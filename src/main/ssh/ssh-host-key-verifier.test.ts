@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseKnownHosts } from './config/ssh-known-hosts'
 import {
   createHostKeyVerifier,
-  DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+  getDefaultServerHostKeyAlgorithms,
   hostKeyFingerprintOf,
   orderServerHostKeyAlgorithms,
   type HostKeyVerifierDeps
@@ -31,7 +31,6 @@ function deps(overrides: Partial<HostKeyVerifierDeps> = {}): HostKeyVerifierDeps
   }
 }
 
-/** Runs the verifier synchronously and reports both the decision and what it returned. */
 function run(
   overrides: Partial<HostKeyVerifierDeps>,
   key = ED_A
@@ -45,9 +44,7 @@ function run(
 }
 
 describe('the ssh2 host key verifier', () => {
-  // The regression that would silently restore accept-everything: ssh2 does
-  // `const ret = verifier(key, verify); if (ret !== undefined) verify(ret)`, so any non-undefined
-  // return — notably the Promise from an `async` function — accepts before the callback decides.
+  // ssh2 treats any non-undefined return, including an async Promise, as acceptance before callback verification.
   it('returns nothing, so ssh2 waits for the callback', () => {
     expect(run({}).returned).toBeUndefined()
   })
@@ -139,9 +136,7 @@ describe('the ssh2 host key verifier', () => {
   })
 
   describe('denials that bypass the policy', () => {
-    // The connect path decides whether to keep offering credentials from the reported decision, so
-    // a denial the report skipped arrives as ssh2's generic handshake failure — and the user is
-    // asked for a passphrase by the host we just refused.
+    // Report every denial so credential fallback cannot prompt against a host already refused.
     it('reports a denial for a key it could not read', () => {
       const onDecision = vi.fn()
       createHostKeyVerifier(deps({ onDecision }))(Buffer.alloc(2), () => {})
@@ -164,16 +159,14 @@ describe('the ssh2 host key verifier', () => {
       expect(onDecision).toHaveBeenCalledWith(expect.objectContaining({ action: 'reject' }))
     })
 
-    // There is no host key to identify here, and the relay keys its install locks on this
-    // fingerprint — reporting a bogus one would be worse than reporting none.
+    // No parseable key means no fingerprint; bogus values must not replace the install-lock identity.
     it('reports no fingerprint for a key it could not read', () => {
       const onDecision = vi.fn()
       createHostKeyVerifier(deps({ onDecision }))(Buffer.alloc(2), () => {})
       expect(onDecision.mock.calls[0]?.[0]?.fingerprint).toBe('')
     })
 
-    // This path runs from the verifier's own catch, so a throw here would escape into ssh2 and hang
-    // the handshake instead of failing it.
+    // Reporting failure inside verifier catch must still deny, never escape and hang handshake.
     it('still denies when reporting the denial throws', () => {
       let accepted: boolean | undefined
       const verifier = createHostKeyVerifier(
@@ -191,8 +184,7 @@ describe('the ssh2 host key verifier', () => {
       expect(accepted).toBe(false)
     })
 
-    // Nobody is waiting on a superseded attempt, and reporting would let it overwrite the live
-    // attempt's outcome.
+    // Superseded verifiers must not overwrite the live attempt's reported outcome.
     it('reports nothing once its attempt has been superseded', () => {
       const onDecision = vi.fn()
       run({ onDecision, isCurrentAttempt: () => false })
@@ -201,8 +193,6 @@ describe('the ssh2 host key verifier', () => {
   })
 })
 
-// We now READ ssh2's list instead of copying it, which removes the drift class entirely — but the
-// fallback copy is still load-bearing if the deep path ever moves, so it is the thing worth pinning.
 describe('the ssh2 default algorithm list', () => {
   const ssh2Constants = require('ssh2/lib/protocol/constants.js') as {
     DEFAULT_SERVER_HOST_KEY: string[]
@@ -210,27 +200,18 @@ describe('the ssh2 default algorithm list', () => {
   }
 
   it('is read from ssh2, not guessed', () => {
-    expect(DEFAULT_SERVER_HOST_KEY_ALGORITHMS).toEqual(ssh2Constants.DEFAULT_SERVER_HOST_KEY)
+    expect(getDefaultServerHostKeyAlgorithms()).toEqual(ssh2Constants.DEFAULT_SERVER_HOST_KEY)
   })
 
-  // The failure this prevents: generateAlgorithmList throws `Unsupported algorithm` from inside
-  // client.connect, and only for hosts we already know, since those are the only ones we set
-  // `algorithms` for.
   it('proposes nothing ssh2 would refuse', () => {
-    // Null is the "could not read it" case, and the caller then leaves ssh2's defaults alone rather
-    // than proposing a guessed list — which is the only way this loop could ever have failed.
-    for (const algorithm of DEFAULT_SERVER_HOST_KEY_ALGORITHMS ?? []) {
+    for (const algorithm of getDefaultServerHostKeyAlgorithms() ?? []) {
       expect(ssh2Constants.SUPPORTED_SERVER_HOST_KEY).toContain(algorithm)
     }
   })
 
-  // ssh2 prepends ssh-ed25519 only when a runtime probe succeeds, so a copy is not merely stale-able
-  // — it can be wrong on a build where the probe fails. This asserts the fallback still matches on a
-  // machine where the probe passes; it is the copy, so drift here is a review, not an outage.
-  // Type scoping is only safe because we can promote the type we hold, and RSA is negotiated under
-  // three different names for one key.
+  // Keep all RSA signature names so one known ssh-rsa key can be promoted under every negotiated algorithm.
   it('contains the RSA signature algorithms the ordering maps onto', () => {
-    expect(DEFAULT_SERVER_HOST_KEY_ALGORITHMS ?? []).toEqual(
+    expect(getDefaultServerHostKeyAlgorithms() ?? []).toEqual(
       expect.arrayContaining(['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'])
     )
   })
@@ -239,12 +220,10 @@ describe('the ssh2 default algorithm list', () => {
 describe('host key algorithm ordering', () => {
   const supported = ['ssh-ed25519', 'rsa-sha2-512', 'ssh-rsa', 'ecdsa-sha2-nistp256']
 
-  // Without this, type-scoped matching is a downgrade: an attacker who cannot forge the key on
-  // file just presents another type and turns a hard failure into first contact.
+  // Lead with stored types so another algorithm cannot turn mismatch into first contact.
   it('leads with the types already known for the host', () => {
     const entries = parseKnownHosts(`example.com ssh-rsa ${RSA_A}`)
     const ordered = orderServerHostKeyAlgorithms(entries, 'example.com', 22, supported)
-    // Any RSA algorithm leading is the property that matters; which one is ssh2 preference order.
     expect(ordered?.[0]).toMatch(/rsa/)
     expect(ordered?.indexOf('ssh-ed25519')).toBeGreaterThan(0)
   })
@@ -265,8 +244,7 @@ describe('host key algorithm ordering', () => {
     expect(orderServerHostKeyAlgorithms(entries, 'example.com', 22, supported)).toBeUndefined()
   })
 
-  // One ssh-rsa key is negotiated as rsa-sha2-512/256 or ssh-rsa, so promoting only the literal
-  // name would leave a known RSA host ordered behind ed25519 — the exact gap this closes.
+  // One ssh-rsa key negotiates as rsa-sha2-512/256 or ssh-rsa; promote them together.
   it('promotes every RSA signature algorithm for a known ssh-rsa key', () => {
     const entries = parseKnownHosts(`example.com ssh-rsa ${RSA_A}`)
     const ordered = orderServerHostKeyAlgorithms(entries, 'example.com', 22, supported)
@@ -274,8 +252,7 @@ describe('host key algorithm ordering', () => {
     expect(ordered?.indexOf('ssh-ed25519')).toBeGreaterThan(1)
   })
 
-  // Types we recorded ourselves must be promoted too, or a host known only to us is left open to
-  // the same downgrade the known_hosts path is protected against.
+  // Store-only known types need the same proposal protection as known_hosts types.
   it('leads with a type known only from our own store', () => {
     const ordered = orderServerHostKeyAlgorithms([], 'example.com', 22, supported, ['ssh-rsa'])
     expect(ordered?.[0]).toMatch(/rsa/)

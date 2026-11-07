@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { useImmediateMutation, useRepoAssignees, useRepoLabels } from '@/hooks/useIssueMetadata'
+import { useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees, useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -39,7 +40,7 @@ export function GHEditSection({
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Called after a successful issue mutation so the parent can invalidate its details cache; otherwise a reopen within FRESH_MS paints pre-mutation data. */
+  /** Invalidate details after mutation so fresh-cache reopen cannot paint pre-mutation data. */
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
@@ -55,7 +56,7 @@ export function GHEditSection({
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
-  // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
+  // Patch Project-view cache too; updating workItemsCache alone leaves table rows stale (docs/design/github-project-view-tasks.md).
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -66,7 +67,7 @@ export function GHEditSection({
     [projectOrigin, patchProjectRowContent]
   )
 
-  // Why: with projectOrigin set, read labels/assignees from the row's repo (not workspace path) so popovers match where writes target.
+  // Project rows use their own repo for labels/assignees, matching write routing.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
@@ -95,7 +96,7 @@ export function GHEditSection({
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
-  // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
+  // Sync resolved assignees unless an optimistic edit is still in flight.
   useEffect(() => {
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
@@ -121,7 +122,6 @@ export function GHEditSection({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-      {/* State */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -189,7 +189,6 @@ export function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      {/* Labels */}
       <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
         <PopoverTrigger asChild>
           <button
@@ -261,7 +260,6 @@ export function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      {/* Assignees */}
       <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
         <PopoverTrigger asChild>
           <button

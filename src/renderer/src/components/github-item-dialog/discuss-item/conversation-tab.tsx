@@ -5,9 +5,9 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
@@ -15,10 +15,13 @@ import {
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply
-} from '@/components/right-sidebar/pr-comments-ai-launch-ack'
-import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
+} from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
+import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
@@ -53,6 +56,7 @@ import { GHCommentComposer } from './gh-comment-composer'
 import { ConversationTabDescription } from './conversation-tab-description'
 import { ConversationTabActivity } from './conversation-tab-activity'
 import { ConversationTabPRSidebar } from './conversation-tab-pr-sidebar'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function ConversationTab({
   item,
@@ -99,7 +103,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -203,8 +208,7 @@ export function ConversationTab({
         )
         return false
       }
-      // Why: nest under review threads (path/threadId/discussion_r); never post a
-      // separate top-level conversation comment for those.
+      // Reply within review threads instead of creating unrelated top-level conversation comments.
       const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
       const result = isReviewThreadReply
         ? await addPRReviewCommentReplyForRepo({
@@ -232,7 +236,7 @@ export function ConversationTab({
 
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
         )
         return false
@@ -285,6 +289,24 @@ export function ConversationTab({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationTabDescription
+          imageUploadAddress={() => {
+            const slug = prRepo ?? markdownGitHubRepo
+            return (item.type === 'pr' || projectOrigin) && slug
+              ? {
+                  runtime:
+                    sourceContext?.provider === 'github'
+                      ? taskSourceRuntimeTarget(sourceContext)
+                      : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  target: { kind: 'slug', ...slug, wakeWslDistro: true }
+                }
+              : githubCommentImageUploadAddress({
+                  repoPath: repoPath ?? '',
+                  repoId: item.repoId,
+                  sourceContext,
+                  type: item.type,
+                  prRepo: bodySlug
+                })
+          }}
           item={item}
           authorLabel={authorLabel}
           canEditBody={canEditBody}

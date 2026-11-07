@@ -1,9 +1,8 @@
-// Today's two records per terminal tab, and the tab-bar entry for every tab, derived from one
-// layout tab. Order fields are derived from the one tab order.
+// Derive legacy terminal rows, tab-bar entries and all order fields from the canonical layout order.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { Tab } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'
@@ -22,7 +21,6 @@ const SHARED_OPTIONAL_FIELDS = [
   'viewMode'
 ] as const
 
-/** What one saved workspace's records share: its key, worktree id, host and the beside records. */
 export type WorkspaceSaveScope = {
   workspaceKey: string
   worktreeId: string
@@ -108,7 +106,6 @@ export function saveTabBarEntry(
   }
 }
 
-/** Each pane's leaf-keyed values, as a layout's per-leaf map. */
 function byLeaf<T>(
   leafIds: readonly string[],
   value: (leafId: string) => T | undefined

@@ -20,7 +20,7 @@ type GitHubSourceApplicationInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 
@@ -70,7 +70,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
       const suggestedName =
         getLinkedWorkItemWorkspaceName(normalizedItem)?.seedName ??
         getLinkedWorkItemSuggestedName(normalizedItem)
-      // Why: a pasted URL/#123 is the lookup query, not a chosen name — replace with the title-derived name or it becomes a slugified-URL workspace name.
+      // Lookup URLs/#numbers are not chosen names; replace them with title-derived names rather than URL slugs.
       if (
         suggestedName &&
         shouldApplyWorkspaceSourceAutoName({

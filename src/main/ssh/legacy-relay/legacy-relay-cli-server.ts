@@ -3,16 +3,17 @@
  * runtime, where that terminal's Dispatch and Run records live.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  *
- * Gated per host by "Allow this host's orca CLI to control Orca" and read on every call. Calls run
+ * Gated per host by the browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL), read on every call. Calls run
  * through a dispatcher that registers only the orchestration methods below, as a paired caller with
  * no grants (the desktop browser bridge's shape), after legacy-relay-cli-caller.ts bound them.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../shared/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,
@@ -27,6 +28,7 @@ import {
   stringFlag
 } from './legacy-relay-cli-args'
 import type { LegacyRelayCliServer } from './legacy-relay-client'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import {
   cappedInboxLimit,
   cappedWait,
@@ -50,7 +52,7 @@ const COMMANDS: ReadonlySet<string> = new Set(
 
 export const LEGACY_RELAY_CLI_CONTROL_OFF =
   'This terminal was started by an older version of Orca. Its orca orchestration commands reach ' +
-  'this desktop only when "Allow this host\'s orca CLI to control Orca" is on for this host in ' +
+  `this desktop only when "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}" is on for this host in ` +
   'Settings > SSH. Otherwise, run them in a new terminal on this host.'
 
 export const LEGACY_RELAY_CLI_UNSUPPORTED =
@@ -61,7 +63,7 @@ const LEGACY_RELAY_CLI_HELP =
   'This terminal was started by an older version of Orca. It runs orca orchestration check, ' +
   'inbox, send, ask and reply; open a new terminal on this host for full orca help.'
 
-export type LegacyRelayCliServerDeps = {
+type LegacyRelayCliServerDeps = {
   targetId: string
   runtime: () => OrcaRuntimeService | null
   /** The per-host switch, read on every call so turning it off applies to the next command. */
@@ -76,7 +78,7 @@ function dispatcherFor(runtime: OrcaRuntimeService): RpcDispatcher {
   if (!dispatcher) {
     dispatcher = new RpcDispatcher({
       runtime,
-      // Why a registry of only these methods: even a bug upstream cannot reach anything else.
+      // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
       methods: ALL_RPC_METHODS.filter((method) => METHODS.has(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
@@ -194,7 +196,7 @@ async function dispatchAsCaller(
   call: LegacyRelayCliCall,
   requestId: string
 ): Promise<RpcResponse> {
-  // Why: the runtime no longer hosts this terminal, so the attachment carries its verified identity.
+  // Attach verified identity because the runtime no longer hosts this legacy terminal.
   const authority = runtime.registerOrchestrationCompatibilitySshAttachment(
     deps.targetId,
     `legacy-relay:${randomUUID()}`,
@@ -205,8 +207,7 @@ async function dispatchAsCaller(
     }
   )
   try {
-    // A mutation this caller committed with this exact payload replays even after its assignment
-    // moved on; everything else, and every read, is scoped.
+    // Only exact committed mutations replay after assignment changes; all other calls remain scoped.
     const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call)
     const db = runtime.getOrchestrationDb()
     assertLegacyRelayCliScope(db, caller, call, deps.livePane, exactReplay)
@@ -273,12 +274,14 @@ async function serveCli(
     ? params.argv.filter((item): item is string => typeof item === 'string')
     : []
   const { command, flags } = parseLegacyRelayCliArgs(argv)
-  // Why before anything runs: `--help` on a valid command must never apply its effects.
+  // Handle help before execution so valid commands cannot apply effects with --help.
   if (flags.has('help') || argv.includes('-h')) {
     return { stdout: `${LEGACY_RELAY_CLI_HELP}\n`, stderr: '', exitCode: 0 }
   }
   if (!COMMANDS.has(command)) {
-    throw new Error(LEGACY_RELAY_CLI_UNSUPPORTED)
+    throw new Error(
+      command === 'connector reply' ? CONNECTOR_REPLY_UNAVAILABLE : LEGACY_RELAY_CLI_UNSUPPORTED
+    )
   }
   const retryRequestId = retryRequestFlag(flags)
   const invocation = admit(deps, env, signal, retryRequestId)

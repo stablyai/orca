@@ -1,10 +1,7 @@
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1
 const HEADER_BYTES = 16
-/**
- * Every metadata field a frame carries, exported because the page's frame-area budget sizes the
- * envelope from this list rather than from a copy of it.
- */
+// Share metadata keys with the page’s frame-area budget so envelope sizing cannot drift.
 export const METADATA_KEYS = [
   'offsetTop',
   'pageScaleFactor',
@@ -41,14 +38,7 @@ export type BrowserScreencastFrame = {
   format: BrowserScreencastFormat
   metadata: BrowserScreencastFrameMetadata
   image: Uint8Array
-  /**
-   * The image as the sender already had it, when the sender had it as base64.
-   *
-   * Optional because only the bridge carries one: this module decodes a socket frame, where the
-   * image is bytes and there is no base64 to keep. It exists so the page's data URI can reuse the
-   * encoding the bridge was given instead of producing it a second time; nothing reads it as the
-   * image, and `image` is the field every consumer is still written against.
-   */
+  // Preserve bridge-provided base64 for data URIs without re-encoding; socket frames still provide bytes in image.
   b64?: string
 }
 

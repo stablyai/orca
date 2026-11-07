@@ -1,4 +1,8 @@
-import type { JiraIssue, JiraIssueFilter, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type {
+  JiraIssue,
+  JiraIssueFilter,
+  JiraSiteSelection
+} from '../../../src/shared/jira/jira-types'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { toJiraDetailComments } from './jira-mobile-issue-read'
 import {

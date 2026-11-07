@@ -20,7 +20,6 @@ function translateOwnerNotSetUpLabel(
       )
 }
 
-/** A placeholder's short label, e.g. "Not configured on devbox". */
 export function getOwnerNotSetUpLabel(placeholder: OwnerNotSetUpPlaceholder): string {
   return translateOwnerNotSetUpLabel(placeholder, placeholder.ownerLabel)
 }
@@ -46,7 +45,6 @@ export function getOwnerNotSetUpLabelParts(placeholder: OwnerNotSetUpPlaceholder
   }
 }
 
-/** Why a placeholder shows no usage, beyond its label; null when the label says it all. */
 export function getOwnerNotSetUpNote(placeholder: OwnerNotSetUpPlaceholder): string | null {
   if (placeholder.kind === 'claude-unknown') {
     return translate(
@@ -63,7 +61,6 @@ export function getOwnerNotSetUpNote(placeholder: OwnerNotSetUpPlaceholder): str
     : null
 }
 
-/** The full tooltip for a placeholder, naming the host in full. */
 export function describeOwnerNotSetUp(placeholder: OwnerNotSetUpPlaceholder): string {
   const note = getOwnerNotSetUpNote(placeholder)
   // Why: Claude's note already names the host, so it stands alone.

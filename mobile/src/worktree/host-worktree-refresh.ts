@@ -1,20 +1,23 @@
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import type { RpcClient } from '../transport/rpc-client'
-import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-reader'
+import {
+  subscribeSharedClientEvents,
+  type SharedClientEventsClient
+} from '../transport/shared-client-events'
+import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
+// Also the floor between change-driven reads, which arrive per agent step (Home throttles the same).
 const WORKTREE_REFRESH_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
-// The part of React Native's AppState this reads, spelled here so importers need no RN types.
+// Keep lifecycle callers independent of RN types.
 type HostAppState = {
   currentState: string
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
 }
 
 type HostWorktreeRefreshArgs = {
-  client: Pick<RpcClient, 'subscribe'>
+  client: SharedClientEventsClient
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
   /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
@@ -35,13 +38,52 @@ export function startHostWorktreeRefresh({
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
+  // Set when a buried or backgrounded page skips notices; coming back then re-reads everything once.
+  let owed = false
+  let lastWorktreeReadAt = 0
+  let trailingRead: ReturnType<typeof setTimeout> | undefined
+  const hidden = (): boolean => appState.currentState !== 'active'
+
+  const readWorktrees = (options?: WorktreeRefreshOptions): void => {
+    lastWorktreeReadAt = Date.now()
+    void fetchWorktrees(options)
+  }
+  const readEverything = (worktreeOptions?: WorktreeRefreshOptions): void => {
+    readWorktrees(worktreeOptions)
+    void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    void syncViewSettings({ resend: true })
+  }
+  const refreshWorktreesOnChange = (): void => {
+    if (trailingRead) {
+      return
+    }
+    const wait = lastWorktreeReadAt + WORKTREE_REFRESH_MS - Date.now()
+    if (wait <= 0) {
+      readWorktrees()
+      return
+    }
+    trailingRead = setTimeout(() => {
+      trailingRead = undefined
+      if (!hidden()) {
+        readWorktrees()
+      }
+    }, wait)
+  }
 
   const refreshOnForeground = (): void => {
-    if (appState.currentState !== 'active') {
+    if (hidden()) {
       return
     }
     sidebarFeed?.refresh()
-    void fetchWorktrees({ allowDuringModal: true })
+    clearTimeout(trailingRead)
+    trailingRead = undefined
+    if (owed) {
+      owed = false
+      // Queued: a read still in flight was sent before the notices this page skipped.
+      readEverything({ allowDuringModal: true, queueIfInFlight: true })
+      return
+    }
+    readWorktrees({ allowDuringModal: true })
     void fetchRepoMetadata({ queueIfInFlight: true })
   }
 
@@ -53,58 +95,55 @@ export function startHostWorktreeRefresh({
   const interval = sidebarFeed
     ? null
     : setInterval(() => {
-        if (appState.currentState !== 'active') {
+        if (hidden()) {
           return
         }
         void fetchWorktrees()
-        // Why: desktop Settings repo edits (icon/color/name, repo removal) now emit `reposChanged`
-        // (#11994), but a host on an older build does not; keep this periodic repo.list as the
-        // convergence safety-net. fetchRepoMetadata self-throttles to REPO_METADATA_REFRESH_MS
-        // (60s), so this is ~1 request/min while foregrounded — the AppState gate is what removes
-        // the waste (both stop while backgrounded).
+        // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)
-  const unsubscribe = client.subscribe(
-    'runtime.clientEvents.subscribe',
-    null,
-    (payload: unknown) => {
-      if (stale || !payload || typeof payload !== 'object') {
-        return
-      }
-      const event = payload as RuntimeClientEventStreamMessage | { type: 'error' }
-      if (event.type === 'ready') {
-        // Every ready: a change between the last read and this subscription sent no notice.
-        sidebarFeed?.refresh()
-        const replayedAfterReconnect = eventStreamReady
-        eventStreamReady = true
-        if (replayedAfterReconnect) {
-          // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
-          void fetchWorktrees()
-          void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-          void syncViewSettings({ resend: true })
-        }
-        return
-      }
-      if (event.type === 'end' || event.type === 'error') {
-        eventStreamReady = false
-        return
-      }
-      if (event.type === 'sidebarInputsChanged') {
-        sidebarFeed?.changed(event)
-      } else if (event.type === 'reposChanged') {
-        // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
-        void fetchWorktrees()
-        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-      } else if (event.type === 'workspaceViewChanged') {
-        void syncViewSettings()
-      } else if (event.type === 'worktreesChanged') {
-        void fetchWorktrees()
-      } else if (event.type === 'sshStateChanged') {
-        // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
-        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-      }
+  const unsubscribe = subscribeSharedClientEvents(client, (event) => {
+    if (stale) {
+      return
     }
-  )
+    if (event.type === 'ready') {
+      // Every ready: a change between the last read and this subscription sent no notice.
+      sidebarFeed?.refresh()
+      const replayedAfterReconnect = eventStreamReady
+      eventStreamReady = true
+      if (replayedAfterReconnect) {
+        // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
+        if (hidden()) {
+          owed = true
+        } else {
+          readEverything()
+        }
+      }
+      return
+    }
+    if (event.type === 'end' || event.type === 'error') {
+      eventStreamReady = false
+      return
+    }
+    if (hidden()) {
+      owed = true
+      return
+    }
+    if (event.type === 'sidebarInputsChanged') {
+      sidebarFeed?.changed(event)
+    } else if (event.type === 'reposChanged') {
+      // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
+      refreshWorktreesOnChange()
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    } else if (event.type === 'workspaceViewChanged') {
+      void syncViewSettings()
+    } else if (event.type === 'worktreesChanged') {
+      refreshWorktreesOnChange()
+    } else if (event.type === 'sshStateChanged') {
+      // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    }
+  })
 
   // A row's live content (agents, terminals) may follow any install; worktree.ps carries it.
   const stopFollowingFeed = sidebarFeed?.onInstalled(
@@ -113,12 +152,12 @@ export function startHostWorktreeRefresh({
   sidebarFeed?.refresh()
   void fetchWorktrees()
   void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-  // Why resend: each connected edge starts a new lifecycle, so a write the last connection lost is
-  // never seen by a replayed ready above.
+  // A lost write predates the new lifecycle’s replayed ready; explicitly resend it on reconnect.
   void syncViewSettings({ resend: true })
 
   return () => {
     stale = true
+    clearTimeout(trailingRead)
     if (interval) {
       clearInterval(interval)
     }

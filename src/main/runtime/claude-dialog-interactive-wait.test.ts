@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
-import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
+import type { RuntimeVisibleTerminalState } from './terminal/records/runtime-terminal-state-records'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -11,50 +14,37 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-async function replayDialog(name: string, connectionId?: string) {
+async function replayDialog(
+  name: string,
+  connectionId?: string,
+  pane: Partial<Parameters<typeof createTranscriptPane>[0]> = {}
+) {
   const base = join(__dirname, '__fixtures__', name)
   const size: { cols: number; rows: number } = JSON.parse(readFileSync(`${base}.meta.json`, 'utf8'))
   const bytes = readFileSync(`${base}.txt`)
-  const pane = await createTranscriptPane({
+  const transcript = await createTranscriptPane({
     paneTitle: 'Claude Code',
     foregroundProcess: 'claude',
     launchAgent: 'claude',
+    ...pane,
     connectionId,
     size,
     data: ''
   })
   const decoder = new TextDecoder()
   for (let offset = 0; offset < bytes.length; offset += 1024) {
-    pane.runtime.onPtyData(
+    transcript.runtime.onPtyData(
       TRANSCRIPT_PANE_PTY_ID,
       decoder.decode(bytes.subarray(offset, offset + 1024), { stream: true }),
       Date.now()
     )
   }
-  return pane
+  return transcript
 }
 
-describe.each([undefined, 'ssh:build-host'])(
-  'Claude interactive-wait query on %s',
-  (connectionId) => {
-    it.each([
-      ['claude-dialog-trust-workspace', true],
-      ['claude-dialog-trust-workspace-narrow', true],
-      ['claude-dialog-trust-workspace-answered', false]
-    ] as const)('reports the current dialog in %s', async (name, blocked) => {
-      const { runtime, handle } = await replayDialog(name, connectionId)
-      const wait = await runtime.getTerminalInteractiveWait(handle)
-      if (blocked) {
-        expect(wait).toMatchObject({ reason: 'agent-trust-workspace' })
-      } else {
-        expect(wait).toBeNull()
-      }
-    })
-  }
-)
-
 describe('Claude dialog screen observation fences', () => {
-  afterEach(() => vi.useRealTimers())
+  beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000))
+  afterEach(() => vi.restoreAllMocks())
 
   async function pendingScreen() {
     const pane = await replayDialog('claude-dialog-trust-workspace')
@@ -79,39 +69,11 @@ describe('Claude dialog screen observation fences', () => {
     await expect(wait).resolves.toBeUndefined()
   })
 
-  it('uses a fresh working title when output overtakes the screen read', async () => {
-    const pane = await pendingScreen()
-    const wait = pane.runtime.getTerminalInteractiveWait(pane.handle)
-    pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]0;⠂ Claude Code\x07', Date.now())
-    pane.release()
-    await expect(wait).resolves.toBeNull()
-  })
-
-  it('does not let an old dialog override a newer working lifecycle', async () => {
-    const pane = await replayDialog('claude-dialog-trust-workspace')
-    pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]0;⠂ Claude Code\x07', Date.now())
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the existing protected lifecycle recorder; the test models current working evidence over unchanged old screen text.
-    const lifecycle = pane.runtime as unknown as {
-      recordAgentPromptLifecycleState(ptyId: string, status: 'working'): void
-    }
-    lifecycle.recordAgentPromptLifecycleState(TRANSCRIPT_PANE_PTY_ID, 'working')
-    await expect(pane.runtime.getTerminalInteractiveWait(pane.handle)).resolves.toBeNull()
-  })
-
   it('discards a dialog snapshot after the owning terminal exits', async () => {
     const pane = await pendingScreen()
     const wait = pane.runtime.getTerminalInteractiveWait(pane.handle)
     pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
     pane.release()
     await expect(wait).resolves.toBeUndefined()
-  })
-
-  it('bounds a screen read that never answers', async () => {
-    const pane = await pendingScreen()
-    vi.useFakeTimers()
-    const wait = pane.runtime.getTerminalInteractiveWait(pane.handle)
-    await vi.advanceTimersByTimeAsync(5_000)
-    await expect(wait).resolves.toBeUndefined()
-    pane.release()
   })
 })

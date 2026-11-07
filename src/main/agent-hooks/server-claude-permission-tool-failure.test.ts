@@ -53,6 +53,7 @@ describe('Claude permission wait after the approved tool fails', () => {
         tool_use_id: 'toolu-approved'
       })
       await post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: COMMAND })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
       await post({
         hook_event_name: 'PostToolUseFailure',
         tool_name: 'Bash',
@@ -76,6 +77,7 @@ describe('Claude permission wait after the approved tool fails', () => {
         tool_use_id: 'toolu-approved'
       })
       await post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: COMMAND })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
       await post({
         hook_event_name: 'PostToolUseFailure',
         tool_name: 'Read',
@@ -99,6 +101,7 @@ describe('Claude permission wait after the approved tool fails', () => {
         tool_use_id: 'toolu-approved'
       })
       await post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: COMMAND })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
       await post({
         hook_event_name: 'PostToolUseFailure',
         tool_name: 'Bash',

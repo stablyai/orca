@@ -1,11 +1,9 @@
-import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../../types'
+import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
-
-// ── Decision Gates ──
 
 export function createGate(
   this: OrchestrationDb,
@@ -132,7 +130,7 @@ export function resolveGate(
 export function timeoutGate(this: OrchestrationDb, gateId: string): DecisionGateRow | undefined {
   this.db
     .prepare(
-      // Why: without the status guard a late timeout overwrites a gate the user already resolved.
+      // A late timeout must not overwrite an already resolved gate.
       "UPDATE decision_gates SET status = 'timeout', resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
     )
     .run(gateId)

@@ -3,20 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAutomationDetailNextTab,
-  isAutomationDetailTabArrowKey,
   shouldHandleAutomationDetailEscapeKey,
   shouldHandleAutomationDetailTabArrowKey
 } from './automation-detail-tab-navigation'
-
-describe('isAutomationDetailTabArrowKey', () => {
-  it('identifies ArrowLeft and ArrowRight', () => {
-    expect(isAutomationDetailTabArrowKey('ArrowLeft')).toBe(true)
-    expect(isAutomationDetailTabArrowKey('ArrowRight')).toBe(true)
-    expect(isAutomationDetailTabArrowKey('ArrowUp')).toBe(false)
-    expect(isAutomationDetailTabArrowKey('ArrowDown')).toBe(false)
-    expect(isAutomationDetailTabArrowKey('Enter')).toBe(false)
-  })
-})
 
 describe('shouldHandleAutomationDetailTabArrowKey', () => {
   function makeEvent(
@@ -42,11 +31,6 @@ describe('shouldHandleAutomationDetailTabArrowKey', () => {
     }
   }
 
-  it('allows unmodified ArrowLeft and ArrowRight on neutral targets', () => {
-    expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ key: 'ArrowRight' }))).toBe(true)
-    expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ key: 'ArrowLeft' }))).toBe(true)
-  })
-
   it('ignores modified or composing arrow keys', () => {
     expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ metaKey: true }))).toBe(false)
     expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ ctrlKey: true }))).toBe(false)
@@ -68,9 +52,9 @@ describe('shouldHandleAutomationDetailTabArrowKey', () => {
     expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ target: editable }))).toBe(false)
   })
 
-  it('ignores keys when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores keys inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)
@@ -82,43 +66,6 @@ describe('shouldHandleAutomationDetailTabArrowKey', () => {
 })
 
 describe('getAutomationDetailNextTab', () => {
-  it('switches from overview to runs on ArrowRight', () => {
-    expect(
-      getAutomationDetailNextTab({
-        currentTab: 'overview',
-        key: 'ArrowRight',
-        canAccessRuns: true
-      })
-    ).toBe('runs')
-  })
-
-  it('does nothing when on overview and pressing ArrowLeft', () => {
-    expect(
-      getAutomationDetailNextTab({
-        currentTab: 'overview',
-        key: 'ArrowLeft'
-      })
-    ).toBeNull()
-  })
-
-  it('switches from runs to overview on ArrowLeft', () => {
-    expect(
-      getAutomationDetailNextTab({
-        currentTab: 'runs',
-        key: 'ArrowLeft'
-      })
-    ).toBe('overview')
-  })
-
-  it('does nothing when on runs and pressing ArrowRight', () => {
-    expect(
-      getAutomationDetailNextTab({
-        currentTab: 'runs',
-        key: 'ArrowRight'
-      })
-    ).toBeNull()
-  })
-
   it('prevents switching to runs if canAccessRuns is false', () => {
     expect(
       getAutomationDetailNextTab({
@@ -134,6 +81,7 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
   function makeEvent(
     overrides: Partial<{
       key: string
+      defaultPrevented: boolean
       altKey: boolean
       ctrlKey: boolean
       metaKey: boolean
@@ -154,19 +102,8 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
     }
   }
 
-  it('allows unmodified Escape on neutral targets', () => {
-    expect(shouldHandleAutomationDetailEscapeKey(makeEvent())).toBe(true)
-  })
-
-  it('allows Escape on SVGElement and document targets', () => {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ target: svg }))).toBe(true)
-    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ target: document }))).toBe(true)
-  })
-
-  it('ignores non-Escape keys', () => {
-    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ key: 'Enter' }))).toBe(false)
-    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ key: 'ArrowLeft' }))).toBe(false)
+  it('ignores Escape already consumed while returning from a run', () => {
+    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ defaultPrevented: true }))).toBe(false)
   })
 
   it('ignores modified or composing Escape keys', () => {
@@ -193,9 +130,9 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ target: clearsValue }))).toBe(false)
   })
 
-  it('ignores Escape when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores Escape inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)

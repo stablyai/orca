@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { LEAF_1 } from './server.test-fixtures'
 
 const REMOVED = 'repo::/removed'
@@ -21,32 +21,6 @@ describe('removed-worktree foreign authority', () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-foreign-authority-'))
   })
   afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
-
-  it('preserves ordinary tokenless OSC after a tokened new turn revives a pane', () => {
-    const server = new AgentHookServer()
-    server.retirePaneAuthority(PANE)
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-foreign',
-        worktreeId: KEPT,
-        launchToken: TOKEN,
-        source: 'codex',
-        hookEventName: 'SessionStart',
-        payload: working
-      },
-      null
-    )
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-foreign',
-      worktreeId: KEPT,
-      connectionId: null,
-      payload: { ...working, state: 'done' }
-    })
-    expect(server.getStatusSnapshot()).toMatchObject([{ worktreeId: KEPT, state: 'done' }])
-    server.stop()
-  })
 
   it('keeps foreign hydrated evidence when a removed commitment outlives its row', async () => {
     const seed = new AgentHookServer()

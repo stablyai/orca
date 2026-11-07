@@ -9,14 +9,13 @@ const response = z.union([
       outcome: z.enum(['killed', 'already_exited', 'not_found'])
     })
   }),
-  // Grok's envelope for a kill it could not attempt, such as an unknown session.
   z.object({ result: z.null(), error: z.string() })
 ])
 
 export const grokBackgroundTaskStop: NonNullable<AcpDialect['backgroundTaskStop']> = {
   probe: { method: '_x.ai/task/kill', params: {} },
   lacksRoute: (error) => error.code === -32601,
-  // `source` is left to Grok's default: its own per-task UI kill.
+  // Omit source to use Grok's per-task UI kill behavior.
   request: (sessionId, taskId) => ({ method: '_x.ai/task/kill', params: { sessionId, taskId } }),
   response: (value, taskId) => {
     const parsed = response.safeParse(value)

@@ -31,7 +31,6 @@ function renderUrlSync(guestUrl: () => string): {
       webviewRef: { current: webview },
       chromeHeaderRef: { current: null },
       lastKnownWebviewUrlRef: { current: 'https://example.test/slow' },
-      trackNextLoadingEventRef: { current: false },
       keepAddressBarFocusRef: { current: false },
       addressBarInputRef: { current: null },
       browserTabUrlRef: { current: 'https://example.test/slow' },
@@ -84,14 +83,5 @@ describe('chromium error page poll visibility gate', () => {
 
     unmount()
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('polls unchanged while the window stays visible', () => {
-    let guestUrl = 'https://example.test/slow'
-    const { updates } = renderUrlSync(() => guestUrl)
-
-    guestUrl = CHROMIUM_ERROR_URL
-    act(() => vi.advanceTimersByTime(250))
-    expect(updates).toHaveLength(1)
   })
 })

@@ -1,9 +1,10 @@
 import type { AppState } from '../types'
-import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../../shared/folder-workspace-path-status'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusRequest
-} from '../../../../shared/folder-workspace-path-status'
+import {
+  FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusRequest
+} from '../../../../shared/folder-workspaces/folder-workspace-path-status'
+
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -14,10 +15,14 @@ import type {
 import {
   getRuntimeTargetHostId,
   runtimeTargetForOwnerEnvironment
-} from '../../runtime/runtime-client-target'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
-import { selectFolderWorkspaces } from '../workspace-record-selectors'
+} from '../../runtime/rpc/targets/runtime-client-target'
+import {
+  catalogOwnsHost,
+  getProjectGroupHostId
+} from '../project-groups/project-group-owner-routing'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
 
 type FolderPathStatusSnapshotState = Pick<
   AppState,
@@ -82,11 +87,11 @@ function getFolderPathStatusScope(
   }
 }
 
-export function getFolderWorkspaceStatusRequestSnapshot(
+export function getFolderWorkspaceStatusRequestDependencies(
   state: FolderPathStatusSnapshotState,
   request: FolderWorkspacePathStatusRequest,
   options: FolderWorkspacePathStatusRouteOptions
-): string | null {
+) {
   const ownerHostId = getRuntimeTargetHostId(
     runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
   )
@@ -115,17 +120,30 @@ export function getFolderWorkspaceStatusRequestSnapshot(
       relevantConnectionIds.add(repo.connectionId)
     }
   }
-  const sshFingerprint = [...relevantConnectionIds]
-    .map(
-      (connectionId) =>
-        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
-    )
-    .sort()
-    .join('|')
   const repoFingerprint = candidateRepos
     .map(
       (repo) =>
         `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}:${getRepoExecutionHostId(repo)}`
+    )
+    .sort()
+    .join('|')
+  return { scope, relevantConnectionIds, repoFingerprint }
+}
+
+export function getFolderWorkspaceStatusRequestSnapshot(
+  state: FolderPathStatusSnapshotState,
+  request: FolderWorkspacePathStatusRequest,
+  options: FolderWorkspacePathStatusRouteOptions
+): string | null {
+  const dependencies = getFolderWorkspaceStatusRequestDependencies(state, request, options)
+  if (!dependencies) {
+    return null
+  }
+  const { scope, relevantConnectionIds, repoFingerprint } = dependencies
+  const sshFingerprint = [...relevantConnectionIds]
+    .map(
+      (connectionId) =>
+        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
     )
     .sort()
     .join('|')

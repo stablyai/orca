@@ -1,16 +1,14 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
-import {
-  getRecentlyClosedTabPosition,
-  pushClosedTerminalTabSnapshot,
-  pushRecentlyClosedTabKind
-} from '../slices/recently-closed-tabs'
-// Why: use the store-free registry (not terminal-parked-tab-watchers, which imports @/store) to avoid re-entering store creation during this slice's eval.
-import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
+import { getRecentlyClosedTabPosition } from '../slices/tabs/recently-closed-tab-position'
+import { pushClosedTerminalTabSnapshot } from './recently-closed-terminal-tabs'
+import { pushRecentlyClosedTabKind } from '../slices/tabs/recently-closed-tabs'
+// Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
+import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   buildTerminalTabRetirementPlan,
   removeSleepingAgentSessionsForTab
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
@@ -18,15 +16,15 @@ import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
-import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
+import { removePaneKeysByTabPrefix } from '../slices/agent-status/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
-import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
-import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
-import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
-import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '../workspaces/selection/active-worktree-deselection-intent'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -60,8 +58,7 @@ export function createTerminalTabCloseActions(
       }
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
-          // Why hoisted: omitRecordKeys takes an iterable, and this closes over one
-          // array instead of allocating a fresh [tabId] at each of the call sites below.
+          // Reuse one iterable for all per-tab omissions in this close.
           const closingTabIds = [tabId]
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
@@ -73,8 +70,7 @@ export function createTerminalTabCloseActions(
             const closing = before.find((t) => t.id === tabId)
             if (closing) {
               closingWorktreeId = wId
-              // The user closing a launch tab whose agent is still starting: that close wins. Any
-              // close of it ends the wait for its start, so nothing is pasted into a tab that is gone.
+              // User close cancels pending agent launch; every close settles its startup wait to prevent delivery into a vanished tab.
               if (closing.agentLaunchPane && !closing.agentLaunchPane.outcome) {
                 if (closeReason === 'user') {
                   noteAgentLaunchPaneClosedByUser(tabId, closing.agentLaunchPane.leafId)
@@ -93,9 +89,7 @@ export function createTerminalTabCloseActions(
               next[wId] = after
             }
           }
-          // Why mirrored here and never persisted: main records the close through the intent below,
-          // and the direct-SSH pull merge reads this synchronously, so a pull landing before main
-          // answered would otherwise re-add the tab. Goes away when that merge moves to main.
+          // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
           const nextClosedTombstones =
             intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
               ? {
@@ -180,7 +174,7 @@ export function createTerminalTabCloseActions(
             }
             nextTabBarOrderByWorktree[wId] = order.filter((entryId) => entryId !== tabId)
           }
-          // Why: clean up unconsumed snapshot/cold-restore data (e.g. tab closed before TerminalPane mounted) to prevent unbounded store growth across restarts.
+          // Clear unconsumed snapshots/cold restores even if closed before pane mount to bound memory.
           let nextSnapshots = s.pendingSnapshotByPtyId
           let nextColdRestores = s.pendingColdRestoreByPtyId
           const closingPtyIds = new Set([
@@ -265,7 +259,7 @@ export function createTerminalTabCloseActions(
         deleteNativeChatComposerDraftsForTab(tabId)
         dropNativeChatPendingAttachmentsForTab(tabId)
       }
-      // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
+      // Share snapshot/removal sweeps so one path cannot silently miss newly added cleanup.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
         const workspaceItem = tabs.find(
@@ -275,6 +269,7 @@ export function createTerminalTabCloseActions(
           const closeUnifiedTab = (): void => {
             get().closeUnifiedTab(workspaceItem.id, {
               recordInteraction: opts?.recordInteraction,
+              ...(opts?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
               terminalRetirementHandled: true
             })
           }

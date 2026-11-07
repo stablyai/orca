@@ -20,7 +20,7 @@ vi.mock('./serve-replaced-app-restart', async (importOriginal) => ({
   restartThisServeSupervisorIfReplaced: restartMock
 }))
 
-// Why: the real check lists processes for the installer, which the spawn mock cannot answer.
+// The spawn mock cannot answer the real installer process check.
 vi.mock('./serve-install-hold', async (importOriginal) => ({
   ...(await importOriginal<typeof ServeInstallHold>()),
   readServeInstallEvidence: async () => ({ kind: 'clear' })
@@ -82,7 +82,6 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-serve-replaced-app-'))
     app = join(root, 'Orca.app')
-    // The update is already on disk unless a test swaps it in.
     await installApp(app, NEW)
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
@@ -117,7 +116,6 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
     await rm(root, { recursive: true, force: true })
   })
 
-  /** Each restart check must precede its own spawn: none may start a server unchecked. */
   function expectCheckedBeforeEverySpawn(spawns: number): void {
     expect(spawnMock).toHaveBeenCalledTimes(spawns)
     expect(restartMock).toHaveBeenCalledTimes(spawns)
@@ -182,7 +180,6 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
     expect(restartMock).not.toHaveBeenCalled()
   })
 
-  // The real decision, for a supervisor that started on the old app before the install swapped it.
   async function withRealRestart() {
     const actual = await vi.importActual<typeof ReplacedAppRestart>('./serve-replaced-app-restart')
     restartMock.mockImplementation(actual.restartThisServeSupervisorIfReplaced)
@@ -229,7 +226,6 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
     expect(await resumeAcrossInstall(false)).not.toHaveBeenCalled()
   })
 
-  // A later attempt of the service loop (here after a crash; also after a park) has no handoff.
   it('restarts before a supervised service starts its next server from a replaced app', async () => {
     const execve = await withRealRestart()
     const crashed = new FakeChild(4101)

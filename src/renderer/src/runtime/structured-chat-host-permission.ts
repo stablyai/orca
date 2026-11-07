@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  agentChatPermissionModes,
-  newChatPermissionModeForSettings
-} from '../../../shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { newChatPermissionModeForSettings } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   chatPermissionHostVerdict,
   hostSettingsApplyChatPermissionModes,
   legacyHostChatPermissionMode,
   type ChatPermissionHostVerdict
-} from '../../../shared/agent-chat-permission-host-support'
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+} from '../../../shared/agent-launch/permissions/agent-chat-permission-host-support'
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 
 /** `unverified`: the host could not say what it runs, so nothing may start there yet. */
 export type StructuredChatHostPermissionVerdict = ChatPermissionHostVerdict | { kind: 'unverified' }
@@ -75,8 +74,7 @@ export function useStructuredChatHostPermissionVerdict(
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const requested = useAppStore((state) => newChatPermissionModeForSettings(agent, state.settings))
   const [contact, setContact] = useState(0)
-  // Contact is part of the key: a host back from a restart may be an older build, so a verdict from
-  // before it never stands in for the fresh one.
+  // Contact keys fresh probes: restarted hosts can be older, so pre-restart permission proof cannot stand.
   const key = `${environmentId ?? 'local'}\0${agent}\0${String(requested)}\0${contact}`
   const [answer, setAnswer] = useState<{
     key: string

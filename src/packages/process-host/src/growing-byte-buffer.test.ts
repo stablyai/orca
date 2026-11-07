@@ -30,7 +30,7 @@ describe('GrowingByteBuffer', () => {
     expect(taken).toEqual(bytes)
   })
 
-  it('retains 100,000 one-byte fragments in one growable allocation', () => {
+  it('preserves 100,000 one-byte fragments across buffer growth', () => {
     const buffer = new GrowingByteBuffer()
     const expected = Buffer.alloc(100_000)
 
@@ -94,7 +94,7 @@ describe('GrowingByteBuffer', () => {
     expect(buffer.byteLength).toBe(0)
   })
 
-  it('keeps a bounded suffix stable across many small appends without unbounded growth', () => {
+  it('retains the newest 64 bytes across many small appends', () => {
     const buffer = new GrowingByteBuffer()
     let expected = ''
     for (let index = 0; index < 5_000; index += 1) {

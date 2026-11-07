@@ -1,9 +1,4 @@
-/**
- * Finishing an activation whose run ended after it launched the candidate, as that run would have:
- * the candidate commits only if it passes the same readiness gate, otherwise recovery undoes it.
- * Undoing first would stop a candidate that may already be serving and, once it changed state,
- * leave the host serving nothing until an operator accepts losing that state (P1-A).
- */
+/** Resume through the original readiness gate before undoing: the candidate may already serve changed state, and stopping it could require operator consent before anything can serve again. */
 import type { ServeReadiness } from '../server/serve-readiness'
 import { withActivatedVersion } from '../managed-server/activation/orcad-activation-record'
 import { writeOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
@@ -23,15 +18,13 @@ import {
   slotLiveness
 } from './orcad-recovery-slot'
 import type { OrcadIncumbentRecoveryOptions } from './orcad-incumbent-recovery'
+import { isOrcadLaunchFailure } from './orcad-launch-failure'
 
-/**
- * Runs under a held fence. Null when the candidate cannot commit, so the caller undoes it; a
- * refusal leaves the host untouched for an operator.
- */
+/** Under the held fence, return null (or the candidate's launch failure) for undo; a refusal leaves the host untouched for an operator. */
 export async function resumeInterruptedOrcadCandidate(
   options: OrcadIncumbentRecoveryOptions,
   transaction: OrcadActivateTransaction
-): Promise<ServeReadiness | OrcadManagedRefusal | null> {
+): Promise<ServeReadiness | OrcadManagedRefusal | { launchFailure: Error } | null> {
   const snapshotState = transaction.snapshot.state
   const incumbent = transaction.recordBefore.active
   if (
@@ -45,9 +38,7 @@ export async function resumeInterruptedOrcadCandidate(
   }
   const candidate = await resolveOrcadSlotIdentity(options, transaction.candidateVersion)
   const candidateLiveness = await slotLiveness(options, candidate.remoteDir)
-  // A journal from before the field cannot say which app started it; committing without that
-  // drops the host-newer guard. Undoing a candidate that may be serving stops it, so only an
-  // operator who accepts losing its changes may.
+  // Old journals lack candidate app version, so commit would drop downgrade protection; undo a possibly serving candidate only with consent.
   if (transaction.candidateAppVersion === undefined) {
     if (orcadLivenessProvenExited(candidateLiveness) || options.acceptChangedState) {
       return null
@@ -66,7 +57,7 @@ export async function resumeInterruptedOrcadCandidate(
         'build; what it changed is discarded.'
     }
   }
-  // An unprovable candidate process is left to undo, which rules it out before anything starts.
+  // Undo must rule out an unprovable candidate before starting another slot.
   if (candidateLiveness === 'UNKNOWN') {
     return null
   }
@@ -74,9 +65,10 @@ export async function resumeInterruptedOrcadCandidate(
   try {
     readiness = await ensureOrcadSlotServing(options, candidate)
   } catch (error) {
-    // Only a verdict about the candidate sends it to undo; an unanswered host keeps the fence.
+    // Only candidate evidence permits undo; unanswered hosts retain the fence.
     if (error instanceof OrcadActiveReadinessError && error.verdict !== 'unverifiable') {
-      return null
+      // Undo still follows; the failed candidate launch is a failed run all the same.
+      return isOrcadLaunchFailure(error) ? { launchFailure: error } : null
     }
     throw error
   }

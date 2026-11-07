@@ -37,7 +37,7 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-/** Every byte value, so a text layer anywhere in the path would show. */
+/** Exercise every byte value to expose accidental text conversion. */
 const PAYLOAD = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 256))
 
 async function roundTrip(
@@ -192,7 +192,6 @@ describe('reading a bridge channel', () => {
   })
 })
 
-/** A channel the test drives by hand. */
 function scriptedChannel(): RemoteCommandChannel & EventEmitter & { stderr: PassThrough } {
   const channel = Object.assign(new PassThrough(), {
     stderr: new PassThrough(),

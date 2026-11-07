@@ -1,318 +1,230 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
-import { parentPort, workerData } from 'node:worker_threads'
+import type { MessagePortMain } from 'electron'
+import type { SpeechAudioPortMessage } from '../../shared/speech-types'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
+import { buildRecognizerConfig } from './stt-worker-model-config'
+import { createStopTailPadding } from './stt-stop-tail-padding'
+import { connectSttWorkerParentPort } from './stt-worker-parent-port'
+import type { SttWorkerRequest as WorkerMessage } from './stt-worker-process'
 
-type WorkerMessage =
-  | {
-      type: 'init'
-      modelDir: string
-      modelType: string
-      streaming: boolean
-      sampleRate: number
-      files: string[]
-      hotwordsFilePath?: string
-      modelingUnit?: string
-    }
-  | { type: 'feed'; samples: Float32Array; sampleRate: number }
-  | { type: 'stop' }
-  | { type: 'teardown' }
+// One per dictation session; every session shares the one loaded recognizer.
+type SessionStream = {
+  // Online streams live for the session; offline ones are made per decode.
+  online: any
+  offlineChunker: OfflineAudioChunker | null
+  // Primed on the session's first feed so stop never waits on another session's stream.
+  primed: boolean
+  // Streaming models report the same hypothesis on most 100 ms feeds; only changes are posted.
+  lastPartialText: string
+}
 
-// Why: the main sherpa-onnx npm package uses WASM which cannot access the host
-// filesystem to load model files. We use the platform-specific native addon
-// (e.g. sherpa-onnx-darwin-arm64) which has a flat C-style API and direct
-// filesystem access. The main thread resolves the correct absolute path
-// (dev vs packaged) and passes it via workerData.
+// A desktop renderer's audio for one stream, posted straight here instead of through main.
+type AudioPortInput = {
+  port: MessagePortMain
+  onEnded: (() => void) | null
+}
+
+const parentPort = connectSttWorkerParentPort()
+// Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
 let sherpa: any = null
 let recognizer: any = null
-let stream: any = null
 let isStreaming = false
-let offlineChunker: OfflineAudioChunker | null = null
-let offlineSampleRate = 16000
+let modelSampleRate = 16000
+const streams = new Map<string, SessionStream>()
+const audioPorts = new Map<string, AudioPortInput>()
 
-function loadSherpa(): any {
-  const modulePath = workerData?.sherpaModulePath
+function loadSherpa(modulePath: string | undefined): any {
   if (!modulePath) {
-    throw new Error('workerData.sherpaModulePath is required')
+    throw new Error('init.sherpaModulePath is required')
   }
   return require(modulePath)
 }
 
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
-    sherpa = loadSherpa()
-
-    const { modelDir, modelType, streaming, sampleRate, files } = msg
-    isStreaming = streaming
-    offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
-    offlineSampleRate = sampleRate
-
-    const tokens = resolveTokens(files, modelDir)
-    const hotwords = buildHotwordsConfig(msg)
-
-    if (streaming && modelType === 'transducer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords,
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
-      recognizer = sherpa.createOnlineRecognizer(config)
-      stream = sherpa.createOnlineStream(recognizer)
-    } else if (streaming && modelType === 'paraformer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          paraformer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search',
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
-      recognizer = sherpa.createOnlineRecognizer(config)
-      stream = sherpa.createOnlineStream(recognizer)
-    } else if (modelType === 'whisper') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          whisper: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'nemo-ctc') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          nemoCtc: {
-            model: resolveFile(files, 'model', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'senseVoice') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          senseVoice: {
-            model: resolveFile(files, 'model', modelDir),
-            // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
-            language: '',
-            useInverseTextNormalization: 1
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    }
-
-    parentPort?.postMessage({ type: 'ready' })
+    sherpa = loadSherpa(msg.sherpaModulePath)
+    isStreaming = msg.streaming
+    modelSampleRate = msg.sampleRate
+    const { online, config } = buildRecognizerConfig(msg)
+    recognizer = online
+      ? sherpa.createOnlineRecognizer(config)
+      : sherpa.createOfflineRecognizer(config)
+    parentPort.post({ type: 'ready' })
   } catch (err) {
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', error: String(err) })
   }
 }
 
-// Why: an offline stream is single-use — always mint a fresh stream after an
-// attempt so a failed decode cannot leave a spent stream on a warm worker.
+function openStream(streamId: string): SessionStream {
+  const existing = streams.get(streamId)
+  if (existing) {
+    return existing
+  }
+  const stream: SessionStream = {
+    online: isStreaming ? sherpa.createOnlineStream(recognizer) : null,
+    offlineChunker: isStreaming ? null : new OfflineAudioChunker(modelSampleRate),
+    primed: false,
+    lastPartialText: ''
+  }
+  streams.set(streamId, stream)
+  return stream
+}
+
 function decodeOfflineChunk(samples: Float32Array): string {
-  try {
-    sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
-    sherpa.decodeOfflineStream(recognizer, stream)
-    const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
-    const result = JSON.parse(resultJson)
-    return result?.text?.trim() ?? ''
-  } finally {
-    if (sherpa && recognizer) {
-      stream = sherpa.createOfflineStream(recognizer)
+  const stream = sherpa.createOfflineStream(recognizer)
+  sherpa.acceptWaveformOffline(stream, { sampleRate: modelSampleRate, samples })
+  sherpa.decodeOfflineStream(recognizer, stream)
+  const result = JSON.parse(sherpa.getOfflineStreamResultAsJson(stream))
+  return result?.text?.trim() ?? ''
+}
+
+function feedOnline(streamId: string, stream: SessionStream, samples: Float32Array): void {
+  if (!stream.primed) {
+    // New streams start with empty encoder caches; zipformer en-20M dropped most of the first second
+    // (first word wrong on 71 of 73 LibriSpeech clips). A second of silence fills them first.
+    sherpa.acceptWaveformOnline(stream.online, {
+      sampleRate: modelSampleRate,
+      samples: new Float32Array(modelSampleRate)
+    })
+    stream.primed = true
+  }
+  sherpa.acceptWaveformOnline(stream.online, { sampleRate: modelSampleRate, samples })
+  while (sherpa.isOnlineStreamReady(recognizer, stream.online)) {
+    sherpa.decodeOnlineStream(recognizer, stream.online)
+  }
+  const result = JSON.parse(sherpa.getOnlineStreamResultAsJson(recognizer, stream.online))
+  const text = result?.text?.trim()
+  if (text && text !== stream.lastPartialText) {
+    stream.lastPartialText = text
+    parentPort.post({ type: 'partial', streamId, text })
+  }
+  if (sherpa.isEndpoint(recognizer, stream.online)) {
+    if (text) {
+      parentPort.post({ type: 'final', streamId, text })
     }
+    sherpa.reset(recognizer, stream.online)
+    stream.lastPartialText = ''
   }
 }
 
-// Why: warm-worker reuse must not see residual audio or a spent offline stream.
-// Recovery failures are swallowed so they cannot skip the stopped lifecycle signal.
-function resetOfflineSessionState(): void {
-  try {
-    offlineChunker = new OfflineAudioChunker(offlineSampleRate)
-    if (sherpa && recognizer) {
-      stream = sherpa.createOfflineStream(recognizer)
+function feedOffline(streamId: string, stream: SessionStream, samples: Float32Array): void {
+  // Bound ONNX allocations below Chromium's >=2GiB crash threshold (#7925); consumers append final segments.
+  const readyChunks = stream.offlineChunker?.push(new Float32Array(samples)) ?? []
+  // push() already consumed these windows; keep decoding later ones after a failure.
+  let firstError: unknown = null
+  for (const chunk of readyChunks) {
+    try {
+      const text = decodeOfflineChunk(chunk)
+      if (text) {
+        parentPort.post({ type: 'final', streamId, text })
+      }
+    } catch (err) {
+      firstError ??= err
     }
-  } catch {
-    // Non-fatal: prefer posting stopped over stranding stopDictation for 60s.
+  }
+  if (firstError) {
+    throw firstError
   }
 }
 
 function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
-  if (!recognizer || !stream) {
+  if (!recognizer) {
     return
   }
-
   try {
-    const inputRate = msg.sampleRate || offlineSampleRate
-    // Why: sherpa's native stream aborts the process if one recognizer sees
-    // different input rates across chunks. Normalize before crossing the
-    // native boundary so device/context changes become recoverable JS state.
-    const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
+    const stream = openStream(msg.streamId)
+    // Normalize rates before native decode: mixed rates on one recognizer abort the process.
+    const samples = resampleToRate(msg.samples, msg.sampleRate || modelSampleRate, modelSampleRate)
     if (isStreaming) {
-      sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
-
-      while (sherpa.isOnlineStreamReady(recognizer, stream)) {
-        sherpa.decodeOnlineStream(recognizer, stream)
-      }
-
-      const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
-      const result = JSON.parse(resultJson)
-      const text = result?.text?.trim()
-      if (text) {
-        parentPort?.postMessage({ type: 'partial', text })
-      }
-
-      if (sherpa.isEndpoint(recognizer, stream)) {
-        const finalText = result?.text?.trim()
-        if (finalText) {
-          parentPort?.postMessage({ type: 'final', text: finalText })
-        }
-        sherpa.reset(recognizer, stream)
-      }
+      feedOnline(msg.streamId, stream, samples)
     } else {
-      // Why: decoding one unbounded capture in a single call makes ONNX tensor
-      // sizes scale with dictation length until a >=2 GiB allocation SIGTRAPs
-      // the whole app (#7925). Decode bounded chunks as they fill instead;
-      // each consumer already appends multiple 'final' segments per session.
-      const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
-      // Why: keep decoding later ready windows after one failure — push() has
-      // already removed them from the chunker, and decodeOfflineChunk refreshes
-      // the stream in finally so a spent stream cannot poison the next attempt.
-      let firstError: unknown = null
-      for (const chunk of readyChunks) {
-        try {
-          const text = decodeOfflineChunk(chunk)
-          if (text) {
-            parentPort?.postMessage({ type: 'final', text })
-          }
-        } catch (err) {
-          firstError ??= err
-        }
-      }
-      if (firstError) {
-        throw firstError
-      }
+      feedOffline(msg.streamId, stream, samples)
     }
   } catch (err) {
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', streamId: msg.streamId, error: String(err) })
   }
 }
 
-function handleStop(): void {
-  if (!recognizer || !stream) {
-    parentPort?.postMessage({ type: 'stopped' })
+function finishStream(stream: SessionStream): string {
+  if (stream.online) {
+    sherpa.acceptWaveformOnline(stream.online, {
+      sampleRate: modelSampleRate,
+      samples: createStopTailPadding(modelSampleRate)
+    })
+    sherpa.inputFinished(stream.online)
+    while (sherpa.isOnlineStreamReady(recognizer, stream.online)) {
+      sherpa.decodeOnlineStream(recognizer, stream.online)
+    }
+    const result = JSON.parse(sherpa.getOnlineStreamResultAsJson(recognizer, stream.online))
+    return result?.text?.trim() ?? ''
+  }
+  // flush() leaves less than one bounded chunk.
+  const remaining = stream.offlineChunker?.flush()
+  return remaining && remaining.length > 0 ? decodeOfflineChunk(remaining) : ''
+}
+
+function attachAudioPort(streamId: string, port: MessagePortMain | undefined): void {
+  if (!port) {
     return
   }
-
-  try {
-    if (isStreaming) {
-      sherpa.inputFinished(stream)
-      while (sherpa.isOnlineStreamReady(recognizer, stream)) {
-        sherpa.decodeOnlineStream(recognizer, stream)
-      }
-      const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
-      const result = JSON.parse(resultJson)
-      const text = result?.text?.trim()
-      if (text) {
-        parentPort?.postMessage({ type: 'final', text })
-      }
-      stream = sherpa.createOnlineStream(recognizer)
+  const input: AudioPortInput = { port, onEnded: null }
+  // The renderer closes its end after 'end'; a close alone means it went away.
+  const end = (): void => {
+    if (audioPorts.get(streamId) !== input) {
+      return
+    }
+    audioPorts.delete(streamId)
+    port.close()
+    input.onEnded?.()
+  }
+  port.on('message', ({ data }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the desktop preload holds the other end, and it sends SpeechAudioPortMessage.
+    const msg = data as SpeechAudioPortMessage
+    if (msg.type === 'end') {
+      end()
     } else {
-      // Why: the remainder is below the chunk limit by construction, so this
-      // last decode is bounded too.
-      const remaining = offlineChunker?.flush()
-      if (remaining && remaining.length > 0) {
-        const text = decodeOfflineChunk(remaining)
-        if (text) {
-          parentPort?.postMessage({ type: 'final', text })
-        }
-      }
-      resetOfflineSessionState()
+      handleFeed({ type: 'feed', streamId, samples: msg.samples, sampleRate: msg.sampleRate })
+    }
+  })
+  port.on('close', end)
+  audioPorts.set(streamId, input)
+  port.start()
+}
+
+function handleStop(streamId: string): void {
+  const input = audioPorts.get(streamId)
+  // Main's stop can overtake the renderer's last frames on the port; finish only after them.
+  if (input) {
+    input.onEnded = () => handleStop(streamId)
+    return
+  }
+  const stream = streams.get(streamId)
+  streams.delete(streamId)
+  try {
+    const text = stream && recognizer ? finishStream(stream) : ''
+    if (text) {
+      parentPort.post({ type: 'final', streamId, text })
     }
   } catch (err) {
-    if (!isStreaming) {
-      resetOfflineSessionState()
-    }
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', streamId, error: String(err) })
   } finally {
-    // Why: stopDictation waits on this signal; recovery must never prevent it.
-    parentPort?.postMessage({ type: 'stopped' })
+    parentPort.post({ type: 'stopped', streamId })
   }
 }
 
-function handleTeardown(): void {
-  stream = null
-  recognizer = null
-  sherpa = null
-  offlineChunker = null
-  process.exit(0)
+// A canceled dictation drops its audio undecoded.
+function handleDiscard(streamId: string): void {
+  const input = audioPorts.get(streamId)
+  audioPorts.delete(streamId)
+  input?.port.close()
+  streams.delete(streamId)
+  parentPort.post({ type: 'stopped', streamId })
 }
 
-parentPort?.on('message', (msg: WorkerMessage) => {
+parentPort.onMessage((message, ports) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends WorkerMessage.
+  const msg = message as WorkerMessage
   switch (msg.type) {
     case 'init':
       handleInit(msg)
@@ -321,10 +233,13 @@ parentPort?.on('message', (msg: WorkerMessage) => {
       handleFeed(msg)
       break
     case 'stop':
-      handleStop()
+      handleStop(msg.streamId)
       break
-    case 'teardown':
-      handleTeardown()
+    case 'discard':
+      handleDiscard(msg.streamId)
+      break
+    case 'attach-audio':
+      attachAudioPort(msg.streamId, ports[0])
       break
   }
 })

@@ -3,8 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       target: { kind: 'local' } | { kind: 'environment'; environmentId: string },
@@ -25,17 +25,21 @@ vi.mock('@/runtime/runtime-file-routing', () => ({
     ) => connectionId ?? (target.kind === 'environment' ? target.environmentId : null)
   )
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
-vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
+vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
+  getRuntimeGitScope: vi.fn(() => null)
+}))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
@@ -43,7 +47,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
@@ -62,15 +69,17 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: mocks.getState
-  }
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
+import { registerEditorPanelHostContentRecoveryTests } from './editor-panel-host-content-recovery.spec'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -113,7 +122,6 @@ const onLocalLogTailChanged = vi.fn(() => () => {})
 const fsApi = { onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
-let latestReloadContent: (file: OpenFile) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -130,7 +138,6 @@ function HookProbe({
   })
   latestFileContents = state.fileContents
   latestDiffContents = state.diffContents
-  latestReloadContent = state.reloadContent
   return null
 }
 
@@ -169,6 +176,10 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       ...createTestStore().getState(),
       settings: null,
+      repos: [{ id: 'repo-1', path: '/repo', hostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
     })
@@ -183,454 +194,16 @@ describe('useEditorPanelContentState', () => {
     root = null
   })
 
-  it('loads folder workspace files through the path-specific SSH connection', async () => {
-    const activeFile = createOpenFile({
-      filePath: '/home/neil/platform/api/src/file.ts',
-      relativePath: 'api/src/file.ts',
-      worktreeId: 'folder:folder-workspace-1'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.content).toBe('remote content')
-    )
-    expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
-      'folder:folder-workspace-1',
-      '/home/neil/platform/api/src/file.ts'
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/home/neil/platform/api/src/file.ts',
-        relativePath: 'api/src/file.ts',
-        worktreeId: 'folder:folder-workspace-1',
-        connectionId: 'ssh-1'
-      })
-    )
-  })
-
-  it('loads an external SSH-host image when the tab is pinned to that target', async () => {
-    const activeFile = createOpenFile({
-      id: '/tmp/ssh-preview.png',
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'repo-ssh::/home/user/project',
-      externalSshTargetId: 'ssh-1'
-    } as never)
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'base64-image',
-      isBinary: true,
-      isImage: true,
-      mimeType: 'image/png'
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.isImage).toBe(true))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/tmp/ssh-preview.png',
-        relativePath: '/tmp/ssh-preview.png',
-        worktreeId: 'repo-ssh::/home/user/project',
-        connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
-    )
-  })
-
-  it('loads an unstamped external SSH-host tab through the resolved connection', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-ssh::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# remote', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# remote'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/work/reports/audit.md',
-        connectionId: 'ssh-1',
-        expectedExternalSshTargetId: undefined
-      })
-    )
-  })
-
-  it('keeps a client-local live-tail log tab on the client inside an SSH workspace', async () => {
-    const logPath = '/Users/me/.codex/sessions/session.jsonl'
-    const worktreeId = 'repo-ssh::/work/demo-project'
-    const externalTab = { id: logPath, filePath: logPath, relativePath: logPath, worktreeId }
-    const activeFile = createOpenFile({ ...externalTab, readOnly: true, liveTail: true })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'log line', isBinary: false })
-
-    container = document.body.appendChild(document.createElement('div'))
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
-    // Why: AI Vault only surfaces client-local logs, so the worktree's SSH target must
-    // not capture this read — it stays a user-named client-local path.
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: undefined,
-        includeLocalLogMetadata: true,
-        access: { kind: 'user-file' }
-      })
-    )
-  })
-
-  it('rejects an unstamped external tab in a remote runtime workspace', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-runtime::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External local files are not available for remote workspaces.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
-  it('rejects an external SSH-host tab after its target owner changes', async () => {
-    const activeFile = createOpenFile({
-      id: '/tmp/ssh-preview.png',
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'repo-ssh::/home/user/project',
-      externalSshTargetId: 'ssh-original'
-    } as never)
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
-    mocks.readRuntimeFileContent.mockRejectedValue(
-      new Error('External SSH files are not available after the workspace host changes.')
-    )
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External SSH files are not available after the workspace host changes.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: 'ssh-replacement',
-        expectedExternalSshTargetId: 'ssh-original'
-      })
-    )
-  })
-
-  it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {
-    const activeFile = createOpenFile({
-      id: 'branch-diff',
-      filePath: '/home/neil/platform/api/src/file.ts',
-      relativePath: 'api/src/file.ts',
-      worktreeId: 'folder:folder-workspace-1',
-      mode: 'diff',
-      diffSource: 'branch',
-      branchCompare: {
-        baseRef: 'main',
-        compareRef: 'feature',
-        compareVersion: 'feature',
-        baseOid: 'base',
-        headOid: 'head',
-        mergeBase: 'merge-base'
-      }
-    })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.getRuntimeGitBranchDiff.mockResolvedValue({
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: 'remote branch diff',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('remote branch diff')
-    )
-    expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
-      'folder:folder-workspace-1',
-      '/home/neil/platform/api/src/file.ts'
-    )
-    expect(mocks.getRuntimeGitBranchDiff).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'folder:folder-workspace-1',
-        worktreePath: '/home/neil/platform',
-        connectionId: 'ssh-1'
-      }),
-      expect.objectContaining({
-        compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
-        filePath: 'api/src/file.ts'
-      })
-    )
-  })
-
-  it('does not read locally while a remote host worktree owner is still hydrating (#6648)', async () => {
-    const activeFile = createOpenFile({
-      filePath: '/home/user/project/src/index.ts',
-      relativePath: 'src/index.ts',
-      worktreeId: 'repo-ssh::/home/user/project'
-    })
-    // Owner unknown (SSH repo not hydrated): connection unresolved + not ready.
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.isWorktreeConnectionResolved.mockReturnValue(false)
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    // Surfaces a retryable owner-not-ready error instead of a terminal local
-    // "access denied", and never attempts the bad local read.
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.loadError).toBeTruthy())
-    expect(latestFileContents[activeFile.id]?.loadError).not.toMatch(/access denied/i)
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-
-    // The SSH repo finishes hydrating: the worktree owner resolves to its
-    // target. We do NOT bump the reload nonce here — the retry hook must
-    // re-attempt the read on its own once the owner-not-ready error clears.
-    mocks.isWorktreeConnectionResolved.mockReturnValue(true)
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-target-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
-
-    // Driven purely by the automatic retry (no re-render, no forced reload).
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('remote'), {
-      timeout: 3000
-    })
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/home/user/project/src/index.ts',
-        worktreeId: 'repo-ssh::/home/user/project',
-        connectionId: 'ssh-target-1'
-      })
-    )
-  })
-
-  it('reloads a clean file when its file content reload nonce changes', async () => {
-    const activeFile = createOpenFile()
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old content', isBinary: false })
-      .mockResolvedValueOnce({ content: 'fresh content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('old content'))
-
-    const reloadedFile = { ...activeFile, fileContentReloadNonce: 1 }
-    await act(async () => {
-      root?.render(<HookProbe activeFile={reloadedFile} openFiles={[reloadedFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        filePath: '/repo/file.ts',
-        relativePath: 'file.ts',
-        worktreeId: 'wt-1'
-      })
-    )
-  })
-
-  it('keeps a loaded unstaged diff when git status moves the row to staged', async () => {
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff.mockResolvedValue({
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: 'large diff content',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'unstaged' }]
-          }}
-        />
-      )
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('large diff content')
-    )
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'staged' }]
-          }}
-        />
-      )
-    })
-
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(1)
-  })
-
-  it('reloads a loaded unstaged diff when its own status row is still present', async () => {
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'first diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'refreshed diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('first diff content')
-    )
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'unstaged' }]
-          }}
-        />
-      )
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('refreshed diff content')
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
-  })
-
-  it('starts a fresh file read for a forced reload instead of reusing the in-flight read', async () => {
-    // A reload nonce on mount makes the lazy-load read and the forced reload
-    // fire in the same effect flush, while the first read is still registered
-    // in flight. The forced reload must delete that entry and start a new read.
-    const activeFile = createOpenFile({ fileContentReloadNonce: 1 })
-    const firstRead = createDeferred<FileContent>()
-    const secondRead = createDeferred<FileContent>()
-    mocks.readRuntimeFileContent
-      .mockReturnValueOnce(firstRead.promise)
-      .mockReturnValueOnce(secondRead.promise)
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
-
-    await act(async () => {
-      secondRead.resolve({ content: 'fresh content', isBinary: false })
-      await secondRead.promise
-    })
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
-  })
+  registerEditorPanelHostContentRecoveryTests(
+    mocks,
+    () => latestFileContents,
+    async (file) => {
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      root = createRoot(container)
+      await act(async () => root?.render(<HookProbe activeFile={file} openFiles={[file]} />))
+    }
+  )
 
   it('ignores an older file read that resolves after a newer forced read', async () => {
     const activeFile = createOpenFile()
@@ -658,7 +231,6 @@ describe('useEditorPanelContentState', () => {
     })
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
 
-    // The older read resolving last must not clobber the fresh content.
     await act(async () => {
       staleRead.resolve({ content: 'stale content', isBinary: false })
       await staleRead.promise
@@ -809,127 +381,5 @@ describe('useEditorPanelContentState', () => {
       await staleDiff.promise
     })
     expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
-  })
-
-  it('routes reloadContent for a diff tab to a forced diff refetch, not a file read', async () => {
-    // Why: the changed-on-disk banner's "Reload from Disk" on an unstaged
-    // diff tab must refetch the diff body — routing it to the file store
-    // would leave the visible diff stale (and vice versa for edit tabs).
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'first diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'reloaded diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('first diff content')
-    )
-
-    await act(async () => {
-      latestReloadContent(activeFile)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('reloaded diff content')
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
-  it('routes reloadContent for an edit tab to a forced file read, not a diff refetch', async () => {
-    const activeFile = createOpenFile()
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old content', isBinary: false })
-      .mockResolvedValueOnce({ content: 'reloaded content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('old content'))
-
-    await act(async () => {
-      latestReloadContent(activeFile)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.content).toBe('reloaded content')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
-    expect(mocks.getRuntimeGitDiff).not.toHaveBeenCalled()
-  })
-
-  it('stamps the disk baseline when a clean tab load resolves', async () => {
-    const activeFile = createOpenFile()
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
-        activeFile.id,
-        getDiskBaselineSignature('disk content')
-      )
-    )
-  })
-
-  it('keeps a dirty tab baseline untouched by content loads', async () => {
-    // Why: a dirty tab's draft still derives from the OLD content — moving
-    // the baseline on load would hide the conflict its restore check exists
-    // to catch.
-    const activeFile = createOpenFile({ isDirty: true })
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('disk content'))
-    expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
   })
 })

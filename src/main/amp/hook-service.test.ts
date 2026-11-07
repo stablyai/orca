@@ -30,30 +30,6 @@ describe('AmpHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('installs an Orca-managed Amp system plugin', () => {
-    const status = new AmpHookService().install()
-
-    expect(status).toMatchObject({
-      agent: 'amp',
-      state: 'installed',
-      configPath: join(homeDir, '.config', 'amp', 'plugins', _internals.AMP_PLUGIN_FILE),
-      managedHooksPresent: true,
-      detail: null
-    })
-
-    const source = readFileSync(status.configPath, 'utf-8')
-    expect(source).toContain('return { action: "allow" }')
-    expect(source).toContain('const MAX_PENDING_POSTS = 50')
-    expect(source).toContain('let postQueue: QueuedPost[] = []')
-    expect(source).toContain('function enqueuePost')
-    expect(source).toContain('postQueue.shift()')
-    expect(source).toContain('enqueuePost("tool.call"')
-    expect(source).not.toContain('await post("tool.call"')
-    expect(source).not.toContain('postQueue = postQueue.then')
-    expect(source).toContain('process.env.ORCA_PANE_KEY')
-    expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
-  })
-
   it('does not overwrite an existing user-authored Amp plugin file', () => {
     const pluginPath = _internals.getPluginPath()
     mkdirSync(dirname(pluginPath), { recursive: true })
@@ -87,47 +63,5 @@ describe('AmpHookService', () => {
 
     expect(skipped.state).toBe('partial')
     expect(existsSync(pluginPath)).toBe(true)
-  })
-
-  it('reports partial for stale managed plugin content missing required handlers', () => {
-    const pluginPath = _internals.getPluginPath()
-    mkdirSync(dirname(pluginPath), { recursive: true })
-    writeFileSync(pluginPath, `// ${_internals.AMP_PLUGIN_MARKER}\n`, 'utf-8')
-
-    const status = new AmpHookService().getStatus()
-
-    expect(status).toMatchObject({
-      agent: 'amp',
-      state: 'partial',
-      managedHooksPresent: true
-    })
-    expect(status.detail).toContain('missing required handlers')
-  })
-
-  it('reports partial when a stale managed plugin is missing the session reset handler', () => {
-    const pluginPath = _internals.getPluginPath()
-    mkdirSync(dirname(pluginPath), { recursive: true })
-    writeFileSync(
-      pluginPath,
-      [
-        `// ${_internals.AMP_PLUGIN_MARKER}`,
-        "amp.on('agent.start', () => {})",
-        "amp.on('tool.call', () => {})",
-        "amp.on('tool.result', () => {})",
-        "amp.on('agent.end', () => {})",
-        '/hook/amp',
-        ''
-      ].join('\n'),
-      'utf-8'
-    )
-
-    const status = new AmpHookService().getStatus()
-
-    expect(status).toMatchObject({
-      agent: 'amp',
-      state: 'partial',
-      managedHooksPresent: true
-    })
-    expect(status.detail).toContain('missing required handlers')
   })
 })

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readRendererProcessMemory } from './renderer-process-memory-reader'
 
-// Why the partial type: Electron types `residentSet` as required, but Chromium
-// omits it on macOS — the reader's optional handling exists for exactly that.
+// Electron requires residentSet in its types, but Chromium omits it on macOS.
 const source = (
   getProcessMemoryInfo: () => Promise<Partial<Electron.ProcessMemoryInfo>>
 ): Parameters<typeof readRendererProcessMemory>[0] =>
@@ -32,8 +31,6 @@ describe('readRendererProcessMemory', () => {
   })
 
   it('returns null for a non-finite private size', async () => {
-    // Why: a NaN would propagate into breadcrumb megabytes and read as a real
-    // footprint of zero, which is worse than reporting nothing.
     await expect(
       readRendererProcessMemory(source(async () => ({ private: Number.NaN, shared: 0 })))
     ).resolves.toBeNull()

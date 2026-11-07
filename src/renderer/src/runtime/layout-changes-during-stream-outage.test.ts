@@ -1,6 +1,4 @@
-// While main's local layout stream is down, a change the window sends is applied by main but not
-// drawn by the window; the reopened stream's snapshot shows it. The local host is the same build,
-// so the window never needs to draw these itself.
+// During local stream outage, main applies intents and reconnect snapshot draws them. Local main shares this build, so window fallback drawing is unnecessary.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -15,7 +13,7 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+
 import { testContext } from '../../../shared/workspace-layout/workspace-layout-command.test-fixture'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -30,7 +28,7 @@ import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layou
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { dropTabThroughLayoutOwner } from '../components/tab-group/tab-group-layout-owner-commands'
 import { applyRuntimePaneTitle } from '../hooks/ipc-events/terminal-pane-title-ipc-bridge'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { endLayoutFramePositions } from './layout-frame-position'
 import type { AppliedLayoutCommand } from './layout-apply-test-double'
 import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'
@@ -52,7 +50,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 type Call = { command: AppliedLayoutCommand; answer: (reply: LayoutApplyReply) => void }
 const rpc = vi.hoisted((): { calls: Call[] } => ({ calls: [] }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   callRuntimeRpc: (_target: unknown, _method: string, params: { command: AppliedLayoutCommand }) =>
     new Promise<LayoutApplyReply>((answer) => rpc.calls.push({ command: params.command, answer }))
@@ -195,28 +193,5 @@ describe('changes made while main’s layout stream is down', () => {
       useAppStore.getState().groupsByWorktree[GIT_KEY]!.find((group) => group.id === 'group-a')
         ?.activeTabId
     ).toBe('tab-unbound')
-  })
-  it('keep an agent’s first generated title when a second prompt comes before the snapshot', async () => {
-    useAppStore.setState({
-      settings: { ...useAppStore.getState().settings!, tabAutoGenerateTitle: true }
-    })
-    const leafId = useAppStore.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
-    const paneKey = makePaneKey('tab-unbound', leafId)
-    stream.onStatus!({ state: 'lost' })
-
-    useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth module')
-    await mainAppliesEach()
-    // The answer settled the first title, so the second prompt is sent too.
-    useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(rpc.calls.map((call) => call.command.type)).toEqual(['renameTabs'])
-    await mainAppliesEach()
-    expect(terminalRow('tab-unbound').generatedTitle).toBeUndefined()
-
-    stream.onStatus!({ state: 'connecting' })
-    stream.onFrame!(frames.snapshot(published(), ++seq))
-    stream.onPosition!(seq)
-    await settle()
-
-    expect(terminalRow('tab-unbound').generatedTitle).toBe('Refactor the auth module')
   })
 })

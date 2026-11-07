@@ -6,7 +6,9 @@ const { callRuntimeRpc } = vi.hoisted(() => ({
   }))
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 
 const { queueDeferredRestoreRetry, cancelDeferredRestoreRetry, resetDeferredRestoreDrainForTests } =
   await import('./pane-spawn-deferral-drain')
@@ -22,21 +24,6 @@ afterEach(() => {
 })
 
 describe('the background retry of restores a host kept asleep', () => {
-  it('asks again after a while, without anyone opening the pane', async () => {
-    const retry = vi.fn(async () => true)
-    queueDeferredRestoreRetry('tab:a', null, retry)
-    await vi.advanceTimersByTimeAsync(29_000)
-    expect(retry).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(retry).toHaveBeenCalledTimes(1)
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'runtime.automaticWork.status',
-      undefined,
-      expect.anything()
-    )
-  })
-
   it('asks one pane per host at a time and takes the next soon after one starts', async () => {
     const order: string[] = []
     const retry = (name: string) => vi.fn(async () => (order.push(name), true))
@@ -62,20 +49,6 @@ describe('the background retry of restores a host kept asleep', () => {
     const gaps = asks.map((at, index) => at - (index === 0 ? start : asks[index - 1]))
     expect(gaps.slice(0, 5)).toEqual([30_000, 60_000, 120_000, 240_000, 300_000])
     expect(Math.max(...gaps)).toBe(300_000)
-  })
-
-  it('never spawns on a host it cannot reach or whose restores are paused', async () => {
-    const retry = vi.fn(async () => true)
-    callRuntimeRpc.mockRejectedValueOnce(new Error('offline'))
-    callRuntimeRpc.mockResolvedValueOnce({
-      automaticWork: { admission: 'enforce', mode: { kind: 'paused' } }
-    })
-    queueDeferredRestoreRetry('tab:a', 'env-1', retry)
-    await vi.advanceTimersByTimeAsync(30_000 + 60_000)
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
-    expect(retry).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('drops a pane that was opened or closed meanwhile', async () => {

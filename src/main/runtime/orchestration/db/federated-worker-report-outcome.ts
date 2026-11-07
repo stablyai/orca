@@ -1,4 +1,4 @@
-import type { WorkerReportOutcome } from '../types'
+import type { WorkerReportOutcome } from './orchestration-records'
 
 export function parseFederatedWorkerReportOutcome(
   payload: string

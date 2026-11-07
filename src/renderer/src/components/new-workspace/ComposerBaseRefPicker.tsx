@@ -1,7 +1,8 @@
 import React from 'react'
 import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
 import { useAppStore } from '@/store'
-import { useRepoMap, useWorktreesForRepo } from '@/store/selectors'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -14,12 +15,7 @@ type ComposerBaseRefPickerProps = {
   readOnly?: boolean
 }
 
-/**
- * Base ref control for the New Workspace composer.
- *
- * Owns its own store reads so the name section stays presentational and the
- * worktree subscription only exists while the picker is actually on screen.
- */
+/** Own store subscriptions only while the picker is shown, leaving the name section presentational. */
 export function ComposerBaseRefPicker({
   repoId,
   baseBranch,

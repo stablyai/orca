@@ -4,8 +4,8 @@ import {
   acquireJiraImageUrl,
   hasCachedJiraImage,
   onJiraImageCacheInvalidated
-} from '@/runtime/runtime-jira-image-cache'
-import { jiraImageProtocolUrl } from '@/runtime/runtime-jira-image-client'
+} from '@/runtime/jira/runtime-jira-image-cache'
+import { jiraImageProtocolUrl } from '@/runtime/jira/runtime-jira-image-client'
 import { translate } from '@/i18n/i18n'
 import { ExpandableMarkdownImage } from './sidebar/MarkdownImageLightbox'
 

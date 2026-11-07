@@ -2,10 +2,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import '../../runtime/orchestration/db/contract-constants'
+import '../../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../runtime/orchestration/db/dispatch-row-writer'
+import '../../runtime/orchestration/db/attempt-outcome-projection'
 import { LEGACY_RELAY_CLI_UNVERIFIED } from './legacy-relay-cli-caller'
 import {
   createLegacyRelayCliServer,
@@ -128,7 +133,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     expect(json(done).result).not.toHaveProperty('lifecycle.action', 'rejected')
     expect(done.exitCode).toBe(0)
     expect(db.getTask(ids.taskId)?.status).toBe('completed')
-    // The verified identity lives only as long as the call.
     expect(runtime.getTerminalProcessIncarnation(WORKER)).toBeNull()
     expect(runtime.getTerminalPaneKey(WORKER)).toBeNull()
   })
@@ -157,6 +161,9 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     await expect(run(['worktree', 'list'])).rejects.toThrow(LEGACY_RELAY_CLI_UNSUPPORTED)
     await expect(run(['terminal', 'send', '--terminal', COORDINATOR])).rejects.toThrow(
       LEGACY_RELAY_CLI_UNSUPPORTED
+    )
+    await expect(run(['connector', 'reply', '--text', 'done'])).rejects.toThrow(
+      CONNECTOR_REPLY_UNAVAILABLE
     )
   })
 

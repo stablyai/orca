@@ -1,8 +1,8 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
 import {
   ClaudeBackgroundTaskIdentityResolver,

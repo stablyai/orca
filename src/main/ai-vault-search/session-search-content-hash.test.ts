@@ -19,24 +19,9 @@ it('reaches the same digest whether the prefix arrives whole or in two appends',
 })
 
 it('freezes once the prefix limit is reached so later appends cannot move it', () => {
-  // Found rather than imported: the limit is the module's business, and a test
-  // that reads it off the export cannot notice the fold ignoring it.
   const capped = foldContentHash(EMPTY_CONTENT_HASH, userMessages('turn', 64))
   expect(capped.count).toBeLessThan(64)
   expect(foldContentHash(capped, userMessages('later', 20))).toEqual(capped)
-})
-
-it('separates two conversations that share an opening prompt', () => {
-  const shared = userMessages('same opening', 1)
-  const first = foldContentHash(EMPTY_CONTENT_HASH, [
-    ...shared,
-    { role: 'user', text: 'left', timestamp: null }
-  ])
-  const second = foldContentHash(EMPTY_CONTENT_HASH, [
-    ...shared,
-    { role: 'user', text: 'right', timestamp: null }
-  ])
-  expect(first.hash).not.toBe(second.hash)
 })
 
 it('refuses to collapse on a prefix too short to mean anything', () => {

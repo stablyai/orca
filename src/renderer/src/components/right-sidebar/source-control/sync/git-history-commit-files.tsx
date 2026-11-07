@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import type React from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { ArrowUpRight } from 'lucide-react'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
@@ -11,11 +12,9 @@ import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitFileStatus } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 
-// State for a single commit's lazily-loaded file list. Owned by GitHistoryPanel,
-// populated through the onLoadCommitFiles loader supplied by SourceControl.
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }
   | { status: 'error'; error: string }
@@ -47,9 +46,24 @@ function CommitFileRow({
         className: 'size-3.5 shrink-0',
         style: { color: STATUS_COLORS[status] }
       })}
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <span className="min-w-0 truncate text-left text-foreground" dir="rtl">
+          <bdi>{fileName}</bdi>
+        </span>
+        {dirPath && (
+          <span
+            className="min-w-0 flex-1 truncate text-left text-2xs text-muted-foreground"
+            dir="rtl"
+          >
+            <bdi>{dirPath}</bdi>
+          </span>
+        )}
+      </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-added)]">
+        {entry.added !== undefined ? `+${entry.added}` : ''}
+      </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-deleted)]">
+        {entry.removed !== undefined ? `−${entry.removed}` : ''}
       </span>
       <span
         className="w-4 shrink-0 text-center text-[10px] font-bold"
@@ -71,17 +85,7 @@ function CommitFilesBody({
   onOpenAll?: () => void
 }): React.JSX.Element {
   if (state.status === 'loading') {
-    return (
-      <div className="flex items-center gap-2 py-1 pl-9 pr-3 text-[11px] text-muted-foreground">
-        <RefreshCw className="size-3 animate-spin" />
-        <span>
-          {translate(
-            'auto.components.right.sidebar.GitHistoryCommitFiles.a1b2c3d4e5',
-            'Loading files…'
-          )}
-        </span>
-      </div>
-    )
+    return <div className="h-6" />
   }
 
   if (state.status === 'error') {
@@ -140,7 +144,6 @@ export function GitHistoryCommitFiles({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
-  // Author and date move off the dense commit row and surface here on expand.
   const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">

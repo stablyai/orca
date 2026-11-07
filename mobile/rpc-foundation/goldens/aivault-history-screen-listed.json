@@ -4,6 +4,11 @@
   "family": "aiVault.history-screen",
   "namedDeltas": [],
   "values": {
+    "0180d22edc2e": {
+      "name": "worktree.ps#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "03106dceb986": {
       "name": "status.get#1",
       "ordinal": 2,
@@ -30,31 +35,64 @@
         "startedAt": 0
       }
     },
-    "035edfd9a1b9": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 5,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "SectionList": 1,
-        "Text": 5,
-        "TextInput": 1,
-        "View": 5
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history", "Workspace", "Project", "All"]
-    },
-    "3a91d2093c6e": {
+    "222a3ba1d974": {
       "name": "worktree.ps#1",
       "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktrees": [
+              {
+                "path": "/repo/feature",
+                "repoId": "repo-1",
+                "worktreeId": "wt-history"
+              },
+              {
+                "path": "/repo/sibling",
+                "repoId": "repo-1",
+                "worktreeId": "wt-2"
+              }
+            ]
+          }
+        }
+      }
     },
-    "3aaa7e04cda5": {
+    "4d68bff46cff": {
+      "name": "status.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "595e6c3bbfed": {
       "name": "aiVault.listSessions#1",
       "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    },
+    "6cd39311d5ec": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -80,9 +118,9 @@
         "startedAt": 0
       }
     },
-    "4cebf6258ec1": {
+    "7368414c8786": {
       "name": "worktree.ps#1",
-      "ordinal": 1,
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -106,9 +144,36 @@
         "startedAt": 0
       }
     },
-    "4d676e55076c": {
-      "name": "status.get#2",
-      "ordinal": 5,
+    "7623e8b568b1": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 8
+      },
+      "labels": ["Back", "Refresh agent sessions"],
+      "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
+    },
+    "7e8b2964ad63": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 8,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "acf501fa9958": {
+      "name": "status.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -132,7 +197,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "capabilities": ["aiVault.v1"]
@@ -140,59 +205,39 @@
         }
       }
     },
-    "4d68bff46cff": {
-      "name": "status.get#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "8d930b47bf2f": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
+    "b7a7af14c8a5": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Defs": 1,
+        "LinearGradient": 1,
+        "Pressable": 5,
+        "Rect": 1,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Search": 1,
+        "SectionList": 1,
+        "Stop": 2,
+        "Svg": 1,
+        "Text": 5,
+        "TextInput": 1,
+        "View": 14
+      },
+      "labels": [
+        "Back",
+        "Refresh agent sessions",
+        "Workspace",
+        "Project",
+        "All",
+        "Search sessions, repo:, path:"
       ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "worktrees": [
-              {
-                "path": "/repo/feature",
-                "repoId": "repo-1",
-                "worktreeId": "wt-history"
-              },
-              {
-                "path": "/repo/sibling",
-                "repoId": "repo-1",
-                "worktreeId": "wt-2"
-              }
-            ]
-          }
-        }
-      }
+      "text": ["Agent Session History", "orca-history", "Workspace", "Project", "All"]
     },
-    "a6bb0efe5318": {
+    "c630476f4fd3": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 7,
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -254,65 +299,10 @@
         }
       }
     },
-    "acf501fa9958": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
-      }
-    },
-    "cee4e3edb0a1": {
-      "name": "status.get#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "d22bb2f62cea": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history"]
-    },
-    "d3c3ce66625d": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -329,37 +319,49 @@
       {
         "id": "worktrees-pending",
         "observation": {
-          "sender": ["4cebf6258ec1", "03106dceb986"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff"],
+          "sender": ["03106dceb986", "7368414c8786"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "7623e8b568b1",
           "effects": []
         }
       },
       {
         "id": "worktrees-listed",
         "observation": {
-          "sender": ["8d930b47bf2f", "acf501fa9958", "4d676e55076c", "3aaa7e04cda5"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["acf501fa9958", "222a3ba1d974", "6cd39311d5ec"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "595e6c3bbfed"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "7623e8b568b1",
           "effects": []
         }
       },
       {
         "id": "ready",
         "observation": {
-          "sender": ["8d930b47bf2f", "acf501fa9958", "4d676e55076c", "a6bb0efe5318"],
-          "payloads": ["3a91d2093c6e", "4d68bff46cff", "cee4e3edb0a1", "d3c3ce66625d"],
+          "sender": ["acf501fa9958", "222a3ba1d974", "c630476f4fd3"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "595e6c3bbfed"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "035edfd9a1b9",
+          "state": "b7a7af14c8a5",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["acf501fa9958", "222a3ba1d974", "c630476f4fd3"],
+          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "595e6c3bbfed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "b7a7af14c8a5",
+          "effects": ["7e8b2964ad63"]
         }
       }
     ]

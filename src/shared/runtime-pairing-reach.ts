@@ -1,5 +1,3 @@
-// Why: STA-2370 — widening the runtime listener to every interface is one-way for the life of the process
-// and persists across launches, so it must follow the reach the user picked, not the shape of the address
-// they typed: a Custom `127.0.0.1:8443` is usually an SSH tunnel or reverse proxy that still needs off-host
-// reach, while "This computer only" must never publish the runtime beyond loopback.
+// Listener widening persists and cannot reverse within the process; follow user-selected reach, not typed addresses.
+// Custom loopback addresses may front SSH/proxies needing off-host access; this-computer must stay loopback (STA-2370).
 export type RuntimePairingReach = 'this-computer' | 'network'

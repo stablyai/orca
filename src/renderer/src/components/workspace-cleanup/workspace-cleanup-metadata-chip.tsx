@@ -27,7 +27,8 @@ export function WorkspaceCleanupMetadataChip({
             'border-border bg-background text-muted-foreground',
             tone === 'ready' &&
               'border-[color:color-mix(in_srgb,var(--git-decoration-added)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-added)_10%,transparent)] text-[var(--git-decoration-added)]',
-            tone === 'review' && 'bg-muted text-foreground',
+            tone === 'review' &&
+              'border-status-warning-border bg-status-warning-background text-status-warning-text',
             tone === 'destructive' && 'border-destructive/30 text-destructive',
             toneClassName
           )}
@@ -35,6 +36,39 @@ export function WorkspaceCleanupMetadataChip({
         >
           <Icon className="size-3" aria-hidden="true" />
           {value ? <span>{value}</span> : null}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** Borderless counterpart to the chip: neutral facts read as text so pills stay reserved for status. */
+export function WorkspaceCleanupMetadataText({
+  icon: Icon,
+  label,
+  value,
+  className
+}: {
+  icon: LucideIcon
+  label: string
+  value?: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground',
+            className
+          )}
+          aria-label={label}
+        >
+          <Icon className="size-3 shrink-0" aria-hidden="true" />
+          {value ? <span className="truncate">{value}</span> : null}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

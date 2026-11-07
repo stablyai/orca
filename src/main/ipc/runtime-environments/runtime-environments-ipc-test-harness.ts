@@ -1,10 +1,10 @@
-import { expect } from 'vitest'
-import type { Mock } from 'vitest'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { expect, type Mock } from 'vitest'
+
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 
 /** Keep IPC tests on the production owner while replacing only its transport. */
@@ -45,6 +45,8 @@ export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transpor
       }
       return owner
     },
+    getRuntimeEnvironmentStatusSnapshot: (environmentId: string) =>
+      owners.get(environmentId)?.read() ?? null,
     getRuntimeEnvironmentStatusSnapshots: () => [...owners.values()].map((owner) => owner.read()),
     resetRuntimeEnvironmentStatusOwners: () => {
       owners.forEach((owner) => owner.dispose())
@@ -70,7 +72,6 @@ export function pairingCode(
   })
 }
 
-/** Resolves the `ipcMain.handle` callback a suite registered for `channel`. */
 export function channelHandlerLookup(handleMock: Mock) {
   return function handler<TArgs, TResult>(
     channel: string

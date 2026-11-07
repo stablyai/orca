@@ -2,11 +2,18 @@ import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Text as NativeText, View } from 'react-native'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
+import { MobileMarkdownRemoteImage } from './MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
+import { MarkdownLinkHandlerContext } from './markdown-link-handler'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import {
+  MobileMarkdownLinksContext,
+  useNativeChatFileLinkExistsFrom
+} from './mobile-markdown-links-context'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 type Props = {
   content?: string
@@ -18,20 +25,27 @@ type Props = {
   /** Multiplier for every text size. Defaults to 1; the chat view passes >1 so its prose reads
    *  larger than the compact base. */
   textScale?: number
-  /** When provided, detected file paths and file-target hrefs render as tappable
-   *  and invoke this with the path text (worktree-relative or absolute, with an
-   *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
-   *  paths render as plain text (no behavior change). */
+  // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
-  /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines. Without it,
-   *  a directive line is ordinary text. Must be referentially stable (this component is memoized). */
-  renderImage?: (href: string, alt: string) => ReactNode
+  // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
+  renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
-  /** The text is still being appended to: markup its end leaves open is closed, as on desktop,
-   *  and a diagram stays code until the text stops. */
+  // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
-  /** The surface under the text: `onBright` for your own message's light fill. */
+  /** The text may end mid-path: chat file links show only answers already known. */
+  streaming?: boolean
+  /** Chat's math delimiters, `\(…\)` and `\[…\]` as well as `$`, as desktop chat reads them.
+   *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
+  chatMath?: boolean
+  /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
+}
+
+/** Without a surface's own image renderer, https images draw from the web (GitHub text). */
+function renderRemoteImage(href: string, alt: string, width?: number): ReactNode {
+  return /^https:\/\//i.test(href) ? (
+    <MobileMarkdownRemoteImage uri={href} alt={alt} width={width} />
+  ) : null
 }
 
 function MobileMarkdownContent({
@@ -43,12 +57,28 @@ function MobileMarkdownContent({
   renderVisual,
   renderImage,
   growing = false,
+  streaming = false,
+  chatMath = false,
   tone: toneName = 'default'
 }: Props) {
+  useMobileColorScheme()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
+  const onOpenLink = useContext(MarkdownLinkHandlerContext)
+  const links = useContext(MobileMarkdownLinksContext)
+  const fileLinkExists = useNativeChatFileLinkExistsFrom(
+    links?.fileLinks ?? null,
+    onOpenFile !== undefined,
+    streaming
+  )
   const text = content?.trim() ?? ''
-  const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing)
+  const { root, directives } = useMobileMarkdownTree(
+    text,
+    renderVisual !== undefined,
+    growing,
+    chatMath,
+    { fileLinkExists, githubRepo: links?.githubRepo }
+  )
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -59,19 +89,22 @@ function MobileMarkdownContent({
   const tone = MARKDOWN_TONES[toneName]
   const ctx: MarkdownBlockContext = {
     growing,
+    chatMath,
     onOpenFile,
+    onOpenLink,
+    filePathsLinkedInTree: fileLinkExists !== undefined,
     tone,
     textScale,
-    // Zoomed list text has read a size above the sheet's since it first scaled; kept as it was.
-    listText: [
-      styles.listText,
-      scaledMarkdownText({ fontSize: 14, lineHeight: 20 }, textScale),
-      tone.text
+    listText: [styles.listText, scaledMarkdownText(styles.listText, textScale), tone.text],
+    listMarker: [
+      styles.listMarker,
+      scaledMarkdownText(styles.listMarker, textScale),
+      tone.secondary
     ],
     rowLongPress: setup.androidTranscript ? setup.onLongPress : undefined,
     directives,
     renderVisual,
-    renderImage,
+    renderImage: renderImage ?? renderRemoteImage,
     mermaidOccurrences: new Map()
   }
   // Native-chat range selection is set on each block; nested inline spans inherit it.

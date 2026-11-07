@@ -39,18 +39,15 @@ export type AttachBrowserPageWebviewArgs = {
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   keepAddressBarFocusRef: MutableRefObject<boolean>
-  paneZoomLevelRef: MutableRefObject<number>
   viewportPresetIdRef: MutableRefObject<BrowserViewportPresetId | null>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   setGuestRecoveryGeneration: Dispatch<SetStateAction<number>>
-  setBrowserZoomPercent: Dispatch<SetStateAction<number>>
   focusAddressBarNow: () => boolean
   syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
   faviconUrlRef: MutableRefObject<string | null>
   addressBarInputRef: RefObject<HTMLInputElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>

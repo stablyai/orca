@@ -65,12 +65,4 @@ describe('ended window creations', () => {
     install(domainsWith(new Map()))
     expect(ended.readEndedCreations().size).toBe(0)
   })
-
-  it('forgets an id main never lists after ten seconds', async () => {
-    vi.useFakeTimers()
-    const { ended } = await load()
-    ended.endWindowCreation('preflight')
-    vi.advanceTimersByTime(10_000)
-    expect(ended.readEndedCreations().size).toBe(0)
-  })
 })

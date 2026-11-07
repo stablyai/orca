@@ -17,9 +17,7 @@ export function getSelectedRepoSshGate(input: {
   connectionId: string | null | undefined
   status: SshConnectionStatus | null | undefined
 }): SelectedRepoSshGate {
-  // Why: a runtime-owned (per-workspace-env) SSH target is hidden plumbing the user can't connect
-  // to; once its workspace is gone the target is destroyed. Never let it drive a "Connect" gate —
-  // otherwise a stale ephemeral repo surfaces a dead connect card in the composer.
+  // Runtime-owned SSH targets are hidden/destroyable plumbing, never user-connectable; stale ephemeral repos must not create dead Connect gates.
   const selectedRepoConnectionId = isRuntimeOwnedSshTargetId(input.connectionId)
     ? null
     : (input.connectionId ?? null)

@@ -5,7 +5,7 @@ import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
-import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import {
@@ -16,7 +16,6 @@ import {
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
-/** One connect attempt from the hosts menu: a row's Connect button or a pick in its host search. */
 export async function connectSshTargetFromStatusMenu(targetId: string): Promise<void> {
   if (isSshConnectInFlight(targetId)) {
     return
@@ -48,8 +47,7 @@ export function SshTargetStatusRow({
   const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Why: shared with the sidebar card control and terminal overlay — a connect started here
-  // must disable those too, in the window before main broadcasts 'connecting'.
+  // Share pending connects across surfaces until main broadcasts connecting, so duplicate attempts stay disabled.
   const connectInFlight = useSshConnectInFlight(targetId)
 
   const handleConnect = useCallback(async () => {

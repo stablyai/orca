@@ -1,7 +1,4 @@
-// Web sibling: the page never removes a host — `page-host-removal-refusal.ts` says why. Refusing
-// here is also the fence that keeps `push-registration.ts` out of the page bundle: the native
-// file's import of it is that subsystem's only path into a page route, and the page has neither
-// the device token nor the gateway client it needs.
+// Refuse page-side host removal and keep native push-registration imports outside the bundle; the page has no credential/gateway client.
 import { PageHostRemovalUnavailableError } from './page-host-removal-refusal'
 
 export function removeHostAndCloseClient(

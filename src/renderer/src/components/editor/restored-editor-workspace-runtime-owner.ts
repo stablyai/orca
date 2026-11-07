@@ -1,4 +1,4 @@
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { AppState } from '@/store/types'
 import { hasOpenFileExecutionHostEvidence } from '@/lib/unified-tab-host-ownership'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
@@ -12,11 +12,7 @@ export type RestoredEditorWorkspaceRuntimeOwner = {
   runtimeEnvironmentId: string
 }
 
-/**
- * The managed server a restored tab now belongs to, when its workspace moved there from an SSH
- * host. Such tabs name no host because the relay era derived it from the workspace, so they would
- * keep reading through the relay; they take the workspace's server instead, as a fresh open does.
- */
+/** Migrate unstamped relay-era tabs to their workspace’s managed server so reads and saves do not retain the old SSH route. */
 export function findRestoredEditorWorkspaceRuntimeOwner(
   state: AppState,
   file: Pick<

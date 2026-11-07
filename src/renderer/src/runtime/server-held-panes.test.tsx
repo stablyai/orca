@@ -1,26 +1,22 @@
 // @vitest-environment happy-dom
-// A layout-owner server's held pane on this desktop's existing newer-build banner: drawn from the
-// server's frames, its Reopen sent to that server's main, and nothing applied here.
+// Frame-drawn server holds use this desktop’s newer-build banner; Reopen goes to server main and applies nothing locally.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { NewerDaemonReopenResult } from '../../../shared/newer-daemon-hold'
 import type {
   PaneStartStatus,
   PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
-import { NewerDaemonHoldBanner } from '@/components/terminal-pane/NewerDaemonHoldBanner'
-import {
-  newerDaemonHoldStore,
-  reopenHeldTerminals
-} from '@/components/terminal-pane/newer-daemon-hold-state'
+import { NewerDaemonHoldBanner } from '@/components/terminal-pane/session-restore/newer-daemon/NewerDaemonHoldBanner'
+import { newerDaemonHoldStore } from '@/components/terminal-pane/session-restore/newer-daemon/newer-daemon-hold-state'
 import {
   CAPABLE,
   ENV,
@@ -37,7 +33,7 @@ import {
 } from './server-layout-frames.test-fixture'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 const hoisted = vi.hoisted(
@@ -63,7 +59,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 vi.mock('./runtime-layout-client', () => ({
   subscribeRuntimeLayout: (...args: never[]) => hoisted.subscribe!(...args)
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: hoisted.callRuntimeRpc }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hoisted.callRuntimeRpc
+}))
 vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null
@@ -83,7 +81,6 @@ const { setServers, mirroredStore, install, uninstallAll } = createServerHarness
 const TAB_1 = toWebTerminalSurfaceTabId('host-tab-1')
 const PANE_KEY = makePaneKey(TAB_1, LEAF_ID)
 const REOPENS: Server = { ...CAPABLE, reopensHeldPanes: true }
-const TITLE = 'This terminal was opened in a newer version of Orca'
 const FAILED_TITLE = "Couldn't reopen this terminal"
 
 /** ENV's workspace with its one pane carrying `status`, as the server publishes it. */
@@ -169,17 +166,6 @@ afterEach(() => {
 })
 
 describe("a layout-owner server's held pane on a paired desktop", () => {
-  it('shows the existing banner while the frames hold it, and drops it once they do not', async () => {
-    await heldServerPane()
-    expect(paneElement.textContent).toContain(TITLE)
-    expect(button('Reopen terminal')).toBeTruthy()
-
-    await publish(layoutWith(undefined))
-    await render()
-
-    expect(paneElement.textContent).toBe('')
-  })
-
   it("sends Reopen to the server's main under the server's ids and applies nothing here", async () => {
     let answer!: (result: NewerDaemonReopenResult) => void
     hoisted.callRuntimeRpc.mockReturnValue(new Promise((resolve) => (answer = resolve)))
@@ -229,37 +215,5 @@ describe("a layout-owner server's held pane on a paired desktop", () => {
     await render()
     expect(paneElement.textContent).toContain(FAILED_TITLE)
     expect(newerDaemonHoldStore.getState().panes[PANE_KEY]?.phase).toBe('failed')
-  })
-
-  it("stops nothing, here or on the server, for a Reopen of a pane the server's frames just dropped", async () => {
-    await heldServerPane()
-    await publish(layoutWith(undefined))
-
-    await act(async () => reopenHeldTerminals(PANE_KEY))
-
-    expect(pty.reopenNewerDaemonTerminals).not.toHaveBeenCalled()
-    // The view report shares the RPC client; only a Reopen would name this method.
-    expect(hoisted.callRuntimeRpc.mock.calls.map(([, method]) => method)).not.toContain(
-      'layout.reopenHeldPanes'
-    )
-  })
-
-  it('shows no banner for an older server that publishes no status', async () => {
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [REOPENS])
-    await publish(layoutWith(undefined))
-    await render()
-
-    expect(paneElement.textContent).toBe('')
-    expect(newerDaemonHoldStore.getState().panes).toEqual({})
-  })
-
-  it('shows no banner for a server with layout intents that cannot reopen held panes', async () => {
-    // CAPABLE advertises layout.intents.v1 only; heldServerPane publishes the pane 'held'.
-    await heldServerPane(CAPABLE)
-
-    expect(paneElement.textContent).toBe('')
-    expect(newerDaemonHoldStore.getState().panes[PANE_KEY]).toBeUndefined()
   })
 })

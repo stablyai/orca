@@ -36,15 +36,16 @@ for (const extension of ['md', 'csv', 'tsv'] as const) {
     try {
       launched = await session.launch({ extraArgs: [coldPath, pathToFileURL(coldPath).href] })
       const { app, page } = launched
-      const table = page.getByRole('table')
+      // OS-opened CSVs are editable, so they render as an ARIA grid rather than a table.
+      const grid = page.getByRole('grid', { name: 'CSV editor' })
       const coldResult =
         extension === 'md'
           ? page.getByRole('heading', { name: 'Cold result' })
-          : table.getByRole('cell', { name: 'Cold result', exact: true })
+          : grid.getByRole('gridcell', { name: 'Cold result', exact: true })
       const warmResult =
         extension === 'md'
           ? page.getByRole('heading', { name: 'Warm result' })
-          : table.getByRole('cell', { name: 'Warm result', exact: true })
+          : grid.getByRole('gridcell', { name: 'Warm result', exact: true })
       await expect(coldResult).toBeVisible()
       await expect(page.getByText('42', { exact: true })).toBeVisible()
       await expect(

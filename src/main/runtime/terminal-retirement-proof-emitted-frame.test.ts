@@ -4,9 +4,12 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { store, TEST_WORKTREE_ID } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
 
 const retired = {
   parentTabId: 'tab',
@@ -30,7 +33,8 @@ function seedRuntimeWithStoredProof(): {
 } {
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: 'pty-runtime-fallback' }),
+    // As the PTY host's spawn commit: the new pane is bound before the terminal registers.
+    spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-runtime-fallback' }))),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -60,8 +64,7 @@ function seedRuntimeWithStoredProof(): {
   return { runtime, internals }
 }
 
-// Why: subscribers dedupe on (epoch, version), so a frame emitted at the stored version but
-// built from the pre-store object would strand the proofs until an unrelated later bump.
+// Subscribers dedupe epoch/version; emitting a pre-store frame at the stored version would hide proofs until another bump.
 it('emits the stored retirement proofs on the frame a runtime-owned create publishes', async () => {
   const { runtime, internals } = seedRuntimeWithStoredProof()
   const events: RuntimeMobileSessionTabsResult[] = []

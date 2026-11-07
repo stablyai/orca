@@ -1,6 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system'
 
-/** Root of the whole mobile-web cache, one level under the OS cache directory. */
 export const MOBILE_WEB_CACHE_DIRECTORY_NAME = 'mobile-web'
 
 export type GenerationDirectoryEntry = {
@@ -8,42 +7,45 @@ export type GenerationDirectoryEntry = {
   readonly isDirectory: boolean
 }
 
-/**
- * Everything the generation store does to disk, as plain `file://` uris.
- *
- * The store never imports `expo-file-system`, so its tests run the real write ordering, failure and
- * interruption paths against an in-memory tree instead of a simulator.
- */
+export type GenerationFileListing = {
+  readonly name: string
+  readonly size: number
+  // Milliseconds since the epoch; null when the platform can't report it.
+  readonly modificationTime: number | null
+}
+
+// Keep the store independent of Expo so tests exercise real interruption/write ordering through this file:// port.
 export type GenerationFileSystem = {
   readonly rootUri: string
-  /** Empty when the directory is missing, so a first run is not a special case. */
+  // Missing directories list as empty.
   list(uri: string): Promise<readonly GenerationDirectoryEntry[]>
-  /** Creates intermediate directories and succeeds when the directory already exists. */
+  // Create parents and tolerate an existing directory.
   createDirectory(uri: string): Promise<void>
-  /** Both writes create intermediate directories. */
+  // Both writes create parents.
   writeBytes(uri: string, bytes: Uint8Array): Promise<void>
   writeText(uri: string, text: string): Promise<void>
-  /** Null only when the file is missing. A read that fails throws, because "absent" and "could not
-   *  be read" lead the store to opposite decisions about deleting the cache. */
+  // Return null only for absence; unreadable files must throw so transient I/O cannot make the store delete a valid cache.
   readText(uri: string): Promise<string | null>
+  readBytes(uri: string): Promise<Uint8Array | null>
   fileExists(uri: string): Promise<boolean>
-  /** Recursive, and a no-op when the path is missing. */
+  fileSize(uri: string): Promise<number | null>
+  // Files only, with the size and mtime the listing already holds (a stat per file costs a JSI object each).
+  listFiles(uri: string): Promise<readonly GenerationFileListing[]>
+  // One native call: total bytes under the directory and its entry count, with no JSI object per file.
+  summarizeDirectory(uri: string): Promise<{ readonly size: number; readonly entryCount: number }>
+  // Create destination parents; require an absent destination on both platforms and throw for unavailable sources.
+  copyFile(fromUri: string, toUri: string): Promise<void>
+  // Delete recursively; missing paths are a no-op.
   delete(uri: string): Promise<void>
-  /** Renames a directory. The destination must not exist: expo moves a directory *into* an existing
-   *  destination rather than over it. */
+  // Require an absent destination: Expo moves into existing directories instead of replacing them.
   moveDirectory(fromUri: string, toUri: string): Promise<void>
+  // Require an absent destination: SDK 55 File.move has no overwrite option.
+  moveFile(fromUri: string, toUri: string): Promise<void>
 }
 
 const FILE_URI_PREFIX = 'file://'
 
-/**
- * The `file://` uri the store works in, as the absolute path the native shell view requires.
- *
- * The two sides speak different dialects of the same location: `expo-file-system` hands out uris,
- * and both native loaders refuse anything that does not start with `/`. Percent-decoded because a
- * uri escapes what a path spells literally, and left alone when it is already a path so a caller
- * cannot double-decode one.
- */
+// Native loaders require absolute paths; decode file:// URIs but leave paths untouched to avoid double-decoding.
 export function generationDirectoryPath(uri: string): string {
   if (!uri.startsWith(FILE_URI_PREFIX)) {
     return uri
@@ -78,12 +80,42 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
     },
     async readText(uri) {
       const file = new File(uri)
-      // The throw is deliberate: iOS data protection and I/O errors reach the store as failures
-      // rather than as a missing file.
+      // Propagate I/O and iOS data-protection failures instead of treating an unreadable file as absent.
       return file.exists ? await file.text() : null
+    },
+    async readBytes(uri) {
+      const file = new File(uri)
+      return file.exists ? await file.bytes() : null
     },
     async fileExists(uri) {
       return new File(uri).exists
+    },
+    async fileSize(uri) {
+      const file = new File(uri)
+      return file.exists ? file.size : null
+    },
+    async listFiles(uri) {
+      const directory = new Directory(uri)
+      if (!directory.exists) {
+        return []
+      }
+      return directory
+        .list()
+        .flatMap((entry) =>
+          entry instanceof File
+            ? [{ name: entry.name, size: entry.size, modificationTime: entry.modificationTime }]
+            : []
+        )
+    },
+    async summarizeDirectory(uri) {
+      const info = new Directory(uri).info()
+      return { size: info.size ?? 0, entryCount: info.files?.length ?? 0 }
+    },
+    async copyFile(fromUri, toUri) {
+      const target = new File(toUri)
+      // iOS copies only into an existing directory.
+      target.parentDirectory.create({ intermediates: true, idempotent: true })
+      new File(fromUri).copy(target)
     },
     async delete(uri) {
       const directory = new Directory(uri)
@@ -98,6 +130,9 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
     },
     async moveDirectory(fromUri, toUri) {
       new Directory(fromUri).move(new Directory(toUri))
+    },
+    async moveFile(fromUri, toUri) {
+      new File(fromUri).move(new File(toUri))
     }
   }
 }

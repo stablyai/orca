@@ -12,7 +12,7 @@ import type {
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
@@ -62,8 +62,7 @@ export function useEffectiveCollapsedGroups(args: {
     }
     const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
     if (!targetWorktree) {
-      // Why: folder workspaces are absent from worktreeMap, so without this the
-      // agent-send picker could never open the section hiding one (#15362).
+      // Folder workspaces are absent from worktreeMap but still need picker-driven section reveal.
       const folderKeys = getFolderWorkspaceRevealGroupKeys(
         agentSendTargetWorktreeId,
         folderWorkspaces,

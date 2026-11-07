@@ -17,7 +17,6 @@ import {
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
 import { useGrabMode } from '../annotate/useGrabMode'
-import { getBrowserPageZoomIndicatorState } from '../host-guest/browser-page-zoom'
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import type {
@@ -44,6 +43,8 @@ import { useBrowserPageWebviewPartition } from '../host-guest/use-browser-page-w
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/use-browser-page-viewport-scroll-reporting'
+import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { useBrowserPageViewportSizeFeedback } from '../host-guest/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
   browserTab,
@@ -101,7 +102,8 @@ export function BrowserPagePane({
   )
   useEffect(() => {
     const subscribe = window.api.ui.onScrollBrowserPage
-    if (!subscribe || !pageViewportScroller || !browserTab.viewportPresetId) {
+    // Main sends these only while a preset or an agent's viewport outsizes the pane.
+    if (!subscribe || !pageViewportScroller) {
       return
     }
     return subscribe((event) => {
@@ -110,7 +112,7 @@ export function BrowserPagePane({
       }
       scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
     })
-  }, [browserTab.id, browserTab.viewportPresetId, pageViewportScroller])
+  }, [browserTab.id, pageViewportScroller])
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -119,7 +121,6 @@ export function BrowserPagePane({
   const browserTabUrlRef = useRef(browserTab.url)
   // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
-  const trackNextLoadingEventRef = useRef(false)
   const recoveryNavigationValidationRef = useRef<{
     committed: boolean
     started: boolean
@@ -151,7 +152,14 @@ export function BrowserPagePane({
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const slotViewport = useBrowserPageSlotViewport(workspaceId)
 
-  const zoom = useBrowserPageZoomFeedback(browserTab.id)
+  const zoom = useBrowserPageZoomFeedback()
+  // Why: presets and remote viewers override the guest's metrics, so the box no longer is its viewport.
+  useBrowserPageViewportSizeFeedback(
+    pageViewport?.content ?? null,
+    isActive && !browserTab.viewportPresetId && !isMobileDriven && !isRemotelyViewed,
+    webviewRef,
+    zoom
+  )
   const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const {
@@ -164,7 +172,8 @@ export function BrowserPagePane({
     isActive,
     chromeShortcutScope,
     addressBarInputRef,
-    guestFocus
+    guestFocus,
+    inputLocked
   })
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
@@ -189,7 +198,6 @@ export function BrowserPagePane({
     webviewRef,
     activeLoadFailureRef,
     lastKnownWebviewUrlRef,
-    trackNextLoadingEventRef,
     recoveryNavigationValidationRef,
     onSetUrlRef,
     onUpdatePageStateRef,
@@ -228,14 +236,11 @@ export function BrowserPagePane({
     setFindOpen,
     focusAddressBarNow,
     focusWebviewNow,
-    paneZoomLevelRef: zoom.paneZoomLevelRef,
-    setBrowserZoomPercent: zoom.setBrowserZoomPercent,
     pendingAnnotationPayload: grabAnnotations.pendingAnnotationPayload,
     inputLocked,
     faviconUrl: browserTab.faviconUrl,
     webviewRef,
     lastKnownWebviewUrlRef,
-    trackNextLoadingEventRef,
     recoveryNavigationValidationRef,
     activeLoadFailureRef,
     retryGuestRecoveryRef,
@@ -252,7 +257,6 @@ export function BrowserPagePane({
     webviewRef,
     chromeHeaderRef,
     lastKnownWebviewUrlRef,
-    trackNextLoadingEventRef,
     keepAddressBarFocusRef,
     addressBarInputRef,
     browserTabUrlRef,
@@ -263,7 +267,6 @@ export function BrowserPagePane({
   const reload = useBrowserPageReloadActions({
     browserTab,
     webviewRef,
-    trackNextLoadingEventRef,
     retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
@@ -282,8 +285,6 @@ export function BrowserPagePane({
     isActiveRef,
     markupIsActive: markup.isActive,
     webviewRef,
-    paneZoomLevelRef: zoom.paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: zoom.setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
     startGrabIntent: grabAnnotations.startGrabIntent,
@@ -302,10 +303,6 @@ export function BrowserPagePane({
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
-  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
-    feedbackVisible: zoom.browserZoomFeedbackVisible,
-    isDefaultZoom: zoom.browserZoomPercent === zoom.browserDefaultZoomPercent
-  })
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -378,25 +375,31 @@ export function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays
+              isActive={isActive}
               markup={markup}
-              browserZoomIndicatorState={browserZoomIndicatorState}
-              browserZoomPercent={zoom.browserZoomPercent}
+              feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
               setFindOpen={setFindOpen}
               webviewRef={webviewRef}
               showFailureOverlay={showFailureOverlay}
               browserTab={browserTab}
               failureExternalUrl={failureExternalUrl}
-              failedNavigationUrl={failedNavigationUrl}
               onUpdatePageStateRef={onUpdatePageStateRef}
               retryGuestRecoveryRef={retryGuestRecoveryRef}
               navigateToUrl={nav.navigateToUrl}
-              setResourceNotice={setResourceNotice}
               certificateFailure={certificateFailure}
               sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
+              autoRetry={{
+                active: isPaintable,
+                whileWindowHidden: isMobileDriven || isRemotelyViewed
+              }}
               isBlankTab={isBlankTab}
               containerRef={containerRef}
               markupPortalContainer={pageViewport?.content ?? null}
+              // Why: a preset page box keeps its size, so a footer below it can take pane height without relayout.
+              markupControlsContainer={
+                browserTab.viewportPresetId ? (pageViewport?.shell ?? null) : null
+              }
               browserOverlayViewport={browserOverlayViewport}
               worktreeId={worktreeId}
               grab={grab}
@@ -406,6 +409,7 @@ export function BrowserPagePane({
             pageViewport.container
           )
         : null}
+      <BrowserPageDevToolsDock browserPageId={browserTab.id} viewport={pageViewport} />
     </div>
   )
 }

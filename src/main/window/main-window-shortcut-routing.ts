@@ -1,5 +1,5 @@
+import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -16,11 +16,16 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition,
+  type TextShortcutInput
+} from '../../shared/text-input-shortcut-policy'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -37,9 +42,18 @@ export function installMainWindowShortcutRouting(args: {
     options: {
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
+      input: TextShortcutInput
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
+    // The IPC carries no key event; preserve prompt editing before consuming a destructive chord.
+    if (
+      action.type === 'deleteCurrentWorkspace' &&
+      focusedShortcutContext.context !== 'terminal' &&
+      nativeChatPromptClaimsShortcut(options.input, process.platform, 'workspace.delete')
+    ) {
+      return false
+    }
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -49,14 +63,12 @@ export function installMainWindowShortcutRouting(args: {
 
     const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
     if (isIndexJump && isAutoRepeat) {
-      // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
-      // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
+      // Renderer index handlers skip repeats; contain them here or raw keys leak to xterm/DOM.
       event.preventDefault()
       return true
     }
 
-    // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
-    // so L2 selects a floating tab instead of switching the main workspace behind the panel.
+    // Floating-panel ownership routes index jumps to its renderer tabs instead of the main workspace.
     if (focus.isFloatingPanelFocused() && isIndexJump) {
       return false
     }
@@ -68,10 +80,11 @@ export function installMainWindowShortcutRouting(args: {
         ? getWindowShortcutActionId(action)
         : null
 
-    // Why: hold-mode dictation needs renderer keyup events, so main only consumes single-keydown dictation toggles.
+    // Hold dictation needs renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+      // No model still forwards: the renderer's startDictation shows the setup toast.
+      if (!voiceSettings?.enabled) {
         return false
       }
       const dictationMode = voiceSettings.dictationMode ?? 'toggle'
@@ -116,7 +129,7 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
+    if (input.type === 'keyDown' && !app.isPackaged && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
@@ -127,7 +140,7 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     if (isMacAppPasteInput(input)) {
-      // Why: chat/terminal panes hold focus without native editable controls, so route Cmd+V through Orca's paste ownership.
+      // Chat/terminal panes are not native editable controls; route Cmd+V through Orca paste ownership.
       event.preventDefault()
       mainWindow.webContents.send('ui:appMenuPaste')
       return
@@ -148,8 +161,12 @@ export function installMainWindowShortcutRouting(args: {
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
-    // Why: bare modifiers emit no terminal bytes, so double-tap detection on the raw key stream never steals readline input.
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (textInputOwnsComposition(input)) {
+      doubleTapDetector.reset()
+    }
+
+    // Bare modifiers emit no terminal bytes, so raw-stream double taps cannot steal readline input.
+    if (!textInputOwnsComposition(input) && (input.type === 'keyDown' || input.type === 'keyUp')) {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,
@@ -174,7 +191,8 @@ export function installMainWindowShortcutRouting(args: {
           doubleTapAction &&
           dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
             isAutoRepeat: false,
-            focusedShortcutContext: terminalShortcutContext
+            focusedShortcutContext: terminalShortcutContext,
+            input: { ...input, doubleTapModifier: detected.modifier }
           })
         ) {
           // preventDefault only the emitting keydown so the renderer detector can't also fire for the same gesture.
@@ -188,24 +206,24 @@ export function installMainWindowShortcutRouting(args: {
       input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
     ) {
-      // Why: the held switcher commits on modifier keyup; preventing the keydown here can suppress the keyup and strand the overlay.
+      // Held switchers commit on modifier keyup; preventing keydown can suppress it and strand the overlay.
       return
     }
 
-    // Why: TipTap owns bare Cmd/Ctrl+B for bold in the markdown editor; skip interception for the bare chord only.
-    // See docs/markdown-cmd-b-bold-design.md.
-    const modForBold = process.platform === 'darwin' ? input.meta : input.control
+    // TipTap owns bare Cmd/Ctrl+B and Cmd/Ctrl+K; preserve modifier variants.
+    const modForMarkdown = process.platform === 'darwin' ? input.meta : input.control
     if (
       focus.isMarkdownEditorFocused() &&
-      input.code === 'KeyB' &&
+      (input.code === 'KeyB' || input.key.toLowerCase() === 'k') &&
       !input.alt &&
       !input.shift &&
-      modForBold
+      (process.platform === 'darwin' ? !input.control : !input.meta) &&
+      modForMarkdown
     ) {
       return
     }
 
-    // Why: keep interception an explicit allowlist so readline control chords reach the PTY instead of being silently stolen.
+    // Allowlist interception so readline control chords reach the PTY.
     const action = resolveWindowShortcutAction(
       input,
       process.platform,
@@ -222,15 +240,16 @@ export function installMainWindowShortcutRouting(args: {
 
     dispatchResolvedWindowShortcutAction(event, action, {
       isAutoRepeat: Boolean(input.isAutoRepeat),
-      focusedShortcutContext: terminalShortcutContext
+      focusedShortcutContext: terminalShortcutContext,
+      input
     })
   })
 
-  // Why: mid-gesture focus loss must not leave the detector armed, or the next modifier press completes a phantom double-tap.
+  // Reset on focus loss or the next modifier could complete a phantom double tap.
   mainWindow.on('blur', () => doubleTapDetector.reset())
 
   mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
-    // Why: some layouts fire Electron's zoom command without before-input-event; honor it only while the zoom action is still bound.
+    // Some layouts emit only Electron zoom commands; honor them only while bound.
     if (zoomDirection !== 'in' && zoomDirection !== 'out') {
       return
     }

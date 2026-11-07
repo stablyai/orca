@@ -4,8 +4,8 @@ import {
   cancelManagedRuntimeInstall,
   installManagedRuntime,
   removeManagedRuntime
-} from '@/runtime/managed-runtime-install-status'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/managed-runtime-install-status'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
@@ -19,16 +19,14 @@ import { ManagedRuntimeLinkButton } from './ManagedRuntimeLinkButton'
 // Parts are joined by ' · ', so a sentence followed by another part drops its full stop.
 const said = (text: string, last: boolean): string => (last ? text : text.replace(/[.。]$/u, ''))
 
-/** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs
- *  on, with Cancel and retries as links. A first Install button, and the ⋯ menu with Update,
- *  Reinstall and Remove, are what the caller places at its row's end. A chat's install card shows
- *  the same host answer, so either one's action moves both. */
+/** Use the host’s shared install snapshot so Settings and chat agree; the caller owns first-install and menu actions. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
   children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
   /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
   signInRunning?: boolean
+  buttonSize?: 'xs' | 'default'
 }): React.JSX.Element {
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -103,7 +101,6 @@ export function ManagedRuntimeInstallRow(props: {
   if (view.note) {
     parts.push(<span key="note">{view.note}</span>)
   }
-  // The line keeps its height while the first read is out, so nothing shifts when it lands.
   const line = (
     <div
       role="status"
@@ -125,7 +122,7 @@ export function ManagedRuntimeInstallRow(props: {
         <>
           {button ? (
             <Button
-              size="xs"
+              size={props.buttonSize ?? 'xs'}
               disabled={button.kind === 'cancel' ? pending !== null : held}
               onClick={() => act(button.kind, primary(button))}
             >

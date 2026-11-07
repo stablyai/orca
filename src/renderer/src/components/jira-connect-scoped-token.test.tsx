@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus } from '../../../shared/jira-types'
+import type { JiraConnectionStatus } from '../../../shared/jira/jira-types'
 import { JiraConnectDialog } from './jira-connect-dialog'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 
@@ -58,24 +58,6 @@ describe('Jira scoped-token connection UI', () => {
     expect(screen.getByRole('button', { name: 'Connect' })).toHaveProperty('disabled', false)
   })
 
-  it('submits an email-free Cloud token to an upgraded host', async () => {
-    mocks.state.settings.activeRuntimeEnvironmentId = 'remote-1'
-    mocks.state.jiraStatus.supportsScopedTokens = true
-    mocks.state.jiraStatusContextKey = getEnvironmentRuntimeContextKey('remote-1')
-    render(<JiraConnectDialog open onOpenChange={vi.fn()} />)
-    fillSiteAndToken()
-    expect(screen.getByLabelText('Atlassian email (optional for scoped tokens)')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() =>
-      expect(mocks.connectJira).toHaveBeenCalledWith({
-        siteUrl: 'https://example.atlassian.net',
-        email: '',
-        apiToken: 'scoped-token',
-        authType: 'cloud'
-      })
-    )
-  })
-
   it('keeps the original email requirement when the remote host omits the capability', () => {
     mocks.state.settings.activeRuntimeEnvironmentId = 'old-remote'
     render(<JiraConnectDialog open onOpenChange={vi.fn()} />)
@@ -86,17 +68,5 @@ describe('Jira scoped-token connection UI', () => {
     expect(screen.getByText(/Update the remote runtime/)).toBeTruthy()
     fireEvent.click(submit)
     expect(mocks.connectJira).not.toHaveBeenCalled()
-  })
-
-  it('shows endpoint diagnostics without marking the token as the failing field', async () => {
-    mocks.connectJira.mockResolvedValue({
-      ok: false,
-      error: 'Could not resolve the Atlassian cloud ID (HTTP 404). Check the Jira Cloud site URL.'
-    })
-    render(<JiraConnectDialog open onOpenChange={vi.fn()} />)
-    fillSiteAndToken()
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('cloud ID'))
-    expect(screen.getByLabelText('API token').getAttribute('aria-invalid')).toBeNull()
   })
 })

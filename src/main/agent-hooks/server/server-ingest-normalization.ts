@@ -1,16 +1,105 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
-import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
+import {
+  buildSpoolHookBody,
+  type SpoolRecord
+} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import {
+  checkHookOwnerPresence,
+  restateHookRoot
+} from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type { NormalizedLocalHook } from './server-types'
+import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+    this.readHookRootEvidence = reader
+  }
+
+  /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
+   *  owner's exit neither answers for the pane nor is forgotten. */
+  protected readonly undecidedOwnerChallenges = new Map<string, number>()
+
+  /** HTTP and spool hooks share one ownership preflight before provider folds; a drain passes
+   *  the one answer deadline all its records share. */
+  protected checkHookOwner(
+    source: AgentHookSource,
+    body: unknown,
+    answerBy?: number
+  ): Promise<unknown> | undefined {
+    const challenges = this.undecidedOwnerChallenges
+    let challenged: string | undefined
+    const read = this.readHookRootEvidence
+    const pending = checkHookOwnerPresence(
+      this.state,
+      source,
+      body,
+      this.env,
+      (paneKey) => {
+        challenged = this.resolvePaneKeyAlias(paneKey)
+        challenges.set(challenged, (challenges.get(challenged) ?? 0) + 1)
+        return this.checkAgentPresence(paneKey)
+      },
+      read && {
+        read,
+        answerBy,
+        // A late answer re-applies the pane's current row with the authority it settles.
+        reconcile: (completion) => {
+          const event = this.statusHooksEnabled
+            ? restateHookRoot(this.state, completion)
+            : undefined
+          if (event) {
+            this.applyNormalizedStatus(event)
+          }
+        }
+      }
+    )
+    // The caller admits or refuses the hook as soon as this settles, with no await in between.
+    return pending?.finally(() => {
+      if (!challenged) {
+        return
+      }
+      const remaining = (challenges.get(challenged) ?? 1) - 1
+      if (remaining > 0) {
+        challenges.set(challenged, remaining)
+      } else {
+        challenges.delete(challenged)
+      }
+    })
+  }
+
+  protected override applyNormalizedStatus(
+    ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
+  ): EnrichedAgentHookEventPayload | undefined {
+    const applied = super.applyNormalizedStatus(...args)
+    const [incoming, , origin = 'hook'] = args
+    // Claude can still block the prompt after this hook, and its idle may already have landed.
+    if (
+      applied?.payload.agentType === 'claude' &&
+      origin === 'hook' &&
+      incoming.hookEventName === 'UserPromptSubmit' &&
+      this.programStatusFacets.claimPrompt(applied.paneKey)
+    ) {
+      this.settleClaudePromptBlocked(applied)
+    }
+    return applied
+  }
+
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -53,7 +142,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
         event.hookEventName === 'SessionStart' &&
         isOpenCodeSharedServerPost(source, body)
       ) {
-        // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()
       }
       return {
@@ -70,13 +158,18 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
+    const transcriptPath = event?.providerSession?.transcriptPath
+    if (transcriptPath) {
+      // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
+      getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
+    }
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
-    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
       onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
@@ -84,7 +177,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
+  protected ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
@@ -101,9 +194,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
-      this.checkAgentPresence(paneKey)
-    )
+    const pending = this.checkHookOwner(record.source, body, answerBy)
     return pending ? pending.then(apply) : apply()
   }
 
@@ -116,8 +207,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
-    // Why: a hook spooled a full second before a proven exit (stamps are whole seconds) describes
-    // the dead agent; replaying it would install an obsolete owner. A same-second one may not.
+    // Whole-second spool timestamps prove pre-exit ownership only with a full second of separation.
     if (exit && record.receivedAt + 1000 <= exit.at) {
       return
     }
@@ -137,7 +227,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event, normalized.onAccepted)
+    this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

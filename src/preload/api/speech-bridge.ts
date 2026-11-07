@@ -1,6 +1,7 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ipcRenderer } from 'electron'
 import type {
+  SpeechAudioPortMessage,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -8,6 +9,9 @@ import type {
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 import type { PreloadApi } from '../api-types'
+
+// On-device sessions get a port to the speech process, so their audio skips main.
+const audioPorts = new Map<string, MessagePort>()
 
 export const speechApi = {
   getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
@@ -26,21 +30,60 @@ export const speechApi = {
     ipcRenderer.invoke('speech:cancelDownload', modelId),
   deleteModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:deleteModel', modelId),
-  startDictation: (
+  startDictation: async (
     modelId: string,
     hotwords: string[] | undefined,
     sessionId: string
-  ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
-  feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
-    // Why: Float32Array is zeroed crossing the contextBridge/IPC boundary; wrap in a Buffer to preserve bytes.
-    ipcRenderer.invoke(
+  ): Promise<void> => {
+    const { port1, port2 } = new MessageChannel()
+    // Sent ahead of the start on the same pipe, so main holds it when the start lands.
+    ipcRenderer.postMessage('speech:audioPort', sessionId, [port2])
+    let directAudio = false
+    try {
+      const result: { directAudio?: boolean } | undefined = await ipcRenderer.invoke(
+        'speech:startDictation',
+        modelId,
+        hotwords,
+        sessionId
+      )
+      directAudio = result?.directAudio === true
+    } finally {
+      if (directAudio) {
+        audioPorts.set(sessionId, port1)
+      } else {
+        port1.close()
+      }
+    }
+  },
+  feedAudio: (
+    samples: Float32Array,
+    sampleRate: number,
+    sessionId = 'desktop'
+  ): Promise<boolean> => {
+    const port = audioPorts.get(sessionId)
+    if (port) {
+      port.postMessage({ type: 'feed', samples, sampleRate } satisfies SpeechAudioPortMessage)
+      // Only cloud sessions have an upload cap, and they never get a port.
+      return Promise.resolve(false)
+    }
+    // Buffer preserves sample bytes across the contextBridge/IPC boundary.
+    return ipcRenderer.invoke(
       'speech:feedAudio',
       Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
       sampleRate,
       sessionId
-    ),
-  stopDictation: (sessionId = 'desktop'): Promise<void> =>
-    ipcRenderer.invoke('speech:stopDictation', sessionId),
+    )
+  },
+  stopDictation: (sessionId = 'desktop'): Promise<void> => {
+    const port = audioPorts.get(sessionId)
+    if (port) {
+      audioPorts.delete(sessionId)
+      // The speech process finishes the stream only after this, so the last frames land.
+      port.postMessage({ type: 'end' } satisfies SpeechAudioPortMessage)
+      port.close()
+    }
+    return ipcRenderer.invoke('speech:stopDictation', sessionId)
+  },
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

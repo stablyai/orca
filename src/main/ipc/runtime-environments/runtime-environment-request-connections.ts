@@ -1,21 +1,24 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
+import type { RuntimeEnvironmentCall } from './runtime-environment-call'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime-shared-control-connection'
-import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime-socket-liveness'
+import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime/remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
-} from '../../../shared/remote-runtime-shared-control-types'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
 import { sharedControlEnvironmentPolicy } from './runtime-environment-shared-control-policy'
@@ -27,6 +30,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
+import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -99,6 +103,10 @@ export function resetRuntimeEnvironmentStatusOwners(): void {
   }
 }
 
+export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
+  return statusOwners.get(environmentId)?.owner.read() ?? null
+}
+
 export function getRuntimeEnvironmentStatusSnapshots() {
   return [...statusOwners.values()].map(({ owner }) => owner.read())
 }
@@ -144,54 +152,49 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return getSharedControlConnection(environmentId, pairedConnection).request(
-    method,
-    params,
-    timeoutMs,
-    envelope,
-    signal
-  )
+  const connection = getSharedControlConnection(environmentId, pairedConnection)
+  return connection.request(method, params, timeoutMs, envelope, signal, { prepareRequest })
 }
 
-/**
- * Sends only on the shared socket whose own `status.get` named `expectedRuntimeId`; null when it
- * did not, or the socket changed before sending. Nothing is sent to another runtime either way.
- */
+/** Send only on the shared socket that proved expectedRuntimeId; return null if it changed or is unproven. */
 export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection,
-  method: string,
-  params: unknown,
-  timeoutMs: number,
-  expectedRuntimeId: string,
-  envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  call: RuntimeEnvironmentCall,
+  expectedRuntimeId: string
 ): Promise<RuntimeRpcResponse<TResult> | null> {
   const shared = getSharedControlConnection(environmentId, pairedConnection)
   let statusSocket: number | undefined
   const status = await shared.request<RuntimeStatus>(
     'status.get',
     undefined,
-    timeoutMs,
+    call.timeoutMs,
     undefined,
-    signal,
-    () => {
-      statusSocket = shared.socketGeneration.peek()
-    }
+    call.signal,
+    { beforeSend: () => void (statusSocket = shared.socketGeneration.peek()) }
   )
   if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
     return null
   }
   let socketChanged = false
+  const beforeSend = (): void => {
+    socketChanged = shared.socketGeneration.peek() !== statusSocket
+    if (socketChanged) {
+      throw new Error('Runtime connection changed before sending')
+    }
+  }
   try {
-    return await shared.request<TResult>(method, params, timeoutMs, envelope, signal, () => {
-      socketChanged = shared.socketGeneration.peek() !== statusSocket
-      if (socketChanged) {
-        throw new Error('Runtime connection changed before sending')
-      }
-    })
+    return await shared.request<TResult>(
+      call.method,
+      call.params,
+      call.timeoutMs,
+      call.envelope,
+      call.signal,
+      { beforeSend, prepareRequest: call.prepareRequest }
+    )
   } catch (error) {
     if (socketChanged) {
       return null
@@ -240,10 +243,6 @@ export function reconnectRemoteRuntimeSharedControlConnection(environmentId: str
   sharedControlConnections.get(environmentId)?.connection.reconnectNow()
 }
 
-export function retryRemoteRuntimeSharedControlConnectionNow(environmentId: string): void {
-  sharedControlConnections.get(environmentId)?.connection.retryNow()
-}
-
 export function pauseRemoteRuntimeSharedControlRetry(environmentId: string): void {
   sharedControlConnections.get(environmentId)?.connection.pauseStandingRetry()
 }
@@ -261,8 +260,7 @@ export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
   }
-  // Why: a socket that still reads OPEN after wake arms no reconnect timer, so retryNow finds
-  // nothing; probing every socket (shared control and per-stream) settles a dead path quickly (#9092).
+  // OPEN sockets can be dead after suspend with no reconnect timer; probe every socket (#9092).
   probeAllRemoteRuntimeSocketsNow()
 }
 
@@ -277,14 +275,17 @@ function getSharedControlConnection(
     cached?.connection.close()
     const transportGeneration = getRuntimeEnvironmentTransportGeneration(environmentId)
     let answeredAt: number | null = null
-    cached = {
-      pairingKey,
-      answeredAt: () => answeredAt,
-      connection: new RemoteRuntimeSharedControlConnection(pairedConnection, {
+    const connection: RemoteRuntimeSharedControlConnection =
+      new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         ...sharedControlEnvironmentPolicy(environmentId),
-        // Why wall clock: it advances across a suspend, so a pre-sleep answer reads as stale.
+        // R39: every ready socket, including after a reconnect, re-declares this installation.
+        onReady: () =>
+          declareWslHostClient(environmentId, (method, params, timeoutMs) =>
+            connection.request(method, params, timeoutMs)
+          ),
+        // Wall-clock time includes suspend, expiring pre-sleep answers.
         onAnswered: () => {
           answeredAt = Date.now()
         },
@@ -309,21 +310,13 @@ function getSharedControlConnection(
             )
         }
       })
-    }
+    cached = { pairingKey, answeredAt: () => answeredAt, connection }
     sharedControlConnections.set(environmentId, cached)
     const entry = cached
-    // Why ready is enough: a socket reaches ready only on its own server frame, which stamps it.
-    setSharedControlAnswerSource(environmentId, () =>
+    // Ready requires this socket's own server frame, which stamps its answer time.
+    setSharedControlAnswerSource(environmentId, entry.connection, () =>
       entry.connection.getDiagnostics().state === 'ready' ? entry.answeredAt() : null
     )
   }
   return cached.connection
-}
-
-function getPairingKey(pairedConnection: PairedRuntimeConnection): string {
-  return [
-    pairedConnection.endpoint,
-    pairedConnection.credential.deviceToken,
-    pairedConnection.hostPublicKeyB64
-  ].join('\0')
 }

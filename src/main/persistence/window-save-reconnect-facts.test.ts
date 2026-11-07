@@ -8,7 +8,7 @@ import {
   leaf,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { deriveShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 import { windowViewPatchForMain, windowViewSaveForMain } from './window-save-view'
 
@@ -51,7 +51,6 @@ const factsFor =
       otherPartitions: () => more.others ?? []
     })
 
-/** A window that never visited the SSH workspace and lost its reconnect bookkeeping. */
 function forgetfulSave(stored: WorkspaceSessionState): WorkspaceSessionState {
   return {
     ...stored,
@@ -152,7 +151,7 @@ describe('what the next startup reconnects comes from main, not the window’s s
 
   it('the local save names a target in a passing state from a relay session in its SSH partition', () => {
     const local = localPartition()
-    // The relay dropped mid-quit: the target reads reconnecting, not connected.
+    // Reconnecting relay routes remain recoverable at quit.
     const facts = factsFor([], [[TARGET, 'reconnecting']], { others: [sshPartition()] })
 
     expect(windowViewSaveForMain(local, local, null, facts).activeConnectionIdsAtShutdown).toEqual([

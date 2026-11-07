@@ -85,4 +85,36 @@ describe('CachedScan', () => {
     expect(cache.current).toBe(1)
     vi.restoreAllMocks()
   })
+
+  it('calls a fresh waiter right after a scan started after it applies, not an older one', async () => {
+    const { cache, pending, applied, finish } = scanner()
+    cache.request()
+    const seen: number[][] = []
+    // A scan already in flight started before the wait, so it cannot satisfy it.
+    cache.afterFresh(() => seen.push([...applied]))
+    await finish()
+    expect(applied).toEqual([1])
+    expect(seen).toEqual([])
+    expect(pending).toHaveLength(1)
+    await finish()
+    // Called synchronously after the apply, so its change publishes in the same revision.
+    expect(seen).toEqual([[1, 2]])
+  })
+
+  it('calls a fresh waiter at once with no demand, and after a failed scan', async () => {
+    const idle = scanner(false)
+    const calls: string[] = []
+    idle.cache.afterFresh(() => calls.push('idle'))
+    expect(calls).toEqual(['idle'])
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const failing = new CachedScan<number>({
+      label: 'test',
+      demand: () => true,
+      applied: () => {},
+      scan: () => Promise.reject(new Error('git failed'))
+    })
+    failing.afterFresh(() => calls.push('failed'))
+    await vi.waitFor(() => expect(calls).toEqual(['idle', 'failed']))
+    vi.restoreAllMocks()
+  })
 })

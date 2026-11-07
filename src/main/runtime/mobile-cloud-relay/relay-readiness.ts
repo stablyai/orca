@@ -1,8 +1,8 @@
 import { RelayHttpError } from './relay-http-client'
+import { RelayHostProofClockSkewError } from './relay-host-proof'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
-// Why the last reconcile could not produce a live broker. Every value is a
-// lowercase token so `relay_<reason>` stays a valid mint failure code.
+// Lowercase reason tokens must form valid relay_<reason> mint-failure codes.
 export type RelayUnavailableReason =
   | 'signed_out'
   | 'not_entitled'
@@ -11,12 +11,16 @@ export type RelayUnavailableReason =
   | 'tls_untrusted'
   | 'connect_timeout'
   | 'network'
+  | 'clock_skew'
   | 'control_not_active'
   | `director_${'token_exchange' | 'assignment'}_${number}`
-  // A relay-coded error message with its `relay_` prefix removed.
   | `control_${string}`
 
-export type RelayUnavailable = { reason: RelayUnavailableReason; retryAt: number | null }
+export type RelayUnavailable = {
+  reason: RelayUnavailableReason
+  retryAt: number | null
+  clockOffsetMs?: number
+}
 
 const TLS_TRUST_ERROR_CODES = new Set([
   'UNABLE_TO_GET_ISSUER_CERT',
@@ -51,6 +55,9 @@ function errorChain(error: unknown): unknown[] {
 }
 
 export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReason {
+  if (error instanceof RelayHostProofClockSkewError) {
+    return 'clock_skew'
+  }
   if (error instanceof RelayHttpError) {
     return error.statusCode === 429
       ? 'rate_limited'
@@ -72,13 +79,17 @@ export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReaso
   return message ? `control_${message[1].slice('control_'.length)}` : 'network'
 }
 
+export function relayUnavailableFor(error: unknown): Omit<RelayUnavailable, 'retryAt'> {
+  return {
+    reason: relayUnavailableReasonFor(error),
+    ...(error instanceof RelayHostProofClockSkewError ? { clockOffsetMs: error.clockOffsetMs } : {})
+  }
+}
+
 const RATE_LIMIT_FLOOR_BASE_MS = 5_000
 const RATE_LIMIT_FLOOR_MAX_MS = 30_000
 
-// The earliest a reconnect may retry. A lone 4429 is the relay's "retry this
-// cell" (also sent for a transient relay-side failure) and keeps the fast retry;
-// a limit-coded refusal or a 4429 repeated after a failed retry waits 5 s, then
-// 10 s, ... up to 30 s, so a rate-limited desktop stops keeping itself limited.
+// Lone 4429 retries immediately; limit-coded/repeated 4429 failures back off 5–30s to escape rate limiting.
 export function relayRetryFloorMs(error: unknown, priorAttempts: number): number {
   if (error instanceof RelayHttpError) {
     return error.retryAfterMs ?? 0
@@ -92,12 +103,11 @@ export function relayRetryFloorMs(error: unknown, priorAttempts: number): number
   return Math.min(RATE_LIMIT_FLOOR_MAX_MS, RATE_LIMIT_FLOOR_BASE_MS * 2 ** doublings)
 }
 
-// Bounds a readiness wait by its caller's deadline and lets a fence release it,
-// without cancelling the shared reconnect work other callers still need.
+// Deadline/fence releases only this waiter, never shared reconnect work.
 export class RelayReadinessWaiters {
   private readonly releases = new Set<() => void>()
 
-  // Resolves true when `work` settles first, false at the deadline or on release.
+  /** True when work settles first; false on deadline or release. */
   async until(work: Promise<unknown>, deadline: number): Promise<boolean> {
     const controller = new AbortController()
     const released = new Error('Relay readiness wait released')
@@ -125,12 +135,13 @@ export class RelayReadinessWaiters {
   }
 }
 
-// Carries the readiness reason as a `relay_*` code that mint failure reporting forwards as-is.
 export class RelayUnavailableError extends Error {
   readonly code: string
+  readonly clockOffsetMs?: number
 
   constructor(readonly unavailable: RelayUnavailable) {
     super(`relay_${unavailable.reason}`)
     this.code = this.message
+    this.clockOffsetMs = unavailable.clockOffsetMs
   }
 }

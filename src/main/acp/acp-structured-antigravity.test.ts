@@ -1,12 +1,11 @@
-// Antigravity's row against its recorded ACP server (1.3.0) and the environment it launches with.
-
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -20,12 +19,12 @@ import {
 } from './acp-structured-adapter.test-support'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
 import { framesOf, launch, openHostRig, RESUMES, send } from './acp-structured-host.test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { deferred } from './acp-scripted-agent.test-support'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { readAcpFixture, type AcpFixtureFrame } from './acp-timeline-fixture.test-support'
@@ -35,53 +34,68 @@ const result = (frame: AcpFixtureFrame | undefined) =>
   z.record(z.string(), z.unknown()).parse(frame?.message.result)
 afterEach(closeProviderTimelineRigs)
 
-it('signs a first chat in, asks in default mode, and answers a question with one of its choices', async () => {
-  const [initialized, opened, ...turn] = await readAcpFixture('antigravity-v1-question')
-  const replay = new GrokFixtureReplay(turn)
-  const rig = await openAcpAdapterRig({
-    spec: ANTIGRAVITY,
-    initialize: result(initialized),
-    script: (agent) => {
-      replay.attach(agent)
-      // A fresh folder names no sign-in method until a client picks one.
-      agent.on('session/new', (frame) =>
-        agent.frames.some((sent) => sent.method === 'authenticate')
-          ? agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
-          : agent.fail(frame, -32000, 'Authentication required')
+it.each<{ config: AntigravityChatAuthConfig | undefined; method: string }>([
+  { config: undefined, method: 'oauth-personal' },
+  {
+    config: {
+      method: 'oauth-business',
+      gcpProject: 'enterprise-project',
+      gcpLocation: 'us-central1'
+    },
+    method: 'oauth-business'
+  }
+])(
+  'signs a first chat in with $method, asks in default mode, and answers a question',
+  async ({ config, method }) => {
+    const [initialized, opened, ...turn] = await readAcpFixture('antigravity-v1-question')
+    const replay = new GrokFixtureReplay(turn)
+    const rig = await openAcpAdapterRig({
+      spec: ANTIGRAVITY,
+      launch: { antigravityChatAuth: config },
+      initialize: result(initialized),
+      script: (agent) => {
+        replay.attach(agent)
+        // The recorded server requires explicit authentication even with a fresh folder.
+        agent.on('session/new', (frame) =>
+          agent.frames.some((sent) => sent.method === 'authenticate')
+            ? agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
+            : agent.fail(frame, -32000, 'Authentication required')
+        )
+        agent.on('authenticate', (frame) => agent.reply(frame, {}))
+      }
+    })
+    await rig.acquire()
+    expect(rig.sent('authenticate')[0]?.params).toEqual({ methodId: method })
+    expect(rig.sent('session/set_config_option')[0]?.params).toMatchObject({ value: 'default' })
+    await sendHello(rig, 'send-1')
+    const question = await waitFor(async () => {
+      const found = (await rig.rig.rows()).find((row) => row.body.kind === 'question')
+      expect(found && replay.awaiting).toBe('reply')
+      return found!
+    })
+    expect(question.body).toMatchObject({ options: [{ label: 'red' }, { id: '2', label: 'blue' }] })
+    await rig.adapter.answerPrompt({
+      sessionId: SESSION,
+      itemId: question.itemId,
+      kind: 'question',
+      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['2'] }] },
+      fence: 1,
+      commit: async () => {}
+    })
+    await waitFor(() => expect(replay.awaiting).toBeNull())
+    const reply = rig.child().agent.frames.find((frame) => !frame.method && frame.id === 2)
+    expect(reply?.result).toEqual({ outcome: { outcome: 'selected', optionId: '2' } })
+    await waitFor(async () =>
+      expect((await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toEqual(
+        [expect.objectContaining({ state: 'completed', outcome: 'success' })]
       )
-      agent.on('authenticate', (frame) => agent.reply(frame, {}))
-    }
-  })
-  await rig.acquire()
-  expect(rig.sent('authenticate')[0]?.params).toEqual({ methodId: 'oauth-personal' })
-  expect(rig.sent('session/set_config_option')[0]?.params).toMatchObject({ value: 'default' })
-  await sendHello(rig, 'send-1')
-  const question = await waitFor(async () => {
-    const found = (await rig.rig.rows()).find((row) => row.body.kind === 'question')
-    expect(found && replay.awaiting).toBe('reply')
-    return found!
-  })
-  expect(question.body).toMatchObject({ options: [{ label: 'red' }, { id: '2', label: 'blue' }] })
-  await rig.adapter.answerPrompt({
-    sessionId: SESSION,
-    itemId: question.itemId,
-    kind: 'question',
-    response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['2'] }] },
-    fence: 1,
-    commit: async () => {}
-  })
-  await waitFor(() => expect(replay.awaiting).toBeNull())
-  const reply = rig.child().agent.frames.find((frame) => !frame.method && frame.id === 2)
-  expect(reply?.result).toEqual({ outcome: { outcome: 'selected', optionId: '2' } })
-  await waitFor(async () =>
-    expect((await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toEqual([
-      expect.objectContaining({ state: 'completed', outcome: 'success' })
-    ])
-  )
-})
+    )
+  }
+)
 
 it('launches on its own private folder with file sign-in and no other Google credentials', async () => {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-antigravity-'))
+  onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
   const folder = join(stateDirectory, 'antigravity-chat')
   const user = {
     GEMINI_HOME: '/data/.gemini',
@@ -97,7 +111,7 @@ it('launches on its own private folder with file sign-in and no other Google cre
   })
   expect(command).toBe(ANTIGRAVITY.command)
   expect(env).toMatchObject({ GEMINI_HOME: folder, AGY_ACP_FORCE_FILE_STORAGE: '1' })
-  // A key deleted at spawn beats its overlay, so the file sign-in must not be among them.
+  // Spawn deletions override overlays; preserve the file sign-in keys.
   expect(envToDelete.sort()).toEqual([
     'ANTIGRAVITY_HARNESS_PATH',
     'GCLOUD_PROJECT',
@@ -111,7 +125,6 @@ it('launches on its own private folder with file sign-in and no other Google cre
   for (const mode of await Promise.all(modes)) {
     expect(process.platform === 'win32' || (mode & 0o777) === 0o700).toBe(true)
   }
-  await rm(stateDirectory, { recursive: true, force: true })
 })
 
 it('runs the chat permission mode picked mid-chat as the server mode on the next send', async () => {
@@ -152,7 +165,6 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
     }
     expect(await host.setOption(CALLER, { envelope, ...fields })).toMatchObject({ ok: true })
     await send(host, value)
-    // The child launched with the earlier mode is replaced before the send reaches it.
     const previous = child
     child = await waitFor(() => {
       expect(rig.child()).not.toBe(previous)
@@ -167,6 +179,112 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
   ])
 })
 
+it('restarts a host agy chat with the skip-permissions flag only while it has Full access', async () => {
+  const hostSpec = ANTIGRAVITY.hostBackend!.spec
+  let resumed = false
+  const { rig, host, fence, ready } = await openHostRig({
+    spec: ANTIGRAVITY,
+    initialize: RESUMES,
+    script: (agent) => {
+      agent.on('session/resume', (frame) => agent.reply(frame, {}))
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+      agent.on('session/set_config_option', (frame) => {
+        const { value } = z.object({ value: z.string() }).parse(frame.params)
+        const options = ['default', 'accept-edits', 'plan'].map((id) => ({ value: id, name: id }))
+        const mode = { id: 'mode', name: 'Mode', category: 'mode', type: 'select', options }
+        agent.reply(frame, { configOptions: [{ ...mode, currentValue: value }] })
+      })
+    },
+    deps: {
+      resolveLaunch: async ({ permissionMode }) => {
+        const fullAccess = permissionMode === 'full-access'
+        return {
+          ...(await launch(() => resumed, hostSpec)()),
+          args: hostSpec.args({ fullAccess, pluginDir: null }),
+          fullAccess
+        }
+      }
+    }
+  })
+  const attach = hostTestAttachParams(null, {
+    provider: 'antigravity',
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: '/home/me/.gemini' },
+    providerHandle: undefined
+  })
+  expect(await host.attach(CALLER, attach)).toMatchObject({ ok: true })
+  await ready()
+  resumed = true
+  const runs: unknown[] = []
+  let child = rig.child()
+  for (const value of ['full-access', 'ask']) {
+    const fields = { key: 'permissionMode', value }
+    const fingerprint = { method: 'agentSession.setOption', sessionId: HOST_TEST_SESSION, fields }
+    const envelope = {
+      sessionId: HOST_TEST_SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: fence(),
+      payloadFingerprint: computeAgentSessionPayloadFingerprint(fingerprint)
+    }
+    expect(await host.setOption(CALLER, { envelope, ...fields })).toMatchObject({ ok: true })
+    await send(host, value)
+    const previous = child
+    child = await waitFor(() => {
+      expect(rig.child()).not.toBe(previous)
+      expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
+      return rig.child()
+    })
+    const options = await rig.adapter.readOptions({ sessionId: HOST_TEST_SESSION, fence: fence() })
+    runs.push({
+      args: child.launch.args,
+      resumed: framesOf(child, 'session/resume').length,
+      mode: framesOf(child, 'session/set_config_option')[0]?.params,
+      reported: options.current.reportedPermissionMode
+    })
+  }
+  expect(runs).toEqual([
+    {
+      args: ['acp', '--dangerously-skip-permissions'],
+      resumed: 1,
+      mode: expect.objectContaining({ configId: 'mode', value: 'default' }),
+      reported: 'full-access'
+    },
+    {
+      args: ['acp'],
+      resumed: 1,
+      mode: expect.objectContaining({ configId: 'mode', value: 'default' }),
+      reported: 'ask'
+    }
+  ])
+})
+
+it("leaves a Full access host chat's plan approval to the person", async () => {
+  let answered = false
+  const rig = await openAcpAdapterRig({
+    spec: ANTIGRAVITY.hostBackend!.spec,
+    launch: { args: ['acp', '--dangerously-skip-permissions'], fullAccess: true },
+    script: (agent) =>
+      agent.on('session/prompt', () => {
+        // agy's flag does not approve plans, so it still asks.
+        void agent
+          .request('plan', 'session/request_permission', {
+            sessionId: PROVIDER_SESSION,
+            toolCall: { toolCallId: 'plan-1', title: 'Approve plan' },
+            options: [{ optionId: 'proceed', name: 'Proceed', kind: 'allow_once' }]
+          })
+          .then(() => {
+            answered = true
+          })
+      })
+  })
+  await rig.acquire({ permissionMode: 'full-access' })
+  await sendHello(rig, 'send-1')
+  await waitFor(async () =>
+    expect((await rig.rig.rows()).some((row) => row.body.kind === 'approval')).toBe(true)
+  )
+  expect(answered).toBe(false)
+})
+
 it('refuses a new start while its sign-in changes, and stops one already starting', async () => {
   const gate = ANTIGRAVITY.launchGate!
   const rig = await openAcpAdapterRig({
@@ -176,6 +294,7 @@ it('refuses a new start while its sign-in changes, and stops one already startin
   const starting = rig.acquire()
   await rig.frame('session/new')
   const signIn = deferred<void>()
+  onTestFinished(() => signIn.resolve())
   const operation = gate.run(
     async () => {},
     () => signIn.promise
@@ -189,6 +308,10 @@ it('refuses a new start while its sign-in changes, and stops one already startin
 
   const lateStart = gate.enter(undefined)
   let left = false
+  onTestFinished(() => {
+    left = true
+    lateStart.leave()
+  })
   let stopped = false
   let worked = false
   const failedOperation = gate.run(
@@ -201,6 +324,7 @@ it('refuses a new start while its sign-in changes, and stops one already startin
       worked = true
     }
   )
+  void failedOperation.catch(() => {})
   expect(lateStart.signal.aborted).toBe(true)
   expect(stopped).toBe(false)
   left = true
@@ -219,7 +343,7 @@ it('stops a chat that has left the gate but is not loaded yet before the operati
         agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
       )
   })
-  // Its start returned, so the gate has no start to abort and no loaded chat lists it yet.
+  // Acquisition ended, but no loaded chat owns this child yet.
   await rig.acquire()
   const child = rig.child()
   let ranOverLiveChild: boolean | null = null

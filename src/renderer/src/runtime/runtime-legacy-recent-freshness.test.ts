@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
-import { listRuntimeFiles } from './runtime-file-search-client'
+import { listRuntimeFiles } from './files/search/runtime-file-search-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall
-} from './runtime-file-client-test-harness'
+} from './files/runtime-file-client-test-harness'
 installRuntimeFileClientEnvironment()
 for (const version of [1, 2]) {
   it(`refreshes candidate eligibility after deletion on version ${version}`, async () => {

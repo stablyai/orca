@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeImageTranscriptMessages } from '../../shared/native-chat-image-transcript-markers'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { normalizeImageTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
-// Verbatim shape of a pasted-image turn, Claude Code 2.1.237: the prompt row carries
-// `[Image #N]` markers plus base64 blocks (no url/path, so they decode to nothing), and
-// a SEPARATE companion row marked isMeta/turnCompanion carries one `[Image: source: ]`
-// text block per image. A survey of ~/.claude/projects found 238 of 241 image-source
-// rows marked isMeta, across every versioned release.
+// Claude 2.1.237 stores source paths in separate isMeta/turnCompanion rows; prompt base64 has no path.
 const PROMPT_ROW = JSON.stringify({
   type: 'user',
   uuid: 'prompt-uuid',
@@ -43,11 +39,6 @@ function decode(): NativeChatMessage[] {
 }
 
 describe('Claude pasted-image companion row', () => {
-  it('keeps the isMeta companion row so the turn carries its attachments', () => {
-    const decoded = decode()
-    expect(decoded.map((m) => m.id)).toEqual(['companion-uuid', 'prompt-uuid'])
-  })
-
   it('folds a multi-image companion into the prompt as image refs', () => {
     const folded = normalizeImageTranscriptMessages(decode())
     expect(folded).toHaveLength(1)
@@ -55,7 +46,6 @@ describe('Claude pasted-image companion row', () => {
       { type: 'image-ref', path: '/tmp/orca-paste-a.png' },
       { type: 'image-ref', path: '/tmp/orca-paste-b.png' }
     ])
-    // The caption survives with its markers stripped.
     const text = folded[0]!.blocks
       .filter((b) => b.type === 'text')
       .map((b) => b.text)

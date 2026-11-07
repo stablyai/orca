@@ -1,45 +1,61 @@
-import { describe, expect, it } from 'vitest'
-import {
-  EMPTY_DAEMON_SESSION_INVENTORY,
-  inventoryFromSessions,
-  removeSessionFromInventory,
-  removeSessionsFromInventory
-} from './resource-session-inventory'
-import type { DaemonSession } from './resource-usage-merge-types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import { ResourceSessionInventoryCache } from './resource-session-inventory-cache'
 
-function session(id: string): DaemonSession {
-  return { id, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
+function session(id: string, incarnationId?: string): DaemonSession {
+  return { id, incarnationId, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
 }
 
-describe('resource session inventory', () => {
-  it('builds count from daemon listSessions payloads', () => {
-    const inventory = inventoryFromSessions([session('a'), session('b')])
-    expect(inventory.count).toBe(2)
-    expect(inventory.sessions.map((entry) => entry.id)).toEqual(['a', 'b'])
+function deferredListing() {
+  let resolve!: (sessions: DaemonSession[]) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<DaemonSession[]>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
+describe('resource session inventory request-scoped exits', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('associates loading notifications with the request they can invalidate', async () => {
+    const original = session('one', 'A')
+    const list = vi.fn().mockResolvedValue([original])
+    const cache = new ResourceSessionInventoryCache(list, true)
+    let exited = false
+    cache.subscribe(() => {
+      if (!exited && cache.getSnapshot().loading) {
+        exited = true
+        cache.exited({ code: 0, ...original, hostId: 'local' })
+      }
+    })
+
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(cache.getSnapshot().sessionInventory.count).toBe(0)
   })
 
-  it('returns a detached sessions array so callers can mutate safely', () => {
-    const source = [session('a')]
-    const inventory = inventoryFromSessions(source)
-    source.pop()
-    expect(inventory.sessions).toEqual([session('a')])
-    expect(inventory.count).toBe(1)
-  })
+  it('absorbs pending exit publications into an in-flight listing without resurrecting its incarnation', async () => {
+    const original = session('one', 'A')
+    const replacement = session('one', 'B')
+    const slow = deferredListing()
+    const list = vi.fn().mockResolvedValueOnce([original]).mockReturnValueOnce(slow.promise)
+    const cache = new ResourceSessionInventoryCache(list, true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(100)
+    void cache.refresh()
+    await vi.advanceTimersByTimeAsync(0)
 
-  it('removes killed or exited sessions without inventing wake-hint ids', () => {
-    const start = inventoryFromSessions([session('live'), session('orphan'), session('other')])
-    const afterOne = removeSessionFromInventory(start, 'orphan')
-    expect(afterOne.count).toBe(2)
-    expect(afterOne.sessions.map((entry) => entry.id)).toEqual(['live', 'other'])
-
-    const afterMany = removeSessionsFromInventory(start, new Set(['live', 'missing', 'other']))
-    expect(afterMany).toEqual(inventoryFromSessions([session('orphan')]))
-  })
-
-  it('is a no-op when removed ids are absent', () => {
-    const start = inventoryFromSessions([session('live')])
-    expect(removeSessionFromInventory(start, 'gone')).toBe(start)
-    expect(removeSessionsFromInventory(start, new Set())).toBe(start)
-    expect(EMPTY_DAEMON_SESSION_INVENTORY.count).toBe(0)
+    cache.exited({ code: 0, ...original, hostId: 'local' })
+    slow.resolve([original, replacement])
+    await vi.advanceTimersByTimeAsync(0)
+    const settled = cache.getSnapshot().sessionInventory
+    expect(settled.sessions).toEqual([replacement])
+    await vi.advanceTimersByTimeAsync(50)
+    expect(cache.getSnapshot().sessionInventory).toBe(settled)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -7,9 +7,9 @@ import {
 } from './workspace-space-decision-details'
 import { getWorkspaceSpaceDeleteState } from './workspace-space-state-resolution'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 
@@ -68,8 +68,7 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     ]
   )
   const decisionDetailsByWorktreeId = useMemo(() => {
-    // Why: the epoch bumps when fresh hook entries cross the stale boundary so
-    // delete readiness recomputes with the same wall-clock sample as the store.
+    // Use the epoch’s clock so delete readiness and the store agree when hook evidence becomes stale.
     const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
     const details = new Map<string, WorkspaceDecisionDetails>()
     for (const worktree of sourceRows) {

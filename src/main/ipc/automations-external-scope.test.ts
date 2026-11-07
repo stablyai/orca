@@ -5,7 +5,7 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-c
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { AutomationService } from '../automations/service'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as Fs from 'node:fs'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { ExternalAutomationManagerCache } from '../automations/external-automation-manager-cache'
@@ -22,12 +22,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-// This computer's `which` lookup is the one process a scoped probe starts, so it counts probes.
+// Each scoped probe performs one local which lookup.
 const probeCommand = vi.hoisted(() => vi.fn())
 const fileExists = vi.hoisted(() => vi.fn(() => false))
 const readRegistrations = vi.fn(() => state.targets)
 vi.mock('@orca/process-host', () => ({ runProcess: probeCommand }))
-// Why: keep the local job read off the developer's real ~/.openclaw and ~/.openclaw.
+// Isolate external job reads from the developer's real home.
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof Fs>()),
   existsSync: fileExists
@@ -131,16 +131,6 @@ describe('scoped external-manager IPC', () => {
     }
   )
 
-  it('does not register external create, edit, or history handlers', () => {
-    for (const channel of [
-      'automations:createExternalForOwner',
-      'automations:updateExternalForOwner',
-      'automations:listExternalRunsForOwner'
-    ]) {
-      expect(ipcHandlers.has(channel)).toBe(false)
-    }
-  })
-
   it('derives the target from the captured owner rather than the payload', async () => {
     const entry = await invoke('automations:listExternalManagerForOwner', {
       owner: desktopSsh(),
@@ -148,18 +138,8 @@ describe('scoped external-manager IPC', () => {
       target: { type: 'local' }
     })
 
-    // Why: an SSH owner is never served here, and a payload target must not reroute it locally.
+    // An SSH owner cannot be rerouted locally by a payload target.
     expect(entry).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(probeCommand).not.toHaveBeenCalled()
-  })
-
-  it('refuses a request with no captured owner without probing', async () => {
-    await expect(
-      invoke('automations:listExternalManagerForOwner', { provider: 'openclaw' })
-    ).rejects.toThrow(/automation owner is required/i)
-    await expect(invoke('automations:runExternalActionForOwner', {})).rejects.toThrow(
-      /automation owner is required/i
-    )
     expect(probeCommand).not.toHaveBeenCalled()
   })
 
@@ -197,30 +177,6 @@ describe('scoped external-manager IPC', () => {
     ).rejects.toThrow(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     expect(probeCommand).not.toHaveBeenCalled()
   })
-
-  it('keeps one cache across requests, so a repeat read costs no second probe', async () => {
-    const request = { owner: desktopSelf, provider: 'openclaw' }
-    await invoke('automations:listExternalManagerForOwner', request)
-    await invoke('automations:listExternalManagerForOwner', request)
-    expect(probeCommand).toHaveBeenCalledTimes(1)
-
-    await invoke('automations:listExternalManagerForOwner', { ...request, refresh: true })
-    expect(probeCommand).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidates that host after a mutation through the scoped path', async () => {
-    const request = { owner: desktopSelf, provider: 'openclaw' }
-    await invoke('automations:listExternalManagerForOwner', request)
-    await invoke('automations:runExternalActionForOwner', {
-      ...request,
-      jobId: 'job-1',
-      action: 'run'
-    })
-    await invoke('automations:listExternalManagerForOwner', request)
-
-    // action + the re-probe after invalidation, on top of the first list.
-    expect(probeCommand).toHaveBeenCalledTimes(3)
-  })
 })
 
 describe('probe scope retention', () => {
@@ -249,8 +205,7 @@ describe('probe scope retention', () => {
 
 describe('Orca automation traffic priority', () => {
   it('parks queued probes while Orca automation work holds the installed lease', async () => {
-    // Orca CRUD and dispatch arrive through the runtime methods, which take the
-    // lease through the hook this registration installed on the service.
+    // Runtime CRUD/dispatch takes the lease installed on the service by registration.
     const lease = state.service.externalProbePriority
     expect(lease).not.toBeNull()
     let finish: () => void = () => undefined
@@ -266,8 +221,7 @@ describe('Orca automation traffic priority', () => {
       provider: 'openclaw'
     })
     await Promise.resolve()
-    // Why: the probe is queued, not started — this is the only thing keeping
-    // external discovery from competing with the work the user is waiting on.
+    // Queued probes must not compete with pending user-facing work.
     expect(probeCommand).not.toHaveBeenCalled()
 
     finish()

@@ -2,20 +2,15 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import SidebarRepositoryFilterSection from '@/components/sidebar/SidebarRepositoryFilterSection'
-import { SidebarHostScopeMenuSection } from '@/components/sidebar/SidebarHostScopeMenuSection'
+import SidebarRepositoryFilterSection from '@/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection'
+import { SidebarHostScopeMenuSection } from '@/components/sidebar/worktree-list/controls/SidebarHostScopeMenuSection'
 import {
   getSidebarHostVisibilityLabel,
   shouldShowHostScopeControls
-} from '@/components/sidebar/sidebar-host-options'
-import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
+} from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
+import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 
-/**
- * Workspace-origin, host, and project scope items for the Agents activity surfaces. State is the
- * persisted agents-view scope (agentsHide*, agentsVisibleHostIds, agentsFilterRepoIds),
- * deliberately separate from the workspace-nav filters. The parent owns the Filters label and
- * separator.
- */
+/** Persisted Agents scope is separate from workspace navigation filters; the parent owns the Filters label/separator. */
 export function ActivityScopeFilterMenuItems(): React.JSX.Element {
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const setAgentsVisibleHostIds = useAppStore((s) => s.setAgentsVisibleHostIds)
@@ -110,8 +105,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
   )
 }
 
-/** Active persisted agents-view filters, for the options trigger badge; a filter that survives
- *  restarts must not silently hide running agents. Stale repo ids count so they stay resettable. */
+/** Count persisted filters, including stale repo IDs, so hidden agents stay discoverable and resettable. */
 export function useActivityScopeFilterCount(): number {
   return useAppStore(
     (state) =>

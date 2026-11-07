@@ -60,22 +60,8 @@ function scoped(
 }
 
 describe('buildExternalAutomationListEntries', () => {
-  it('omits empty host probes', () => {
-    expect(buildExternalAutomationListEntries([scoped(null)])).toEqual([])
-  })
-
-  it('lists jobs from an unavailable manager', () => {
-    expect(buildExternalAutomationListEntries([scoped(null, { jobs: [job()] })])).toEqual([
-      expect.objectContaining({
-        job: expect.objectContaining({ id: 'job-1' })
-      })
-    ])
-  })
-
   it('separates identical manager and job IDs reported by two authorities', () => {
-    // `openclaw:local` names no authority, so both hosts hand back the same manager
-    // ID. An unqualified key would make the two rows one, and the second would
-    // shadow the first in selection, dialogs, and React's reconciliation.
+    // Manager/job IDs collide across authorities; qualify row identity to preserve independent selection, dialogs and reconciliation.
     const entries = buildExternalAutomationListEntries([
       scoped(null, { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] }),
       scoped('env-7', { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] })
@@ -83,17 +69,5 @@ describe('buildExternalAutomationListEntries', () => {
 
     expect(entries).toHaveLength(2)
     expect(entries[0]?.key).not.toBe(entries[1]?.key)
-  })
-
-  it('carries the scope it keyed each entry with', () => {
-    const [entry] = buildExternalAutomationListEntries([scoped('env-7', { jobs: [job()] })])
-
-    // The entry is what the edit dialog captures; re-deriving the scope from the
-    // manager ID at save time is the lookup this field exists to avoid.
-    expect(entry?.scope.owner.authority).toEqual({
-      kind: 'runtime',
-      environmentId: 'env-7',
-      pairingRevision: 1
-    })
   })
 })

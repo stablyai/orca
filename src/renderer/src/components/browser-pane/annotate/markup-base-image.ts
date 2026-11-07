@@ -1,12 +1,6 @@
-// Captures the frozen base screenshot the user draws on. Renderer-only and
-// environment-aware: local Electron webviews expose capturePage(); remote panes
-// already display the streamed frame as an <img> we can snapshot. Keeping this
-// out of the main process means the markup feature works identically for local
-// and remote/SSH browser panes.
+// Capture in the renderer from local webviews or streamed images so local and remote panes share markup delivery.
 
-// A frozen snapshot as a data URL plus its intrinsic pixel size. The overlay
-// shows it as an <img> backdrop and reuses that same loaded element as the
-// compositor's base layer.
+// Reuse the frozen image as both overlay backdrop and compositor base.
 export type MarkupBaseImage = {
   dataUrl: string
   width: number
@@ -32,10 +26,7 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
     throw new Error('markup: webview capturePage returned an empty image')
   }
   const size = native.getSize()
-  // Why: capturePage() can include an alpha channel where the page has no opaque
-  // background, which would let the live webview ghost through the frozen
-  // backdrop. Flatten onto white (the browser's default canvas color) so the
-  // base image is fully opaque.
+  // Flatten transparent capturePage regions onto browser-white so the live guest cannot show through the frozen backdrop.
   const image = await loadImage(native.toDataURL())
   return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
 }
@@ -43,14 +34,11 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
 function captureFromImage(element: HTMLImageElement): MarkupBaseImage {
   const width = element.naturalWidth || element.width
   const height = element.naturalHeight || element.height
-  // Why: drawImage() silently no-ops on an undecoded/detached source, yielding a
-  // blank PNG. Fail fast instead so the caller surfaces an error.
+  // Reject undecoded/detached frames; drawImage would silently produce a blank PNG.
   if (!element.complete || !element.isConnected || width <= 0 || height <= 0) {
     throw new Error('markup: remote frame image is not ready')
   }
-  // Why: snapshot the live frame into a detached canvas (opaque white backdrop)
-  // so later screencast frames can't change the base image and transparent
-  // regions don't ghost the live stream through.
+  // Copy the live frame onto an opaque canvas so later frames and transparent regions cannot alter the base.
   return { dataUrl: flattenToOpaquePng(element, width, height), width, height }
 }
 

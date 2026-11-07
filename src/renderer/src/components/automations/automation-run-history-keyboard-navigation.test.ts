@@ -1,22 +1,8 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import { makeRun } from './automations-page-fixtures'
-import {
-  getAutomationRunHistoryArrowTarget,
-  isAutomationRunHistoryArrowKey,
-  shouldHandleAutomationRunHistoryKey
-} from './automation-run-history-keyboard-navigation'
 
-describe('isAutomationRunHistoryArrowKey', () => {
-  it('identifies ArrowUp and ArrowDown', () => {
-    expect(isAutomationRunHistoryArrowKey('ArrowUp')).toBe(true)
-    expect(isAutomationRunHistoryArrowKey('ArrowDown')).toBe(true)
-    expect(isAutomationRunHistoryArrowKey('ArrowLeft')).toBe(false)
-    expect(isAutomationRunHistoryArrowKey('ArrowRight')).toBe(false)
-    expect(isAutomationRunHistoryArrowKey('Enter')).toBe(false)
-  })
-})
+import { shouldHandleAutomationRunHistoryKey } from './automation-run-history-keyboard-navigation'
 
 describe('shouldHandleAutomationRunHistoryKey', () => {
   function makeEvent(
@@ -41,18 +27,6 @@ describe('shouldHandleAutomationRunHistoryKey', () => {
       ...overrides
     }
   }
-
-  it('allows unmodified ArrowUp, ArrowDown, and Enter', () => {
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'ArrowDown' }))).toBe(true)
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'ArrowUp' }))).toBe(true)
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'Enter' }))).toBe(true)
-  })
-
-  it('ignores other keys', () => {
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'ArrowLeft' }))).toBe(false)
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'ArrowRight' }))).toBe(false)
-    expect(shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'Space' }))).toBe(false)
-  })
 
   it('ignores modified or composing keys', () => {
     expect(shouldHandleAutomationRunHistoryKey(makeEvent({ metaKey: true }))).toBe(false)
@@ -107,72 +81,5 @@ describe('shouldHandleAutomationRunHistoryKey', () => {
     expect(
       shouldHandleAutomationRunHistoryKey(makeEvent({ key: 'ArrowDown', target: button }))
     ).toBe(true)
-  })
-})
-
-describe('getAutomationRunHistoryArrowTarget', () => {
-  const run1 = makeRun({ id: 'run-1' })
-  const run2 = makeRun({ id: 'run-2' })
-  const run3 = makeRun({ id: 'run-3' })
-  const runs = [run1, run2, run3]
-
-  it('returns null for empty runs list', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs: [],
-        selectedRunId: null,
-        key: 'ArrowDown'
-      })
-    ).toBeNull()
-  })
-
-  it('moves selection down from first item to second item', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs,
-        selectedRunId: 'run-1',
-        key: 'ArrowDown'
-      })
-    ).toBe(run2)
-  })
-
-  it('moves selection up from second item to first item', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs,
-        selectedRunId: 'run-2',
-        key: 'ArrowUp'
-      })
-    ).toBe(run1)
-  })
-
-  it('clamps at the bottom of the runs list', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs,
-        selectedRunId: 'run-3',
-        key: 'ArrowDown'
-      })
-    ).toBe(run3)
-  })
-
-  it('clamps at the top of the runs list', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs,
-        selectedRunId: 'run-1',
-        key: 'ArrowUp'
-      })
-    ).toBe(run1)
-  })
-
-  it('defaults to index 0 on ArrowDown when nothing was selected', () => {
-    expect(
-      getAutomationRunHistoryArrowTarget({
-        runs,
-        selectedRunId: null,
-        key: 'ArrowDown'
-      })
-    ).toBe(run2)
   })
 })

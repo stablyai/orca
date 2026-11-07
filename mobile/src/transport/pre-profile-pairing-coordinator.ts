@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, savePairedHost } from './host-store'
-import type { HostProfile, PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
   relayCredentialProvision,
@@ -32,8 +32,9 @@ import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-direc
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
-import { assertCommittedInstall, relayHost } from './pairing-relay-host'
+import { assertCommittedInstall, directHost, relayHost } from './pairing-relay-host'
 import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import { adoptExchangedToken, exchangePairingTicket } from './pairing-ticket-exchange'
 import type { HostStatusReply } from './host-status-reply-schema'
 
 export type PreProfilePairingAttempt = {
@@ -55,6 +56,7 @@ type Dependencies = {
   recoverPendingJournal: () => Promise<void>
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   recordDescriptorFromStatus: typeof recordHostDescriptorFromStatus
+  exchangeTicket: typeof exchangePairingTicket
   now: () => number
   platform: string
 }
@@ -72,6 +74,7 @@ const defaultDependencies: Dependencies = {
   recoverPendingJournal: () => settleMobileRelayPairingRecovery(PENDING_RECOVERY_WAIT_MS),
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   recordDescriptorFromStatus: recordHostDescriptorFromStatus,
+  exchangeTicket: exchangePairingTicket,
   now: Date.now,
   platform: Platform.OS
 }
@@ -161,8 +164,7 @@ async function runPairing(
   onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
-  // Why: every pairing artifact must share the preserved host id so re-pairing
-  // updates one card instead of publishing a second identity (STA-1840).
+  // Use the preserved host id for every artifact so re-pairing updates one card (STA-1840).
   const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
     offer.publicKeyB64,
     `host-${now}`
@@ -170,8 +172,7 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
-    // Why: a new scan always wins over a stale journal, but first gives its
-    // recovery a bounded chance to publish an install that already committed.
+    // Give committed recovery a bounded publication chance before the new scan supersedes its journal.
     await dependencies.recoverPendingJournal()
     assertActive(isDisposed)
     journal = createMobileRelayPairingJournal({
@@ -234,8 +235,19 @@ async function runPairing(
   log('success', 'Pairing path selected', `winner: ${winner.path}`)
   assertActive(isDisposed)
 
+  // Last call on the winning socket: once the phone signs in with its own token the scanned one stops working.
+  const exchangeTicket = (): Promise<string> =>
+    dependencies.exchangeTicket({
+      client: winner.client,
+      status: winner.status,
+      ticket: offer.deviceToken,
+      log
+    })
+
   if (!journal) {
-    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
+    const deviceToken = await exchangeTicket()
+    assertActive(isDisposed)
+    await dependencies.savePairedHost({ ...directHost(offer, hostId, hostName, now), deviceToken })
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
@@ -257,10 +269,11 @@ async function runPairing(
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
-    // record of why the phone never got a relay endpoint.
+    // Log the refusal code because LAN-only success otherwise hides why relay was unavailable.
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
-    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
+    const deviceToken = await exchangeTicket()
+    assertActive(isDisposed)
+    await dependencies.savePairedHost({ ...directHost(offer, hostId, hostName, now), deviceToken })
     await dependencies.clearJournal(journal.metadata.journalId)
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
@@ -275,6 +288,8 @@ async function runPairing(
     throw new Error('desktop returned no relay endpoint after credential install')
   }
   assertActive(isDisposed)
+  journal = await adoptExchangedToken(journal, await exchangeTicket(), dependencies.saveJournal)
+  assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
   await dependencies.savePairedHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
@@ -282,12 +297,8 @@ async function runPairing(
   return { hostId }
 }
 
-/**
- * Why after the save: the saved row starts as its existing name (or "Host N") and the descriptor
- * writer adopt-renames it to the desktop's machine name in the same serialized store chain, so a
- * load issued after pairing returns the desktop-reported name. A recording failure is swallowed —
- * descriptor upkeep must never fail a pairing that already saved.
- */
+// After save, record descriptors on the same serialized chain so pairing returns the adopted machine name.
+// Swallow bookkeeping failures; the host is already committed.
 function recordWinnerDescriptor(
   dependencies: Dependencies,
   hostId: string,
@@ -300,22 +311,6 @@ function recordWinnerDescriptor(
     dependencies.recordDescriptorFromStatus(hostId, status)
   } catch {
     // Best-effort bookkeeping; the host is already saved.
-  }
-}
-
-function baseHost(
-  offer: PairingOffer,
-  hostId: string,
-  name: string,
-  lastConnected: number
-): HostProfile {
-  return {
-    id: hostId,
-    name,
-    endpoint: offer.endpoint,
-    deviceToken: offer.deviceToken,
-    publicKeyB64: offer.publicKeyB64,
-    lastConnected
   }
 }
 

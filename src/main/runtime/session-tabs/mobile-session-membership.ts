@@ -1,24 +1,52 @@
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from './session-tabs-change-publication'
+import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as SessionTabsProjection } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
 } from '../../../shared/runtime-types'
-import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
+  protected abstract createMobileSessionTabsDelivery(): ReturnType<
+    SessionTabsPublication['createMobileSessionTabsDelivery']
+  >
+
+  protected abstract toMobileSessionTabsResult(
+    ...args: Parameters<SessionTabsProjection['toMobileSessionTabsResult']>
+  ): ReturnType<SessionTabsProjection['toMobileSessionTabsResult']>
+
+  protected abstract hasAgentSenderListeners(): boolean
+
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
 
-  /** Bump the snapshot version and emit, coalesced unless `immediate`.
-   *  Why the bump: clients gate mirrored snapshots on a strictly increasing
-   *  `snapshotVersion`, so a re-emit at the same version is silently dropped. */
+  /** The RPC server owns the pairing key clients authenticate this host by. */
+  setAgentSenderPeerKey(read: () => string | null): void {
+    this.agentProjections.setPeerKey(read)
+  }
+
+  /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
+  refreshAgentSenderAssociations(): void {
+    if (!this.hasAgentSenderListeners()) {
+      return
+    }
+    const changed = this.agentProjections.senders.changedScopes(
+      this.mobileSessionTabsByWorktree.keys()
+    )
+    for (const worktreeId of changed) {
+      this.touchMobileSessionTabsForWorktree(worktreeId)
+    }
+  }
+
+  /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options: { immediate?: boolean } = {}
@@ -33,13 +61,11 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       snapshotVersion: snapshot.snapshotVersion + 1
     })
     if (options.immediate) {
-      // Why: an exit is structural and must not wait behind the title/status window. A
-      // registration's ready flip coalesces so it merges with the spawn's graph update.
+      // Emit structural exits immediately; coalesce ready flips with spawn graph updates.
       this.notifyMobileSessionTabsChanged(worktreeId)
       return
     }
-    // Why: title/status flips several times a second under spinner-in-title
-    // agents. Coalesce the emit instead of fanning out every version.
+    // Coalesce spinner-driven title/status bursts instead of broadcasting every version.
     this.scheduleMobileSessionTabsChanged(worktreeId)
   }
 
@@ -81,8 +107,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     leafId: string,
     candidatePtyId: string | null | undefined
   ): boolean {
-    // Why `?? undefined`: the absence of a session is what licenses membership,
-    // so a partition miss must read as absent and not as a distinct null value.
+    // Only absent sessions license membership; normalize partition misses to undefined.
     const session = this.getWorkspaceSessionForWorktree(worktreeId) ?? undefined
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     if (
@@ -98,11 +123,12 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       return false
     }
     const pty = this.ptysById.get(candidatePtyId)
-    const pane = parsePaneKey(pty?.paneKey ?? '')
+    const recorded = this.paneOfPty(pty)
+    const pane = parsePaneKey(recorded.paneKey ?? '')
     return Boolean(
       pty?.connected &&
       pty.worktreeId === worktreeId &&
-      pty.tabId === parentTabId &&
+      recorded.tabId === parentTabId &&
       pane?.leafId === leafId
     )
   }
@@ -110,7 +136,6 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   protected reconcileMobileSessionRetirementFences(
     leaves: readonly RuntimeSyncedLeaf[]
   ): RuntimeSyncedLeaf[] {
-    // Switch point: main's own panes are the membership record; the window-era fence is not asked.
     const mainOwns = ORCA_LAYOUT_OWNER_IS_MAIN
       ? startedMainTerminalSurfaces(this)?.ownedWorkspaces()
       : null
@@ -139,9 +164,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
           tab.leafId,
           tab.ptyId
         ) ||
-        // Why: after a cold restore the saved session is the only membership record until the PTY
-        // registers. Frame-only; once listed, the surface's graph leaves pass the shared predicate
-        // like any listed surface's. Host-side single-writer membership absorbs this.
+        // Before PTY registration, cold restore has only saved membership; use it for the frame until surface graph leaves qualify.
         this.hasPersistedTerminalSurfaceMembership(snapshot.worktree, tab.parentTabId, tab.leafId)
       ) {
         continue

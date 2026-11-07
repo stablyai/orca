@@ -1,8 +1,7 @@
-// Main's pane trees shown at once, against the store rather than the frame: a tab the window's own
-// pane command held may lag the trees drawn since. Only a tab it still holds waits.
+// Compare frame pane trees against current store: local held commands can lag subsequent frame drawings; only still-held tabs wait.
 
 import type { AppState } from '@/store/types'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
+import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import { isTabPaneTreeHeld } from './layout-owner-pane-intents'
 

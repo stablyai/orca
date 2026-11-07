@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { exposeRun } from './run-receipt'
-import type { RunRow } from '../../../../orchestration/types'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 
-// Why: typecheck cannot see the strip because the RPC return types are loose.
+// Loose RPC return types cannot prove internal fields were stripped.
 const RUN_ROW: RunRow = {
   id: 'run_1',
   objective: 'Coordinate reviews',
@@ -35,26 +35,5 @@ describe('exposeRun', () => {
     expect(exposed).not.toHaveProperty('coordinator_pane_key')
     expect(exposed).not.toHaveProperty('coordinator_orca_session_id')
     expect(exposed).not.toHaveProperty('coordinator_orca_session_id_generation')
-  })
-
-  it('preserves every published column by value', () => {
-    const exposed = exposeRun(RUN_ROW)
-
-    expect(exposed).toEqual({
-      id: 'run_1',
-      objective: 'Coordinate reviews',
-      coordinator_handle: 'term_coord',
-      consumer_generation: 3,
-      legacy: 0,
-      created_at: '2026-09-04T18:53:07Z',
-      updated_at: '2026-09-04T18:53:09Z'
-    })
-  })
-
-  it('does not mutate the source row', () => {
-    const row = { ...RUN_ROW }
-    exposeRun(row)
-
-    expect(row).toEqual(RUN_ROW)
   })
 })

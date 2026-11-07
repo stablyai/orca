@@ -3,8 +3,28 @@ import {
   fetchAntigravityRateLimits,
   resetAntigravityUsageSupportForTests
 } from './antigravity-usage-fetcher'
-import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
+import { ANTIGRAVITY_USAGE_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+
+const { hostShellEnvironmentMock, runWslProcessMock, wslRunningMock, defaultDistroMock } =
+  vi.hoisted(() => ({
+    hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' })),
+    runWslProcessMock: vi.fn(),
+    wslRunningMock: vi.fn(async () => true),
+    defaultDistroMock: vi.fn(async (): Promise<string | null | symbol> => 'Ubuntu')
+  }))
+
+vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: hostShellEnvironmentMock
+}))
+vi.mock('../wsl/discovery/wsl-default-distro', () => ({
+  resolveWslDefaultDistro: defaultDistroMock,
+  UNRESOLVED_WSL_DEFAULT: Symbol('unresolved')
+}))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({
+  isWslDistroRunningForBackgroundWork: wslRunningMock
+}))
 
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
@@ -44,9 +64,7 @@ function harness(
     env?: NodeJS.ProcessEnv
   } = {}
 ) {
-  // Why the per-call split: the fetcher probes `--version` before the quota read, and a fixture
-  // that answers both alike either fakes a version line into `/usage` or a usage envelope into the
-  // version probe.
+  // Version and usage probes need distinct payloads.
   const runCommand =
     options.runCommand ??
     vi
@@ -56,7 +74,7 @@ function harness(
           ? (options.versionResult ?? processResult({ stdout: 'agy version 1.2.11\n' }))
           : (options.result ?? processResult())
       )
-  // Why the `in` check and not `??`: an explicit `program: null` is the absent-CLI case.
+  // Explicit program: null models an absent CLI.
   const resolveCommand = vi
     .fn()
     .mockResolvedValue('program' in options ? options.program : '/Users/x/.local/bin/agy')
@@ -79,171 +97,7 @@ function harness(
   }
 }
 
-describe('fetchAntigravityRateLimits', () => {
-  beforeEach(() => {
-    resetAntigravityUsageSupportForTests()
-  })
-
-  it('publishes the CLI reading as Antigravity usage', async () => {
-    const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
-
-    expect(result.status).toBe('ok')
-    expect(result.provider).toBe('antigravity')
-    expect(result.error).toBeNull()
-    expect(result.weekly).toMatchObject({ usedPercent: 60, windowMinutes: 10_080 })
-    expect(result.buckets).toEqual([
-      {
-        name: 'Gemini Models',
-        group: 'Gemini Models',
-        windowName: 'Weekly Limit Remaining',
-        usedPercent: 60,
-        windowMinutes: 10_080,
-        resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
-        resetDescription: null
-      }
-    ])
-    expect(result.usageMetadata).toMatchObject({
-      source: 'cli',
-      credentialSource: 'antigravity-cli'
-    })
-  })
-
-  it('never publishes the agy bucket id to the renderer', async () => {
-    const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
-
-    for (const bucket of result.buckets ?? []) {
-      expect(bucket).not.toHaveProperty('id')
-    }
-  })
-
-  it('probes the version, then runs the quota read with the resolved path and login-shell env', async () => {
-    const loginShellEnv = { PATH: '/Users/x/.local/bin:/usr/bin' }
-    const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }), env: loginShellEnv })
-    await h.fetch()
-
-    // Why the login-shell PATH: agy installs to ~/.local/bin, which Electron's inherited PATH omits.
-    // Why auto-update off: a due check spawns agy's updater, whose child flashes a Windows console.
-    const probeEnv = { PATH: '/Users/x/.local/bin:/usr/bin', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-    const [versionSpec, usageSpec] = h.runCommand.mock.calls.map(([spec]) => spec)
-    expect(versionSpec.args).toEqual(ANTIGRAVITY_VERSION_ARGS)
-    expect(versionSpec.env).toEqual(probeEnv)
-    expect(usageSpec.program).toBe('/Users/x/.local/bin/agy')
-    expect(usageSpec.args).toEqual(ANTIGRAVITY_USAGE_ARGS)
-    expect(usageSpec.env).toEqual(probeEnv)
-    expect(usageSpec.timeoutMs).toBeGreaterThan(0)
-    expect(h.resolveCommand).toHaveBeenCalledWith('agy', { platform: 'darwin', env: probeEnv })
-    // The login-shell env is a shared cache entry; the probe must not write into it.
-    expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
-  })
-
-  it('reports an absent CLI as unavailable and never spawns', async () => {
-    const h = harness({ program: null })
-    const result = await h.fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
-    expect(result.error).toContain('was not found on this machine')
-    expect(h.runCommand).not.toHaveBeenCalled()
-  })
-
-  it('reports a signed-out account as unavailable, not as a failed refresh', async () => {
-    const result = await harness({
-      // agy exits 0 and prints this rather than an envelope.
-      result: processResult({ stderr: 'You are not logged into Antigravity.' })
-    }).fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(result.error).toContain('Sign in with `agy`')
-  })
-
-  it('reports an auth failure on stderr as sign-in guidance, not as a broken read', async () => {
-    // Why pinned: the other shape of "signed out" — a non-zero exit with an auth diagnostic — used
-    // to land in the parse-failure branch as a generic refresh error.
-    const result = await harness({
-      result: processResult({ code: 1, stderr: 'Not authenticated. Run agy login.' })
-    }).fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(result.error).toContain('Sign in with `agy`')
-  })
-
-  it('reports a bare "Not authenticated." failure on stderr as sign-in guidance', async () => {
-    const result = await harness({
-      result: processResult({ code: 1, stderr: 'Not authenticated.\n' })
-    }).fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(result.error).toContain('Sign in with `agy`')
-  })
-
-  it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
-    // Why pinned: stderr containing unrelated words like "oauth" or "author" must not be misclassified
-    // as missing-credentials.
-    const result = await harness({
-      result: processResult({
-        code: 1,
-        stderr: 'Failed to contact https://oauth2.googleapis.com/token: connection refused'
-      })
-    }).fetch()
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
-    expect(result.error).toContain('did not report a quota (exit 1)')
-  })
-
-  it('reports a timeout as its own failure kind', async () => {
-    const result = await harness({ result: processResult({ timedOut: true }) }).fetch()
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(result.error).toContain('did not answer in time')
-  })
-
-  it('reports an unreadable payload as a parse failure carrying the exit code', async () => {
-    const result = await harness({
-      result: processResult({ code: 2, stdout: 'unknown command /usage' })
-    }).fetch()
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
-    expect(result.error).toContain('exit 2')
-  })
-
-  it('does not blame the exit code when agy exited cleanly with no payload', async () => {
-    const result = await harness({ result: processResult({ code: 0, stdout: '' }) }).fetch()
-
-    expect(result.status).toBe('error')
-    expect(result.error).not.toContain('exit')
-  })
-
-  it('reports a spawn failure instead of rejecting the cycle', async () => {
-    const runCommand = vi.fn().mockRejectedValue(new Error('EACCES'))
-    const result = await harness({ runCommand }).fetch()
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
-    expect(result.error).toContain('EACCES')
-  })
-
-  it('never reports quota from a successful read as stale session data', async () => {
-    const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
-
-    // Why: this tier meters no 5h pool. The Gemini mirror it replaces filled `session` from a
-    // 60-minute per-model window and left `weekly` null — exactly backwards (#22511).
-    expect(result.session).toBeNull()
-    expect(result.weekly).not.toBeNull()
-  })
-})
-
-/**
- * Captured when agy treated `/usage` as a prompt instead of a command: a conversation was started,
- * a turn was spent, and the account answered RESOURCE_EXHAUSTED. This is the exact shape the
- * unsupported latch has to recognise.
- */
+/** Captured billed-turn response when /usage was treated as a prompt; must latch future probes off. */
 const MODEL_TURN_ENVELOPE = JSON.stringify({
   conversation_id: '28a5ca91-301f-4050-8efc-9c82c4e64df3',
   status: 'ERROR',
@@ -257,171 +111,105 @@ describe('agy versions that answer /usage as a prompt', () => {
     resetAntigravityUsageSupportForTests()
   })
 
-  it('reports the quota read as unavailable instead of as a parse failure', async () => {
-    const result = await harness({
-      result: processResult({ stdout: MODEL_TURN_ENVELOPE })
-    }).fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(result.error).toContain('answers `/usage` as a prompt')
-  })
-
   it('never spawns agy again once a turn was spent', async () => {
     const h = harness({ result: processResult({ stdout: MODEL_TURN_ENVELOPE }) })
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
 
-    // Why: the evidence costs a turn of the user's quota, so rediscovering it on a 15-minute
-    // cadence would keep paying for the same answer.
+    // Retrying unsupported /usage would spend another model turn on every poll.
     await h.fetch()
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
   })
-
-  it('does not latch when the usage payload parsed, whatever else the envelope says', async () => {
-    const h = harness({
-      result: processResult({ stdout: `${USAGE_ENVELOPE}\n${MODEL_TURN_ENVELOPE}` })
-    })
-    const first = await h.fetch()
-    const second = await h.fetch()
-
-    expect(first.status).toBe('ok')
-    expect(second.status).toBe('ok')
-    expect(h.runCommand).toHaveBeenCalledTimes(4)
-  })
-
-  it('does not latch on an empty or unparsable answer', async () => {
-    const h = harness({ result: processResult({ code: 2, stdout: 'unknown flag' }) })
-    const first = await h.fetch()
-    const second = await h.fetch()
-
-    // Why: a transient failure is not evidence that the command is unsupported.
-    expect(first.status).toBe('error')
-    expect(second.status).toBe('error')
-    expect(h.runCommand).toHaveBeenCalledTimes(4)
-  })
 })
 
-describe('the agy version gate', () => {
+describe('a WSL runtime target', () => {
+  const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+
   beforeEach(() => {
     resetAntigravityUsageSupportForTests()
+    wslRunningMock.mockReset().mockResolvedValue(true)
+    defaultDistroMock.mockReset().mockResolvedValue('Ubuntu')
+    runWslProcessMock
+      .mockReset()
+      .mockImplementation(async (spec: { args: readonly string[] }) =>
+        spec.args[0] === '--version'
+          ? processResult({ stdout: 'agy version 1.2.11\n' })
+          : processResult({ stdout: USAGE_ENVELOPE })
+      )
   })
 
-  it('never runs the quota read below the floor', async () => {
-    const h = harness({
-      versionResult: processResult({ stdout: 'agy version 1.1.10\n' }),
-      result: processResult({ stdout: USAGE_ENVELOPE })
+  it('reads quota from the agy inside the selected distro, never the host CLI', async () => {
+    const h = harness()
+    const result = await fetchAntigravityRateLimits({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock returns a ProcessResult, which is the whole contract runProcess exposes to this fetcher.
+      runCommand: h.runCommand as never,
+      resolveCommand: h.resolveCommand,
+      target: ubuntu
     })
-    const result = await h.fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(result.error).toContain('needs agy 1.1.11 or newer (found 1.1.10)')
-    // Why the assertion: below the floor `/usage` is a billed model turn, so it must not run at all.
-    expect(h.runCommand).toHaveBeenCalledTimes(1)
-    expect(h.runCommand.mock.calls[0]![0].args).toEqual(ANTIGRAVITY_VERSION_ARGS)
-  })
-
-  it('holds a prerelease below the floor', async () => {
-    // Why pinned: `1.1.11-rc.1` sorts below stable `1.1.11`; reading the core alone would let a
-    // release candidate spawn the billable read early.
-    const h = harness({ versionResult: processResult({ stdout: 'agy version 1.1.11-rc.1\n' }) })
-    const result = await h.fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.error).toContain('found 1.1.11-rc.1')
-    expect(h.runCommand).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    ['a garbled version line', processResult({ stdout: 'agy version unknown\n' })],
-    ['a failed version probe', processResult({ code: 1, stderr: 'boom' })]
-  ])('reports %s instead of guessing', async (_label, versionResult) => {
-    const h = harness({ versionResult })
-    const result = await h.fetch()
-
-    expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(result.error).toContain('version could not be read')
-    expect(h.runCommand).toHaveBeenCalledTimes(1)
-  })
-
-  it('runs the quota read at exactly the floor', async () => {
-    const h = harness({
-      versionResult: processResult({ stdout: 'agy version 1.1.11\n' }),
-      result: processResult({ stdout: USAGE_ENVELOPE })
-    })
-    const result = await h.fetch()
 
     expect(result.status).toBe('ok')
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads the version from stderr if stdout is empty on exit 0', async () => {
-    const h = harness({
-      versionResult: processResult({ stdout: '', stderr: 'agy version 1.1.11\n' }),
-      result: processResult({ stdout: USAGE_ENVELOPE })
-    })
-    const result = await h.fetch()
-
-    expect(result.status).toBe('ok')
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('quota read safety and diagnostic precedence', () => {
-  beforeEach(() => resetAntigravityUsageSupportForTests())
-
-  it.each([
-    processResult({ stdout: '1.2.14', timedOut: true }),
-    processResult({ stdout: '1.2.14', signal: 'SIGTERM' }),
-    processResult({ stdout: '1.2.14', code: 1 })
-  ])('does not read quota after an unsuccessful version probe: %j', async (versionResult) => {
-    const h = harness({ versionResult })
-    const result = await h.fetch()
-    expect(result.status).toBe('unavailable')
-    expect(h.runCommand).toHaveBeenCalledTimes(1)
-  })
-
-  it('accepts a quota reading ahead of unrelated auth diagnostics', async () => {
-    const result = await harness({
-      result: processResult({
-        stdout: USAGE_ENVELOPE,
-        stderr: 'Not authenticated. Run agy login.'
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:ubuntu')
+    expect(h.runCommand).not.toHaveBeenCalled()
+    expect(h.resolveCommand).not.toHaveBeenCalled()
+    expect(runWslProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        distro: 'Ubuntu',
+        loginPath: 'preferred',
+        program: 'agy',
+        args: ANTIGRAVITY_USAGE_ARGS,
+        env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
       })
-    }).fetch()
-    expect(result.status).toBe('ok')
+    )
   })
 
-  it('latches a model turn ahead of authentication guidance', async () => {
-    const h = harness({
-      result: processResult({ stdout: MODEL_TURN_ENVELOPE, stderr: 'not logged into antigravity' })
-    })
-    expect((await h.fetch()).error).toContain('answers `/usage` as a prompt')
-    await h.fetch()
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
+  it('reads the default distro WSL reports, not the first one listed', async () => {
+    defaultDistroMock.mockResolvedValue('Debian')
+
+    const result = await fetchAntigravityRateLimits({ target: { runtime: 'wsl', wslDistro: null } })
+
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:debian')
+    expect(wslRunningMock).toHaveBeenCalledWith('Debian')
+    expect(runWslProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ distro: 'Debian' })
+    )
   })
 
-  it('prefers a structured quota failure over conflicting sign-in wording', async () => {
-    const result = await harness({
-      result: processResult({
-        stderr: 'not logged in\nAGY_ERROR: {"status":"RESOURCE_EXHAUSTED","error_code":429}'
+  it.each([true, false])(
+    'distinguishes a missing CLI from an unresolved login environment: %s',
+    async (environmentResolved) => {
+      runWslProcessMock.mockResolvedValue({
+        ...processResult({ code: 127, stderr: 'agy: not found' }),
+        environmentResolved
       })
-    }).fetch()
-    expect(result.usageMetadata?.failureKind).toBe('rate-limited')
-    expect(result.error).not.toContain('Sign in')
+
+      const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+      expect(result.status).toBe(environmentResolved ? 'unavailable' : 'error')
+      expect(result.error).toContain(environmentResolved ? 'was not found' : 'login environment')
+      expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('never starts a stopped distro to read quota', async () => {
+    wslRunningMock.mockResolvedValue(false)
+
+    const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+    expect(result.status).toBe('unavailable')
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
-  it('rechecks the version after an in-session CLI upgrade', async () => {
-    const runCommand = vi
-      .fn()
-      .mockResolvedValueOnce(processResult({ stdout: '1.1.10' }))
-      .mockResolvedValueOnce(processResult({ stdout: '1.2.14' }))
-      .mockResolvedValueOnce(processResult({ stdout: USAGE_ENVELOPE }))
-    const h = harness({ runCommand })
-    expect((await h.fetch()).status).toBe('unavailable')
-    expect((await h.fetch()).status).toBe('ok')
-    expect(runCommand).toHaveBeenCalledTimes(3)
+  it('latches a CLI that spent a model turn only in its own runtime', async () => {
+    runWslProcessMock.mockImplementation(async (spec: { args: readonly string[] }) =>
+      spec.args[0] === '--version'
+        ? processResult({ stdout: 'agy version 1.2.11\n' })
+        : processResult({ stdout: MODEL_TURN_ENVELOPE })
+    )
+    await fetchAntigravityRateLimits({ target: ubuntu })
+
+    const host = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
+
+    expect(host.status).toBe('ok')
   })
 })

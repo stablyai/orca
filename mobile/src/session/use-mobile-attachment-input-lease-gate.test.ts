@@ -98,8 +98,7 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     const { gate } = renderGate({ ...refs, showToast })
 
     const result = gate()('terminal-1')
-    // Mid-wait the user switches tabs: the lease recovers, but for a different
-    // target — the attach must not proceed against the stale handle.
+    // Lease recovery after a tab switch must not authorize attachment to the old target.
     await vi.advanceTimersByTimeAsync(200)
     refs.activeHandle.current = 'terminal-2'
     refs.leaseReady.current = true

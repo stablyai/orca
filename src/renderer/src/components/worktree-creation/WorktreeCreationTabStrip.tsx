@@ -2,11 +2,7 @@ import React from 'react'
 import { AlertTriangle, GitBranch, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Faux tab strip: mirrors the real tab row (height, border, bg) so the create reads as a
- * workspace tab. Carries only the worktree name and a cancel control; the live status lives in
- * the body below.
- */
+/** Match real tab chrome for same-frame creation handoff; name/cancel live here, status in the body. */
 export default function WorktreeCreationTabStrip({
   title,
   isError,
@@ -21,8 +17,7 @@ export default function WorktreeCreationTabStrip({
   return (
     <div className="flex h-[36px] shrink-0 items-stretch border-b border-border bg-card">
       {reserveCollapsedSidebarHeaderSpace ? (
-        // Why: collapsed sidebar chrome floats above this strip, so reserve
-        // the same measured width real tabs use to keep title/cancel clear.
+        // Reserve the real tab strip’s measured collapsed-sidebar width so title/cancel remain unobstructed.
         <div
           className="shrink-0"
           style={
@@ -37,8 +32,7 @@ export default function WorktreeCreationTabStrip({
         {isError ? (
           <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
         ) : (
-          // Why: a static worktree glyph (not a spinner) keeps the tab reading
-          // as a normal tab; the single loading spinner lives in the body.
+          // Keep the tab glyph static; the body owns the single loading spinner.
           <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
         )}
         <span className="truncate font-medium text-foreground">{title}</span>

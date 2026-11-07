@@ -11,14 +11,12 @@ import {
 const HOST_NAME = 'Build server'
 const LONG_HOST_NAME = 'Shared GPU build server in us-east-1'
 const STATUS_BAR_HEIGHT = 28
-// Why: Claude's System Default login is a macOS Keychain item keyed by $USER, which HOME
-// isolation does not cover; an account name with no item keeps the runner's real login out.
+// Use a nonexistent Keychain account: HOME isolation alone does not hide the user-keyed macOS Claude login.
 const NO_CLAUDE_LOGIN_USER = 'orca-e2e-no-claude-login'
 
 test.use({ orcaAppExtraEnv: { USER: NO_CLAUDE_LOGIN_USER } })
 
-// Why: screenshots are the proof artifact; ORCA_E2E_SCREENSHOT_DIR collects them outside test output.
-// Why cropped: the full window shows the terminal prompt, which carries the machine's user name.
+// Collect cropped screenshot evidence outside test output; full windows expose usernames in terminal prompts.
 async function shootStatusBar(
   page: Page,
   name: string,
@@ -103,13 +101,11 @@ test('a provider set up only on this computer stays visible, greyed, under a ser
       timeout: 20_000
     })
 
-    // 1. Nothing focused: this computer owns usage, so its own MiniMax meter shows.
     await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))
     await expect(minimaxChip(page)).toBeVisible({ timeout: 30_000 })
     await expect(minimaxChip(page).locator('[title]')).toHaveCount(0)
     await shootStatusBar(page, '1-local-owner-minimax-meter.png', outputPath)
 
-    // 2. Focus a workspace on the paired server: MiniMax becomes a host-named placeholder.
     await focusFirstServerWorktree(page, environmentId)
     const placeholder = minimaxChip(page).locator(`[title^="Not configured on ${HOST_NAME}"]`)
     await expect(placeholder).toBeVisible({ timeout: 60_000 })
@@ -185,7 +181,6 @@ test('a provider set up only on this computer stays visible, greyed, under a ser
       }
     })
 
-    // 3. The row opens Settings on the server's accounts.
     await row.click()
     const hostPicker = page.getByRole('combobox', { name: 'Host' })
     await expect(hostPicker).toBeVisible({ timeout: 30_000 })

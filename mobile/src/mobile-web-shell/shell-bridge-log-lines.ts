@@ -2,11 +2,9 @@ import type { BridgeHostDiagnostic } from './bridge-host-contract'
 import type { ShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import { maskUserText } from './shell-log-path-masking'
 
-/** Bridge-side shell log lines: host diagnostics and frames that found no host to answer them. */
-
-/** Null for routine kinds; the caller already bounds each key to one line per host. */
+// Return null for routine kinds; callers limit other diagnostic keys to one line per host.
 export function bridgeDiagnosticLine(diagnostic: BridgeHostDiagnostic): ShellLifecycleLine | null {
-  // Retired terminal streams are routine and one per stream; they would crowd out the log.
+  // Routine per-stream retirements would crowd out useful diagnostics.
   if (diagnostic.kind === 'terminal-backlog') {
     return null
   }
@@ -19,7 +17,6 @@ export function bridgeDiagnosticLine(diagnostic: BridgeHostDiagnostic): ShellLif
   }
 }
 
-/** A page frame arrived while no bridge host was built, so it was dropped unanswered. */
 export function frameWithoutHostLine(facts: {
   clientReady: boolean
   snapshotReady: boolean
@@ -51,7 +48,7 @@ function bridgeDiagnosticDetail(diagnostic: BridgeHostDiagnostic): string | unde
     case 'binary-lane-refused':
     case 'binary-frame-dropped':
     case 'terminal-backlog':
-      // Their payloads name keys, ids or schema text that is not needed to place a stall.
+      // Omit payload keys, ids and schema text that are unnecessary to locate a stall.
       return undefined
   }
 }

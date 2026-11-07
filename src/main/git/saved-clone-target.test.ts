@@ -14,8 +14,7 @@ function git(cwd: string, ...args: string[]): void {
   execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t.invalid', ...args])
 }
 
-// What `git clone url` leaves at <root>/orca. `finished: false` is a clone killed before checkout;
-// `commits: false` is a finished clone of an empty repository, whose HEAD stays unborn.
+// finished=false models interrupted checkout; commits=false models a finished empty clone.
 function checkout(originUrl: string, { finished = true, commits = true } = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-saved-clone-target-'))
   roots.push(root)
@@ -69,7 +68,6 @@ describe('reuseSavedCloneTarget', () => {
     await expect(decide(project, 'https://github.com/stablyai/orca')).resolves.toBe(project)
   })
 
-  // A brand-new repository has no commits, so a repeat clone must not read as a failed one.
   it('reuses a finished clone of an empty repository, whose HEAD is unborn', async () => {
     const project = saved(checkout(url, { commits: false }))
     await expect(decide(project)).resolves.toBe(project)
@@ -123,7 +121,6 @@ describe('reuseSavedCloneTarget', () => {
     await expect(decide(project)).rejects.toThrow('"orca" is already an Orca project')
   })
 
-  // The two reasons a clone can be refused need different things from the user, so say which it is.
   it('says the recorded repository differs without disclosing its credential-bearing URL', async () => {
     const project = saved(join(tmpdir(), 'orca-saved-clone-target-absent'), {
       gitRemoteIdentity: {
@@ -156,7 +153,6 @@ describe('reuseSavedCloneTarget', () => {
     }
     const path = checkout(url, { finished: false })
     await expect(decide(saved(path))).rejects.toThrow('already an Orca project')
-    // Same repo by its saved identity: let git clone, which refuses the non-empty folder.
     await expect(decide(saved(path, { gitRemoteIdentity: identity }))).resolves.toBeNull()
   })
 

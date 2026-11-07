@@ -1,4 +1,4 @@
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 
 const EDITABLE_JIRA_ISSUE_FIELDS = ['title', 'labels', 'status', 'priority', 'assignee'] as const
 export type EditableJiraIssueField = (typeof EDITABLE_JIRA_ISSUE_FIELDS)[number]

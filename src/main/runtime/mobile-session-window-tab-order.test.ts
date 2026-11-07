@@ -86,9 +86,7 @@ describe('mobile tab order for a window publication with chats', () => {
   it('sends tabs in the window tab bar order, chats included', () => {
     const { publishWindowTabs, restoreChat, latestFrame } = createRuntime()
     publishWindowTabs(1, [group('group-1', ['file-1', 'term-1'])])
-    // The chat opens after the terminal, so the runtime appends it to its own list.
     restoreChat('claude_a')
-    // The user drags the chat to the front of the window's tab bar.
     publishWindowTabs(2, [group('group-1', ['agent-session:claude_a', 'file-1', 'term-1'])])
 
     const frame = latestFrame()
@@ -104,7 +102,7 @@ describe('mobile tab order for a window publication with chats', () => {
     const { publishWindowTabs, restoreChat, latestFrame } = createRuntime()
     publishWindowTabs(1, [group('group-1', ['file-1', 'term-1'])])
     restoreChat('claude_a')
-    // A second chat sits in its own group on the left; the window lists it before main restores it.
+    // Window publication can precede main restoring the chat row.
     publishWindowTabs(
       2,
       [

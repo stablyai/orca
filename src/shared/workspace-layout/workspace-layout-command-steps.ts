@@ -1,5 +1,4 @@
-// Steps every command shares: lookups, placing a tab in the one tab order, and result shapes.
-
+import { canonicalTabGap, visibleLayoutGroups } from './workspace-layout-client-visibility'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { insertTabIdIntoOrder } from './tab-order'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -41,7 +40,7 @@ export function applied(
   }
 }
 
-/** A workspace's first tab creates its entry; its worktree id is its key unless the runtime opened it first. */
+/** Create a missing workspace entry using its worktree ID unless runtime already supplied the key. */
 export function workspaceOrEmpty(model: WorkspaceLayoutModel, key: string): WorkspaceLayout {
   return model.workspaces[key] ?? { worktreeId: key, tabs: [], groups: [] }
 }
@@ -81,7 +80,6 @@ export function boundPtyIds(workspace: WorkspaceLayout, tab: LayoutTab): string[
     : []
 }
 
-/** The workspace with one pane's data replaced; a pane with no data keeps no record. */
 export function setLeaf(
   workspace: WorkspaceLayout,
   leafId: string,
@@ -94,7 +92,6 @@ export function setLeaf(
   return { ...workspace, leaves }
 }
 
-/** The terminal tab and pane a pane key names in this workspace. */
 export function locatePane(
   workspace: WorkspaceLayout,
   paneKey: string
@@ -115,10 +112,7 @@ export function locatePane(
 
 export type TabPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
-/**
- * The group a workspace with none gets. Switch point: the sender's (the window keeps its emptied
- * group), else the workspace's root group id, which the window and the Loader mint too.
- */
+/** In owner builds, reuse the sender’s empty group or the window/Loader root ID; otherwise mint an ID. */
 function firstGroupId(key: string, placement: TabPlacement, context: LayoutContext): string {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     return placement.groupId ?? workspaceRootGroupId(key)
@@ -126,16 +120,14 @@ function firstGroupId(key: string, placement: TabPlacement, context: LayoutConte
   return context.mintId()
 }
 
-/**
- * Puts a new tab in the one tab order: the named group, else the anchor's, else the first; a
- * workspace with no group gets one. Pinned tabs stay ahead of unpinned ones.
- */
+/** Place in named group, anchor group or first group (create when absent); preserve pinned-before-unpinned order. */
 export function placeNewTab(
   workspace: WorkspaceLayout,
   key: string,
   tab: LayoutTab,
   placement: TabPlacement,
-  context: LayoutContext
+  context: LayoutContext,
+  replacingTabId?: string
 ): WorkspaceLayout {
   const tabs = [...workspace.tabs, tab]
   const anchorGroup = placement.afterTabId
@@ -144,6 +136,7 @@ export function placeNewTab(
   let group =
     workspace.groups.find((entry) => entry.id === placement.groupId) ??
     anchorGroup ??
+    (context.visibility ? visibleLayoutGroups(workspace, context.visibility)[0] : undefined) ??
     workspace.groups[0]
   const groups = [...workspace.groups]
   if (!group) {
@@ -153,10 +146,38 @@ export function placeNewTab(
   let tabOrder: string[]
   if (placement.index !== undefined) {
     tabOrder = group.tabOrder.filter((id) => id !== tab.id)
-    tabOrder.splice(Math.max(0, Math.min(placement.index, tabOrder.length)), 0, tab.id)
+    tabOrder.splice(
+      canonicalTabGap(
+        tabOrder,
+        workspace.tabs,
+        placement.index,
+        context.visibility,
+        replacingTabId
+      ),
+      0,
+      tab.id
+    )
   } else {
     const anchor = anchorGroup === group ? placement.afterTabId : undefined
-    tabOrder = insertTabIdIntoOrder(group.tabOrder, tabs, tab.id, tab.isPinned === true, anchor)
+    if (context.visibility) {
+      const visibleIds = new Set(workspace.tabs.filter(context.visibility).map((entry) => entry.id))
+      const shown = group.tabOrder.filter((id) => id !== replacingTabId && visibleIds.has(id))
+      const inserted = insertTabIdIntoOrder(shown, tabs, tab.id, tab.isPinned === true, anchor)
+      tabOrder = [...group.tabOrder]
+      tabOrder.splice(
+        canonicalTabGap(
+          tabOrder,
+          workspace.tabs,
+          inserted.indexOf(tab.id),
+          context.visibility,
+          replacingTabId
+        ),
+        0,
+        tab.id
+      )
+    } else {
+      tabOrder = insertTabIdIntoOrder(group.tabOrder, tabs, tab.id, tab.isPinned === true, anchor)
+    }
   }
   const placed = { ...group, tabOrder }
   return {

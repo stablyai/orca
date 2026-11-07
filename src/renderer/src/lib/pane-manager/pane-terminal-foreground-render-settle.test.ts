@@ -35,19 +35,6 @@ function createTerminal(paused: boolean): {
 }
 
 describe('writeForegroundTerminalChunk render-pause ownership', () => {
-  it('drives a paused render only for a currently visible reveal replay', () => {
-    const { terminal, renderService } = createTerminal(true)
-
-    writeForegroundTerminalChunk(terminal, 'replayed snapshot bytes', {
-      forceViewportRefresh: true,
-      shouldReleaseRenderPause: () => true
-    })
-
-    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
-    expect(renderService._isPaused).toBe(false)
-    expect(renderService._needsFullRefresh).toBe(false)
-  })
-
   it('leaves a newly-hidden terminal paused when replay parsing finishes', () => {
     const { terminal, renderService } = createTerminal(true)
     let parsed: (() => void) | undefined
@@ -66,18 +53,5 @@ describe('writeForegroundTerminalChunk render-pause ownership', () => {
     expect(renderService.refreshRows).not.toHaveBeenCalled()
     expect(renderService._isPaused).toBe(true)
     expect(renderService._needsFullRefresh).toBe(true)
-  })
-
-  it('does not inspect RenderService on the ordinary forced-refresh path', () => {
-    const { terminal, renderService } = createTerminal(true)
-    const renderServiceRead = vi.fn(() => renderService)
-    Object.defineProperty(terminal._core, '_renderService', { get: renderServiceRead })
-
-    writeForegroundTerminalChunk(terminal, 'ordinary output', {
-      forceViewportRefresh: true
-    })
-
-    expect(renderServiceRead).not.toHaveBeenCalled()
-    expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
   })
 })

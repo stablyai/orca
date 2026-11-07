@@ -6,11 +6,7 @@ const PATH_PREFIX: Record<PairingCandidatePath, string> = {
   relay: 'Relay: '
 }
 
-// Why: the direct and relay candidates race into one pairing log, and only the
-// relay call sites prefixed themselves — so unlabelled direct lines
-// ("Reconnecting (attempt 2)", detail 10.5.0.2:6768) read as the relay
-// retrying a LAN address. Attributing at the candidate seam covers every line
-// each path emits, including ones whose call site forgets to say which it is.
+// Attribute at the candidate seam so direct LAN diagnostics cannot look like relay retries when call sites omit path labels.
 export function attributePairingLogPath(
   path: PairingCandidatePath,
   onLog: ConnectionLogSink | undefined

@@ -1,15 +1,5 @@
-/**
- * The execution host's ordering stamp for one repo's worktree catalog.
- *
- * Every catalog publication a host sends (a listing, a create reply, a remove reply) says which
- * catalog it describes. A listing is a snapshot from when its scan began; a mutation reply names
- * the catalog its mutation produced. A client applies publications in that order and never lets
- * an older snapshot undo a newer fact, whatever order they arrived in.
- *
- * `sequence` is the host's per-repo scan generation, which every worktree change bumps. It lives
- * in one process, so `epoch` names that process: numbers from a restarted host restart, and a
- * different epoch is a new catalog rather than an older one.
- */
+/** Order each host/repo catalog’s listings and mutation replies by scan generation, regardless of arrival order. Listings name their start generation; mutations name the one they produced.
+ * An epoch identifies the host process so sequence resets after restart denote a new catalog. */
 export type WorktreeCatalogVersion = Readonly<{
   epoch: string
   sequence: number
@@ -35,7 +25,6 @@ export function isWorktreeCatalogVersionBefore(
   return candidate.epoch === applied.epoch && candidate.sequence < applied.sequence
 }
 
-/** The version a client should hold after applying `incoming` on top of `applied`. */
 export function laterWorktreeCatalogVersion(
   applied: WorktreeCatalogVersion | undefined,
   incoming: WorktreeCatalogVersion
@@ -43,6 +32,6 @@ export function laterWorktreeCatalogVersion(
   if (!applied || applied.epoch !== incoming.epoch) {
     return incoming
   }
-  // Why strict: an equal version keeps the held object, so a no-op listing patches no state.
+  // Keep the held object at equal sequence to avoid no-op state patches.
   return incoming.sequence > applied.sequence ? incoming : applied
 }

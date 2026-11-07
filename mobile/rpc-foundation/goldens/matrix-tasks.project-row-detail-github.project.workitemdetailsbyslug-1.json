@@ -4,21 +4,9 @@
   "family": "tasks.project-row-detail",
   "namedDeltas": [],
   "values": {
-    "0216abb9c43b": {
-      "name": "projectTitleDraft",
-      "ordinal": 1,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "0679b27a119b": {
       "name": "projectFieldDrafts",
       "ordinal": 11,
-      "value": {}
-    },
-    "0ad63b01155a": {
-      "name": "prFileContents",
-      "ordinal": 8,
       "value": {}
     },
     "0fa980ff8396": {
@@ -150,19 +138,17 @@
       "ordinal": 17,
       "value": "outer refused"
     },
-    "2e6edf535ef3": {
-      "name": "prFileLoadingPath",
-      "ordinal": 9,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "2ee1c7329449": {
       "name": "projectRowDetail",
       "ordinal": 12,
       "value": {
         "$rpc": "null"
       }
+    },
+    "31fcc93f02da": {
+      "name": "projectEditingCommentDraft",
+      "ordinal": 9,
+      "value": ""
     },
     "3236e59b43c5": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -207,6 +193,23 @@
       "error": "transport failure",
       "loading": false
     },
+    "368311fc2981": {
+      "name": "projectCommentDraft",
+      "ordinal": 7,
+      "value": ""
+    },
+    "3a42a92c5487": {
+      "name": "projectBodyDraft",
+      "ordinal": 6,
+      "value": "Project issue body"
+    },
+    "3b9902cb94f1": {
+      "name": "expandedPrFilePath",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
+      }
+    },
     "41f7d0f4ab48": {
       "detail": {
         "$rpc": "null"
@@ -221,9 +224,9 @@
       "error": "",
       "loading": false
     },
-    "4ad8bb2f6308": {
+    "4f23116da7f6": {
       "name": "projectReviewersDraft",
-      "ordinal": 6,
+      "ordinal": 10,
       "value": ""
     },
     "561861a537bb": {
@@ -231,12 +234,17 @@
       "ordinal": 18,
       "value": false
     },
-    "6545686833e4": {
-      "name": "expandedPrFilePath",
-      "ordinal": 7,
+    "5cebe6c14680": {
+      "name": "prFileLoadingPath",
+      "ordinal": 4,
       "value": {
         "$rpc": "null"
       }
+    },
+    "60012e7abb60": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 2,
+      "value": {}
     },
     "6c3d811fffe9": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -276,10 +284,71 @@
         }
       }
     },
-    "742985d99709": {
-      "name": "projectEditingCommentDraft",
-      "ordinal": 5,
-      "value": ""
+    "7ca2bb47ab1c": {
+      "name": "prFileContents",
+      "ordinal": 3,
+      "value": {}
+    },
+    "899221be28d8": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 15,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.workItemDetailsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "details": {
+              "assignees": [],
+              "baseSha": "base-sha",
+              "body": "body",
+              "checks": [],
+              "comments": [],
+              "files": [],
+              "headSha": "head-sha",
+              "item": {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:1",
+                "labels": [],
+                "number": 1,
+                "state": "open",
+                "title": "Project issue",
+                "type": "issue",
+                "updatedAt": "2026-10-30T00:00:00Z",
+                "url": "https://github.enterprise.test/owner/repo/issues/1"
+              },
+              "pullRequestId": "PR_kwDO"
+            },
+            "ok": true
+          }
+        }
+      }
     },
     "8bea5c781cb0": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -360,6 +429,11 @@
         }
       }
     },
+    "9911dd53d1d7": {
+      "name": "projectTitleDraft",
+      "ordinal": 5,
+      "value": "Project issue"
+    },
     "9c91ff2e7fe6": {
       "name": "github.project.workItemDetailsBySlug#1",
       "ordinal": 15,
@@ -435,13 +509,6 @@
         }
       }
     },
-    "9f0108368fff": {
-      "name": "projectEditingCommentId",
-      "ordinal": 4,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "a90f501112f8": {
       "name": "projectRowDetailError",
       "ordinal": 17,
@@ -473,57 +540,6 @@
       "error": "",
       "loading": false
     },
-    "b4e65ea8b72c": {
-      "name": "github.project.workItemDetailsBySlug#1",
-      "ordinal": 15,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.workItemDetailsBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "type": "issue"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "details": {
-              "assignees": [],
-              "baseSha": "base-sha",
-              "body": "body",
-              "checks": [],
-              "comments": [],
-              "files": [],
-              "headSha": "head-sha",
-              "item": {
-                "labels": []
-              },
-              "pullRequestId": "PR_kwDO"
-            },
-            "ok": true
-          }
-        }
-      }
-    },
     "b63d5911050c": {
       "name": "projectRowDetailError",
       "ordinal": 13,
@@ -533,6 +549,13 @@
       "name": "projectRowDetailError",
       "ordinal": 17,
       "value": ""
+    },
+    "c0e2c37d8abf": {
+      "name": "projectEditingCommentId",
+      "ordinal": 8,
+      "value": {
+        "$rpc": "null"
+      }
     },
     "cd23fb9a85c7": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -573,11 +596,6 @@
         }
       }
     },
-    "da1a7926872e": {
-      "name": "projectBodyDraft",
-      "ordinal": 2,
-      "value": ""
-    },
     "ea064759ca04": {
       "name": "projectRowDetailError",
       "ordinal": 17,
@@ -590,11 +608,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "eec8081f6290": {
-      "name": "projectCommentDraft",
-      "ordinal": 3,
-      "value": ""
     },
     "f6a5085dd8e9": {
       "name": "projectRowDetailLoading",
@@ -641,11 +654,6 @@
           }
         }
       }
-    },
-    "fdcd0ea3f000": {
-      "name": "prFileCommentDrafts",
-      "ordinal": 10,
-      "value": {}
     }
   },
   "recording": {
@@ -654,23 +662,23 @@
       {
         "id": "tk-project-row-detail.normal:mounted",
         "observation": {
-          "sender": ["b4e65ea8b72c"],
+          "sender": ["899221be28d8"],
           "payloads": ["118d9662d37f"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "b2a01ad6d4fe",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -690,16 +698,16 @@
           },
           "state": "183c3c26aba7",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -719,16 +727,16 @@
           },
           "state": "183c3c26aba7",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -748,16 +756,16 @@
           },
           "state": "183c3c26aba7",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -777,16 +785,16 @@
           },
           "state": "183c3c26aba7",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -806,16 +814,16 @@
           },
           "state": "205699b4093c",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -835,16 +843,16 @@
           },
           "state": "0fa980ff8396",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -864,16 +872,16 @@
           },
           "state": "45b703d1ba29",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -893,16 +901,16 @@
           },
           "state": "41f7d0f4ab48",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -922,16 +930,16 @@
           },
           "state": "348c16318267",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",
@@ -951,16 +959,16 @@
           },
           "state": "45b703d1ba29",
           "effects": [
-            "0216abb9c43b",
-            "da1a7926872e",
-            "eec8081f6290",
-            "9f0108368fff",
-            "742985d99709",
-            "4ad8bb2f6308",
-            "6545686833e4",
-            "0ad63b01155a",
-            "2e6edf535ef3",
-            "fdcd0ea3f000",
+            "3b9902cb94f1",
+            "60012e7abb60",
+            "7ca2bb47ab1c",
+            "5cebe6c14680",
+            "9911dd53d1d7",
+            "3a42a92c5487",
+            "368311fc2981",
+            "c0e2c37d8abf",
+            "31fcc93f02da",
+            "4f23116da7f6",
             "0679b27a119b",
             "2ee1c7329449",
             "b63d5911050c",

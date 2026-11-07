@@ -28,8 +28,6 @@ export function isGitHubUserAttachmentVideoLink(
   return isGitHubUserAttachmentUrl(href) && isBareAutolink(children, href)
 }
 
-// Shared fallback link for attachments that can't render inline (see the image
-// note below on why load failures drop to a session-scoped link).
 function AttachmentFallbackLink({
   href,
   children
@@ -90,9 +88,7 @@ export function GitHubUserAttachmentImage({
   const [failed, setFailed] = React.useState(false)
   const label = alt?.trim() || src
 
-  // Why: private-repo attachment images can't load cross-origin without the
-  // user's GitHub session cookies, so wrap in a top-level link (opening the
-  // URL where that session exists) and drop to a text link on load error.
+  // Private images need GitHub cookies; fallback links open top-level authenticated sessions after inline failures.
   if (failed) {
     return <AttachmentFallbackLink href={src}>{label}</AttachmentFallbackLink>
   }

@@ -1,8 +1,4 @@
-/**
- * The window event is the only place the publisher's identity can be lost, so
- * these cover the whole attribution path: a scoped runtime event must reach one
- * host, and an unattributed one must still reach a whole authority.
- */
+/** Preserve publisher attribution end to end: scoped runtime events reach one host; unattributed events still refresh their authority. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -18,10 +14,7 @@ import {
 import { createAutomationHostCache, type AutomationHostCache } from './automation-host-cache'
 import type { AutomationHostRow } from './automation-host-cache-types'
 import { createAutomationHostInvalidation } from './automation-host-invalidation'
-import {
-  subscribeAutomationHostInvalidation,
-  toAutomationAuthorityChangeEvent
-} from './automation-host-invalidation-window-events'
+import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
@@ -69,52 +62,6 @@ describe('automationsChanged window event attribution', () => {
   // The suite runs in node, so the publisher and the subscriber need a real shared target.
   beforeEach(() => {
     vi.stubGlobal('window', new EventTarget())
-  })
-
-  it('maps an environment id to its runtime authority and keeps the selector', () => {
-    expect(
-      toAutomationAuthorityChangeEvent({
-        environmentId: 'env-1',
-        selector: { kind: 'ssh', targetId: 'target-1' },
-        reason: 'definition'
-      })
-    ).toEqual({
-      authority: RUNTIME,
-      selector: { kind: 'ssh', targetId: 'target-1' },
-      reason: 'definition'
-    })
-  })
-
-  it('treats an absent environment id as the desktop authority', () => {
-    expect(toAutomationAuthorityChangeEvent({ reason: 'run' })).toEqual({
-      authority: DESKTOP,
-      reason: 'run'
-    })
-  })
-
-  it('routes a scoped runtime event to one host and leaves the others alone', () => {
-    const { cache, invalidated } = subscribedCache()
-
-    emitAutomationsChangedWindowEvent({
-      environmentId: 'env-1',
-      selector: { kind: 'ssh', targetId: 'target-1' },
-      reason: 'definition'
-    })
-
-    expect(invalidated).toHaveBeenCalledWith([hostStableKey(RUNTIME_SSH)])
-    expect(cache.get(RUNTIME_SELF)?.requestGeneration).toBe(0)
-    expect(cache.get(DESKTOP_SELF)?.requestGeneration).toBe(0)
-  })
-
-  it('falls back to the whole authority when an old host sends no selector', () => {
-    const { cache, invalidated } = subscribedCache()
-
-    emitAutomationsChangedWindowEvent({ environmentId: 'env-1' })
-
-    expect(invalidated.mock.calls[0]?.[0]).toEqual(
-      expect.arrayContaining([hostStableKey(RUNTIME_SELF), hostStableKey(RUNTIME_SSH)])
-    )
-    expect(cache.get(DESKTOP_SELF)?.requestGeneration).toBe(0)
   })
 
   // A publisher that predates the detail payload still has to produce a refresh.

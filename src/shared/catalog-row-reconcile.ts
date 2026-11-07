@@ -1,10 +1,6 @@
 import { structuralValuesEqual } from './structural-value-equality'
 
-/**
- * Reuses equal rows from `previous` — and the whole array when nothing moved — so a refetch that
- * changed nothing leaves identity-keyed memos and store subscribers untouched. `getIdentity` must
- * be the key the producing merge already dedups by, so it is unique within `next`.
- */
+/** Reuse equal rows/unchanged arrays to preserve memo/subscriber identity; getIdentity must be unique in next and match the producing merge’s dedupe key. */
 export function reconcileCatalogRows<T>(
   previous: readonly T[],
   next: readonly T[],

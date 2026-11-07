@@ -3,7 +3,6 @@ import { classifyGitHubUnavailable } from '../../../../shared/github/api-availab
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/task-query'
 import { sortWorkItemsByNumber } from '../../../../shared/work-items'
 import {
-  ghExecFileAsync,
   classifyListIssuesError,
   classifyListPrsError,
   ghRepoExecOptions,
@@ -15,13 +14,12 @@ import { githubHostExecOptions } from '../../github-api-repository'
 import { githubPRStackExecutionScope } from './../github-exec-scope'
 import { hydrateWorkItemRepositoryMergeMetadata } from './../detect/hydrate-work-item-merge-metadata'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
-import { mapPullRequestWorkItem } from './../map/work-item'
 import {
-  buildWorkItemListRequest,
   assertSshRepoHasResolvedGitHubSource,
   type PartialWorkItemsResult
 } from './work-item-list-request'
 import { listIssueWorkItemPage } from './work-item-issue-page'
+import { listPullRequestWorkItemPage } from './work-item-pr-page'
 export async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -35,17 +33,7 @@ export async function listRecentWorkItems(
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const recentQuery = parseTaskQuery('is:open')
-  const prRequest = prOwnerRepo
-    ? buildWorkItemListRequest({
-        kind: 'pr',
-        ownerRepo: prOwnerRepo,
-        limit,
-        query: recentQuery,
-        page
-      })
-    : null
-  // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
-  // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
+  // Isolate missing sources to avoid global searches, and retain successful halves on partial failure.
   const [issuesSettled, prsSettled] = await Promise.allSettled([
     issueOwnerRepo
       ? listIssueWorkItemPage({
@@ -60,12 +48,16 @@ export async function listRecentWorkItems(
           noCache
         })
       : Promise.resolve([]),
-    prRequest && prOwnerRepo
-      ? ghExecFileAsync(prRequest.args, {
-          ...ghOptions,
-          ...githubHostExecOptions(prOwnerRepo)
+    prOwnerRepo
+      ? listPullRequestWorkItemPage({
+          ownerRepo: prOwnerRepo,
+          query: recentQuery,
+          limit,
+          page,
+          options: { ...ghOptions, ...githubHostExecOptions(prOwnerRepo) },
+          noCache
         })
-      : Promise.resolve({ stdout: '[]' })
+      : Promise.resolve([])
   ])
 
   let issues: MainWorkItem[] = []
@@ -82,9 +74,7 @@ export async function listRecentWorkItems(
 
   let prs: MainWorkItem[] = []
   if (prsSettled.status === 'fulfilled') {
-    prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
-      .slice(prRequest?.offset ?? 0, (prRequest?.offset ?? 0) + limit)
-      .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
+    prs = prsSettled.value
     prs = await hydrateWorkItemRepositoryMergeMetadata(
       prs,
       prOwnerRepo,
@@ -92,8 +82,7 @@ export async function listRecentWorkItems(
       githubPRStackExecutionScope(connectionId, localGitOptions)
     )
   } else {
-    // Why: re-throw PR errors so the cross-repo aggregator counts the repo failed; this feature only fixes issue-side swallowing (#1076).
-    // Why: log issuesError first so a both-sides-failed case isn't blind to the classification we're about to drop.
+    // Log the issue error before propagating the PR failure to the cross-repo aggregator.
     if (issuesError) {
       console.warn(
         'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
@@ -135,7 +124,7 @@ export async function listQueriedWorkItems(
   let availabilityError: unknown
   let prsError: ClassifiedError | undefined
 
-  // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
+  // Preserve classified issue-side failure alongside partial PR results.
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
     if (!issueScope) {
       return { items: [] }
@@ -175,21 +164,15 @@ export async function listQueriedWorkItems(
     if (!prOwnerRepo) {
       return []
     }
-    const request = buildWorkItemListRequest({
-      kind: 'pr',
-      ownerRepo: prOwnerRepo,
-      limit,
-      query,
-      page: page ?? 1
-    })
     try {
-      const { stdout } = await ghExecFileAsync(request.args, {
-        ...ghOptions,
-        ...githubHostExecOptions(prOwnerRepo)
+      const mapped = await listPullRequestWorkItemPage({
+        ownerRepo: prOwnerRepo,
+        limit,
+        query,
+        page: page ?? 1,
+        options: { ...ghOptions, ...githubHostExecOptions(prOwnerRepo) },
+        noCache
       })
-      const mapped = (JSON.parse(stdout) as Record<string, unknown>[])
-        .slice(request.offset, request.offset + limit)
-        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(
         mapped,
         prOwnerRepo,
@@ -216,7 +199,7 @@ export async function listQueriedWorkItems(
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
   if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
-    // Why: when every half hit the same availability failure, propagate it so Tasks can distinguish an outage from no data.
+    // Shared availability failure across both halves means an outage, not an empty result.
     throw availabilityError
   }
   return {

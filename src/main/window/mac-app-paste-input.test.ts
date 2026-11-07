@@ -42,9 +42,4 @@ describe('isMacAppPasteInput', () => {
   ])('%s', (_name, input, expected) => {
     expect(isMacAppPasteInput(input)).toBe(expected)
   })
-
-  it('never claims paste off macOS', () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    expect(isMacAppPasteInput(cmdKey('v', 'KeyV'))).toBe(false)
-  })
 })

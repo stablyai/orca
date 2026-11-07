@@ -5,15 +5,15 @@ import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/co
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from './workspace-cleanup-host-identity'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import './workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
   getWorkspaceCleanupCandidateHostLabel
 } from './workspace-cleanup-host-label'
 import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
 
-/** Names the workspaces whose running agents a delete would stop, before anything is queued. */
 export function WorkspaceCleanupConfirmStopAgents({
   candidates,
   onBack,

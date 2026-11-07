@@ -3,8 +3,8 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
@@ -76,8 +76,7 @@ function resolveSplitTargetWorktreeId(request: RuntimeTerminalSplitRequest): str
     if (evidence.owners.size > 0) {
       return null
     }
-    // During startup the ownership rows can hydrate after this IPC event. Keep the
-    // explicit host hint so the bounded replay queue can wake the right worktree.
+    // Keep explicit host hints through startup hydration so bounded replay can wake the right workspace.
     return request.worktreeId
   }
   return evidence.owners.size === 1 ? [...evidence.owners][0]! : null
@@ -158,10 +157,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         (item) => item.id === localTabId
       )
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
-      // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
-      // back into a workspace they deliberately left. A notification click is the opposite: the
-      // user asked for this workspace, and the activateWorktree that precedes it is async, so
-      // the active id here is still the old one and would swallow the reveal.
+      // Courtesy completion reveals must not undo user navigation; explicit notification clicks may reveal before async activation updates the active ID.
       if (
         !userInitiated &&
         tab?.contentType === 'agent-session' &&

@@ -1,7 +1,7 @@
-// Invoking the fake connection's canUseTool permission callback, as the CLI would.
+import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
+import type { FakeConnection } from './structured/claude-structured-session-test-support'
 
-import type { ClaudeStreamJsonConnectionHandlers } from './claude-stream-json-connection'
-import type { FakeConnection } from './claude-structured-session-test-support'
+type CanUseToolOptions = Parameters<CanUseTool>[2]
 
 export function invokeCanUseTool(
   connection: FakeConnection,
@@ -10,18 +10,20 @@ export function invokeCanUseTool(
   toolUseID: string,
   extra: {
     input?: Record<string, unknown>
-    suggestions?: unknown[]
+    suggestions?: CanUseToolOptions['suggestions']
     signal?: AbortSignal
     agentID?: string
+    decisionReason?: string
   } = {}
 ): { promise: Promise<unknown>; settled: () => boolean } {
-  const options = {
+  const asked: CanUseToolOptions = {
     requestId,
     toolUseID,
     signal: extra.signal ?? new AbortController().signal,
-    ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
-  } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
-  const asked = extra.agentID ? { ...options, agentID: extra.agentID } : options
+    ...(extra.suggestions ? { suggestions: extra.suggestions } : {}),
+    ...(extra.decisionReason ? { decisionReason: extra.decisionReason } : {}),
+    ...(extra.agentID ? { agentID: extra.agentID } : {})
+  }
   let done = false
   const promise = Promise.resolve(
     connection.handlers.canUseTool?.(toolName, extra.input ?? {}, asked)

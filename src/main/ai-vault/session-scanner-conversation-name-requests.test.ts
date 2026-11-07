@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildConversationNamePrompt } from '../../shared/conversation-name-generation'
+import { buildConversationNamePrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
@@ -24,8 +24,7 @@ function turn(sessionId: string, at: string, role: 'user' | 'assistant', content
   }
 }
 
-// #29973: naming a chat runs a one-shot `claude -p` in the chat's folder, and the CLI saves that
-// run next to the chat. Listed, it read as the chat, and opening it resumed the naming request.
+// Claude saves naming runs beside the chat; listing them can resume the naming prompt instead (#29973).
 describe('scanAiVaultSessions chat-naming requests', () => {
   it('lists the chat but not the request Orca ran to name it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-name-request-'))

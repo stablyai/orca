@@ -2,12 +2,9 @@ import { accessSync, constants } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
 import { RuntimeClientError } from './types'
 import { resolveLaunchUserDataPath } from './launch-user-data-path'
+import { appImageEphemeralRootOf } from '../../shared/appimage-ephemeral-root'
 
-/**
- * Only a CLI run by an installed Orca app's executable can start a server. The `orca` that an
- * SSH-launched Orca server puts on a remote host runs on plain Node, belongs to that server's
- * profile, and is rewritten with each server version.
- */
+/** A remote server’s Node-based CLI cannot start a local app server. */
 export function canStartOrcaServer(env: NodeJS.ProcessEnv): boolean {
   const override = env.ORCA_APP_EXECUTABLE
   return (
@@ -38,8 +35,17 @@ function isVersionScopedDir(dir: string, userData: string): boolean {
     inside === '' ||
     (!inside.startsWith('..') && !isAbsolute(inside)) ||
     dir.includes('orcad-artifacts') ||
-    dir.includes('/.mount_')
+    appImageEphemeralRootOf(dir) !== null
   )
+}
+
+/** PATH for a persisted service: entries tied to one Orca version or AppImage launch are gone by its next start. */
+export function resolveServicePath(env: NodeJS.ProcessEnv): string {
+  const userData = resolveLaunchUserDataPath(env)
+  const durable = (env.PATH ?? '')
+    .split(delimiter)
+    .filter((dir) => isAbsolute(dir) && !isVersionScopedDir(dir, userData))
+  return durable.length > 0 ? durable.join(delimiter) : '/usr/bin:/bin'
 }
 
 /** The stable launcher on PATH: a version-specific executable would vanish with the next update. */
@@ -73,7 +79,7 @@ export function resolveServiceCommand(
   }
   const name = appCliName(deps.platform)
   for (const dir of (deps.env.PATH ?? '').split(delimiter).filter(isAbsolute)) {
-    // Why skip: launchers under the profile or a mounted AppImage point at one version's files.
+    // Profile and AppImage launchers point at files that disappear with an update.
     if (!isVersionScopedDir(dir, userData) && isExecutable(join(dir, name))) {
       return join(dir, name)
     }

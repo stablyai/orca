@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import type { TerminalViewportRefitOptions } from './terminal-viewport-refit-options'
+import { terminalPaneViewport } from '../session/mobile-terminal-pane-layout'
+import { useCallback, useEffect, useRef } from 'react'
 import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import type { TerminalWebViewHandle } from './TerminalWebView'
-import type { TerminalFrame } from './terminal-webview-messages'
 import { shouldRecoverTerminalOnAppStateChange } from './terminal-foreground-recovery'
 import { terminalViewportUpdate } from './mobile-terminal-operations'
 import {
@@ -17,29 +15,12 @@ import {
 
 export type TerminalViewportDims = { cols: number; rows: number }
 
-type TerminalViewportRefitOptions = {
-  activeHandleRef: RefObject<string | null>
-  terminalRefs: RefObject<Map<string, TerminalWebViewHandle>>
-  // The terminal frame React Native laid out, unrounded; null until its first layout.
-  terminalFrameRef: RefObject<TerminalFrame | null>
-  viewportRef: RefObject<TerminalViewportDims | null>
-  viewportMeasuredRef: RefObject<boolean>
-  // Why: while native chat covers the active terminal, a refit would push phone dims into a PTY nobody on this device is viewing.
-  nativeChatCoveredRef: RefObject<boolean>
-  clientRef: RefObject<RpcClient | null>
-  deviceTokenRef: RefObject<string | null>
-  connState: ConnectionState
-  tabStripVisible: boolean
-  // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
-  textScale: number
-  unsubscribeTerminal: (handle: string) => void
-  subscribeToTerminal: (handle: string) => void
-}
-
 // Why: re-measure on layout changes outside the subscribe path (tab strip, fold/rotate/resize), or a PTY renders "cut in half" (#4579).
 export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) {
   const {
     activeHandleRef,
+    visibleTerminalHandlesRef,
+    terminalPaneViewportsRef,
     terminalRefs,
     terminalFrameRef,
     viewportRef,
@@ -54,6 +35,12 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     subscribeToTerminal
   } = options
 
+  const invalidateViewports = useCallback(() => {
+    viewportMeasuredRef.current = false
+    terminalPaneViewportsRef?.current.forEach((state) => {
+      state.viewportMeasuredRef.current = false
+    })
+  }, [viewportMeasuredRef, terminalPaneViewportsRef])
   const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refitRunSeqRef = useRef(0)
   const forceNextRefitRef = useRef(false)
@@ -64,17 +51,16 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     keyboardVisible: false,
     pending: false
   })
-  // Why: marks the armed timer as a height refit so its callback re-checks the keyboard; other refits always run unguarded.
   const heightOriginatedRefitRef = useRef(false)
   const scheduleViewportRefit = useCallback(
-    (options?: { heightOriginated?: boolean }) => {
+    (trigger?: { heightOriginated?: boolean }) => {
       if (refitTimerRef.current) {
         clearTimeout(refitTimerRef.current)
       }
-      heightOriginatedRefitRef.current = options?.heightOriginated ?? false
+      heightOriginatedRefitRef.current = trigger?.heightOriginated ?? false
       refitTimerRef.current = setTimeout(() => {
         refitTimerRef.current = null
-        // Why: a height refit can fire after the keyboard reopened within the debounce; re-check so we never reflow the PTY mid-keystroke.
+        // Height debounce can outlive keyboard reopening; recheck before reflowing the PTY.
         if (heightOriginatedRefitRef.current) {
           heightOriginatedRefitRef.current = false
           const decision = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, {
@@ -87,80 +73,91 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
         }
         const runSeq = refitRunSeqRef.current + 1
         refitRunSeqRef.current = runSeq
-        const handle = activeHandleRef.current
-        if (!handle) {
-          return
-        }
-        // Why: the trigger already marked the viewport stale, and the return-to-terminal resubscribe re-measures — refitting now would resize a covered PTY.
-        if (nativeChatCoveredRef.current) {
-          return
-        }
-        const ref = terminalRefs.current.get(handle)
-        if (!ref) {
-          return
-        }
-        const isCurrentTarget = () =>
-          isTerminalViewportRefitTargetCurrent({
-            activeHandle: activeHandleRef.current,
-            expectedHandle: handle,
-            currentRef: terminalRefs.current.get(handle),
-            expectedRef: ref,
-            nativeChatCovered: nativeChatCoveredRef.current,
-            disposed: disposedRef.current,
-            runSeq,
-            currentRunSeq: refitRunSeqRef.current
-          })
-        void (async () => {
-          await ref.awaitReady()
-          if (!isCurrentTarget()) {
+        const handles =
+          visibleTerminalHandlesRef?.current ??
+          (activeHandleRef.current ? [activeHandleRef.current] : [])
+        const forceRefit = forceNextRefitRef.current
+        forceNextRefitRef.current = false
+        handles.forEach((handle) => {
+          const geometry = terminalPaneViewportsRef
+            ? terminalPaneViewport(terminalPaneViewportsRef.current, handle)
+            : options
+          const { terminalFrameRef, viewportRef, viewportMeasuredRef } = geometry
+          // Why: the trigger already marked the viewport stale, and the return-to-terminal resubscribe re-measures — refitting now would resize a covered PTY.
+          if (nativeChatCoveredRef.current && handle === activeHandleRef.current) {
             return
           }
-          const frame = terminalFrameRef.current
-          const dims = frame ? ref.fitDimensions(frame) : null
-          if (!dims) {
+          const ref = terminalRefs.current.get(handle)
+          if (!ref) {
             return
           }
-          const forceRefit = forceNextRefitRef.current
-          forceNextRefitRef.current = false
-          const prev = viewportRef.current
-          if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
-            return
-          }
-          viewportRef.current = dims
-          viewportMeasuredRef.current = true
-          // Why: prefer in-place updateViewport over resubscribe to keep the mobile subscriber record alive. See docs/mobile-presence-lock.md.
-          const rpc = clientRef.current
-          const deviceToken = deviceTokenRef.current
-          if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
-            try {
-              const reply = await terminalViewportUpdate.request(rpc, {
-                terminal: handle,
-                client: { id: deviceToken, type: 'mobile' as const },
-                viewport: dims
-              })
-              if (!isCurrentTarget()) {
-                return
-              }
-              updateViewportCapabilityRef.current = resolveTerminalUpdateViewportCapability(reply)
-              const outcome = terminalViewportUpdate.interpret(reply)
-              if (outcome?.updated) {
-                rpc.updateTerminalSubscriptionViewport(handle, dims)
-                if (outcome.applied) {
-                  // Why: updateViewport re-streams only the visible screen, so local scrollback stays wrapped at the old width — reflow it locally.
-                  ref.reflow(dims.cols, dims.rows, frame)
-                }
-                return
-              }
-            } catch {
-              // Fall through to legacy resubscribe.
+          const isCurrentTarget = () =>
+            isTerminalViewportRefitTargetCurrent({
+              activeHandle: visibleTerminalHandlesRef
+                ? visibleTerminalHandlesRef.current.includes(handle)
+                  ? handle
+                  : null
+                : activeHandleRef.current,
+              expectedHandle: handle,
+              currentRef: terminalRefs.current.get(handle),
+              expectedRef: ref,
+              nativeChatCovered: nativeChatCoveredRef.current && handle === activeHandleRef.current,
+              disposed: disposedRef.current,
+              runSeq,
+              currentRunSeq: refitRunSeqRef.current
+            })
+          void (async () => {
+            await ref.awaitReady()
+            if (!isCurrentTarget()) {
+              return
             }
-          }
-          if (!isCurrentTarget()) {
-            return
-          }
-          unsubscribeTerminal(handle)
-          subscribeToTerminal(handle)
-        })()
+            const frame = terminalFrameRef.current
+            const dims = frame ? ref.fitDimensions(frame) : null
+            if (!dims) {
+              return
+            }
+            const prev = viewportRef.current
+            if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
+              // A width change marked it unmeasured; the same grid still fits, so it is measured again.
+              viewportMeasuredRef.current = true
+              return
+            }
+            viewportRef.current = dims
+            viewportMeasuredRef.current = true
+            // Why: prefer in-place updateViewport over resubscribe to keep the mobile subscriber record alive. See docs/mobile-presence-lock.md.
+            const rpc = clientRef.current
+            const deviceToken = deviceTokenRef.current
+            if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
+              try {
+                const reply = await terminalViewportUpdate.request(rpc, {
+                  terminal: handle,
+                  client: { id: deviceToken, type: 'mobile' as const },
+                  viewport: dims
+                })
+                if (!isCurrentTarget()) {
+                  return
+                }
+                updateViewportCapabilityRef.current = resolveTerminalUpdateViewportCapability(reply)
+                const outcome = terminalViewportUpdate.interpret(reply)
+                if (outcome?.updated) {
+                  rpc.updateTerminalSubscriptionViewport(handle, dims)
+                  if (outcome.applied) {
+                    // Why: updateViewport re-streams only the visible screen, so local scrollback stays wrapped at the old width — reflow it locally.
+                    ref.reflow(dims.cols, dims.rows, frame)
+                  }
+                  return
+                }
+              } catch {
+                // Fall through to legacy resubscribe.
+              }
+            }
+            if (!isCurrentTarget()) {
+              return
+            }
+            unsubscribeTerminal(handle)
+            subscribeToTerminal(handle)
+          })()
+        })
       }, 150)
     },
     [
@@ -181,18 +178,17 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     scheduleViewportRefit()
   }, [scheduleViewportRefit])
 
-  // Why: the tab strip toggles at the 1↔2 terminal boundary (~40px area change), so the cached viewport goes stale.
   const prevTabStripVisibleRef = useRef(tabStripVisible)
   useEffect(() => {
     if (prevTabStripVisibleRef.current === tabStripVisible) {
       return
     }
     prevTabStripVisibleRef.current = tabStripVisible
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleViewportRefit()
   }, [tabStripVisible, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: fold/unfold and rotation change window dims with no subscribe/tab change; refit or the grid stays stale (fit capped at 1).
+  // Fold/rotation changes can occur without tab or subscription changes; refit the stale grid.
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const prevWindowDimsRef = useRef({ width: windowWidth, height: windowHeight })
   useEffect(() => {
@@ -201,45 +197,30 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       return
     }
     prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
-    // Why: adjustResize can change only window height while the IME is open; the frame-height notifier corrects once it closes.
+    // IME adjustResize may change height alone; correct via frame notification after close.
     if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
       return
     }
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: on text-size change the refit's 150ms debounce lets the WebView apply the new fontSize before we re-measure cell metrics.
+  // Debounce font changes so the WebView applies fontSize before native measures new cells.
   const prevTextScaleRef = useRef(textScale)
   useEffect(() => {
     if (prevTextScaleRef.current === textScale) {
       return
     }
     prevTextScaleRef.current = textScale
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: panel dock/undock or a sidebar resize changes the width with no window or tab change; a
-  // width that still fits the PTY's grid (sub-pixel layout jitter) needs no refit.
+  // Dock/sidebar changes alter width without window changes; the refit keeps the grid if it still fits.
   const notifyTerminalFrameWidth = useCallback(() => {
-    const handle = activeHandleRef.current
-    const frame = terminalFrameRef.current
-    const fit = handle && frame ? terminalRefs.current.get(handle)?.fitDimensions(frame) : null
-    const grid = viewportRef.current
-    if (fit && grid && fit.cols === grid.cols && fit.rows === grid.rows) {
-      return
-    }
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleViewportRefit()
-  }, [
-    activeHandleRef,
-    terminalFrameRef,
-    terminalRefs,
-    viewportRef,
-    viewportMeasuredRef,
-    scheduleViewportRefit
-  ])
+  }, [invalidateViewports, scheduleViewportRefit])
 
   const notifyFrameHeightRefitEvent = useCallback(
     (event: TerminalFrameHeightRefitEvent) => {
@@ -248,12 +229,12 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       if (!transition.shouldRefit) {
         return
       }
-      viewportMeasuredRef.current = false
+      invalidateViewports()
       scheduleViewportRefit({ heightOriginated: true })
     },
     [viewportMeasuredRef, scheduleViewportRefit]
   )
-  // Why: notify imperatively so layout churn doesn't rerender the full session.
+  // Notify imperatively so layout churn cannot rerender the whole session.
   const notifyTerminalFrameHeight = useCallback(
     (height: number) => notifyFrameHeightRefitEvent({ type: 'frame-height', height }),
     [notifyFrameHeightRefitEvent]
@@ -263,13 +244,17 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     [notifyFrameHeightRefitEvent]
   )
 
-  // Why: a renderer swap or pixel-ratio change gives the same grid a different cell box.
+  // Renderer/DPR swaps can change cell metrics without changing the grid.
   const notifyTerminalCellBoxChange = useCallback(
     (handle: string) => {
-      if (handle !== activeHandleRef.current) {
+      if (
+        visibleTerminalHandlesRef
+          ? !visibleTerminalHandlesRef.current.includes(handle)
+          : handle !== activeHandleRef.current
+      ) {
         return
       }
-      viewportMeasuredRef.current = false
+      invalidateViewports()
       scheduleViewportRefit()
     },
     [activeHandleRef, viewportMeasuredRef, scheduleViewportRefit]
@@ -291,7 +276,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
         return
       }
       // Why: cached grid can match while the host PTY changed in background; reassert equal dims to converge after iOS resume.
-      viewportMeasuredRef.current = false
+      invalidateViewports()
       scheduleForcedViewportRefit()
     })
     return () => sub.remove()
@@ -304,10 +289,10 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     if (previous === 'connected' || connState !== 'connected') {
       return
     }
-    // Why: an in-place desktop upgrade may add updateViewport; reconnect is where the cached method_not_found goes stale.
+    // Reconnect can reach an upgraded host; clear cached method-not-found capability.
     updateViewportCapabilityRef.current = 'unknown'
     // Why: reconnect can restore a PTY resized while the socket was down, so equal cached dims still need reassertion.
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleForcedViewportRefit()
   }, [connState, viewportMeasuredRef, scheduleForcedViewportRefit])
 

@@ -1,16 +1,16 @@
-// In-process Windows DACL reads and writes for Orca's secure files.
-//
-// Why native: the alternative is spawning icacls.exe, which blocked the main thread for seconds
-// per write on hosts with slow process creation (#26027), and whose `/reset` + `/inheritance:r`
-// shape behavioural EDR scores as ransomware (#25583). Policy (which SIDs, which flags) lives in
-// JS; this file writes DACLs given as SDDL and reads them back as plain structure.
+// Native DACL IO avoids icacls.exe’s multi-second main-thread stalls (#26027) and EDR-scored
+// /reset + /inheritance:r pattern (#25583). JS owns SID/flag policy; native reads/writes structure.
 
 #include <napi.h>
 #include <windows.h>
 #include <aclapi.h>
 #include <sddl.h>
+#include <wincred.h>
+
+#include "isolated-spawn.h"
 
 #include <functional>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -131,8 +131,28 @@ Win32Result GrantAccess(std::u16string path, const std::u16string& sid, DWORD ma
   return status == ERROR_SUCCESS ? Win32Result{} : Fail("SetNamedSecurityInfoW", status);
 }
 
+Win32Result VerifyFileDescriptor(HANDLE file, PSECURITY_DESCRIPTOR expected) {
+  PSECURITY_DESCRIPTOR raw = nullptr;
+  PACL actual = nullptr;
+  DWORD status = GetSecurityInfo(file, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                 nullptr, nullptr, &actual, nullptr, &raw);
+  LocalPtr owned(raw);
+  if (status != ERROR_SUCCESS) return Fail("GetSecurityInfo", status);
+  BOOL present = FALSE, defaulted = FALSE;
+  PACL requested = nullptr;
+  SECURITY_DESCRIPTOR_CONTROL control = 0;
+  DWORD revision = 0;
+  if (!GetSecurityDescriptorDacl(expected, &present, &requested, &defaulted) ||
+      !GetSecurityDescriptorControl(raw, &control, &revision) || !present || !requested ||
+      !actual || !(control & SE_DACL_PROTECTED) || actual->AclSize != requested->AclSize ||
+      std::memcmp(actual, requested, requested->AclSize) != 0) {
+    return Fail("VerifyFileDescriptor", ERROR_INVALID_SECURITY_DESCR);
+  }
+  return {};
+}
+
 Win32Result CreateFileWithDacl(const std::u16string& path, const std::u16string& sddl,
-                               const uint8_t* data, size_t length) {
+                               const uint8_t* data, size_t length, bool strict) {
   LocalPtr descriptor;
   auto parsed = ParseSddl(sddl, &descriptor);
   if (!parsed.ok()) {
@@ -142,20 +162,23 @@ Win32Result CreateFileWithDacl(const std::u16string& path, const std::u16string&
     return Fail("WriteFile", ERROR_INVALID_PARAMETER);
   }
   SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor.get(), FALSE};
-  // Why CREATE_NEW: the descriptor only applies to a file this call creates; opening an
-  // existing one would keep that file's (possibly broader) DACL. Share mode 0 keeps every other
-  // opener out until the contents are complete.
-  HANDLE file = CreateFileW(reinterpret_cast<LPCWSTR>(path.c_str()), GENERIC_WRITE, 0,
+  // CREATE_NEW ensures the descriptor applies (existing files retain their DACL); share mode 0 excludes readers until complete.
+  HANDLE file = CreateFileW(reinterpret_cast<LPCWSTR>(path.c_str()),
+                            GENERIC_WRITE | (strict ? READ_CONTROL : 0), 0,
                             &attributes, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (file == INVALID_HANDLE_VALUE) {
     return Fail("CreateFileW", GetLastError());
   }
-  Win32Result result;
+  Win32Result result = strict ? VerifyFileDescriptor(file, descriptor.get()) : Win32Result{};
   DWORD written = 0;
-  if (!WriteFile(file, data, static_cast<DWORD>(length), &written, nullptr)) {
+  if (result.ok() && !WriteFile(file, data, static_cast<DWORD>(length), &written, nullptr)) {
     result = Fail("WriteFile", GetLastError());
-  } else if (written != length) {
+  } else if (result.ok() && written != length) {
     result = Fail("WriteFile", ERROR_WRITE_FAULT);
+  }
+  if (result.ok() && strict) {
+    if (!FlushFileBuffers(file)) result = Fail("FlushFileBuffers", GetLastError());
+    else result = VerifyFileDescriptor(file, descriptor.get());
   }
   // A failed close can mean lost data on a network volume, so it tears the file like a failed write.
   if (!CloseHandle(file) && result.ok()) {
@@ -218,25 +241,7 @@ Napi::Value CurrentUserSid(const Napi::CallbackInfo& info) {
   return SidString(env, reinterpret_cast<TOKEN_USER*>(buffer.data())->User.Sid);
 }
 
-// Structure only, no policy: `{ protected, aces: [{ type, flags, mask, sid }] }`, or null for a
-// NULL DACL. Only plain allow/deny ACEs carry a SID; every other type comes back with sid null so
-// the caller can refuse what it does not understand (object, callback and conditional ACEs).
-Napi::Value GetDaclAces(const Napi::CallbackInfo& info) {
-  auto env = info.Env();
-  if (info.Length() < 1 || !info[0].IsString()) {
-    return ThrowTypeError(env, "getDaclAces(path: string)");
-  }
-  auto path = info[0].As<Napi::String>().Utf16Value();
-  PSECURITY_DESCRIPTOR rawDescriptor = nullptr;
-  PACL dacl = nullptr;
-  DWORD status = GetNamedSecurityInfoW(reinterpret_cast<LPCWSTR>(path.c_str()), SE_FILE_OBJECT,
-                                       DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl,
-                                       nullptr, &rawDescriptor);
-  if (status != ERROR_SUCCESS) {
-    ToError(env, Fail("GetNamedSecurityInfoW", status)).ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  LocalPtr descriptor(rawDescriptor);
+Napi::Value DaclValue(Napi::Env env, PSECURITY_DESCRIPTOR rawDescriptor, PACL dacl) {
   if (dacl == nullptr) {
     return env.Null();
   }
@@ -277,6 +282,26 @@ Napi::Value GetDaclAces(const Napi::CallbackInfo& info) {
   result.Set("aces", aces);
   return result;
 }
+// Return structure only; null means NULL DACL. Only plain allow/deny ACEs expose SIDs;
+// unknown/object/callback/conditional types retain sid null so JS can refuse them.
+Napi::Value GetDaclAces(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    return ThrowTypeError(env, "getDaclAces(path: string)");
+  }
+  auto path = info[0].As<Napi::String>().Utf16Value();
+  PSECURITY_DESCRIPTOR rawDescriptor = nullptr;
+  PACL dacl = nullptr;
+  DWORD status = GetNamedSecurityInfoW(reinterpret_cast<LPCWSTR>(path.c_str()), SE_FILE_OBJECT,
+                                       DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl,
+                                       nullptr, &rawDescriptor);
+  if (status != ERROR_SUCCESS) {
+    ToError(env, Fail("GetNamedSecurityInfoW", status)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  LocalPtr descriptor(rawDescriptor);
+  return DaclValue(env, rawDescriptor, dacl);
+}
 
 Napi::Value SetDaclSddl(const Napi::CallbackInfo& info) {
   auto env = info.Env();
@@ -291,6 +316,110 @@ Napi::Value SetDaclSddl(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value ReadFileWithDacl(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber())
+    return ThrowTypeError(env, "readFileWithDacl(path: string, maxBytes: number)");
+  auto path = info[0].As<Napi::String>().Utf16Value();
+  DWORD limit = info[1].As<Napi::Number>().Uint32Value();
+  HANDLE file = CreateFileW(reinterpret_cast<LPCWSTR>(path.c_str()), GENERIC_READ | READ_CONTROL,
+      FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return env.Null();
+    ToError(env, Fail("CreateFileW", error)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  BY_HANDLE_FILE_INFORMATION attributes{};
+  LARGE_INTEGER size{};
+  PSECURITY_DESCRIPTOR raw = nullptr;
+  PACL dacl = nullptr;
+  Win32Result result;
+  if (GetFileType(file) != FILE_TYPE_DISK || !GetFileInformationByHandle(file, &attributes) ||
+      (attributes.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+      !GetFileSizeEx(file, &size) || size.QuadPart < 0 || size.QuadPart > limit) {
+    result = Fail("ReadFileWithDacl", ERROR_INVALID_DATA);
+  }
+  if (result.ok()) {
+    DWORD status = GetSecurityInfo(file, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                   nullptr, nullptr, &dacl, nullptr, &raw);
+    if (status != ERROR_SUCCESS) result = Fail("GetSecurityInfo", status);
+  }
+  LocalPtr descriptor(raw);
+  auto output = Napi::Object::New(env);
+  if (result.ok()) {
+    output.Set("dacl", DaclValue(env, raw, dacl));
+    auto bytes = Napi::Buffer<uint8_t>::New(env, static_cast<size_t>(size.QuadPart));
+    DWORD read = 0;
+    if (!env.IsExceptionPending() &&
+        (!ReadFile(file, bytes.Data(), static_cast<DWORD>(size.QuadPart), &read, nullptr) ||
+         read != size.QuadPart)) result = Fail("ReadFile", ERROR_READ_FAULT);
+    output.Set("data", bytes);
+  }
+  if (!CloseHandle(file) && result.ok()) result = Fail("CloseHandle", GetLastError());
+  if (!result.ok()) ToError(env, result).ThrowAsJavaScriptException();
+  return output;
+}
+
+struct CredentialDeleter {
+  void operator()(CREDENTIALW* value) const { CredFree(value); }
+};
+using CredentialPtr = std::unique_ptr<CREDENTIALW, CredentialDeleter>;
+
+Napi::Value ReadGenericCredential(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString())
+    return ThrowTypeError(env, "readGenericCredential(target: string)");
+  auto target = info[0].As<Napi::String>().Utf16Value();
+  PCREDENTIALW raw = nullptr;
+  if (!CredReadW(reinterpret_cast<LPCWSTR>(target.c_str()), CRED_TYPE_GENERIC, 0, &raw)) {
+    DWORD error = GetLastError();
+    if (error == ERROR_NOT_FOUND) return env.Null();
+    auto failure = ToError(env, Fail("CredReadW", error));
+    failure.Set("syscall", Napi::String::New(env, "CredReadW"));
+    failure.Set("win32Code", Napi::Number::New(env, error));
+    failure.ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  CredentialPtr owned(raw);
+  return Napi::Buffer<BYTE>::Copy(env, raw->CredentialBlob, raw->CredentialBlobSize);
+}
+
+Napi::Value WriteGenericCredential(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsTypedArray())
+    return ThrowTypeError(env, "writeGenericCredential(target: string, user: string, data: Uint8Array)");
+  auto target = info[0].As<Napi::String>().Utf16Value();
+  auto user = info[1].As<Napi::String>().Utf16Value();
+  auto bytes = info[2].As<Napi::Uint8Array>();
+  if (bytes.ByteLength() > 2560) {
+    ToError(env, Fail("CredWriteW", ERROR_INVALID_PARAMETER)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  PCREDENTIALW raw = nullptr;
+  if (!CredReadW(reinterpret_cast<LPCWSTR>(target.c_str()), CRED_TYPE_GENERIC, 0, &raw)) {
+    DWORD error = GetLastError();
+    if (error != ERROR_NOT_FOUND) {
+      ToError(env, Fail("CredReadW", error)).ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+  }
+  CredentialPtr owned(raw);
+  CREDENTIALW created{};
+  created.Type = CRED_TYPE_GENERIC;
+  created.TargetName = reinterpret_cast<LPWSTR>(target.data());
+  created.UserName = reinterpret_cast<LPWSTR>(user.data());
+  created.Persist = CRED_PERSIST_LOCAL_MACHINE;
+  // Replacing only the blob retains every writable field in an existing credential.
+  CREDENTIALW replacement = raw ? *raw : created;
+  PCREDENTIALW credential = &replacement;
+  credential->CredentialBlob = bytes.Data();
+  credential->CredentialBlobSize = static_cast<DWORD>(bytes.ByteLength());
+  if (!CredWriteW(credential, 0))
+    ToError(env, Fail("CredWriteW", GetLastError())).ThrowAsJavaScriptException();
+  return env.Undefined();
+}
+
 Napi::Value CreateFileWithDaclJs(const Napi::CallbackInfo& info) {
   auto env = info.Env();
   if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() ||
@@ -300,7 +429,8 @@ Napi::Value CreateFileWithDaclJs(const Napi::CallbackInfo& info) {
   auto data = info[2].As<Napi::Uint8Array>();
   auto result = CreateFileWithDacl(info[0].As<Napi::String>().Utf16Value(),
                                    info[1].As<Napi::String>().Utf16Value(), data.Data(),
-                                   data.ByteLength());
+                                   data.ByteLength(), info.Length() > 3 && info[3].IsBoolean() &&
+                                   info[3].As<Napi::Boolean>().Value());
   if (!result.ok()) {
     ToError(env, result).ThrowAsJavaScriptException();
   }
@@ -391,16 +521,51 @@ Napi::Value GrantAccessAsync(const Napi::CallbackInfo& info) {
   return promise;
 }
 
+// Clear HANDLE_FLAG_INHERIT on the std handles so a spawn with bInheritHandles=TRUE can't leak them
+// to a long-lived child; libuv duplicates an inheritable copy for an explicit stdio 'inherit'.
+// Returns only failures, as [{ stream, code }]; absent handles are skipped.
+Napi::Value ClearStdHandleInheritance(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  struct Stream {
+    DWORD id;
+    const char* name;
+  };
+  const Stream streams[] = {{STD_INPUT_HANDLE, "stdin"},
+                            {STD_OUTPUT_HANDLE, "stdout"},
+                            {STD_ERROR_HANDLE, "stderr"}};
+  auto failures = Napi::Array::New(env);
+  for (const auto& stream : streams) {
+    HANDLE handle = GetStdHandle(stream.id);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) {
+      continue;
+    }
+    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0)) {
+      auto failure = Napi::Object::New(env);
+      failure.Set("stream", stream.name);
+      failure.Set("code", static_cast<double>(GetLastError()));
+      failures.Set(failures.Length(), failure);
+    }
+  }
+  return failures;
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("currentUserSid", Napi::Function::New(env, CurrentUserSid));
   exports.Set("getDaclAces", Napi::Function::New(env, GetDaclAces));
+  exports.Set("readFileWithDacl", Napi::Function::New(env, ReadFileWithDacl));
+  exports.Set("readGenericCredential", Napi::Function::New(env, ReadGenericCredential));
+  exports.Set("writeGenericCredential", Napi::Function::New(env, WriteGenericCredential));
   exports.Set("setDaclSddl", Napi::Function::New(env, SetDaclSddl));
   exports.Set("setDaclSddlAsync", Napi::Function::New(env, SetDaclSddlAsync));
   exports.Set("createFileWithDacl", Napi::Function::New(env, CreateFileWithDaclJs));
   exports.Set("grantAccess", Napi::Function::New(env, GrantAccessJs));
   exports.Set("grantAccessAsync", Napi::Function::New(env, GrantAccessAsync));
+  exports.Set("clearStdHandleInheritance", Napi::Function::New(env, ClearStdHandleInheritance));
+  exports.Set("spawnDetachedIsolated", Napi::Function::New(env, SpawnDetachedIsolated));
+  exports.Set("isolatedSpawnBreaksAwayFromJob",
+              Napi::Function::New(env, IsolatedSpawnBreaksAwayFromJob));
   return exports;
 }
 

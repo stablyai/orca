@@ -1,9 +1,4 @@
-/**
- * Real OpenSSH: the managed tunnel reaches orcad wherever the connection's exec works, through a
- * user ControlMaster whose login a standalone forward cannot repeat, and on a persisted port an
- * older Orca's muxed forward still holds. Opt-in (needs sshd and ssh on PATH):
- * ORCA_REAL_OPENSSH_TEST=1 pnpm test src/main/managed-server/lifecycle/orcad-managed-tunnel-transport-real-openssh.test.ts
- */
+// Opt in with ORCA_REAL_OPENSSH_TEST=1; requires sshd and ssh on PATH.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, symlinkSync } from 'node:fs'
 import { connect, createServer, type Server, type Socket } from 'node:net'
@@ -25,7 +20,6 @@ import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-tran
 
 const GREETING = 'orcad-fixture'
 
-/** First line orcad's stand-in sends, read through the tunnel's local listener. */
 function readGreeting(port: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: '127.0.0.1', port })
@@ -56,7 +50,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
     let orcad: Server
     const orcadSockets = new Set<Socket>()
     let orcadPort = 0
-    // The user's own LocalForward in their ssh_config, which the master opened and must keep.
+    // User-configured forwards on the master must survive Orca tunnel cleanup.
     let configuredForwardPort = 0
     let conn: SshConnection
 
@@ -85,7 +79,6 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       fixture = await startRealOpenSshFixture({
         client: [`LocalForward 127.0.0.1:${configuredForwardPort} 127.0.0.1:${orcadPort}`]
       })
-      // The host's pinned Node, where the stdio bridge looks for it under the session's HOME.
       const nodeBin = join(fixture.remoteHome, '.orca-remote', 'runtimes', 'node-fixture', 'bin')
       mkdirSync(nodeBin, { recursive: true })
       symlinkSync(
@@ -98,7 +91,6 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
         usesSystemSshTransport: () => true,
         getClient: () => null,
         getConnectGeneration: () => 1,
-        // The connection's own exec: through the user's master, as every remote command goes.
         exec: async (command: string, execOptions?: SshExecOptions) =>
           spawnSystemSshCommand(fixture.target, command, {
             ...fixture.buildOptions(),
@@ -110,7 +102,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
     }, 30_000)
 
     afterEach(async () => {
-      // Why: sshd may hold its end of a forwarded socket past the forward's own exit.
+      // sshd can retain forwarded sockets after the local forward exits.
       for (const socket of orcadSockets) {
         socket.destroy()
       }
@@ -128,7 +120,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       }
     }, 30_000)
 
-    // Why: an MFA or hardware-key login lives on in the master, but a standalone forward must log in again.
+    // MFA/hardware-key authentication may exist only on the established master.
     it('reaches orcad through the bridge when only the master can log in', async () => {
       fixture.refuseNewLogins()
       const tunnel = await new OrcadManagedTunnelTransportProvider().start(conn, options(0))
@@ -153,7 +145,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       } finally {
         await tunnel.close()
       }
-      // The master and the user's own forward on it stay up; only Orca's stale forward went.
+      // Cancel only Orca's stale forward; preserve the master and user-configured forwards.
       expect(() => fixture.ssh(['-O', 'check'])).not.toThrow()
       expect(await readGreeting(configuredForwardPort)).toBe(GREETING)
       expect(await dial(persisted)).toBe(false)

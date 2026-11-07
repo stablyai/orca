@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcRequest } from '../../../core'
 

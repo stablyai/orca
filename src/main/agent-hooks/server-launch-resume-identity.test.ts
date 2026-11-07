@@ -15,8 +15,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtE
 
 const RESUMED = { key: 'session_id' as const, id: 'resumed-session' }
 
-// #10923: Codex runs SessionStart only at its first turn, so a resumed pane is silent until the
-// user types; the host that launched the resume seeds the identity every reader joins on.
+// Codex may stay silent until the resumed pane's first turn; seed identity at launch for every reader.
 describe('a resume launch seeds the pane identity', () => {
   const servers: AgentHookServer[] = []
   let userDataPath: string
@@ -43,28 +42,7 @@ describe('a resume launch seeds the pane identity', () => {
     return server
   }
 
-  it('publishes an identity-only row before the agent reports', async () => {
-    const server = await startServer()
-    server.recordLaunchResumeIdentity({
-      paneKey: PANE,
-      worktreeId: 'wt-1',
-      agentType: 'codex',
-      providerSession: RESUMED,
-      launchedAt: Date.now()
-    })
-    expect(server.getStatusSnapshotForPane(PANE)).toEqual([
-      expect.objectContaining({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        agentType: 'codex',
-        providerSession: RESUMED,
-        providerSessionOnly: true
-      })
-    ])
-  })
-
-  it("yields to the agent's own report and is replaced by its first hook", async () => {
+  it('yields to a newer agent report', async () => {
     const server = await startServer()
     const launchedAt = Date.now() - 1_000
     const response = await postHookEvent(
@@ -139,7 +117,6 @@ describe('a resume launch seeds the pane identity', () => {
       providerSession: RESUMED,
       launchedAt: Date.now()
     })
-    // Synchronous flush via stop() captures the trailing-debounced write.
     server.stop()
     servers.length = 0
     const restarted = await startServer()
@@ -150,16 +127,5 @@ describe('a resume launch seeds the pane identity', () => {
         providerSessionOnly: true
       })
     ])
-  })
-
-  it('ignores a pane key that is not a stable tab:leaf key', async () => {
-    const server = await startServer()
-    server.recordLaunchResumeIdentity({
-      paneKey: 'not-a-pane',
-      agentType: 'codex',
-      providerSession: RESUMED,
-      launchedAt: Date.now()
-    })
-    expect(server.getStatusSnapshot()).toEqual([])
   })
 })

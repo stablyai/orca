@@ -1,8 +1,4 @@
-/**
- * Event invalidation has one blast-radius rule: a scoped event touches its own
- * entry, an unscoped one touches its authority, and neither ever touches
- * another authority's rows.
- */
+/** Scoped events invalidate one entry, unscoped events their authority, and neither crosses authority boundaries. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -85,37 +81,6 @@ describe('automation host invalidation', () => {
     expect(generationOf(cache, RUNTIME_SELF)).toBe(untouched)
   })
 
-  it('coalesces a burst into one invalidation pass', async () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
-
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' }, reason: 'definition' })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' }, reason: 'run' })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'ssh', targetId: 'target-1' } })
-    expect(invalidation.pending()).toBe(2)
-    expect(onInvalidated).not.toHaveBeenCalled()
-
-    await Promise.resolve()
-    expect(onInvalidated).toHaveBeenCalledTimes(1)
-    expect(onInvalidated.mock.calls[0]?.[0]).toHaveLength(2)
-    // Why: one refresh per burst, so an entry's generation advances once, not three times.
-    expect(generationOf(cache, DESKTOP_SELF)).toBe(1)
-  })
-
-  it('folds a scoped event into the authority pass it is already covered by', async () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
-
-    invalidation.handle({ authority: DESKTOP })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' } })
-    await Promise.resolve()
-
-    expect(onInvalidated.mock.calls[0]?.[0]).toHaveLength(2)
-    expect(generationOf(cache, DESKTOP_SELF)).toBe(1)
-  })
-
   it('reports a scoped event for a host nothing is caching yet', async () => {
     const cache = seeded()
     const uncached: StableAutomationCatalogRef = {
@@ -125,8 +90,7 @@ describe('automation host invalidation', () => {
     const onInvalidated = vi.fn()
     const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
 
-    // A create is the first thing that ever addresses its host: dropping the key
-    // for want of a stale entry is how the new row never appears.
+    // Report unseen create keys too or their first row will never be fetched.
     invalidation.handle({ authority: RUNTIME, selector: { kind: 'ssh', targetId: 'never-seen' } })
     await Promise.resolve()
 

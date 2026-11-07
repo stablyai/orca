@@ -27,12 +27,7 @@ export function isHostAnsweredSystemSshExit(err: unknown): err is SystemSshComma
   )
 }
 
-/**
- * `timeoutMs` bounds a remote consumer that never returns. Windows PowerShell 5.1 cannot drain a
- * large redirected stdin over a non-pty ssh exec (#16432): the remote process stays alive at idle
- * CPU, writes nothing, and never closes — so without a bound this promise is simply never settled
- * and the caller waits forever with no error to show.
- */
+/** Bound hung remote consumers: PowerShell 5.1 can lose redirected stdin/EOF on an empty-pipe read at any size (#16432). */
 export function waitForChannelClose(
   channel: SystemSshCommandChannel,
   label: string,
@@ -56,8 +51,7 @@ export function waitForChannelClose(
     }
     if (timeoutMs !== undefined) {
       timer = setTimeout(() => {
-        // Settle before closing: the close we request would otherwise come back as a SIGTERM
-        // failure and mask the timeout, which is the only diagnosis a wedged remote gives.
+        // Reject before close so its SIGTERM result cannot mask the diagnostic timeout.
         settle(
           reject,
           new Error(
@@ -155,14 +149,12 @@ export async function awaitWithSystemSshAbort<T>(
     abortReject = reject
   })
   const abort = (): void => {
-    // Why: abort is connection teardown; do not wait for stubborn system ssh/tar
-    // children to emit close after we've already signaled them.
+    // Abort connection teardown without waiting indefinitely for signalled ssh/tar children.
     abortChildren()
     suppressLateOperationError = true
     abortReject?.(
       Object.assign(createAbortError(), {
-        // The child was signaled, but this fast abort path intentionally does
-        // not wait for process exit; callers holding remote locks must retain them.
+        // No exit proof on fast abort; callers must retain remote locks.
         sshChannelCloseConfirmed: false
       })
     )

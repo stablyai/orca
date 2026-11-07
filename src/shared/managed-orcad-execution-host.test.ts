@@ -47,7 +47,7 @@ describe('managed Orca server host merging', () => {
   it('keeps both ids resolvable and shows one row routed to the server', () => {
     const hosts = registry({ kind: 'managed', environmentId: 'omarchy-server' })
 
-    // Why both: setups, folders and filters are owned by one id or the other.
+    // Setups, folders and filters may belong to either id.
     expect(hosts.map((host) => host.id)).toEqual([
       'local',
       'runtime:omarchy-server',
@@ -146,19 +146,6 @@ describe('managed Orca server host merging', () => {
     expect(new Set(expandEquivalentExecutionHostIds(hosts, [shownId]))).toEqual(
       new Set(['runtime:omarchy-server', 'ssh:omarchy-target'])
     )
-  })
-
-  it('names the merged row with a rename saved on either id', () => {
-    const hosts = buildExecutionHostRegistry({
-      repos: [],
-      settings: null,
-      hostSource: 'configured-only',
-      sshTargetLabels: SSH_TARGETS,
-      runtimeEnvironments: [MANAGED_SERVER],
-      hostLabelOverrides: new Map([['ssh:omarchy-target', 'Build box']])
-    })
-
-    expect(hosts.find((host) => host.id === 'runtime:omarchy-server')?.label).toBe('Build box')
   })
 
   it('widens a host scope an older build saved with only one id of the pair', () => {

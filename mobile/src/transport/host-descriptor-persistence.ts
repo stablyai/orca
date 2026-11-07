@@ -1,16 +1,16 @@
 import { mutateStoredHosts } from './host-list-mutation-queue'
 import { withReportedDescriptor, type ReportedHostDescriptor } from './host-name-identity'
 
-/**
- * Records what the desktop reported over an authenticated status read. Best-effort: descriptor
- * upkeep must never gate connecting or acting on a host. A reply carrying neither field (a desktop
- * from before either existed) writes nothing, so "Host N" rows for old desktops never churn.
- */
+// Keep authenticated descriptor upkeep best-effort; older hosts omitting both fields must not churn stored rows.
 export async function updateHostDescriptor(
   hostId: string,
   descriptor: ReportedHostDescriptor
 ): Promise<void> {
-  if (descriptor.machineName === null && descriptor.platform === null) {
+  if (
+    descriptor.machineName === null &&
+    descriptor.platform === null &&
+    (descriptor.machine ?? null) === null
+  ) {
     return
   }
   try {

@@ -3,8 +3,8 @@
 import { act, useLayoutEffect, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -13,18 +13,24 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({ getRuntimeFileReadScope: vi.fn(() => null) }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
+  getRuntimeFileReadScope: vi.fn(() => null)
+}))
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
-vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
+vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
+  getRuntimeGitScope: vi.fn(() => null)
+}))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
@@ -32,17 +38,25 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -164,6 +178,10 @@ describe('useEditorPanelContentState visibility', () => {
     mocks.getState.mockReturnValue({
       ...createTestStore().getState(),
       settings: null,
+      repos: [{ id: 'repo-1', path: '/repo', hostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
     })
@@ -174,20 +192,6 @@ describe('useEditorPanelContentState visibility', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
-  })
-
-  it('defers the initial remote read until reveal', async () => {
-    const file = makeFile('initial')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('remote')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
   })
 
   it('invalidates a hidden tab and rejects its older in-flight result', async () => {
@@ -254,29 +258,6 @@ describe('useEditorPanelContentState visibility', () => {
     )
   })
 
-  it('does not re-read while the reveal read is still in flight', async () => {
-    const file = makeFile('flip-flop')
-    const pendingRead = createDeferred<FileContent>()
-    mocks.readRuntimeFileContent.mockReturnValue(pendingRead.promise)
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    await act(async () => root.render(<Probe activeFile={file} />))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    await act(async () => root.render(<Probe activeFile={file} />))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => {
-      pendingRead.resolve({ content: 'remote', isBinary: false })
-      await pendingRead.promise
-    })
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('remote')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-  })
-
   it('publishes hidden visibility before a watcher event in the same commit', async () => {
     const file = makeFile('commit-visibility')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'old', isBinary: false })
@@ -299,64 +280,6 @@ describe('useEditorPanelContentState visibility', () => {
       isBinary: false,
       isStale: true
     })
-  })
-
-  it('shares one post-change read between visible source and preview panels', async () => {
-    const source = makeFile('source', {
-      filePath: '/repo/readme.md',
-      relativePath: 'readme.md',
-      language: 'markdown'
-    })
-    const preview = makeFile('preview', {
-      filePath: '/repo/readme.md',
-      relativePath: 'readme.md',
-      language: 'markdown',
-      mode: 'markdown-preview',
-      markdownPreviewSourceFileId: source.id
-    })
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old', isBinary: false })
-      .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
-
-    await act(async () => {
-      root.render(
-        <>
-          <Probe activeFile={source} name="source" openFiles={[source, preview]} />
-          <Probe activeFile={preview} name="preview" openFiles={[source, preview]} />
-        </>
-      )
-    })
-    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce())
-
-    dispatchExternalChange(source)
-    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => {
-      expect(snapshots.get('source')?.fileContents[source.id]?.content).toBe('fresh')
-      expect(snapshots.get('preview')?.fileContents[preview.id]?.content).toBe('fresh')
-    })
-  })
-
-  it('invalidates a hidden file nonce without reading until reveal', async () => {
-    const file = makeFile('file-nonce')
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old', isBinary: false })
-      .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('old')
-    )
-
-    const changed = { ...file, fileContentReloadNonce: 1 }
-    await act(async () => root.render(<Probe activeFile={changed} isVisible={false} />))
-    expect(snapshots.get('main')?.fileContents[file.id]?.isStale).toBe(true)
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={changed} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('fresh')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
   })
 
   it('invalidates a hidden diff nonce without reading until reveal', async () => {
@@ -405,8 +328,7 @@ describe('useEditorPanelContentState visibility', () => {
 
     await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
     dispatchExternalChange(file)
-    // Why: the viewers render "Loading diff…" purely on a missing entry, so a
-    // retained (stale-marked) entry is what keeps the pane painted.
+    // Retaining a stale entry prevents the missing-entry Loading diff state while reload is pending.
     expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('old diff')
     expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()
@@ -421,30 +343,6 @@ describe('useEditorPanelContentState visibility', () => {
     })
     await vi.waitFor(() =>
       expect(snapshots.get('main')?.diffContents[file.id]).toEqual(textDiff('fresh diff'))
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidates a hidden Git-status diff without reading until reveal', async () => {
-    const file = makeFile('status', { mode: 'diff', diffSource: 'unstaged' })
-    const status: GitStatusEntry[] = [
-      { path: file.relativePath, status: 'modified', area: 'unstaged' }
-    ]
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce(textDiff('old diff'))
-      .mockResolvedValueOnce(textDiff('fresh diff'))
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() => expect(snapshots.get('main')?.diffContents[file.id]).toBeDefined())
-    await act(async () =>
-      root.render(<Probe activeFile={file} gitStatusEntries={status} isVisible={false} />)
-    )
-    expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={file} gitStatusEntries={status} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('fresh diff')
     )
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
   })

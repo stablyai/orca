@@ -5,9 +5,7 @@ import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { getUpdateInstallBlockGuidance } from '../maintenance/update-card/update-install-block-guidance'
 
-// Why: always rendered (not gated by `statusBarItems`). When the update card
-// is collapsed, this segment is the only way back to it — hiding it would
-// strand the user with an orphaned download or install.
+// Always expose the collapsed update card so pending downloads and installs remain reachable.
 export function UpdateStatusSegment({
   iconOnly
 }: {

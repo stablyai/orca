@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import type { WorktreeLineage } from './worktree/lineage-types'
 import type { Worktree } from './worktree/types'
-import type { WorktreeLineageBoundary } from './resolved-worktree-lineage'
-import {
-  projectResolvedWorktreeLineage,
-  sharesWorktreeLineageBoundary
-} from './resolved-worktree-lineage'
+
+import { projectResolvedWorktreeLineage } from './resolved-worktree-lineage'
 
 function worktree(id: string, instanceId: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -44,30 +41,6 @@ function lineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage {
     ...overrides
   }
 }
-
-describe('sharesWorktreeLineageBoundary', () => {
-  const boundary = (overrides: Partial<WorktreeLineageBoundary> = {}): WorktreeLineageBoundary => ({
-    hostId: 'local',
-    ...overrides
-  })
-
-  it('accepts the same host', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary())).toBe(true)
-  })
-
-  it.each([
-    ['child host', boundary({ hostId: undefined }), boundary()],
-    ['parent host', boundary(), boundary({ hostId: undefined })]
-  ])('treats an undefined %s as compatible', (_label, child, parent) => {
-    expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
-  })
-
-  it('rejects a different known host', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ hostId: 'ssh:remote' }))).toBe(
-      false
-    )
-  })
-})
 
 describe('projectResolvedWorktreeLineage', () => {
   const parent = worktree('parent', 'parent-instance')

@@ -5,19 +5,26 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getVirtualRowTransform,
   getWorktreeVirtualRowTransform,
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
 import type { RenderRow } from '../listing/render-row'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-import type { useHostHeaderDrag } from '../../host-header-drag'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
+import type { useHostHeaderDrag } from '../drag/host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
-import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
+import {
+  renderFolderWorkspaceOption,
+  renderFolderWorkspaceVirtualRow,
+  type FolderWorkspaceRowContext
+} from './folder-row'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import {
   renderImportedWorktreesVirtualRow,
   renderNewExternalWorktreesInboxVirtualRow,
@@ -65,7 +72,7 @@ function renderHostHeaderVirtualRow(
   row: Extract<RenderRow, { type: 'host-header' }>,
   vItem: VirtualItem
 ): React.JSX.Element {
-  // Why: the host card is the outer tier; it pins above group headers (z-30 vs z-20) and stays put as they hand off.
+  // Incoming hosts must cover the outgoing sticky group before they pin.
   const isActiveStickyHost = ctx.activeStickyHostIndexRef.current === vItem.index
   const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
     rows: ctx.renderRows,
@@ -83,9 +90,9 @@ function renderHostHeaderVirtualRow(
       data-index={vItem.index}
       ref={ctx.measureVirtualRowElement}
       className={cn(
-        'left-0 right-0',
+        'left-0 right-0 z-30 bg-worktree-sidebar',
         hasHeaderTopSpacing && !isActiveStickyHost && 'pt-1',
-        isActiveStickyHost ? 'sticky -top-px z-30 bg-worktree-sidebar' : 'absolute top-0'
+        isActiveStickyHost ? 'sticky -top-px' : 'absolute top-0'
       )}
       style={isActiveStickyHost ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
     >
@@ -103,15 +110,24 @@ function renderHostHeaderVirtualRow(
   )
 }
 
+function folderLineageToggle(
+  ctx: WorktreeVirtualRowContext,
+  row: { lineageGroupKey?: string }
+): LineageToggleHandler | undefined {
+  return row.lineageGroupKey ? ctx.item.getLineageToggleHandler(row.lineageGroupKey) : undefined
+}
+
 function renderLineageGroupVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: Extract<RenderRow, { type: 'lineage-group' }>,
   vItem: VirtualItem
 ): React.JSX.Element {
-  const [parent, ...children] = row.rows
+  const parent = row.folder ? undefined : row.rows[0]
+  const children = row.folder ? row.rows : row.rows.slice(1)
   const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
-  const parentPreviewOffset = parent
-    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parent.worktree.id) ?? 0)
+  const parentKey = parent ? getWorktreeHostIdentity(parent.worktree) : null
+  const parentPreviewOffset = parentKey
+    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parentKey) ?? 0)
     : 0
   return (
     <div
@@ -124,29 +140,40 @@ function renderLineageGroupVirtualRow(
       ref={ctx.measureVirtualRowElement}
       className={cn(
         'absolute left-0 right-0 top-0',
-        parent?.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
+        parentKey !== null &&
+          parentKey === ctx.worktreeDragState.draggingWorktreeId &&
+          'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
       style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
     >
       <div className="overflow-visible">
-        {parent
-          ? renderWorktreeItemRow(
-              ctx.item,
-              parent,
-              false,
-              renderWorktreeLineageDescendants(ctx.item, parent, children),
-              childIsActive
-            )
-          : null}
+        {row.folder
+          ? renderFolderWorkspaceOption({
+              ctx: ctx.folderWorkspace,
+              row: row.folder,
+              lineage: {
+                onToggle: folderLineageToggle(ctx, row.folder),
+                children: renderWorktreeLineageDescendants(ctx.item, row.folder, children),
+                childIsActive
+              }
+            })
+          : parent
+            ? renderWorktreeItemRow(
+                ctx.item,
+                parent,
+                false,
+                renderWorktreeLineageDescendants(ctx.item, parent, children),
+                childIsActive
+              )
+            : null}
       </div>
     </div>
   )
 }
 
-// One virtual slot -> one row renderer. Every branch owns its own absolute/sticky frame
-// because sticky headers and lineage groups position differently from plain cards.
+// Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
 export function renderWorktreeVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
@@ -181,7 +208,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
-      actionState: ctx.importedWorktreeCardActionState.get(row.repo.id),
+      actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
     })
@@ -211,7 +238,8 @@ export function renderWorktreeVirtualRow(
       ctx: ctx.folderWorkspace,
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      lineage: { onToggle: folderLineageToggle(ctx, row) }
     })
   }
 
@@ -219,8 +247,8 @@ export function renderWorktreeVirtualRow(
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
-  const itemPreviewOffset =
-    ctx.worktreeDragState.previewOffsetsByWorktreeId.get(row.worktree.id) ?? 0
+  const itemKey = getWorktreeHostIdentity(row.worktree)
+  const itemPreviewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemKey) ?? 0
 
   return (
     <div
@@ -235,7 +263,7 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
-        row.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
+        itemKey === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { projectOrchestrationFleet } from '../../../../../../shared/orchestration-fleet-projection'
 import {
   applyFederatedFleetObservations,
@@ -104,8 +104,7 @@ describe('federated fleet snapshots', () => {
   })
 
   it('does not grant a snapshot call budget after the fleet deadline expires', async () => {
-    // Five distinct peers exceed the host concurrency, so the last one only starts after the
-    // first wave has already spent the whole fleet budget.
+    // Exceed concurrency so the final peer cannot start before the fleet budget expires.
     const dispatchIds = Array.from({ length: 5 }, (_, index) => `dispatch-expired-${index}`)
     const dispatches = new Map(
       dispatchIds.map((dispatchId) => [
@@ -428,6 +427,8 @@ function federatedDispatch(
     remote_terminal_handle: null,
     to_home_imported_sequence: 0,
     to_home_acknowledged_sequence: 0,
+    home_auto_release_at: null,
+    home_auto_release_state: null,
     created_at: '2026-08-27 00:00:00',
     updated_at: '2026-08-27 00:00:00'
   }

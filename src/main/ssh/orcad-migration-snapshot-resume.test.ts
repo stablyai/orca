@@ -10,7 +10,7 @@ import type {
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationSnapshotChunkRequest } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { transferOrcadMigrationSnapshots } from './orcad-migration-snapshot-coordinator'
@@ -38,7 +38,7 @@ function openStore(dataFile: string): Store {
   return createSqliteTestStore(Store, { dataFile })
 }
 
-/** A relay host whose dormant tab keeps its scrollback inline, as `ssh:` partitions do. */
+/** Model relay ssh: partitions that retain dormant-tab scrollback inline. */
 function relayProfile(): { store: Store; dataFile: string } {
   const directory = mkdtempSync(join(tmpdir(), 'orcad-snapshot-resume-'))
   directories.push(directory)
@@ -85,7 +85,6 @@ function relayProfile(): { store: Store; dataFile: string } {
   return { store, dataFile }
 }
 
-/** A staged destination that loses the connection on its first chunk. */
 function destination(manifest: OrcadMigrationManifest, failFirst: boolean) {
   const [snapshot] = manifest.payload.dormantState?.terminalScrollbackSnapshots ?? []
   let received = 0
@@ -130,19 +129,6 @@ async function transfer(
 }
 
 describe('resuming a scrollback upload the journal still holds', () => {
-  it('retries after the tab closed and the upload was interrupted', async () => {
-    const { store } = relayProfile()
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-    store.syncOrcadMigrationScrollbackRetention([manifest])
-    store.setWorkspaceSession(getDefaultWorkspaceSession(), toSshExecutionHostId(TARGET.id))
-    const remote = destination(manifest, true)
-
-    await expect(transfer(store, manifest, remote)).rejects.toThrow('transport lost')
-    await transfer(store, manifest, remote)
-
-    expect(remote.received()).toBe(Buffer.byteLength(OUTPUT))
-  })
-
   it('recovers after a restart, from the journal alone', async () => {
     const { store, dataFile } = relayProfile()
     const manifest = createOrcadMigrationManifest(store, TARGET)

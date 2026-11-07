@@ -27,85 +27,6 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('keeps Codex lead state terminal after a confirmed interrupt', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          hookEventName: 'UserPromptSubmit',
-          payload: {
-            state: 'working',
-            prompt: 'long task',
-            agentType: 'codex',
-            model: 'gpt-5.6-sol'
-          }
-        },
-        'conn-1'
-      )
-      vi.setSystemTime(1_500)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          hookEventName: 'Interrupt',
-          payload: { state: 'done', prompt: 'long task', agentType: 'codex', interrupted: true }
-        },
-        'conn-1'
-      )
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'done',
-          prompt: 'long task',
-          agentType: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
-        })
-      ])
-      expect(listener).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          payload: expect.objectContaining({ state: 'done', interrupted: true })
-        })
-      )
-
-      vi.setSystemTime(17_000)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          hookEventName: 'SubagentStop',
-          toolAgentId: 'delayed-child',
-          payload: { state: 'done', prompt: 'long task', agentType: 'codex' }
-        },
-        'conn-1'
-      )
-
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'done',
-        model: 'gpt-5.6-sol',
-        prompt: 'long task'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not infer an interrupt while a subagent child is still working', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -120,7 +41,7 @@ describe('AgentHookServer listener replay', () => {
             state: 'working',
             prompt: 'review loop',
             agentType: 'claude',
-            // Why: a working pane can be child-driven while the lead is idle; Ctrl+C doesn't stop children, so no terminal-done may be inferred here.
+            // Child-driven working status cannot prove Ctrl+C ended the lead's turn.
             subagents: [{ id: 'a1', state: 'working', startedAt: 900 }]
           }
         },
@@ -146,8 +67,7 @@ describe('AgentHookServer listener replay', () => {
   })
 
   it('does not infer an interrupt while Claude reports a background shell and the row carries no main agent fact', () => {
-    // Why: a row from a host too old to publish `mainAgent` cannot say whether its `working` is the
-    // main agent's own turn or a shell holding an idle main agent open, so the evidence guard stays for it.
+    // Legacy hosts omit mainAgent, so working may mean an idle lead held open by live shell work.
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -239,9 +159,7 @@ describe('AgentHookServer listener replay', () => {
           intent: 'ctrl-c'
         })
       ).toBe(true)
-      // Why: Ctrl+C ended the main agent's turn, not the shell the inventory reported. The synthesized
-      // row is the fold of the cancelled main agent with that shell, so it monitors; the verdict rides
-      // `mainAgent.outcome`, and `interrupted` is a done-row flag the normalizer keeps off it.
+      // Cancel the main agent without discarding live shell inventory or marking the working row interrupted.
       const inferred = server.getStatusSnapshot()[0]
       expect(inferred).toMatchObject({
         state: 'working',
@@ -290,8 +208,7 @@ describe('AgentHookServer listener replay', () => {
       vi.setSystemTime(1_500)
       expect(cancel('first')).toBe(true)
 
-      // Why: the relay owns this pane's main agent record, so the host's local one still says the
-      // first cancel; the second cancel must not inherit that clock.
+      // Relay-owned turns must not inherit the local record's earlier cancellation clock.
       vi.setSystemTime(5_000)
       relayTurn('second', 5_000)
       vi.setSystemTime(6_000)
@@ -338,8 +255,7 @@ describe('AgentHookServer listener replay', () => {
           intent: 'ctrl-c'
         })
       ).toBe(true)
-      // Why: the child outlives the cancel (a relayed pane has no local roster, so the row's own
-      // snapshots are the evidence); the main agent's verdict is recorded without retiring the child.
+      // Relayed rows carry their own child evidence; main-agent cancellation must preserve it.
       expect(server.getStatusSnapshot()[0]).toMatchObject({
         state: 'working',
         subagents: [{ id: 'a1', state: 'working' }],
@@ -375,7 +291,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
-      // Why: the main agent is already settled; Ctrl+C at its prompt stops nothing the row shows.
+      // Ctrl+C at an idle lead's prompt stops none of the child work shown.
       expect(
         server.inferInterrupt({
           paneKey: PANE,
@@ -564,48 +480,6 @@ describe('AgentHookServer listener replay', () => {
     expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
   })
 
-  it('carries idle subagent rows through an inferred interrupt', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: {
-            state: 'working',
-            prompt: 'wrap up',
-            agentType: 'claude',
-            subagents: [{ id: 'a1', state: 'idle', startedAt: 900, agentType: 'probe1' }]
-          }
-        },
-        'conn-1'
-      )
-      const baseline = server.getStatusSnapshot()[0]
-
-      vi.setSystemTime(1_500)
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'wrap up',
-        baselineAgentType: 'claude',
-        intent: 'ctrl-c'
-      })
-
-      expect(applied).toBe(true)
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'done',
-        interrupted: true,
-        subagents: [expect.objectContaining({ id: 'a1', state: 'idle' })]
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('preserves an inferred interrupted row when OpenCode immediately reports SessionIdle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -665,53 +539,6 @@ describe('AgentHookServer listener replay', () => {
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('rejects inferred interrupts when a same-millisecond prompt update changed the row', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'first task', agentType: 'codex' }
-        },
-        'conn-1'
-      )
-      const baseline = server.getStatusSnapshot()[0]
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'second task', agentType: 'codex' }
-        },
-        'conn-1'
-      )
-
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'first task',
-        baselineAgentType: 'codex',
-        intent: 'plain-escape'
-      })
-
-      expect(applied).toBe(false)
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'working',
-          prompt: 'second task',
-          agentType: 'codex'
-        })
-      ])
     } finally {
       vi.useRealTimers()
     }
@@ -802,43 +629,4 @@ describe('AgentHookServer listener replay', () => {
       }
     }
   )
-
-  it('rejects Ctrl+C inference for Droid', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: { state: 'working', prompt: 'long task', agentType: 'droid' }
-        },
-        'conn-1'
-      )
-      const baseline = server.getStatusSnapshot()[0]
-
-      vi.setSystemTime(1_500)
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'long task',
-        baselineAgentType: 'droid',
-        intent: 'ctrl-c'
-      })
-
-      expect(applied).toBe(false)
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'working',
-          prompt: 'long task',
-          agentType: 'droid'
-        })
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 })

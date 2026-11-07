@@ -41,21 +41,27 @@ export function isUpdateCardVisible({
 export function getUpdateCardAriaLabel(status: UpdateStatus): string {
   switch (status.state) {
     case 'idle':
-      return 'Update status'
+      return translate('auto.components.UpdateCard.aria.statusIdle', 'Update status')
     case 'checking':
-      return 'Checking for updates'
+      return translate('auto.components.UpdateCard.aria.statusChecking', 'Checking for updates')
     case 'not-available':
-      return "You're on the latest version"
+      return translate(
+        'auto.components.UpdateCard.aria.statusLatest',
+        "You're on the latest version"
+      )
     case 'available':
-      return 'Update available'
+      return translate('auto.components.UpdateCard.aria.statusAvailable', 'Update available')
     case 'downloading':
-      return 'Downloading update'
+      return translate('auto.components.UpdateCard.aria.statusDownloading', 'Downloading update')
     case 'downloaded':
-      return 'Update ready to install'
+      return translate(
+        'auto.components.UpdateCard.aria.statusDownloaded',
+        'Update ready to install'
+      )
     case 'error':
       return status.installBlock
         ? translate('updates.installBlock.waitingLabel', 'Update waiting')
-        : 'Update error'
+        : translate('auto.components.UpdateCard.aria.statusError', 'Update error')
   }
 }
 

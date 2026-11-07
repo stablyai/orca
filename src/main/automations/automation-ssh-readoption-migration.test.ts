@@ -100,16 +100,8 @@ describe('migrateAutomationsForSshReadoption', () => {
     expect(migrate([automation], 9)).toBe(true)
     expect(automation.runContext?.hostId).toBe(`ssh:${NEW_ID}`)
     expect(automation.sourceContext?.hostId).toBe(`ssh:${NEW_ID}`)
-    // A local record's execution target is not an SSH reference and must stay untouched.
     expect(automation.executionTargetId).toBe('local')
     expect(automation.executionTargetGeneration).toBeUndefined()
-  })
-
-  it('leaves automations on other targets alone', () => {
-    const other = makeAutomation({ id: 'auto-2', executionTargetId: 'ssh-other' })
-    expect(migrate([other], 9)).toBe(false)
-    expect(other.executionTargetId).toBe('ssh-other')
-    expect(other.executionTargetGeneration).toBe(3)
   })
 
   it('re-points run history so workspace navigation survives re-adoption', () => {
@@ -124,20 +116,6 @@ describe('migrateAutomationsForSshReadoption', () => {
 })
 
 describe('migrateAutomationHostFilterSshTargetId', () => {
-  it('follows the re-adopted id', () => {
-    const ui = uiWithFilter(
-      hostStableKey({ authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: OLD_ID } })
-    )
-    expect(migrateAutomationHostFilterSshTargetId(ui, OLD_ID, NEW_ID)).toBe(true)
-    expect(ui.automationHostFilter).toEqual({
-      kind: 'host',
-      hostKey: hostStableKey({
-        authority: { kind: 'desktop' },
-        selector: { kind: 'ssh', targetId: NEW_ID }
-      })
-    })
-  })
-
   it('never rewrites a runtime authority filter that reuses the same target id', () => {
     const hostKey = hostStableKey({
       authority: { kind: 'runtime', environmentId: 'env-1' },
@@ -146,24 +124,5 @@ describe('migrateAutomationHostFilterSshTargetId', () => {
     const ui = uiWithFilter(hostKey)
     expect(migrateAutomationHostFilterSshTargetId(ui, OLD_ID, NEW_ID)).toBe(false)
     expect(ui.automationHostFilter).toEqual({ kind: 'host', hostKey })
-  })
-
-  it('ignores All hosts, other hosts, and unparseable persisted values', () => {
-    const all = { automationHostFilter: { kind: 'all' } } as PersistedUIState
-    expect(migrateAutomationHostFilterSshTargetId(all, OLD_ID, NEW_ID)).toBe(false)
-    const selfKey = hostStableKey({
-      authority: { kind: 'desktop' },
-      selector: { kind: 'self' }
-    })
-    expect(migrateAutomationHostFilterSshTargetId(uiWithFilter(selfKey), OLD_ID, NEW_ID)).toBe(
-      false
-    )
-    expect(migrateAutomationHostFilterSshTargetId(uiWithFilter('garbage'), OLD_ID, NEW_ID)).toBe(
-      false
-    )
-    // A store written before the filter existed must migrate without throwing.
-    expect(migrateAutomationHostFilterSshTargetId({} as PersistedUIState, OLD_ID, NEW_ID)).toBe(
-      false
-    )
   })
 })

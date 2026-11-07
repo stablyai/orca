@@ -49,8 +49,7 @@ export function subscribeMobileTerminalSafely(
   try {
     return client.subscribe('terminal.subscribe', params, onData)
   } catch {
-    // Why: a transport mock or closing socket can reject before returning an
-    // unsubscribe handle; callers must still release their subscribing marker.
+    // Synchronous subscribe failures still need to release the subscribing marker.
     onSynchronousError()
     return () => {}
   }

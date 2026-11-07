@@ -1,7 +1,7 @@
 import {
   MOBILE_RELAY_CLOSE_CODE,
   MOBILE_RELAY_PHONE_CLOSE_REASON
-} from '../../../src/shared/mobile-relay-close-codes'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
 export class RelayRecoveryFailureCount {
@@ -56,8 +56,7 @@ export class RelayRecoveryFailureCount {
   }
 }
 
-// The cell held the dial for the desktop's data link, which never attached while
-// its control looked alive. No re-resolve: the director names the seated cell.
+// Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
 function isHostAttachTimeout(error: Error | null): boolean {
   return (
     error instanceof RelayOuterError &&

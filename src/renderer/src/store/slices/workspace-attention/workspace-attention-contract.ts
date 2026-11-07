@@ -33,12 +33,7 @@ export type WorkspaceAttentionSlice = {
   markTerminalBell: (target: TerminalPaneAttentionTarget) => void
   /** An admitted, unviewed agent completion or prompt (terminal or structured chat). */
   markAgentAttentionUnread: (write: AgentAttentionUnreadWrite) => void
-  /**
-   * The tabs on screen in a visible, focused window with the user present are read — every
-   * marker of each. `screenArrived` is true when the set of on-screen tabs (or the on-screen
-   * workspace, host or window focus) changed since the last read; a tab switch counts. Then each
-   * on-screen workspace's flag is settled even when nothing was removed.
-   */
+  /** Read all markers of tabs shown in a focused, present window. screenArrived includes tab/workspace/host/focus changes and settles flags even without removed markers. */
   readOnScreenAttention: (screen: OnScreenAttention, options: { screenArrived: boolean }) => void
   /** Sidebar "Mark as read" (also removes every marker in the workspace) / "Mark as unread". */
   setWorkspaceUnreadByUser: (

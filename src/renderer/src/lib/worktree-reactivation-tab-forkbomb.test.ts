@@ -1,10 +1,11 @@
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
-import { activateAndRevealWorktree } from './worktree-activation'
-import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
+import { waitForWorktreeAgentActivationGateForTests } from './workspace/activation/worktree-agent-activation-gate'
+import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
@@ -37,11 +38,7 @@ vi.mock('@/runtime/runtime-layout-client', () => ({
 
 const initialAppStoreState = useAppStore.getState()
 
-/**
- * A `session.tabs.list` answer holding no agent-session tab. The gate asks the host for one
- * workspace's snapshot rather than the whole `session.tabs.listAll` inventory, and refuses an answer
- * that does not name the scope it listed — so the fake host has to report its worktree.
- */
+// The gate requires a scoped workspace snapshot, so the empty fake session.tabs.list answer must name its worktree.
 function emptySessionTabsSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: worktreeId,

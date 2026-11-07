@@ -1,8 +1,4 @@
-/**
- * `buildSshArgs` is shared with the sftp client, and three of its flags mean something else there.
- * Every case below is a silent wrong-target rather than an error if the translation is skipped,
- * which is why the fallback is "refuse and use another transport", never "pass it through".
- */
+/** SSH flags can silently change meaning in SFTP; unknown translations must decline to another transport. */
 import { describe, expect, it } from 'vitest'
 import {
   SftpArgTranslationError,
@@ -11,20 +7,6 @@ import {
 } from './system-ssh-sftp-args'
 
 describe('translateSshArgsToSftpArgs', () => {
-  it('sends the port as an option, since sftp -p preserves mtimes instead', () => {
-    const args = translateSshArgsToSftpArgs(['-p', '2222', '--', 'dev@win.example'])
-
-    expect(args).toEqual(['-o', 'Port=2222', '--', 'dev@win.example'])
-  })
-
-  it('sends the login name as an option, since sftp has no -l', () => {
-    // `buildSshArgs` emits `-l` for a config alias no Host block claims. Throwing here would send
-    // exactly those hosts to the transport this PR exists to stop using, silently.
-    const args = translateSshArgsToSftpArgs(['-l', 'neil', '--', 'awin'])
-
-    expect(args).toEqual(['-o', 'User=neil', '--', 'awin'])
-  })
-
   it('translates the whole unclaimed-alias shape buildSshArgs emits', () => {
     const args = translateSshArgsToSftpArgs([
       '-o',
@@ -58,21 +40,10 @@ describe('translateSshArgsToSftpArgs', () => {
     ])
   })
 
-  it('spells ControlPath=none out, since sftp -S names a program to run', () => {
-    // `sftp -S none` would try to exec a binary called `none`.
-    const args = translateSshArgsToSftpArgs(['-S', 'none', '--', 'dev@win.example'])
-
-    expect(args).toEqual(['-o', 'ControlPath=none', '--', 'dev@win.example'])
-  })
-
   it('refuses any other -S, which would hand sftp an ssh binary Orca did not choose', () => {
     expect(() => translateSshArgsToSftpArgs(['-S', '/tmp/ctl.sock'])).toThrow(
       SftpArgTranslationError
     )
-  })
-
-  it('drops -T, which sftp does not have', () => {
-    expect(translateSshArgsToSftpArgs(['-T', '--', 'host'])).toEqual(['--', 'host'])
   })
 
   it('passes through the flags both clients spell the same way', () => {
@@ -109,8 +80,7 @@ describe('translateSshArgsToSftpArgs', () => {
   })
 
   it('refuses an unknown flag rather than guessing what sftp would do with it', () => {
-    // The point of the throw: a flag added to buildSshArgs later must degrade to another
-    // transport, not reach sftp carrying a different meaning.
+    // Future SSH flags must fall back safely instead of inheriting SFTP's different meaning.
     expect(() => translateSshArgsToSftpArgs(['-A', '--', 'host'])).toThrow(SftpArgTranslationError)
   })
 

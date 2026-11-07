@@ -1,3 +1,6 @@
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { agentReadsSkill } from '@/lib/agent-skill-coverage'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
@@ -6,14 +9,12 @@ import type {
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
-  getRuntimeScopedSkillDiscoveryKey,
-  getSkillDiscoveryTargetKey,
-  resetSkillDiscoveryCacheForTests
+  getRuntimeScopedSkillDiscoveryKey
 } from './installed-agent-skill-discovery'
 import {
   getInstalledAgentSkillVerdict,
@@ -36,20 +37,23 @@ export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
 ] as const satisfies readonly SkillSourceKind[]
 
 type InstalledAgentSkillOptions = {
+  agent?: TuiAgent
+  runtimeTarget?: RuntimeClientTarget | null
   enabled?: boolean
   discoveryTarget?: SkillDiscoveryTarget
   sourceKinds?: readonly SkillSourceKind[]
 }
 
 type InstalledAgentSkillMatchOptions = {
+  agent?: TuiAgent
+  sources?: readonly SkillDiscoverySource[]
   sourceKinds?: readonly SkillSourceKind[]
 }
 
 export type InstalledAgentSkillState = {
   installed: boolean
   loading: boolean
-  // Why: a forced rescan keeps the previous result, so only the first scan per
-  // runtime-scoped target is genuinely unknown.
+  // Only first results are unknown; forced rescans retain prior evidence.
   settled: boolean
   // A negative this scan cannot vouch for: render it as unknown, not as undone.
   installedUnverifiable: boolean
@@ -86,6 +90,9 @@ export function hasInstalledAgentSkillNamed(
 ): boolean {
   const expected = new Set(skillNames.map(normalizeSkillName))
   return skills.some((skill) => {
+    if (options.agent && !agentReadsSkill(options.agent, skill, options.sources ?? [])) {
+      return false
+    }
     if (!skill.installed) {
       return false
     }
@@ -94,6 +101,7 @@ export function hasInstalledAgentSkillNamed(
     }
     return (
       expected.has(normalizeSkillName(skill.name)) ||
+      (skill.bundledName !== undefined && expected.has(normalizeSkillName(skill.bundledName))) ||
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
@@ -103,13 +111,6 @@ export function notifyInstalledAgentSkillsRefreshed(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
   }
-}
-
-export const _installedAgentSkillDiscoveryInternalsForTests = {
-  discoverInstalledAgentSkills,
-  getSkillDiscoveryTargetKey,
-  isOrchestrationSkillName,
-  reset: resetSkillDiscoveryCacheForTests
 }
 
 export function useInstalledAgentSkill(
@@ -123,10 +124,12 @@ export function useInstalledAgentSkillNames(
   skillNames: readonly string[],
   options: InstalledAgentSkillOptions = {}
 ): InstalledAgentSkillState {
-  const { enabled = true, discoveryTarget, sourceKinds } = options
+  const { enabled = true, discoveryTarget, sourceKinds, agent } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
-  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const activeRuntimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const runtimeTarget =
+    options.runtimeTarget === undefined ? activeRuntimeTarget : options.runtimeTarget
   const discoveryTargetKey = runtimeTarget
     ? getRuntimeScopedSkillDiscoveryKey(
         runtimeTarget,
@@ -135,12 +138,7 @@ export function useInstalledAgentSkillNames(
         sourceKinds
       )
     : UNRESOLVED_RUNTIME_DISCOVERY_KEY
-  // Why: callers derive the target inside a store-backed useMemo, so unrelated
-  // store writes hand us a new object with the same key. Two targets with the
-  // same key resolve to the same scan, so hold one until the key moves and keep
-  // `refresh` — and the discovery effect it drives — stable. State, not a ref:
-  // React may discard a useMemo, and a render-phase ref write can leak from a
-  // render that never commits.
+  // Hold equivalent target keys in React state to stabilize refresh/effects; memo discard and render-phase ref writes must not leak across uncommitted renders.
   const [latchedDiscoveryTarget, setLatchedDiscoveryTarget] = useState({
     key: discoveryTargetKey,
     target: discoveryTarget
@@ -158,18 +156,14 @@ export function useInstalledAgentSkillNames(
   const [error, setError] = useState<string | null>(null)
   const currentDiscoveryTargetKeyRef = useRef(discoveryTargetKey)
   const refreshGenerationRef = useRef(0)
-  // Why: the runtime target only changes identity when the owning peer does
-  // (switch or same-id re-pair), so it resets state alongside the key. State,
-  // not a ref: a render-phase ref write survives a render React discards, which
-  // would skip the reset and keep painting the retired peer's list.
+  // Reset with peer/key changes in state; render-phase ref writes survive discarded renders and could retain the retired peer’s list.
   const [stateResetInput, setStateResetInput] = useState({
     discoveryTargetKey,
     enabled,
     runtimeTarget
   })
   currentDiscoveryTargetKeyRef.current = discoveryTargetKey
-  // Why: skill scans can outlive transient settings/onboarding panels; keep
-  // the module cache update but skip React state writes after unmount.
+  // Let late scans update module cache, but never set React state after transient surfaces unmount.
   const mountedRef = useMountedRef()
   let resultForRender = result
   let loadingForRender = loading
@@ -216,8 +210,7 @@ export function useInstalledAgentSkillNames(
         })
       }
       if (!runtimeTarget) {
-        // Why: stay in the loading state rather than scanning the wrong host and
-        // reporting "not installed" before the owning runtime is known.
+        // Wait for owner resolution instead of scanning the wrong host and claiming absent skills.
         return false
       }
       let installedAfterRefresh = false
@@ -230,7 +223,9 @@ export function useInstalledAgentSkillNames(
           sourceKinds
         )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
-          sourceKinds
+          sourceKinds,
+          agent,
+          sources: next.sources
         })
         writeIfCurrent(() => {
           setResult(next)
@@ -245,9 +240,7 @@ export function useInstalledAgentSkillNames(
           )
         })
       } finally {
-        // Why: a silent refresh can supersede an in-flight loading one, whose own
-        // clear is then dropped by the generation guard. Only the winning
-        // generation clears, so it must clear regardless of its own showLoading.
+        // Only the winning generation clears loading, even when a silent refresh supersedes a visible scan.
         writeIfCurrent(() => {
           setLoading(false)
         })
@@ -255,6 +248,7 @@ export function useInstalledAgentSkillNames(
       return installedAfterRefresh
     },
     [
+      agent,
       candidateSkillNames,
       discoveryTargetKey,
       enabled,
@@ -273,16 +267,11 @@ export function useInstalledAgentSkillNames(
     if (!enabled) {
       return
     }
-    // Why: skill install commands run outside React state, often in a terminal, so
-    // an install event is authoritative and forces past every cache.
+    // Installs occur outside React; mutation events force past every cache.
     const refreshFromInstall = (): void => {
       void refresh(true)
     }
-    // Why: focus fires on every app and window switch, and a forced refresh
-    // bypasses every cache down to the host's disk walk — that is what turned an
-    // alt-tab into a multi-root filesystem scan per window and per client. Focus,
-    // and another surface finishing its own scan, are both only hints that
-    // something may have changed, so they read through the freshness window.
+    // Focus/other-surface refresh are freshness hints, not mutations; forcing them would disk-scan every window/client on each app switch.
     const refreshQuietly = (): void => {
       void refresh(false, false)
     }
@@ -307,8 +296,10 @@ export function useInstalledAgentSkillNames(
 
   const installed = useMemo(
     () =>
-      enabled ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { sourceKinds }) : false,
-    [candidateSkillNames, enabled, skills, sourceKinds]
+      enabled
+        ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { sourceKinds, agent, sources })
+        : false,
+    [agent, candidateSkillNames, enabled, skills, sourceKinds, sources]
   )
 
   const settled = enabled && resultForRender !== null
@@ -323,8 +314,7 @@ export function useInstalledAgentSkillNames(
 
   useEffect(() => {
     if (installed && candidateSkillNames.some(isOrchestrationSkillName)) {
-      // Why: older floating-workspace education still keys off this marker; any
-      // surface that detects the orchestration skill should satisfy setup.
+      // Legacy floating-workspace setup still reads this orchestration-skill marker.
       markOrchestrationSetupComplete()
     }
   }, [candidateSkillNames, installed])

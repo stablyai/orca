@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
@@ -63,8 +63,7 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   ].join('  ')
 }
 
-// Why omitted rather than zeroed: a host that predates the field, or cannot read
-// commit at all, must not be printed as agents committing nothing.
+// Missing commit fields mean unknown usage, not zero.
 function formatCommitLines(snapshot: MemorySnapshot): string[] {
   if (typeof snapshot.totalPrivateMemory !== 'number') {
     return []
@@ -86,6 +85,9 @@ function formatCpu(cpu: number): string {
 }
 
 function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  if (metric === 'footprint') {
+    return 'summed memory footprint (Activity Monitor); includes graphics memory'
+  }
   return metric === 'working-set'
     ? 'summed working set; shared pages may repeat'
     : 'summed RSS; shared or aliased pages may repeat'
@@ -141,13 +143,24 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsParent(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
     : bodyWithScope
+}
+
+/** The parent line, in the sidebar's precedence: worktree, then folder workspace, then another machine. */
+function formatWorktreePsParent(worktree: RuntimeWorktreePsResult['worktrees'][number]): string {
+  const parent =
+    worktree.parentWorktreeId ??
+    worktree.workspaceLineage?.parentWorkspaceKey ??
+    (worktree.crossStoreParent
+      ? `${worktree.crossStoreParent.parent.workspaceKey} on another machine`
+      : null)
+  return parent ? `\nparent: ${parent}` : ''
 }
 
 export function formatRepoList(result: RuntimeRepoList): string {

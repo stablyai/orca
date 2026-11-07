@@ -1,8 +1,4 @@
-/**
- * `orca serve`'s app-side question, run by the CLI with the app's own executable under
- * ELECTRON_RUN_AS_NODE: prepare this machine's orcad slot if it can serve, and print one
- * `ORCA_SERVE_RUNTIME` line saying which host to run. Diagnostics go to stderr.
- */
+// App-side CLI probe under ELECTRON_RUN_AS_NODE: print one ORCA_SERVE_RUNTIME selection; diagnostics use stderr.
 import { join } from 'node:path'
 import process from 'node:process'
 import {
@@ -34,7 +30,7 @@ async function run(argv: readonly string[]): Promise<void> {
     ],
     bundledNodeRuntime: findAppImageNodeRuntime(process.resourcesPath)
   })
-  // orcad serve never starts the desktop's startup pass, so the slot cache is bounded here too.
+  // orcad skips desktop startup, so bound the slot cache here too.
   await pruneDesktopOrcadArtifactCache(
     userDataPath,
     selection.kind === 'orcad' ? [selection.version] : []
@@ -43,7 +39,7 @@ async function run(argv: readonly string[]): Promise<void> {
 }
 
 run(process.argv.slice(2)).catch((error: unknown) => {
-  // Any failure here is a reason to serve on Electron, never to fail `orca serve`.
+  // Selection failure falls back to Electron rather than failing orca serve.
   const reason = `orcad selection failed: ${error instanceof Error ? error.message : String(error)}`
   process.stdout.write(`${formatServeRuntimeSelection({ kind: 'electron', reason })}\n`, () =>
     process.exit(0)

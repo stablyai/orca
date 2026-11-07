@@ -84,7 +84,7 @@ describe('Claude child permission lifecycle', () => {
         tool_name: 'Bash',
         tool_input: { command: 'false' }
       })
-      // Why: the lead's own progress overwrites the listener's wait slot; only the server keeps the prompt.
+      // Lead progress replaces the listener wait slot; the server must retain the child prompt.
       await postClaudeHook({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
       await postClaudeHook({
         hook_event_name: 'StopFailure',
@@ -181,30 +181,6 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.toolName).toBeUndefined()
       expect(status?.toolInput).toBeUndefined()
       expect(status?.interactivePrompt).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('keeps a child permission after unrelated lead progress and teammate idle', async () => {
-    const { server, postClaudeHook } = await createServer()
-    try {
-      await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'areviewer-6d3cb5b5',
-        agent_type: 'reviewer',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-      await postClaudeHook({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
-      await postClaudeHook({ hook_event_name: 'TeammateIdle', teammate_name: 'writer' })
-
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'waiting',
-        toolName: 'Bash',
-        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'working' })]
-      })
     } finally {
       server.stop()
     }

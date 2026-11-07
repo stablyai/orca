@@ -27,9 +27,7 @@ function getAuthPresenceProbe(authPath: string): SharedAuthFilesystemOperation<C
   if (existing) {
     return existing
   }
-  // Why: aborting a Node fs promise does not necessarily cancel an already
-  // issued UNC operation. Share the raw probe until it really settles so a
-  // disconnected WSL home cannot accumulate native requests across polls.
+  // Node cannot cancel issued UNC I/O; share the raw probe until settlement to prevent poll accumulation.
   const probe = createAuthFilesystemOperation(authPath, async () => {
     try {
       await access(authPath)
@@ -48,33 +46,23 @@ function getAuthPresenceProbe(authPath: string): SharedAuthFilesystemOperation<C
   return probe
 }
 
-// Why: the background quota poller spawns the real `codex` binary to read rate
-// limits. For users who installed Codex but never signed in, that spawn can
-// only fail — and worse, surfaces as an unexpected Codex process starting in
-// the background. A signed-in Codex always writes an auth.json under its
-// CODEX_HOME, so gating the fetch on that file keeps the poller silent until
-// the user actually uses Codex.
+// Avoid spawning background Codex for never-signed-in users; its auth.json gates usage probes.
 export async function probeCodexAuthPresence(
   codexHomePath?: string | null,
   options: CodexAuthPresenceOptions = {}
 ): Promise<CodexAuthPresence> {
-  // Mirror Codex's own home resolution: an explicit managed-account home wins,
-  // then CODEX_HOME, then the default ~/.codex.
   const home = codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
   const authPath = join(home, 'auth.json')
   const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? AUTH_PRESENCE_TIMEOUT_MS)
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal
   try {
-    // Why: managed WSL homes are UNC paths. A synchronous stat can park
-    // Electron main while Windows wakes or reconnects the distro; the race
-    // also keeps a disconnected distro from serializing all later refreshes.
+    // UNC stat can block while WSL wakes/reconnects; async bounded waits keep other accounts refreshing.
     const authPresence = await getAuthPresenceProbe(authPath).wait(signal)
     if (authPresence !== 'absent' || !parseWslUncPath(home)) {
       return authPresence
     }
 
-    // Why: ENOENT on a WSL UNC auth path can mean either a missing auth file or
-    // an unavailable distro. Only an accessible Codex home proves signed-out.
+    // Missing UNC auth can mean a down distro; only an accessible home proves signed-out.
     const homePresence = await getAuthPresenceProbe(home).wait(signal)
     return homePresence === 'present' ? 'absent' : 'unavailable'
   } catch {

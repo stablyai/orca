@@ -10,7 +10,6 @@ type GuideInvocation = {
   snippet: string
 }
 
-// Why: guides write examples as `orca ...`, `orca-dev ...`, or the `ORCA` placeholder.
 const CLI_INVOCATION = /(?:^|[\s`(])(?:orca|orca-dev|orca-ide|ORCA)\s+([^\n`]*)/g
 
 // Longest path first so `orchestration worker-start` never resolves as `orchestration worker`.
@@ -28,13 +27,14 @@ function findSpecForInvocation(invocation: string): CommandSpec | undefined {
 function collectGuideInvocations(): GuideInvocation[] {
   const found: GuideInvocation[] = []
   for (const guide of BUNDLED_SKILL_GUIDES) {
-    for (const match of guide.fullMarkdown.matchAll(CLI_INVOCATION)) {
+    const documents = [guide.markdown, ...guide.references.map((reference) => reference.markdown)]
+    for (const match of documents.join('\n').matchAll(CLI_INVOCATION)) {
       const invocation = match[1].trim()
       const spec = findSpecForInvocation(invocation)
       if (!spec) {
         continue
       }
-      // Why: a quoted flag value belongs to the nested program (`--command 'codex --model ...'`), not to orca.
+      // Quoted values contain nested commands whose flags do not belong to orca.
       const orcaArgs = invocation.replace(/'[^']*'|"[^"]*"/g, ' ')
       const flags = [...orcaArgs.matchAll(/(?:^|[\s[(])--([a-z][a-z0-9-]*)/g)].map(
         (flag) => flag[1]
@@ -55,7 +55,6 @@ function collectGuideInvocations(): GuideInvocation[] {
 describe('bundled skill guides', () => {
   const invocations = collectGuideInvocations()
 
-  // Why: the guides ship inside the binary, so an example the parser rejects is a shipped defect.
   it('only documents flags the CLI parser accepts', () => {
     expect(invocations.length).toBeGreaterThan(0)
     const rejected = invocations.filter((invocation) => {

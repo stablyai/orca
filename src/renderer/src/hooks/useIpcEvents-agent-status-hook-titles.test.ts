@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  TEST_REPO
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import type { AppState } from '../store/types'
 import {
   buildStoreState,
@@ -61,7 +59,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -151,7 +149,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -228,7 +226,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -302,7 +300,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -382,7 +380,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
@@ -436,6 +434,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(track).toHaveBeenCalledWith('agent_hook_unattributed', {
       reason: 'unknown_tab_id'
     })
+    expect(track).toHaveBeenCalledTimes(1)
 
     const previousStoreState = { ...storeState }
     storeState.terminalLayoutsByTabId = {
@@ -513,7 +512,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -585,7 +584,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       )
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: store.subscribe,
         getState: store.getState

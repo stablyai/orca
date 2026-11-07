@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../shared/agent-session/agent-session-context-usage'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
@@ -31,7 +31,7 @@ export class AcpContextTimeline {
     ]
   }
 
-  /** Replayed history is dropped except what it says about the context window. */
+  /** Retain only context-window information from replayed history. */
   history(
     update: SessionUpdate | undefined,
     usage: AgentSessionContextUsage | undefined,

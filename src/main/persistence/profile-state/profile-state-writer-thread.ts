@@ -1,6 +1,7 @@
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 
-/** Owns one writer thread's lifetime so recovery can prove it exited before replacing it. */
+/** Recovery must observe thread exit before replacing its owner. */
 export class ProfileStateWriterThread {
   private readonly worker: Worker
   private readonly exit = Promise.withResolvers<void>()
@@ -15,7 +16,7 @@ export class ProfileStateWriterThread {
       exit: (code: number) => void
     }
   ) {
-    this.worker = new Worker(workerPath, { workerData, execArgv: [] })
+    this.worker = spawnWorkerThread(workerPath, { workerData, execArgv: [] })
     this.worker.on('message', handlers.message)
     this.worker.on('error', handlers.error)
     this.worker.once('exit', (code) => {

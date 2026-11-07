@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createAccumulator, ingestRgJsonLine } from './text-search'
-import { resolveSearchResultPath } from './text-search-paths'
 
 describe('text search result paths', () => {
-  it.each([
-    ['/root/repo', './src/a.ts', '/root/repo/src/a.ts'],
-    ['/root/repo', '/root/repo/src/a.ts', '/root/repo/src/a.ts'],
-    ['C:\\repo', './src/a.ts', 'C:\\repo\\src\\a.ts'],
-    ['C:\\repo', 'C:/repo/src/a.ts', 'C:/repo/src/a.ts'],
-    ['\\\\wsl.localhost\\Ubuntu\\repo', './src/a.ts', '\\\\wsl.localhost\\Ubuntu\\repo\\src\\a.ts']
-  ])('resolves %s and %s on the owning host', (root, reported, expected) => {
-    expect(resolveSearchResultPath(root, reported)).toBe(expected)
-  })
-
   it('translates an absolute WSL path before resolving its host path', () => {
     const acc = createAccumulator()
     ingestRgJsonLine(

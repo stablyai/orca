@@ -1,4 +1,5 @@
 import React from 'react'
+import type { IRange } from 'monaco-editor'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
 import {
@@ -9,19 +10,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { translate } from '@/i18n/i18n'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getRemoteUrlLineRange } from './selection-copy'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   point: { x: number; y: number }
   line: number
+  selection: IRange | null
+  fileId: string
   filePath: string
   relativePath: string
+  worktreeId?: string
 }
 
 export function MonacoGutterContextMenu({
@@ -29,8 +36,11 @@ export function MonacoGutterContextMenu({
   onOpenChange,
   point,
   line,
+  selection,
+  fileId,
   filePath,
-  relativePath
+  relativePath,
+  worktreeId
 }: MonacoGutterContextMenuProps): React.JSX.Element {
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -44,7 +54,14 @@ export function MonacoGutterContextMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent sideOffset={0} align="start">
         <DropdownMenuItem
-          onSelect={() => window.api.ui.writeClipboardText(formatPathLineReference(filePath, line))}
+          onSelect={() => {
+            const state = useAppStore.getState()
+            const file = state.openFiles.find((openFile) => openFile.id === fileId)
+            const owner = file ? getOpenFileRevealOwner(state, file) : 'unresolved'
+            void window.api.ui.writeClipboardText(
+              formatPathLineReference(formatClipboardFilePath(filePath, owner), line)
+            )
+          }}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
           {translate(
@@ -66,11 +83,21 @@ export function MonacoGutterContextMenu({
         <DropdownMenuItem
           onSelect={async () => {
             const state = useAppStore.getState()
-            const activeFile = state.openFiles.find((f) => f.filePath === filePath)
+            // Conflict overview editors may carry a synthetic id; fall back only within this owner.
+            const activeFile =
+              state.openFiles.find((file) => file.id === fileId) ??
+              (worktreeId
+                ? state.openFiles.find(
+                    (file) => file.filePath === filePath && file.worktreeId === worktreeId
+                  )
+                : undefined)
             if (!activeFile) {
               return
             }
-            const worktree = findWorktreeById(selectWorktreesByRepo(state), activeFile.worktreeId)
+            const worktree = findFirstIndexedWorktree(
+              selectWorktreesByRepo(state),
+              activeFile.worktreeId
+            )
             if (!worktree) {
               return
             }
@@ -90,7 +117,7 @@ export function MonacoGutterContextMenu({
                 worktreePath: worktree.path,
                 connectionId
               },
-              { relativePath, line }
+              { relativePath, ...getRemoteUrlLineRange(line, selection) }
             )
             if (url) {
               window.api.ui.writeClipboardText(url)

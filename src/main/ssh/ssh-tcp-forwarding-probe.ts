@@ -1,8 +1,4 @@
-/**
- * Whether an SSH host lets this client open a local forward, asked each time a managed tunnel
- * starts. A host whose sshd refuses forwarding (`AllowTcpForwarding no`) is reached through the
- * stdio bridge instead (orcad-managed-tunnel-transport.ts).
- */
+/** Probe forwarding on each managed-tunnel start; sshd policy refusal selects the stdio bridge. */
 import { connect, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './connection/ssh-connection'
@@ -32,10 +28,7 @@ function closeQuietly(channel: ClientChannel | undefined): void {
   }
 }
 
-/**
- * Opens one direct-tcpip channel to `port` on the host's loopback. A refused connection still
- * proves forwarding is allowed; only the administrative refusal means it is not.
- */
+/** Connection refusal proves forwarding is allowed; only administrative refusal proves policy denial. */
 export function probeTcpForwarding(
   connection: Pick<SshConnection, 'getClient'>,
   port: number,
@@ -75,11 +68,7 @@ export function probeTcpForwarding(
   })
 }
 
-/**
- * The forward's own end-to-end check, for a client that forwards out of process (system SSH):
- * its listener is up before sshd has been asked for a channel, so only a dial through it answers.
- * Any reply bytes, or a channel still open at the timeout, mean the channel opened.
- */
+/** A listener alone proves no remote channel: dial through it. Reply bytes or a channel still open at timeout prove it opened. */
 export function checkForwardChannel(
   forward: Pick<StartedPortForward, 'entry' | 'lastChannelOpenFailure'>,
   timeoutMs = FORWARD_CHANNEL_CHECK_TIMEOUT_MS

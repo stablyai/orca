@@ -4,12 +4,6 @@ import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'
 
-const HOST = 'host-1'
-
-/**
- * The host screen's shared view settings, and the Home card's per-host stats read. Both belong to
- * the host list: one mirrors the desktop's workspace view store, the other fills the card's counts.
- */
 export function hostScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -50,34 +44,6 @@ export function hostScreenMountAdapters(
         },
         state: () => projectObservable({ view: state.view }),
         dispose: hook.unmount
-      }
-    },
-    'home.host-stats': (context) => {
-      const fetchStats = modules.load(
-        'mobile/src/home/mobile-home-host-requests.ts'
-      ).fetchMobileHomeStats
-      let stats: Record<string, unknown> = {}
-      let disposed = false
-      return {
-        action(name) {
-          if (name === 'unmount') {
-            disposed = true
-            return
-          }
-          return fetchStats(
-            context.client,
-            HOST,
-            (update: (value: Record<string, unknown>) => Record<string, unknown>) => {
-              stats = update(stats)
-              context.effect('stats', stats)
-            },
-            () => disposed
-          )
-        },
-        state: () => ({ ...stats }),
-        dispose: () => {
-          disposed = true
-        }
       }
     }
   }

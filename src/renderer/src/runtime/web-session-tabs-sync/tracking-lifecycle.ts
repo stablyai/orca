@@ -1,4 +1,8 @@
 import {
+  forgetVisibleTabPicksForEnvironment,
+  forgetVisibleTabPicksForWorktree
+} from '../web-session-visible-tab-pick-report'
+import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
   latestReceivedSessionTabsSnapshotByWorktree,
@@ -19,11 +23,11 @@ import {
 import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
   clearAllWebRuntimeWakeTerminalRespawn
-} from '../web-runtime-wake-terminal-respawn'
+} from '../hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 import {
   endWebRuntimeInitialTerminalBootstrap,
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment
-} from '../web-runtime-initial-terminal-bootstrap'
+} from './initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
@@ -46,7 +50,7 @@ import {
 import {
   clearWebSessionTerminalPlacementsForWorktree,
   clearWebSessionTerminalPlacementsForEnvironment
-} from '../web-session-terminal-placement'
+} from '../hosted-terminals/placement/web-session-terminal-placement'
 import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydration'
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
@@ -139,9 +143,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   forgetRetiredEpochCensuses((candidate) => candidate === key)
-  // The receipt ledger and removal watermark are deliberately kept: they order a delayed
-  // predecessor frame against the live publisher's next one, which is the whole point of a
-  // retraction. Clearing the live view is this function's job; forgetting what was received is not.
+  // Retain receipt/removal boundaries after clearing live view; they distinguish delayed predecessors from live republication.
   untrackWebSessionTabsWorktree(environmentId, worktreeId)
   removeWebSessionTabsEnvironment(environmentId, worktreeId)
   lastHostTerminalTabCountByWorktree.delete(key)
@@ -155,6 +157,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
   forgetMirroredTerminalHandles(environmentId, worktreeId)
+  forgetVisibleTabPicksForWorktree(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -188,6 +191,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   latestReceivedSessionTabsFrameByEnvironment.delete(trimmedEnvironmentId)
   latestReceivedSessionTabsInventoryFrameByEnvironment.delete(trimmedEnvironmentId)
+  forgetVisibleTabPicksForEnvironment(trimmedEnvironmentId)
   for (const key of sessionTabsRemovalWatermarkByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       sessionTabsRemovalWatermarkByWorktree.delete(key)

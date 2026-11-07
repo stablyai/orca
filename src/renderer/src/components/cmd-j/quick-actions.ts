@@ -1,4 +1,14 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import { gitGraphSupport, openGitGraph } from '@/lib/git-graph-tab'
+import {
+  GitGraph,
+  FileText,
+  FolderPlus,
+  Globe,
+  PanelRightClose,
+  Play,
+  SquareTerminal,
+  Trash2
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -25,6 +35,7 @@ export type CmdJQuickAction = {
   icon: LucideIcon
   verbKeywords: string[]
   /** Query-bound actions must still match the live input when selected. */
+  disabled?: boolean
   sourceQuery?: string
   isAvailable: (ctx: CmdJQuickActionContext) => CmdJQuickActionAvailability
   run: (ctx: CmdJQuickActionContext) => Promise<CmdJQuickActionRunResult>
@@ -42,7 +53,7 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
-async function runWorkspaceAction(
+export async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
 ): Promise<CmdJQuickActionRunResult> {
@@ -68,10 +79,27 @@ export async function runBrowserWorkspaceAction(
   return runWorkspaceAction(ctx, run)
 }
 
-// Why: Cmd+J actions are for high-frequency, safe, context-light verbs.
-// Context-heavy setup flows such as Ghostty import and browser cookie import
-// stay inside their Settings panes where explanatory UI and failure states fit.
+// Keep context-heavy imports in Settings, where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
+  {
+    id: 'git-graph',
+    kind: 'action',
+    title: translate('gitGraph.title', 'Git Graph'),
+    description: '',
+    icon: GitGraph,
+    verbKeywords: ['git graph', 'commit history', 'branches'],
+    isAvailable: (ctx) =>
+      ctx.activeWorktreeId && gitGraphSupport(ctx.activeWorktreeId) === true
+        ? { available: true }
+        : { available: false, reason: 'loading' },
+    run: async (ctx) => {
+      if (!ctx.activeWorktreeId || gitGraphSupport(ctx.activeWorktreeId) !== true) {
+        return { status: 'unavailable', reason: 'loading' }
+      }
+      await openGitGraph(ctx.activeWorktreeId)
+      return { status: 'ok' }
+    }
+  },
   {
     id: 'new-browser-tab',
     kind: 'action',
@@ -89,6 +117,27 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     ],
     isAvailable: getBrowserWorkspaceActionAvailability,
     run: (ctx) => runBrowserWorkspaceAction(ctx, ctx.openNewBrowserTab)
+  },
+  {
+    id: 'new-browser-tab-split-right',
+    kind: 'action',
+    title: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRight',
+      'New Browser Tab in Right Split'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRightDescription',
+      'Open a browser tab in a new split to the right.'
+    ),
+    icon: PanelRightClose,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.browserRight', 'browser right'),
+      translate('auto.components.cmd.j.quick.actions.verbs.splitBrowser', 'split browser'),
+      translate('auto.components.cmd.j.quick.actions.verbs.browserSplit', 'browser split')
+    ],
+    isAvailable: getBrowserWorkspaceActionAvailability,
+    run: (ctx) =>
+      runBrowserWorkspaceAction(ctx, (groupId) => ctx.openNewBrowserTab(groupId, 'right'))
   },
   {
     id: 'new-markdown-file',

@@ -1,31 +1,47 @@
-// One host status stream per runtime target, shared by every session-list projection.
-//
-// The feed is a read-only mirror: the host projects each session's status from its journal and
-// this owner keeps the latest summary per session while anyone is looking. Losing the stream
-// keeps the cached summaries and reconnects; a fresh snapshot merges over them.
-// Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
+// Share one read-only host status stream per target. Retain latest summaries across disconnect and merge fresh snapshots; tab maps own visibility, so this feed never retracts summaries.
 
-import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session-workspace-sleep'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session/agent-session-wire'
 import {
-  foldAgentSessionStatusEvent,
-  revokeAgentSessionStatusLive,
+  foldAgentSessionConversationNames,
+  type AgentSessionConversationNames
+} from '../../../shared/agent-session/agent-session-conversation-names'
+import {
+  AgentSessionAssociationObservation,
+  applyAgentSessionStatusEvent,
+  revokeAgentSessionStatusLiveInPlace,
   type AgentSessionStatusSnapshot
-} from '../../../shared/agent-session-status-snapshot-fold'
-import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+} from '../../../shared/agent-session/view/agent-session-status-snapshot-fold'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from './structured-agent-session-client'
+import {
+  createStructuredAgentSessionStatusDispatch,
+  membershipChanges,
+  type StructuredAgentSessionStatusChange
+} from './structured-agent-session-status-dispatch'
 
 export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
 
+export type { StructuredAgentSessionStatusChange }
+
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
+  /** The live map, updated in place: read entries, never use its identity as a change signal. */
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getNamingSnapshot: () => AgentSessionConversationNames
+  getAssociationRevision: () => number
   getSessionSleepState: (sessionId: string) => number | null | undefined
   getNamingActive: (sessionId: string) => boolean | null
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
-  subscribe: (listener: () => void) => () => void
+  /** Host-wide readers; each update says which sessions it touched. */
+  subscribe: (listener: (change: StructuredAgentSessionStatusChange) => void) => () => void
+  /** Per-chat readers wake only for updates touching their session. */
+  subscribeSession: (sessionId: string, listener: () => void) => () => void
 }
 
 const RECONNECT_MAX_DELAY_MS = 5_000
@@ -40,12 +56,16 @@ export function structuredAgentSessionStatusFeedKey(target: RuntimeClientTarget)
 }
 
 function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
-  let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
+  // Updated in place like a keyed entity store: one session's change must not copy every retained summary.
+  const snapshot = new Map<string, AgentSessionStatusSummary>()
+  let names: AgentSessionConversationNames = new Map()
+  const associations = new AgentSessionAssociationObservation()
   let namingActiveSessionIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
   // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
   const knownSleep = new Map<string, number | null>()
-  const listeners = new Set<() => void>()
+  const dispatch = createStructuredAgentSessionStatusDispatch()
+  const emit = dispatch.emit
   const activations = new Set<symbol>()
   let sleepResolved = false
   let generation = 0
@@ -53,22 +73,28 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
 
-  const emit = (): void => {
-    for (const listener of listeners) {
-      listener()
-    }
-  }
-  const setSnapshot = (next: StructuredAgentSessionStatusSnapshot): void => {
-    snapshot = next
-    emit()
-  }
   const applyEvent = (event: AgentSessionStatusEvent): void => {
+    const touched = new Set<string>()
+    let wholeHost = false
     if (event.type === 'snapshot') {
       // Naming metadata precedes the full status snapshot and says nothing about Sleep.
-      sleepResolved ||= event.namingActiveSessionIds === undefined
+      const resolvesSleep = !sleepResolved && event.namingActiveSessionIds === undefined
+      sleepResolved ||= resolvesSleep
+      // Resolving Sleep or first learning naming activity answers for every session, listed or not.
+      wholeHost = resolvesSleep
       reconnectAttempt = 0
       if (event.namingActiveSessionIds !== undefined) {
-        namingActiveSessionIds = new Set(event.namingActiveSessionIds)
+        const next = new Set(event.namingActiveSessionIds)
+        const moved = membershipChanges(namingActiveSessionIds, next)
+        wholeHost ||= moved === null
+        moved?.forEach((sessionId) => touched.add(sessionId))
+        namingActiveSessionIds = next
+      }
+      // Paired-host frames are unchecked; the names fold ignores a malformed list, so must this.
+      for (const note of Array.isArray(event.conversationNames) ? event.conversationNames : []) {
+        if (typeof note?.sessionId === 'string') {
+          touched.add(note.sessionId)
+        }
       }
       for (const session of event.sessions) {
         confirmedSessions.add(session.sessionId)
@@ -86,7 +112,13 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     } else {
       return
     }
-    setSnapshot(foldAgentSessionStatusEvent(snapshot, event))
+    associations.observe(event)
+    // Names stay copy-on-write: tab-name observation compares this map's identity, and it copies only on a rename.
+    names = foldAgentSessionConversationNames(names, event)
+    for (const sessionId of applyAgentSessionStatusEvent(snapshot, event)) {
+      touched.add(sessionId)
+    }
+    emit(wholeHost ? null : touched)
   }
   const active = (candidate: number): boolean => activations.size > 0 && candidate === generation
   const clearReconnect = (): void => {
@@ -98,12 +130,6 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const dropHandle = (): void => {
     handle?.unsubscribe()
     handle = null
-  }
-  const revokeSnapshotOwnership = (): void => {
-    const next = revokeAgentSessionStatusLive(snapshot)
-    if (next !== snapshot) {
-      setSnapshot(next)
-    }
   }
   let open = (): void => {}
   const scheduleReconnect = (candidate: number): void => {
@@ -119,8 +145,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     }, delay)
   }
-  // Losing contact is never exit: the sessions go unverifiable and this client stops
-  // claiming host-owned execution, but nothing here settles them.
+  // Lost contact revokes verified execution, never proves exit or settles sessions.
   const loseConnection = (candidate: number): void => {
     if (candidate !== generation) {
       return
@@ -128,8 +153,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     generation += 1
     namingActiveSessionIds = null
     confirmedSessions.clear()
-    revokeSnapshotOwnership()
-    emit()
+    revokeAgentSessionStatusLiveInPlace(snapshot)
+    emit(null)
     dropHandle()
     scheduleReconnect(generation)
   }
@@ -168,6 +193,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   }
   open = (): void => {
     const candidate = ++generation
+    associations.renew()
     dropHandle()
     if (target.kind !== 'environment') {
       // A local host is this build; only a remote one can predate the method.
@@ -191,10 +217,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         }
         if (!marksSleep || !supported) {
           sleepResolved = true
-          emit()
+          emit(null)
         }
-        // A host without the method is terminal, not a fault: retrying would relay-probe
-        // forever. A failed probe is not an answer, so that path still reconnects.
+        // Unsupported method is final to avoid endless relay probes; failed capability probes remain retryable.
         if (supported) {
           subscribeToHost(candidate)
           return
@@ -207,12 +232,15 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     generation += 1
     clearReconnect()
     dropHandle()
-    revokeSnapshotOwnership()
     reconnectAttempt = 0
-    // Teardown only runs once nothing is activated, so re-confirmation is the next
-    // subscribe's job and there is no mounted reader left to notify.
+    // Teardown has no active readers; next subscription owns re-confirmation.
+    const observed = confirmedSessions.size > 0 || namingActiveSessionIds !== null
     namingActiveSessionIds = null
     confirmedSessions.clear()
+    // Readers that outlive activation (hooks that activate conditionally) must see lost observation too.
+    if (revokeAgentSessionStatusLiveInPlace(snapshot).length > 0 || observed) {
+      emit(null)
+    }
   }
 
   return {
@@ -230,6 +258,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    getNamingSnapshot: () => names,
+    getAssociationRevision: () => associations.revision,
     getSessionSleepState: (sessionId) => {
       const known = knownSleep.get(sessionId)
       return known !== undefined ? known : sleepResolved ? null : undefined
@@ -237,10 +267,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     getNamingActive: (sessionId) => namingActiveSessionIds?.has(sessionId) ?? null,
     getSessionObservation: (sessionId) =>
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
-    subscribe: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
+    subscribe: dispatch.subscribe,
+    subscribeSession: dispatch.subscribeSession,
     stop
   }
 }
@@ -258,8 +286,7 @@ export function getStructuredAgentSessionStatusFeed(
 }
 
 export function resetStructuredAgentSessionStatusFeedsForTests(): void {
-  // Dropping the map alone leaves a live subscription and its pending reconnect running
-  // into the next test, where they reopen a stream nothing is holding.
+  // Stop subscriptions/reconnects before clearing map or they reopen unheld streams in the next test.
   for (const owner of owners.values()) {
     owner.stop()
   }

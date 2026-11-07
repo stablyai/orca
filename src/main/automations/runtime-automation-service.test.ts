@@ -1,205 +1,176 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { AutomationRun } from '../../shared/automations-types'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import type { AutomationRunTerminalObserver } from './run-completion-watcher'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { createRuntimeAutomationService } from './runtime-automation-service'
 
-const captured = vi.hoisted((): { dispatcher: unknown; observer: unknown } => ({
-  dispatcher: null,
-  observer: null
-}))
-
-const { deliverTerminalAgentLaunchPrompt } = vi.hoisted(() => ({
-  deliverTerminalAgentLaunchPrompt: vi.fn(async () => true)
-}))
-vi.mock('../runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
-  deliverTerminalAgentLaunchPrompt
-}))
-
-vi.mock('./service', () => ({
-  AutomationService: class {
-    start(): void {}
-    stop(): void {}
-    constructor(
-      _store: unknown,
-      opts: { headlessDispatcher?: unknown; terminalObserver?: unknown }
-    ) {
-      captured.dispatcher = opts.headlessDispatcher
-      captured.observer = opts.terminalObserver
-    }
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
 
-import { createRuntimeAutomationService } from './runtime-automation-service'
+type TestStore = Awaited<ReturnType<typeof createStore>>
 
-describe('headless automation dispatch', () => {
-  it('hands the launched run to its watcher instead of awaiting one tui-idle wait itself', async () => {
-    const runtime = {
-      setAutomationService: vi.fn(),
-      notifyAutomationsChanged: vi.fn(),
-      launchAgentTerminal: vi.fn(async () => ({
-        handle: 'terminal-1',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:pane-1',
-        ptyId: 'pty-1',
-        worktreeId: 'wt-1'
-      })),
-      showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
-      waitForTerminal: vi.fn(),
-      // Not resolvable by pane key yet: the launch's own handle must still reach the watcher.
-      getTerminalHandleForPaneKey: vi.fn(() => null),
-      getAgentStatusRowsForPane: vi.fn(() => [])
-    }
-    createRuntimeAutomationService({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => [] } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
-      runtime: runtime as never,
-      headless: true
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
-    const dispatcher = captured.dispatcher as HeadlessAutomationDispatcher
-    const launch = await dispatcher({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reuse-workspace automation; only these fields are read.
-      automation: {
-        workspaceMode: 'existing',
-        workspaceId: 'wt-1',
-        agentId: 'goose'
-      } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title is read.
-      run: { title: 'Nightly' } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
-      target: {} as never
-    })
+const PANE = (name: string) => `tab-${name}:11111111-2222-4333-8444-555555555555`
 
-    expect(launch.completion).toBeUndefined()
-    expect(launch.terminalPaneKey).toBe('tab-1:pane-1')
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
-      agent: 'goose',
-      prompt: '',
-      title: 'Nightly'
-    })
-    expect(runtime.waitForTerminal).not.toHaveBeenCalled()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
-    const observer = captured.observer as AutomationRunTerminalObserver
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolution reads only the pane key.
-    expect(observer.resolveRunTerminal({ terminalPaneKey: 'tab-1:pane-1' } as never)).toBe(
-      'terminal-1'
-    )
+function createAutomation(store: TestStore): Automation {
+  store.addRepo({ id: 'r1', path: '/repo', displayName: 'repo', badgeColor: '#fff', addedAt: 1 })
+  return store.createAutomation({
+    name: 'Nightly check',
+    prompt: 'Check the repo',
+    agentId: 'claude',
+    projectId: 'r1',
+    workspaceMode: 'existing',
+    workspaceId: 'wt1',
+    timezone: 'UTC',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    dtstart: new Date('2026-05-12T00:00:00Z').getTime()
   })
-})
+}
 
-describe('headless automation dispatch with extra agent args', () => {
-  it('passes saved extras to an existing-workspace launch', async () => {
-    const runtime = {
-      setAutomationService: vi.fn(),
-      notifyAutomationsChanged: vi.fn(),
-      launchAgentTerminal: vi.fn(async () => ({
-        handle: 'terminal-1',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:pane-1',
-        ptyId: 'pty-1',
-        worktreeId: 'wt-1'
-      })),
-      showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
-      getTerminalHandleForPaneKey: vi.fn(() => null),
-      getAgentStatusRowsForPane: vi.fn(() => [])
-    }
-    createRuntimeAutomationService({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => [] } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
-      runtime: runtime as never,
-      headless: true
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
-    const dispatcher = captured.dispatcher as HeadlessAutomationDispatcher
-    const automation = {
-      workspaceMode: 'existing',
-      workspaceId: 'wt-1',
-      agentId: 'claude',
-      prompt: 'go',
-      extraAgentArgs: '--model opus'
-    }
-    await dispatcher({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these fields are read.
-      automation: automation as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title is read.
-      run: { title: 'Nightly' } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
-      target: {} as never
-    })
-
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
-      agent: 'claude',
-      prompt: 'go',
-      title: 'Nightly',
-      extraAgentArgs: '--model opus'
-    })
+function retainRun(
+  store: TestStore,
+  automation: Automation,
+  name: string,
+  status: AutomationRun['status']
+): AutomationRun {
+  const run = store.createAutomationRun(
+    automation,
+    Date.now() + store.listAutomationRuns().length,
+    'manual'
+  )
+  return store.updateAutomationRun({
+    runId: run.id,
+    status,
+    workspaceId: 'wt1',
+    terminalSessionId: `tab-${name}`,
+    terminalPaneKey: PANE(name),
+    terminalPtyId: `pty-${name}`,
+    error: null
   })
-})
+}
 
-describe('headless reuse-session dispatch', () => {
-  it('sends the second run into the agent the first run started, on one PTY', async () => {
-    const runs: AutomationRun[] = []
-    const runtime = {
-      setAutomationService: vi.fn(),
-      notifyAutomationsChanged: vi.fn(),
-      launchAgentTerminal: vi.fn(async () => ({
-        handle: 'terminal-1',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:pane-1',
-        ptyId: 'pty-1',
-        worktreeId: 'wt-1'
-      })),
-      showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
-      getTerminalHandleForPaneKey: vi.fn(() => 'terminal-1'),
-      getTerminalPtyIdForHandle: vi.fn(() => 'pty-1'),
-      getAgentStatusRowsForPane: vi.fn(() => [
-        { state: 'done', agentType: 'claude', receivedAt: 1 }
-      ])
-    }
-    createRuntimeAutomationService({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => runs } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
-      runtime: runtime as never,
-      headless: true
+/** This host's runtime with one live pane per run; every pane's agent stays busy. */
+function fakeRuntime(focusedTabIds: string[] = []) {
+  const handleOf = (paneKey: string) => `handle:${paneKey}`
+  const runtime = {
+    getAgentStatusRowsForPane: () => [],
+    getAcceptedAgentReply: () => null,
+    subscribeAgentStatusRowChanges: () => () => {},
+    openedAgentSessionRecordStore: () => null,
+    openAgentSessionRecordStore: vi.fn(() => new Promise(() => {})),
+    getTerminalHandleForPaneKey: (paneKey: string) => handleOf(paneKey),
+    getTerminalPtyIdForHandle: (handle: string) => `pty-${handle.split('tab-')[1]?.split(':')[0]}`,
+    waitForTerminal: vi.fn((_handle: string) => new Promise(() => {})),
+    readTerminal: async () => ({ tail: [] }),
+    readTerminalClientUse: () => 'unused' as const,
+    confirmTerminalShellAlone: async () => true,
+    getWorkspaceSessionForWorktree: () => ({
+      unifiedTabs: {
+        wt1: focusedTabIds.map((id) => ({ id, lastFocusedAt: 1 }))
+      }
+    }),
+    closeTerminal: vi.fn(async () => {}),
+    canOpenRunTerminals: () => true,
+    setAutomationService: () => {},
+    notifyAutomationsChanged: () => {}
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only these runtime members.
+  return { runtime, service: runtime as unknown as OrcaRuntimeService }
+}
+
+const readRun = (store: TestStore, run: AutomationRun) =>
+  store.listAutomationRuns(run.automationId).find((entry) => entry.id === run.id)
+
+describe('runtime automation service', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-runtime-automation-service-'))
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    vi.useRealTimers()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('reattaches a dispatched run after restart and strands one whose prompt was never confirmed', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const dispatched = retainRun(store, automation, 'x', 'dispatched')
+    const dispatching = retainRun(store, automation, 'y', 'dispatching')
+    const { runtime, service: host } = fakeRuntime()
+    const service = createRuntimeAutomationService({
+      store,
+      runtime: host,
+      allowRemoteHostScheduling: false
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
-    const dispatcher = captured.dispatcher as HeadlessAutomationDispatcher
-    const dispatch = (id: string) =>
-      dispatcher({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these fields are read.
-        automation: {
-          id: 'auto-1',
-          workspaceMode: 'existing',
-          workspaceId: 'wt-1',
-          agentId: 'claude',
-          prompt: 'triage',
-          reuseSession: true
-        } as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the id and title are read.
-        run: { id, title: 'Nightly' } as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
-        target: {} as never
-      })
 
-    const first = await dispatch('run-1')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selection reads only these run fields.
-    runs.push({
-      ...first,
-      id: 'run-1',
-      automationId: 'auto-1',
-      status: 'completed',
-      createdAt: 1
-    } as AutomationRun)
-    const second = await dispatch('run-2')
+    service.start()
+    await vi.advanceTimersByTimeAsync(3 * 60_000)
 
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
-    expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({ handle: 'terminal-1', freshLaunch: false, text: 'triage' })
-    )
-    expect(second.terminalPtyId).toBe(first.terminalPtyId)
-    expect(second.terminalPaneKey).toBe('tab-1:pane-1')
+    const watchedHandles = runtime.waitForTerminal.mock.calls.map((call) => call[0])
+    expect(watchedHandles).toEqual([`handle:${PANE('x')}`])
+    expect(readRun(store, dispatched)?.status).toBe('dispatched')
+    expect(readRun(store, dispatching)).toMatchObject({
+      status: 'dispatch_failed',
+      error: 'Orca stopped before this run reported that its agent started.',
+      terminalSessionId: 'tab-y',
+      terminalPaneKey: PANE('y'),
+      terminalPtyId: 'pty-y'
+    })
+    service.stop()
+  })
+
+  it('keeps a finished run terminal the user has focused and closes an untouched one', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const focused = retainRun(store, automation, 'seen', 'completed')
+    const untouched = retainRun(store, automation, 'unseen', 'completed')
+    const { runtime, service: host } = fakeRuntime(['tab-seen'])
+    const service = createRuntimeAutomationService({
+      store,
+      runtime: host,
+      allowRemoteHostScheduling: false
+    })
+
+    await expect(service.runTerminalRetention?.drain()).resolves.toBe(1)
+
+    expect(runtime.closeTerminal.mock.calls).toEqual([[`handle:${PANE('unseen')}`]])
+    expect(readRun(store, focused)?.terminalPtyId).toBe('pty-seen')
+    expect(readRun(store, untouched)?.terminalPtyId).toBeNull()
+  })
+
+  it('closes an untouched run terminal beyond the newest three on the scheduler tick, until stopped', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const runs = ['a', 'b', 'c', 'd'].map((name) => {
+      vi.advanceTimersByTime(1000)
+      return retainRun(store, automation, name, 'completed')
+    })
+    const { runtime, service: host } = fakeRuntime()
+    const service = createRuntimeAutomationService({
+      store,
+      runtime: host,
+      allowRemoteHostScheduling: false
+    })
+
+    service.start()
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+
+    expect(runtime.closeTerminal.mock.calls).toEqual([[`handle:${PANE('a')}`]])
+    service.stop()
+    retainRun(store, automation, 'e', 'completed')
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
+    expect(readRun(store, runs[1])?.terminalPtyId).toBe('pty-b')
   })
 })

@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 
@@ -72,8 +72,7 @@ export function scheduleSimulatorPaneManagedShutdown(
     if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId))) {
       return
     }
-    // Why: closing/reopening or moving a simulator tab briefly unmounts the pane.
-    // Delaying avoids killing a stream that the replacement pane is about to reuse.
+    // Delay shutdown across brief close/reopen/move unmounts so replacement panes can reuse the stream.
     void shutdownManagedSimulatorIfNoPane(worktreeId, undefined, {
       getTabsForWorktree,
       shutdownManagedSimulator: shutdown

@@ -1,5 +1,8 @@
+import { z } from 'zod'
 import { AcpRpcError } from './acp-errors'
 import type { AcpJsonRpcMessage, AcpPeerHandlers } from './acp-json-rpc-peer'
+
+const cancelRequestSchema = z.looseObject({ requestId: z.union([z.string(), z.number()]) })
 
 type OpenRequest = {
   controller: AbortController
@@ -28,14 +31,21 @@ export class AcpIncomingRequests {
     this.open.clear()
   }
 
-  // Each handler answers its own request (a permission answers `cancelled`); -32800 only if it
-  // throws. The runtime never answers for a live handler: an answer still being saved must win.
-  cancel(): void {
-    for (const request of this.open.values()) {
-      if (!request.cancelled) {
+  // Handlers own cancellation replies; do not preempt an answer still being saved.
+  cancel(id?: string | number): void {
+    for (const [openId, request] of this.open) {
+      if ((id === undefined || id === openId) && !request.cancelled) {
         request.cancelled = true
         request.controller.abort(new AcpRpcError(-32800, 'Request cancelled'))
       }
+    }
+  }
+
+  /** The agent withdrew one request with `$/cancel_request`; its handler still answers it. */
+  cancelRequested(params: unknown): void {
+    const parsed = cancelRequestSchema.safeParse(params)
+    if (parsed.success) {
+      this.cancel(parsed.data.requestId)
     }
   }
 
@@ -63,7 +73,7 @@ export class AcpIncomingRequests {
     void Promise.race([
       abandoned,
       Promise.resolve().then(() => {
-        // A cancelled request still reaches its handler, so a permission can answer `cancelled`.
+        // Cancellation still reaches the handler so permissions can answer `cancelled`.
         if (request.closed) {
           throw controller.signal.reason
         }

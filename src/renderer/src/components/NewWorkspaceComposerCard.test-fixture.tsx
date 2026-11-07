@@ -121,8 +121,7 @@ export async function renderCard(
       />
     )
   })
-  // Settle the mount-time chunk warm before the click, so the click's import() is not
-  // overlapping an in-flight one (vitest's module runner serialises those; a browser does not).
+  // Settle mount-time warm before clicking; Vitest serializes overlapping imports unlike browsers.
   await act(async () => {})
   return container
 }

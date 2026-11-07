@@ -129,7 +129,7 @@ export function buildGpuCrashDiagnostics(
   return details
 }
 
-/** Captures GPU identity before a crash and emits it once when a Windows GPU burst starts. */
+/** Capture GPU identity before teardown; emit once per Windows GPU burst. */
 export class GpuCrashDiagnosticsRecorder {
   private readonly provider: GpuInfoProvider
   private readonly recordBreadcrumb: (data: CrashReportBreadcrumbData) => void

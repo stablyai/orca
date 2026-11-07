@@ -56,8 +56,7 @@ export function createTranscriptWatchScheduler(
     }
     reconciliationTimer = setTimeout(() => {
       reconciliationTimer = null
-      // Why: wait for the host-side stat/drain check before rearming so a slow
-      // remote filesystem cannot accumulate overlapping reconciliation work.
+      // Rearm after completion so slow remote filesystems cannot accumulate overlapping reconciliations.
       void options.reconcile().then(armReconciliation, armReconciliation)
     }, reconciliationIntervalMs)
     unrefTimer(reconciliationTimer)

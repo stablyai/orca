@@ -1,5 +1,4 @@
-// A divider drag whose split main's tree no longer holds at that path: main refuses it, nothing of
-// main's moves, and the window snaps back to main's ratios when its hold on the tab ends.
+// A stale divider path is refused by main; the window restores main’s unchanged ratios when its tab hold ends.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -9,8 +8,8 @@ import { localDesktopSession } from '../../../shared/workspace-layout/workspace-
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { setGroupRatioThroughLayoutOwner } from '../components/tab-group/tab-group-layout-owner-commands'
-import { layoutOwnerPaneGestures } from '../components/terminal-pane/terminal-pane-layout-owner-gestures'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { layoutOwnerPaneGestures } from '../components/terminal-pane/layout/ownership/terminal-pane-layout-owner-gestures'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { provideLayoutFrameTerminalPanes } from './layout-frame-terminal-panes'
 import { layoutApplyTestTransport } from './layout-apply-test-transport.test-fixture'
@@ -24,7 +23,7 @@ vi.mock('./workspace-layout-frame-sync', async (importOriginal) => ({
   showStartupLayoutFrames: () => {}
 }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

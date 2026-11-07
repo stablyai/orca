@@ -54,11 +54,9 @@ describe('RelayControlClient close reason', () => {
       onClose: vi.fn()
     })
     clients.push(client)
-    // The handshake never completes here; only the transport close matters.
     void client.connect().catch(() => {})
     const socket = await accepted
-    // A pong proves the client socket left CONNECTING; closeNow can only send a
-    // close frame from OPEN, and that is the state a real sign-out fences from.
+    // Pong proves OPEN, the only state from which sign-out can send its named close frame.
     await new Promise<void>((resolve) => {
       socket.once('pong', () => resolve())
       socket.ping()
@@ -80,8 +78,6 @@ describe('RelayControlClient close reason', () => {
     })
   })
 
-  // Every non-auth close keeps today's abrupt terminate, so a cell can never
-  // read a quit, a rotation or a sleep as a sign-out.
   it('closes abruptly with no reason when none is given', async () => {
     const { client, closed } = await connectedClient()
 

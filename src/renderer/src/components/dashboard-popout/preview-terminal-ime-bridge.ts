@@ -1,7 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { installTerminalImeCompositionTracker } from '@/components/terminal-pane/terminal-ime-composition-tracker'
-import { installTerminalImeNativeTextForwarder } from '@/components/terminal-pane/terminal-ime-native-text-forwarder'
+import { installTerminalImeCompositionTracker } from '@/components/terminal-pane/input/ime/terminal-ime-composition-tracker'
+import { installTerminalImeNativeTextForwarder } from '@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder'
 
 export type PreviewImeBridge = {
   /** True when the forwarder owns this keydown, so xterm must not encode it. */
@@ -10,24 +10,11 @@ export type PreviewImeBridge = {
 }
 
 export type PreviewImeBridgeOptions = {
-  /**
-   * The preview's live kitty mirror, read once per commit. Required, not
-   * optional: omitting it evaluated every commit at flags `0`, so a Preview on
-   * a bit-3 TUI silently sent legacy text the app had declined.
-   */
+  /** Read the live kitty mirror once per commit; a default zero would send legacy text to TUIs requiring CSI-u. */
   getKittyKeyboardFlags: () => number
 }
 
-/**
- * Native-text bridge for the preview terminal.
- *
- * Why: xterm's kitty encoder can encode+cancel a printable keydown before
- * Chromium commits IME/native text, silently dropping the glyph. Mirrors
- * TerminalPane's forwarder, on macOS and desktop Linux like the pane's install.
- *
- * Bit policy stays in terminal-ime-kitty-commit-encoding.ts: the getter is
- * forwarded unchanged, never masked or reduced to a boolean.
- */
+/** Bypass xterm’s printable-keydown cancellation until native text commits; forward the full kitty flag word unchanged to shared encoding policy. */
 export function installPreviewImeBridge(
   terminal: Terminal,
   options: PreviewImeBridgeOptions

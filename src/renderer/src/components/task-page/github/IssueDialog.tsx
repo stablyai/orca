@@ -1,4 +1,6 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { useRef, useState } from 'react'
+import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import {
   Dialog,
   DialogContent,
@@ -11,7 +13,7 @@ import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import IssueSourceSelector from '@/components/github/IssueSourceSelector'
 import {
   Select,
@@ -20,7 +22,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { resolveUserRepoSwitchReset } from '@/components/task-page-new-issue-draft'
+import { resolveUserRepoSwitchReset } from '@/components/task-page/task-page-new-issue-draft'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Input } from '@/components/ui/input'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
@@ -36,7 +38,7 @@ export function TaskPageGitHubIssueDialog({
     setIssueSourcePreference,
     submitShortcutLabel,
     selectedRepos,
-    perRepoSourceState,
+    githubSourceDisplayState,
     newIssueOpen,
     setNewIssueOpen,
     newIssueTitle,
@@ -51,10 +53,19 @@ export function TaskPageGitHubIssueDialog({
     newIssueRepoId,
     setNewIssueRepoId,
     newIssueTargetRepo,
+    newIssueRuntimeTarget,
+    newIssueSourceContext,
     newIssueRepoLabels,
     newIssueRepoAssignees,
     handleCreateNewIssue
   } = model
+  const [uploading, setUploading] = useState(false)
+  const uploadPending = useRef(false)
+  const submit = () => {
+    if (!uploadPending.current) {
+      void handleCreateNewIssue()
+    }
+  }
   return (
     <Dialog
       open={newIssueOpen}
@@ -69,7 +80,7 @@ export function TaskPageGitHubIssueDialog({
         onKeyDown={(event) => {
           if (isScreenSubmitShortcut(event)) {
             event.preventDefault()
-            void handleCreateNewIssue()
+            submit()
           }
         }}
       >
@@ -78,30 +89,37 @@ export function TaskPageGitHubIssueDialog({
             {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
           </DialogTitle>
           {(() => {
-            // Why: inline the resolved {owner}/{repo} slug as the source indicator; fall back to displayName when unresolved.
+            // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
-              ? perRepoSourceState.find((s) =>
+              ? githubSourceDisplayState.find((s) =>
                   repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
                 )
               : undefined
             const issuesSlug = entry?.sources?.issues
               ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
               : null
-            const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+            const target = issuesSlug ?? newIssueTargetRepo?.displayName
             return (
               <DialogDescription>
-                {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
-                {issuesSlug ?? fallback}
+                {target
+                  ? translate('auto.components.TaskPage.filingInTarget', 'Filing in {{target}}', {
+                      target
+                    })
+                  : translate(
+                      'auto.components.TaskPage.filingInThisRepository',
+                      'Filing in this repository'
+                    )}
               </DialogDescription>
             )
           })()}
           {(() => {
-            // Why: mirror the Tasks-view target selector so a fork contributor can flip target at filing time (fork-routing regression #1076).
-            // Sibling (not nested) because DialogDescription renders a <p> and the selector a <div> — nesting is invalid HTML.
+            // Keep the fork target selector beside DialogDescription; its div cannot nest inside the description’s p.
             if (!newIssueTargetRepo) {
               return null
             }
-            const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+            const entry = githubSourceDisplayState.find((s) =>
+              repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
+            )
             if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
               return null
             }
@@ -173,7 +191,7 @@ export function TaskPageGitHubIssueDialog({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  void handleCreateNewIssue()
+                  submit()
                 }
               }}
               placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
@@ -185,12 +203,29 @@ export function TaskPageGitHubIssueDialog({
               {translate('auto.components.TaskPage.7f3f7b4c18', 'Description (optional, markdown)')}
             </label>
             <GitHubMarkdownComposer
+              key={newIssueTargetRepo?.id}
+              imageUploadAddress={
+                newIssueTargetRepo
+                  ? {
+                      runtime: newIssueRuntimeTarget ?? { kind: 'local' },
+                      target: {
+                        kind: 'repo',
+                        repo: getGitHubRuntimeRepoId(newIssueSourceContext, newIssueTargetRepo.id),
+                        source: 'issue'
+                      }
+                    }
+                  : undefined
+              }
+              onImageUploadPendingChange={(pending) => {
+                uploadPending.current = pending
+                setUploading(pending)
+              }}
               value={newIssueBody}
               onChange={setNewIssueBody}
               placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
               disabled={newIssueSubmitting}
               minHeightClassName="min-h-40"
-              onSubmitShortcut={() => void handleCreateNewIssue()}
+              onSubmitShortcut={submit}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -212,7 +247,9 @@ export function TaskPageGitHubIssueDialog({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>
@@ -224,8 +261,10 @@ export function TaskPageGitHubIssueDialog({
             {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
-            onClick={() => void handleCreateNewIssue()}
-            disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting}
+            onClick={submit}
+            disabled={
+              !newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting || uploading
+            }
           >
             {newIssueSubmitting ? (
               <>

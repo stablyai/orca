@@ -5,14 +5,14 @@ import { getJiraSelfUser } from '@/components/jira-self-user'
 import { useJiraSourceConnection } from '@/components/new-workspace/use-jira-source-connection'
 import { useAppStore } from '@/store'
 import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
-import { jiraListAssignableUsersForTarget } from '@/runtime/runtime-jira-client'
+import { jiraListAssignableUsersForTarget } from '@/runtime/jira/runtime-jira-user-fields-client'
 import { translate } from '@/i18n/i18n'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { JiraIssue, JiraIssueUpdate, JiraUser } from '../../../shared/jira-types'
+import type { JiraIssue, JiraIssueUpdate, JiraUser } from '../../../shared/jira/jira-types'
 
 export function JiraIssueAssigneeControl({
   issue,

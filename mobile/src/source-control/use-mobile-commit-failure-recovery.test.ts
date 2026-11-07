@@ -19,6 +19,7 @@ vi.mock('../components/host-protocol-gates-context', () => ({
 }))
 
 import { useMobileCommitFailureRecovery } from './use-mobile-commit-failure-recovery'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 type Recovery = ReturnType<typeof useMobileCommitFailureRecovery>
 
@@ -47,8 +48,7 @@ function hostClient(launchReply: () => Promise<RpcResponse>) {
     }
     return launchReply()
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reaches the client only through sendRequest.
-  return { client: { sendRequest } as unknown as RpcClient, sendRequest }
+  return { client: stubRpcClient({ sendRequest }), sendRequest }
 }
 
 const FAILURE: MobileCommitFailureRecovery = {
@@ -95,7 +95,6 @@ describe('useMobileCommitFailureRecovery', () => {
     expect(recovery?.launchError).toBeNull()
     expect(recovery?.launchWarning).toBe('the requested arguments were ignored.')
     expect(recovery?.launchSuccess).toBe('Agent started in feature-login')
-    // A new failure is a new launch; the old one's note does not carry over.
     rerender({ ...FAILURE, error: 'another hook failed' })
     expect(recovery?.launchWarning).toBeNull()
     expect(recovery?.launchSuccess).toBeNull()

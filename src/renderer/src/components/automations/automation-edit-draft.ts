@@ -1,4 +1,6 @@
+import { automationCanonicalLaunchSetup } from '../../../../shared/automation-launch-setup'
 import type { Automation } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
   isRunnableAutomationSchedule,
@@ -9,13 +11,19 @@ import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-mod
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
+  const setup = automationCanonicalLaunchSetup(automation)
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
   return {
     name: automation.name,
     prompt: automation.prompt,
     agentId: automation.agentId,
-    extraAgentArgs: automation.extraAgentArgs ?? '',
+    surface: automation.launchSetup?.surface ?? automation.surface ?? 'terminal',
+    extraAgentArgs: setup.extraAgentArgs ?? '',
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',
@@ -36,6 +44,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     scheduleWarning:
       schedule || hasCustomSchedule
         ? null
-        : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+        : translate(
+            'auto.components.automations.editDraft.unsupportedSchedule',
+            'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+          )
   }
 }

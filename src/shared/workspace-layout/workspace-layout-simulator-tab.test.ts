@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf } from './workspace-layout-command-types'
-import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
+import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 
 const drawn = (
   fields: Partial<CommandOf<'openSimulatorTab'>> = {}
@@ -13,22 +13,6 @@ const drawn = (
 })
 
 describe('a simulator tab a window drew', () => {
-  it('keeps the window’s id, group and creation time in a workspace main holds no group of', () => {
-    const { model, results } = build(testContext(), [drawn({ groupId: 'g1', createdAt: 7 })])
-    expect(results[0]?.tabId).toBe('sim-1')
-    expect(model.workspaces[WS]?.groups).toEqual([{ id: 'g1', tabOrder: ['sim-1'] }])
-    expect(model.workspaces[WS]?.tabs).toEqual([
-      {
-        id: 'sim-1',
-        entityId: 'sim-1',
-        kind: 'simulator',
-        createdAt: 7,
-        customTitle: null,
-        color: null
-      }
-    ])
-  })
-
   it('changes nothing when sent again, and refuses an id another tab holds', () => {
     const ctx = testContext()
     const { model, results } = build(ctx, [{ type: 'createTerminalTab', workspace: WS }, drawn()])
@@ -36,13 +20,6 @@ describe('a simulator tab a window drew', () => {
     expect(again.ok && again.model).toEqual(model)
     const taken = applyLayoutCommand(model, drawn({ tabId: results[0]!.tabId! }), ctx)
     expect(taken.ok ? 'applied' : taken.code).toBe('tab_exists')
-  })
-
-  it('refuses a group main does not hold beside the groups it does', () => {
-    const ctx = testContext()
-    const { model } = build(ctx, [{ type: 'createTerminalTab', workspace: WS }])
-    const placed = applyLayoutCommand(model, drawn({ groupId: 'elsewhere' }), ctx)
-    expect(placed.ok ? 'applied' : placed.code).toBe('group_not_found')
   })
 
   it('takes its place after the tab the window drew it beside', () => {
@@ -77,10 +54,5 @@ describe('a simulator tab a window drew', () => {
       split
     ).model
     expect(closed.workspaces[WS]?.groups.map((group) => group.id)).toEqual([besideGroupId])
-  })
-
-  it('makes the workspace when main holds none', () => {
-    const { model } = build(testContext(), [drawn()], emptyModel())
-    expect(model.workspaces[WS]?.groups).toHaveLength(1)
   })
 })

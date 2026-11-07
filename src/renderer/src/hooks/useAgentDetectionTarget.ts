@@ -1,9 +1,9 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -26,15 +26,7 @@ function getLocalAgentDetectionTargetKey(worktreeId: string): string {
 export type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
   WorktreeRuntimeOwnerState
 
-/**
- * Resolve which host's agent detection a worktree's launch surfaces must use:
- * the owning SSH host, the owning paired-runtime host, or the local machine.
- * Returns undefined while the store has not hydrated the owning repo yet.
- *
- * Why a string key: selectors must return a stable primitive; building the
- * target object inside the selector would re-render subscribers on every
- * store write.
- */
+/** Resolve the workspace’s proven local/SSH/runtime owner, remaining undefined through hydration. Return a primitive selector key to avoid allocating targets on every store write. */
 export function getAgentDetectionTargetKeyForWorktree(
   state: AgentDetectionOwnerState,
   worktreeId: string | null
@@ -51,14 +43,12 @@ export function getAgentDetectionTargetKeyForWorktree(
     if (owner.environmentId) {
       return getRuntimeAgentDetectionTargetKey(owner.environmentId, worktreeId)
     }
-    // Why: a hostless folder can span local and SSH children, so keep the
-    // ambiguity gate before applying its focused-runtime fallback.
+    // Hostless folders can span hosts; reject ambiguity before focused-runtime fallback.
     if (getConnectionIdFromState(state, worktreeId) === undefined) {
       return undefined
     }
   } else if (getResolvedExecutionHostIdForWorktree(state, worktreeId) === null) {
-    // Why: repo rows can hydrate before a restored remote worktree; that gap
-    // must stay unresolved instead of probing the repo row's local owner.
+    // Repo hydration can precede remote workspace ownership; stay unresolved instead of probing a misleading local repo row.
     return undefined
   }
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
@@ -117,6 +107,6 @@ export function parseAgentDetectionTargetKey(
 export function useAgentDetectionTargetForWorktree(
   worktreeId: string | null
 ): AgentDetectionTarget | undefined {
-  const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
+  const key = useAppStateValue((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
 }

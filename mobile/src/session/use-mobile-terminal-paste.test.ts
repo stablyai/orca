@@ -1,32 +1,29 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 
-// `useMemo` joins `useCallback` because the paste now reads the clipboard through the platform
-// seam, which is a hook. Called rather than cached: this test mounts nothing, so there is no
-// render to hold a value across.
+// Call memo factories directly: this hook-only harness has no mounted render to cache across.
 vi.mock('react', () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory()
 }))
-// The clipboard seam's native half is what the hook calls, so the pasteboard is what a test stands
-// in for: text, image and the two probes behind `contents`.
+const clipboard = vi.hoisted(() => ({ text: '' }))
 vi.mock('expo-clipboard', () => ({
-  getStringAsync: async () => '',
+  getStringAsync: async () => clipboard.text,
   getImageAsync: async () => ({ data: 'png' })
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./mobile-clipboard-image')>()),
   prepareMobileClipboardImageBase64: async () => 'png',
   saveMobileClipboardImageAsTempFile: async () => '/tmp/shot.png'
 }))
 
-describe('mobile clipboard image followed by typing', () => {
-  it.each(['omp', 'claude'])('separates a pasted image from subsequent %s input', async (agent) => {
+describe('mobile clipboard text paste', () => {
+  it('frames a multi-line paste in an alt-screen app the way desktop does', async () => {
+    clipboard.text = 'line 1\nline 2 \x1b[201~'
     const sendRequest = vi
       .fn()
       .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
@@ -42,7 +39,8 @@ describe('mobile clipboard image followed by typing', () => {
       close: vi.fn()
     }
     const paste = useMobileTerminalPaste({
-      agent,
+      sendTerminalUserInput: terminalInputSend.request,
+      agent: null,
       activeHandle: 'term-1',
       activeHandleRef: { current: 'term-1' },
       activeSessionTabTypeRef: { current: 'terminal' },
@@ -56,14 +54,34 @@ describe('mobile clipboard image followed by typing', () => {
       getActiveWorktreeConnectionId: async () => null,
       onError: vi.fn(),
       onSuccess: vi.fn(),
-      ptyModesRef: { current: new Map() },
+      ptyModesRef: {
+        current: new Map([
+          [
+            'term-1',
+            {
+              bracketedPasteMode: true,
+              altScreen: true,
+              mouseTrackingMode: 'none',
+              sgrMouseMode: false,
+              sgrMousePixelsMode: false,
+              applicationCursorKeysMode: false,
+              kittyKeyboardFlags: 0,
+              modifyOtherKeys: 0
+            }
+          ]
+        ])
+      },
       refreshCanPaste: vi.fn(),
       showToast: vi.fn()
     })
-    await paste()
+    try {
+      await paste()
+    } finally {
+      clipboard.text = ''
+    }
     expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
       terminal: 'term-1',
-      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/shot.png\x1b[201~ `,
+      text: '\x1b[200~line 1\rline 2 \u241b[201~\x1b[201~',
       enter: false
     })
   })

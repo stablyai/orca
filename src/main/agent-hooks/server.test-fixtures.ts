@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookServer } from './server'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111'
@@ -18,9 +18,11 @@ export type Body = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
+  hookEventName?: string
   env?: string
   version?: string
   agentProcess?: string
+  tmuxPane?: string
   payload: Record<string, unknown>
 }
 
@@ -42,7 +44,7 @@ export function buildBody(payload: Record<string, unknown>, overrides: Partial<B
   }
 }
 
-// Why: use a recent-but-not-now timestamp so fixtures survive hydrate's 7d drop (HYDRATE_MAX_AGE_MS) without racing the wall clock.
+// Stay within the seven-day hydration limit without racing now.
 export function recentTs(offsetMs = 0): number {
   return Date.now() - 60 * 60 * 1000 + offsetMs
 }

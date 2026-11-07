@@ -1,11 +1,4 @@
-/**
- * The four-slot request pool every authority call goes through.
- *
- * Priority work (the selected host, and Desktop + Self) jumps the queue, and
- * queued work that the catalog has made obsolete is dropped before it is sent —
- * transport already in flight is left to finish and rejected by the commit fence
- * instead, because cancelling it would not un-send it.
- */
+/** Pool four authority calls; selected/Desktop Self jobs take priority. Drop obsolete queued work before send; already-sent work finishes behind the commit fence. */
 
 export const AUTOMATION_HOST_REQUEST_CONCURRENCY = 4
 
@@ -83,8 +76,7 @@ export function createAutomationHostRequestPool(
       }),
     cancelQueued: () => {
       for (const entry of [...urgent.splice(0), ...waiting.splice(0)]) {
-        // Settling alone resolves the submitter without ever running the job, so a
-        // dropped job must first hand back whatever it reserved on submission.
+        // Cancelled jobs must release their reservations before settling; they never reach run.
         entry.job.cancel?.()
         entry.settle()
       }
