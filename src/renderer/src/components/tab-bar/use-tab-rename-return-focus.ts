@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -6,6 +6,7 @@ import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { useAppStore } from '@/store'
 
 export function useTabRenameReturnFocus({
+  renameOwnerRef,
   commitRename,
   cancelRename,
   tabId,
@@ -14,6 +15,7 @@ export function useTabRenameReturnFocus({
   groupId,
   isNativeChat
 }: {
+  renameOwnerRef: RefObject<HTMLDivElement | null>
   commitRename: () => void
   cancelRename: () => void
   tabId: string
@@ -22,7 +24,6 @@ export function useTabRenameReturnFocus({
   groupId: string
   isNativeChat: boolean
 }) {
-  const renameOwnerRef = useRef<HTMLDivElement | null>(null)
   const frameRef = useRef<number | null>(null)
   const generationRef = useRef(0)
 
@@ -81,7 +82,7 @@ export function useTabRenameReturnFocus({
         })
       }
     })
-  }, [groupId, isNativeChat, tabId, unifiedTabId, worktreeId])
+  }, [groupId, isNativeChat, renameOwnerRef, tabId, unifiedTabId, worktreeId])
 
   const onRenameKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -101,5 +102,5 @@ export function useTabRenameReturnFocus({
     [cancelRename, commitRename, restoreContentFocus]
   )
 
-  return { renameOwnerRef, onRenameKeyDown }
+  return { onRenameKeyDown }
 }

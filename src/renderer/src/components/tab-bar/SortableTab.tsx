@@ -144,6 +144,7 @@ export default function SortableTab({
     onComplete
   } = useSortableTabContextMenu()
   const {
+    renameSlotProps,
     isEditing,
     renameValue,
     setRenameValue,
@@ -157,7 +158,8 @@ export default function SortableTab({
     customTitle: tab.customTitle,
     onSetCustomTitle
   })
-  const { renameOwnerRef, onRenameKeyDown } = useTabRenameReturnFocus({
+  const { onRenameKeyDown } = useTabRenameReturnFocus({
+    renameOwnerRef: renameSlotProps.ref,
     commitRename,
     cancelRename,
     tabId: tab.id,
@@ -197,7 +199,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, true)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -277,9 +279,7 @@ export default function SortableTab({
           onMouseDown={(event) => {
             // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
+            preventMiddleButtonDefault(event)
           }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
@@ -355,8 +355,8 @@ export default function SortableTab({
     <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
-          ref={renameOwnerRef}
           {...slotProps}
+          {...renameSlotProps}
           onContextMenu={(event) => {
             // The hover card is portalled: React still routes its events through this slot.
             if (event.target instanceof Node && event.currentTarget.contains(event.target)) {

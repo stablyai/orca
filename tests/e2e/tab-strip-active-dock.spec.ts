@@ -97,7 +97,7 @@ test.describe('Tab strip active-tab dock', () => {
       await expect(activeTab).toHaveCount(0)
 
       await strip.evaluate((el) => {
-        el.style.maxWidth = '400px'
+        el.style.maxWidth = '260px'
       })
       await expect(strip).not.toHaveAttribute('data-active-tab-dock-disabled')
       await strip.evaluate((el, side) => {
