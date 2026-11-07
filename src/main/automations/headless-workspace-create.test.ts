@@ -56,7 +56,7 @@ const automation: Automation = {
   baseBranch: 'origin/main',
   setupDecision: 'skip',
   reuseSession: false,
-  timezone: 'UTC',
+  timezone: 'Asia/Kolkata',
   rrule: 'FREQ=DAILY',
   dtstart: 1,
   enabled: true,
@@ -82,7 +82,7 @@ describe('headless automation workspace create args', () => {
 
     expect(args).toMatchObject({
       repoSelector: { selector: 'id:repo-1', hostId: 'ssh:ssh-target-1' },
-      name: 'auto-nightly-review-run-20260102T0304',
+      name: 'auto-nightly-review-run-20260102T0834',
       baseBranch: 'origin/main',
       setupDecision: 'skip',
       activate: false,
