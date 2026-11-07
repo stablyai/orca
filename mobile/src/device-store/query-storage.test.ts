@@ -3,7 +3,7 @@ import {
   experimental_createQueryPersister,
   type PersistedQuery
 } from '@tanstack/query-persist-client-core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrcaQueryStorage, type OrcaQueryStoreBackend } from './query-storage'
 
 type WriteOps = Parameters<OrcaQueryStoreBackend['write']>[0]
@@ -39,6 +39,13 @@ function persisterOver(storage: ReturnType<typeof createOrcaQueryStorage>) {
 }
 
 describe('createOrcaQueryStorage', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: 1_794_000_000_000 })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("never writes a query whose key isn't ['orca', <bridge host>, ...]", async () => {
     const memory = memoryBackend('host-a')
     const storage = createOrcaQueryStorage(memory.backend)
@@ -69,7 +76,7 @@ describe('createOrcaQueryStorage', () => {
     const persister = persisterOver(storage)
     const client = new QueryClient()
     const queryKey = ['orca', 'host-a', 'worktree.ps', { exec: 'local' }, {}]
-    const startedAt = Date.now()
+    const startedAt = 1_794_000_000_000
     const persistAt = async (rows: string[], updatedAt: number) => {
       client.setQueryData(queryKey, { rows }, { updatedAt })
       await persister.persistQueryByKey(queryKey, client)
