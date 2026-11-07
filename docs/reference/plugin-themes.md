@@ -111,7 +111,7 @@ An app theme may add one image painted behind the window's translucent surfaces:
   2 MB. Orca serves it only through its own image scheme and checks the bytes each time; an image
   that does not pass is not shown and the theme still applies. `validate:plugin` reports a
   missing file.
-- `videoPath` (optional, Orca 1.4.253 and later) is a looping video played over `path`. It
+- `videoPath` (optional, Orca 1.4.254 and later) is a looping video played over `path`. It
   never shows controls. Orca checks it from the file's headers, without
   decoding it. Limits:
   - MP4 or WebM, with one video track and no audio track (encode with `-an`)
