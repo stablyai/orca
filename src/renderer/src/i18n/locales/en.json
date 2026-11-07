@@ -20749,7 +20749,11 @@
         "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
         "failed": "{{agent}} couldn't fork this chat",
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
-        "failedDetail": "Your chat is unchanged. Try again."
+        "failedDetail": "Your chat is unchanged. Try again.",
+        "commandDescription": "Fork this chat from its latest response",
+        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandNothing": "There’s no response to fork yet.",
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
