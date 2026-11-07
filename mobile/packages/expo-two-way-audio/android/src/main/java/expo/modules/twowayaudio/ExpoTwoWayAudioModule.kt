@@ -4,6 +4,8 @@ import androidx.core.os.bundleOf
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Coroutine
+import expo.modules.kotlin.typedarray.Uint8Array
 import expo.modules.interfaces.permissions.Permissions
 
 class ExpoTwoWayAudioModule : Module() {
@@ -14,6 +16,8 @@ class ExpoTwoWayAudioModule : Module() {
         private const val ON_AUDIO_INTERRUPTION_EVENT = "onAudioInterruption"
         var audioEngine: AudioEngine? = null
     }
+
+    private val speech by lazy { OnDeviceSpeech { name, body -> sendEvent(name, body) } }
 
     override fun definition() = ModuleDefinition {
         Name("ExpoTwoWayAudio")
@@ -94,11 +98,47 @@ class ExpoTwoWayAudioModule : Module() {
              }
          }
 
+        AsyncFunction("speechAvailability") Coroutine { locale: String ->
+            speech.availability(locale)
+        }
+
+        AsyncFunction("speechDownload") Coroutine { locale: String ->
+            speech.download(locale)
+        }
+
+        AsyncFunction("speechStart") Coroutine { locale: String, sampleRate: Int ->
+            speech.start(locale, sampleRate)
+        }
+
+        Function("speechFeed") { pcm: Uint8Array ->
+            runCatching {
+                val bytes = ByteArray(pcm.byteLength)
+                pcm.read(bytes, 0, bytes.size)
+                speech.feed(bytes)
+            }
+            Unit
+        }
+
+        AsyncFunction("speechFinish") Coroutine { ->
+            speech.finish()
+        }
+
+        Function("speechCancel") {
+            speech.cancel()
+        }
+
+        OnDestroy {
+            speech.destroy()
+        }
+
         Events(
             ON_MIC_DATA_EVENT,
             ON_INPUT_VOLUME_LEVEL_EVENT,
             ON_RECORDING_CHANGE_EVENT,
-            ON_AUDIO_INTERRUPTION_EVENT
+            ON_AUDIO_INTERRUPTION_EVENT,
+            SPEECH_TEXT_EVENT,
+            SPEECH_ERROR_EVENT,
+            SPEECH_DOWNLOAD_PROGRESS_EVENT
         )
     }
 
