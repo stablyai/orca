@@ -1,5 +1,6 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { AutomationHostLabel, AutomationHostStatusBadges } from './AutomationHostBadges'
 import {
   AutomationListLocalRows,
@@ -71,7 +72,7 @@ export function AutomationListHostGroups({
       {groups.map((group) => (
         <section key={group.authorityKey} className="mb-2" data-authority-key={group.authorityKey}>
           <div className="px-2 pb-1 text-[11px] font-medium uppercase text-muted-foreground">
-            {group.authorityLabel}
+            {translateExecutionHostLabel(group.authorityLabel)}
           </div>
           {group.hosts.map(({ entry, rows, hostRowCount }) => {
             const action = hostRecoveryAction(entry)

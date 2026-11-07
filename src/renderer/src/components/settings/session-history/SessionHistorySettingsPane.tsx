@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -67,7 +68,7 @@ export function SessionHistorySettingsPane({
   const servers = isWebClient ? [] : environments
   const localEntry: SessionSearchComputerEntry = {
     id: LOCAL_EXECUTION_HOST_ID,
-    name: getLocalExecutionHostLabel(),
+    name: translateLocalExecutionHostLabel(getLocalExecutionHostLabel()),
     state: policy.enabled ? 'on' : 'off'
   }
   const serverEntries = servers.map((environment) => ({

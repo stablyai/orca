@@ -28,6 +28,7 @@ import {
 } from './targets/ssh-target-draft'
 
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
+import { formatSshUserFacingError } from './targets/ssh-user-facing-error'
 import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'
 import {
   isManagedServerSshHost,
@@ -160,7 +161,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
         )
       }
@@ -249,7 +250,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
       )
     }

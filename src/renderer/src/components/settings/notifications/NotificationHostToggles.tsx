@@ -6,6 +6,7 @@ import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
 import { pickerExecutionHosts } from '../../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
+import { translateExecutionHostLabel } from '../../sidebar/execution-host-label'
 import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../host-picker/HostListOverflowNote'
@@ -74,7 +75,7 @@ export function NotificationHostToggles({
             {rows.shown.map((host) => (
               <NotificationSettingToggle
                 key={host.id}
-                label={host.label}
+                label={translateExecutionHostLabel(host.label)}
                 description={host.detail}
                 checked={!isMuted(host)}
                 disabled={disabled}

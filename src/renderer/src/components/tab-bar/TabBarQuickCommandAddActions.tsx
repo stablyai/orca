@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import type { TerminalQuickCommandHost } from '@/hooks/use-terminal-quick-command-hosts'
 
 export function TabBarQuickCommandAddActions({
@@ -27,7 +28,7 @@ export function TabBarQuickCommandAddActions({
             : translate(
                 'auto.components.tab.bar.TabBarQuickCommandAddActions.b856c833ae',
                 'Command on {{value0}}',
-                { value0: host.label }
+                { value0: translateExecutionHostLabel(host.label) }
               )}
         </button>
       ))}

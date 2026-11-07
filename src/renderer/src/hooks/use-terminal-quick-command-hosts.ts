@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
@@ -16,6 +17,7 @@ import type {
   TerminalQuickCommandHostsSlice
 } from '@/store/slices/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]
@@ -108,6 +110,8 @@ export function useTerminalQuickCommandHosts(
   remoteHostLoadFailed: boolean
   remoteHostPending: boolean
 } {
+  const { i18n } = useTranslation()
+  const language = i18n.resolvedLanguage ?? i18n.language
   const {
     executionHostId,
     loadRemote,
@@ -170,6 +174,7 @@ export function useTerminalQuickCommandHosts(
   )
 
   const hosts = useMemo(() => {
+    void language
     if (!enabled) {
       return DISABLED_TERMINAL_QUICK_COMMAND_HOSTS
     }
@@ -178,8 +183,9 @@ export function useTerminalQuickCommandHosts(
       {
         commands: settings?.terminalQuickCommands ?? [],
         hostId: LOCAL_EXECUTION_HOST_ID,
-        label:
+        label: translateExecutionHostLabel(
           hostOptions.find((host) => host.id === LOCAL_EXECUTION_HOST_ID)?.label ?? 'This computer'
+        )
       }
     ]
     if (
@@ -198,6 +204,7 @@ export function useTerminalQuickCommandHosts(
     return result
   }, [
     enabled,
+    language,
     remoteConnectionGeneration,
     remoteEnvironmentId,
     remoteHostId,

@@ -6,6 +6,7 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { translate } from '@/i18n/i18n'
+import { translateExecutionHostLabel } from '../../sidebar/execution-host-label'
 import { QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsToolbarProps = {
@@ -93,7 +94,7 @@ export function QuickCommandsToolbar({
           <SelectContent>
             {hostOptions.map((host) => (
               <SelectItem key={host.id} value={host.id}>
-                {host.label}
+                {translateExecutionHostLabel(host.label)}
               </SelectItem>
             ))}
           </SelectContent>
