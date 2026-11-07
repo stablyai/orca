@@ -16,6 +16,12 @@ import { JournalSqlReadValues } from './journal-sql-read-values'
 import { readJournalSqlProjection } from './journal-sql-read-transaction'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
+import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
+import { readJournalSqlInput } from './journal-sql-input-reads'
+import { JournalSqlReducer } from './journal-sql-reducer'
+import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
+import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   readJournalSqlItems,
   type JournalSqlItemRead,
@@ -25,6 +31,9 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'usage-limit-cut' }
+    | { kind: 'orca-stop-cut' }
+    | { kind: 'input-read'; operation: JournalInputRead }
     | { kind: 'metadata' }
     | { kind: 'item'; itemId: string }
     | { kind: 'submission'; clientMessageId: string }
@@ -39,6 +48,9 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'usage-limit-cut'; cut: NativeChatUsageLimitCut | null }
+  | { kind: 'orca-stop-cut'; cut: NativeChatOrcaStopCut | null }
+  | { kind: 'input-read'; result: JournalInputReadResult }
   | {
       kind: 'metadata'
       cursor: AgentJournalCursor
@@ -87,6 +99,15 @@ function read(
     )
   }
   switch (operation.kind) {
+    case 'usage-limit-cut':
+    case 'orca-stop-cut': {
+      const { state } = new JournalSqlReducer(scope, scope.epoch)
+      return operation.kind === 'usage-limit-cut'
+        ? { kind: 'usage-limit-cut', cut: readJournalUsageLimitCut(state) }
+        : { kind: 'orca-stop-cut', cut: readJournalOrcaStopCut(state) }
+    }
+    case 'input-read':
+      return { kind: 'input-read', result: readJournalSqlInput(scope, operation.operation) }
     case 'items-by-kind':
     case 'context-floor':
     case 'running-turn':

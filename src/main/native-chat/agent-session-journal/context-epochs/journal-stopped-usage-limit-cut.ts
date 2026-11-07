@@ -5,10 +5,8 @@ import { readAgentSessionFailureFact } from '../../../../shared/agent-session/fa
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { latestUsageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { renderJournalStatus } from '../projection/journal-public-read'
-import { journalInputOrder } from '../input-order/journal-input-order'
+import { readJournalUsageLimitContinueIdentity } from '../journal-status-cuts'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 
 function mayEndWork(body: AgentJournalItemBody): boolean {
@@ -57,7 +55,7 @@ export function journalStoppedUsageLimitCut(
       return undefined
     }
   }
-  const cut = latestUsageLimitContinueIdentity(renderJournalStatus(state, journalInputOrder(state)))
+  const cut = readJournalUsageLimitContinueIdentity(state)
   return cut && owns(readAgentJournalTurn(state.items.get(cut.turnItemId)?.body)?.turnId)
     ? cut
     : undefined

@@ -12,6 +12,10 @@ import type { JournalItemLinkageVisitor } from './journal-store-contracts'
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { JournalThreadGoalSource } from './projection/journal-thread-goal-source'
+import { readJournalInput, type JournalInputReader } from './journal-input-reads'
+import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
+import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 
 /** Which items a visit decodes; a database serves only the named kinds, in sequence order. */
 export type JournalItemFilter = {
@@ -20,6 +24,9 @@ export type JournalItemFilter = {
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
+  input: JournalInputReader
+  usageLimitCut(): Promise<NativeChatUsageLimitCut | null>
+  orcaStopCut(): Promise<NativeChatOrcaStopCut | null>
   // Builder B: context metadata used by options reports.
   contextFloor(): Promise<AgentJournalCursor | null>
   cursor(): Promise<AgentJournalCursor>
@@ -49,7 +56,12 @@ export type AgentSessionJournalReads = {
 
 /** The synchronous readers today's in-memory journal already answers. */
 type FoldedJournalReads = {
-  [K in Exclude<keyof AgentSessionJournalReads, 'visitItems' | 'contextFloor'>]: (
+  [
+    K in Exclude<
+      keyof AgentSessionJournalReads,
+      'visitItems' | 'contextFloor' | 'input' | 'usageLimitCut' | 'orcaStopCut'
+    >
+  ]: (
     ...args: Parameters<AgentSessionJournalReads[K]>
   ) => Awaited<ReturnType<AgentSessionJournalReads[K]>>
 } & {
@@ -59,7 +71,10 @@ type FoldedJournalReads = {
 }
 
 /** Answers at call time, so an awaited answer reflects writes admitted before the call. */
-export function foldedJournalReads(journal: FoldedJournalReads): AgentSessionJournalReads {
+export function foldedJournalReads(
+  journal: FoldedJournalReads,
+  state: () => JournalReducerState
+): AgentSessionJournalReads {
   const now =
     <A extends unknown[], T>(read: (...args: A) => T) =>
     (...args: A): Promise<T> => {
@@ -70,6 +85,9 @@ export function foldedJournalReads(journal: FoldedJournalReads): AgentSessionJou
       }
     }
   return {
+    input: async (operation) => readJournalInput(state(), operation),
+    usageLimitCut: now(() => readJournalUsageLimitCut(state())),
+    orcaStopCut: now(() => readJournalOrcaStopCut(state())),
     // Builder B: read through the context controller without retaining a copy.
     contextFloor: now(() => journal.context.floor()),
     cursor: now(journal.cursor),

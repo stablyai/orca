@@ -166,7 +166,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
+    unconfirmedClientMessageIds: (await journal.reads.input({ kind: 'recovered-unknown-ids' })).ids
   }
 }
 

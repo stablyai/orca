@@ -273,7 +273,7 @@ export class AgentSessionJournal {
     journalInput.journalInputPresentationRemoved(this.state, itemId)
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
-  readonly reads: AgentSessionJournalReads = foldedJournalReads(this)
+  readonly reads: AgentSessionJournalReads = foldedJournalReads(this, () => this.state)
 
   /** Read after all preceding writes and before later ones. */
   readInOrder<T>(read: () => T): Promise<T> {

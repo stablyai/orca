@@ -1,9 +1,13 @@
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type {
+  JournalInputAnswer,
+  JournalInputRead,
+  JournalInputReader
+} from './journal-input-reads'
 
-/** Input-order reads move here with the single-list queue; until then the fold answers them. */
-export type JournalSqlReads = Omit<AgentSessionJournalReads, 'pendingSubmissions' | 'newestTurn'>
+export type JournalSqlReads = AgentSessionJournalReads
 
 const VISIT_PAGE = 256
 
@@ -31,10 +35,25 @@ export function journalSqlReads(
     return result
   }
   const metadata = () => read({ kind: 'metadata' })
+  const input: JournalInputReader = async <K extends JournalInputRead['kind']>(
+    operation: Extract<JournalInputRead, { kind: K }>
+  ) => {
+    const { result } = await read({ kind: 'input-read', operation })
+    if (result.kind !== operation.kind) {
+      throw new Error(`journal input reader answered ${result.kind} for ${operation.kind}`)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named procedure returns its matching discriminant, checked above.
+    return result as JournalInputAnswer<K>
+  }
   const item = async (itemId: string) => (await read({ kind: 'item', itemId })).item
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    input,
+    usageLimitCut: async () => (await read({ kind: 'usage-limit-cut' })).cut,
+    orcaStopCut: async () => (await read({ kind: 'orca-stop-cut' })).cut,
+    pendingSubmissions: async () => (await input({ kind: 'pending-submissions' })).submissions,
+    newestTurn: async () => (await input({ kind: 'newest-turn' })).turn,
     contextFloor: async () => (await read({ kind: 'context-floor' })).floor,
     cursor: async () => (await metadata()).cursor,
     physicalCursor: async () => (await metadata()).physicalCursor,

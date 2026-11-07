@@ -1,7 +1,5 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { journalInputOrder } from './input-order/journal-input-order'
-import { renderJournalStatus } from './projection/journal-public-read'
+import { readJournalUsageLimitContinueIdentity } from './journal-status-cuts'
 import { JournalHostFactsNeededError, type JournalRewoundFacts } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 
@@ -13,9 +11,7 @@ export function journalRewoundReceipt(
 ): (cursor: AgentJournalCursor) => JournalOperationReceipt {
   return (cursor) => ({
     fold: (draft) => {
-      const cancel =
-        latestUsageLimitContinueIdentity(renderJournalStatus(draft, journalInputOrder(draft))) ??
-        null
+      const cancel = readJournalUsageLimitContinueIdentity(draft) ?? null
       if (
         known?.cursor.epoch !== cursor.epoch ||
         known.cursor.sequence !== cursor.sequence ||

@@ -59,9 +59,26 @@ export type JournalInputReadResult =
   | JournalInputSingleReadResult
   | { kind: 'batch'; results: JournalInputSingleReadResult[] }
 
+export type JournalInputAnswer<K extends JournalInputRead['kind']> =
+  JournalInputReadResult extends infer R
+    ? R extends { kind: infer RK }
+      ? K extends RK
+        ? R & { kind: K }
+        : never
+      : never
+    : never
+
+export type JournalInputReader = <K extends JournalInputRead['kind']>(
+  operation: Extract<JournalInputRead, { kind: K }>
+) => Promise<JournalInputAnswer<K>>
+
 /** Detaches a value from its storage before it leaves the read; memory answers are already plain. */
 export type JournalInputPlain = <T>(value: T) => T
 
+export function readJournalInput<K extends JournalInputRead['kind']>(
+  state: JournalReducerState,
+  operation: Extract<JournalInputRead, { kind: K }>
+): JournalInputAnswer<K>
 export function readJournalInput(
   state: JournalReducerState,
   operation: JournalInputRead

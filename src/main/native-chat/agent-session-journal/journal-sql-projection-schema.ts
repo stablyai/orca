@@ -13,12 +13,14 @@ import { journalSqlInputEventSchema } from './journal-sql-input-event-schema'
 import { journalSqlSubmissionMemberSchema } from './journal-sql-submission-member-schema'
 import { journalSqlCardMemberSchema } from './journal-sql-card-member-schema'
 import { journalSqlQueueRecoverySchema } from './journal-sql-queue-recovery'
+import { journalSqlStatusItemSchema } from './journal-sql-status-item-schema'
 
 export function journalSqlProjectionSchema(): string {
   return (
     journalSqlIndexSchema() +
     journalSqlScalarSchema() +
     journalSqlItemSchema() +
+    journalSqlStatusItemSchema() +
     journalSqlDomainCounterSchema() +
     journalSqlInputEntitySchema() +
     journalSqlPrimitiveFactSchema() +
