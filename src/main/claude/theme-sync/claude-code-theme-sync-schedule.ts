@@ -103,10 +103,12 @@ export function startClaudeCodeThemeSync(host: {
       .then(async () => {
         const result = await syncClaudeCodeThemeConfigDirs(target, host.userDataPath)
         restorePending = result.restorePending
-        if (!target.enabled && result.replaced.length === 0) {
-          // Off with nothing restored: stop touching the user's config folders.
+        if (!target.enabled) {
+          // Off: keep retrying only the files this pass restored.
           for (const path of retryTimers.keys()) {
-            cancelReloadRetries(path)
+            if (!result.replaced.includes(path)) {
+              cancelReloadRetries(path)
+            }
           }
         }
         new Set(result.replaced).forEach(scheduleReloadRetries)

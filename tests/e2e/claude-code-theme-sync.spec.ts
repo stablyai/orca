@@ -143,8 +143,16 @@ test('Claude Code follows the Orca terminal theme live and restores its own them
     }
   }
   const readTheme = () => readSettings().theme
-  // Let the launch-time pass and the restore that turning the sync off triggers finish first.
-  await orcaPage.waitForTimeout(3_000)
+  // A launch-time takeover must be restored (its record gone) before the test sets the user's theme.
+  const recordPath = join(home, '.orca', 'claude-theme-sync.json')
+  const recordedDirs = () => {
+    try {
+      return Object.keys(JSON.parse(readFileSync(recordPath, 'utf-8')))
+    } catch {
+      return []
+    }
+  }
+  await expect.poll(recordedDirs, { timeout: 30_000 }).toEqual([])
   writeFileSync(settingsPath, `${JSON.stringify({ ...readSettings(), theme: 'light' }, null, 2)}\n`)
   const ptyId = await discoverActivePtyId(orcaPage)
 

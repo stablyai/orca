@@ -104,19 +104,19 @@ async function applyToConfigDir(
     if (!isReplaceableTheme(settings.theme)) {
       return
     }
+    // Under the lock, so another Orca's restore cannot leave its look in the file Orca now selects.
+    replaced.push(...(await writeThemeFile(configDir, theme)))
     // The record lands first: a crash between the two writes must still leave a way back.
     await save({
       owner,
       previousTheme: typeof settings.theme === 'string' ? settings.theme : null
     })
-    // Reread: Claude Code or the hook installer may have saved settings.json while the record was written.
+    // Reread after the last await: Claude Code or the hook installer may have saved meanwhile.
     const current = readHooksJson(settingsPath)
     if (!current || current.theme !== settings.theme) {
       await save(undefined)
       return
     }
-    // Under the lock, so another Orca's restore cannot leave its look in the file Orca now selects.
-    replaced.push(...(await writeThemeFile(configDir, theme)))
     try {
       writeHooksJson(settingsPath, { ...current, theme: THEME_SETTING })
     } catch (error) {
@@ -150,8 +150,13 @@ function revertSettings(
     console.warn(`[claude-theme] Could not restore ${settingsPath} yet`)
     return { restored: false }
   }
-  if (entry.userChangedTheme || settings.theme !== THEME_SETTING) {
+  if (entry.userChangedTheme) {
     return { restored: true }
+  }
+  if (settings.theme !== THEME_SETTING) {
+    // Already reverted by a pass whose theme-file write failed; that write is still owed.
+    const reverted = settings.theme === (entry.previousTheme ?? undefined)
+    return reverted ? { restored: true, previousTheme: entry.previousTheme } : { restored: true }
   }
   const { theme: _orcaTheme, ...rest } = settings
   writeHooksJson(
@@ -181,18 +186,20 @@ async function restoreConfigDir(
     if (!reverted.restored) {
       return { restored: false, replaced: [] }
     }
-    await save(undefined)
     // Why: account homes can share the default's themes folder; the first restored look wins.
     const themeFile = await realpath(themeFilePath(configDir)).catch(() => themeFilePath(configDir))
-    if (reverted.previousTheme === undefined || publishedThemeFiles.has(themeFile)) {
-      return { restored: true, replaced: [] }
+    let replaced: string[] = []
+    if (reverted.previousTheme !== undefined && !publishedThemeFiles.has(themeFile)) {
+      // Under the lock and before the record goes, so a failed write is retried and cannot
+      // overwrite the theme another Orca selects right after.
+      replaced = await writeThemeFile(
+        configDir,
+        releasedTheme(reverted.previousTheme, terminalBase)
+      )
+      publishedThemeFiles.add(themeFile)
     }
-    publishedThemeFiles.add(themeFile)
-    return {
-      restored: true,
-      // Under the lock, so it cannot overwrite the theme another Orca selects right after.
-      replaced: await writeThemeFile(configDir, releasedTheme(reverted.previousTheme, terminalBase))
-    }
+    await save(undefined)
+    return { restored: true, replaced }
   }).catch((error: unknown) => {
     console.warn(`[claude-theme] Could not restore ${settingsPath} yet:`, error)
     return { restored: false, replaced: [] }
