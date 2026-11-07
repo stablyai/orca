@@ -5,10 +5,10 @@ import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'
 import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type * as SessionSnapshot from '@/runtime/web-runtime-session-snapshot'
 
 const actualSnapshots = await vi.importActual<typeof SessionSnapshot>(
@@ -47,7 +47,8 @@ it.each(['local', 'web'] as const)(
     const focusSource = vi.fn()
     const { startAgentSessionFork } =
       await import('../../src/renderer/src/components/terminal-pane/terminal-agent-session-fork')
-    const launcher = await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+    const launcher =
+      await import('../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
     const launched = vi.spyOn(launcher, 'launchAgentInNewTab')
     const forking = startAgentSessionFork({ prompt, agent, worktreeId: 'wt-1', focusSource })
     await vi.waitFor(() => expect(pasteDraftWhenAgentReady).toHaveBeenCalledOnce())
@@ -123,7 +124,7 @@ it.skipIf(process.platform === 'win32')(
     const focusSource = vi.fn()
     const { startAgentSessionFork } =
       await import('@/components/terminal-pane/terminal-agent-session-fork')
-    const launcher = await import('@/lib/launch-agent-in-new-tab')
+    const launcher = await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
     const launched = vi.spyOn(launcher, 'launchAgentInNewTab')
     const forking = startAgentSessionFork({
       prompt,

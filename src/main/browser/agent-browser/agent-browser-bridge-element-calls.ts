@@ -1,9 +1,9 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../browser-error'
-import type { CapturedElement } from '../cdp-element-capture'
-import { assertExpectedPageUrlForStep } from '../browser-expected-page-url'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
-import { readRecord, readString } from '../guest-frame-input-sessions'
+import type { CapturedElement } from '../cdp/commands/cdp-element-capture'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
+import { readRecord, readString } from '../cdp/input/guest-frame-input-sessions'
 import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
 
 export type CapturedTarget = { wc: WebContents; captured: CapturedElement }

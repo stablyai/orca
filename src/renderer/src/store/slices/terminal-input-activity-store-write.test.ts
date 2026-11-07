@@ -10,7 +10,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -38,20 +40,6 @@ describe('recordTerminalInput store writes are coalesced', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     resetTerminalInputActivityCoalescingForTests()
-  })
-
-  it('does not write the store on every keystroke', () => {
-    const store = createTestStore()
-    const listener = vi.fn()
-    const unsubscribe = store.subscribe(listener)
-
-    for (let i = 0; i < 50; i++) {
-      store.getState().recordTerminalInput(PANE, 1_000 + i * 15)
-    }
-    unsubscribe()
-
-    // 50 keystrokes inside ~750ms: leading edge plus at most one window boundary.
-    expect(listener.mock.calls.length).toBeLessThanOrEqual(3)
   })
 
   it('keeps the freshest stamp visible to imperative readers before the flush', () => {

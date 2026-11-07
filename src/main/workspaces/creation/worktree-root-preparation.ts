@@ -6,7 +6,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../ipc/worktree-logic'
 import { getWorktreeMirrorDistro } from '../execution-host/project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from '../execution-host/local-project-runtime-resolution'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 // Match create's mirror-distro resolution so root preparation cannot target a different directory.
 type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &

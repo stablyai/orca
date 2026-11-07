@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -10,7 +10,7 @@ import {
 } from './worktrees-slice-test-harness'
 
 const { exactLookup } = vi.hoisted(() => ({ exactLookup: vi.fn() }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: exactLookup
 }))
 const url = 'https://github.com/acme/orca/pull/42'

@@ -221,6 +221,8 @@ function dependencies(
     readBundle: vi.fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER)),
     writeBundle: vi.fn(async () => {}),
     setRelayRouting: vi.fn(async () => {}),
+    lastGoodPathWasDirectHere: vi.fn(async () => true),
+    recordGoodPath: vi.fn(async () => {}),
     directPath: 'lan',
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),

@@ -1,4 +1,9 @@
-import { worktreePreparationGit } from '../../../git/worktree-create-git-executor'
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import {
+  discardPreparationEntry,
+  trackPreparationDiscard
+} from './worktree-preparation-discard-retry'
+import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
@@ -11,8 +16,11 @@ import type {
   PreparedCheckoutReset,
   WorktreeCreatePhase
 } from '../../../../shared/worktree/create-timing-vocabulary'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../../../git/worktree-operation-options'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../../../git/worktrees/worktree-operation-options'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetPreparationPoolForTests,
   hasPendingPreparations,
@@ -32,7 +40,7 @@ import {
 import {
   discardPreparedWorktree,
   finalizePreparedWorktree
-} from '../../../git/worktree-create-preparation'
+} from '../../../git/worktrees/creation/worktree-create-preparation'
 import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
@@ -126,6 +134,10 @@ async function prepareWorktreeCreateInBackground(
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
   const canonicalBase = await canonicalBaseRef(repo.path, baseBranch, options)
+  // Project removal already released this repo's checkouts; arming one now would orphan it.
+  if (store.getRepo && !store.getRepo(repo.id)) {
+    return
+  }
   return startPreparation({
     repoPath: repo.path,
     workspaceRoot,
@@ -155,9 +167,18 @@ async function claimPreparedWorktree(
   args.timing?.recordAdoptedPreparation(entry.activity.work)
   const claimedAt = performance.now()
   try {
-    await timePhase(args, 'prepared_checkout_wait', () => entry.ready)
+    await timePhase(args, 'prepared_checkout_wait', () =>
+      waitForPromiseWithSignal(entry.ready, options.signal)
+    )
+    entry.operation.complete()
     return { ...reserved, status: 'claimed', claimedAt }
   } catch {
+    entry.operation.controller.abort()
+    trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
+    }
     return { status: 'miss', reason: 'prepare_failed', rearm: releaseClaimAfterCreate(reservation) }
   }
 }
@@ -282,6 +303,10 @@ async function attemptPreparedWorktreeCreate(
       await timePhase(args, 'prepared_checkout_discard', () =>
         discardPreparedWorktree(args.repoPath, entry.preparedPath, options, entry.lockReason)
       ).catch(() => {})
+    }
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
     }
     console.warn(
       '[worktree-create] prepared checkout could not be finalized; using normal add',

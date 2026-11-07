@@ -2,8 +2,8 @@ import { useCallback, useEffect } from 'react'
 import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
-import { useCreatePullRequestDialogFields } from '../../useCreatePullRequestDialogFields'
-import { useHostedReviewStackParent } from '../../useHostedReviewStackParent'
+import { useCreatePullRequestDialogFields } from '../../hosted-review/creation/useCreatePullRequestDialogFields'
+import { useHostedReviewStackParent } from '../../hosted-review/provider-actions/useHostedReviewStackParent'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
@@ -64,6 +64,9 @@ export function useSourceControlCreateReviewComposer({
     setBase: setPrBase,
     title: prTitle,
     setTitle: setPrTitle,
+    imageUploadPending: prImageUploadPending,
+    imageUploadPendingRef: prImageUploadPendingRef,
+    onImageUploadPending: onPrImageUploadPending,
     body: prBody,
     setBody: setPrBody,
     draft: prDraft,
@@ -205,6 +208,9 @@ export function useSourceControlCreateReviewComposer({
     prBaseResults,
     prBaseSearchError,
     prBaseSearchPending,
+    prImageUploadPending,
+    prImageUploadPendingRef,
+    onPrImageUploadPending,
     prBody,
     prDraft,
     prFieldRevisions,

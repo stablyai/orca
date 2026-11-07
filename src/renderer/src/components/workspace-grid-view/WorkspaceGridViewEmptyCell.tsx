@@ -1,7 +1,7 @@
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceGridViewCellRect } from '@/lib/workspace-grid-view-cell-rects'
-import { focusWorkspaceGridViewMember } from '@/lib/workspace-grid-view-actions'
+import type { WorkspaceGridViewCellRect } from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
+import { focusWorkspaceGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
 import {
   WorkspaceGridViewCellHeader,
   useWorkspaceGridViewCellName

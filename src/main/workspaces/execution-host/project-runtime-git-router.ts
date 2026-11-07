@@ -21,18 +21,18 @@ import {
   setLocalGitRuntimeRouter,
   type LocalGitRuntimeRouter
 } from '../../git/command-runner/local-git-runtime-route'
-import { isWslDistroRunningForBackgroundWork } from '../../wsl-background-distro-gate'
+import { isWslDistroRunningForBackgroundWork } from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   onWslHostsNewWorkChanged,
   wslHostsGateOpen,
   wslHostsOptedIn
-} from '../../wsl/wsl-host-gate'
+} from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,
   onWslAutomountRootsChanged,
   wslDrivePathUnderRoots
-} from '../../wsl/wsl-automount-root'
+} from '../../wsl/filesystem/wsl-automount-root'
 
 export type ProjectRuntimeGitRouterStore = {
   getRepos: () => Repo[]

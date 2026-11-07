@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils'
 import {
   workspaceGridViewCellEdges,
   type WorkspaceGridViewCellRect
-} from '@/lib/workspace-grid-view-cell-rects'
-import { focusWorkspaceGridViewMember } from '@/lib/workspace-grid-view-actions'
+} from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
+import { focusWorkspaceGridViewMember } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
 
 /** Marks controls inside a cell that act on the grid view instead of focusing the cell. */
 export const WORKSPACE_GRID_VIEW_CELL_ACTION_ATTR = 'data-workspace-grid-view-cell-action'

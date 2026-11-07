@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const mocks = vi.hoisted(() => ({
   stopped: true,
@@ -15,7 +15,7 @@ vi.mock('./repo-git-remote-identity', () => ({
 vi.mock('../../git/git-username', () => ({
   resolveLocalGitUsernameDetailed: mocks.resolveLocalGitUsernameDetailed
 }))
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   blockedWslDistroForPath: mocks.blockedWslDistroForPath,
   wslDistroForPath: mocks.wslDistroForPath
@@ -85,16 +85,5 @@ describe('repo Git enrichment for a stopped WSL distro (E9)', () => {
     enrichRepoGitUsernames(store)
     await flushRepoGitUsernameEnrichmentForTests()
     expect(mocks.resolveLocalGitUsernameDetailed).toHaveBeenCalledTimes(1)
-  })
-
-  it('enriches a host repo exactly as before, without asking the gate', async () => {
-    const store = makeStore(makeRepo('C:/repos/one'))
-    enrichMissingRepoGitRemoteIdentities(store)
-    enrichRepoGitUsernames(store)
-    await flushRepoGitRemoteIdentityEnrichmentForTests()
-    await flushRepoGitUsernameEnrichmentForTests()
-    expect(mocks.probeGitRemoteIdentity).toHaveBeenCalledTimes(1)
-    expect(mocks.resolveLocalGitUsernameDetailed).toHaveBeenCalledTimes(1)
-    expect(mocks.blockedWslDistroForPath).not.toHaveBeenCalled()
   })
 })

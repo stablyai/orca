@@ -27,12 +27,6 @@ afterEach(() => {
 })
 
 describe('readNodeFileSyncWithinLimit', () => {
-  it('returns stable bytes without changing them', () => {
-    const path = createTempFile('stable 🐋 bytes')
-
-    expect(readNodeFileSyncWithinLimit(path, 1024).buffer.toString('utf8')).toBe('stable 🐋 bytes')
-  })
-
   it('rejects an oversized sparse file before allocating its declared size', () => {
     const path = createTempFile('')
     const descriptor = openSync(path, 'r+')

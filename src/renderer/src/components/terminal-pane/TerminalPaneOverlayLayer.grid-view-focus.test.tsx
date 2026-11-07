@@ -53,6 +53,9 @@ vi.mock('../../store', async () => {
   }))
   return { useAppStore }
 })
+vi.mock('./parking/lifecycle/use-terminal-tab-cold-parking', () => ({
+  useTerminalTabColdParking: () => new Set()
+}))
 vi.mock('./TerminalOverlaySlot', () => ({
   TerminalOverlaySlot: (props: SlotProps) => {
     mocks.slots.set(props.terminalTabId, {

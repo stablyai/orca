@@ -1,4 +1,4 @@
-import { WORKSPACE_GRID_VIEW_MAX_MEMBERS } from '@/lib/workspace-grid-view-membership'
+import { WORKSPACE_GRID_VIEW_MAX_MEMBERS } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 
 const STORAGE_KEY = 'orca.workspace-grid-view.members.v1'
 

@@ -1,6 +1,6 @@
 import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './types'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
@@ -10,6 +10,7 @@ import {
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { setRelayRouting } from './host-store'
+import { lastGoodPathWasDirectHere, recordHostGoodPath } from './host-path-memory'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
@@ -106,6 +107,8 @@ function createSupervisor(
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
     setRelayRouting,
+    lastGoodPathWasDirectHere,
+    recordGoodPath: recordHostGoodPath,
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../store-test-helpers'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 
 export function registerAgentStatusNestedResumeTests(): void {
   const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

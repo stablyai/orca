@@ -1,4 +1,4 @@
-import type { AgentLaunchChoices } from './agent-launch-choices'
+import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -6,20 +6,20 @@ import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
-import type { AiVaultSearchSettings } from './ai-vault-search-settings'
+import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
-import type { SourceControlAiSettings } from './source-control-ai-types'
+import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
-import type { TerminalCustomTheme } from './terminal-custom-themes'
+import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
-import type { CommitMessageAiSettings } from './commit-message-ai-types'
+import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
 import type {
   ClaudeManagedAccount,
@@ -29,8 +29,8 @@ import type {
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
-import type { TerminalQuickCommand } from './terminal-quick-command-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
@@ -89,6 +89,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
+  /** View newly opened Markdown files start in (see markdown-default-view-mode.ts); absent = Rich. */
+  markdownDefaultViewMode?: 'source' | 'rich'
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Selection paste preserves the normal clipboard; defaults on for Linux/macOS, off for Windows. */
@@ -203,7 +205,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
+  /** Resume working structured chats after restart; on for new profiles, off for profiles that predate the default. Off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
@@ -214,6 +216,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
   nativeChatLinkPreviews?: boolean
+  /** A card under a chat turn that opened a pull request; absent means on. */
+  nativeChatOpenedPullRequests?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */
   nativeChatInheritShellEnvironment?: boolean
   /** Login-shell variable names structured chat inherits while the whole environment is off. */
@@ -246,8 +250,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
-  /** Maximum worker nesting; 1 forbids sub-workers. Renderer-only: omit from SettingsUpdate RPC so workers cannot raise their cap. */
-  nestedWorkerMaxDepth?: number
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean
@@ -336,8 +338,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   disabledTuiAgents: TuiAgent[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** One-shot guard: hosts saved before the remote CLI control default flip were pinned off. */
-  sshRemoteCliControlExistingHostsMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */

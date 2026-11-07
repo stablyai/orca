@@ -1,10 +1,11 @@
 import type { TaskPageGitHubListStateModel } from './use-task-page-github-list-state'
 import { useAppStore } from '@/store/index'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useState, useMemo, useLayoutEffect, useCallback, useEffect } from 'react'
 import type { ItemDialogTab } from '@/components/github/github-work-item-identity'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-cache-selectors'
+import { createTaskPageDialogWorkItemReader } from '@/components/task-page/task-page-dialog-work-item'
 import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
@@ -66,14 +67,18 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
-  const dialogWorkItemKey = githubTaskDrawerWorkItem
-    ? {
-        id: githubTaskDrawerWorkItem.id,
-        repoId: githubTaskDrawerWorkItem.repoId,
-        url: githubTaskDrawerWorkItem.url,
-        repoHostId: githubTaskDrawerWorkItem.repoHostId
-      }
-    : null
+  const dialogWorkItemKey = useMemo(
+    () =>
+      githubTaskDrawerWorkItem
+        ? {
+            id: githubTaskDrawerWorkItem.id,
+            repoId: githubTaskDrawerWorkItem.repoId,
+            url: githubTaskDrawerWorkItem.url,
+            repoHostId: githubTaskDrawerWorkItem.repoHostId
+          }
+        : null,
+    [githubTaskDrawerWorkItem]
+  )
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
     [appliedTaskSearch]
@@ -85,10 +90,14 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
       appliedWorkItemsCacheQuery
     )
 
+  const drawerRepo = dialogWorkItemKey ? getWorkItemRepo(repos, dialogWorkItemKey) : undefined
+  const dialogBinding = drawerRepo && githubTaskBinding(drawerRepo)
   // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
-  const cachedDialogWorkItem = useAppStore((s) =>
-    findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
+  const readDialogWorkItem = useMemo(
+    () => createTaskPageDialogWorkItemReader(dialogWorkItemKey, dialogBinding),
+    [dialogWorkItemKey, dialogBinding]
   )
+  const cachedDialogWorkItem = useAppStore((s) => readDialogWorkItem(s.workItemsCache))
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null

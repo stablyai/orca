@@ -12,7 +12,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
-import type { WorkspaceGridViewCellRect } from '@/lib/workspace-grid-view-cell-rects'
+import type { WorkspaceGridViewCellRect } from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
 import { WorkspaceGridViewCellHeader } from './workspace-grid-view/WorkspaceGridViewCellHeader'
 import {
   focusWorkspaceGridViewCellOnFocus,

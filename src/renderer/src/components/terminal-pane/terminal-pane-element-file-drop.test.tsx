@@ -2,13 +2,13 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-preparation'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { collectPublicPanes, toPublicPane } from '@/lib/pane-manager/pane-public-view'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import {
   NativeChatPaneFileDropSurface,

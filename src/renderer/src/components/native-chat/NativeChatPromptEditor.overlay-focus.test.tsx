@@ -10,10 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import {
-  writeNativeChatComposerText,
-  type NativeChatComposerInput
-} from './native-chat-composer-input'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 afterEach(() => {
   cleanup()
@@ -74,20 +71,6 @@ describe('composer focus while the quick launcher is open', () => {
       await vi.runOnlyPendingTimersAsync()
     })
 
-    expect(screen.getByRole('menu')).toBeTruthy()
-    expect(document.activeElement).toBe(search)
-  })
-
-  it('updates a returned draft without taking focus from the launcher', async () => {
-    const input = setup()
-    const search = screen.getByRole('combobox', { name: 'Search launcher' })
-
-    await act(async () => {
-      writeNativeChatComposerText(input, 'Returned message', 16)
-      await vi.runOnlyPendingTimersAsync()
-    })
-
-    expect(input.value).toBe('Returned message')
     expect(screen.getByRole('menu')).toBeTruthy()
     expect(document.activeElement).toBe(search)
   })

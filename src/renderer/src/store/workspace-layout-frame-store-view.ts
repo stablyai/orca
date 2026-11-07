@@ -1,6 +1,6 @@
 // Read frame view/facts directly from scoped store records instead of serializing the session (E2a); reuse save trimming for editor, group, browser and scrollback state.
 
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   BROWSER_TAB_LAYOUT_FIELDS,
   BROWSER_TAB_WORKSPACE_FIELDS,
@@ -12,13 +12,13 @@ import {
   omitStoredFields,
   pickStoredFields
 } from '../../../shared/workspace-layout/stored-record-fields'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
 import {
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree
-} from '@/lib/workspace-session-browser-tabs'
-import { buildEditorSessionData } from '@/lib/workspace-session'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
+} from '@/lib/workspace/persistence/workspace-session-browser-tabs'
+import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import type { AppState } from './types'
 
 export type LayoutFrameStoreViewState = Pick<

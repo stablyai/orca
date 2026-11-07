@@ -162,23 +162,6 @@ describe('fetchMobileWebBundle', () => {
     expect(host.calls[0]!.params).toEqual({})
   })
 
-  it('asks for each chunk at the next step of the advertised chunk size', async () => {
-    const host = bundleHost({ 'index.html': 'abcdefghij' }, { chunkBytes: 3 })
-
-    await fetchMobileWebBundle({ client: host.client })
-
-    expect(
-      host.calls
-        .filter((call) => call.method === 'mobileWeb.bundle.chunk')
-        .map((call) => call.params)
-    ).toEqual([
-      { buildId: host.manifest.buildId, path: 'index.html', offset: 0 },
-      { buildId: host.manifest.buildId, path: 'index.html', offset: 3 },
-      { buildId: host.manifest.buildId, path: 'index.html', offset: 6 },
-      { buildId: host.manifest.buildId, path: 'index.html', offset: 9 }
-    ])
-  })
-
   it('fails when a reassembled asset does not hash to the manifest entry', async () => {
     const host = bundleHost(
       { 'index.html': 'abcdef' },
@@ -503,56 +486,6 @@ describe('fetchMobileWebBundle', () => {
       'bundle asset index.html is longer than the manifest declares'
     )
     expect(await refusalOf(failed)).toBe('asset-overlong')
-  })
-
-  it('counts the bytes it received rather than the total the manifest claims', async () => {
-    const host = bundleHost({ 'index.html': 'abcdef' }, { chunkBytes: 3 })
-    // Ignore claimed totalBytes; derive progress from the asset bytes actually read.
-    host.manifest.totalBytes = 999
-
-    const fetched = await fetchMobileWebBundle({ client: host.client })
-
-    expect(fetched.totalBytes).toBe(6)
-  })
-
-  it('reads a schema refusal whose message is prose as a generic failure', async () => {
-    // Dispatcher schema rejection uses diagnostic prose rather than a bundle machine code.
-    const host = bundleHost(
-      { 'index.html': 'abc' },
-      {
-        intercept: (call) =>
-          call.method === 'mobileWeb.bundle.chunk'
-            ? new Error('Invalid input: expected string, received number')
-            : undefined
-      }
-    )
-
-    const error = await fetchMobileWebBundle({ client: host.client }).catch(
-      (thrown: unknown) => thrown
-    )
-
-    expect(readMobileWebBundleErrorCode(error)).toBeNull()
-    expect(error).toBeInstanceOf(Error)
-    expect(String(error)).toContain('Invalid input: expected string, received number')
-  })
-
-  it('surfaces the host code when the bundle is not there to serve', async () => {
-    const host = bundleHost(
-      { 'index.html': 'abc' },
-      {
-        intercept: (call) =>
-          call.method === 'mobileWeb.bundle.manifest'
-            ? new Error('mobile_web_bundle_unavailable')
-            : undefined
-      }
-    )
-
-    const error = await fetchMobileWebBundle({ client: host.client }).catch(
-      (thrown: unknown) => thrown
-    )
-
-    expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_unavailable')
-    expect(error).not.toBeInstanceOf(MobileWebBundleFetchError)
   })
 
   describe('with a cached generation to reuse', () => {

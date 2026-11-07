@@ -4,7 +4,7 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { ShellPathExistence } from '../../shared/path-existence-batch'
 import type { PreloadApi } from '../api-types'
@@ -49,8 +49,5 @@ export const shellApi = {
   pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
   pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-    ipcRenderer.invoke('shell:pickDirectory', args),
-
-  copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-    ipcRenderer.invoke('shell:copyFile', args)
+    ipcRenderer.invoke('shell:pickDirectory', args)
 } satisfies PreloadApi['shell']

@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TerminalLeafMoveRequest } from '../../../../shared/terminal-leaf-move'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
@@ -12,7 +12,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   moveWebRuntimeLeafToNewTab,
   resolvePaneMoveHost,
@@ -53,6 +53,14 @@ export type DetachedTerminalPaneTab = {
   leafId: string
   ptyId: string | null
 }
+
+/** Where a pane's new tab goes; `targetTabId` names a tab another client already drew. */
+export type TerminalPaneNewTabTarget = { groupId: string; index?: number; targetTabId?: string }
+
+export type DetachTerminalPaneToNewTab = (
+  sourcePaneId: number,
+  target: TerminalPaneNewTabTarget
+) => Promise<DetachedTerminalPaneTab | null>
 
 function moveCreatedTabToIndex(args: {
   groupId: string
@@ -99,6 +107,8 @@ type DetachTerminalPaneToTabArgs = {
   sourceTabId: string
   targetGroupId: string
   targetIndex?: number
+  /** The new tab's id when another client already drew the tab; else one is minted. */
+  targetTabId?: string
   worktreeId: string
 }
 
@@ -155,7 +165,7 @@ async function moveLeafToNewTab(
     // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
     targetTabId: paneMoveHost
       ? toWebTerminalSurfaceTabId(createBrowserUuid())
-      : createBrowserUuid(),
+      : (args.targetTabId ?? createBrowserUuid()),
     leafId,
     ptyId: livePtyId
   }
@@ -201,7 +211,10 @@ async function moveLeafToNewTab(
   }
   // Failed persistence rolls main back; unknown outcomes fault persistence and reload converges on main’s committed side.
   console.warn('[terminal-pane-detach] main did not move the pane', answer)
-  reportMoveFailed()
+  // A move another client asked for is refused to that client; this window's user did not drag it.
+  if (!args.targetTabId) {
+    reportMoveFailed()
+  }
   return null
 }
 

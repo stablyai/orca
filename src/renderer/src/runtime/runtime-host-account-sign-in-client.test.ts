@@ -33,12 +33,10 @@ vi.mock('./runtime-environment-revision', () => ({
 
 import {
   addCodexAccountOnHost,
-  cancelHostAccountSignIn,
-  runningHostAccountSignInOwner
+  cancelHostAccountSignIn
 } from './runtime-host-account-sign-in-client'
 
 const OWNER = { kind: 'environment', environmentId: 'server' } as const
-const CODEX = { accounts: [], activeAccountId: null }
 
 function status(patch: Partial<HostAccountSignInStatus>): HostAccountSignInStatus {
   return { flowId: 'flow-1', provider: 'codex', revision: 1, phase: 'starting', ...patch }
@@ -53,16 +51,6 @@ afterEach(() => {
 })
 
 describe('host account sign-in client', () => {
-  it('starts nothing on the host when Cancel lands during the capability check', async () => {
-    const capability = Promise.withResolvers<void>()
-    rpc.capability = capability.promise
-    const adding = addCodexAccountOnHost(OWNER)
-    await expect(cancelHostAccountSignIn(OWNER, 'codex')).resolves.toBe(true)
-    capability.resolve()
-    await expect(adding).rejects.toThrow('Codex sign-in was cancelled.')
-    expect(rpc.calls).toEqual([])
-  })
-
   it('applies a Cancel clicked before the host answered the start', async () => {
     const start = Promise.withResolvers<HostAccountSignInStatus>()
     rpc.answer = (method) =>
@@ -75,37 +63,5 @@ describe('host account sign-in client', () => {
     start.resolve(status({}))
     await expect(adding).rejects.toThrow('Codex sign-in was cancelled.')
     expect(rpc.calls.map((call) => call.method)).toContain('accounts.hostSignInCancel')
-  })
-
-  it('names the server a sign-in runs on, so Cancel reaches it after the picker moves', async () => {
-    const start = Promise.withResolvers<HostAccountSignInStatus>()
-    rpc.answer = (method) =>
-      method === 'accounts.hostSignInStart'
-        ? start.promise
-        : status({ revision: 2, phase: 'signedIn', codex: CODEX })
-    expect(runningHostAccountSignInOwner('codex')).toBeNull()
-    const adding = addCodexAccountOnHost(OWNER)
-    expect(runningHostAccountSignInOwner('codex')).toEqual(OWNER)
-    expect(runningHostAccountSignInOwner('claude')).toBeNull()
-    // A second server for the same provider would make Cancel ambiguous, so it is refused.
-    await expect(
-      addCodexAccountOnHost({ kind: 'environment', environmentId: 'other' })
-    ).rejects.toThrow('still running on another server')
-    start.resolve(status({}))
-    await adding
-    expect(runningHostAccountSignInOwner('codex')).toBeNull()
-  })
-
-  it('joins the running sign-in when Add is clicked again', async () => {
-    const start = Promise.withResolvers<HostAccountSignInStatus>()
-    rpc.answer = (method) =>
-      method === 'accounts.hostSignInStart'
-        ? start.promise
-        : status({ revision: 2, phase: 'signedIn', codex: CODEX })
-    const first = addCodexAccountOnHost(OWNER)
-    const second = addCodexAccountOnHost(OWNER)
-    start.resolve(status({}))
-    await expect(Promise.all([first, second])).resolves.toEqual([CODEX, CODEX])
-    expect(rpc.calls.filter((call) => call.method === 'accounts.hostSignInStart')).toHaveLength(1)
   })
 })

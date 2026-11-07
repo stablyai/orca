@@ -1,6 +1,7 @@
 import React from 'react'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'

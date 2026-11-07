@@ -1,4 +1,4 @@
-import type { CommitDropdownCopy } from '../../../src/shared/source-control-dropdown-commit-items'
+import type { CommitDropdownCopy } from '../../../src/shared/source-control/dropdown/source-control-dropdown-commit-items'
 import type { Translate } from '../i18n/mobile-i18n'
 
 export function mobileCommitDropdownCopy(t: Translate): CommitDropdownCopy {

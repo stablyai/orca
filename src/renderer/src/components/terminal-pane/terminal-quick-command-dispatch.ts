@@ -1,11 +1,11 @@
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 type QuickCommandPane = {
   leafId: string

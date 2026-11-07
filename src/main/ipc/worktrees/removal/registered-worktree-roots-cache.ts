@@ -9,7 +9,7 @@ import {
 import {
   isDescendantOrEqual,
   normalizeExistingPath
-} from '../../filesystem/filesystem-path-containment'
+} from '../../filesystem/access/filesystem-path-containment'
 import {
   findOwnersListedThroughAnotherGit,
   shouldRelistOwner

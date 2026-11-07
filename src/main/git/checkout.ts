@@ -1,7 +1,9 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
-import { runWithGitReadCacheInvalidation } from './status'
+import { gitEnvWithoutYesNoPrompt } from './command-runner/git-no-prompt-env'
+import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 /** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
 export function assertValidBranchName(branch: string): void {
@@ -15,11 +17,16 @@ export async function checkoutBranch(
   worktreePath: string,
   branch: string,
   options: GitRuntimeOptions = {}
-): Promise<void> {
+): Promise<{ skippedPaths: string[] }> {
   assertValidBranchName(branch)
-  await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['checkout', branch, '--'], gitOptionsForWorktree(worktreePath, options))
+  const { stderr } = await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(['checkout', branch, '--'], {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // A locked file must fail the checkout, not open a prompt while the switch lock is held.
+      ...gitEnvWithoutYesNoPrompt()
+    })
   )
+  return { skippedPaths: parseCheckoutSkippedPaths(stderr) }
 }
 
 /** for-each-ref avoids localized branch decoration; return the current branch first. */

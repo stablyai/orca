@@ -1,7 +1,7 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 
-import { antigravityFixture } from './session-scanner-antigravity-fixtures'
-import { codexFixture } from './session-scanner-codex-fixtures'
+import { antigravityFixture } from './scanners/antigravity/session-scanner-antigravity-fixtures'
+import { codexFixture } from './scanners/codex/session-scanner-codex-fixtures'
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
 
 export type IncrementalAgentFixture = {

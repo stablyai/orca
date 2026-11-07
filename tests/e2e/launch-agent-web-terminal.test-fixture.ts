@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import type { AgentLaunchChoices } from '../../src/shared/agent-launch-choices'
-import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
+import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type * as LaunchAgentKindModule from '../../src/shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
   actualOperation: false,
@@ -97,19 +98,31 @@ export const store = {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.capability,
+  runtimeEnvironmentSupportsCapabilities: async (
+    environmentId: string,
+    capabilities: Parameters<typeof RuntimeRpcClient.runtimeEnvironmentSupportsCapabilities>[1]
+  ) => Promise.all(capabilities.map((capability) => mocks.capability(environmentId, capability))),
   callRuntimeRpc: mocks.hostRpc
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: mocks.toastError, success: mocks.toastSuccess }
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.reveal
+}))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
+  tuiAgentToAgentKind: mockLaunchAgentKind
 }))
+const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
+vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchAgentKindModule>()),
+  tuiAgentToAgentKind: mockLaunchAgentKind
+}))
+
 vi.mock('@/runtime/web-runtime-terminal-create-operation', async (importOriginal) => {
   const actual = await importOriginal<typeof TerminalOperation>()
   return {

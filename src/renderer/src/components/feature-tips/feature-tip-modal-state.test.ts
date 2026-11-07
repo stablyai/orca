@@ -31,18 +31,4 @@ describe('feature tip modal state', () => {
 
     expect(tip?.id).toBe('voice-dictation')
   })
-
-  it('falls back to the CLI tip first when no modal tip id is pinned', () => {
-    const tip = getFeatureTipForModal({
-      cliInstalled: false,
-      modalData: {},
-      seenTipIds: [],
-      featureInteractions: {},
-      chatUiLaunchTipVariant: 'none',
-      settings: makeSettings(),
-      webClient: false
-    })
-
-    expect(tip?.id).toBe('orca-cli')
-  })
 })

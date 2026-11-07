@@ -7,7 +7,7 @@ import { BLANK_BROWSER_TAB_STATE } from '../../shared/workspace-layout/workspace
 import { loadWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { randomUUID } from 'node:crypto'
 
 export type ServeBrowserPageState = {

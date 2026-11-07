@@ -6,8 +6,8 @@ import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-serv
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import '../../../shared/workspace-session-pane-ownership'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import {
   _resetLayoutFramePositionForTests,

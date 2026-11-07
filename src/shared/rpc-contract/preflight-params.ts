@@ -3,7 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { parseRoutableExecutionHostId } from '../execution-host'
 import { OptionalExecutionHostId } from './worktree-params'
 import { RepoSelector } from './github-repo-target-params'
-import type { TuiAgent } from '../tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../project-execution-runtime'
 

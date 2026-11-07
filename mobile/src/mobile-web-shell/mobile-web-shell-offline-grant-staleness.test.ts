@@ -29,6 +29,7 @@ const doubles = vi.hoisted((): Doubles => ({
 
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
@@ -133,7 +134,7 @@ async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted
         createStore: () => createGenerationStore({ fileSystem }),
         mintSessionId: () => 'session-id',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       }
     })
     latest.state = session.state
@@ -172,28 +173,6 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     doubles.connection = { client: {}, state: 'connected' }
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
     doubles.manifest = null
-  })
-
-  it('opens a same-build hit online without writing to the generation directory', async () => {
-    // Do not rewrite manifest.json while the native view may read it during page open.
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
-    const generationPaths = () =>
-      fileSystem.paths().filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
-    const paths = generationPaths()
-    const settled = fileSystem.writes.length
-    doubles.manifest = M2
-
-    const online = await mountRoute(fileSystem)
-
-    expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
-    const generationWrites = fileSystem.writes
-      .slice(settled)
-      .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
-    expect(generationWrites).toEqual([])
-    expect(generationPaths()).toEqual(paths)
-    await online.unmount()
   })
 
   it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {

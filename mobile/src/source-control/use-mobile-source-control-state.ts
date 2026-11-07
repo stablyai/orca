@@ -68,6 +68,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   }, [recordCommitFailure])
 
   const loaders = useMobileSourceControlLoaders({
+    hostId,
     client,
     connState,
     statusIdentityKey,
@@ -204,7 +205,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     insets,
     router,
     setRootRef,
-    worktreeLabel,
+    worktreeLabel: status ? branchLabel : worktreeLabel,
     screenState,
     branchCompareState,
     busyAction,

@@ -11,7 +11,7 @@ export function nativeChatSlotCopyText(
   const slot = slots.find((entry) => entry.kind === 'message' && entry.message.id === messageId)
   return slot?.kind === 'message'
     ? slot.message.from && (slot.message.role === 'user' || slot.message.agentStart)
-      ? agentMessageTranscriptText(slot.message.blocks, slot.message.from)
+      ? agentMessageTranscriptText(slot.message.blocks, slot.message.from, slot.message.shortened)
       : nativeChatMessageCopyText(slot.message, nativeChatStoppedBeforeStartLabel())
     : null
 }

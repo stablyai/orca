@@ -4,20 +4,20 @@ import {
 } from '../../../shared/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   cancelGenerateCommitMessageLocal,
   generateCommitMessageFromContext,
   resolveCommitMessageSettings,
   type GenerateCommitMessageResult
 } from '../../text-generation/commit-message-text-generation'
-import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-message-host-key'
-import { getStagedCommitContext } from '../../git/status'
+import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
+import { getStagedCommitContext } from '../../git/source-control/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
-import { resolveSourceControlAiLinkedIssue } from '../source-control-ai-linked-issue'
+import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import { resolveSourceControlAiLinkedIssue } from '../source-control/source-control-ai-linked-issue'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {

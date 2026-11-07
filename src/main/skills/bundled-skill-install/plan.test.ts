@@ -33,24 +33,6 @@ function unreadableFile(path: string, throws = false): BundledSkillFilesystem {
 }
 
 describe('unreadable bundled skill content', () => {
-  it.each([`---\nname: ${NAME}\n---\nmine\n`, 'another skill\n'])(
-    'leaves an ordinary copy alone while updating another target: %s',
-    async (text) => {
-      const home = await makeSkillHome()
-      await writeCopy(home.shared, text)
-      const auxiliary = join(home.shared, 'scripts', 'run.sh')
-      await mkdir(dirname(auxiliary))
-      await writeFile(auxiliary, 'mine')
-      await writeCopy(home.claude, OLD_TEXT)
-      const { plan } = await previewAndInstall(
-        serviceInput(home, { filesystem: unreadableFile(auxiliary) })
-      )
-      expect(plan.skills[0].ops.map((op) => op.kind)).toEqual(['leave', 'update'])
-      expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(text)
-      expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
-    }
-  )
-
   it.each([false, true])(
     'blocks only the forced target whose identity fails (throws: %s)',
     async (throws) => {

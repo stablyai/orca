@@ -1,3 +1,4 @@
+import { useStructuredAgentSessionOptionStamp } from './structured-agent-session-status-hooks'
 // @vitest-environment happy-dom
 
 import { renderHook } from '@testing-library/react'
@@ -9,10 +10,11 @@ import type { SelectionOutcome } from '../../../../shared/agent-session/options/
 
 type OptionsFixtureMocks = {
   call: Mock
+  subscribeStatus: Mock
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+  agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   hold: Mock<
     (
       sessionId: string,
@@ -22,6 +24,7 @@ type OptionsFixtureMocks = {
     ) => Promise<SelectionOutcome> | null
   >
   toastError: Mock<(message: string) => void>
+  effortDiscovery: boolean
   coherentCatalog: boolean
   sendSelection: boolean
 }
@@ -29,13 +32,14 @@ type OptionsFixtureMocks = {
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   const selection: {
     target: RuntimeClientTarget
-    agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+    agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   } = {
     target: { kind: 'local' },
     agent: 'codex'
   }
   return {
     call: vi.fn(),
+    subscribeStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
     enqueue: vi.fn(),
     pick: vi.fn(),
     ...selection,
@@ -48,6 +52,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
       ) => Promise<SelectionOutcome> | null
     >(),
     toastError: vi.fn<(message: string) => void>(),
+    effortDiscovery: false,
     coherentCatalog: false,
     sendSelection: false
   }
@@ -61,6 +66,15 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
   )
   return {
     ...actual,
+    useStructuredAgentSessionHostCapabilityState: (
+      target: RuntimeClientTarget | null,
+      capability: string
+    ) => {
+      const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
+      return mocks.effortDiscovery && capability === 'agent-session.model-catalog.model-efforts.v1'
+        ? 'supported'
+        : state
+    },
     useStructuredAgentSessionHostCapability: (
       target: RuntimeClientTarget,
       capability: Parameters<typeof actual.useStructuredAgentSessionHostCapability>[1]
@@ -76,7 +90,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
 })
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
   callStructuredAgentSession: mocks.call
 }))
 
@@ -86,7 +100,7 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
 
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', async () => {
   const { structuredSessionSelectionController } =
-    await import('@/lib/structured-agent-session-selection-controller')
+    await import('@/lib/agent-session/options/structured-agent-session-selection-controller')
   const actual = await vi.importActual<typeof LaunchOptions>(
     '@/lib/agent-session/launch/structured-agent-session-launch-options'
   )
@@ -128,19 +142,23 @@ class FakeRpcCallError extends Error {
 }
 
 type Answers = {
-  options?: () => Promise<unknown>
+  options?: (target: RuntimeClientTarget) => Promise<unknown>
   modelCatalog?: () => Promise<unknown>
 }
 
 function answer(answers: Answers): void {
   mocks.call.mockImplementation(
-    async (_target: unknown, method: string, params: { key: string; value: string }) => {
+    async (
+      _target: RuntimeClientTarget,
+      method: string,
+      params: { key: string; value: string }
+    ) => {
       if (method === 'agentSession.setOption') {
         const value = await mocks.pick(method, method, { key: params.key, value: params.value })
         return value ? { ok: true, value } : Promise.reject(new Error('Unconfirmed option write'))
       }
       if (method === 'agentSession.options' && answers.options) {
-        return answers.options()
+        return answers.options(_target)
       }
       if (method === 'agentSession.modelCatalog' && answers.modelCatalog) {
         return answers.modelCatalog()
@@ -170,11 +188,12 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex' | 'pi' | 'antigravity'
+  agent?: 'claude' | 'codex' | 'pi' | 'antigravity' | 'opencode2'
   providerStarting?: boolean
   paired?: boolean
   /** Pass the production presentation scope, which is closed while transport is disabled. */
   presentation?: boolean
+  onRender?: () => void
 }
 
 const PROVISIONAL: RenderProps = { transportEnabled: false, fence: null, launch: 'new' }
@@ -189,13 +208,19 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
   mocks.agent = initial.agent ?? 'codex'
   return renderHook(
     (props: RenderProps) => {
+      props.onRender?.()
       const { capturePresentation } = useStructuredAgentSessionMutate({
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
         stateRef: { current: { fence: props.fence } },
         enabled: props.transportEnabled
       })
+      const hostOptionStamp = useStructuredAgentSessionOptionStamp(
+        props.sessionId ?? 'session-1',
+        props.paired ? PAIRED_TARGET : LOCAL_TARGET
+      )
       const options = useStructuredAgentSessionOptions({
+        hostOptionStamp,
         agent: props.agent ?? 'codex',
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
@@ -250,7 +275,7 @@ function setOptionCalls(calls: ReturnType<typeof vi.fn<MutateCall>>): unknown[] 
 }
 
 const HOST_CATALOG = {
-  origin: 'live-session',
+  origin: 'live-session' as const,
   models: [
     {
       id: 'gpt-hosted',

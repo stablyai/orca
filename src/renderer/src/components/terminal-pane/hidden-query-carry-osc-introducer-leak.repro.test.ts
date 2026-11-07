@@ -1,21 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
-import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
+import { bindPtyConnectionTestMocks } from './pty-connection/test-fixtures/pty-connection-mocks.spec'
+import {
+  flushAsyncTicks,
+  writeHeadlessTerminal
+} from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   type ConnectCallbacks,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
@@ -58,7 +65,8 @@ describe('hidden query carry vs a following OSC', () => {
   })
 
   it('does not paint an OSC payload after the reveal restore when a hidden chunk ended mid-CSI', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-id')
     const dataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -79,6 +87,8 @@ describe('hidden query carry vs a following OSC', () => {
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
     const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
     const binding = connectPanePty(...args)
     const rendered = new Terminal({ cols: 120, rows: 40, allowProposedApi: true })
     try {
@@ -89,7 +99,8 @@ describe('hidden query carry vs a following OSC', () => {
         rawLength: HIDDEN_STRAGGLER_ENDING_MID_SGR.length
       })
       isVisibleRef.current = true
-      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      const { _dispatchPtyModelRestoreNeededForTest } =
+        await import('./pty-transport/delivery/pty-model-restore-channel')
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'unhide', markerSeq: 1000 })
       await flushAsyncTicks(40)
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)

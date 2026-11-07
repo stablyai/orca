@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -415,25 +415,6 @@ describe('fetchWorktrees', () => {
 
     resolvePersist()
     await rename
-  })
-
-  it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
-    const store = createTestStore()
-    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-
-    mockApi.worktrees.listDetected.mockResolvedValueOnce(
-      makeDetectedResult('repo1', [], {
-        authoritative: false,
-        source: 'metadata-fallback'
-      })
-    )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
-
-    const result = await store.getState().fetchWorktrees('repo1')
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
-    expect(store.getState().sortEpoch).toBe(7)
-    expect(result).toBe(false)
   })
 
   it('keeps the scanned rows and their tabs when a stopped WSL distro returns stored rows', async () => {

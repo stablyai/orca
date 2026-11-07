@@ -7,7 +7,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
-} from '@/lib/pr-comment-thread-resolution'
+} from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import {
   getGitHubRepoSourceSettings,

@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { focusWorkspaceGridViewMember } = vi.hoisted(() => ({
   focusWorkspaceGridViewMember: vi.fn()
 }))
-vi.mock('@/lib/workspace-grid-view-actions', () => ({ focusWorkspaceGridViewMember }))
+vi.mock('@/lib/workspace/grid-view/workspace-grid-view-actions', () => ({
+  focusWorkspaceGridViewMember
+}))
 
 import {
   WORKSPACE_GRID_VIEW_CELL_ACTION_ATTR,

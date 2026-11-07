@@ -2,10 +2,10 @@ import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
-import { followWorkspaceSleep } from '@/components/sidebar/workspace-sleep-follower'
+import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -155,10 +155,10 @@ export function registerMobileAndTerminalCloseIpcBridge(
   unsubs.push(
     window.api.ui.onCloseTerminal((target) => {
       if (target.kind === 'pane') {
-        applyClosedTerminalLeafNotice(target.tabId, target.leafId)
+        applyClosedTerminalLeafNotice(target.tabId, target.leafId, 'requested')
       } else {
         // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-        closeTerminalTab(target.tabId, { skipRunningProcessConfirm: true })
+        closeTerminalTab(target.tabId, { reason: 'requested', skipRunningProcessConfirm: true })
       }
     })
   )
@@ -177,6 +177,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
             window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
           }
           closeTerminalTab(tabId, {
+            reason: 'requested',
             rejectPinned: true,
             ...(force ? { force: true } : {}),
             ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),

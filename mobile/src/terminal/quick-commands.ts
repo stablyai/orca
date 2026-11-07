@@ -1,40 +1,16 @@
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import {
-  applyTerminalQuickCommandMutation,
   flattenTerminalQuickCommand,
-  getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
-  MAX_QUICK_COMMAND_LABEL_LENGTH,
-  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
-  parseNormalizedTerminalQuickCommands,
-  supportsTerminalAgentQuickCommand,
-  terminalQuickCommandMatchesRepo,
-  type TerminalQuickCommandMutation
-} from '../../../src/shared/terminal-quick-commands'
-import {
-  getTerminalQuickCommandBodySize,
-  formatKilobytes,
-  terminalQuickCommandAgentPromptMaxLength
-} from '../../../src/shared/terminal-quick-command-prompt-limit'
-import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+  supportsTerminalAgentQuickCommand
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import '../../../src/shared/protocol-version'
+import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-capabilities'
+import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 // Reuse the pure desktop command logic; renderer-only labels and native truncation stay here.
-export {
-  isTerminalAgentQuickCommand as isAgentQuickCommand,
-  getTerminalQuickCommandBody,
-  terminalQuickCommandMatchesRepo as quickCommandMatchesRepo,
-  supportsTerminalAgentQuickCommand,
-  getTerminalQuickCommandBodySize,
-  formatKilobytes,
-  MAX_QUICK_COMMAND_LABEL_LENGTH,
-  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
-  parseNormalizedTerminalQuickCommands,
-  terminalQuickCommandAgentPromptMaxLength,
-  applyTerminalQuickCommandMutation,
-  type TerminalQuickCommandMutation
-}
 
 const MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH = 240
 

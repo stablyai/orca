@@ -24,7 +24,7 @@ import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-rega
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export function structuredAgentSessionHostKey(target: RuntimeClientTarget): string {
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`

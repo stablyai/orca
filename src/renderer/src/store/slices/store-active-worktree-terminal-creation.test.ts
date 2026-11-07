@@ -7,7 +7,7 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../../../shared/folder-workspace-host-routing.test-fixture'
+} from '../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/terminal-pane-owner-context'
 
@@ -18,7 +18,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: mockRestorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))

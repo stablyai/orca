@@ -69,7 +69,9 @@ export {
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
 
-export function createTestStore() {
+export function createTestStore(
+  isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
+) {
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withTestStorePolicies(
@@ -77,7 +79,7 @@ export function createTestStore() {
         ...createRepoSlice(...a),
         ...createSparsePresetsSlice(...a),
         ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a),
+        ...createTerminalSlice(...a, isClaudeAgent),
         ...createTabsSlice(...a),
         ...createUISlice(...a),
         ...createSettingsSlice(...a),

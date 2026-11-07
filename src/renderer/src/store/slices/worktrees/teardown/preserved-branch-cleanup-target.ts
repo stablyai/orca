@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { PreservedBranchCleanup } from '../../../../../../shared/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 
 export const preservedBranchRuntimeTargetByCleanupKey = new Map<
   string,

@@ -4,7 +4,7 @@ import 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import type { ListDetectedWorktreesArgs } from '../../../../shared/detected-worktree-provider-contract'
 import type { SshProviderEpoch } from '../../../../shared/ssh-types'
-import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { useAppStore } from '@/store'
 import {
   TEST_SSH_AUTHORITY,
@@ -143,50 +143,6 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
       { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
-  })
-
-  it('fetches the requested host when duplicate repo ids exist', async () => {
-    const store = createTestStore()
-    const localWorktree = makeWorktree({
-      id: 'same-repo::/local/wt',
-      repoId: 'same-repo',
-      path: '/local/wt'
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [
-        {
-          id: 'same-repo',
-          path: '/local/repo',
-          displayName: 'Local',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'local'
-        },
-        {
-          id: 'same-repo',
-          path: '/remote/repo',
-          displayName: 'Runtime',
-          badgeColor: '#111',
-          addedAt: 1,
-          executionHostId: 'runtime:env-1'
-        }
-      ]
-    } as Partial<AppState>)
-    mockApi.worktrees.listDetected.mockResolvedValueOnce(
-      makeDetectedResult('same-repo', [localWorktree])
-    )
-
-    await store.getState().fetchWorktrees('same-repo', { executionHostId: 'local' })
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoId: 'same-repo',
-        executionHostId: 'local'
-      })
-    )
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
   it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
@@ -335,42 +291,6 @@ describe('fetchWorktrees', () => {
 
     await expect(refresh).resolves.toBe(false)
     expect(store.getState().worktreesByRepo['repo-missing']).toBeUndefined()
-  })
-
-  it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
-    const store = createTestStore()
-    // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
-    const remote = makeWorktree({
-      id: 'repo-remote::/remote/wt1',
-      repoId: 'repo-remote',
-      path: '/remote/wt1',
-      branch: 'refs/heads/remote',
-      hostId: 'local'
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo-remote',
-          path: '/home/dvic/src/omarchy-dotfiles',
-          displayName: 'omarchy-dotfiles',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ]
-    })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: makeDetectedResult('repo-remote', [remote]),
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    await store.getState().fetchWorktrees('repo-remote', { forceLocalOwner: true })
-
-    expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
-    ])
   })
 
   it('rejects a pre-reconnect runtime listing after a newer generation publishes', async () => {

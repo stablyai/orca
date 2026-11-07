@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastError: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focusRenderer,
   focusRuntimeTerminalHandle: mocks.focusRuntime
 }))
@@ -47,7 +47,7 @@ import type { AgentSenderAssociation } from '../../src/shared/agent-sender-assoc
 import type { AgentMessageSender } from '../../src/shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 const PAIRED: RuntimeClientTarget = { kind: 'environment', environmentId: 'paired' }
@@ -152,7 +152,12 @@ function reopenedWorker(first: 'live' | 'gone') {
   const firstHandle = first === 'live' ? host.open('tab-0', 'workspace') : 'term_before'
   const reopened = host.open('tab-1', 'workspace')
   publish('local', [
-    { identity: 'dispatch:first', paneKey: pane('tab-1'), worktreeId: 'workspace' },
+    {
+      identity: 'dispatch:first',
+      dispatchActor: true,
+      paneKey: pane('tab-1'),
+      worktreeId: 'workspace'
+    },
     ...(first === 'live'
       ? [{ identity: firstHandle, paneKey: pane('tab-0'), worktreeId: 'workspace' }]
       : [{ identity: firstHandle, paneKey: pane('tab-1'), worktreeId: 'workspace' }])
@@ -232,7 +237,14 @@ it('acts on what the card names after the host answers, not on what it named at 
   duringLookup = () =>
     publish(
       'local',
-      [{ identity: sender.party.address, paneKey: pane('tab-0'), worktreeId: 'workspace' }],
+      [
+        {
+          identity: sender.party.address,
+          dispatchActor: true,
+          paneKey: pane('tab-0'),
+          worktreeId: 'workspace'
+        }
+      ],
       2
     )
   await open(sender)
@@ -272,7 +284,12 @@ it('asks a paired host for the pane by its own coordinates, not this window’s 
     }
   })
   publish('runtime:paired', [
-    { identity: 'dispatch:first', paneKey: pane('tab-1'), worktreeId: 'host-workspace' }
+    {
+      identity: 'dispatch:first',
+      dispatchActor: true,
+      paneKey: pane('tab-1'),
+      worktreeId: 'host-workspace'
+    }
   ])
   const sender = worker('term_before')
   const resolved = resolveAgentMessageSenderTarget(
@@ -319,7 +336,12 @@ it('shows and opens a paired host’s pane under the window’s whole-tab mirror
     }
   })
   publish('runtime:paired', [
-    { identity: 'dispatch:first', paneKey: pane('tab-2'), worktreeId: 'workspace' }
+    {
+      identity: 'dispatch:first',
+      dispatchActor: true,
+      paneKey: pane('tab-2'),
+      worktreeId: 'workspace'
+    }
   ])
   const sender = worker('term_before')
   const resolved = resolveAgentMessageSenderTarget(

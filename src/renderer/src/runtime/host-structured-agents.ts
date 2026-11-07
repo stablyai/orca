@@ -8,7 +8,7 @@ import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '.
 import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
 import { callRuntimeRpc } from './runtime-rpc-client'
 

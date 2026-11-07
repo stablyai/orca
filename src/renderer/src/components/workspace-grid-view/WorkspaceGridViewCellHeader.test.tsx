@@ -17,7 +17,7 @@ const { store } = vi.hoisted(() => ({
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: typeof store.state) => unknown) => selector(store.state)
 }))
-vi.mock('@/lib/workspace-grid-view-actions', () => ({
+vi.mock('@/lib/workspace/grid-view/workspace-grid-view-actions', () => ({
   focusWorkspaceGridViewMember: vi.fn(),
   removeWorkspaceFromGridViewKeepingFocus: vi.fn()
 }))

@@ -4,20 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
   listEnvironments
-} from '../../shared/runtime-environment-store'
-import { DeviceRegistry } from './device-registry'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
 import {
   clearRuntimeMetadata,
   clearRuntimeMetadataIfOwned,
   readRuntimeMetadata,
   writeRuntimeMetadata
-} from './runtime-metadata'
+} from './rpc/server/runtime-metadata'
 
 const tempDirs: string[] = []
 

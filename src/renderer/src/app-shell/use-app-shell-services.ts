@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
+import { useClosedEditorTabCleanup } from '../components/editor/model-lifetime/retention/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
 import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
@@ -11,7 +11,7 @@ import {
   usePrimarySelectionPaste
 } from '../hooks/usePrimarySelectionPaste'
 import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
-import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
+import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useHostStructuredAgentsSync } from '../runtime/host-structured-agents-sync'
 import { useLegacyChatRenameMigration } from '../runtime/legacy-chat-rename-migration'

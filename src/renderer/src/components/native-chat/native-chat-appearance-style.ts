@@ -3,13 +3,14 @@ import { useMemo, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { resolveEditorFontStack } from '@/lib/editor-typography'
-import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-theme'
-import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { isTerminalBackgroundLight } from '../../../../shared/terminal-themes/terminal-title-contrast'
+import { useSystemPrefersDark } from '../../hooks/theme/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.
@@ -107,8 +108,9 @@ function applyTerminalChatColors(
       '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
       '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
-      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble and link color yield too.
       '--chat-user-message': 'initial',
+      '--text-link': 'initial',
       '--chat-source-background': background,
       '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':

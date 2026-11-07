@@ -3,7 +3,7 @@ import type { WorktreeAgentInventoryState } from '@/lib/agent-detection-target-i
 import type {
   GitConflictOperation,
   GitStatusEntry
-} from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/status/git-status-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'

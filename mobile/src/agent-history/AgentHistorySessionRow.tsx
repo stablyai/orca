@@ -7,8 +7,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AutoHeight } from '../components/AutoHeight'
 import { DisclosureChevron } from '../components/DisclosureChevron'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { recentSessionConversationTurns } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState

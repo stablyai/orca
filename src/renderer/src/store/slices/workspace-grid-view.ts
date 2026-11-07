@@ -3,7 +3,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   addWorkspaceGridViewMember,
   removeWorkspaceGridViewMember
-} from '@/lib/workspace-grid-view-membership'
+} from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import type { AppState } from '../types'
 import { selectFolderWorkspaces } from '../workspace-record-selectors'
 import {

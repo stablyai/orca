@@ -17,7 +17,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 type SubscriptionCallbacks = {
@@ -118,7 +118,8 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
   async function attachAllPanes(): Promise<
     { hostTabId: string; transport: { getPtyId: () => string | null; destroy?: () => void } }[]
   > {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { createRemoteRuntimePtyTransport } =
+      await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
     const panes = HOST_TAB_IDS.map((hostTabId) => {
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',

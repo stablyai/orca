@@ -39,7 +39,7 @@ import {
   type AutomationWorkspaceSshPin
 } from '../../../shared/automation-workspace-pin'
 import { summarizeAutomationRunUsage } from '../../../shared/automation-usage-summary'
-import type { FolderWorkspaceHostState } from '../../../shared/folder-workspace-execution-host'
+import type { FolderWorkspaceHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 export type AutomationStorageAuthority = 'desktop' | 'runtime'
 

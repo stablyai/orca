@@ -4,7 +4,7 @@ import {
 } from './worktrees/removal/registered-worktree-roots-cache'
 import { registerWorktreeHandlers } from './worktrees'
 import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
@@ -28,7 +28,6 @@ import {
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
   resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
@@ -100,7 +99,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     resolveLocalGitUsernameMock,
     getBaseRefDefaultMock,
     resolveDefaultBaseRefWithLocalGitMock,
-    resolveDefaultBaseRefViaExecMock,
     getDefaultRemoteMock,
     getBranchConflictKindMock,
     getPRForBranchMock,
@@ -225,7 +223,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   resolveLocalGitUsernameMock.mockResolvedValue('')
   getBaseRefDefaultMock.mockResolvedValue('origin/main')
   resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
-  resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
   getDefaultRemoteMock.mockResolvedValue('origin')
   getBranchConflictKindMock.mockResolvedValue(null)
   getPRForBranchMock.mockResolvedValue(null)

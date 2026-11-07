@@ -1,11 +1,11 @@
 // Real store/main model/frame rig for drag-out; importing suites install layout transport mocks.
 
 import { expect, vi } from 'vitest'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   createTestStore,
   makeWorktree,

@@ -3,7 +3,6 @@ import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
-  MobileWebShellReportedFailure as ShellFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
@@ -24,6 +23,11 @@ import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-docume
 import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
 import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-document-lifecycle'
+import {
+  reduceShellFailed,
+  retryDeletesCache,
+  type RefetchAfterDelete
+} from './shell-failure-recovery'
 
 export function createMobileWebShellSession(
   routePathname: string,
@@ -42,6 +46,7 @@ export function createMobileWebShellSession(
     state: CHECKING,
     retriedOnce: false,
     remountedOnce: false,
+    pageRemountedOnce: false,
     pageReady: false,
     pagePainted: false,
     documentLoaded: false,
@@ -153,30 +158,9 @@ function onManifestRead(
   )
 }
 
-// Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
-// Retired document reports cannot interrupt recovery; profile failures can end startup before ready.
-function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): MobileWebShellStep {
-  if (session.state.kind !== 'ready' && reason !== 'host-profile-unreadable') {
-    return step(session, {})
-  }
-  const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
-  if (reason === 'isolation-unavailable' || reason === 'host-profile-unreadable') {
-    // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
-    return step(session, { state: failed, flow: session.flow + 1 })
-  }
-  if (reason === 'render-process-gone') {
-    return session.remountedOnce
-      ? step(session, { state: failed })
-      : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
-  }
-  if (session.retriedOnce || session.gates === null) {
-    return step(session, { state: failed })
-  }
-  // Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
-  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
-    { kind: 'delete-cache' }
-  ])
-}
+// Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
+const refetchAfterDelete: RefetchAfterDelete = (session, gates) =>
+  startFlow(session, gates, { retriedOnce: true, cached: null }, [{ kind: 'delete-cache' }])
 
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
   if (session.state.kind === 'failed' && session.state.reason === 'host-profile-unreadable') {
@@ -250,36 +234,53 @@ export function reduceMobileWebShellSession(
     case 'download-failed':
       return onDownloadFailed(session, event.cause)
     case 'shell-failed':
-      return onShellFailed(session, event.reason)
+      return reduceShellFailed(session, event.reason, refetchAfterDelete)
     case 'remounted':
     case 'document-started':
     case 'document-loaded':
     case 'page-ready-deadline':
     case 'document-load-deadline':
       return reducePageDocumentLifecycle(session, event, (failed) =>
-        onShellFailed(failed, 'document-load-failed')
+        reduceShellFailed(failed, 'document-load-failed', refetchAfterDelete)
       )
     case 'page-ready':
+      return step(
+        session,
+        pageDocumentStatePatch(session, event),
+        session.state.kind === 'ready' ? [{ kind: 'cancel-deadlines' }] : []
+      )
     case 'page-painted':
+      // A painted remount refills the renderer-loss budget; only a loss before paint walls.
+      // The page-failure budget stays spent: a page that paints and then faults would otherwise remount forever.
+      return step(
+        session,
+        session.state.kind === 'ready'
+          ? { ...pageDocumentStatePatch(session, event), remountedOnce: false }
+          : {}
+      )
     case 'page-back-claim':
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':
       return onLayoutChanged(session, event.wide)
-    case 'retry-pressed':
+    case 'retry-pressed': {
       // Only explicit retry resets recovery latches; reconnect must not grant another remount.
+      const reset = { retriedOnce: false, remountedOnce: false, pageRemountedOnce: false }
+      const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
+        ? [{ kind: 'delete-cache' }]
+        : []
       return session.gates === null
-        ? step(session, {
-            retriedOnce: false,
-            remountedOnce: false,
-            updateNotice: null,
-            requestedBuildId: null,
-            state: CHECKING,
-            flow: session.flow + 1
-          })
-        : startFlow(session, session.gates, {
-            retriedOnce: false,
-            remountedOnce: false,
-            cached: null
-          })
+        ? step(
+            session,
+            {
+              ...reset,
+              updateNotice: null,
+              requestedBuildId: null,
+              state: CHECKING,
+              flow: session.flow + 1
+            },
+            fresh
+          )
+        : startFlow(session, session.gates, { ...reset, cached: null }, fresh)
+    }
   }
 }

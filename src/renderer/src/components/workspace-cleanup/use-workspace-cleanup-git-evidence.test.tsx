@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
 import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
 

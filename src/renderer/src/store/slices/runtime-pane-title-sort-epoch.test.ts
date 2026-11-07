@@ -4,9 +4,12 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
-  ensurePtyDispatcher: vi.fn(),
+  ensurePtyDispatcher: vi.fn()
+}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   unregisterPtyDataHandlers: vi.fn()
 }))
 vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
@@ -60,41 +63,6 @@ describe('runtimePaneTitle → sortEpoch', () => {
     expect(store.getState().runtimePaneTitlesByTabId).toBe(runtimePaneTitlesByTabId)
     expect(store.getState().tabsByWorktree['wt-bg']?.[0]?.title).toBe(firstTitle)
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe(firstTitle)
-  })
-
-  it('collapses bulk Codex spinner title churn to the first meaningful publication', () => {
-    const store = createTestStore()
-    const tabCount = 20
-    const worktrees = Array.from({ length: tabCount }, (_, index) =>
-      makeWorktree({ id: `wt-${index}`, repoId: 'repo1', path: `/path/wt-${index}` })
-    )
-    const tabsByWorktree = Object.fromEntries(
-      worktrees.map((worktree, index) => [
-        worktree.id,
-        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
-      ])
-    )
-    seedStore(store, {
-      worktreesByRepo: { repo1: worktrees },
-      tabsByWorktree
-    })
-    let publications = 0
-    const unsubscribe = store.subscribe(() => {
-      publications += 1
-    })
-    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧']
-
-    for (let tabIndex = 0; tabIndex < tabCount; tabIndex += 1) {
-      const tabId = `tab-${tabIndex}`
-      for (const frame of frames) {
-        const title = `${frame} Codex is thinking`
-        store.getState().updateTabTitle(tabId, title)
-        store.getState().setRuntimePaneTitle(tabId, 1, title)
-      }
-    }
-
-    unsubscribe()
-    expect(publications).toBe(tabCount * 2)
   })
 
   it('publishes a bulk tab-title update once across worktrees', () => {

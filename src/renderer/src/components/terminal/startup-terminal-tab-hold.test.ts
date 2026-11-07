@@ -19,7 +19,7 @@ import {
   type StartupTerminalTabHold
 } from './startup-terminal-tab-hold'
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
 
 const WORKTREE_ID = 'repo::/worktree'

@@ -2,8 +2,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceGridViewCellRect } from '@/lib/workspace-grid-view-cell-rects'
-import { computeWorkspaceGridViewCellRects } from '@/lib/workspace-grid-view-cell-rects'
+import type { WorkspaceGridViewCellRect } from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
+import { computeWorkspaceGridViewCellRects } from '@/lib/workspace/grid-view/workspace-grid-view-cell-rects'
 import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces'
 import type { TerminalController } from './use-terminal-controller'
 

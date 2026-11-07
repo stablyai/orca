@@ -5,11 +5,11 @@ import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
-} from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
 

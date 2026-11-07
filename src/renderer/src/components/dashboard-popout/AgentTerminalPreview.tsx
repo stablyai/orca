@@ -2,9 +2,9 @@ import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
@@ -24,7 +24,7 @@ import {
   openStandaloneTerminal,
   type StandaloneTerminal
 } from '../standalone-terminal/open-standalone-terminal'
-import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
+import type { TerminalPreviewDataPayload } from '../../../../shared/terminal/replay/terminal-preview'
 import { terminalPreviewApiFor } from './terminal-preview-api'
 
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'

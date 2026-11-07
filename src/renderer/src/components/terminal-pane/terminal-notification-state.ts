@@ -9,17 +9,19 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import { getActiveWorkspaceExecutionHostId } from '@/lib/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
+  findIndexedProjectGroupOwner
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import {
   findIndexedRepoOwnerForHost,
-  getCatalogOwnerHostId,
   resolveIndexedRepoOwner
-} from '@/lib/worktree-runtime-owner-index'
+} from '@/lib/workspace/ownership/repo-owner-index'
+import { getCatalogOwnerHostId } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>

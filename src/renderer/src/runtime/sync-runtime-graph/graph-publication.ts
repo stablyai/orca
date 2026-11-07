@@ -1,17 +1,17 @@
-import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
+} from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'

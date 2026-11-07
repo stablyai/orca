@@ -1,11 +1,16 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
-import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
-import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
+import {
+  normalizeHostedReviewHeadRef,
+  normalizeHostedReviewBaseRef as stripBaseRef
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
+import {
+  localizedCreateFailure,
+  localizedCreateException
+} from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -15,9 +20,9 @@ import type { HostedReviewCreatedContext } from './hosted-review-creation-state'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlPullRequestGeneration } from './use-pull-request-generation'
 import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
-import { useGenerateBeforeCreatePullRequest } from '../../use-generate-before-create-pull-request'
-import { createdReviewIsForeground } from '../../created-review-foreground'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
+import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 /** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
@@ -35,6 +40,7 @@ export function useSourceControlHostedReviewCreation({
   hostedReviewCreation,
   prAiGenerationEnabled,
   prBase,
+  prImageUploadPendingRef,
   prBody,
   prDraft,
   prFieldRevisions,
@@ -47,7 +53,18 @@ export function useSourceControlHostedReviewCreation({
   setCreatePrIntentNoticeForWorktree,
   settings,
   worktreePath
-}: {
+}: Pick<
+  SourceControlCreateReviewComposer,
+  | 'prAiGenerationEnabled'
+  | 'prBase'
+  | 'prBody'
+  | 'prDraft'
+  | 'prFieldRevisions'
+  | 'prFieldsAreSeedPlaceholders'
+  | 'prTitle'
+  | 'pullRequestFieldsInitialized'
+  | 'handleGeneratePullRequestFields'
+> & {
   activePullRequestGenerationKey: SourceControlPullRequestGeneration['activePullRequestGenerationKey']
   activeRepo: SourceControlWorktreeContext['activeRepo']
   activeWorktreeId: string | null
@@ -55,20 +72,12 @@ export function useSourceControlHostedReviewCreation({
   createHostedReview: SourceControlStoreActions['createHostedReview']
   createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
   createStackedHostedReview: SourceControlStoreActions['createStackedHostedReview']
-  handleGeneratePullRequestFields: SourceControlCreateReviewComposer['handleGeneratePullRequestFields']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
   hostedReviewCreateProvider: SourceControlHostedReviewState['hostedReviewCreateProvider']
   hostedReviewCreation: SourceControlHostedReviewState['hostedReviewCreation']
-  prAiGenerationEnabled: SourceControlCreateReviewComposer['prAiGenerationEnabled']
-  prBase: SourceControlCreateReviewComposer['prBase']
-  prBody: SourceControlCreateReviewComposer['prBody']
-  prDraft: SourceControlCreateReviewComposer['prDraft']
-  prFieldRevisions: SourceControlCreateReviewComposer['prFieldRevisions']
-  prFieldsAreSeedPlaceholders: SourceControlCreateReviewComposer['prFieldsAreSeedPlaceholders']
+  prImageUploadPendingRef?: React.RefObject<boolean>
   prGenerating: boolean
-  prTitle: SourceControlCreateReviewComposer['prTitle']
-  pullRequestFieldsInitialized: SourceControlCreateReviewComposer['pullRequestFieldsInitialized']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
   setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
@@ -78,6 +87,7 @@ export function useSourceControlHostedReviewCreation({
   const createPullRequest = useCallback(
     async (stacked = false, generated?: PullRequestGenerationFields): Promise<void> => {
       if (
+        prImageUploadPendingRef?.current ||
         !activeRepo ||
         !activeWorktreeId ||
         !worktreePath ||
@@ -230,14 +240,7 @@ export function useSourceControlHostedReviewCreation({
       } catch (error) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
           tone: 'destructive',
-          message:
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-                  'Failed to create {{value0}}',
-                  { value0: hostedReviewCreateCopy.reviewLabel }
-                )
+          message: localizedCreateException(error, hostedReviewCreateCopy.reviewLabel)
         })
       }
     },
@@ -254,6 +257,7 @@ export function useSourceControlHostedReviewCreation({
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       prBase,
+      prImageUploadPendingRef,
       prBody,
       prDraft,
       prGenerating,

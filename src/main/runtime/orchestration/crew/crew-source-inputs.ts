@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   readCrewParentInputs,
   type CrewParentClaim,
@@ -12,10 +12,10 @@ import {
   readCrewQuestions,
   type CrewAssignmentRow
 } from './crew-query'
-import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
+import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { paneKeyMatchSuffix } from '../db/pane-key-match'
 
 type ProvenanceRow = Pick<CrewParentClaim, 'id' | 'handle' | 'pane' | 'session' | 'process'>

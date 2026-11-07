@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpStructuredLane } from './acp-structured-lane'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { openAcpFixtureRig } from './acp-timeline-fixture.test-support'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 afterEach(closeProviderTimelineRigs)
 

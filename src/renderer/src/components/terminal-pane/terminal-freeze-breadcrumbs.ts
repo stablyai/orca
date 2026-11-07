@@ -3,13 +3,13 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   type PtyDeliveryBreadcrumb,
   createPtyDeliveryBreadcrumbRing
-} from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB,
   recordTerminalWebglDiagnostic,
   setTerminalWebglDiagnosticRecorder
-} from '../../../../shared/terminal-webgl-diagnostics'
-import { maybeStartTerminalRenderDesyncSentinel } from './terminal-render-desync-trigger'
+} from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
+import { maybeStartTerminalRenderDesyncSentinel } from './render-health/terminal-render-desync-trigger'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
 const ATLAS_FONT_PROBE_MISMATCH = 'atlas-font-probe-mismatch'

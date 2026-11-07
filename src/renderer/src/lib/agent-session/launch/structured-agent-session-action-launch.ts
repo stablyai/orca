@@ -7,11 +7,11 @@ import {
 } from './structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
 import type { Tab } from '../../../../../shared/tab-types'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
 import { insertUnifiedTabAfterAnchor } from '../../unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'
-import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
+import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import {
@@ -44,14 +44,16 @@ export function openDeclinedTerminal(
   })
 }
 
-/** Only a foreground action without a prompt to deliver may open before admission. */
+/** Explicit chats keep their input if admission fails; empty foreground actions can also open immediately. */
 export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
   const { plan } = args
   return (
-    args.focusIntent !== undefined &&
-    args.activate !== false &&
-    !plan.resumeFrom &&
-    (!plan.prompt?.trim() || plan.promptDelivery === 'draft')
+    plan.requestedSurface === 'chat' ||
+    (args.focusIntent !== undefined &&
+      args.activate !== false &&
+      !plan.resumeFrom &&
+      !plan.forkFrom &&
+      (!plan.prompt?.trim() || plan.promptDelivery === 'draft'))
   )
 }
 

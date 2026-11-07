@@ -1,4 +1,4 @@
-import WorktreeCard from '@/components/sidebar/WorktreeCard'
+import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
   getLineageChildrenInlineStyle,
@@ -10,6 +10,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectCrossStoreFolderChildrenById } from '@/store/cross-store-lineage-parents'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -18,6 +19,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
   const repos = useAppStore((s) => s.repos)
   const [collapsedLineageWorktreeIds, setCollapsedLineageWorktreeIds] = useState<
     ReadonlySet<string>
@@ -31,7 +33,8 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       folderWorkspaces,
       workspaceLineageByChildKey,
       worktreeLineageById,
-      worktreesByRepo
+      worktreesByRepo,
+      crossStoreChildrenByFolderId
     })
 
   const toggleLineage = (worktreeId: string): void => {

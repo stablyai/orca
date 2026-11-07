@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts
-} from '@/lib/source-control-commit-draft-session'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+} from '@/lib/source-control/drafts/source-control-commit-draft-session'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import {
   createPrIntentCurrentTargetConflictsWithToken,

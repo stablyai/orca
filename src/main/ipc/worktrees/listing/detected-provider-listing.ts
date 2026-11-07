@@ -39,7 +39,7 @@ import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
-import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
+import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,
   rescanWorktreesWhenWslDistroRuns,

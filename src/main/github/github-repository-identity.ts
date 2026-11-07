@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
-import { readRemoteUrl } from '../git/remote-url-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
+import { readRemoteUrl } from '../git/remotes/remote-url-probe'
 import {
   ghAccountBindingsEqual,
   normalizeGhAccountBinding,
@@ -14,7 +14,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
-import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'

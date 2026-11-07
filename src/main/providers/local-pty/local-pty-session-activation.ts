@@ -1,6 +1,6 @@
 import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
-import { withInitialOutputDiagnostic } from '../../../shared/terminal-start-failure'
-import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import { withInitialOutputDiagnostic } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../../shared/startup-command-submission'
 import {
@@ -9,11 +9,14 @@ import {
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../../shared/startup-command-staging'
-import { PtyStartupIngress } from '../../../shared/pty-startup-ingress'
-import type { PtyIngressEmission } from '../../../shared/pty-startup-ingress-contract'
-import { resolvePtyOwnerBackend } from '../../../shared/pty-owner-backend'
-import { resolveProcessExitCause } from '../../../shared/terminal-exit-cause'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
+import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
+import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
+import {
+  type TerminalExitCause,
+  resolveProcessExitCause
+} from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getAgentForegroundContextPaths } from '../agent-foreground-context-paths'
 import { getSpawnedShellName } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'

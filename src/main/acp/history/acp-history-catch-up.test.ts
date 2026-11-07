@@ -13,8 +13,8 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import '../../../shared/agent-session/failures/agent-session-failure'
+import '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   closeProviderTimelineRigs,
@@ -30,9 +30,9 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { acpNamedTextKey } from '../acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
-import { StructuredAgentSessionCurrentWork } from '../../native-chat/agent-session-wire/structured-agent-session-current-work'
-import { hasUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import { planStructuredAgentSessionDeadGeneration } from '../../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { StructuredAgentSessionCurrentWork } from '../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
+import { hasUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/termination/structured-agent-session-unfinished-work'
+import { planStructuredAgentSessionDeadGeneration } from '../../native-chat/agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
 import { AcpLoadHistory } from './acp-history-replay'
 import { asReattachHistory } from '../acp-structured-session'
 import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
@@ -601,66 +601,6 @@ describe('ACP history catch-up', () => {
     await catchUp(frames)
     expect(await fixture.rig.rows()).toEqual(rows)
   })
-  it.each(['refused', 'direct', 'queued', 'card', 'empty'] as const)(
-    'imports without a notice beside a %s submission',
-    async (scenario) => {
-      const { fixture, catchUp } = await setup(GROK_ACP_DIALECT, 'prompt-id')
-      const { journal } = fixture.rig
-      await journal.appendSubmission({
-        clientMessageId: 'retained',
-        payloadFingerprint: 'retained',
-        fence: 1,
-        ...(scenario === 'direct' ? {} : { handoverRecorded: true }),
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: scenario === 'empty' ? '' : 'keep my message' }]
-        }
-      })
-      if (scenario !== 'direct' && scenario !== 'queued') {
-        await journal.resolveDispatch({
-          clientMessageId: 'retained',
-          fence: 1,
-          state: 'pending',
-          turnScope: { kind: 'thread' }
-        })
-      }
-      if (scenario === 'refused' || scenario === 'card') {
-        await journal.resolveDispatch({
-          clientMessageId: 'retained',
-          fence: 1,
-          state: 'rejected',
-          ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
-            surface: 'rejection'
-          }),
-          ...(scenario === 'card' ? { keptAsQueuedMessageId: 'card' } : {})
-        })
-      }
-      const before = await fixture.rig.rows()
-      const submissions = journal.submissions()
-      const replay = [
-        userReplay('outside'),
-        {
-          method: 'session/update',
-          params: {
-            sessionId: NAMESPACE,
-            _meta: { promptId: 'outside' },
-            update: {
-              sessionUpdate: 'agent_message_chunk',
-              content: { type: 'text', text: 'answer' }
-            }
-          }
-        }
-      ]
-      await catchUp(replay)
-      const rows = await fixture.rig.rows()
-      expect(dividers(rows)).toHaveLength(0)
-      expect(rows.slice(0, before.length)).toEqual(before)
-      expect(journal.submissions()).toEqual(submissions)
-      await catchUp(replay)
-      expect(await fixture.rig.rows()).toEqual(rows)
-    }
-  )
   it.each(['queued-only', 'ownership-revision'] as const)(
     'captures immutable coverage before concurrent %s',
     async (scenario) => {

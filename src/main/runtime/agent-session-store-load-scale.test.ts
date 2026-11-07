@@ -13,7 +13,7 @@ import {
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { hostTestMessage } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 // Width, link count and malformed bytes vary independently; no clock-dependent budget.

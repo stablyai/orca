@@ -16,7 +16,7 @@ import type {
   AgentModelCatalogReadParams
 } from './agent-model-catalog-service-contract'
 export type { AgentModelCatalogServiceDeps, AgentModelCatalogService }
-import { onAtRestCommandContextRetired } from '../agent-session-wire/at-rest-command-context'
+import { onAtRestCommandContextRetired } from '../agent-session-wire/options/at-rest-command-context'
 import {
   createAgentModelCatalogSnapshot,
   agentModelCatalogRequestKey,
@@ -35,6 +35,7 @@ import {
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
+  const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
   const admission = new PrioritySemaphore(2)
 
@@ -74,7 +75,8 @@ export function createAgentModelCatalogService(
     claims,
     requestKey,
     capture,
-    captureRead
+    captureRead,
+    tasks
   )
   return {
     captureRead,
@@ -113,11 +115,12 @@ export function createAgentModelCatalogService(
     async prewarm() {
       await prewarmAgentModelCatalog(deps, lifetime.signal, (params) => this.read(params))
     },
-    stop() {
+    async stop() {
       lifetime.abort()
       unbindRetirement()
       retireContext()
       deps.store.clearPartialAttempts()
+      await Promise.allSettled(tasks)
     }
   }
 }

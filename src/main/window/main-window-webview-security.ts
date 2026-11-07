@@ -3,34 +3,36 @@ import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
-} from '../browser/local-ssh-browser-partitions'
+} from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
-} from '../browser/browser-route-session-runtime'
+} from '../browser/routing/sessions/browser-route-session-runtime'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
-import { setDocPreviewFailureSink } from '../browser/doc-preview-failure-notice'
+import { setDocPreviewFailureSink } from '../browser/document-preview/doc-preview-failure-notice'
 import {
   getDocPreviewGrant,
   revokeAllDocPreviewGrants
-} from '../browser/doc-preview-grant-registry'
-import { isDocPreviewSession } from '../browser/doc-preview-protocol'
+} from '../browser/document-preview/doc-preview-grant-registry'
+import { isDocPreviewSession } from '../browser/document-preview/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
-import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
-import { installBrowserJavaScriptDialogs } from '../browser/browser-javascript-dialogs'
+import { parseChromeExtensionUrl } from '../../shared/browser/extensions/browser-extension-url'
+import { getBrowserExtensionSessionForProfile } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { installBrowserJavaScriptDialogs } from '../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
+import { installNativeChatVisualGuestTheme } from '../host/native-chat-visual-guest-theme'
 import {
   admitPluginFrameAttach,
   attachPluginFrameGuest,
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../plugins/panels/plugin-frame-guest-registry'
+import { attachBrowserPasswordGuest } from '../browser-passwords/browser-password-guest-service'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -57,6 +59,7 @@ function isAdmissibleExtensionPageAttach(partition: string, src: string): boolea
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
+  installNativeChatVisualGuestTheme(mainWindow)
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
   // Why: plugin panels are frames of this renderer; same IP-handling fence as doc preview guests.
   mainWindow.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
@@ -77,7 +80,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // Install containment before any plugin/chat srcdoc frame is created.
   registerHostFrameNavigationGuard(mainWindow.webContents)
 
-  const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
+  const browserGuestPreload = join(__dirname, 'browser-guest-preload.js')
   // Only previews get this pinned editor-link preload; never accept renderer preload values or expose it to browsing guests.
   const docPreviewLinkPreload = join(__dirname, 'doc-preview-link-preload.js')
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
@@ -117,7 +120,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
 
     delete params.preload
     // Install main-world close policy before inline scripts can call window.close.
-    webPreferences.preload = isDocPreviewAttach ? docPreviewLinkPreload : browserWindowClosePreload
+    webPreferences.preload = isDocPreviewAttach ? docPreviewLinkPreload : browserGuestPreload
     // Clear legacy preloadURL as well as preload so guests cannot inherit the main bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
@@ -160,6 +163,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
+    attachBrowserPasswordGuest(guest)
   })
 }
 

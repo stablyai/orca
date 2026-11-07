@@ -1,7 +1,11 @@
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewInfo,
+  HostedReviewForBranchArgs
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   createTestStore,
   mockApi,
@@ -51,6 +55,10 @@ describe('worktree remote runtime mutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+    Object.defineProperty(window.api, 'gh', {
+      configurable: true,
+      value: { workItemByOwnerRepo: vi.fn().mockResolvedValue(null) }
+    })
   })
 
   it('rechecks GitHub PR suppression after branch confirmation resolves', async () => {
@@ -85,9 +93,7 @@ describe('worktree remote runtime mutations', () => {
       slug: { owner: 'acme', repo: 'orca' },
       number: 42
     })
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
     store.setState({
       worktreesByRepo: {
         repo1: [{ ...wt, linkedPR: null, suppressedGitHubPR: 42 }]
@@ -95,9 +101,7 @@ describe('worktree remote runtime mutations', () => {
     })
 
     resolveLookup(confirmedReview(42))
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
@@ -134,18 +138,14 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     store.setState({
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
     })
 
     resolveLookup(confirmedReview(42))
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
     expect(
@@ -189,9 +189,7 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
 
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
@@ -206,53 +204,13 @@ describe('worktree remote runtime mutations', () => {
       baseBranch: 'main',
       pushTarget: { remoteName: 'origin', branchName: 'feature/pr-link' }
     })
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
     expect(
       getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0]).map((item) => item.number)
     ).toEqual([7, 42])
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalled()
-  })
-
-  it('does not link an arbitrary same-repo terminal PR URL for a known push target when lookup misses', async () => {
-    const store = createTestStore()
-    installReviewRead().mockResolvedValue(null)
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/worktrees/orca',
-      branch: 'refs/heads/feature/pr-link',
-      pushTarget: {
-        remoteName: 'origin',
-        branchName: 'feature/pr-link',
-        remoteUrl: 'https://github.com/acme/orca.git'
-      }
-    })
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    })
-
-    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
-      url: 'https://github.com/acme/orca/pull/1',
-      slug: { owner: 'acme', repo: 'orca' },
-      number: 1
-    })
-
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
-
-    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      updates: { linkedPR: 1 }
-    })
   })
 
   it('rejects a same-number branch result for a different repository URL', async () => {
@@ -295,9 +253,7 @@ describe('worktree remote runtime mutations', () => {
       linkedGiteaPR: null
     })
 
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })

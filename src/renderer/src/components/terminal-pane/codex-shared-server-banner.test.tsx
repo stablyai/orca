@@ -13,7 +13,7 @@ import {
   CODEX_STOP_SHARED_SERVER_COMMAND,
   type CodexSharedServerStatus
 } from '../../../../shared/codex-shared-server-command'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 
 const routing = vi.hoisted(() => ({
@@ -21,7 +21,7 @@ const routing = vi.hoisted(() => ({
   revealFloatingWorkspacePanel: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: routing.activateAndRevealWorkspace
 }))
 vi.mock('@/lib/floating-workspace-panel-reveal', () => ({

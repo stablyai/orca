@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
-import { buildEditorSessionData } from '@/lib/workspace-session'
+import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
 import { useEditorExternalWatch } from '@/hooks/useEditorExternalWatch'
 import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
@@ -16,7 +16,7 @@ import {
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import '../../../../shared/layout-owner-switch'
 

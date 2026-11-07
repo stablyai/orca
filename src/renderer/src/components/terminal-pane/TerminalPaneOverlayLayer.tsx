@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { useThemeBackgroundStore } from '@/store/theme-background'
 import {
@@ -15,7 +15,7 @@ import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
-import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useTerminalTabColdParking } from './parking/lifecycle/use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string

@@ -182,7 +182,7 @@ describe('UsageProviderStoreLifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it('reports enabled scans and preserves revisions when the usage cache is rebuilt', async () => {
+  it('retries saved revisions when the usage cache is rebuilt', async () => {
     const telemetry = setupTelemetryClientTest()
     try {
       const cacheFile = join(tempDirectory, 'provider.json')
@@ -200,9 +200,17 @@ describe('UsageProviderStoreLifecycle', () => {
       await original.flush()
       rmSync(cacheFile)
       const rebuilt = createStore(cacheFile)
+      writeProbe.opens = 0
+      await rebuilt.whenLoaded()
+      expect(writeProbe.opens).toBe(0)
       await rebuilt.setEnabled(true)
+      writeProbe.opens = 0
       await rebuilt.refresh(true)
-      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toEqual(first)
+      expect(telemetry.mock.capture).toHaveBeenCalledTimes(2)
+      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toMatchObject({
+        properties: first.properties
+      })
+      expect(writeProbe.opens).toBe(1)
     } finally {
       cleanupTelemetryClientTest(telemetry.envStash)
     }
@@ -217,7 +225,7 @@ describe('UsageProviderStoreLifecycle', () => {
       await store.setEnabled(true)
       writeProbe.opens = 0
       await store.refresh(true)
-      // Usage cache, identity file, and token-usage snapshot: one write each.
+      // One usage report, one identity batch, and one token revision batch.
       expect(writeProbe.opens).toBe(3)
       expect(telemetry.mock.capture).toHaveBeenCalledTimes(sessions.length)
     } finally {
