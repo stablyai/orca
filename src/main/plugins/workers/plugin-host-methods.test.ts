@@ -44,3 +44,29 @@ describe('executePluginHostCall mutation auditing', () => {
     expect(storageSet).not.toHaveBeenCalled()
   })
 })
+
+describe('workspace.readContext host reachability', () => {
+  it('keeps the active remote context when its host cannot list terminals', async () => {
+    const services = createServices(vi.fn())
+    vi.mocked(services.resolveActiveWorktreeContext).mockResolvedValue({
+      worktreeId: 'remote-repo::/home/user/repo',
+      branch: '',
+      displayName: 'Remote main'
+    })
+    vi.mocked(services.listWorktreeTerminals).mockRejectedValue(new Error('host_unreachable'))
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'workspace.readContext',
+      params: {},
+      surface: 'panel',
+      grantedCapabilities: ['workspace:read'],
+      services
+    })
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: { branch: '', displayName: 'Remote main', terminals: [] }
+    })
+  })
+})

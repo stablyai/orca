@@ -3,14 +3,14 @@ import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/a
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
 
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 

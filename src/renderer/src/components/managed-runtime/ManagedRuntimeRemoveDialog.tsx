@@ -1,6 +1,6 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { translate } from '@/i18n/i18n'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { useAppStore } from '@/store'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { Button } from '../ui/button'
@@ -21,7 +21,7 @@ export function ManagedRuntimeRemoveDialog(props: {
   onRemove: () => void
 }): React.JSX.Element {
   const { agentLabel, host, open, onOpenChange, onRemove } = props
-  const hostLabel = useAppStore((state) =>
+  const hostLabel = useAppStateValue((state) =>
     host.kind === 'environment'
       ? selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(host.environmentId))
       : translate('components.managed-runtime.thisComputer', 'this computer')

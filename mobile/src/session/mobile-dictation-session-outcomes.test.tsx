@@ -1,6 +1,7 @@
 // Mount the real composing hooks over native capture: refused starts and lost transcripts were in how the session hook and dictation hook meet, which isolated handler tests would miss.
 import { createElement, useRef } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type * as NativeChatSendError from './native-chat/use-mobile-native-chat-send-error'
@@ -159,7 +160,7 @@ function mount(
   }
 
   act(() => {
-    create(createElement(Probe))
+    createWithQueryClient(createElement(Probe))
   })
   return {
     current: () => {

@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionCloseIntent,
@@ -52,7 +52,7 @@ export async function activateWebRuntimeSessionTab(args: {
   // A click names no leaf, so the pane on screen does; the server would otherwise pick the first.
   // Loaded lazily: the module subscribes to main's pane list on import, and terminal panes load it.
   const { hasLegacyRelayBridgedPane, isLegacyRelayBridgedTab } =
-    await import('../components/terminal-pane/legacy-relay-bridge-panes')
+    await import('../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes')
   const leafId =
     args.leafId ??
     (hasLegacyRelayBridgedPane(args.tabId)

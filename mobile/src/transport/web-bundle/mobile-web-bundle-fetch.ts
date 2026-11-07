@@ -2,16 +2,19 @@ import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
-  MobileWebBundleManifestRead
+  MobileWebBundleManifestRead,
+  MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from '../rpc-client'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
 import { runRpcOperation } from '../rpc-operation'
+import { mobileWebBundleWindowReader } from './mobile-web-bundle-window-reader'
 import {
-  mobileWebBundleWindowReader,
-  type MobileWebBundleWindowHeader
-} from './mobile-web-bundle-window-reader'
+  assertWindowDescribesAsset,
+  assertWindowFillsItsSlot,
+  windowSlotBytes
+} from './mobile-web-bundle-window-checks'
 
 // Limit concurrent windows across all assets to the host’s four slots; one reader per asset serializes large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
@@ -59,11 +62,14 @@ export async function fetchMobileWebBundle(args: {
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
   reusable?: MobileWebBundleReusableAssets
+  // The manifest the caller already read; windows name its build id, so a build the desktop since replaced fails the fetch.
+  opened?: MobileWebBundleManifestReply
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
   throwIfCallerAborted(args.signal)
-  const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
+  const opened =
+    args.opened ?? (await runRpcOperation(args.client, mobileWebBundleManifestRead, null))
   throwIfCallerAborted(args.signal)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
@@ -242,54 +248,6 @@ function planWindowReads(
   })
 }
 
-function windowSlotBytes(
-  entry: MobileWebBundleAssetRead,
-  offset: number,
-  windowBytes: number
-): number {
-  return Math.min(windowBytes, entry.byteLength - offset)
-}
-
-/** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
-function assertWindowFillsItsSlot(
-  entry: MobileWebBundleAssetRead,
-  offset: number,
-  byteLength: number,
-  eof: boolean,
-  windowBytes: number
-): void {
-  const { path, byteLength: declared } = entry
-  const expected = windowSlotBytes(entry, offset, windowBytes)
-  if (byteLength === expected && eof === offset + windowBytes >= declared) {
-    return
-  }
-  const end = offset + byteLength
-  if (byteLength > windowBytes) {
-    throw new MobileWebBundleFetchError(
-      'chunk-oversize',
-      `bundle window for ${path} at ${offset} is ${byteLength} bytes, over the ${windowBytes}-byte window`
-    )
-  }
-  if (byteLength > expected || (byteLength > 0 && !eof && end >= declared)) {
-    throw new MobileWebBundleFetchError(
-      'asset-overlong',
-      `bundle asset ${path} is longer than the manifest declares`
-    )
-  }
-  if (!eof && byteLength === 0) {
-    throw new MobileWebBundleFetchError(
-      'asset-no-progress',
-      `bundle asset ${path} made no progress at ${offset}`
-    )
-  }
-  throw new MobileWebBundleFetchError(
-    'asset-short',
-    eof
-      ? `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
-      : `bundle window for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
-  )
-}
-
 async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
   // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
   const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
@@ -300,33 +258,6 @@ async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Arra
     )
   }
   return asset.whole
-}
-
-// Validate build/path/offset/length/hash echoes so misrouted or post-update replies cannot corrupt reassembly.
-function assertWindowDescribesAsset(
-  reply: MobileWebBundleWindowHeader,
-  asset: MobileWebBundleAssetRead,
-  buildId: string,
-  offset: number
-): void {
-  if (reply.buildId !== buildId) {
-    throw new MobileWebBundleFetchError(
-      'build-changed-mid-fetch',
-      `bundle build changed mid-fetch: asked ${buildId}, served ${reply.buildId}`
-    )
-  }
-  if (reply.path !== asset.path || reply.offset !== offset) {
-    throw new MobileWebBundleFetchError(
-      'chunk-misrouted',
-      `bundle window answered ${reply.path} at ${reply.offset}, not ${asset.path} at ${offset}`
-    )
-  }
-  if (reply.sha256 !== asset.sha256 || reply.assetByteLength !== asset.byteLength) {
-    throw new MobileWebBundleFetchError(
-      'asset-entry-changed',
-      `bundle asset ${asset.path} no longer matches the manifest entry`
-    )
-  }
 }
 
 /** Only the caller's abort surfaces as `fetch-stopped`; an internal stop rejects with the failure

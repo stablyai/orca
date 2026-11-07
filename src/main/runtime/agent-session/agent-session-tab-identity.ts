@@ -3,7 +3,7 @@ import { isReopenedChatTabId } from '../../../shared/agent-session/view/structur
 import { randomUUID } from 'node:crypto'
 import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const REOPENED_TAB_PREFIX = 'agent-chat-tab-v1-'
 

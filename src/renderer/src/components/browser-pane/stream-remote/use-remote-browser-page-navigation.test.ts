@@ -6,7 +6,9 @@ import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import { useRemoteBrowserPageNavigation } from './use-remote-browser-page-navigation'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => ({})) }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn(async () => ({}))
+}))
 
 function page(): BrowserPage {
   return {

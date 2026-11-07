@@ -1,4 +1,4 @@
-import { mockPanePtyArgs } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-connect-mock-pane'
+import { mockPanePtyArgs } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import type * as WslDistroGate from '../../src/main/wsl/discovery/wsl-background-distro-gate'
@@ -12,25 +12,26 @@ import {
 } from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { setupPtyIpcSuite } from '../../src/main/ipc/pty/pty-ipc-test-harness'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
-import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
+import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   createMockTransport,
   createPane,
   createManager
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-deps'
-import { flushAsyncTicks } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-async'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { flushAsyncTicks } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
-import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import type { AppState } from '../../src/renderer/src/store/types'
 import type {
   IpcPtyTransportOptions,
   PtyTransport
-} from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
-import { createTestStore, makeTab } from '../../src/renderer/src/store/slices/store-test-helpers'
+} from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
+import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
+import { makeTab } from '../../src/renderer/src/store/slices/store-session-test-harness'
 import {
   existsSyncMock,
   wslUncDirectoryExistsAsyncMock
@@ -42,7 +43,7 @@ import {
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from '../../src/renderer/src/lib/session-write-subscriber'
+} from '../../src/renderer/src/lib/workspace/persistence/session-write-subscriber'
 
 type FixtureState = StoreState & Pick<AppState, 'projectHostSetups'>
 let state: FixtureState | AppState
@@ -54,17 +55,20 @@ vi.mock('react', async (importOriginal) => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('@/components/terminal-pane/terminal-pane-recovery', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requestTerminalPaneRecovery: vi.fn(async () => true)
-}))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock(
+  '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    requestTerminalPaneRecovery: vi.fn(async () => true)
+  })
+)
+vi.mock('@/components/terminal-pane/pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: (options: IpcPtyTransportOptions) => {
     mountedOptions = options
     const transport = createMockTransport()
     const connect = vi.fn<PtyTransport['connect']>(async (connectOptions) => {
       const { spawnIpcPty } =
-        await import('../../src/renderer/src/components/terminal-pane/ipc-pty-spawn-request')
+        await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/ipc-pty-spawn-request')
       const result = await spawnIpcPty(
         options,
         connectOptions,
@@ -364,7 +368,7 @@ describe('mounted folder plain-shell project runtime', () => {
 
   it('starts an actual forced-host tab before its session publication settles', async () => {
     const { connectPanePty } =
-      await import('../../src/renderer/src/components/terminal-pane/pty-connection')
+      await import('../../src/renderer/src/components/terminal-pane/pty-connection/connect-pane-pty')
     const renderer = createTestStore()
     const folder = {
       ...MIXED_FOLDER,
@@ -482,7 +486,7 @@ describe('mounted folder plain-shell project runtime', () => {
     'keeps the local folder project through plain and cold startup with copied IDs (%s)',
     async (reverse) => {
       const { connectPanePty } =
-        await import('../../src/renderer/src/components/terminal-pane/pty-connection')
+        await import('../../src/renderer/src/components/terminal-pane/pty-connection/connect-pane-pty')
       const localFolder = {
         ...MIXED_FOLDER,
         id: 'copied',

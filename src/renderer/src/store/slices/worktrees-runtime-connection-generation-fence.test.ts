@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { advanceRuntimeEnvironmentConnectionGeneration } from './runtime-status-connection-generation'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'

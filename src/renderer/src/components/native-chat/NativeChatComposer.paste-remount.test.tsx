@@ -5,7 +5,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef, type RefObject } from 'react'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import type {
   NativeChatComposerField as NativeChatComposerFieldComponent,
@@ -19,6 +22,7 @@ type FieldProps = {
   sendButtonDisabled?: boolean
   onRemoveImageAttachment: (id: string) => void
   onSend: () => void
+  sendBlockedReason?: string | null
 }
 
 const mocks = vi.hoisted(() => {
@@ -52,14 +56,14 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
 vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),
@@ -108,7 +112,8 @@ const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8
 function composer(
   acceptsImages = true,
   composerRef?: RefObject<NativeChatComposerHandle | null>,
-  mode: 'structured' | 'terminal' | 'goal' = 'structured'
+  mode: 'structured' | 'terminal' | 'goal' = 'structured',
+  overrides?: Partial<NativeChatStructuredComposerTransport>
 ): React.JSX.Element {
   return (
     <NativeChatComposer
@@ -140,7 +145,8 @@ function composer(
               acceptsImages,
               ...(mode === 'goal' ? { threadGoal: { setObjective: mocks.goal } } : {}),
               sessionId: 'session-1',
-              runtimeEnvironmentId: 'env-1'
+              runtimeEnvironmentId: 'env-1',
+              ...overrides
             }
       }
     />
@@ -388,6 +394,61 @@ import {
 } from './native-chat-composer-draft-storage'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+
+it('keeps a picked Plan skill held as a message instead of enabling the native mode action', async () => {
+  const setOption = vi.fn()
+  const send = vi.fn(() => true)
+  const dispatchCommand = vi.fn(async () => ({ handled: false, accepted: false, error: null }))
+  render(
+    composer(true, undefined, 'structured', {
+      sendBlockedReason: 'The host is waiting',
+      send,
+      dispatchCommand,
+      optionSnapshot: [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ],
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption,
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      }
+    })
+  )
+  const field = screen.getByRole('textbox')
+  act(() =>
+    promptEditor(field).commands.insertContent({
+      type: 'nativeChatSkill',
+      attrs: { token: '/plan', path: '/skills/plan/SKILL.md' }
+    })
+  )
+  expect(promptValue(field)).toBe('/plan')
+  expect(readNativeChatComposerDraft(PANE).document).toMatchObject({
+    content: [{ content: [{ type: 'nativeChatSkill', attrs: { path: '/skills/plan/SKILL.md' } }] }]
+  })
+  expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
+  expect(mocks.state.fieldProps?.sendBlockedReason).toBe('The host is waiting')
+  act(() => mocks.state.fieldProps?.onSend())
+  expect(promptValue(field)).toBe('/plan')
+  expect(setOption).not.toHaveBeenCalled()
+  expect(dispatchCommand).not.toHaveBeenCalled()
+  expect(send).not.toHaveBeenCalled()
+})
 import { promptTextContent } from './native-chat-prompt-document'
 
 it.each([false, true])(

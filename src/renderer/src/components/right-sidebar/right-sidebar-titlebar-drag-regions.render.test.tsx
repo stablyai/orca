@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
@@ -215,7 +215,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.cachedWorktree = null
   })
 
-  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
+  it('offers Source Control but hides repository-only activity buttons in a folder workspace', () => {
     mockAppState.activeWorktreeId = 'folder:folder-1'
     mockAppState.activeRepo = null
 
@@ -226,7 +226,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).not.toContain('aria-label="Search')
     expect(markup).toContain('aria-label="Attached worktrees')
     expect(markup).toContain('aria-label="PR Checks')
-    expect(markup).not.toContain('aria-label="Source Control')
+    expect(markup).toContain('aria-label="Source Control')
     expect(markup).not.toContain('aria-label="Checks')
   })
 

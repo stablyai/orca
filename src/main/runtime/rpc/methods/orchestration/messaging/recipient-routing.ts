@@ -1,13 +1,17 @@
 import { selectBareRecipientOwner, runMismatch } from './recipient-owner-selection'
-import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orchestration/db'
+import type { LegacyAdoptedMailboxOwner } from '../../../../orchestration/db/runs/run-lookup'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
+import type {
+  DispatchContextRow,
+  DispatchStatus
+} from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import type { OrchestrationCoordinatorKey } from '../../../../orchestration/orchestration-caller-identity'
-import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
-import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import type { OrchestrationCoordinatorKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,
@@ -277,5 +281,3 @@ function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecip
     warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
   }
 }
-
-export { selectBareRecipientOwner } from './recipient-owner-selection'

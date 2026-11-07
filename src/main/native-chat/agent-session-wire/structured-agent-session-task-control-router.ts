@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from './providers/structured-agent-session-adapter'
 
 /** Tasks route only to their existing provider child; none of these controls starts one. */
 export function structuredSessionTaskControlRoutes(

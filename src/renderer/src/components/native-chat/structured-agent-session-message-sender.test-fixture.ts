@@ -19,7 +19,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   structuredAgentSessionHostSupports: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: mocks.compatible
 }))
 vi.mock('./structured-agent-session-message-hand-back', () => ({

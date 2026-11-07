@@ -16,12 +16,15 @@ export type NativeChatTranscriptScrollOptions = {
   restoreScrollOffset: (offset: number) => void
   consumeProgrammaticScroll: (event: Event) => boolean
   reconcileReaderScroll: (isTakingOver: boolean) => void
+  onLeaveEnd?: () => void
+  onReturnToEnd?: (reason?: 'send') => void
 }
 
 export type NativeChatTranscriptScroll = {
   showJump: boolean
+  recordReaderScroll: () => void
   onScroll: UIEventHandler<HTMLDivElement>
-  scrollToBottom: () => void
+  scrollToBottom: (reason?: 'send') => void
   /** Following, or close enough to the end that Jump to latest stays hidden. */
   readerAtEnd: () => boolean
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void

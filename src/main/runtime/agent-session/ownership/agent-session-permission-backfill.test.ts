@@ -10,7 +10,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 let root: string
 beforeEach(async () => {

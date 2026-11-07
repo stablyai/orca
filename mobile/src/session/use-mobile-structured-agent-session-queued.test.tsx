@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
@@ -137,7 +138,7 @@ describe('mobile structured queued messages', () => {
     sessionId?: string
   ): Promise<void> {
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Harness, { hostSupport, ...(sessionId ? { sessionId } : {}) })
       )
     })
@@ -388,7 +389,7 @@ describe('mobile structured queued messages', () => {
         }
       }
       await act(async () => {
-        renderer = create(createElement(Route, { hostId: 'a' }))
+        renderer = createWithQueryClient(createElement(Route, { hostId: 'a' }))
       })
       await act(async () => listener?.(working))
       expect(hook!.sendFollowUp).toEqual({ action: 'steer', offersChoice: true })

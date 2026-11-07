@@ -5,8 +5,8 @@ import { EMPTY_FORM, type EditingTarget } from '../../../settings/ssh/targets/ss
 import {
   addRuntimeSshTarget,
   listRuntimeEditableSshTargets
-} from '@/runtime/runtime-ssh-target-management'
-import { refreshRuntimeEnvironmentSshTargetMetadata } from '@/runtime/runtime-environment-ssh-state'
+} from '@/runtime/hosts/ssh/runtime-ssh-target-management'
+import { refreshRuntimeEnvironmentSshTargetMetadata } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { saveNewSshHostFromForm } from './add-remote-host-ssh-actions'
 

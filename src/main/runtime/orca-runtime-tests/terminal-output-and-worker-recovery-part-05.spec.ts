@@ -8,7 +8,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { join } from 'node:path'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import type { OrchestrationDb } from '../orchestration/db'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,

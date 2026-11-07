@@ -5,9 +5,9 @@ import {
   type StructuredAgentSessionState
 } from '../../../shared/agent-session/structured-agent-session-reducer'
 import { toolUse, toolResult } from '../../claude/claude-child-work-producer-harness.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
-import { fixture } from './structured-agent-session-claude-stop-contract-test-fixture'
-import { openTurn } from './structured-agent-session-claude-stop-contract-test-actions'
+import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data'
+import { fixture } from './host/testing/structured-agent-session-claude-stop-contract-test-fixture'
+import { openTurn } from './host/testing/structured-agent-session-claude-stop-contract-test-actions'
 
 it('delivers a running root Bash action before its result and removes it when it ends', async () => {
   const connection = fixture.claude.connections[0]!

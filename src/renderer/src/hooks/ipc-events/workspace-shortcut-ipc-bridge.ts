@@ -3,7 +3,7 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-boa
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { isGitRepoKind } from '../../../../shared/repo-kind'

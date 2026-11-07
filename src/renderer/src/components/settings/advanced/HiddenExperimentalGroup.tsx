@@ -4,7 +4,7 @@ import { Switch } from '../../ui/switch'
 import {
   isTerminalRenderDesyncSentinelArmed,
   setTerminalRenderDesyncSentinelArmed
-} from '../../terminal-pane/terminal-render-desync-trigger'
+} from '../../terminal-pane/render-health/terminal-render-desync-trigger'
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 

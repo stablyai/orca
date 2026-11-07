@@ -1,5 +1,5 @@
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { RemoteDispatchAttachmentRow } from '../../types'
+import type { RemoteDispatchAttachmentRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { paneKeyMatchSuffix, REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'

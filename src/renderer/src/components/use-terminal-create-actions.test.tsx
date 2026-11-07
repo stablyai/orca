@@ -37,7 +37,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi
 vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -46,7 +46,9 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn() }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: vi.fn()
+}))
 vi.mock('@/lib/duplicate-browser-tab-options', () => ({
   buildDuplicatedBrowserTabOptions: () => ({})
 }))
@@ -107,6 +109,7 @@ describe('useTerminalCreateActions creation gates', () => {
     mocks.state = {
       ...mocks.state,
       tabsByWorktree: { [WORKTREE_ID]: terminals },
+      unifiedTabsByWorktree: {},
       openFiles: [],
       tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
       setTabBarOrder

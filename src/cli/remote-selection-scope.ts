@@ -6,6 +6,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'environment' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
     commandPath.join(' ') === 'host list' ||
+    // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.
+    commandPath.join(' ') === 'host rm' ||
     commandPath[0] === 'serve' ||
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||

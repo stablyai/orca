@@ -1,3 +1,4 @@
+import { legacyEditorTabs } from './legacy-editor-tab-hydration'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -79,7 +80,9 @@ export function buildHydratedTabState(
   const tabIdAliasesByWorktree: Record<string, Map<string, Map<string, string>>> = {}
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
-  for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
+  for (const [worktreeId, tabs] of Object.entries(
+    session.unifiedTabs ?? legacyEditorTabs(session)
+  )) {
     const chatOnly = chatOnlyWorktreeIds.has(worktreeId)
     if (!validWorktreeIds.has(worktreeId) && !chatOnly) {
       continue

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useSourceControlWatchConsumers } from './source-control-watch-consumers'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -34,7 +35,13 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
 }
 
 export function useEditorExternalWatch(): void {
-  const snapshot = useAppStore(selectEditorExternalWatchTargets)
+  const sectionTargets = useSourceControlWatchConsumers()
+  const snapshot = useAppStore(
+    useCallback(
+      (state) => selectEditorExternalWatchTargets(state, sectionTargets),
+      [sectionTargets]
+    )
+  )
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
   const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())

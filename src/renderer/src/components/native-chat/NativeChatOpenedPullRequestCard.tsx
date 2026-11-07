@@ -10,7 +10,6 @@ import {
 import { GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
 import type { GitHubIssueOrPRLink } from '../../../../shared/github/links'
@@ -20,7 +19,10 @@ import {
   type NativeChatOpenedPullRequest
 } from '../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID } from '../settings/chat/native-chat-opened-pull-requests-setting-target'
-import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
+import {
+  NativeChatCardHideButton,
+  NATIVE_CHAT_HIDEABLE_CARD_CLASS
+} from './NativeChatCardHideButton'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,
@@ -214,8 +216,10 @@ export function NativeChatOpenedPullRequestCard({
   const [first] = pullRequests
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
   return (
-    <div className="group relative rounded-lg border border-chat-code-border p-2 text-sm">
-      <div className="flex min-w-0 items-center px-1 pb-1 pr-6 text-xs text-chat-foreground-faint">
+    <div
+      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
+    >
+      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-xs text-chat-foreground-faint">
         <span className="min-w-0 truncate">
           {pullRequests.length === 1 && first
             ? translate('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
@@ -227,20 +231,19 @@ export function NativeChatOpenedPullRequestCard({
                 { count: pullRequests.length, defaultValue_one: 'Opened {{count}} pull request' }
               )}
         </span>
+        <NativeChatCardHideButton
+          ariaLabel={translate(
+            'components.native-chat.openedPullRequests.hide',
+            "Don't show opened pull requests"
+          )}
+          updates={{ nativeChatOpenedPullRequests: false }}
+          settingSectionId={NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID}
+          hiddenMessage={translate(
+            'components.native-chat.openedPullRequests.hidden',
+            "Orca won't show opened pull requests anymore"
+          )}
+        />
       </div>
-      <EyeOffDismissButton
-        label={translate(
-          'components.native-chat.openedPullRequests.hide',
-          "Don't show opened pull requests"
-        )}
-        onClick={() =>
-          hideNativeChatCardKind(
-            { nativeChatOpenedPullRequests: false },
-            NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID
-          )
-        }
-        className="absolute right-1.5 top-1.5 opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
-      />
       <div className="space-y-0.5">
         {pullRequests.map((pullRequest) => (
           <OpenedPullRequestRow

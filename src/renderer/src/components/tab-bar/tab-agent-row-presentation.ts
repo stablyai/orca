@@ -34,6 +34,11 @@ export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
         'auto.components.tab.bar.QuickLaunchButton.chatNotOnHost',
         'No chat on this host'
       )
+    case 'windows':
+      return translate(
+        'auto.components.tab.bar.QuickLaunchButton.chatNotOnWindows',
+        'No chat on Windows yet'
+      )
   }
 }
 

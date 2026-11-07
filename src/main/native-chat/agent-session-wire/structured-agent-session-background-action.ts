@@ -4,13 +4,13 @@ import type {
 } from '../../../shared/agent-session/agent-session-foreground-task'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import { refuseUnclassified } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionCaller } from './host/structured-agent-session-host-types'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
-} from './structured-agent-session-mutation-context'
-import { openForProviderWrite } from './structured-agent-session-send-preparation'
-import type { MutationPlan } from './structured-agent-session-mutation-plans'
+} from './operations/structured-agent-session-mutation-context'
+import { openForProviderWrite } from './operations/structured-agent-session-send-preparation'
+import type { MutationPlan } from './operations/structured-agent-session-mutation-plans'
 
 /** Replays report the recorded answer; they never detach a later invocation. */
 export function backgroundStructuredAgentSessionTask(

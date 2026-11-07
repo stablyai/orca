@@ -1,6 +1,6 @@
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '../../../ui/button'
 import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
@@ -20,7 +20,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { StepBadge } from '../../setup-guide/SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type BrowserUseCookieImportStepProps = {
   cookiesImported: boolean

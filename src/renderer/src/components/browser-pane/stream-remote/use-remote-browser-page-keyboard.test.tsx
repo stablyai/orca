@@ -7,7 +7,9 @@ import { useRemoteBrowserPageInputQueue } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn(async () => ({})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 vi.mock('@/hooks/useShortcutLabel', () => ({ getShortcutPlatform: () => 'linux' }))
 
 const { lifecycle } = createHarness()

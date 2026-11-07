@@ -4,13 +4,14 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER as CALLER
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/use-native-chat-rewind'

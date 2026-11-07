@@ -9,7 +9,7 @@ import {
   renderOptions,
   descriptor
 } from './use-structured-agent-session-options.test-fixture'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 const A = 'opencode/crouton-alpha-free'

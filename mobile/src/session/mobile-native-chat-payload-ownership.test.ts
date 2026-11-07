@@ -1,3 +1,5 @@
+import type * as MobileNativeChatSendModule from './native-chat/mobile-native-chat-send'
+import type * as MobileNativeChatStaleInputModule from './native-chat/mobile-native-chat-stale-input'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -14,9 +16,24 @@ import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-nat
 import { useMobileNativeChatFileAttachments } from './native-chat/composer/use-mobile-native-chat-file-attachments'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatImageAttachments } from './native-chat/composer/use-mobile-native-chat-image-attachments'
+import { useMobileNativeChatMessageSend } from './native-chat/transcript/use-mobile-native-chat-message-send'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: vi.fn() }) }))
+vi.mock('./native-chat/mobile-native-chat-stale-input', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatStaleInputModule>()),
+  healMobileNativeChatStaleInput: async () => true
+}))
+vi.mock('./native-chat/mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatSendModule>()),
+  readMobileNativeChatInputClear: async () => null,
+  clearMobileNativeChatInput: async () => true,
+  sendMobileNativeChatMessageWithOutcome: async () => 'unknown'
+}))
+vi.mock('./native-chat/composer/mobile-native-chat-image-send', () => ({
+  MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS: 300,
+  pasteMobileNativeChatImagePaths: async () => true
+}))
 const SCOPE_A = 'h\0w\0tab-a'
 type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
 function updateImages(
@@ -42,6 +59,7 @@ beforeEach(() => resetMobileNativeChatDraftStoreForTests())
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  vi.useRealTimers()
 })
 
 it('returns refused text, images and files to their origin across teardown, retry and later acceptance', async () => {
@@ -86,6 +104,7 @@ it('returns refused text, images and files to their origin across teardown, retr
       agent: 'codex',
       sendStructured,
       ...drafts,
+      holdUnconfirmed: () => {},
       onSendError: () => {}
     })
     const images = useMobileNativeChatImageAttachments({
@@ -154,7 +173,7 @@ it('returns refused text, images and files to their origin across teardown, retr
   act(() => {
     sent = full.images.sendNativeChat(full.drafts.composerText)
   })
-  expect(sendStructured.mock.calls.at(-1)).toEqual([
+  expect(sendStructured.mock.calls.at(-1)?.slice(0, 5)).toEqual([
     'complete prompt',
     ['file:///preview.png'],
     expect.any(Number),
@@ -176,4 +195,131 @@ it('returns refused text, images and files to their origin across teardown, retr
   expect(full.drafts.composerText).toBe('newer typing')
   expect(full.images.attachments.map((image) => image.id)).toEqual(['newer-image'])
   expect(full.files.files.map((file) => file.id)).toEqual(['newer-file'])
+})
+
+it.each([
+  { chat: 'structured', structured: true },
+  { chat: 'terminal', structured: false }
+])('hands a $chat send nobody confirmed back with its attachments', async ({ structured }) => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const client: RpcClient = {
+    sendRequest: vi.fn(),
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => 1,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  let screen!: {
+    text: string
+    setText: (text: string) => void
+    images: Hook
+    files: ReturnType<typeof useMobileNativeChatFileAttachments>
+  }
+  function Screen(): null {
+    const drafts = useMobileNativeChatDrafts({
+      hostId: 'h',
+      worktreeId: 'w',
+      tabId: 'tab-a',
+      sessionId: 'tab-a',
+      messages: [],
+      chatActive: true,
+      transcriptLoading: false,
+      transcriptSettled: true
+    })
+    const files = useMobileNativeChatFileAttachments({
+      client,
+      sessionId: 'tab-a',
+      scopeKey: SCOPE_A,
+      enabled: true,
+      showToast: () => {}
+    })
+    const bridge = useMobileStructuredNativeChatSendBridge({
+      agent: 'codex',
+      sendStructured: async (_text, _images, _deadline, _attachments, _skills, intent) => {
+        intent?.onCreated?.('lost-send')
+        return 'unknown'
+      },
+      ...drafts,
+      holdUnconfirmed: (_id, onUnconfirmed) => setTimeout(onUnconfirmed, 20_000),
+      onSendError: () => {}
+    })
+    const terminal = useMobileNativeChatMessageSend({
+      client,
+      enabled: true,
+      handleRef: { current: 'terminal-a' },
+      deviceTokenRef: { current: null },
+      agentRef: { current: 'claude' },
+      commandSendRef: { current: () => {} },
+      captureSendOrigin: drafts.captureSendOrigin,
+      readSeededLaunchDraftSeed: drafts.readSeededLaunchDraftSeed,
+      clearDraftForSend: drafts.clearDraftForSend,
+      restoreRejectedDraft: drafts.restoreRejectedDraft,
+      acceptSend: drafts.acceptSend,
+      holdUnconfirmedSend: drafts.holdUnconfirmedSend,
+      onSendError: () => {}
+    })
+    const images = useMobileNativeChatImageAttachments({
+      client,
+      agent: structured ? 'codex' : 'claude',
+      enabled: true,
+      deviceTokenRef: { current: null },
+      getActiveWorktreeConnectionId: async () => null,
+      connState: 'connected',
+      showToast: () => {},
+      onSendError: () => {},
+      readSeededLaunchDraft: () => null,
+      sleep: async () => {},
+      scopeKey: SCOPE_A,
+      activeHandleRef: { current: 'terminal-a' },
+      structuredNativeChat: structured,
+      files: files.files,
+      onFilesSent: files.removeFiles,
+      baseSend: structured ? bridge.sendWithOutcome : terminal.sendWithOutcome
+    })
+    screen = {
+      text: useMobileNativeChatDraft(drafts.draftKey),
+      setText: drafts.setComposerText,
+      images,
+      files
+    }
+    return null
+  }
+  const image = { id: 'sent-image', path: '/image.png', previewUri: 'file:///image.png' }
+  const file = {
+    id: 'sent-file',
+    name: 'notes.txt',
+    mime: 'text/plain',
+    byteLength: 4,
+    path: '/notes.txt'
+  }
+  await act(async () => {
+    renderer = create(createElement(Screen))
+  })
+  act(() => {
+    screen.setText('see attached')
+    updateImages(SCOPE_A, () => [image])
+    if (structured) {
+      updateFiles(SCOPE_A, () => [file])
+    }
+  })
+  await act(async () => {
+    await screen.images.sendNativeChat(screen.text)
+  })
+  expect(screen.text).toBe('')
+  expect(screen.images.attachments).toEqual([])
+  expect(screen.files.files).toEqual([])
+  act(() => updateImages(SCOPE_A, () => [{ ...image, id: 'newer-image' }]))
+  await act(async () => {
+    vi.advanceTimersByTime(20_000)
+  })
+  expect(screen.text).toBe('see attached')
+  expect(screen.images.attachments.map((attached) => attached.id)).toEqual([
+    'newer-image',
+    'sent-image'
+  ])
+  expect(screen.files.files).toEqual(structured ? [file] : [])
 })

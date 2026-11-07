@@ -67,10 +67,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
   ): React.JSX.Element {
     // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
-    const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
-      draftScopeKey,
-      imeEnterGesture.isComposing
-    )
+    const draftState = useNativeChatDraft(draftScopeKey, imeEnterGesture.isComposing)
+    const { draft, setDraft, flushDraftAppends } = draftState
     const [caret, setCaret] = useState(draft.length)
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
@@ -262,6 +260,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId
     })
     const submission = useNativeChatComposerSubmit({
+      agent,
+      textareaRef,
       structuredTransport,
       draftScopeKey,
       draft,
@@ -279,6 +279,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const { goalMode } = submission
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
+      agent,
       draft,
       messageDelivery: submission.messageDelivery,
       imageAttachments,

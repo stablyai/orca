@@ -4,8 +4,9 @@ import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 

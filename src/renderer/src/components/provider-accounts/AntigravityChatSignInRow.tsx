@@ -1,3 +1,4 @@
+import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -11,13 +12,13 @@ import {
   startAntigravityChatSignIn,
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
-} from '@/runtime/antigravity-chat-sign-in-status'
+} from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
 } from '../../../../shared/antigravity-account-types'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -223,16 +224,22 @@ export function useAntigravityChatSignInControls(props: {
   )
   const ownFlow = running(flow) && flow.flowId !== null
   const action = signInAction(flow, auth, error)
+  const line =
+    status === 'known'
+      ? (chatSignInLine(flow, auth, openFailed, label, props.signedOut) ?? props.unanswered ?? null)
+      : null
+  const hintAllowed =
+    status === 'known' &&
+    flow?.phase !== 'failed' &&
+    !((flow?.phase === 'cancelled' || flow?.phase === 'expired') && auth === 'unknown') &&
+    !running(flow)
   return {
     flow,
     ownFlow,
     url: ownFlow && flow?.phase === 'waiting' ? (flow.url ?? null) : null,
-    line:
-      status === 'known'
-        ? (chatSignInLine(flow, auth, openFailed, label, props.signedOut) ??
-          props.unanswered ??
-          null)
-        : null,
+    line,
+    lineForAuth: ({ hint, reauth }: { hint: string | null; reauth: boolean }) =>
+      hintAllowed && (auth !== 'signedIn' || reauth) ? (hint ?? line) : line,
     alert:
       error ??
       (status === 'readFailed' ? readFailed : null) ??
@@ -244,6 +251,7 @@ export function useAntigravityChatSignInControls(props: {
     copy,
     copyLabel: translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
+    recoveryDisabled: props.disabled || pending || otherClients(flow),
     start: () => act(() => startAntigravityChatSignIn(owner)),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
     send: (callbackUrl: string, refused: (message: string) => void) =>
@@ -271,61 +279,78 @@ export function AntigravityChatSignInRow(props: {
     }),
     disabled: props.disabled
   })
-  const { line, alert, copy, copyLabel, url } = signIn
+  const { line, copy, copyLabel, url } = signIn
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-none">
-            {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
-          </p>
-          {props.description ? (
-            <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
-          ) : null}
-          {/* Reserve line height so the host’s answer cannot shift layout. */}
-          <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
-            {line}
-            {line && alert ? ' ' : null}
-            {alert && (
-              <span role="alert" className="text-destructive">
-                {alert}
-              </span>
-            )}
-          </p>
-        </div>
-        {signIn.ownFlow ? (
-          <div className="flex shrink-0 items-center gap-2">
-            {url && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={copyLabel}
-                    onClick={() => void copy.copyText()}
-                  >
-                    {copy.status === 'copied' ? <Check /> : <Copy />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{copyLabel}</TooltipContent>
-              </Tooltip>
-            )}
-            <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-              {translate('accounts.antigravity.chatCancel', 'Cancel')}
-            </Button>
+      <AntigravityChatAuthForm
+        owner={props.owner}
+        disabled={props.disabled || signIn.ownFlow}
+        onSignIn={signIn.start}
+        signInError={signIn.alert}
+        hostLabel={props.label}
+        heading={
+          <div>
+            <p className="text-sm font-medium leading-none">
+              {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
+            </p>
+            {props.description ? (
+              <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
+            ) : null}
           </div>
-        ) : (
-          <Button
-            size="xs"
-            // Account switching uses secondary styling once signed in.
-            variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
-            disabled={signIn.signInDisabled}
-            onClick={signIn.start}
-          >
-            {signIn.actionLabel}
-          </Button>
+        }
+      >
+        {(auth) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {/* Reserve line height so the host’s answer cannot shift layout. */}
+              <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
+                {!auth.alert ? signIn.lineForAuth(auth) : line}
+                {line && auth.alert ? ' ' : null}
+                {auth.alert && (
+                  <span role="alert" className="text-destructive">
+                    {auth.alert}
+                  </span>
+                )}
+              </p>
+            </div>
+            {signIn.ownFlow ? (
+              <div className="flex shrink-0 items-center gap-2">
+                {url && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={copyLabel}
+                        onClick={() => void copy.copyText()}
+                      >
+                        {copy.status === 'copied' ? <Check /> : <Copy />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{copyLabel}</TooltipContent>
+                  </Tooltip>
+                )}
+                <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
+                  {translate('accounts.antigravity.chatCancel', 'Cancel')}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="xs"
+                // Account switching uses secondary styling once signed in.
+                variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
+                disabled={
+                  (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) ||
+                  auth.disabled
+                }
+                onClick={auth.start}
+              >
+                {signIn.actionLabel}
+              </Button>
+            )}
+          </div>
         )}
-      </div>
+      </AntigravityChatAuthForm>
       {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )
