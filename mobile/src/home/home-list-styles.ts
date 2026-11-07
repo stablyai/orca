@@ -85,7 +85,7 @@ export const homeListStyles = themedStyleSheet(() => ({
     minHeight: 44,
     paddingHorizontal: ROW_LEADING_PADDING
   },
-  actionLabel: { fontSize: 16, color: colors.accentBlue },
+  actionLabel: { flex: 1, minWidth: 0, fontSize: 16, color: colors.accentBlue },
   // A desktop's needs-you count, in the Feed badge's amber.
   countPill: {
     minWidth: 20,
