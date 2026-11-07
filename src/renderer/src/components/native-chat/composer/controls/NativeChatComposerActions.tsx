@@ -3,7 +3,7 @@ import { memo } from 'react'
 import { ArrowUp, CornerDownRight, ListEnd, Mic, Plus, Save, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
@@ -96,6 +96,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   agent,
   launchPrompt = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const mode = useNativeChatPlanMode({
     surface: sessionOptionsSurface,
@@ -116,38 +117,38 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     }
   }
   const dictationLabel = isDictating
-    ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
-    : translate('components.native-chat.composer.startDictation', 'Start dictation')
+    ? t('components.native-chat.composer.stopDictation', 'Stop dictation')
+    : t('components.native-chat.composer.startDictation', 'Start dictation')
   const sendReason = stops ? null : (sendBlockedReason ?? null)
   const sendHint =
     sendReason ??
     (!stops && alternateSend
       ? alternateSend === 'steer'
-        ? translate('components.native-chat.composer.alternateSteerHint', '{{shortcut}} to steer', {
+        ? t('components.native-chat.composer.alternateSteerHint', '{{shortcut}} to steer', {
             shortcut: getScreenSubmitShortcutLabel()
           })
-        : translate('components.native-chat.composer.alternateQueueHint', '{{shortcut}} to queue', {
+        : t('components.native-chat.composer.alternateQueueHint', '{{shortcut}} to queue', {
             shortcut: getScreenSubmitShortcutLabel()
           })
       : null)
   const steerPreviewLabel =
     steerPreview === 'queue'
-      ? translate('components.native-chat.composer.previewQueue', 'Queue')
+      ? t('components.native-chat.composer.previewQueue', 'Queue')
       : steerPreview === 'steer'
-        ? translate('components.native-chat.composer.previewSteer', 'Steer')
-        : translate('components.native-chat.composer.previewSteerQueued', 'Steer queued')
+        ? t('components.native-chat.composer.previewSteer', 'Steer')
+        : t('components.native-chat.composer.previewSteerQueued', 'Steer queued')
   const sendButton = editSession ? (
     <Button
       type="button"
       size="sm"
-      aria-label={translate('components.native-chat.queuedMessages.save', 'Save')}
+      aria-label={t('components.native-chat.queuedMessages.save', 'Save')}
       className="group-data-[terminal=true]/toolbar:size-8 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
       disabled={sendDisabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
     >
       <span data-composer-primary-label>
-        {translate('components.native-chat.queuedMessages.save', 'Save')}
+        {t('components.native-chat.queuedMessages.save', 'Save')}
       </span>
       <span data-composer-primary-icon aria-hidden="true" className="hidden">
         <Save className="size-4" />
@@ -160,9 +161,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       aria-label={
         stops
           ? isStopping
-            ? translate('components.native-chat.status.stopping', 'Stopping…')
-            : translate('components.native-chat.stop', 'Stop the agent')
-          : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
+            ? t('components.native-chat.status.stopping', 'Stopping…')
+            : t('components.native-chat.stop', 'Stop the agent')
+          : (sendReason ?? t('components.native-chat.composer.send', 'Send'))
       }
       disabled={sendDisabled || (stops && isStopping)}
       // A press keeps focus where it was; a focused button drops it to <body> when it disables.
@@ -183,7 +184,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={translate('components.native-chat.composer.attach', 'Attach file')}
+          aria-label={t('components.native-chat.composer.attach', 'Attach file')}
           disabled={attachDisabled}
           onClick={onAttach}
           className="pointer-coarse:size-11"
@@ -192,7 +193,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate('components.native-chat.composer.attach', 'Attach file')}
+        {t('components.native-chat.composer.attach', 'Attach file')}
       </TooltipContent>
     </Tooltip>
   )
@@ -323,7 +324,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             priority: 3,
             content: (
               <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
-                {translate('common.cancel', 'Cancel')}
+                {t('common.cancel', 'Cancel')}
               </Button>
             )
           }

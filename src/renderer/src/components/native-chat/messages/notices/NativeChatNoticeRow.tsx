@@ -15,6 +15,7 @@ import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
@@ -74,6 +75,7 @@ export function NativeChatNoticeRow({
   messageId?: string
   agentName?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
   const openForkSource = useContext(NativeChatForkedFromContext)
@@ -83,10 +85,7 @@ export function NativeChatNoticeRow({
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
-    const label = translate(
-      'components.native-chat.notices.forkedFrom',
-      NATIVE_CHAT_NOTICE_COPY.forkedFrom
-    )
+    const label = t('components.native-chat.notices.forkedFrom', NATIVE_CHAT_NOTICE_COPY.forkedFrom)
     return (
       // Plain text with decorative rules: a separator role would hide the source button from screen readers.
       <div className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint">
@@ -112,11 +111,8 @@ export function NativeChatNoticeRow({
   if (look.kind === 'divider') {
     const label =
       look.label === 'contextCleared'
-        ? translate(
-            'components.native-chat.notices.contextCleared',
-            NATIVE_CHAT_NOTICE_COPY.contextCleared
-          )
-        : translate('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
+        ? t('components.native-chat.notices.contextCleared', NATIVE_CHAT_NOTICE_COPY.contextCleared)
+        : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
     return (
       <div
         role="separator"
@@ -148,7 +144,7 @@ export function NativeChatNoticeRow({
   if (look.kind === 'model-fallback') {
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
-        {translate(
+        {t(
           'components.native-chat.notices.modelFallback',
           CLAUDE_MODEL_FALLBACK_COPY,
           claudeModelFallbackLabels(look)
@@ -161,7 +157,7 @@ export function NativeChatNoticeRow({
       <Card className="gap-3 py-3 shadow-xs">
         <CardHeader className="px-4">
           <CardTitle className="text-sm">
-            {translate('components.native-chat.notices.plan', NATIVE_CHAT_NOTICE_COPY.plan)}
+            {t('components.native-chat.notices.plan', NATIVE_CHAT_NOTICE_COPY.plan)}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 text-sm leading-relaxed text-foreground">
@@ -181,12 +177,12 @@ export function NativeChatNoticeRow({
     const agent = agentName ?? look.agent
     const summary =
       look.decision === 'denied'
-        ? translate(
+        ? t(
             'components.native-chat.notices.permissionDenied',
             '{{agent}} denied permission. View details.',
             { agent }
           )
-        : translate(
+        : t(
             'components.native-chat.notices.safetyReview',
             '{{agent}} reported a safety review warning. View details.',
             { agent }
@@ -200,7 +196,7 @@ export function NativeChatNoticeRow({
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
-          ? `${translate(
+          ? `${t(
               'components.native-chat.notices.truncatedResponse',
               'Provider response truncated (original size: {{bytes}} bytes).',
               { bytes: payload.byteLength }
@@ -223,7 +219,8 @@ export function NativeChatNoticeRow({
   const antigravitySignInContent = nativeChatAntigravitySignInContent(
     failure?.kind,
     agentName,
-    failure?.account
+    failure?.account,
+    t
   )
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
@@ -321,7 +318,7 @@ export function NativeChatNoticeRow({
         <ProviderFrameRow
           block={block}
           detail={detail}
-          summary={translate('components.native-chat.notices.details', 'Details')}
+          summary={t('components.native-chat.notices.details', 'Details')}
         />
       ) : null}
     </div>
@@ -334,6 +331,7 @@ function UsageLimitContinueNow({
 }: {
   resetsAt: number | undefined
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const orcaStopView = useNativeChatOrcaStopView()
   const resetPassed = useSyncExternalStore(
     (invalidate) => {
@@ -363,10 +361,10 @@ function UsageLimitContinueNow({
   }
   return (
     <NativeChatInterruptedContinueButton
-      label={translate('components.native-chat.usageLimitActions.continueNow', 'Continue Now')}
+      label={t('components.native-chat.usageLimitActions.continueNow', 'Continue Now')}
       onContinue={orcaStopView.continueUsageLimit}
       disabled={orcaStopView.usageLimitContinueDisabled}
-      explanation={translate(
+      explanation={t(
         'components.native-chat.interruptedContinue.usageLimitExplanation',
         'Asks the agent to continue where it left off. Use it once the limit resets.'
       )}

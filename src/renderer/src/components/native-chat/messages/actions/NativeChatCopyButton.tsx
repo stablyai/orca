@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Use Electron clipboard IPC for reliable copying in renderer contexts; show inline success without a toast. */
 export function NativeChatCopyButton({
@@ -14,6 +14,7 @@ export function NativeChatCopyButton({
   label?: string
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
 
@@ -42,8 +43,8 @@ export function NativeChatCopyButton({
   }, [text])
 
   const label = copied
-    ? translate('components.native-chat.copyMessage.copied', 'Copied')
-    : (copyLabel ?? translate('components.native-chat.copyMessage.copy', 'Copy message'))
+    ? t('components.native-chat.copyMessage.copied', 'Copied')
+    : (copyLabel ?? t('components.native-chat.copyMessage.copy', 'Copy message'))
 
   return (
     <button

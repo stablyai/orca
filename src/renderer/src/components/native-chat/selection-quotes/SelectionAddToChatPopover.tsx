@@ -3,7 +3,7 @@ import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
 const DOUBLE_CLICK_SETTLE_MS = 500
@@ -31,6 +31,7 @@ export function SelectionAddToChatPopover({
   /** `button` is where the offer was clicked, for a surface that opens a menu from it. */
   onAdd: (text: string, button: DOMRect) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [request, setRequest] = useState<QuoteRequest | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const virtualRef = useMemo(() => ({ current: request?.anchor ?? null }), [request])
@@ -154,7 +155,7 @@ export function SelectionAddToChatPopover({
               }}
             >
               <Quote />
-              {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
+              {t('components.native-chat.addSelectionToChat', 'Add to chat')}
             </Button>
           </div>
         </PopoverContent>

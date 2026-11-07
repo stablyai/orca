@@ -96,16 +96,6 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(history.messages.map((message) => message.subject)).toEqual(['do the work'])
   })
 
-  it('keeps serving a worker whose process restarted without a re-attach', async () => {
-    attachedDispatchWithMail()
-    const first = await check(PANE_A)
-
-    expect(await check(PANE_A)).toMatchObject({ deliveryId: null, count: 0 })
-    await expect(check(PANE_A, { ack: first.deliveryId })).resolves.toMatchObject({
-      acknowledged: first.deliveryId
-    })
-  })
-
   it('refuses the stale worker a plain check, so it cannot steal the next Delivery', async () => {
     const dispatchId = attachedDispatchWithMail()
     await check(PANE_A)

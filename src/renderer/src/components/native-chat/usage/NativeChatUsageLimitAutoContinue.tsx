@@ -1,5 +1,5 @@
 import { Settings } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from '../../settings/chat/native-chat-usage-limit-continue-setting-target'
@@ -28,12 +28,13 @@ export function NativeChatUsageLimitAutoContinue({
 }: {
   state: NativeChatUsageLimitAutoContinueState
 }): React.JSX.Element {
+  const t = useTranslate()
   if (state.kind === 'off') {
     return (
       <div className="ml-6">
         <button type="button" className={LINK_CLASS} onClick={openUsageLimitContinueSetting}>
           <Settings aria-hidden="true" className="size-3.5" />
-          {translate(
+          {t(
             'components.native-chat.usageLimitAutoContinue.openSetting',
             'Continue automatically when limits reset'
           )}
@@ -44,7 +45,7 @@ export function NativeChatUsageLimitAutoContinue({
   if (state.kind === 'cancelled') {
     return (
       <p className="ml-6 text-xs text-chat-foreground-faint">
-        {translate(
+        {t(
           'components.native-chat.usageLimitAutoContinue.cancelled',
           "Orca won't continue this chat automatically."
         )}
@@ -53,7 +54,7 @@ export function NativeChatUsageLimitAutoContinue({
   }
   return (
     <p className="ml-6 text-xs text-chat-foreground-faint">
-      {translate(
+      {t(
         'components.native-chat.usageLimitAutoContinue.scheduled',
         'Orca will continue this chat at {{time}}.',
         { time: formatUsageLimitResetClock(state.resetsAt) }
@@ -64,7 +65,7 @@ export function NativeChatUsageLimitAutoContinue({
         disabled={state.cancelDisabled}
         onClick={state.cancel}
       >
-        {translate('components.native-chat.usageLimitAutoContinue.cancel', "Don't continue")}
+        {t('components.native-chat.usageLimitAutoContinue.cancel', "Don't continue")}
       </button>
     </p>
   )

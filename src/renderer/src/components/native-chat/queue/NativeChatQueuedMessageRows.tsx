@@ -17,7 +17,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { QueuedMessageReorder } from './use-structured-agent-session-queued-reorder'
@@ -65,6 +65,7 @@ function SortableQueuedMessages({
   reorder,
   renderCard
 }: Props & { reorder: QueuedMessageReorder }): React.JSX.Element {
+  const t = useTranslate()
   const mounted = useRef(false)
   useLayoutEffect(() => {
     mounted.current = true
@@ -73,7 +74,7 @@ function SortableQueuedMessages({
     }
   }, [])
   const sensors = useSensors(useSensor(PointerSensor, pointerOptions))
-  const reorderHint = translate(
+  const reorderHint = t(
     'components.native-chat.queuedMessages.reorderHint',
     'Drag to reorder, or use the Up and Down arrow keys.'
   )
@@ -176,12 +177,13 @@ function QueuedMessagePresentation({
   insertion: QueuedMessageDragPresentation['insertion']
   sortable: ReturnType<typeof useSortable>
 }): ReactNode {
+  const t = useTranslate()
   const renderer = useContext(QueuedMessageRenderer)
   if (!renderer) {
     throw new Error('Queued message renderer is missing')
   }
   const movable = card.hold !== 'sending'
-  const label = translate('components.native-chat.queuedMessages.reorderMessage', 'Reorder message')
+  const label = t('components.native-chat.queuedMessages.reorderMessage', 'Reorder message')
   return renderer.renderCard(card, {
     rowRef: sortable.setNodeRef,
     rowStyle: {
@@ -225,7 +227,7 @@ function QueuedMessagePresentation({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
+            {t(
               'components.native-chat.queuedMessages.reorderHint',
               'Drag to reorder, or use the Up and Down arrow keys.'
             )}

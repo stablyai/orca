@@ -1,6 +1,6 @@
 import { GitFork, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
 export function NativeChatForkAction({
@@ -10,13 +10,14 @@ export function NativeChatForkAction({
   itemId: string
   fork: NativeChatForkRowAction
 }) {
-  const label = translate('components.native-chat.fork.action', 'Fork from this response')
+  const t = useTranslate()
+  const label = t('components.native-chat.fork.action', 'Fork from this response')
   // Disabled while support is still being learned; an unoffered row keeps an empty slot of this size.
   const disabledReason =
     fork.pendingItemId !== null
-      ? translate('components.native-chat.fork.pending', 'Forking this chat…')
+      ? t('components.native-chat.fork.pending', 'Forking this chat…')
       : fork.support.kind === 'unknown'
-        ? translate('components.native-chat.fork.checking', 'Checking whether this chat can fork…')
+        ? t('components.native-chat.fork.checking', 'Checking whether this chat can fork…')
         : null
   return (
     <Tooltip>
@@ -42,7 +43,7 @@ export function NativeChatForkAction({
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {disabledReason ??
-          translate(
+          t(
             'components.native-chat.fork.tooltip',
             'Fork from this response. The new chat includes this whole response, up to the end of its turn.'
           )}

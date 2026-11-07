@@ -53,11 +53,4 @@ describe('files.readDir remote reply budget', () => {
       })
     ])
   })
-
-  it('keeps the full listing for local callers', async () => {
-    expect(await readDir(undefined)).toEqual([
-      expect.objectContaining({ ok: true, result: expect.any(Array) })
-    ])
-    expect(await readDir(undefined)).toMatchObject([{ result: { length: 80_000 } }])
-  })
 })

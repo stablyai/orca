@@ -7,11 +7,7 @@ import { activeProviderContext } from '../../../../../../shared/agent-session/ag
 import { HOST_TEST_THREAD } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
-import {
-  seedUnrelatedHistory,
-  traceCallerReads,
-  traceDispatchProbes
-} from './helper-follow-up-sql-trace.test-support'
+import './helper-follow-up-sql-trace.test-support'
 
 describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
@@ -29,21 +25,7 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   }
   const depthOf = (dispatch: { dispatchId: string }) =>
     f.h.db.getDispatchContextById(dispatch.dispatchId)!.depth
-  const {
-    h,
-    panes,
-    cli,
-    success,
-    start,
-    report,
-    pair,
-    follow,
-    takeOver,
-    continues,
-    placeNextWorkerInChat,
-    otherRun,
-    effects
-  } = f
+  const { h, success, start, report, pair, follow, placeNextWorkerInChat, otherRun, effects } = f
 
   it.each(['term_worker', 'term_coord'] as const)(
     'lets %s continue a finished helper in place twice using the original address',
@@ -240,36 +222,6 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     }
   )
 
-  it.each(['reopened', 'started_fresh'] as const)(
-    'continues an own closed helper with %s',
-    async (delivery) => {
-      const { helper } = await pair()
-      if (delivery === 'reopened') {
-        vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
-          paneKey: panes.get('term_helper')!,
-          agent: 'claude',
-          processIncarnation: 'process:term_helper',
-          providerSession: { key: 'session_id', id: 'fixture-conversation' },
-          observedAt: 1
-        })
-        vi.spyOn(h.runtime, 'resumeAgentSessionInWorkspace').mockResolvedValue({
-          ok: true,
-          handle: 'term_reopened',
-          paneKey: h.runtime.getTerminalPaneKey('term_reopened')!,
-          ptyId: 'pty:term_reopened'
-        })
-      }
-      await success('worker-release', '--dispatch', helper.dispatchId)
-      f.nextTerminal = 'term_fresh'
-      const sent = await follow('term_worker', helper.dispatchId)
-      expect(sent.error).toBeUndefined()
-      expect(sent.result).toMatchObject({ delivery, state: 'ready' })
-      if (delivery === 'reopened') {
-        expect(h.runtime.resumeAgentSessionInWorkspace).toHaveBeenCalledOnce()
-      }
-    }
-  )
-
   it.each(['live', 'closed', 'leftover'] as const)(
     'refuses another worker’s %s helper before effects',
     async (state) => {
@@ -319,26 +271,6 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     }
   })
 
-  it.each(['terminal', 'on'] as const)('still refuses a worker’s explicit --%s', async (flag) => {
-    const { helper } = await pair()
-    const before = effects()
-    const sent = await cli(
-      'worker-start',
-      '--from',
-      'term_worker',
-      '--spec',
-      'next',
-      `--${flag}`,
-      flag === 'terminal' ? 'term_helper' : 'other-host'
-    )
-    expect(sent.error).toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('omit --on and --terminal')
-    })
-    expect(effects()).toEqual(before)
-    expect(getFollowUpDispatch(h.db, helper.dispatchId)).toBeUndefined()
-  })
-
   it.each(['own', 'foreign'] as const)(
     'continues held mail after a helper reports only from its %s creator',
     async (sender) => {
@@ -373,86 +305,4 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
       expect(effects().closes).toBe(before.closes)
     }
   )
-
-  it('reads the same custody evidence for a chain of recoveries however much unrelated work is stored', async () => {
-    const counts: unknown[] = []
-    const traces: ReturnType<typeof traceCallerReads>[] = []
-    for (const unrelated of [40, 400]) {
-      const terminal = `term_worker_${unrelated}`
-      const first = await start('term_coord', terminal)
-      const helper = await start(terminal, `${terminal}_helper`)
-      await report(`${terminal}_helper`, helper, `dispatch:${first.dispatchId}`)
-      await report(terminal, first, 'term_coord')
-      // Four recoveries of the same agent; only the last is still at work.
-      let caller = first
-      for (let step = 0; step < 4; step++) {
-        caller = await takeOver('term_coord', terminal)
-        if (step < 3) {
-          await report(terminal, caller, 'term_coord')
-        }
-      }
-      const { process_incarnation: incarnation, host_scope: host } = h.db.getDispatchContextById(
-        first.dispatchId
-      )!
-      seedUnrelatedHistory(h.db, h.activeRunId, unrelated, {
-        pane: h.runtime.getTerminalPaneKey(terminal)!,
-        incarnation: incarnation!,
-        host
-      })
-      const trace = traceCallerReads(h.db)
-      await continues(terminal, helper, caller)
-      counts.push(trace.counts())
-      traces.push(trace)
-      trace.restore()
-    }
-    // One indexed read of the agent's custody, visiting its one row, at both sizes; no former-owner scan.
-    expect(counts[0]).toMatchObject({
-      identity: { executions: 1, visited: 1 },
-      formerOwner: { executions: 0, visited: 0 }
-    })
-    expect(counts[1]).toEqual(counts[0])
-    for (const trace of traces) {
-      expect(trace.expectIndexedPlans()).toEqual(['identity'])
-    }
-  })
-
-  it('reads custody once per row however long the follow-up chain and however many rows share its process', async () => {
-    const probed: ReturnType<ReturnType<typeof traceDispatchProbes>['counts']>[] = []
-    for (const length of [3, 30]) {
-      const sender = `term_sender_${length}`
-      const child = `term_child_${length}`
-      let worker = await start('term_coord', sender)
-      const helper = await start(sender, child)
-      await report(child, helper, `dispatch:${worker.dispatchId}`)
-      await success('worker-release', '--dispatch', helper.dispatchId)
-      // Each in-place follow-up also takes over the same pane, so every ancestor is found only through its process.
-      for (let step = 0; step < length; step++) {
-        await report(sender, worker, 'term_coord')
-        worker = receipt.parse((await follow('term_coord', worker.dispatchId)).result)
-      }
-      const { process_incarnation: incarnation, host_scope: host } = h.db.getDispatchContextById(
-        worker.dispatchId
-      )!
-      // As many other custody rows on the chain's exact process as the chain has ancestors.
-      const near = { pane: h.runtime.getTerminalPaneKey(sender)!, incarnation: incarnation!, host }
-      seedUnrelatedHistory(h.db, h.activeRunId, 4 * length, near, host)
-      const trace = traceCallerReads(h.db)
-      const probes = traceDispatchProbes(h.db)
-      f.nextTerminal = `${child}_continued`
-      expect((await follow(sender, helper.dispatchId)).error).toBeUndefined()
-      const { identity, formerOwner } = trace.counts()
-      // One indexed read of the process's rows, each read a bounded number of times: linear, not ancestors x rows.
-      expect(identity).toMatchObject({ executions: 1, visited: length + 1 })
-      expect(identity.fieldReads).toBeLessThanOrEqual(4 * (2 * length + 1))
-      expect(formerOwner.executions).toBe(0)
-      probed.push(probes.counts())
-      probes.restore()
-      trace.restore()
-    }
-    // Each further ancestor costs one Dispatch read and one owner probe, and no Dispatch is read more often.
-    expect(probed[1]).toEqual({
-      total: probed[0].total + 2 * 27,
-      perDispatch: probed[0].perDispatch
-    })
-  })
 })

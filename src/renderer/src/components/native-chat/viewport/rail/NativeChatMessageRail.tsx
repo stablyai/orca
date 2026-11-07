@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   NATIVE_CHAT_RAIL_ROOMY_TICKS,
@@ -14,13 +15,13 @@ const WHEEL_DELTA_PAGE = 2
 /** Nominal line height for line-mode wheel deltas, which arrive as ~3 per notch. */
 const WHEEL_LINE_PX = 16
 
-function railItemLabel(item: NativeChatRailItem): string {
+function railItemLabel(item: NativeChatRailItem, t: Translate = translate): string {
   if (item.text.length > 0) {
     return item.text
   }
   return item.hasImages
-    ? translate('components.native-chat.railImageMessage', 'Image attachment')
-    : translate('components.native-chat.railEmptyMessage', 'Message')
+    ? t('components.native-chat.railImageMessage', 'Image attachment')
+    : t('components.native-chat.railEmptyMessage', 'Message')
 }
 
 /** Where the card sits, and the reply it showed, latched on close for its exit animation. */
@@ -60,6 +61,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   /** A tick whose older history is still paging in. */
   pendingId?: string | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   useUiLanguageRevision()
   const [target, setTarget] = useState<NativeChatRailPreviewTarget | null>(null)
   /** A message an arrow key asked to focus, whose tick may not be drawn until the next render. */
@@ -110,7 +112,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           ref={railRef}
           role="toolbar"
           data-native-chat-rail
-          aria-label={translate('components.native-chat.railLabel', 'Your messages')}
+          aria-label={t('components.native-chat.railLabel', 'Your messages')}
           aria-orientation="vertical"
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -171,7 +173,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                 key={item.id}
                 type="button"
                 tabIndex={item.id === tabId ? 0 : -1}
-                aria-label={railItemLabel(item)}
+                aria-label={railItemLabel(item, t)}
                 aria-current={item.id === rail.activeId ? 'true' : undefined}
                 aria-busy={item.id === pendingId ? true : undefined}
                 onPointerEnter={(event) => {
@@ -217,7 +219,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
         {previewed ? (
           <div className="flex flex-col gap-1">
             <p className="line-clamp-2 text-xs leading-snug text-foreground">
-              {railItemLabel(previewed)}
+              {railItemLabel(previewed, t)}
             </p>
             {reply.length > 0 ? (
               <p className="line-clamp-3 text-xs leading-snug text-muted-foreground">{reply}</p>

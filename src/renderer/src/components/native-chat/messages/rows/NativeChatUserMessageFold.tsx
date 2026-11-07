@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
 import { nativeChatUserMessageFolds } from '../../../../../../shared/native-chat/transcript/native-chat-user-message-fold'
@@ -23,6 +23,7 @@ export function NativeChatUserMessageFold({
   onRefolded?: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const disclosure = useNativeChatDisclosure(`user-message:${messageId}`, false)
   const longText = useMemo(() => nativeChatUserMessageFolds(markdown), [markdown])
   // A fold clips but still lays out the whole text, so it needs the composer's long-run rule.
@@ -87,8 +88,8 @@ export function NativeChatUserMessageFold({
             }}
           >
             {disclosure.open
-              ? translate('components.native-chat.userMessage.showLess', 'Show less')
-              : translate('components.native-chat.userMessage.showFull', 'Show full message')}
+              ? t('components.native-chat.userMessage.showLess', 'Show less')
+              : t('components.native-chat.userMessage.showFull', 'Show full message')}
           </Button>
         </div>
       ) : null}

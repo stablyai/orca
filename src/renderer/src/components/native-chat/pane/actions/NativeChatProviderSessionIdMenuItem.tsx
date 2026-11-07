@@ -1,25 +1,23 @@
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function NativeChatProviderSessionIdMenuItem({
   sessionId
 }: {
   sessionId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const copy = async (): Promise<void> => {
     try {
       await window.api.ui.writeTerminalClipboardText(sessionId)
       toast.success(
-        translate(
-          'components.terminalPane.TerminalContextMenu.copySessionIdSuccess',
-          'Session ID copied'
-        )
+        t('components.terminalPane.TerminalContextMenu.copySessionIdSuccess', 'Session ID copied')
       )
     } catch {
       toast.error(
-        translate(
+        t(
           'components.terminalPane.TerminalContextMenu.copySessionIdError',
           'Unable to copy session ID'
         )
@@ -29,7 +27,7 @@ export function NativeChatProviderSessionIdMenuItem({
   return (
     <DropdownMenuItem onSelect={() => void copy()}>
       <Copy />
-      {translate('components.terminalPane.TerminalContextMenu.copySessionId', 'Copy Session ID')}
+      {t('components.terminalPane.TerminalContextMenu.copySessionId', 'Copy Session ID')}
     </DropdownMenuItem>
   )
 }

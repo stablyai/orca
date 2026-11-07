@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
 import {
@@ -66,10 +67,10 @@ function withPendingValue(
 }
 
 // Keep visible value text inside the accessible name for voice control (WCAG 2.5.3).
-function pillAccessibleName(title: string, value: string): string {
+function pillAccessibleName(title: string, value: string, t: Translate = translate): string {
   return value === title
     ? title
-    : translate('components.native-chat.composer.pillAccessibleName', '{{value0}} {{value1}}', {
+    : t('components.native-chat.composer.pillAccessibleName', '{{value0}} {{value1}}', {
         value0: title,
         value1: value
       })
@@ -86,6 +87,7 @@ function PickerTrigger(props: {
   triggerRef: React.Ref<HTMLButtonElement>
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
   // Keep the tooltip mounted but closed unless informative; changing wrapper identity would detach the open picker.
   const informative = props.disabledReason !== null || props.dispatched
@@ -117,7 +119,7 @@ function PickerTrigger(props: {
           {props.disabledReason ? <div>{props.disabledReason}</div> : null}
           {props.dispatched ? (
             <div>
-              {translate(
+              {t(
                 'components.native-chat.composer.sentNotConfirmed',
                 'Sent to the agent — not confirmed'
               )}
@@ -141,6 +143,7 @@ function SessionOptionPopover(props: {
   onAction: (descriptor: SessionOptionDescriptor) => void
   focusComposer?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { model, options, pendingIds, demandModelCatalog } = props
   const canOpen = [model, ...options].some(
     (descriptor) =>
@@ -168,9 +171,9 @@ function SessionOptionPopover(props: {
     wasOpen.current = open
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
-  const modelTitle = translate('components.native-chat.composer.model', 'Model')
+  const modelTitle = t('components.native-chat.composer.model', 'Model')
   const modelLabel = nativeChatModelPillLabel(model, say)
-  const modelName = pillAccessibleName(modelTitle, modelLabel)
+  const modelName = pillAccessibleName(modelTitle, modelLabel, t)
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
@@ -216,7 +219,7 @@ function SessionOptionPopover(props: {
         optionsLabel={optionsLabel}
         accessibleName={
           optionsLabel
-            ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel)}`
+            ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
             : modelName
         }
         disabled={!canOpen}

@@ -4,6 +4,7 @@ import {
 } from '@/runtime/agent-sender-associations'
 import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -22,8 +23,8 @@ import type { AgentMessageSender } from '../../../../../../shared/agent-session/
 import type { Tab } from '../../../../../../shared/tab-types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
-export function unnamedSenderLabel(): string {
-  return translate('components.native-chat.agentMessage.unnamedSender', 'an agent')
+export function unnamedSenderLabel(t: Translate = translate): string {
+  return t('components.native-chat.agentMessage.unnamedSender', 'an agent')
 }
 
 const qualifiedTabs = new WeakMap<
@@ -104,6 +105,7 @@ export function useAgentMessageSenderLabel(
   target?: RuntimeClientTarget,
   dispatchId?: string
 ): string {
+  const t = useTranslate()
   const { address, orcaSessionId } = sender.party
   const local = !address.startsWith('dispatch:')
   const owner = useAppStore((state) => agentMessageSenderOwner(state, chatWorktreeId, target))
@@ -127,6 +129,6 @@ export function useAgentMessageSenderLabel(
     conversationName,
     snapshotName: sender.name,
     tabLabel: chatTab?.label,
-    fallback: unnamedSenderLabel()
+    fallback: unnamedSenderLabel(t)
   })
 }

@@ -3,7 +3,7 @@ import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { agentForksConversations } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { NativeChatTabSession } from '../../../tab-bar/tab-session-history-switch'
@@ -37,15 +37,16 @@ export function NativeChatPaneHeader({
   colorScheme: React.CSSProperties['colorScheme']
   handOff?: NativeChatHeaderHandOff
 }): React.JSX.Element {
+  const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
-  const split = translate(
+  const split = t(
     'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
     'Split Terminal Right'
   )
   const splitShortcutCombos = useShortcutKeyComboDetails('terminal.splitRight')
-  const handOffLabel = translate(
+  const handOffLabel = t(
     'components.agentSessionContinuation.handOffToAnotherAgent',
     'Hand Off to Another Agent'
   )

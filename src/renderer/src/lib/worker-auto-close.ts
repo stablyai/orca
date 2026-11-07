@@ -9,6 +9,7 @@ import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchest
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../shared/orchestration-runtime-capabilities'
 import {
@@ -148,23 +149,24 @@ export function useWorkerAutoClose(
 /** The strip's line; null when no strip shows (kept open, or nothing closes the worker). */
 export function workerAutoCloseStripText(
   state: WorkerAutoCloseState | null,
-  nowMs: number
+  nowMs: number,
+  t: Translate = translate
 ): string | null {
   if (!state || state.kept) {
     return null
   }
   return state.closesAt === null
-    ? translate(
+    ? t(
         'components.orchestration.workerAutoClose.running',
         'Temporary orchestration worker · Closes 2 minutes after it finishes'
       )
-    : translate(
+    : t(
         'components.orchestration.workerAutoClose.finished',
         'Temporary orchestration worker finished · Closes in {{countdown}}',
         { countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs) }
       )
 }
 
-export function workerKeepOpenLabel(): string {
-  return translate('components.orchestration.workerAutoClose.keepOpen', 'Keep open')
+export function workerKeepOpenLabel(t: Translate = translate): string {
+  return t('components.orchestration.workerAutoClose.keepOpen', 'Keep open')
 }
