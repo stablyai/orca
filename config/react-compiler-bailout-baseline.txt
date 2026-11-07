@@ -605,7 +605,6 @@
 1 src/renderer/src/components/task-page/github/use-task-page-github-quiet-refresh-effect.ts
 5 src/renderer/src/components/task-page/github/use-task-page-github-quiet-refresh.ts
 3 src/renderer/src/components/task-page/github/use-task-page-github-search-pagination.ts
-3 src/renderer/src/components/task-page/github/use-task-page-pr-check-hydration.ts
 4 src/renderer/src/components/task-page/github/use-task-page-work-items-cache-selection.ts
 1 src/renderer/src/components/task-page/gitlab/use-task-page-gitlab-loading.ts
 2 src/renderer/src/components/task-page/jira/task-page-jira-board-view.tsx
