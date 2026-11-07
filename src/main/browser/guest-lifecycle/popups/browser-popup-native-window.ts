@@ -28,7 +28,7 @@ export function isNativeBrowserPopupRequest(input: {
   )
 }
 
-// OpenURL creates synchronously; scripted window.open creates its child in a later task.
+/** Preserves pre-navigation admission across synchronous links and deferred script windows. */
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
   options: Electron.BrowserWindowConstructorOptions
@@ -97,6 +97,8 @@ export function allowNativeBrowserPopup(input: {
       ...input.options,
       title: 'about:blank',
       fullscreenable: false,
+      // Match origin-bar popups: a visible app menu consumes the minimum content height.
+      autoHideMenuBar: true,
       show: mayPresent && !input.background,
       // Content-sized like origin-bar popups, so resizeTo cannot hide the origin title.
       useContentSize: true,
