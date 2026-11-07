@@ -58,7 +58,7 @@ export async function startSttDictation(
     manifest.provider === 'openai'
       ? null
       : { modelId, hotwordsFilePath, language: engineDictationLanguage(manifest, language) }
-  if (state.sessions.size >= MAX_STT_SESSIONS) {
+  if (liveSessions(state).length >= MAX_STT_SESSIONS) {
     throw new Error('dictation_session_limit')
   }
   if (config && conflictingSessions(state, config).some((other) => other.phase !== 'stopping')) {
@@ -89,6 +89,11 @@ export async function startSttDictation(
       }
     } else {
       await requireModelReady(state, modelId)
+      // A cloud dictation needs no recognizer; free one nobody else uses.
+      const idle = state.engine
+      if (idle && sttEngineUsers(state, idle).length === 0) {
+        await teardownSttEngine(state, idle)
+      }
       session.cloud = new OpenAiTranscriptionSession(
         modelId,
         readOpenAiSpeechApiKey,
@@ -109,9 +114,14 @@ export async function startSttDictation(
 
 // Sessions share one recognizer, so a second model would load another copy; refuse it while others use the first.
 function conflictingSessions(state: SttSessionState, config: SttRecognizerConfig): SttSession[] {
-  return [...state.sessions.values()].filter(
+  return liveSessions(state).filter(
     (other) => other.config && !sameSttRecognizerConfig(other.config, config)
   )
+}
+
+// A canceled start only waits out its model load; it holds no device's slot.
+function liveSessions(state: SttSessionState): SttSession[] {
+  return [...state.sessions.values()].filter((session) => !session.canceled)
 }
 
 async function requireModelReady(state: SttSessionState, modelId: string): Promise<void> {
@@ -152,7 +162,7 @@ async function acquireSttEngine(
     if (!current) {
       return spawnSttEngine(state, config, manifest)
     }
-    // No session uses a recognizer with another config, so it is idle.
+    // Only canceled starts can still wait on a recognizer with another config.
     await teardownSttEngine(state, current)
   }
 }

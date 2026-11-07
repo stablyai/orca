@@ -507,6 +507,16 @@ describe('SttService', () => {
     expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
   })
 
+  it('frees an idle local recognizer when a cloud dictation starts', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    await service.stopDictation('desktop')
+
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
+
+    expect(getLastWorker()!.terminated).toBe(true)
+  })
+
   it('reads the OpenAI key only when finishing cloud dictation', async () => {
     const service = new SttService(
       {
