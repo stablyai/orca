@@ -1,5 +1,6 @@
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { shellScreenRouteKey } from '../shell-screen-route'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge-frame-fields'
 
 // Reuse init for same-screen pane updates: it already carries route and is reread on every ready, avoiding a new shell-to-page opcode.
 
@@ -14,6 +15,17 @@ export const BRIDGE_OPEN_ROUTE_PARAM = 'open'
 export const BRIDGE_CLEARABLE_ROUTE_PARAMS = ['paneKey', BRIDGE_OPEN_ROUTE_PARAM] as const
 
 export type BridgeClearableRouteParam = (typeof BRIDGE_CLEARABLE_ROUTE_PARAMS)[number]
+
+// The page's ask to erase a one-shot param it applied, naming the value it consumed.
+export function routeParamClearFrame(param: BridgeClearableRouteParam, value: string) {
+  return {
+    v: BRIDGE_PROTOCOL_VERSION,
+    type: 'notify',
+    name: BRIDGE_ROUTE_PARAM_CLEAR,
+    param,
+    value
+  } as const
+}
 
 // Share shellScreenRouteKey with remount identity; deduplicate routes on both sides because every ready republishes the held route.
 export function bridgeRouteMoved(

@@ -35,7 +35,7 @@ import { BridgeClientRequests } from './bridge-client-requests'
 import { readBridgeRequestFrameOptions, readBridgeRpcEnvelope } from './bridge-client-rpc-envelope'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
-import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
+import { routeParamClearFrame, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
@@ -352,13 +352,6 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
     nativeRequestRoom: () => bridgePendingRequestCap(true) - requests.size,
-    clearRouteParam: (param, value) =>
-      posted({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: BRIDGE_ROUTE_PARAM_CLEAR,
-        param,
-        value
-      })
+    clearRouteParam: (param, value) => posted(routeParamClearFrame(param, value))
   }
 }
