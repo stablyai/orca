@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -83,7 +83,7 @@ function TerminalFontWeightChoice(): React.JSX.Element {
             <span className="pointer-events-none flex flex-col items-center gap-0.5 py-0.5">
               <span
                 aria-hidden
-                className="text-lg"
+                className="text-lg text-foreground"
                 style={{ fontFamily, fontWeight: choice.weight }}
               >
                 {SAMPLE_TEXT}
@@ -119,9 +119,15 @@ export function useWindowsTerminalFontWeightNotice(persistedUIReady: boolean): v
     }
   }, [weightChosenElsewhere])
 
+  const shownRef = useRef(false)
+
   useEffect(() => {
     if (!noticePending) {
-      toast.dismiss(TOAST_ID)
+      // Sonner defers dismissal, so an unconditional one would close the toast shown right after hydration.
+      if (shownRef.current) {
+        shownRef.current = false
+        toast.dismiss(TOAST_ID)
+      }
       return
     }
     const fontFamily = buildFontFamily(useAppStore.getState().settings?.terminalFontFamily ?? '')
@@ -132,6 +138,7 @@ export function useWindowsTerminalFontWeightNotice(persistedUIReady: boolean): v
       finishNotice()
       return
     }
+    shownRef.current = true
     toast(
       translate('terminal.windowsFontWeight.title', 'Terminal text on Windows is now lighter'),
       {
