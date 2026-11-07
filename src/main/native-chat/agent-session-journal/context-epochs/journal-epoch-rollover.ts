@@ -8,7 +8,10 @@ import { agentSessionJournalProviderHandle } from '../../../../shared/agent-sess
 import type { JournalTransactionalDatabase } from '../database/journal-host-database'
 import type { JournalLoad } from '../replay/journal-open'
 import { applyJournalRow, createJournalReducerState } from '../projection/journal-reducer'
-import { buildJournalQueueRow, type JournalQueueCardChange } from '../queued-messages/journal-queue-events'
+import {
+  buildJournalQueueRow,
+  type JournalQueueCardChange
+} from '../queued-messages/journal-queue-events'
 import type { JournalOperationReceipt } from '../writing/journal-row-writer'
 import {
   deleteJournalEpochRows,

@@ -9,7 +9,10 @@ import { readAgentSessionExecutionOptions } from '../../../../shared/agent-sessi
 import { structuredAgentSessionCommandTurnIdentity } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from '../projection/journal-dispatch-reducer'
-import { queuedHandOffInDoubt, queuedHandOffOutcome } from '../projection/journal-dispatch-settlement'
+import {
+  queuedHandOffInDoubt,
+  queuedHandOffOutcome
+} from '../projection/journal-dispatch-settlement'
 import type { JournalDispatchRow, JournalRow } from '../durable-rows/journal-row-schema'
 import type { JournalQueueRow, JournalQueuedChange } from './journal-queue-events'
 import type { JournalReducerState } from '../projection/journal-reducer'

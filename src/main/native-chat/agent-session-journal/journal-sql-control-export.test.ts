@@ -7,7 +7,10 @@ import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import {
+  persistJournalOutcomeRows,
+  persistJournalOutcomeTransition
+} from './outcomes/journal-outcome-table'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { exportJournalControlState } from './journal-sql-control-export'

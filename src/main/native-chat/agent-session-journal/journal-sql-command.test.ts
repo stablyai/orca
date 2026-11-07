@@ -1,8 +1,14 @@
 import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { advanceJournalOutcomeSource, ensureJournalOutcomeTables } from './outcomes/journal-outcome-format'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import {
+  advanceJournalOutcomeSource,
+  ensureJournalOutcomeTables
+} from './outcomes/journal-outcome-format'
+import {
+  persistJournalOutcomeRows,
+  persistJournalOutcomeTransition
+} from './outcomes/journal-outcome-table'
 import { createJournalReducerState } from './projection/journal-reducer'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'

@@ -17,7 +17,10 @@ import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import {
+  persistJournalOutcomeRows,
+  persistJournalOutcomeTransition
+} from './outcomes/journal-outcome-table'
 import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'

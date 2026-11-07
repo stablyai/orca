@@ -19,7 +19,10 @@ import { JournalSqlBatch } from './journal-sql-batch'
 import { beginJournalSqlConversion, markJournalSqlReady } from './journal-sql-meta'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
-import { advanceJournalOutcomeSource, startJournalOutcomeLog } from './outcomes/journal-outcome-format'
+import {
+  advanceJournalOutcomeSource,
+  startJournalOutcomeLog
+} from './outcomes/journal-outcome-format'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'

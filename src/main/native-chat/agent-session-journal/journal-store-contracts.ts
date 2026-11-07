@@ -16,7 +16,10 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type { JournalHostDatabase, JournalTransactionalDatabase } from './database/journal-host-database'
+import type {
+  JournalHostDatabase,
+  JournalTransactionalDatabase
+} from './database/journal-host-database'
 import type { JournalLifecycleMutationInput } from './writing/journal-row-builders'
 import type { JournalRowsRead } from './replay/journal-read-row'
 import type { JournalReducerState } from './projection/journal-reducer'

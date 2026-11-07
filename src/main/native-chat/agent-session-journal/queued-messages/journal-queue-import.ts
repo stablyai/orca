@@ -2,7 +2,10 @@ import { memoryJournalMap, memoryJournalSet } from '../journal-memory-collection
 import { JournalDraftMap, JournalDraftSet } from '../projection/journal-transition-collections'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalDispatchRowApplies, queuedHandOffInDoubt } from '../projection/journal-dispatch-settlement'
+import {
+  journalDispatchRowApplies,
+  queuedHandOffInDoubt
+} from '../projection/journal-dispatch-settlement'
 import { legacyQueuedChange } from './journal-queue-legacy-change'
 
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'

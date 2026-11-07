@@ -20,10 +20,16 @@ import type { JournalHostDatabase } from './database/journal-host-database'
 import { JournalWriteQueue } from './writing/journal-write-queue'
 import { prepareJournalOutcomeWrite } from './outcomes/journal-outcome-write'
 import { persistJournalOutcomeRows } from './outcomes/journal-outcome-table'
-import { ensureJournalOutcomeTables, startJournalOutcomeLog } from './outcomes/journal-outcome-format'
+import {
+  ensureJournalOutcomeTables,
+  startJournalOutcomeLog
+} from './outcomes/journal-outcome-format'
 import { createJournalReducerState } from './projection/journal-reducer'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { journalContextCursor, physicalJournalCursor } from './context-epochs/journal-context-cursor'
+import {
+  journalContextCursor,
+  physicalJournalCursor
+} from './context-epochs/journal-context-cursor'
 import type { JournalRecoveryJournal } from './submissions/journal-pending-submission-recovery'
 import {
   markJournalPendingSubmissionsUnknown,

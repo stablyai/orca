@@ -2,7 +2,10 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { JournalRow, JournalStopEvent } from './durable-rows/journal-row-schema'
-import { composeJournalOperationReceipts, type JournalOperationReceipt } from './writing/journal-row-writer'
+import {
+  composeJournalOperationReceipts,
+  type JournalOperationReceipt
+} from './writing/journal-row-writer'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity
