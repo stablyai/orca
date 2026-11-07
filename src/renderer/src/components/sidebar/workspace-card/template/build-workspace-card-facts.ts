@@ -118,6 +118,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       deleteQuickAction: card.showDeleteQuickAction
     },
     options: {
+      compactHeader: !card.newCardStyle && card.settings?.compactWorktreeHeader === true,
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
       show: showOptions(card.cardProps),
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'

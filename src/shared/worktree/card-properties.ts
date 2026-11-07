@@ -2,6 +2,12 @@ import type { GlobalSettings } from '../global-settings-types'
 import type { PersistedUIState } from '../persisted-ui-state-types'
 import type { WorktreeCardMode, WorktreeCardProperty } from '../ui-chrome-types'
 
+export const CARD_LAYOUT_SETTING_KEYS = [
+  'experimentalNewWorktreeCardStyle',
+  'compactWorktreeCards',
+  'compactWorktreeHeader'
+] as const
+
 const FIXED_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 
 export const TASK_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
@@ -76,11 +82,14 @@ export function getWorktreeCardModeProperties(mode: WorktreeCardMode): WorktreeC
 }
 
 export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
-  settings: Pick<GlobalSettings, 'compactWorktreeCards'>
+  settings: Pick<GlobalSettings, 'compactWorktreeCards' | 'compactWorktreeHeader'>
   ui: Pick<PersistedUIState, 'worktreeCardProperties' | '_worktreeCardModeDefaulted'>
 } {
   return {
-    settings: { compactWorktreeCards: mode === 'Compact' },
+    settings: {
+      compactWorktreeCards: mode === 'Compact',
+      compactWorktreeHeader: mode === 'CompactHeader'
+    },
     ui: {
       worktreeCardProperties: getWorktreeCardModeProperties(mode),
       _worktreeCardModeDefaulted: true

@@ -26,6 +26,7 @@ type CompactAgentSummaryButtonProps = {
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
+  inline?: boolean
 }
 
 type CompactAgentExpansionProps = {
@@ -76,7 +77,8 @@ export function CompactAgentSummaryButton({
   agents,
   subjectLabel,
   expanded,
-  onToggle
+  onToggle,
+  inline = false
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const summary = summarizeAgents(agents, subjectLabel)
   const groups = buildSummaryAgentGroups(agents)
@@ -96,6 +98,24 @@ export function CompactAgentSummaryButton({
     },
     [onToggle]
   )
+  if (inline) {
+    return (
+      <button
+        type="button"
+        className="ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-[11px] tabular-nums text-muted-foreground hover:bg-worktree-sidebar-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+        aria-label={subjectLabel}
+        aria-expanded={expanded}
+        title={subjectLabel}
+        onClick={handleToggle}
+        onKeyDown={stopActivationKeyPropagation}
+        onMouseDown={stopPointerPropagation}
+        onPointerDown={stopPointerPropagation}
+      >
+        <span>{agents.length}</span>
+        <ChevronDown className={cn('size-3', !expanded && '-rotate-90')} aria-hidden />
+      </button>
+    )
+  }
   return (
     <button
       type="button"

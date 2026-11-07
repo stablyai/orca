@@ -94,6 +94,7 @@ export type WorkspaceCardFacts = {
   }
   options: {
     style: WorkspaceCardStyle
+    compactHeader?: boolean
     show: WorkspaceCardShowOptions
     agentRows: 'full' | 'compact'
   }

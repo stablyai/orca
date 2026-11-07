@@ -69,6 +69,7 @@ export function MetadataActionIcon({
   href,
   workspaceId,
   onClick,
+  onPointerDown,
   children
 }: {
   label: string
@@ -76,6 +77,7 @@ export function MetadataActionIcon({
   /** The card's workspace hosts the link, not whichever one is selected. */
   workspaceId?: string
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
   children: React.ReactNode
 }): React.JSX.Element {
   const trigger = href ? (
@@ -100,6 +102,7 @@ export function MetadataActionIcon({
       size="icon-xs"
       className="size-6"
       aria-label={label}
+      onPointerDown={onPointerDown}
       onClick={(event) => {
         event.stopPropagation()
         onClick?.(event)
