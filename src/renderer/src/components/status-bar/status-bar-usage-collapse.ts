@@ -56,7 +56,51 @@ export function pickCollapsedUsageChips(
   return collapsed
 }
 
-export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
+const CHIP_WIDTH_TOLERANCE_PX = 1
+
+export type UsageChipWidthMemo = {
+  /** Width the chip last measured while in the row. */
+  inRow: number
+  /** Width it first measured after leaving the row; a later change there means its content changed. */
+  outOfFlow?: number
+}
+
+/**
+ * Width a chip takes in the row. Collapsed chips report their remembered in-row width so the row
+ * measures the same whatever is collapsed; callers reset the memo when density or DPR changes.
+ */
+export function resolveUsageChipWidth(
+  memo: Map<string, UsageChipWidthMemo>,
+  provider: string,
+  measured: number,
+  collapsed: boolean
+): number {
+  if (!collapsed) {
+    memo.set(provider, { inRow: measured })
+    return measured
+  }
+  const entry = memo.get(provider)
+  if (!entry) {
+    return measured
+  }
+  if (entry.outOfFlow === undefined) {
+    entry.outOfFlow = measured
+    return entry.inRow
+  }
+  if (Math.abs(entry.outOfFlow - measured) > CHIP_WIDTH_TOLERANCE_PX) {
+    memo.delete(provider)
+    return measured
+  }
+  return entry.inRow
+}
+
+export function measureUsageRow(
+  usage: HTMLElement | null,
+  resolveChipWidth: (provider: string, measured: number, collapsed: boolean) => number = (
+    _provider,
+    measured
+  ) => measured
+): UsageRowMeasure {
   if (!usage) {
     return {
       naturalWidth: 0,
@@ -72,13 +116,17 @@ export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
   const chipElements = [...usage.querySelectorAll<HTMLElement>('[data-usage-chip]')]
   const chipRow = chipElements[0]?.parentElement
   const chipGap = chipRow ? Number.parseFloat(getComputedStyle(chipRow).columnGap) || 0 : 0
-  const chips = chipElements.map((element) => ({
-    provider: element.dataset.usageChip ?? '',
-    width: element.getBoundingClientRect().width,
-    urgent: element.dataset.usageUrgent === 'true',
-    percentage: element.dataset.usagePercentage === 'true',
-    collapsed: element.dataset.usageCollapsed === 'true'
-  }))
+  const chips = chipElements.map((element) => {
+    const provider = element.dataset.usageChip ?? ''
+    const collapsed = element.dataset.usageCollapsed === 'true'
+    return {
+      provider,
+      width: resolveChipWidth(provider, element.getBoundingClientRect().width, collapsed),
+      urgent: element.dataset.usageUrgent === 'true',
+      percentage: element.dataset.usagePercentage === 'true',
+      collapsed
+    }
+  })
   const more = usage.querySelector<HTMLElement>('[data-usage-more]')
   const moreChipWidth = more?.getBoundingClientRect().width ?? 0
   const moreInRow = more !== null && more.dataset.usageCollapsed !== 'true'
