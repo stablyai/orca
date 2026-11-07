@@ -32,7 +32,8 @@ export function useNativeChatSideChat(
       return undefined
     }
     const start = (): { refused: string } | { throughItemId: string } => {
-      if (fork.support.kind === 'unknown') {
+      // Another fork from this chat is still opening.
+      if (fork.support.kind === 'unknown' || fork.pendingItemId !== null) {
         return {
           refused: translate(
             'components.native-chat.sideChat.notReady',
