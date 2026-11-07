@@ -1,5 +1,4 @@
 import React from 'react'
-import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { VirtualItem } from '@tanstack/react-virtual'
@@ -46,13 +45,13 @@ import {
   RepoHeaderProjectActionsMenu,
   type RepoHeaderProjectActions
 } from './repo-header-project-actions'
-import {
-  handleRepoHeaderCollapseAffordancePointerDown,
-  shouldIgnoreRepoHeaderToggle,
-  toggleSectionHeaderCollapse
-} from './header-event-guards'
+import { shouldIgnoreRepoHeaderToggle, toggleSectionHeaderCollapse } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import {
+  SectionHeaderCollapsedSummary,
+  SectionHeaderCollapseToggle
+} from './section-header-collapse-controls'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -190,6 +189,9 @@ export function renderWorktreeSectionHeaderRow(args: {
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  const showCollapsedSummary = showHeaderCollapseAffordance && isHeaderCollapsed
+  // Why: a group is a container of projects, so it reads as a category label rather than a peer row.
+  const isProjectGroupLabel = isProjectGroupHeader && !row.repo
   return (
     <div
       key={vItem.key}
@@ -326,7 +328,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             <div
               className={cn(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
+                repoHeaderColor || isProjectGroupLabel ? 'text-muted-foreground' : headerVisual.tone
               )}
             >
               {row.repo ? (
@@ -343,7 +345,16 @@ export function renderWorktreeSectionHeaderRow(args: {
 
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
-                <div className="min-w-0 truncate text-[13px] font-semibold leading-4">{label}</div>
+                <div
+                  className={cn(
+                    'min-w-0 truncate font-semibold leading-4',
+                    isProjectGroupLabel
+                      ? 'text-2xs uppercase tracking-wider text-muted-foreground'
+                      : 'text-[13px]'
+                  )}
+                >
+                  {label}
+                </div>
                 {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
@@ -351,24 +362,14 @@ export function renderWorktreeSectionHeaderRow(args: {
               </div>
             </div>
           </div>
+          {showCollapsedSummary ? (
+            // Why: a group's count mixes projects and folders, so only workspace headers show one.
+            <SectionHeaderCollapsedSummary count={isProjectGroupLabel ? null : row.count} />
+          ) : null}
 
           <ProjectHeaderActions>
             {showHeaderCollapseAffordance ? (
-              <div
-                className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                data-repo-header-collapse-affordance=""
-                aria-hidden
-                onPointerDown={handleRepoHeaderCollapseAffordancePointerDown}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  toggleHeader(event)
-                }}
-              >
-                <ChevronDown
-                  className={cn('size-3.5 transition-transform', isHeaderCollapsed && '-rotate-90')}
-                />
-              </div>
+              <SectionHeaderCollapseToggle collapsed={isHeaderCollapsed} onToggle={toggleHeader} />
             ) : null}
 
             {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
