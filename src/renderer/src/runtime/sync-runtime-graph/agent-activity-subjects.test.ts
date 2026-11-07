@@ -13,6 +13,7 @@ it('publishes desktop event clocks, excludes heartbeat timestamps, and respects 
   const worktree = makeWorktree()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every field read by the activity publisher; unrelated AppState actions are unused.
   const state = {
+    settings: { activeRuntimeEnvironmentId: 'unrelated-focused-host' },
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },
     tabsByWorktree: { [worktree.id]: [makeTab()] },

@@ -4,10 +4,7 @@ import {
   buildActivityEvents,
   createActivityEventBuildCache
 } from '../../components/activity/activity-event-builder'
-import {
-  getSettingsFocusedExecutionHostId,
-  getWorktreeExecutionHostId
-} from '../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentActivitySubject } from '../../../../shared/agent-activity-read-state'
 import type { StructuredChatTabNames } from '../structured-chat-tab-name'
 
@@ -46,11 +43,7 @@ export function buildAgentActivitySubjects(state: AppState): AgentActivitySubjec
   const subjects = new Map<string, AgentActivitySubject>()
   for (const event of events) {
     const paneKey = event.entry.paneKey
-    const hostId = getWorktreeExecutionHostId(
-      event.worktree,
-      event.repo ?? undefined,
-      getSettingsFocusedExecutionHostId(state.settings)
-    )
+    const hostId = getWorktreeExecutionHostId(event.worktree, event.repo ?? undefined)
     const key = JSON.stringify([hostId, event.worktree.id, paneKey])
     const existing = subjects.get(key)
     if (existing) {
