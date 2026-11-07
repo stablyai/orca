@@ -55,10 +55,11 @@ export function useStructuredNativeChatSubmitReveal(
         ...queuedMessages,
         steer: async () => undefined,
         resume: async () => false,
-        steerHead: undefined
+        steerHead: undefined,
+        steerLast: undefined
       }
     }
-    const { steerHead } = queuedMessages
+    const { steerHead, steerLast } = queuedMessages
     return {
       ...queuedMessages,
       steer: (messageId) => {
@@ -70,6 +71,15 @@ export function useStructuredNativeChatSubmitReveal(
         steerHead &&
         (() => {
           const steered = steerHead()
+          if (steered) {
+            revealLatest()
+          }
+          return steered
+        }),
+      steerLast:
+        steerLast &&
+        (() => {
+          const steered = steerLast()
           if (steered) {
             revealLatest()
           }

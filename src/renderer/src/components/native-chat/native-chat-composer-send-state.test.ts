@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
 
-function chordSteersHead(
+function chordSteersQueued(
   overrides: Partial<Parameters<typeof nativeChatComposerSendState>[0]> & {
     followUp?: 'queue' | 'steer'
   } = {}
@@ -25,15 +25,15 @@ function chordSteersHead(
     isWorking: false,
     canStop: true,
     ...input
-  }).chordSteersHead
+  }).chordSteersQueued
 }
 
-describe('nativeChatComposerSendState chordSteersHead', () => {
+describe('nativeChatComposerSendState chordSteersQueued', () => {
   it('sends the head card from an empty composer where steering means sending it now', () => {
     // No turn runs (a paused queue after Stop): the card's own Send.
-    expect(chordSteersHead()).toBe(true)
+    expect(chordSteersQueued()).toBe(true)
     // Mid-turn with follow-ups queued: the chord's other way is a steer.
-    expect(chordSteersHead({ isWorking: true })).toBe(true)
+    expect(chordSteersQueued({ isWorking: true })).toBe(true)
   })
 
   it.each([
@@ -41,6 +41,6 @@ describe('nativeChatComposerSendState chordSteersHead', () => {
     ['a queued card is being edited', { editSession: { canSave: true } }],
     ['the composer submits a goal, not a message', { messageDelivery: false }]
   ])('never does where %s', (_case, overrides) => {
-    expect(chordSteersHead(overrides)).toBe(false)
+    expect(chordSteersQueued(overrides)).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ it('sends no queued card and retries no start on a host held for its permission 
     editCapable: false,
     editor: undefined,
     steerHead: vi.fn(() => true),
+    steerLast: vi.fn(() => true),
     isWorking: false
   }
   const controller = {
@@ -82,9 +83,11 @@ it('sends no queued card and retries no start on a host held for its permission 
   await act(() => result.current.queuedMessages.resume())
   await act(() => result.current.queuedMessages.steer('m1'))
   expect(result.current.queuedMessages.steerHead).toBeUndefined()
+  expect(result.current.queuedMessages.steerLast).toBeUndefined()
   expect(queuedMessages.resume).not.toHaveBeenCalled()
   expect(queuedMessages.steer).not.toHaveBeenCalled()
   expect(queuedMessages.steerHead).not.toHaveBeenCalled()
+  expect(queuedMessages.steerLast).not.toHaveBeenCalled()
   act(() => result.current.retryLaunch())
   expect(retryLaunch).not.toHaveBeenCalled()
   let allow!: (allowed: boolean) => void
