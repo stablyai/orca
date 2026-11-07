@@ -65,6 +65,7 @@ import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-opened-pull-requests'
 import { NativeChatPullRequestChangeContext } from './NativeChatOpenedPullRequestCard'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
+import { useNativeChatInlineSubagentChoices } from './native-chat-child-navigation'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 export function NativeChatMessageList({
@@ -153,6 +154,7 @@ export function NativeChatMessageList({
     subagentDisclosure,
     openSubagentSections
   } = useNativeChatSubagentSections(messages, subagentRows, subagentRoster)
+  const inlineSubagentChoices = useNativeChatInlineSubagentChoices(subagentChoices, subagentRows)
   // Folded subagent rows stay loaded, so a reopened reply keeps its reveal.
   const loadedMessageIds = useMemo(
     () => new Set([...messages.map(({ id }) => id), ...subagentSections.pathOf.keys()]),
@@ -204,7 +206,7 @@ export function NativeChatMessageList({
     isWorking,
     lifecycleWorking,
     subagentSections,
-    subagentChoices,
+    subagentChoices: inlineSubagentChoices,
     line: {
       draws: tailRow === 'activity',
       thinking: turnStatuses.active?.thinking === true,

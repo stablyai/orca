@@ -25,6 +25,7 @@ import {
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import { backgroundTaskGroupLabel, buildBackgroundTaskGroups } from './background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
+import { useNativeChatChildNavigation } from './native-chat-child-navigation'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
 const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
@@ -76,11 +77,13 @@ function BackgroundTaskRow(props: {
   onShowAgent?: (providerId: string) => void
 }): React.JSX.Element {
   const { row, now } = props
+  const navigation = useNativeChatChildNavigation()
   const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   // Only an agent's activity streams into the conversation, filed under the provider's id.
-  const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
+  const shownId =
+    row.kind === 'agent' && (navigation || props.onShowAgent) ? row.providerId : undefined
   const content = (
     <>
       <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
@@ -112,7 +115,13 @@ function BackgroundTaskRow(props: {
               'Show {{value0}} in the conversation',
               { value0: agentChildRowName(row) }
             )}
-            onClick={() => props.onShowAgent?.(shownId)}
+            onClick={() => {
+              if (navigation) {
+                navigation.open({ agentId: shownId, label: agentChildRowName(row) })
+              } else {
+                props.onShowAgent?.(shownId)
+              }
+            }}
           >
             {content}
           </button>
