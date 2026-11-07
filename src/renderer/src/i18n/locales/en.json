@@ -735,6 +735,23 @@
           "remote": "remote",
           "gpu": "gpu"
         }
+      },
+      "appIcon": {
+        "importCustom": "Custom…",
+        "replaceCustom": "Replace custom icon…",
+        "removeCustom": "Remove custom icon",
+        "customKeyword": "custom",
+        "importKeyword": "import",
+        "importErrors": {
+          "unsupportedFormat": "Unsupported image. Pick a PNG or JPEG file.",
+          "unreadable": "Could not read the selected file.",
+          "tooLarge": "Image is larger than {{max}} MB.",
+          "notSquare": "App icons must be square.",
+          "tooSmall": "Image must be at least {{min}}×{{min}} pixels.",
+          "tooBig": "Image must be at most {{max}}×{{max}} pixels.",
+          "undecodable": "Could not decode the selected image.",
+          "saveFailed": "Could not save the custom icon."
+        }
       }
     },
     "browser": {
@@ -23610,7 +23627,9 @@
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
       "importGhosttyConfig": "Import Ghostty Config",
-      "importKittyConfig": "Import Kitty Config"
+      "importKittyConfig": "Import Kitty Config",
+      "pickAppIcon": "Choose app icon",
+      "appIconImage": "App icon image"
     }
   },
   "taskProviders": {

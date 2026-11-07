@@ -247,7 +247,9 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.468448bba4',
         'watercolor'
-      )
+      ),
+      ...translateSearchKeyword('settings.appearance.appIcon.customKeyword', 'custom'),
+      ...translateSearchKeyword('settings.appearance.appIcon.importKeyword', 'import')
     ]
   }
 ])
