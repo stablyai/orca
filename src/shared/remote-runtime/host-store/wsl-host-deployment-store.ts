@@ -94,16 +94,22 @@ function readStoredRecords(userDataPath: string): StoredRecord[] {
   if (!existsSync(path)) {
     return []
   }
-  let raws: unknown[]
+  let text: string
   try {
     hardenExistingSecureFile(path)
-    raws = EnvelopeSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
-    ).deployments
+    text = readNodeFileSyncWithinLimit(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES).buffer.toString(
+      'utf8'
+    )
+  } catch {
+    throw new WslHostDeploymentStoreInvalidError(path)
+  }
+  return parseStoredRecordsText(path, text)
+}
+
+function parseStoredRecordsText(path: string, text: string): StoredRecord[] {
+  let raws: unknown[]
+  try {
+    raws = EnvelopeSchema.parse(JSON.parse(text)).deployments
   } catch {
     throw new WslHostDeploymentStoreInvalidError(path)
   }
@@ -131,8 +137,17 @@ function readStoredRecords(userDataPath: string): StoredRecord[] {
 
 /** Throws WslHostDeploymentStoreInvalidError when the file itself is unreadable. */
 export function readWslHostDeployments(userDataPath: string): WslHostDeployments {
+  return deploymentsFromRecords(readStoredRecords(userDataPath))
+}
+
+/** Parses bytes already read from `path`; throws WslHostDeploymentStoreInvalidError like a failed read. */
+export function parseWslHostDeploymentsText(path: string, text: string): WslHostDeployments {
+  return deploymentsFromRecords(parseStoredRecordsText(path, text))
+}
+
+function deploymentsFromRecords(records: StoredRecord[]): WslHostDeployments {
   const result: WslHostDeployments = { deployments: [], unreadableEnvironmentIds: new Set() }
-  for (const record of readStoredRecords(userDataPath)) {
+  for (const record of records) {
     if (record.deployment) {
       result.deployments.push(record.deployment)
     } else if (record.environmentId !== undefined) {
