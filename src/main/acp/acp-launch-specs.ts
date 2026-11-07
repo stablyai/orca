@@ -1,4 +1,5 @@
 import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
@@ -176,8 +177,12 @@ export type AcpHostBackend = {
     homePath: string
     /** Orca's data folder on this host, where the agent's own account lives. */
     stateDirectory: string
+    /** The account type Orca's own Chat signs in with, saved on this host. */
+    settings: AcpHostBackendSettings
   }): Promise<AgentSessionAccountHome | null>
 }
+
+export type AcpHostBackendSettings = Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'grok',
