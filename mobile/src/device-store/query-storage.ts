@@ -58,6 +58,10 @@ function keyNamesHost(storageKey: string, hostId: string): boolean {
   }
 }
 
+function isPersistedRecord(value: unknown): value is PersistedQuery {
+  return typeof value === 'object' && value !== null && 'queryHash' in value && 'state' in value
+}
+
 function encodeForStore(query: PersistedQuery): string | null {
   try {
     const value = encodeDeviceStoreValue(query)
@@ -161,12 +165,12 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
       if (value == null) {
         return null
       }
-      // TanStack checks the record's shape and removes one it can't use; an unreadable value goes too.
+      // A throw makes TanStack remove the row; it checks the rest of the record's shape itself.
       const record = decodeDeviceStoreValue(value)
-      if (record === undefined) {
+      if (!isPersistedRecord(record)) {
         throw new Error('[query-storage] unreadable stored record')
       }
-      return record as PersistedQuery
+      return record
     },
     setItem(key, query) {
       if (!keyNamesHost(key, backend.hostId)) {
