@@ -118,7 +118,8 @@ describe('saved-server registry read reuse', () => {
 
   it.skipIf(process.platform === 'win32').each([
     ['readable by others', 0o644],
-    ['owner read-only', 0o400]
+    ['owner read-only', 0o400],
+    ['setuid', 0o4600]
   ])('retries hardening a registry left %s by a transient chmod failure', (_label, mode) => {
     addServer(userDataPath, 'Alpha', 1)
     const path = getEnvironmentStorePath(userDataPath)
@@ -128,10 +129,10 @@ describe('saved-server registry read reuse', () => {
     hooks.failChmod = true
     names()
     names()
-    expect(fs.statSync(path).mode & 0o777).toBe(mode)
+    expect(fs.statSync(path).mode & 0o7777).toBe(mode)
 
     hooks.failChmod = false
     names()
-    expect(fs.statSync(path).mode & 0o777).toBe(0o600)
+    expect(fs.statSync(path).mode & 0o7777).toBe(0o600)
   })
 })

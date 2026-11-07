@@ -56,8 +56,8 @@ function isProtected(snapshot: Snapshot): boolean {
   }
   return (
     (snapshot.directoryMode === null ||
-      (snapshot.directoryMode & 0o777) === PROTECTED_DIRECTORY_MODE) &&
-    snapshot.files.every((file) => file === null || (file.mode & 0o777) === PROTECTED_FILE_MODE)
+      (snapshot.directoryMode & 0o7777) === PROTECTED_DIRECTORY_MODE) &&
+    snapshot.files.every((file) => file === null || (file.mode & 0o7777) === PROTECTED_FILE_MODE)
   )
 }
 
