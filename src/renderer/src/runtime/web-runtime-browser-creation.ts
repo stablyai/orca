@@ -32,7 +32,7 @@ import {
 } from './web-runtime-browser-creation-e2e-fault'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import { registerPairedBrowserTabCreator } from '../store/slices/browser/paired-browser-tab-creator'
+import { registerPairedBrowserTabCreator } from '../store/slices/browser/tabs/paired-browser-tab-creator'
 import {
   forgetStagedBrowserTabHandover,
   wasStagedBrowserTabHandedToFrames

@@ -1,6 +1,6 @@
 import { DiffTooLargeNotice } from './diff/large-files/DiffTooLargeNotice'
 import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { getDiffContentSignature } from './diff/sections/diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'

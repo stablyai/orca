@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
   getRuntimeTargetForFileOwner,
   requireRuntimeTargetForFileOwner
@@ -12,7 +12,7 @@ import {
 import { canAutoSaveOpenFile } from '../autosave/editor-autosave'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
-import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
+import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import { getRecentSelfWrite } from './editor-self-write-registry'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 

@@ -11,7 +11,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import React, { useState, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'

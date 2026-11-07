@@ -16,7 +16,7 @@ import {
 import { toast } from 'sonner'
 // @vitest-environment happy-dom
 
-import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
+import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import path from 'node:path'
 import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,7 +34,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: launchAgent
 }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mutationInFlight
 }))

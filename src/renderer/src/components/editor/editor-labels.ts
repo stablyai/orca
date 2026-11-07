@@ -1,4 +1,4 @@
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 

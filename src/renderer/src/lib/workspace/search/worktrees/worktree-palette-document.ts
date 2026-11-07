@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
-import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
+import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import {
   buildPaletteDocument,
   type PaletteDocument

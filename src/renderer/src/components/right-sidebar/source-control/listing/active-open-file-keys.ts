@@ -1,4 +1,4 @@
-import type { DiffSource } from '@/store/slices/editor'
+import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import type { BranchCompareSnapshot } from '../../../../../../shared/editor-tab-view-types'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { getCompareVersion } from '@/store/slices/editor/git/git-status-reconciliation'

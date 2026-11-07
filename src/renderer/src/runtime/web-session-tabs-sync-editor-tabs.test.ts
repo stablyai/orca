@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionMarkdownTab } from '../../../shared/runtime-ty
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'node:path'
 
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import './web-session-focus-intent'

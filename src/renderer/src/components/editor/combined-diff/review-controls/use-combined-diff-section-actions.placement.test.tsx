@@ -8,7 +8,7 @@ import {
   EDITOR_PLACEMENT,
   seedEditorPlacementConsumers,
   drawEditorPlacementConsumers
-} from '@/store/slices/editor-placement-consumers.test-fixture'
+} from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
 

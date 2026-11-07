@@ -3,7 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 
 const editorProps = vi.hoisted(() => {

@@ -32,10 +32,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree } from './store-test-helpers'
-import {
-  getPullRequestGenerationRecordKey,
-  type PullRequestGenerationRecord
-} from './pull-request-generation'
+import { getPullRequestGenerationRecordKey } from './hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationRecord } from './hosted-review/generation/pull-request-generation-state'
 import {
   getCommitMessageGenerationRecordKey,
   type CommitMessageGenerationRecord

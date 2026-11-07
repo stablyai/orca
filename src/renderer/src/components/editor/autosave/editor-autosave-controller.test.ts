@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import '@/store/slices/editor'
+
 import { createEditorSlice } from '@/store/slices/editor/create-editor-slice'
 import type { AppState } from '@/store/types'
 import {
@@ -22,7 +22,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 import { getDefaultSettings } from '../../../../../shared/constants'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
-import { emptyTabLayoutState } from '../../../store/slices/editor-slice-test-harness'
+import { emptyTabLayoutState } from '../../../store/slices/editor/editor-slice-test-harness'
 import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
 
 const mocks = vi.hoisted(() => ({

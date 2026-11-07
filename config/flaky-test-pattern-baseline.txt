@@ -344,7 +344,7 @@
 2 test-no-real-time-wait:src/renderer/src/lib/execute-open-editor-path-move.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/orca-yaml-trust-prompt-slot-eviction.test.ts
-1 test-no-real-time-wait:src/renderer/src/store/slices/github-pr-checks-fetch.test.ts
+1 test-no-real-time-wait:src/renderer/src/store/github/checks/github-pr-checks-fetch.test.ts
 2 test-no-real-time-wait:src/renderer/src/store/slices/workspace-cleanup-removal-preflight.test.ts
 1 test-no-real-time-wait:src/renderer/src/store/terminals/legacy-relay-bridged-tab-close.test.ts
 2 test-no-real-time-wait:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
@@ -804,9 +804,8 @@
 1 test-no-wall-clock:src/renderer/src/lib/workspace/activation/worktree-activation-emptied-workspace-reseed.test.ts
 1 test-no-wall-clock:src/renderer/src/runtime/close-mirrored-editor-tab.test.ts
 2 test-no-wall-clock:src/renderer/src/runtime/structured-agent-session-tab-retirement.test.ts
-2 test-no-wall-clock:src/renderer/src/store/slices/github-pr-branch-linked-pr-divergence.test.ts
-1 test-no-wall-clock:src/renderer/src/store/slices/github-pr-refresh-hosted-review-cache-leak.test.ts
-7 test-no-wall-clock:src/renderer/src/store/slices/jira.test.ts
+2 test-no-wall-clock:src/renderer/src/store/github/pull-requests/github-pr-branch-linked-pr-divergence.test.ts
+7 test-no-wall-clock:src/renderer/src/store/slices/jira/jira.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-exact-runtime-stop.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/worktrees-always-force-delete.test.ts
 6 test-no-wall-clock:src/renderer/src/store/slices/worktrees-metadata-persistence.test.ts

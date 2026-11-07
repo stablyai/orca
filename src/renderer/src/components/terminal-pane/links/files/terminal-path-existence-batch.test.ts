@@ -1,7 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/links/files/terminal-path-existence-batch'
 const remote = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-path-existence-batch', () => ({ runtimePathsExist: remote }))
+vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
+  runtimePathsExist: remote
+}))
 const context = {
   target: { kind: 'local' as const },
   worktreeId: 'folder:/work',

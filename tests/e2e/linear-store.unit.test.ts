@@ -19,7 +19,7 @@ import {
   createTestStore,
   deferred,
   issue
-} from '../../src/renderer/src/store/slices/linear-slice-test-harness'
+} from '../../src/renderer/src/store/slices/linear/linear-slice-test-harness'
 
 const linearStatus = vi.fn()
 const linearConnect = vi.fn()
@@ -39,7 +39,7 @@ const linearTestConnection = vi.fn()
 const linearSelectWorkspace = vi.fn()
 const linearDisconnectWorkspace = vi.fn()
 
-vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
+vi.mock('@/runtime/linear/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,

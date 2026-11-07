@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
-import type { OpenFile } from '@/store/slices/editor'
-import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createEditorStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { installMonacoViewStateTracking } from './monaco-view-state-persistence'
 
 function makeFile(id: string, filePath: string): OpenFile {
