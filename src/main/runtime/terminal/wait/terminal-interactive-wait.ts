@@ -1,6 +1,5 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
+import { OrcaRuntimeWithOrchestrationAgentLaunch } from '../launch/orchestration-agent-launch'
 import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalInteractiveWait,
@@ -12,7 +11,6 @@ import type {
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
-import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -25,24 +23,10 @@ import {
 } from './active-worktree-context-fallback'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
-import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
-export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
+export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithOrchestrationAgentLaunch {
   protected abstract getTerminalAgentStatusPtyId(handle: string): string
 
   protected abstract getTerminalWaitPermissionInputs(
@@ -73,8 +57,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   ): RuntimePtyWorktreeRecord | null
 
   protected abstract getOrchestrationDbIfAvailable(): OrchestrationDb | null
-
-  protected abstract getAgentLaunchPlatformForWorkspace(scope: AgentLaunchScope): NodeJS.Platform
 
   async getTerminalInteractiveWait(
     handle: string
@@ -221,104 +203,5 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
-  }
-
-  resolveOrchestrationAgentLauncher(
-    selector: string,
-    platform: NodeJS.Platform = process.platform,
-    shell?: AgentStartupShell
-  ): TuiAgent | undefined {
-    return resolveConfiguredWorkerAgent(
-      selector,
-      this.store?.getSettings().agentCmdOverrides ?? {},
-      platform,
-      shell
-    )
-  }
-
-  async resolveOrchestrationAgentLauncherForTarget(
-    selector: string,
-    target: { repo?: string; worktree?: string }
-  ): Promise<TuiAgent | undefined> {
-    if (isTuiAgent(selector)) {
-      return selector
-    }
-    const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
-    // SAFETY: Forward an absent target unchanged; the existing resolver owns validation.
-    const workspace = repo
-      ? { repo, path: repo.path, connectionId: getRepoRoutingConnectionId(repo) }
-      : await this.resolveTerminalWorkspaceLaunchScope(target.worktree!)
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const shell = resolveStartupShell(
-      platform,
-      resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote: Boolean(workspace.connectionId),
-        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
-      })
-    )
-    return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
-  }
-
-  async probeOrchestrationOpenCodeModelLaunchSupport(target: {
-    worktree?: string
-    model?: string
-  }): Promise<boolean> {
-    if (!target.model || !target.worktree) {
-      return false
-    }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
-    const executionRepo = workspace?.repo
-    if (
-      workspace?.connectionId ||
-      (executionRepo?.executionHostId && executionRepo.executionHostId !== 'local')
-    ) {
-      return false
-    }
-    const store = this.requireStore()
-    const path = workspace?.path
-    if (!path) {
-      return false
-    }
-    // The launch's own platform, and `isWsl` from the path alone, as main read it.
-    let launchRuntime
-    try {
-      launchRuntime = resolveAgentLaunchRuntime(store, workspace, undefined, 'opencode')
-    } catch {
-      return false
-    }
-    if (
-      !target.model.trim() ||
-      launchRuntime.platform !== process.platform ||
-      parseWslUncPath(path)
-    ) {
-      return false
-    }
-    await resolveOpenCodeModelLaunchRoute({
-      inputs: resolveAgentStartupPlanInputs({
-        agent: 'opencode',
-        settings: store.getSettings(),
-        platform: launchRuntime.platform,
-        isRemote: false,
-        shell: undefined,
-        sessionOptions: { model: target.model }
-      }),
-      cwd: path,
-      hostIdentity: this.getRuntimeId()
-    })
-    return true
-  }
-
-  validateOrchestrationAgentLauncher(agent: TuiAgent): void {
-    const settings = this.store?.getSettings()
-    if (!settings) {
-      throw new Error('runtime_unavailable')
-    }
-    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
-      throw new OrchestrationError(
-        'agent_unconfigured',
-        `Agent launcher ${agent} is disabled or unavailable.`
-      )
-    }
   }
 }

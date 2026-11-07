@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-params'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
+import { WorkerRoleName } from '../orchestration-worker-roles'
 
 export const FederationAttachStartParams = z.object({
   /** Omitted by v1.4.198 coordinators; the worker host then mints a stub home Run. */
@@ -23,8 +24,10 @@ export const FederationAttachStartParams = z.object({
   setupSource: z.enum(['explicit_request', 'orchestration_default']).optional(),
   terminal: OptionalString,
   agent: OptionalString,
+  role: WorkerRoleName.optional(),
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,
+  fastMode: z.boolean().optional(),
   timeoutMs: OptionalFiniteNumber,
   devMode: z.boolean().optional(),
   /** The coordinator's workspace, for `--on <server> --worktree new-child`; sent only to servers
@@ -33,3 +36,15 @@ export const FederationAttachStartParams = z.object({
 })
 
 export type FederationAttachStartInput = z.infer<typeof FederationAttachStartParams>
+export const FederationWorkerLaunchParams = FederationAttachStartParams.omit({
+  runId: true,
+  dispatchId: true,
+  taskId: true,
+  taskSpec: true,
+  depth: true,
+  protocolVersion: true,
+  timeoutMs: true,
+  devMode: true
+})
+
+export type FederationWorkerLaunchInput = z.infer<typeof FederationWorkerLaunchParams>

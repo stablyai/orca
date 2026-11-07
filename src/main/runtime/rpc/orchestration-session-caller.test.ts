@@ -61,6 +61,7 @@ const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.workerAutoClose sessionId': 'names the worker session, as its terminal does',
   'orchestration.workerKeepOpen terminal': 'names the worker terminal',
   'orchestration.workerKeepOpen sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerLaunchPreflight terminal': 'names the worker terminal for launch planning',
   'orchestration.workerChatTouch terminal': 'names the worker terminal',
   'orchestration.workerChatTouch sessionId': 'names the worker session, as its terminal does'
 }
@@ -109,9 +110,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 50 registered methods carrying 36 party-naming fields.
-    expect(registry.size).toBe(50)
-    expect(partyNaming).toHaveLength(36)
+    // The population: 51 registered methods carrying 37 party-naming fields.
+    expect(registry.size).toBe(51)
+    expect(partyNaming).toHaveLength(37)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
