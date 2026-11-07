@@ -171,6 +171,9 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // A whole-screen seed paints the grid from the renderer/provider, authoritative at this size.
+        state.reflowRepaintTrust = undefined
+        state.unrepaintedReflowGrid = undefined
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
@@ -209,6 +212,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
     if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
       state.unrepaintedReflowGrid = undefined
+      state.reflowRepaintTrust = undefined
     }
     // Reflow joins the byte stream so snapshots cannot capture wraps from an out-of-order width change.
     state.writeChain = state.writeChain
@@ -235,6 +239,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why: nothing resized the PTY, so the TUI does not repaint and its cells keep the old grid.
     if (applied.cols !== cols || applied.rows !== rows) {
       state.unrepaintedReflowGrid = { cols, rows }
+      // A TUI that paints repaints a whole screen per buffer; distrust each buffer until an explicit
+      // full-screen erase proves it, and ignore what was queued before this boundary (#38418).
+      state.reflowRepaintTrust = {
+        boundarySequence: this.getPtyOutputSequence(ptyId),
+        normalRepainted: false,
+        alternateRepainted: false,
+        signalCarry: ''
+      }
     }
   }
 

@@ -173,6 +173,21 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedEscapeTail?: string
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
+  /** Per-buffer proof that the reflowed grid was repainted; see `readRuledScreen`. */
+  reflowRepaintTrust?: ReflowRepaintTrust
+}
+
+/** Fresh output retires the reflow distrust buffer by buffer: a TUI that erases the alternate
+ *  screen has not repainted the normal buffer it will return to. */
+export type ReflowRepaintTrust = {
+  /** Output at or below this sequence was queued before the reflow and cannot retire it. */
+  boundarySequence: number
+  /** An explicit full-screen erase painted the normal buffer since the reflow. */
+  normalRepainted: boolean
+  /** The same for the alternate buffer. */
+  alternateRepainted: boolean
+  /** Start of a paint signal cut off at the previous chunk boundary, so a split one still counts. */
+  signalCarry: string
 }
 
 export type RuntimeVisibleTerminalState = {

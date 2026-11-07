@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { scanRepaintSignals } from './repaint-signals'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -114,6 +115,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // A whole-screen seed paints the grid from the renderer, authoritative at this size.
+        state.reflowRepaintTrust = undefined
+        state.unrepaintedReflowGrid = undefined
         // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
         if (typeof rendered.seq === 'number') {
           state.rendererSeedSeq = rendered.seq
@@ -238,7 +242,30 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         }
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        // Read before the write: an erase inside a chunk belongs to the buffer active when it ran.
+        const alternateAtStart = state.emulator.isAlternateScreen
         await state.emulator.write(chunk, { forwardQueryReplies })
+        // The reflowed grid distrusts cells wrapped at an older width. Only a reliable signal of a
+        // fresh paint retires it: an explicit full-screen erase on the buffer that was active when it
+        // ran — byte counts prove nothing — or a whole-screen seed from the renderer/provider.
+        // Output queued before the reflow cannot retire it, and an erase that shares a chunk with a
+        // buffer toggle (even one split across chunks) is ambiguous, so it retires nothing (#38418).
+        const trust = state.reflowRepaintTrust
+        if (trust && outputSequence > trust.boundarySequence) {
+          const signals = scanRepaintSignals(`${trust.signalCarry}${chunk}`)
+          trust.signalCarry = signals.carry
+          if (signals.fullErase && !signals.bufferToggle) {
+            if (alternateAtStart) {
+              trust.alternateRepainted = true
+            } else {
+              trust.normalRepainted = true
+            }
+            if (trust.normalRepainted && trust.alternateRepainted) {
+              state.reflowRepaintTrust = undefined
+              state.unrepaintedReflowGrid = undefined
+            }
+          }
+        }
         const pty = this.ptysById.get(ptyId)
         if (!pty || this.headlessTerminals.get(ptyId) !== state) {
           continue
