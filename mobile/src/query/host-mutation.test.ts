@@ -1,5 +1,6 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
@@ -149,4 +150,22 @@ it('settles a lost reply through the client a reconnect put in place', async () 
   after.answer(ok)
   await expect(done).resolves.toBe('new')
   expect(before.sent).toHaveLength(1)
+})
+
+it('checks a lost reply again after a path switch instead of failing it', async () => {
+  vi.useFakeTimers()
+  try {
+    const desktop = host('connected')
+    const { done } = run(desktop.client, [])
+    await vi.advanceTimersByTimeAsync(0)
+    desktop.answer(markRpcDeliveryUnknown(new Error('Connection closed')))
+    await vi.advanceTimersByTimeAsync(0)
+    desktop.answer(new LogicalClientCutoverError())
+    await vi.advanceTimersByTimeAsync(250)
+    expect(desktop.sent).toHaveLength(3)
+    desktop.answer(ok)
+    await expect(done).resolves.toBe('new')
+  } finally {
+    vi.useRealTimers()
+  }
 })

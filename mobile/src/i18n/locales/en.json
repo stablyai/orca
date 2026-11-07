@@ -4720,6 +4720,7 @@
   "hostMutation": {
     "renameOffline": "{{host}} is offline. Your text stays here until you can save.",
     "renameUnconfirmed": "Not confirmed yet. Orca checks the name when {{host}} is back.",
-    "saving": "Saving"
+    "saving": "Saving",
+    "serverUnreachable": "Its server can't be reached."
   }
 }

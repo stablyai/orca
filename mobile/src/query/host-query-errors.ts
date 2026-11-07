@@ -2,7 +2,7 @@ import { isLogicalClientSuspendedError } from '../transport/logical-client-suspe
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 
-const CUTOVER_RETRY_DELAY_MS = 250
+export const CUTOVER_RETRY_DELAY_MS = 250
 
 // failWhenDisconnected rejects with a plain Error that the page bridge rebuilds, so match the message.
 export function isHostNotConnectedError(error: unknown): boolean {

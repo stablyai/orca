@@ -5,7 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState } from '../transport/types'
-import { isHostNotConnectedError } from './host-query-errors'
+import { CUTOVER_RETRY_DELAY_MS, isHostNotConnectedError } from './host-query-errors'
 import { hostReadClient } from './host-read-client'
 
 /**
@@ -52,6 +52,21 @@ export type HostMutationContext = HostMutationCallOptions & {
   connected: () => Promise<void>
 }
 
+/** The write's route (e.g. a server row's owner) can't be reached through this host. */
+export class HostRouteUnreachableError extends Error {
+  constructor() {
+    super('The workspace server is unreachable')
+  }
+}
+
+// Why: errors crossing the page bridge are rebuilt as other classes, so also match by message.
+export function isHostRouteUnreachableError(error: unknown): boolean {
+  return (
+    error instanceof HostRouteUnreachableError ||
+    (error instanceof Error && error.message === 'The workspace server is unreachable')
+  )
+}
+
 function isUnconfirmed(error: unknown): boolean {
   return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
 }
@@ -64,7 +79,7 @@ function writeClient(context: HostMutationContext, failFast: boolean): RpcClient
   }
   const routed = context.route ? context.route(client) : client
   if (!routed) {
-    throw new Error('The workspace server is unreachable')
+    throw new HostRouteUnreachableError()
   }
   return failFast ? hostReadClient(routed) : routed
 }
@@ -140,6 +155,11 @@ async function confirmOnceConnected<TVars, TResult>(
       if (!isUnconfirmed(error) && !isHostNotConnectedError(error)) {
         rollback?.()
         throw error
+      }
+      // A path switch under the check: try again shortly, as host reads do.
+      if (isLogicalClientCutoverError(error)) {
+        await new Promise((resolve) => setTimeout(resolve, CUTOVER_RETRY_DELAY_MS))
+        continue
       }
       // Lost again with the host still up (e.g. it timed out): stop here and let the screen offer Retry.
       if (context.client()?.getState() === 'connected') {
