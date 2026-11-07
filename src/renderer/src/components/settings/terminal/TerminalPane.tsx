@@ -306,7 +306,13 @@ export function TerminalPane({
     defaultShellSection,
     isWindows &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
-      <SettingsGroup key="windows-administrator">
+      <SettingsGroup
+        key="windows-administrator"
+        title={translate(
+          'auto.components.settings.DefaultWindowsProjectRuntimeSetting.windows',
+          'Windows'
+        )}
+      >
         <TerminalWindowsAdministratorSection />
       </SettingsGroup>
     ) : null,

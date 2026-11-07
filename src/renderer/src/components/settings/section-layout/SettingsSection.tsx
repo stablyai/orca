@@ -18,6 +18,8 @@ type SettingsSectionProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
+  /** Pane is built from SettingsGroup cards, so the body drops its own card. Fixed per pane, never query-dependent. */
+  grouped?: boolean
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
@@ -40,6 +42,7 @@ export function SettingsSection({
   children,
   className,
   bodyClassName,
+  grouped = false,
   badge,
   badgeAccessory,
   forceVisible = false,
@@ -86,11 +89,11 @@ export function SettingsSection({
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {/* Ungrouped panes get one card; panes built from SettingsGroup cards render bare. */}
       <div
         className={cn(
-          'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
-          'has-[[data-settings-group]]:flex has-[[data-settings-group]]:flex-col has-[[data-settings-group]]:gap-8 has-[[data-settings-group]]:rounded-none has-[[data-settings-group]]:border-0 has-[[data-settings-group]]:bg-transparent has-[[data-settings-group]]:p-0 has-[[data-settings-group]]:shadow-none',
+          grouped
+            ? 'flex flex-col gap-8'
+            : 'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
           bodyClassName
         )}
       >

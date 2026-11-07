@@ -46,12 +46,7 @@ export function AgentDetectionCatalog({
 
       {/* Focusable so "Choose per agent" can move focus here. One keyed list (not one SettingsGroup per
           section) so a row keeps its state, e.g. expanded setup, when it moves from available to installed. */}
-      <section
-        id={AGENTS_INSTALLED_SECTION_ID}
-        data-settings-group=""
-        tabIndex={-1}
-        className="scroll-mt-8 outline-none"
-      >
+      <section id={AGENTS_INSTALLED_SECTION_ID} tabIndex={-1} className="scroll-mt-8 outline-none">
         {[
           ...detectedAgents.map((agent) => ({ agent, installed: true })),
           ...undetectedAgents.map((agent) => ({ agent, installed: false }))

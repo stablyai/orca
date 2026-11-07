@@ -63,17 +63,15 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   return (
     <SettingsGroup
       key="updates"
-      title={
-        <span
-          onClick={(event) => {
-            if (event.altKey) {
-              setChannelSwitcherRevealed((revealed) => !revealed)
-            }
-          }}
-        >
-          {translate('auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a', 'Updates')}
-        </span>
-      }
+      title={translate(
+        'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
+        'Updates'
+      )}
+      onHeaderClick={(event) => {
+        if (event.altKey) {
+          setChannelSwitcherRevealed((revealed) => !revealed)
+        }
+      }}
       description={translate(
         'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
         'Current version: {{value0}}',
