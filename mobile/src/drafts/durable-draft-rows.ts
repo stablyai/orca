@@ -44,9 +44,25 @@ type Row = {
 
 const rows = new Map<string, Row>()
 
+// The store refuses keys past 512 characters; a long worktree path or id is hashed instead.
+const MAX_KEY_LENGTH = 512
+
+function fnv1a(text: string, seed: number): string {
+  let hash = seed
+  for (let index = 0; index < text.length; index += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193) >>> 0
+  }
+  return hash.toString(16).padStart(8, '0')
+}
+
 /** `draft:<namespace>:<worktree or ''>:<id>`; the shell binds the host. */
 export function durableDraftRowKey(namespace: string, worktreeId: string, id: string): string {
-  return `draft:${namespace}:${worktreeId}:${id}`
+  const key = `draft:${namespace}:${worktreeId}:${id}`
+  if (key.length <= MAX_KEY_LENGTH) {
+    return key
+  }
+  const rest = `${worktreeId}:${id}`
+  return `draft:${namespace}:#${fnv1a(rest, 0x811c9dc5)}${fnv1a(rest, 0x01000193)}`
 }
 
 export function deviceStoreDraftBackend(
