@@ -16,7 +16,7 @@ import {
 export type MathEnv = {
   /** Chat's `\(…\)` and `\[…\]` delimiters too. */
   chatMath: boolean
-  /** Set by the parse: the first line of a top-level display opener still waiting for its closer.
+  /** Set by the parse: the first line of a display opener still waiting for its closer.
    *  A closer added later turns everything from that line on into one formula. */
   waitingMathLine?: number
 }
@@ -274,8 +274,8 @@ function blockMath(
   // An unclosed block is chat still streaming in; GitHub keeps an unclosed `$$` as text.
   if (isCitationBracketMath(opener, body) || (!closed && !chatDelimiters(state.env))) {
     failed.set(scan, { from: startLine, to: line })
-    // A container's scan stops at its end, so only a top-level opener can reach later text.
-    if (!closed && state.level === 0) {
+    // Only a scan that read to the source's last line can be closed by text added later.
+    if (!closed && line >= state.bMarks.length - 1) {
       const env: MathEnv = state.env
       env.waitingMathLine = Math.min(env.waitingMathLine ?? startLine, startLine)
     }

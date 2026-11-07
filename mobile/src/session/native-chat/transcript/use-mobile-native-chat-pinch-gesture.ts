@@ -25,7 +25,13 @@ export function useMobileNativeChatPinchGesture(scopeKey: string): {
             pinchBase.current = fontScaleRef.current
           })
           .onUpdate((e) => {
-            setScaled({ scopeKey, fontScale: quantizeFontScale(pinchBase.current * e.scale) })
+            const fontScale = quantizeFontScale(pinchBase.current * e.scale)
+            // Same object for an unchanged step, so gesture noise commits nothing.
+            setScaled((previous) =>
+              previous.scopeKey === scopeKey && previous.fontScale === fontScale
+                ? previous
+                : { scopeKey, fontScale }
+            )
           })
       ),
     [scopeKey]
