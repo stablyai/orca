@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { PluginTaskSourceRef } from '../../../../../shared/plugins/tasks/plugin-task-source-ref'
 

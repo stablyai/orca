@@ -32,6 +32,8 @@ function workerHandle(invokeCommand: () => Promise<unknown>): PluginWorkerHandle
   return {
     commands: ['toggle'],
     invokeCommand,
+    taskSources: [],
+    invokeTaskSource: async () => undefined,
     deliverEvent: () => undefined,
     requestFromPanel: async () => undefined,
     runHook: async () => undefined,
