@@ -2834,8 +2834,9 @@
       "phoneReady": "この端末で使用可能",
       "phoneNeedsDownload": "言語のダウンロードが必要",
       "phoneDownloading": "ダウンロード中… {{progress}}%",
-      "phoneUnsupported": "この端末の言語では使用できません",
-      "download": "この端末にダウンロード"
+      "phoneUnsupported": "この端末では使用できません",
+      "download": "この端末にダウンロード",
+      "downloadSize": "約 {{size}} MB"
     }
   },
   "sourceControl": {

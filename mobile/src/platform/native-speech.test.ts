@@ -47,3 +47,32 @@ describe('a recognizer another page took over', () => {
     expect(await second.serve({ action: 'read' })).toMatchObject({ failure: null })
   })
 })
+
+describe('text a cancelled session sends while the next one is arming', () => {
+  it('is dropped rather than shown as the new dictation’s words', async () => {
+    const text: {
+      emit: (event: { revision: number; committed: string; tentative: string }) => void
+    } = {
+      emit: () => {}
+    }
+    let resolveStart: (value: { started: true; locale: string }) => void = () => {}
+    const engine: NativeSpeechEngine = {
+      ...engineWith('automatic'),
+      start: () =>
+        new Promise((resolve) => {
+          resolveStart = resolve
+        }),
+      onText: (handler) => {
+        text.emit = handler
+      }
+    }
+    const server = createNativeSpeechServer(engine)
+    const starting = server.serve({ action: 'start', locale: 'en-US' })
+    text.emit({ revision: 3, committed: 'old words', tentative: '' })
+    resolveStart({ started: true, locale: 'en-US' })
+    await starting
+    expect(await server.serve({ action: 'read' })).toMatchObject({ committed: '' })
+    text.emit({ revision: 1, committed: 'new words', tentative: '' })
+    expect(await server.serve({ action: 'read' })).toMatchObject({ committed: 'new words' })
+  })
+})
