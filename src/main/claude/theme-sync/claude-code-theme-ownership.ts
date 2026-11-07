@@ -7,6 +7,8 @@ import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
 
 /** What Orca replaced in one config dir's settings.json, so turning the sync off can put it back. */
 export type ClaudeThemeOwnership = {
+  /** The Orca profile (userData path) that took over; only it restores, so builds with different settings do not fight. */
+  owner: string
   /** null when settings.json had no theme. */
   previousTheme: string | null
   /** The user picked another theme after Orca's; Orca stops writing it. */
@@ -35,8 +37,13 @@ export async function readClaudeThemeOwnership(): Promise<OwnershipByConfigDir |
   const owned: OwnershipByConfigDir = new Map()
   for (const [dir, entry] of Object.entries(parsed)) {
     const previous = isPlainObject(entry) ? entry.previousTheme : undefined
-    if (isPlainObject(entry) && (typeof previous === 'string' || previous === null)) {
+    if (
+      isPlainObject(entry) &&
+      typeof entry.owner === 'string' &&
+      (typeof previous === 'string' || previous === null)
+    ) {
       owned.set(dir, {
+        owner: entry.owner,
         previousTheme: previous,
         ...(entry.userChangedTheme === true ? { userChangedTheme: true } : {})
       })
