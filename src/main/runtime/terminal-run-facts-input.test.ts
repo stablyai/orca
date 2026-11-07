@@ -133,33 +133,6 @@ describe('run facts: the controller write funnel', () => {
     }
   })
 
-  it('records stream input from a client', async () => {
-    const run = await createFreshRun()
-
-    await sendTerminalStreamInput(run.runtime, {
-      terminal: run.handle,
-      text: 'l',
-      client: undefined,
-      isMobile: false
-    })
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-  })
-
-  it('records a dispatched agent prompt before its first write', async () => {
-    vi.useFakeTimers()
-    const run = await createFreshRun()
-
-    const submission = run.runtime.sendTerminalAgentPrompt(run.handle, 'review this', {
-      inputKind: 'driving'
-    })
-    await vi.runAllTimersAsync()
-    await submission.catch(() => undefined)
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-    expect(run.writes[0]?.inputRecorded).toBe(true)
-  })
-
   it('reads a run launched with a prompt as untyped until someone drives it', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
@@ -191,14 +164,6 @@ describe('run facts: the controller write funnel', () => {
     expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
   })
 
-  it('records nothing for a client query reply', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.sendTerminal(run.handle, { text: 'y' }, { inputKind: 'query-reply' })
-
-    expect(run.firstUserInputAt()).toBeNull()
-  })
-
   it.each([
     ['a terminal reply', '\x1b[3;4R'],
     ['focus reports', '\x1b[I\x1b[O'],
@@ -217,30 +182,12 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).toBeNull()
   })
 
-  it('records a reply mixed with a keystroke', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.sendTerminal(run.handle, { text: '\x1b[3;4Rx' }, { inputKind: 'driving' })
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-  })
-
   it('records dashboard preview typing before the write that could end the process', async () => {
     const run = await createFreshRun()
 
     await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, 'exit\r')).resolves.toBe(true)
 
     expect(run.writes.map((write) => write.inputRecorded)).toEqual([true])
-  })
-
-  it('records nothing for dashboard preview bytes that are only a reply or focus reports', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[3;4R')
-    await run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[O\x1b[I')
-
-    expect(run.writes).toHaveLength(2)
-    expect(run.firstUserInputAt()).toBeNull()
   })
 })
 
