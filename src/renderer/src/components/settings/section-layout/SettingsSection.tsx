@@ -86,10 +86,11 @@ export function SettingsSection({
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {/* Contain row groups in a distinct band so they cannot read as sidebar continuations. */}
+      {/* Ungrouped panes get one card; panes built from SettingsGroup cards render bare. */}
       <div
         className={cn(
           'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
+          'has-[[data-settings-group]]:space-y-8 has-[[data-settings-group]]:rounded-none has-[[data-settings-group]]:border-0 has-[[data-settings-group]]:bg-transparent has-[[data-settings-group]]:p-0 has-[[data-settings-group]]:shadow-none',
           bodyClassName
         )}
       >

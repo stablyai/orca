@@ -1,13 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/windows-terminal-shell'
-import {
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { ShellIcon } from '../../../tab-bar/shell-icons'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -34,16 +31,15 @@ export function TerminalWindowsShellSection({
   const showWslOption = windowsShell === 'wsl.exe'
 
   return (
-    <section key="windows-shell" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
-        description={translate(
-          'auto.components.settings.TerminalPane.a55eee649f',
-          'Default shell for new terminal panes on Windows.'
-        )}
-      />
-
-      <div className="divide-y divide-border/40">
+    <SettingsGroup
+      key="windows-shell"
+      title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+      description={translate(
+        'auto.components.settings.TerminalPane.a55eee649f',
+        'Default shell for new terminal panes on Windows.'
+      )}
+    >
+      <div>
         <SearchableSetting
           className="@container"
           title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
@@ -148,6 +144,6 @@ export function TerminalWindowsShellSection({
           />
         </SearchableSetting>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

@@ -88,7 +88,7 @@ export function HostedReviewCreationDefaults({
         'Defaults used when the hosted-review composer opens.'
       )}
       keywords={KEYWORDS}
-      className="space-y-3 px-1 py-2"
+      className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
         <Label>

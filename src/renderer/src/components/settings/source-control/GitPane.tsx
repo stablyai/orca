@@ -9,6 +9,7 @@ import { Switch } from '../../ui/switch'
 import { useAppStore } from '../../../store/index'
 
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
@@ -141,7 +142,7 @@ export function GitPane({
   onBranchPromptDirtyChange,
   branchPromptDiscardSignal,
   settingsSearchQuery
-}: GitPaneProps): React.JSX.Element {
+}: GitPaneProps): React.JSX.Element | null {
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
@@ -180,7 +181,7 @@ export function GitPane({
           'Prefix added to branch names when creating worktrees.'
         )}
         keywords={['branch naming', 'git username', 'custom']}
-        className="space-y-3"
+        className="space-y-3 py-3"
       >
         <div className="space-y-0.5">
           <Label>{translate('auto.components.settings.GitPane.330f584b50', 'Branch Prefix')}</Label>
@@ -256,7 +257,7 @@ export function GitPane({
         title={keepLocalMainUpToDateTitle}
         description={KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION}
         keywords={KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="space-y-0.5">
           <Label>{keepLocalMainUpToDateTitle}</Label>
@@ -324,5 +325,9 @@ export function GitPane({
     ) : null
   ].filter(Boolean)
 
-  return <div className="space-y-4">{visibleSections}</div>
+  if (visibleSections.length === 0) {
+    return null
+  }
+
+  return <SettingsGroup>{visibleSections}</SettingsGroup>
 }

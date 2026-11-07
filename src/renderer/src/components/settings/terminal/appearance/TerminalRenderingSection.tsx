@@ -2,13 +2,13 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   SettingsRow,
   SettingsSegmentedControl,
-  SettingsSubsectionHeader,
   SettingsSwitchRow
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { translate } from '@/i18n/i18n'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -20,16 +20,15 @@ export function TerminalRenderingSection({
   updateSettings
 }: TerminalRenderingSectionProps): React.JSX.Element {
   return (
-    <section key="rendering" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.2fba319f21', 'Rendering')}
-        description={translate(
-          'auto.components.settings.TerminalPane.72bc9334a0',
-          'Terminal renderer behavior for live panes and new panes.'
-        )}
-      />
-
-      <div className="divide-y divide-border/40">
+    <SettingsGroup
+      key="rendering"
+      title={translate('auto.components.settings.TerminalPane.2fba319f21', 'Rendering')}
+      description={translate(
+        'auto.components.settings.TerminalPane.72bc9334a0',
+        'Terminal renderer behavior for live panes and new panes.'
+      )}
+    >
+      <div>
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.c1fc9e9444', 'GPU Acceleration')}
           description={translate(
@@ -140,6 +139,6 @@ export function TerminalRenderingSection({
           />
         </SearchableSetting>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

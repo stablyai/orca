@@ -193,7 +193,7 @@ export function RepositoryForkSyncSection({
           fallback: 'default branch'
         }
       ])}
-      className="space-y-3"
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="flex items-start justify-between gap-4">

@@ -7,9 +7,10 @@ import { Label } from '../../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import { AdvancedNetworkSettingsSection } from './network/AdvancedNetworkSettingsSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { SettingsSwitch } from '../form-controls/SettingsFormControls'
 import { getAdvancedSearchEntry } from './advanced-search'
 import { translate } from '@/i18n/i18n'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type AdvancedPaneProps = {
   settings: GlobalSettings
@@ -39,16 +40,14 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
   }
 
   return (
-    <div className="space-y-4">
-      <section className="space-y-3">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.AdvancedPane.8d8d8ac599', 'Compatibility')}
-          description={translate(
-            'auto.components.settings.AdvancedPane.8b7a8df299',
-            'Low-level workarounds for support troubleshooting.'
-          )}
-        />
-
+    <div className="space-y-8">
+      <SettingsGroup
+        title={translate('auto.components.settings.AdvancedPane.8d8d8ac599', 'Compatibility')}
+        description={translate(
+          'auto.components.settings.AdvancedPane.8b7a8df299',
+          'Low-level workarounds for support troubleshooting.'
+        )}
+      >
         <SearchableSetting
           title={getAdvancedSearchEntry().http1Compatibility.title}
           description={getAdvancedSearchEntry().http1Compatibility.description}
@@ -133,18 +132,17 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
             </div>
           ) : null}
         </SearchableSetting>
-      </section>
+      </SettingsGroup>
 
-      <section className="space-y-3">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.AdvancedPane.network', 'Network')}
-          description={translate(
-            'auto.components.settings.AdvancedPane.networkDescription',
-            'App-level network routing for proxies and corporate environments.'
-          )}
-        />
+      <SettingsGroup
+        title={translate('auto.components.settings.AdvancedPane.network', 'Network')}
+        description={translate(
+          'auto.components.settings.AdvancedPane.networkDescription',
+          'App-level network routing for proxies and corporate environments.'
+        )}
+      >
         <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
-      </section>
+      </SettingsGroup>
     </div>
   )
 }

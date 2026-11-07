@@ -118,7 +118,7 @@ const SelectedRepositoryActionRows = memo(
       [selections]
     )
     return (
-      <div className="space-y-3">
+      <div data-settings-row="" className="space-y-3 py-3">
         <Label className="text-xs font-medium">
           {translate(
             'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',

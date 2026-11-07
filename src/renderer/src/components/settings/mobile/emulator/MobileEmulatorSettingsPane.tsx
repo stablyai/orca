@@ -10,6 +10,7 @@ import { EmulatorOpeningSettings } from './EmulatorOpeningSettings'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
@@ -135,90 +136,92 @@ export function MobileEmulatorSettingsPane({
 
   const devices = availability?.devices ?? []
   return (
-    <div className="space-y-4">
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
-          'Mobile Emulator'
-        )}
-        description={translate(
-          'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
-          'Configure mobile emulator support for Orca and coding agents.'
-        )}
-        keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
-        className="divide-y divide-border/40"
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
-            'Enable Mobile Emulator'
+    <div className="space-y-8">
+      <SettingsGroup>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
+            'Mobile Emulator'
           )}
           description={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
-            'Shows the New Mobile Emulator action and allows agents to attach to the active emulator.'
+            'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
+            'Configure mobile emulator support for Orca and coding agents.'
           )}
-          checked={enabled}
-          onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
-        />
+          keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
+          className="divide-y divide-border"
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
+              'Enable Mobile Emulator'
+            )}
+            description={translate(
+              'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
+              'Shows the New Mobile Emulator action and allows agents to attach to the active emulator.'
+            )}
+            checked={enabled}
+            onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
+          />
 
-        <div className="py-2">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
-                  'Availability'
-                )}
-              </Label>
-              <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+          <div className="py-3">
+            <div className="flex items-start gap-4">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
+                    'Availability'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
+                >
+                  {refreshing ? <Loader2 className="size-3 animate-spin" /> : null}
+                  {statusText(availability, enabled)}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.settings.MobileEmulatorSettingsPane.8aec2f99a0',
+                    'Refresh emulator availability'
+                  )}
+                  onClick={() => void refreshAvailability()}
+                  disabled={refreshing}
+                >
+                  {refreshing ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
-              >
-                {refreshing ? <Loader2 className="size-3 animate-spin" /> : null}
-                {statusText(availability, enabled)}
-              </Badge>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                aria-label={translate(
-                  'auto.components.settings.MobileEmulatorSettingsPane.8aec2f99a0',
-                  'Refresh emulator availability'
-                )}
-                onClick={() => void refreshAvailability()}
-                disabled={refreshing}
-              >
-                {refreshing ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
-              </Button>
-            </div>
+
+            {enabled ? (
+              <MobileEmulatorAvailabilityDetails
+                availability={availability}
+                configuredPath={settings.androidSdkPath ?? null}
+                onSetAndroidSdkPath={async (path) => {
+                  await updateSettings({ androidSdkPath: path })
+                  await refreshAvailability()
+                }}
+              />
+            ) : null}
           </div>
 
-          {enabled ? (
-            <MobileEmulatorAvailabilityDetails
-              availability={availability}
-              configuredPath={settings.androidSdkPath ?? null}
-              onSetAndroidSdkPath={async (path) => {
-                await updateSettings({ androidSdkPath: path })
-                await refreshAvailability()
-              }}
-            />
-          ) : null}
-        </div>
-
-        <EmulatorOpeningSettings
-          settings={settings}
-          devices={devices}
-          enabled={enabled}
-          updateSettings={updateSettings}
-        />
-      </SearchableSetting>
+          <EmulatorOpeningSettings
+            settings={settings}
+            devices={devices}
+            enabled={enabled}
+            updateSettings={updateSettings}
+          />
+        </SearchableSetting>
+      </SettingsGroup>
 
       {enabled ? (
         <SearchableSetting

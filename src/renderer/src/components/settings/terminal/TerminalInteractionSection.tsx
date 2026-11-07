@@ -3,7 +3,7 @@ import { RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-pane-appearance-search'
@@ -22,6 +22,7 @@ import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
 } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {
   settings: GlobalSettings
@@ -55,19 +56,15 @@ export function TerminalInteractionSection({
         'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
       )
   return (
-    <section key="pane-interaction" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.TerminalPane.45721f3e67',
-          'Terminal Interaction'
-        )}
-        description={translate(
-          'auto.components.settings.TerminalPane.96fe15def8',
-          'Scrolling, mouse, and clipboard behavior for terminal panes.'
-        )}
-      />
-
-      <div className="divide-y divide-border/40">
+    <SettingsGroup
+      key="pane-interaction"
+      title={translate('auto.components.settings.TerminalPane.45721f3e67', 'Terminal Interaction')}
+      description={translate(
+        'auto.components.settings.TerminalPane.96fe15def8',
+        'Scrolling, mouse, and clipboard behavior for terminal panes.'
+      )}
+    >
+      <div>
         <SearchableSetting
           title={translate(
             'auto.components.settings.TerminalPane.scrollSpeed.title',
@@ -380,6 +377,6 @@ export function TerminalInteractionSection({
           />
         </SearchableSetting>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }
