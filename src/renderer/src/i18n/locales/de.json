@@ -1207,7 +1207,7 @@
         "insecureOrigin": "Orca hat die Kopplung von dieser Seite abgelehnt: Die Seite wird über unverschlüsseltes http auf einem anderen Computer bereitgestellt. Dadurch könnte jeder auf dem Netzwerkpfad die Seite ersetzen und den Kopplungscode abfangen. Den Web-Client über https, über localhost auf diesem Computer oder über einen SSH-Tunnel öffnen. Um dies dennoch zuzulassen, kann der Serverbetreiber Orca mit ORCA_ALLOW_INSECURE_WEB_PAIRING=1 neu starten.",
         "deviceDowngraded": "Dieser Orca-Server unterstützt den Anmeldeschlüssel dieses Browsers nicht mehr (möglicherweise wurde eine ältere Serverversion installiert). Den Server aktualisieren oder diesen Browser erneut koppeln.",
         "unauthorized": "Nicht autorisiert. Diesen Web-Client erneut koppeln.",
-        "unauthorizedNewLink": "Nicht autorisiert. Fordere einen neuen Kopplungslink an."
+        "unauthorizedLinkUsedOrExpired": "Nicht autorisiert. Dieser Kopplungslink ist möglicherweise abgelaufen oder wurde bereits verwendet. Erstelle in Orca einen neuen Kopplungslink und öffne ihn."
       }
     },
     "store": {
