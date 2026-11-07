@@ -11,7 +11,10 @@ import { useProjectHostSetupProjection } from '@/store/projects/use-project-host
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
+import {
+  createFolderWorkspaceFromSidebar,
+  createWorkspaceForRepoHeader
+} from '../../folder-workspace-create'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -232,18 +235,9 @@ const WorktreeList = React.memo(function WorktreeList({
     },
     [openModal]
   )
-  const handleCreateFolderWorkspace = useCallback(
-    (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
-      }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
-    },
-    [openModal]
-  )
+  const handleCreateFolderWorkspace = useCallback((projectGroup: ProjectGroup) => {
+    void createFolderWorkspaceFromSidebar(projectGroup)
+  }, [])
 
   useSidebarRevealRequests({
     groupBy,
@@ -336,7 +330,7 @@ const WorktreeList = React.memo(function WorktreeList({
         toggleGroup={handleToggleGroup}
         onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={openHeaderCreateComposer}
+        handleCreateForRepo={createWorkspaceForRepoHeader}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}

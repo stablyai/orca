@@ -46,12 +46,15 @@ export async function submitFolderWorkspaceCreate({
   chatSessionOptions: requestedChatSessionOptions,
   autoRenameBranchFromWork,
   settings,
+  agentLaunchPreferences,
   agentCmdOverrides,
   agentArgs: requestedAgentArgs,
   agentEnv,
   terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
+  folderPath,
+  connectionId,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
@@ -86,11 +89,12 @@ export async function submitFolderWorkspaceCreate({
   const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
   const preferences =
     quickAgent && settings
-      ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+      ? (agentLaunchPreferences ??
+        (await ensureAgentLaunchPreferences(useAppStore.getState(), {
           kind: 'folder',
           runtimeEnvironmentId,
           executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
-        })
+        })))
       : undefined
   const effectiveSettings = settings
     ? {
@@ -180,8 +184,9 @@ export async function submitFolderWorkspaceCreate({
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,
     name: workspaceName,
+    ...(folderPath ? { folderPath } : {}),
     // Retain the SSH target even when another host owns the focused runtime.
-    connectionId: projectGroup.connectionId ?? null,
+    connectionId: connectionId !== undefined ? connectionId : (projectGroup.connectionId ?? null),
     linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
