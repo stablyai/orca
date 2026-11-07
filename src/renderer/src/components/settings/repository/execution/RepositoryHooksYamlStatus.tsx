@@ -2,6 +2,7 @@ import { AlertTriangle } from 'lucide-react'
 import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
 import { Button } from '../../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { renderYamlScriptPreview } from './repository-hook-settings-draft'
 
 const EXAMPLE_TEMPLATE = `scripts:
@@ -28,48 +29,51 @@ const YAML_STATE_STYLES: Record<string, { card: string; titleClassName: string }
   missing: { card: 'border-border/50 bg-muted/20', titleClassName: 'text-foreground' }
 }
 
-function getYamlStateCopy(yamlState: string): { heading: string; description: string } {
+function getYamlStateCopy(
+  yamlState: string,
+  t: Translate = translate
+): { heading: string; description: string } {
   switch (yamlState) {
     case 'loaded':
       return {
-        heading: translate(
+        heading: t(
           'auto.components.settings.RepositoryHooksSection.56f9a4a1d0',
           'Using `orca.yaml`'
         ),
-        description: translate(
+        description: t(
           'auto.components.settings.RepositoryHooksSection.ca424ff135',
           'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.'
         )
       }
     case 'update-available':
       return {
-        heading: translate(
+        heading: t(
           'auto.components.settings.RepositoryHooksSection.623e0c9f31',
           '`orca.yaml` could not be parsed'
         ),
-        description: translate(
+        description: t(
           'auto.components.settings.RepositoryHooksSection.aba825233f',
           'The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.'
         )
       }
     case 'invalid':
       return {
-        heading: translate(
+        heading: t(
           'auto.components.settings.RepositoryHooksSection.623e0c9f31',
           '`orca.yaml` could not be parsed'
         ),
-        description: translate(
+        description: t(
           'auto.components.settings.RepositoryHooksSection.0cc712b823',
           'The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.'
         )
       }
     default:
       return {
-        heading: translate(
+        heading: t(
           'auto.components.settings.RepositoryHooksSection.5a67e4793d',
           'No `orca.yaml` detected'
         ),
-        description: translate(
+        description: t(
           'auto.components.settings.RepositoryHooksSection.b20c5df6ca',
           'Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
         )
@@ -77,17 +81,17 @@ function getYamlStateCopy(yamlState: string): { heading: string; description: st
   }
 }
 
-function getParseErrorFixes(): string[] {
+function getParseErrorFixes(t: Translate = translate): string[] {
   return [
-    translate(
+    t(
       'auto.components.settings.RepositoryHooksSection.07ba35bc68',
       'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.'
     ),
-    translate(
+    t(
       'auto.components.settings.RepositoryHooksSection.787ca433ef',
       'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.'
     ),
-    translate(
+    t(
       'auto.components.settings.RepositoryHooksSection.ecc73d9125',
       'Compare your file against the working template below and copy that shape if needed.'
     )
@@ -101,14 +105,15 @@ function ExampleTemplateCard({
   copiedTemplate: boolean
   onCopyTemplate: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2">
       <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
-        {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}{' '}
+        {t('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}{' '}
         <code className="rounded bg-muted px-1 py-0.5">
-          {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
+          {t('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
         </code>{' '}
-        {translate('auto.components.settings.RepositoryHooksSection.95a0411b3e', 'template')}
+        {t('auto.components.settings.RepositoryHooksSection.95a0411b3e', 'template')}
       </p>
       <div className="relative rounded-lg border border-border/50 bg-background/70">
         <Button
@@ -119,8 +124,8 @@ function ExampleTemplateCard({
           onClick={onCopyTemplate}
         >
           {copiedTemplate
-            ? translate('auto.components.settings.RepositoryHooksSection.3149964b66', 'Copied')
-            : translate('auto.components.settings.RepositoryHooksSection.da37d6f10e', 'Copy')}
+            ? t('auto.components.settings.RepositoryHooksSection.3149964b66', 'Copied')
+            : t('auto.components.settings.RepositoryHooksSection.da37d6f10e', 'Copy')}
         </Button>
         <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 pr-16 font-mono text-[11px] leading-5 text-muted-foreground">
           {EXAMPLE_TEMPLATE}
@@ -141,8 +146,9 @@ export function RepositoryHooksYamlStatus({
   copiedTemplate: boolean
   onCopyTemplate: () => void
 }): React.JSX.Element {
-  const copy = getYamlStateCopy(yamlState)
-  const parseErrorFixes = getParseErrorFixes()
+  const t = useTranslate()
+  const copy = getYamlStateCopy(yamlState, t)
+  const parseErrorFixes = getParseErrorFixes(t)
   return (
     <div className={`space-y-3 rounded-xl border p-3 ${YAML_STATE_STYLES[yamlState].card}`}>
       <div className="space-y-1">
@@ -161,7 +167,7 @@ export function RepositoryHooksYamlStatus({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
-                {translate(
+                {t(
                   'auto.components.settings.RepositoryHooksSection.af49e2a19e',
                   'The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.'
                 )}
