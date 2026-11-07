@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
+import { AcpConnectionClosedError } from '../acp/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
@@ -20,6 +21,8 @@ import { hasAntigravityMacOSCredential } from './native-macos-credentials'
 export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
+/** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
+export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
 const PROBE_TIMEOUT_MS = 5_000
 const RECHECK_MS = 5 * 60_000
 
@@ -76,14 +79,16 @@ export async function antigravityHostAcpReady(
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
     return cached.answer
   }
+  let answered = false
   const check: HostCheck = {
     identity,
     retryAt: now() + RECHECK_MS,
     answer: initializeAntigravityAcp(
-      () => ({ command, args: ['acp'], env, envToDelete }),
+      () => ({ command, args: ['acp', AGY_SKIP_PERMISSIONS_FLAG], env, envToDelete }),
       PROBE_TIMEOUT_MS,
       undefined,
       async (connection, initialized, folder) => {
+        answered = true
         if (!isCompatibleAntigravityHostAcp(initialized)) {
           throw new IncompatibleHostAcp()
         }
@@ -95,7 +100,11 @@ export async function antigravityHostAcpReady(
     ).then(
       () => true,
       (error: unknown) => {
-        if (error instanceof IncompatibleHostAcp) {
+        // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
+        if (
+          error instanceof IncompatibleHostAcp ||
+          (!answered && error instanceof AcpConnectionClosedError)
+        ) {
           check.retryAt = undefined
         }
         return false
