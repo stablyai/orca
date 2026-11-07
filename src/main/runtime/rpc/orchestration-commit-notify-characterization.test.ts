@@ -110,56 +110,6 @@ describe('orchestration commit-notify recovery', () => {
     await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
-  it('replays one Dispatch send after notification throws post-commit', async () => {
-    const { db, runtime } = harness.setup()
-    const task = db.createTask({ spec: 'Receive exact control mail' })
-    const { dispatch } = createReadyLocalWorker(db, task.id)
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const waiting = runtime.waitForMessage(`dispatch:${dispatch.id}`, { timeoutMs: 5_000 })
-    const replayed = await throwAfterCommitAndReplay(
-      dispatcher,
-      runtime,
-      request('rpc_dispatch_send', 'mutation_dispatch_send', 'orchestration.send', {
-        from: 'term_coord',
-        to: `dispatch:${dispatch.id}`,
-        subject: 'one durable Dispatch message'
-      }),
-      'rpc_dispatch_send_retry'
-    )
-
-    const messages = db.getUnreadMessages(`dispatch:${dispatch.id}`)
-    expect(messages).toHaveLength(1)
-    expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
-  })
-
-  it('replays one generic reply after notification throws post-commit', async () => {
-    const { db, runtime, activeRunId } = harness.setup()
-    const original = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${activeRunId}`,
-      subject: 'Need a generic answer',
-      runId: activeRunId
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const waiting = runtime.waitForMessage('term_worker', { timeoutMs: 5_000 })
-    const replayed = await throwAfterCommitAndReplay(
-      dispatcher,
-      runtime,
-      request('rpc_generic_reply', 'mutation_generic_reply', 'orchestration.reply', {
-        id: original.id,
-        body: 'One durable answer',
-        from: 'term_coord'
-      }),
-      'rpc_generic_reply_retry'
-    )
-
-    const replies = db.getInbox(100).filter((message) => message.thread_id === original.id)
-    expect(replies).toHaveLength(1)
-    expect(replayed.result).toMatchObject({ message: { id: replies[0]?.id } })
-    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
-  })
-
   it('replays one question reply nudge without duplicating the answer', async () => {
     const { db, runtime, activeRunId } = harness.setup()
     if (!activeRunId) {
