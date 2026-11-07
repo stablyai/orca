@@ -51,8 +51,10 @@ export type ClaudeSessionMoveCandidate = {
   leafId: string
 }
 
-// Match npm Claude by its fresh command line: generic node/python may now run user programs.
-// Why teams: a packaged `orca claude-teams` leads the foreground as `Orca`, a name any `orca` command shares.
+/**
+ * Match npm Claude by its fresh command line: generic node/python may now run user programs.
+ * Teams: a packaged `orca claude-teams` leads the foreground as `Orca`, a name any `orca` command shares.
+ */
 function isClaudeProcess(processName: string | null, launchedAsAgentTeams: boolean): boolean {
   const agent = recognizeAgentProcess(processName)?.agent
   return agent === 'claude' || (launchedAsAgentTeams && agent === 'claude-agent-teams')

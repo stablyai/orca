@@ -49,7 +49,7 @@ export function launchConfigRegistryEntriesEqual(
   )
 }
 
-// Why: `orca claude-teams` records its own launch agent, but the Claude it wraps reports hooks as `claude`.
+/** `orca claude-teams` records its own launch agent, but the Claude it wraps reports hooks as `claude`. */
 function launchAgentMatchesStatus(
   launchAgent: AgentType,
   statusAgent: AgentType | undefined
