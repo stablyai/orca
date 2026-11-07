@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
-import { subscribeTranslationResourceVersion } from './translation-resource-version'
+import { subscribeTranslationScope } from './i18n'
 import {
   getTranslationScopeKey,
   TranslationScopeContext,
@@ -9,7 +9,7 @@ import {
 /** Feeds useTranslate()/useIntlLocale(); detached React roots need their own. */
 export function TranslationScopeProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const scopeKey = useSyncExternalStore(
-    subscribeTranslationResourceVersion,
+    subscribeTranslationScope,
     getTranslationScopeKey,
     getTranslationScopeKey
   )
