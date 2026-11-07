@@ -69,8 +69,8 @@ function TerminalFontWeightChoice(): React.JSX.Element {
       >
         {SAMPLE_TEXT}
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={switchId} className="text-sm text-popover-foreground">
+      <div className="flex items-center justify-between gap-3 text-sm text-popover-foreground">
+        <Label htmlFor={switchId}>
           {translate('terminal.windowsFontWeight.lighterText', 'Lighter terminal text')}
         </Label>
         <Switch
