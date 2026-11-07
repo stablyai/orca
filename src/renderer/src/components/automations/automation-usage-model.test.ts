@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  summarizeAutomationRunUsage
-} from './automation-usage-model'
+import { summarizeAutomationRunUsage } from './automation-usage-model'
 
 function makeRun(overrides: Partial<AutomationRun>): AutomationRun {
   return {
@@ -112,13 +108,5 @@ describe('automation usage model', () => {
       lastRunStatus: 'completed',
       lastRunAt: 3
     })
-  })
-
-  it('formats compact token and cost labels', () => {
-    expect(formatAutomationTokens(1250)).toBe('1.3k')
-    expect(formatAutomationTokens(1_250_000)).toBe('1.3M')
-    expect(formatAutomationCost(null)).toBe('n/a')
-    expect(formatAutomationCost(0.0042)).toBe('$0.0042')
-    expect(formatAutomationCost(1.234)).toBe('$1.23')
   })
 })

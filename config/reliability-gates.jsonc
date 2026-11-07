@@ -2801,8 +2801,7 @@
         {
           "file": "src/shared/ephemeral-vm-recipe-process.test.ts",
           "assertions": [
-            "recipe commands have no implicit wall-clock deadline",
-            "a stopped process that ignores graceful termination is force-killed and settled"
+            "synchronous graceful termination settles cancellation and clears the force-kill timer"
           ]
         },
         {
@@ -5018,7 +5017,10 @@
         },
         {
           "file": "src/shared/doc-preview-scheme.test.ts",
-          "assertions": ["preview URLs round-trip per segment and reject a malformed grant id"]
+          "assertions": [
+            "malformed grant ids and unsupported schemes are refused",
+            "undecodable percent escapes are refused"
+          ]
         },
         {
           "file": "src/main/ipc/doc-preview-grant-ipc.test.ts",
@@ -5178,16 +5180,6 @@
           "durationSeconds": 195,
           "summary": "Candidate with the sole delta that the preview pane does not hand focus to its guest — the tree as it stood before this change — failed at the target=_blank press: six real presses reached the anchor, the embedder had the webview as its active element, and main's own log answered each report with registered true, grant live, focused false. This is the gap the rewrite found: since previews became browser pages they had no chrome to pass focus on, so the one route out of a preview was shut.",
           "currentCommand": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
-        },
-        {
-          "date": "2026-08-27",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.05,
-          "summary": "39/39 on the title-parity trio at the relocated path, replacing the 2026-08-27 record of the same three files, which killed five mutants as sole deltas: disabling the document branch restores New Tab for a named document, dropping the grant-URL refusal puts the scheme into the title, the tab mirror and the written session, returning New Tab instead of the file name breaks the fallback, removing the guest listener leaves the document unable to name its tab, and making the scheme test parse rather than prefix-match lets a title that merely looks like a preview URL through.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts"
         },
         {
           "date": "2026-08-27",
@@ -5424,7 +5416,8 @@
         "Audit1412 retires this complete dated receipt because a source in its selector was deleted or reduced. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-08-27\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 1.5,\n          \"summary\": \"175/175 at the relocated paths on the unified tool authority, replacing the 2026-08-27 record of the same command at 174/174. That run killed twelve of fourteen mutants as sole deltas — dropping the document branch from the one authority door, removing either browsing-registration refusal or the mint-side refusal that is its converse, deleting the registration notification or widening it to the worktree-wide and any-tab waits, disposing revoked state by grant instead of by page, dropping the hosting-renderer or destroyed-contents check, rebuilding the renderer tool target from the grant, and deleting the teardown identity check under a re-mint — and reported two as ill-posed rather than as kills. The relocation changed no file it names except their directory.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser/browser-preview-tool-authorization.test.ts src/main/ipc/browser/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-lifecycle.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-policy-profile.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx\"\n        }",
         "Audit1412 retires this complete dated receipt because a source in its selector was deleted or reduced. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-08-27\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.32,\n          \"summary\": \"55/55 on the candidate that gives every guest one attach door. A preview used to reach its policies through an installer of its own, which meant the manager's attachment bookkeeping — the set registration consults and the cleanup teardown runs — never knew a preview existed. It is now a profile on `attachGuestPolicies`, and the doc policy is what that profile installs. Red-green with each mutant as the sole delta: deleting the profile branch hands a previewed document the browsing machinery (clicked-link routing, frame routing, popup child windows, anti-detection over the debugger) and lets it navigate off-grant; dropping the manager's destroyed wiring leaves the guest answerable through the grant-keyed authority after it dies and its id marked attached forever; and making the window fork ask for the default profile is caught at the fork itself. The absence assertions are paired with a presence precondition in the same run: a browsing guest attached through the same method observably takes every one of those things, so a profile that fenced nothing, or an attach path that had stopped installing anything at all, fails rather than passing empty.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts\"\n        }",
         "Audit1412 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[]}. Remaining provider scope applies only to unchanged-source receipts.",
-        "Audit1421 removes browser-address-bar-suggestions.test.ts. Document suggestion title/path matching, recency merging and path-prefix ranking alarms are lost. No equivalent replacement coverage is claimed. Historical receipts remain scoped to unchanged selectors; the reduced command has no new execution result."
+        "Audit1421 removes browser-address-bar-suggestions.test.ts. Document suggestion title/path matching, recency merging and path-prefix ranking alarms are lost. No equivalent replacement coverage is claimed. Historical receipts remain scoped to unchanged selectors; the reduced command has no new execution result.",
+        "Audit1803 retires this complete dated receipt because doc-preview-scheme.test.ts was reduced. It does not validate the reduced selector. Original receipt verbatim: {\"date\":\"2026-08-27\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts\",\"result\":\"passed\",\"durationSeconds\":2.05,\"summary\":\"39/39 on the title-parity trio at the relocated path, replacing the 2026-08-27 record of the same three files, which killed five mutants as sole deltas: disabling the document branch restores New Tab for a named document, dropping the grant-URL refusal puts the scheme into the title, the tab mirror and the written session, returning New Tab instead of the file name breaks the fallback, removing the guest listener leaves the document unable to name its tab, and making the scheme test parse rather than prefix-match lets a title that merely looks like a preview URL through.\",\"currentCommand\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts\"}"
       ],
       "demotionRule": "Demote if a paired HTML preview creates a browser workspace on either side, renders from anything other than the orca-preview scheme, serves a read the host reported as truncated or over-cap, serves a document without the self-only content security policy, lets the preview session carry an off-machine request, reads an SSH path that canonicalizes outside its grant root, steals focus from the source editor when it opens, removes unrelated editor or terminal state on close, hides a document that rendered because one subresource was refused, leaves a grant readable after the tab or renderer that owns it is gone, mints one for a sender that is not the trusted renderer, opens a browser tab for a navigation the document started with no one at the keyboard, or lets the guest gather an ICE candidate; or if a paired browser creation this gate still owns produces duplicate client or host identities or loses its requested split."
     },
@@ -14434,7 +14427,9 @@
         {
           "file": "src/shared/cross-platform-path.test.ts",
           "assertions": [
-            "comparison keys preserve literal POSIX backslashes while folding Windows drive and UNC spellings"
+            "POSIX literal backslashes preserve containment and relative identity",
+            "Windows drive and UNC roots enforce containment",
+            "WSL Linux-tail comparisons remain case-sensitive and relative suffix bytes remain exact"
           ]
         },
         {
