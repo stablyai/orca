@@ -80,6 +80,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   writes.mockReset()
   imageWrites.mockReset()
+  imageWrites.mockResolvedValue(undefined)
   extract.mockReset()
   capture.mockReset()
   state.recordFeatureInteraction.mockReset()

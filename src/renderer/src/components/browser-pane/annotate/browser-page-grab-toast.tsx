@@ -73,27 +73,24 @@ export function BrowserPageGrabToast({
             <DropdownMenuContent align="start" sideOffset={4}>
               <DropdownMenuItem
                 onSelect={() => {
-                  const dataUrl = grabToast.payload?.screenshot?.dataUrl
+                  const payload = grabToast.payload
+                  const dataUrl = payload?.screenshot?.dataUrl
                   if (dataUrl?.startsWith('data:image/png;base64,')) {
+                    // A newer grab may own the toast by the time the write settles.
+                    const settle = (update: Pick<BrowserPageGrabToastState, 'message' | 'type'>) =>
+                      setGrabToast((prev) =>
+                        prev?.payload === payload ? { ...prev, ...update } : prev
+                      )
                     void window.api.ui.writeClipboardImage(dataUrl).then(
                       () =>
-                        setGrabToast((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                message: translate(
-                                  'auto.components.browser.pane.BrowserPane.f30d2d35a7',
-                                  'Screenshotted'
-                                )
-                              }
-                            : null
-                        ),
-                      () =>
-                        setGrabToast((prev) =>
-                          prev
-                            ? { ...prev, message: imageCopyFailedMessage(), type: 'error' }
-                            : null
-                        )
+                        settle({
+                          type: 'success',
+                          message: translate(
+                            'auto.components.browser.pane.BrowserPane.f30d2d35a7',
+                            'Screenshotted'
+                          )
+                        }),
+                      () => settle({ type: 'error', message: imageCopyFailedMessage() })
                     )
                   }
                 }}

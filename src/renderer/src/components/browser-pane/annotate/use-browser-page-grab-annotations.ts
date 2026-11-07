@@ -233,11 +233,9 @@ export function useBrowserPageGrabAnnotations({
     if (!dataUrl?.startsWith('data:image/png;base64,')) {
       return
     }
+    recordFeatureInteraction('browser-grab')
     void window.api.ui.writeClipboardImage(dataUrl).then(
-      () => {
-        recordFeatureInteraction('browser-grab')
-        showGrabToast(screenshottedGrabToastMessage(), 'success', payload)
-      },
+      () => showGrabToast(screenshottedGrabToastMessage(), 'success', payload),
       () => showGrabToast(imageCopyFailedMessage(), 'error', payload)
     )
     grab.rearm()

@@ -96,7 +96,7 @@ export async function renderImagePngDataUrl(
   src: string,
   size: PanZoomSize,
   background: string | null,
-  vector = true
+  vector: boolean
 ): Promise<string> {
   const layout = vector ? imagePngLayout(size) : rasterPngLayout(size)
   if (!layout) {
