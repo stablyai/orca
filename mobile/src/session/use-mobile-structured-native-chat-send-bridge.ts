@@ -79,7 +79,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       const clientMessageId = structuredSessionOperationId()
       const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
         clientMessageId,
-        command: intent?.goal === true || isSlashCommandDraft(text)
+        command: intent?.goal === true || isSlashCommandDraft(text),
+        carried: intent?.carried
       })
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {

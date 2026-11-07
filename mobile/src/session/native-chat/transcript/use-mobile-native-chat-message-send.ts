@@ -97,7 +97,7 @@ export function useMobileNativeChatMessageSend(args: {
       recordControlSend: boolean,
       sharedDeadline?: number,
       sentAt?: number,
-      onHandBack?: () => void
+      intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
@@ -133,7 +133,8 @@ export function useMobileNativeChatMessageSend(args: {
       // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
       const inFlightId = syncComposer
         ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
-            command: classification !== 'chat'
+            command: classification !== 'chat',
+            carried: intent?.carried
           })
         : null
       const typesCodexCommand =
@@ -203,7 +204,7 @@ export function useMobileNativeChatMessageSend(args: {
                 return
               }
               restoreRejectedDraft(origin, draftText)
-              onHandBack?.()
+              intent?.onHandBack?.()
               onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
             },
             inFlightId
@@ -259,7 +260,7 @@ export function useMobileNativeChatMessageSend(args: {
       _attachments?: readonly unknown[],
       sentAt?: number,
       intent?: MobileNativeChatSendIntent
-    ) => sendMessage(text, images, true, true, deadline, sentAt, intent?.onHandBack),
+    ) => sendMessage(text, images, true, true, deadline, sentAt, intent),
     [sendMessage]
   )
 

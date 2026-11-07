@@ -61,7 +61,10 @@ type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
 const textSend = (text: string, previews?: string[]) =>
   [text, previews, expect.any(Number), undefined, expect.any(Number)] as const
 const imageSend = (text: string, previews: string[]) =>
-  [...textSend(text, previews), { onHandBack: expect.any(Function) }] as const
+  [
+    ...textSend(text, previews),
+    expect.objectContaining({ onHandBack: expect.any(Function) })
+  ] as const
 
 const SCOPE_A = 'h\0w\0tab-a'
 const SCOPE_B = 'h\0w\0tab-b'

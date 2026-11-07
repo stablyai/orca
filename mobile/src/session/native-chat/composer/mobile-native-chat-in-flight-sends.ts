@@ -3,11 +3,12 @@ import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
 import { readMobileNativeChatDraftInputs } from './mobile-native-chat-draft-inputs'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
-import {
-  saveMobileNativeChatDraft,
-  type MobileNativeChatInFlightSend,
-  type MobileNativeChatSavedFile
-} from './mobile-native-chat-draft-persistence'
+import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
+import type {
+  MobileNativeChatInFlightSend,
+  MobileNativeChatSavedFile
+} from './mobile-native-chat-saved-drafts'
 
 // Sends cleared from the box before their outcome was known. `held` marks one a live hold is waiting on;
 // the rest came back with the page and wait for their chat to open.
@@ -40,7 +41,12 @@ export function beginMobileNativeChatInFlightSend(
   kind: MobileNativeChatInFlightSend['kind'],
   text: string,
   // A command's restore keeps a lone /clear or /compact and warns instead of saying it is back.
-  extra: { clientMessageId?: string; command?: boolean } = {}
+  extra: {
+    clientMessageId?: string
+    command?: boolean
+    // Only the chips this send took, not ones attached while it was on its way.
+    carried?: MobileNativeChatSendIntent['carried']
+  } = {}
 ): string | null {
   const destination = origin.draftDestination
   if (!destination.active) {
@@ -57,9 +63,8 @@ export function beginMobileNativeChatInFlightSend(
       kind,
       text,
       skills: inputs.skills,
-      images: inputs.images.map(({ path }) => ({ path })),
-      // A terminal chat sends no file chips; they stay in the box.
-      files: kind === 'structured' ? savedMobileNativeChatFiles(inputs.files) : [],
+      images: (extra.carried?.images ?? []).map(({ path }) => ({ path })),
+      files: savedMobileNativeChatFiles(extra.carried?.files ?? []),
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
       ...(extra.clientMessageId === undefined ? {} : { clientMessageId: extra.clientMessageId }),
       ...(extra.command ? { command: true } : {}),

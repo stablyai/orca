@@ -1,4 +1,6 @@
 import type { RpcClient } from '../../transport/rpc-client'
+import type { PendingNativeChatImage } from './composer/mobile-native-chat-image-attachment'
+import type { PendingNativeChatFile } from './composer/mobile-native-chat-file-attachment'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
@@ -44,6 +46,11 @@ export type MobileNativeChatSendIntent = {
   onCreated?: (clientMessageId: string) => void
   /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
   onHandBack?: () => void
+  /** The chips this send carries, saved with it so a kill mid-send can return them. */
+  carried?: {
+    images: readonly PendingNativeChatImage[]
+    files: readonly PendingNativeChatFile[]
+  }
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

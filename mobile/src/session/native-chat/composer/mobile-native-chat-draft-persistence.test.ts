@@ -252,6 +252,22 @@ describe('mobile native-chat draft persistence', () => {
     ])
   })
 
+  it('brings back an attachment with no text after a relaunch', async () => {
+    vi.useFakeTimers()
+    publishPageDeviceStore(deviceStore)
+    await loadMobileNativeChatDrafts('host-1', 'wt-1')
+    addMobileNativeChatDraftImages(mobileNativeChatDraftDestination(TAB_A), [
+      { path: '/tmp/orca/only.png', previewUri: 'data:image/png;base64,AAAA' }
+    ])
+    await settle()
+
+    await relaunch()
+
+    expect(readMobileNativeChatDraftInputs(TAB_A).images.map(({ path }) => path)).toEqual([
+      '/tmp/orca/only.png'
+    ])
+  })
+
   describe('a send cut off by a kill', () => {
     let renderer: ReactTestRenderer | null = null
     let drafts: ReturnType<typeof useMobileNativeChatDrafts> | null = null

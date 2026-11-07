@@ -54,6 +54,10 @@ export function mobileNativeChatDraftDestination(scope: string): MobileNativeCha
 export function readMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs {
   return scope ? (drafts.get(scope) ?? empty) : empty
 }
+/** Scopes holding chips or picks, including ones with no text yet. */
+export function mobileNativeChatDraftInputScopes(): string[] {
+  return [...drafts.keys()]
+}
 export function updateMobileNativeChatDraftInputs(
   target: string | MobileNativeChatDraftDestination,
   update: (current: MobileNativeChatDraftInputs) => MobileNativeChatDraftInputs
