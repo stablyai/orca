@@ -40,6 +40,7 @@ import { useNativeChatHistoryRetention } from './use-native-chat-history-retenti
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
 import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
+import { useNativeChatSideChatForkPointReport } from './use-native-chat-side-chat'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
@@ -165,6 +166,7 @@ export function NativeChatMessageList({
     latestTurn
   )
   const { messages: rows, turnKeys, liveTurnKey } = turnRows
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
@@ -211,6 +213,7 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
+  useNativeChatSideChatForkPointReport(allSlots, latestTurnKey, isWorking || lifecycleWorking)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
@@ -326,7 +329,7 @@ export function NativeChatMessageList({
     revealedDiff: navigationRequest.revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
-    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
+    latestTurnKey,
     deliveryNotices,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,

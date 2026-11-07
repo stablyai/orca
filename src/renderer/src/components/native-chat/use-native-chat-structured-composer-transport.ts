@@ -69,16 +69,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     contextFloor: controller.contextFloor,
     sessionForkSupport: controller.forkSupport
   })
-  const sideChat = useNativeChatSideChat(fork, {
-    messages: controller.messages,
-    journal: {
-      items: controller.journalItems,
-      submissions: controller.submissions,
-      latestTurn: controller.latestTurn
-    },
-    agentWorking: controller.isWorking,
-    menuOpen: controller.commandsMenuOpen
-  })
+  const sideChat = useNativeChatSideChat(fork)
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     // A held host takes no turn; pausing or clearing a goal starts none.

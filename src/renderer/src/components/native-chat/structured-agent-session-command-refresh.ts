@@ -34,5 +34,5 @@ export function useStructuredAgentSessionCommandMenu(
     }
   }, [enabled, open, sessionId, target])
   const refresh = useCallback(() => query.current?.invalidate(), [])
-  return { open, setOpen, refresh }
+  return { setOpen, refresh }
 }

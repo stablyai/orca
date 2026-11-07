@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   nativeChatForkableItemIds,
   nativeChatForkSupport,
-  nativeChatLatestForkPoint,
   nativeChatRowOffersFork
 } from './native-chat-fork-offer'
 import type { NativeChatMessage } from './native-chat-types'
@@ -126,61 +125,5 @@ describe('nativeChatForkSupport', () => {
       kind: 'known',
       fork: 'tip'
     })
-  })
-})
-
-describe('nativeChatLatestForkPoint', () => {
-  const row = (id: string, role: 'user' | 'assistant', sequence: number): NativeChatMessage => ({
-    id,
-    role,
-    blocks: [{ type: 'text', text: id }],
-    timestamp: sequence,
-    source: 'transcript',
-    journalPosition: { sequence, index: 0 }
-  })
-  const running = [
-    row('ask-1', 'user', 10),
-    row('reply-1', 'assistant', 11),
-    row('ask-2', 'user', 20),
-    row('reply-2', 'assistant', 21)
-  ]
-  const chat = (fork: 'checkpoint' | 'tip') =>
-    ({
-      support: { kind: 'known', fork },
-      contextFloorSequence: 0,
-      forkableItemIds: new Set(['reply-1', 'reply-2'])
-    }) as const
-
-  it('forks a running chat through its last finished response', () => {
-    expect(
-      nativeChatLatestForkPoint(
-        { messages: running, journal: null, agentWorking: true },
-        chat('checkpoint')
-      )
-    ).toEqual({ kind: 'ready', throughItemId: 'reply-1' })
-  })
-
-  it('waits for the running reply where the agent forks only at its tip', () => {
-    expect(
-      nativeChatLatestForkPoint(
-        { messages: running, journal: null, agentWorking: true },
-        chat('tip')
-      )
-    ).toEqual({ kind: 'reply-running' })
-    expect(
-      nativeChatLatestForkPoint(
-        { messages: running, journal: null, agentWorking: false },
-        chat('tip')
-      )
-    ).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
-  })
-
-  it('has nothing to fork before the first reply', () => {
-    expect(
-      nativeChatLatestForkPoint(
-        { messages: [row('ask-1', 'user', 10)], journal: null, agentWorking: false },
-        chat('checkpoint')
-      )
-    ).toEqual({ kind: 'no-reply' })
   })
 })
