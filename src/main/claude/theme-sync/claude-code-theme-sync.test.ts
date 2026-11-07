@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -90,6 +90,23 @@ describe('Claude Code theme sync', () => {
     claudeVersion = '2.1.319'
     expect(readSettings()).toEqual({ theme: 'dark' })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'takes over later when the settings write fails, instead of treating it as the user’s pick',
+    async () => {
+      writeSettings({ theme: 'dark' })
+      mkdirSync(join(configDir, 'themes'))
+      chmodSync(configDir, 0o555)
+      try {
+        await sync(on)
+      } finally {
+        chmodSync(configDir, 0o755)
+      }
+      expect(readSettings()).toEqual({ theme: 'dark' })
+      await sync(on)
+      expect(readSettings()).toEqual({ theme: 'custom:orca' })
+    }
+  )
 
   it('never rewrites a settings file it cannot parse', async () => {
     writeFileSync(settingsPath, '{ "theme": "dark", ')

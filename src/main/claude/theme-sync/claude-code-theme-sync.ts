@@ -13,7 +13,11 @@ import {
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import { claudeLoadsCustomThemes, probeRecentClaudeCliVersion } from '../claude-hook-event-versions'
 import type { ClaudeCodeTheme } from './claude-code-theme'
-import { readClaudeThemeOwnership, withClaudeThemeOwnership } from './claude-code-theme-ownership'
+import {
+  readClaudeThemeOwnership,
+  withClaudeThemeOwnership,
+  type ClaudeThemeOwnership
+} from './claude-code-theme-ownership'
 
 const THEME_SETTING = 'custom:orca'
 // Why only these: colorblind and ANSI-only themes, and the user's own custom ones, were picked on purpose.
@@ -59,15 +63,29 @@ function isReplaceableTheme(theme: unknown): boolean {
 async function applyToConfigDir(
   configDir: string,
   theme: ClaudeCodeTheme,
-  owner: string
+  owner: string,
+  recorded: ClaudeThemeOwnership | undefined
 ): Promise<string[]> {
   // The file goes first so settings never name a theme Claude Code cannot load.
   const replaced = await writeThemeFile(configDir, theme)
   const settingsPath = join(configDir, 'settings.json')
+  const unlocked = readHooksJson(settingsPath)
+  if (!unlocked) {
+    console.warn(`[claude-theme] Skipping ${settingsPath}: it is not valid JSON`)
+    return replaced
+  }
+  // Lock-free check: most passes leave settings.json and the record as they are.
+  const mayChange = recorded
+    ? !recorded.userChangedTheme && unlocked.theme !== THEME_SETTING
+    : isReplaceableTheme(unlocked.theme)
   // Probe outside the lock: it spawns Claude Code, and only a first takeover needs it.
-  const supported =
-    isReplaceableTheme(readHooksJson(settingsPath)?.theme) &&
-    claudeLoadsCustomThemes(await probeRecentClaudeCliVersion(resolveClaudeCommand()))
+  if (
+    !mayChange ||
+    (!recorded &&
+      !claudeLoadsCustomThemes(await probeRecentClaudeCliVersion(resolveClaudeCommand())))
+  ) {
+    return replaced
+  }
   await withClaudeThemeOwnership(configDir, async ({ entry, save }) => {
     if (entry?.userChangedTheme) {
       return
@@ -75,7 +93,6 @@ async function applyToConfigDir(
     // Why sync reads and writes: Orca's in-process hook installer edits this file synchronously.
     const settings = readHooksJson(settingsPath)
     if (!settings) {
-      console.warn(`[claude-theme] Skipping ${settingsPath}: it is not valid JSON`)
       return
     }
     if (entry) {
@@ -84,18 +101,23 @@ async function applyToConfigDir(
       }
       return
     }
-    if (!supported || !isReplaceableTheme(settings.theme)) {
+    if (!isReplaceableTheme(settings.theme)) {
       return
     }
-    const previous = typeof settings.theme === 'string' ? settings.theme : null
     // The record lands first: a crash between the two writes must still leave a way back.
-    await save({ owner, previousTheme: previous })
-    const current = readHooksJson(settingsPath)
-    if (!current || current.theme !== settings.theme) {
+    await save({
+      owner,
+      previousTheme: typeof settings.theme === 'string' ? settings.theme : null
+    })
+    try {
+      writeHooksJson(settingsPath, { ...settings, theme: THEME_SETTING })
+    } catch (error) {
+      // Without this, the next pass would read the unchanged theme as the user's own pick.
       await save(undefined)
-      return
+      throw error
     }
-    writeHooksJson(settingsPath, { ...current, theme: THEME_SETTING })
+  }).catch((error: unknown) => {
+    console.warn(`[claude-theme] Could not select the Orca theme in ${settingsPath}:`, error)
   })
   return replaced
 }
@@ -108,10 +130,33 @@ function releasedTheme(previousTheme: string | null, terminalBase: string): Clau
   return { name: 'Orca', base, overrides: {} }
 }
 
+/** Writes the replaced theme back into settings.json; the theme to show running sessions, if it reverted. */
+function revertSettings(
+  settingsPath: string,
+  entry: ClaudeThemeOwnership,
+  dirState: 'present' | 'gone' | 'unreadable'
+): { restored: boolean; previousTheme?: string | null } {
+  const settings =
+    dirState === 'unreadable' ? null : dirState === 'present' ? readHooksJson(settingsPath) : {}
+  if (!settings) {
+    console.warn(`[claude-theme] Could not restore ${settingsPath} yet`)
+    return { restored: false }
+  }
+  if (entry.userChangedTheme || settings.theme !== THEME_SETTING) {
+    return { restored: true }
+  }
+  const { theme: _orcaTheme, ...rest } = settings
+  writeHooksJson(
+    settingsPath,
+    entry.previousTheme === null ? rest : { ...settings, theme: entry.previousTheme }
+  )
+  return { restored: true, previousTheme: entry.previousTheme }
+}
+
 /** Puts the replaced theme back; false keeps the record while settings.json or its dir cannot be read. */
 async function restoreConfigDir(
   configDir: string,
-  owner: string,
+  recorded: ClaudeThemeOwnership,
   terminalBase: string,
   publishedThemeFiles: Set<string>
 ): Promise<{ restored: boolean; replaced: string[] }> {
@@ -120,42 +165,33 @@ async function restoreConfigDir(
     (error: unknown) => (isDefinitiveAbsence(error) ? ('gone' as const) : ('unreadable' as const))
   )
   const settingsPath = join(configDir, 'settings.json')
-  const restoredTheme = await withClaudeThemeOwnership(configDir, async ({ entry, save }) => {
-    if (!entry || entry.owner !== owner) {
-      return { restored: true, previousTheme: undefined }
+  const outcome = await withClaudeThemeOwnership(configDir, async ({ entry, save }) => {
+    if (!entry || entry.owner !== recorded.owner) {
+      return { restored: true }
     }
-    const settings =
-      dirState === 'unreadable' ? null : dirState === 'present' ? readHooksJson(settingsPath) : {}
-    if (!settings) {
-      console.warn(`[claude-theme] Could not restore ${settingsPath} yet`)
-      return { restored: false, previousTheme: undefined }
+    const reverted = revertSettings(settingsPath, entry, dirState)
+    if (reverted.restored) {
+      await save(undefined)
     }
-    const reverts = !entry.userChangedTheme && settings.theme === THEME_SETTING
-    if (reverts) {
-      const { theme: _orcaTheme, ...rest } = settings
-      writeHooksJson(
-        settingsPath,
-        entry.previousTheme === null ? rest : { ...settings, theme: entry.previousTheme }
-      )
-    }
-    await save(undefined)
-    return { restored: true, previousTheme: reverts ? entry.previousTheme : undefined }
+    return reverted
+  }).catch((error: unknown) => {
+    // Turning the sync off must not wait on the lock; a later pass drops the record once it frees.
+    console.warn(`[claude-theme] Restoring ${settingsPath} without the record lock:`, error)
+    const reverted = revertSettings(settingsPath, recorded, dirState)
+    return { ...reverted, restored: false }
   })
-  if (restoredTheme.previousTheme === undefined) {
-    return { restored: restoredTheme.restored, replaced: [] }
+  if (outcome.previousTheme === undefined) {
+    return { restored: outcome.restored, replaced: [] }
   }
   // Why: account homes can share the default's themes folder; the first restored look wins.
   const themeFile = await realpath(themeFilePath(configDir)).catch(() => themeFilePath(configDir))
   if (publishedThemeFiles.has(themeFile)) {
-    return { restored: true, replaced: [] }
+    return { restored: outcome.restored, replaced: [] }
   }
   publishedThemeFiles.add(themeFile)
   return {
-    restored: true,
-    replaced: await writeThemeFile(
-      configDir,
-      releasedTheme(restoredTheme.previousTheme, terminalBase)
-    )
+    restored: outcome.restored,
+    replaced: await writeThemeFile(configDir, releasedTheme(outcome.previousTheme, terminalBase))
   }
 }
 
@@ -194,10 +230,12 @@ export async function syncClaudeCodeThemeConfigDirs(
       )
       if (isDir) {
         result.replaced.push(
-          ...(await applyToConfigDir(dir, target.theme, userDataPath).catch((error: unknown) => {
-            console.warn(`[claude-theme] Could not sync ${dir}:`, error)
-            return []
-          }))
+          ...(await applyToConfigDir(dir, target.theme, userDataPath, owned.get(dir)).catch(
+            (error: unknown) => {
+              console.warn(`[claude-theme] Could not sync ${dir}:`, error)
+              return []
+            }
+          ))
         )
       }
     }
@@ -208,7 +246,7 @@ export async function syncClaudeCodeThemeConfigDirs(
     if (entry.owner !== userDataPath) {
       continue
     }
-    const restore = await restoreConfigDir(dir, userDataPath, target.terminalBase, published).catch(
+    const restore = await restoreConfigDir(dir, entry, target.terminalBase, published).catch(
       (error: unknown) => {
         console.warn(`[claude-theme] Could not restore ${dir}:`, error)
         return { restored: false, replaced: [] }

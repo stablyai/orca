@@ -82,7 +82,7 @@ export function startClaudeCodeThemeSync(host: {
         queue = queue
           .then(async () => {
             for (const path of paths) {
-              await republishThemeFile(path, attempt)
+              await republishThemeFile(path, attempt).catch(warnSyncFailed)
             }
           })
           .catch(warnSyncFailed)
@@ -103,6 +103,10 @@ export function startClaudeCodeThemeSync(host: {
         restorePending = result.restorePending
         if (result.replaced.length > 0) {
           scheduleReloadRetries(result.replaced)
+        } else if (!target.enabled) {
+          // Off with nothing restored: stop touching the user's config folder.
+          retryTimers.forEach(clearTimeout)
+          retryTimers = []
         }
       })
       .catch(warnSyncFailed)

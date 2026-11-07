@@ -61,8 +61,8 @@ export type ClaudeThemeOwnershipSlot = {
 }
 
 /**
- * Runs `edit` with a fresh read of `configDir`'s record while holding the lock Orca's hook installers
- * take, so two Orca builds never drop each other's entries or edit settings.json at the same time.
+ * Runs `edit` with a fresh read of `configDir`'s record under Orca's cross-process managed-hook lock,
+ * so two Orca builds never drop each other's entries or edit settings.json for the theme at once.
  */
 export async function withClaudeThemeOwnership<T>(
   configDir: string,

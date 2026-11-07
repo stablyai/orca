@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
@@ -18,22 +18,30 @@ const CLAUDE_LIGHT_BORDER = 0x8a8a8a
 const TOKYO_NIGHT_ACCENT = 0x7aa2f7
 const GRUVBOX_DARK_ACCENT = 0x458588
 const TOKYO_NIGHT_LIGHT_ACCENT = 0x34548a
-// Covers Orca's last reload retry (45 s) when the macOS file-event stream drops events.
-const LIVE_SWITCH_TIMEOUT_MS = 75_000
+// Covers Orca's first five reload attempts (to 120 s) when macOS drops file events.
+const LIVE_SWITCH_TIMEOUT_MS = 130_000
 
-const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-claude-theme-')))
+// The config folder must exist before launch, so it is created at load, only when the test runs.
+const root = enabled ? realpathSync(mkdtempSync(join(tmpdir(), 'orca-claude-theme-'))) : ''
 const configDir = join(root, 'claude')
 const workDir = join(root, 'work')
-mkdirSync(configDir)
-mkdirSync(workDir)
-writeFileSync(join(configDir, 'settings.json'), `${JSON.stringify({ theme: 'light' })}\n`)
-writeFileSync(
-  join(configDir, '.claude.json'),
-  JSON.stringify({
-    hasCompletedOnboarding: true,
-    projects: { [workDir]: { hasTrustDialogAccepted: true } }
-  })
-)
+if (enabled) {
+  mkdirSync(configDir)
+  mkdirSync(workDir)
+  writeFileSync(join(configDir, 'settings.json'), `${JSON.stringify({ theme: 'light' })}\n`)
+  writeFileSync(
+    join(configDir, '.claude.json'),
+    JSON.stringify({
+      hasCompletedOnboarding: true,
+      projects: { [workDir]: { hasTrustDialogAccepted: true } }
+    })
+  )
+}
+test.afterAll(() => {
+  if (enabled) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test.use({
   launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' },
@@ -61,15 +69,18 @@ function promptBorderColor(page: Page): Promise<number | null> {
   })
 }
 
-/** Samples the border until it shows `target`; every earlier sample must still show `previous`. */
+/** Samples the border until it shows `target`; every earlier sample must still show `previous`
+ *  (a redraw can briefly hide the border, so samples without one are skipped). */
 async function expectLiveSwitch(page: Page, previous: number, target: number): Promise<number> {
   const started = Date.now()
   const frames: number[] = []
   await expect
     .poll(
       async () => {
-        const color = (await promptBorderColor(page)) ?? -1
-        frames.push(color)
+        const color = await promptBorderColor(page)
+        if (color !== null) {
+          frames.push(color)
+        }
         return color
       },
       { timeout: LIVE_SWITCH_TIMEOUT_MS, intervals: [100] }
@@ -116,6 +127,8 @@ test('Claude Code follows the Orca terminal theme live and restores its own them
     terminalThemeLight: 'Tokyo Night Light',
     terminalUseSeparateLightTheme: true
   })
+  // Orca takes the theme over at launch (the default); turning it off must have restored it.
+  await expect.poll(readTheme, { timeout: 30_000 }).toBe('light')
   const ptyId = await discoverActivePtyId(orcaPage)
 
   // Off matches main: Claude keeps its own light theme on the dark terminal.
