@@ -135,7 +135,7 @@ export async function withInheritedClaudeLaunchAccount<T>(
       : selected?.provenance.startsWith('profile:')
         ? selected.provenance.slice('profile:'.length)
         : null)
-  const home = id === null ? router.systemDefaultHome() : await router.prepareAccount(id)
+  const home = id === null ? router.systemDefaultHome() : await router.prepareAccountForLaunch(id)
   const pointer = claudeProfileLaunchPointer(router.pointerPath, id, home)
   const launch: ClaudeLaunchAccount = {
     router,

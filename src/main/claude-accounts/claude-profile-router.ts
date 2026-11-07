@@ -210,6 +210,17 @@ export class ClaudeProfileRouter {
     return profile.home
   }
 
+  /** Launch policy for a named account: initial setup must succeed, a failed refresh may not block. */
+  async prepareAccountForLaunch(accountId: string): Promise<string> {
+    const profile = this.describe(accountId)
+    await prepareClaudeProfileForLaunch(
+      profile,
+      (value) => this.setUp(value),
+      this.args.refreshWaitMs
+    )
+    return profile.home
+  }
+
   /** Wait for setup before deleting so it cannot recreate the folder. */
   async removeAccount(accountId: string): Promise<void> {
     await this.setups.get(accountId)?.catch(() => {})
