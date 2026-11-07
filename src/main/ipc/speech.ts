@@ -81,7 +81,7 @@ export function registerSpeechHandlers(store: Store): void {
 
   const getHotwordsFilePath = (content: string): string => {
     const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // sherpa-onnx cannot read non-ASCII Windows paths; use the ASCII-safe model cache for hotwords.
+    // Native speech libraries may open paths with ANSI Windows APIs; keep hotwords in the ASCII-safe model cache.
     return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
   }
 
@@ -175,7 +175,7 @@ export function registerSpeechHandlers(store: Store): void {
         }
 
         if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
+          const content = `${hotwords.join('\n')}\n`
           const hotwordsFilePath = getHotwordsFilePath(content)
           releaseHotwords = retainHotwordsFile(hotwordsFilePath)
           await writeFile(hotwordsFilePath, content, 'utf-8')

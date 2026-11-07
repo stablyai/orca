@@ -27,7 +27,7 @@ vi.mock('./serve-orcad-launch', async (importOriginal) => ({
 }))
 
 import { serveOrcaApp } from './launch'
-import { speechRecognizerPackageName } from '../../shared/speech-recognizer-package'
+import transcribeCppPackages from '../../shared/transcribe-cpp-packages.json'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
@@ -100,9 +100,13 @@ describe('orca serve host selection', () => {
     try {
       await mkdir(join(appRoot, 'out', 'web'), { recursive: true })
       await writeFile(join(appRoot, 'out', 'web', 'web-index.html'), '<html></html>')
-      const recognizer = speechRecognizerPackageName(process.platform, process.arch)
-      await mkdir(join(appRoot, 'node_modules', recognizer), { recursive: true })
-      await writeFile(join(appRoot, 'node_modules', recognizer, 'sherpa-onnx.node'), '')
+      const [, native] = Object.entries(transcribeCppPackages).find(
+        ([target]) => target === `${process.platform}-${process.arch}`
+      ) ?? ['', 'unshipped-target']
+      for (const file of ['transcribe-cpp/package.json', `${native}/contract.json`]) {
+        await mkdir(join(appRoot, 'node_modules', file, '..'), { recursive: true })
+        await writeFile(join(appRoot, 'node_modules', file), '')
+      }
       process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT = appRoot
       const selection = { kind: 'orcad', runtime: '/node', entry: '/slot/orcad.js', version: '1' }
       resolveLocalServeRuntimeMock.mockResolvedValue(selection)

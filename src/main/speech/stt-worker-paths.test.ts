@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import {
-  SPEECH_RECOGNIZER_DIR_ENV,
-  speechRecognizerPackageName
-} from '../../shared/speech-recognizer-package'
+import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
+import transcribeCppPackages from '../../shared/transcribe-cpp-packages.json'
 import { getSpeechEngineModulesDir, hasLocalSpeechRecognizer } from './stt-worker-paths'
 
 const roots: string[] = []
@@ -24,28 +22,32 @@ function handedNodeModules(): string {
   return dir
 }
 
+function writeFile(path: string): void {
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, '')
+}
+
 // orcad: a packaged host with no Electron resources tree.
 describe('speech worker paths on orcad (#31174)', () => {
   it('has no on-device recognizer unless orca serve names one', () => {
     installFakeAppEnvironment({ isPackaged: () => true })
-    expect(getSpeechEngineModulesDir('sherpa')).toBeNull()
-    expect(hasLocalSpeechRecognizer({ files: ['model.int8.onnx'] })).toBe(false)
+    expect(hasLocalSpeechRecognizer()).toBe(false)
   })
 
-  it("uses the installed app's recognizer that orca serve names", () => {
+  it("uses the installed app's transcribe-cpp that orca serve names", () => {
     installFakeAppEnvironment({ isPackaged: () => true })
     const dir = handedNodeModules()
-    const sherpa = join(dir, speechRecognizerPackageName(process.platform, process.arch))
-    mkdirSync(sherpa)
-    writeFileSync(join(sherpa, 'sherpa-onnx.node'), '')
-    expect(getSpeechEngineModulesDir('sherpa')).toBe(dir)
-    expect(hasLocalSpeechRecognizer({ files: ['model.int8.onnx'] })).toBe(true)
-    expect(hasLocalSpeechRecognizer({ files: ['model-Q8_0.gguf'] })).toBe(false)
+    const [, native] = Object.entries(transcribeCppPackages).find(
+      ([target]) => target === `${process.platform}-${process.arch}`
+    ) ?? ['', 'unshipped-target']
+    writeFile(join(dir, 'transcribe-cpp', 'package.json'))
+    writeFile(join(dir, native, 'contract.json'))
+    expect(getSpeechEngineModulesDir()).toBe(native === 'unshipped-target' ? null : dir)
   })
 
   it('ignores a named directory that holds no recognizer', () => {
     installFakeAppEnvironment({ isPackaged: () => true })
     handedNodeModules()
-    expect(getSpeechEngineModulesDir('sherpa')).toBeNull()
+    expect(getSpeechEngineModulesDir()).toBeNull()
   })
 })
