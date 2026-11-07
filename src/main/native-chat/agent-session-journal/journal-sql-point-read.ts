@@ -18,16 +18,17 @@ import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
 import { readJournalSqlInput } from './journal-sql-input-reads'
-import { JournalSqlReducer } from './journal-sql-reducer'
-import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { readJournalStatusState, type JournalStatusState } from './journal-status-state'
+import type { JournalStatusState } from './journal-status-state'
+import { readJournalSqlStatusState } from './journal-sql-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
-import {
-  readJournalStatusIndicators,
-  type JournalStatusIndicatorRead,
-  type JournalStatusIndicators
+import type {
+  JournalStatusIndicatorRead,
+  JournalStatusIndicators
 } from './journal-status-indicators'
+import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import {
   readJournalSqlItems,
   type JournalSqlItemRead,
@@ -110,25 +111,25 @@ function read(
   }
   switch (operation.kind) {
     case 'status-indicators': {
-      const { state } = new JournalSqlReducer(scope, scope.epoch)
+      const state = new JournalSqlStatusContext(scope)
       return {
         kind: 'status-indicators',
-        indicators: readJournalStatusIndicators(state, operation.input)
+        indicators: readJournalSqlStatusIndicators(state, operation.input)
       }
     }
     case 'status-state': {
-      const { state } = new JournalSqlReducer(scope, scope.epoch)
+      const state = new JournalSqlStatusContext(scope)
       return {
         kind: 'status-state',
-        status: readJournalStatusState(state, operation.currentFence)
+        status: readJournalSqlStatusState(state, operation.currentFence)
       }
     }
     case 'usage-limit-cut':
     case 'orca-stop-cut': {
-      const { state } = new JournalSqlReducer(scope, scope.epoch)
+      const state = new JournalSqlStatusContext(scope)
       return operation.kind === 'usage-limit-cut'
-        ? { kind: 'usage-limit-cut', cut: readJournalUsageLimitCut(state) }
-        : { kind: 'orca-stop-cut', cut: readJournalOrcaStopCut(state) }
+        ? { kind: 'usage-limit-cut', cut: readJournalSqlUsageLimitCut(state) }
+        : { kind: 'orca-stop-cut', cut: readJournalSqlOrcaStopCut(state) }
     }
     case 'input-read':
       return { kind: 'input-read', result: readJournalSqlInput(scope, operation.operation) }

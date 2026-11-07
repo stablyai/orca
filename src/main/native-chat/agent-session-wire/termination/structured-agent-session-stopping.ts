@@ -11,6 +11,7 @@ import type { StructuredAgentSessionCurrentWork } from '../observations/structur
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
 
 export function structuredAgentSessionStopping(
@@ -20,7 +21,20 @@ export function structuredAgentSessionStopping(
   /** A Stop bound to an ended generation’s turn is over. */
   scope?: StructuredAgentSessionWorkScope
 ): boolean {
-  const stop = journal.stopMarks.latest()
+  return structuredAgentSessionStoppingForMark(
+    journal.stopMarks.latest(),
+    items,
+    submissions,
+    scope
+  )
+}
+
+export function structuredAgentSessionStoppingForMark(
+  stop: JournalLatestStop | null,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  scope?: StructuredAgentSessionWorkScope
+): boolean {
   if (stop === null || !stopIsAPersons(stop.event.reason)) {
     return false
   }

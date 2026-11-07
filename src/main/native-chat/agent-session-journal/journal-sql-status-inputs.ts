@@ -1,3 +1,11 @@
+import type { JournalSqlStatusContext } from './journal-sql-status-context'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+
 import type { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
 
@@ -60,4 +68,42 @@ export function* sqlStatusRelatedInputIds(
     }
     after = Number(last.ordinal)
   }
+}
+
+function firstInputItem(item: AgentJournalRenderItem | null, floor: number): boolean {
+  return !!(
+    item &&
+    item.sequence > floor &&
+    item.body.kind === 'message' &&
+    item.body.role === 'user' &&
+    isRootAgentJournalItem(item) &&
+    item.body.command === undefined
+  )
+}
+
+/** Seeds retain provider fallback; historical associations contribute only their native item. */
+export function readJournalSqlFirstInputId(
+  state: JournalSqlStatusContext,
+  start: number,
+  floor: number,
+  seeds: readonly AgentJournalSubmission[]
+): string | null {
+  const order = state
+  const ids = new Set(seeds.map((entry) => entry.clientMessageId))
+  for (const id of state.relatedInputIds(start, floor)) {
+    ids.add(id)
+  }
+  const candidates = [...ids]
+    .map((id) => ({ id, ordinal: order.inputOrdinal(id) }))
+    .filter(({ ordinal }) => ordinal >= start)
+    .sort((a, b) => a.ordinal - b.ordinal)
+  for (const { id } of candidates) {
+    const native = state.displayed(agentJournalSubmissionKey(id))
+    const providerId = native ? undefined : state.submission(id)?.providerItemId
+    const item = native ?? (providerId ? state.displayed(providerId) : null)
+    if (firstInputItem(item, floor)) {
+      return id
+    }
+  }
+  return null
 }

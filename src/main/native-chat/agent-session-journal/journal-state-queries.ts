@@ -6,21 +6,11 @@ import type {
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 
 /** Each live range query names its population; whole-state restore/export remains memory-only. */
 export type JournalStateQueries = {
-  statusRelatedInputIds: (
-    state: JournalReducerState,
-    start: number,
-    floor: number
-  ) => Iterable<string>
-  hasStatusRequestItem: (state: JournalReducerState) => boolean
-  failedStatusItems: (state: JournalReducerState, floor: number) => Iterable<JournalStatusItem>
-  statusItems: (
-    state: JournalReducerState,
-    selection: JournalStatusItemSelection
-  ) => Iterable<JournalStatusItem>
+  usageLimitContinueIdentity: (state: JournalReducerState) => UsageLimitContinueIdentity | undefined
   latestContextClearSequence: (state: JournalReducerState) => number
   echoClaimant: (state: JournalReducerState, fingerprint: string, marker5: boolean) => string | null
   itemsAfterSequence: (

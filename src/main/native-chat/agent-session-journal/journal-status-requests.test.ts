@@ -10,7 +10,26 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalDispatchRowBuilder } from './writing/journal-row-builders'
-import { readJournalRequestStatus } from './journal-status-requests'
+import { readJournalRequestStatus as memoryReadJournalRequestStatus } from './journal-status-requests'
+
+import type { JournalReducerState } from './projection/journal-reducer'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlRequestStatus } from './journal-sql-status-requests'
+
+const sqlOwners = new WeakMap<JournalReducerState, JournalSqlReducer>()
+function readJournalRequestStatus(
+  state: JournalReducerState,
+  ...args: Parameters<typeof memoryReadJournalRequestStatus> extends [unknown, ...infer A]
+    ? A
+    : never
+) {
+  const sql = sqlOwners.get(state)
+  if (!sql) {
+    return memoryReadJournalRequestStatus(state, ...args)
+  }
+  sql.flush()
+  return readJournalSqlRequestStatus(new JournalSqlStatusContext(sql.context.scope), ...args)
+}
 
 const databases: Database.Database[] = []
 afterEach(() => databases.splice(0).forEach((db) => db.close()))
@@ -21,7 +40,9 @@ function fixture(backend: 'memory' | 'sql') {
   const db = new Database(':memory:')
   databases.push(db)
   db.exec(journalSqlProjectionSchema())
-  return new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
+  const sql = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch')
+  sqlOwners.set(sql.state, sql)
+  return sql.state
 }
 function row(
   itemId: string,

@@ -1,5 +1,4 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { readJournalUsageLimitContinueIdentity } from './journal-status-cuts'
 import { JournalHostFactsNeededError, type JournalRewoundFacts } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 
@@ -11,7 +10,7 @@ export function journalRewoundReceipt(
 ): (cursor: AgentJournalCursor) => JournalOperationReceipt {
   return (cursor) => ({
     fold: (draft) => {
-      const cancel = readJournalUsageLimitContinueIdentity(draft) ?? null
+      const cancel = draft.queries.usageLimitContinueIdentity(draft) ?? null
       if (
         known?.cursor.epoch !== cursor.epoch ||
         known.cursor.sequence !== cursor.sequence ||

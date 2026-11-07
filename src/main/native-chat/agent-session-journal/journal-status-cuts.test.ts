@@ -10,11 +10,52 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalDispatchRowBuilder } from './writing/journal-row-builders'
-import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
+import {
+  readJournalUsageLimitCut as memoryReadJournalUsageLimitCut,
+  readJournalOrcaStopCut as memoryReadJournalOrcaStopCut
+} from './journal-status-cuts'
+import {
+  newestStructuredAgentSessionTurn,
+  newestStructuredAgentSessionTurnBySequence
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { renderJournalItems } from './projection/journal-reducer'
+import { memoryJournalMap } from './journal-memory-collections'
 import { journalRewoundReceipt } from './journal-writer-rewind-receipt'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+
+import type { JournalReducerState } from './projection/journal-reducer'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
+
+const sqlOwners = new WeakMap<JournalReducerState, JournalSqlReducer>()
+function readJournalUsageLimitCut(
+  state: JournalReducerState,
+  ...args: Parameters<typeof memoryReadJournalUsageLimitCut> extends [unknown, ...infer A]
+    ? A
+    : never
+) {
+  const sql = sqlOwners.get(state)
+  if (!sql) {
+    return memoryReadJournalUsageLimitCut(state, ...args)
+  }
+  sql.flush()
+  return readJournalSqlUsageLimitCut(new JournalSqlStatusContext(sql.context.scope), ...args)
+}
+function readJournalOrcaStopCut(
+  state: JournalReducerState,
+  ...args: Parameters<typeof memoryReadJournalOrcaStopCut> extends [unknown, ...infer A] ? A : never
+) {
+  const sql = sqlOwners.get(state)
+  if (!sql) {
+    return memoryReadJournalOrcaStopCut(state, ...args)
+  }
+  sql.flush()
+  return readJournalSqlOrcaStopCut(new JournalSqlStatusContext(sql.context.scope), ...args)
+}
 
 const databases: Database.Database[] = []
 afterEach(() => databases.splice(0).forEach((db) => db.close()))
@@ -26,7 +67,9 @@ function fixture(backend: 'memory' | 'sql') {
   const db = new Database(':memory:')
   databases.push(db)
   db.exec(journalSqlProjectionSchema())
-  return new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
+  const sql = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch')
+  sqlOwners.set(sql.state, sql)
+  return sql.state
 }
 function item(
   id: string,
@@ -181,9 +224,23 @@ it.each(['memory', 'sql'] as const)(
         { sequenceIndex: 1 }
       )
     )
-    const boundary = (raw?: true) =>
-      [...state.queries.statusItems(state, { kind: 'boundary', raw })][0]?.item.itemId
-    expect(boundary()).toBe('orca:running')
+    const boundary = (raw?: true) => {
+      const sql = sqlOwners.get(state)
+      if (sql) {
+        sql.flush()
+        const item = [
+          ...new JournalSqlStatusContext(sql.context.scope).select({ kind: 'boundary', raw })
+        ][0]?.item
+        return readAgentJournalTurn(item?.body)?.turnId ?? null
+      }
+      return (
+        (raw
+          ? newestStructuredAgentSessionTurnBySequence(memoryJournalMap(state.items).values())
+          : newestStructuredAgentSessionTurn(renderJournalItems(state))
+        )?.turnId ?? null
+      )
+    }
+    expect(boundary()).toBe('running')
     expect(boundary(true)).toBe('completed')
     state.inputs.rejections.set('running', {
       clientMessageId: 'running',
@@ -213,7 +270,62 @@ it.each(['memory', 'sql'] as const)(
         contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
       })
     )
-    expect(boundary()).toBe('clear')
+    expect(boundary()).toBeNull()
     expect(readJournalOrcaStopCut(state, 12)).toBeNull()
   }
 )
+
+it('reads changed cuts at the writer savepoint and discards their memo after rollback', () => {
+  const state = fixture('sql')
+  const sql = sqlOwners.get(state)!
+  const { db } = sql.context.scope
+  state.items.set(
+    'failed',
+    item('failed', 1, {
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'completed',
+      outcome: 'failure'
+    })
+  )
+  const limit = (resetsAt: number) =>
+    item(
+      'limit',
+      2,
+      {
+        kind: 'status',
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('usageLimitReached', {
+            usageLimit: { resetsAt }
+          }),
+          { surface: 'row' }
+        )
+      },
+      { turnScope: { kind: 'turn', turnItemId: 'failed' } }
+    )
+  state.items.set('limit', limit(400))
+  expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
+    turnItemId: 'failed',
+    resetsAt: 400
+  })
+  db.exec('SAVEPOINT writer_cut')
+  try {
+    state.items.set('limit', limit(500))
+    expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
+      turnItemId: 'failed',
+      resetsAt: 500
+    })
+    state.items.set('limit', limit(600))
+    expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
+      turnItemId: 'failed',
+      resetsAt: 600
+    })
+  } finally {
+    db.exec('ROLLBACK TO writer_cut; RELEASE writer_cut')
+  }
+  const next = new JournalSqlReducer(sql.context.scope, 'epoch').state
+  expect(next.queries.usageLimitContinueIdentity(next)).toEqual({
+    turnItemId: 'failed',
+    resetsAt: 400
+  })
+})

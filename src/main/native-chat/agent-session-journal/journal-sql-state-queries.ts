@@ -9,9 +9,8 @@ import type { JournalSqlValueContext } from './journal-sql-value-context'
 import type { JournalSqlQueryFacts } from './journal-sql-query-facts'
 import { journalSqlOrderedValues } from './journal-sql-keyed-values'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import { sqlHasStatusRequestItem, sqlFailedStatusItems } from './journal-sql-status-request-items'
-import { sqlJournalStatusItems } from './journal-sql-status-items'
-import { sqlStatusRelatedInputIds } from './journal-sql-status-inputs'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlUsageLimitContinueIdentity } from './journal-sql-status-cuts'
 
 export function sqlJournalStateQueries(
   context: JournalSqlValueContext,
@@ -47,29 +46,9 @@ export function sqlJournalStateQueries(
     return Number(row?.sequence ?? 0)
   }
   return {
-    statusRelatedInputIds(_state, start, floor) {
+    usageLimitContinueIdentity() {
       facts.flush()
-      return sqlStatusRelatedInputIds(scope, start, floor)
-    },
-    hasStatusRequestItem() {
-      facts.flush()
-      return sqlHasStatusRequestItem(scope)
-    },
-    failedStatusItems(_state, floor) {
-      facts.flush()
-      return sqlFailedStatusItems(
-        scope,
-        (id) => context.read<AgentJournalRenderItem>('items', JSON.stringify(id)),
-        floor
-      )
-    },
-    statusItems(_state, selection) {
-      facts.flush()
-      return sqlJournalStatusItems(
-        scope,
-        (id) => context.read<AgentJournalRenderItem>('items', JSON.stringify(id)),
-        selection
-      )
+      return readJournalSqlUsageLimitContinueIdentity(new JournalSqlStatusContext(scope))
     },
     latestContextClearSequence: latestClear,
     echoClaimant(_state, fingerprint, marker5) {
