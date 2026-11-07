@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
 import type { AgentTokenSession } from './agent-token-usage'
 import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
@@ -125,6 +126,7 @@ export abstract class UsageProviderStoreLifecycle<
   /** Await queued cache writes so quit does not drop the final snapshot. */
   async flush(): Promise<void> {
     await this.loaded
+    await this.scanPromise
     await this.inlineCache.settle()
     await this.tokenReporter?.flush()
     await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
@@ -203,7 +205,7 @@ export abstract class UsageProviderStoreLifecycle<
         })
       }
     } catch (error) {
-      if (!isMissingFileError(error)) {
+      if (!isDefinitiveAbsence(error)) {
         console.error(`${this.config.logTag} Failed to load persisted state:`, error)
       }
     }
@@ -279,6 +281,7 @@ export abstract class UsageProviderStoreLifecycle<
           path: usageSourceCachePath(this.config.resolveCacheFile()),
           schemaVersion: this.schemaVersion,
           worktreeFingerprint,
+          hadPreviousHistory: this.getScanState()[this.config.dataPresenceKey],
           reuse: this.state.worktreeFingerprint === worktreeFingerprint
         })
         this.state.sessions = result.sessions
@@ -329,8 +332,4 @@ export abstract class UsageProviderStoreLifecycle<
     const repos = this.store.getRepos()
     return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
   }
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }

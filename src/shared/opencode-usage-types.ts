@@ -1,3 +1,5 @@
+import type { UsageHistoryRow } from './usage-history-types'
+
 export type OpenCodeUsageScope = 'orca' | 'all'
 export type OpenCodeUsageRange = '7d' | '30d' | '90d' | 'all'
 export type OpenCodeUsageBreakdownKind = 'model' | 'project'
@@ -50,9 +52,11 @@ export type OpenCodeUsageBreakdownRow = {
 }
 
 export type OpenCodeUsageSessionRow = {
+  lastActiveDay?: string
+  totalsScope?: 'lifetime' | 'selection'
   sessionId: string
   lastActiveAt: string
-  durationMinutes: number
+  durationMinutes: number | null
   projectLabel: string
   model: string | null
   events: number
@@ -70,4 +74,8 @@ export type OpenCodeUsageSnapshot = {
   modelBreakdown: OpenCodeUsageBreakdownRow[]
   projectBreakdown: OpenCodeUsageBreakdownRow[]
   recentSessions: OpenCodeUsageSessionRow[]
+  /** Calendar day on the recording host, using the same local boundary as history rows. */
+  historyToday?: string
+  history?: UsageHistoryRow[]
+  historyNeedsRescan?: boolean
 }

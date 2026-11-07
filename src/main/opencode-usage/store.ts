@@ -1,5 +1,7 @@
+import { localUsageDay } from '../../shared/usage-history-range'
+import { projectEventUsageHistory } from '../usage/usage-history-projection'
 import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -34,13 +36,15 @@ import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 
-export function initOpenCodeUsagePath(): void {
-  _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
+export function initOpenCodeUsagePath(
+  userDataPath = getAppEnvironment().getPath('userData')
+): void {
+  _openCodeUsageFile = join(userDataPath, 'orca-opencode-usage.json')
 }
 
 function getOpenCodeUsageFile(): string {
   if (!_openCodeUsageFile) {
-    _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
+    _openCodeUsageFile = join(getAppEnvironment().getPath('userData'), 'orca-opencode-usage.json')
   }
   return _openCodeUsageFile
 }
@@ -70,10 +74,17 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: OpenCodeUsageScope,
     range: OpenCodeUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): OpenCodeUsageSnapshot {
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            history: projectEventUsageHistory('opencode', this.getFilteredDaily(scope, range))
+          }
+        : {}),
       summary: this.buildSummary(scope, range),
       daily: this.buildDaily(scope, range),
       modelBreakdown: this.buildBreakdown(scope, range, 'model'),
@@ -149,7 +160,12 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     range: OpenCodeUsageRange,
     limit = 10
   ): OpenCodeUsageSessionRow[] {
-    return buildOpenCodeUsageRecentSessions(this.getFilteredSessions(scope, range), limit)
+    return buildOpenCodeUsageRecentSessions(
+      this.getFilteredSessions(scope, range),
+      limit,
+      this.getFilteredDaily(scope, range),
+      range
+    )
   }
 
   private getFilteredDaily(

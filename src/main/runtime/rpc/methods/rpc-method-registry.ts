@@ -1,3 +1,4 @@
+import { USAGE_HISTORY_METHODS } from './usage-history'
 import { STATUS_METHODS } from './host-management/status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
@@ -119,6 +120,7 @@ export const ALL_RPC_METHODS = [
   ...ACCOUNT_METHODS,
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
+  ...USAGE_HISTORY_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,
