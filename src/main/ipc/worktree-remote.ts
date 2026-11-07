@@ -1386,7 +1386,9 @@ async function performLocalWorktreeCreate(
         // Path retries must retain the adopted branch.
         selectedExistingLocalBranchName = branchName
       }
+      // A selected review may adopt its remote branch, but exact mode only creates a new one.
       const allowedPushTargetRemoteConflict =
+        !exactName &&
         lastBranchConflictKind &&
         isAllowedPushTargetRemoteConflict(lastBranchConflictKind, branchName, args)
       if (lastBranchConflictKind) {

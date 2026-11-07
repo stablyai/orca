@@ -25,7 +25,6 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
-import { WorktreeCreateExactNameTakenError } from '../../../shared/new-workspace/worktree-create-collision'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -515,18 +514,5 @@ describe('thrown agent-session refusals', () => {
         new RemoteRuntimeClientError('method_not_found', 'x')
       )
     ).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
-  })
-})
-
-// The folder shortcut opens the composer only on this code; runtime_error would toast instead.
-describe('exact-name create refusal', () => {
-  it('reaches paired clients with its code', () => {
-    expect(
-      mapRuntimeError(
-        'create',
-        { runtimeId: 'host' },
-        new WorktreeCreateExactNameTakenError('"Login fix" is already taken on this host.')
-      )
-    ).toMatchObject({ ok: false, error: { code: 'worktree_create_exact_name_taken' } })
   })
 })

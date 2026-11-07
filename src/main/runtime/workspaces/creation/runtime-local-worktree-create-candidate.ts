@@ -195,7 +195,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
     if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
       selectedExistingLocalBranchName = branchName
     }
+    // A selected review may adopt its remote branch, but exact mode only creates a new one.
     const allowedPushTargetRemoteConflict =
+      !exactName &&
       branchConflictKind &&
       isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args.request)
     let selectedReviewConflictMatched = false
