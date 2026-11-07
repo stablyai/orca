@@ -48,6 +48,15 @@ describe('getActivityThreadTaskTitle', () => {
         })
       ).toBe('Investigate the flaky login test')
     }
+    for (const title of ['✳ Claude Code', 'Gemini CLI ready']) {
+      expect(
+        getActivityThreadTaskTitle({
+          entry: { prompt: 'Investigate the flaky login test', stateHistory: [] },
+          tab: { ...tab, generatedTitle: undefined, title },
+          generatedTitlesEnabled: false
+        })
+      ).toBe('Investigate the flaky login test')
+    }
   })
 
   it('picks the most recent substantive prompt from history, not the longest', () => {
