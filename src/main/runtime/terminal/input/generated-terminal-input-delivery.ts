@@ -12,7 +12,7 @@ import { GeneratedInputRefusedError } from './generated-input-refused-error'
 export type GeneratedInputDelivery = GeneratedInputRequest &
   Pick<
     RuntimeAgentPromptWriteOptions,
-    'framing' | 'observedReady' | 'composerReady' | 'beforeWrite' | 'signal'
+    'framing' | 'observedReady' | 'composerReady' | 'beforeWrite' | 'signal' | 'onGeneratedFrame'
   >
 
 const TARGET_GONE = new Set([
@@ -60,6 +60,7 @@ async function deliver(
       ...(delivery.observedReady ? { observedReady: true } : {}),
       ...(delivery.composerReady !== undefined ? { composerReady: delivery.composerReady } : {}),
       ...(delivery.beforeWrite ? { beforeWrite: delivery.beforeWrite } : {}),
+      ...(delivery.onGeneratedFrame ? { onGeneratedFrame: delivery.onGeneratedFrame } : {}),
       ...(delivery.signal ? { signal: delivery.signal } : {}),
       ...(delivery.requireConsumer ? { requireConsumer: true } : {}),
       onGeneratedOutcome: definite,

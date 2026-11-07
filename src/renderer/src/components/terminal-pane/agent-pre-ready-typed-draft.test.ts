@@ -18,7 +18,12 @@ import {
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type * as TerminalWorktreeRouteModule from '@/lib/terminal-worktree-route'
-import { appendTypedDraftText } from './pty-connection/agent-pre-ready-typed-draft'
+import {
+  appendTypedDraftText,
+  installAgentPreReadyTypedDraft
+} from './pty-connection/agent-pre-ready-typed-draft'
+import { bindSettlePaneSerializer } from './pty-connection/pane-serializer-settle'
+import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 
 const {
   notifyCodexPaneBoundForStaleSweep,
@@ -28,12 +33,14 @@ const {
   waitForPaneAgentToLookReady,
   deliverGeneratedPaste,
   onPasteTimeout,
-  recoveryNotice
+  recoveryNotice,
+  acceptGeneratedInput
 } = vi.hoisted(() => ({
   waitForPaneAgentToLookReady: vi.fn(),
   deliverGeneratedPaste: vi.fn(async (_paste: unknown): Promise<string> => 'staged'),
   onPasteTimeout: vi.fn(),
   recoveryNotice: vi.fn(),
+  acceptGeneratedInput: vi.fn(() => 'accepted-held-draft'),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
@@ -58,6 +65,7 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/lib/agent-draft-readiness', () => ({ waitForPaneAgentToLookReady }))
 // The generated-input operation that takes the keys at handoff; its outcome is the test's to set.
 vi.mock('@/lib/agent-paste-draft', () => ({ deliverGeneratedPaste }))
+vi.mock('@/lib/generated-paste-notice', () => ({ acceptGeneratedInput }))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
@@ -272,6 +280,14 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(pane.transport.sendInput).not.toHaveBeenCalled()
 
     pane.bind('pty-1')
+    expect(acceptGeneratedInput).toHaveBeenCalledExactlyOnceWith({
+      text: 'make the tests pass',
+      agent: 'claude',
+      submit: false
+    })
+    expect(acceptGeneratedInput.mock.invocationCallOrder[0]).toBeLessThan(
+      waitForPaneAgentToLookReady.mock.invocationCallOrder[0]
+    )
     await flushAsyncTicks(20)
 
     // The held keys' observation ends with the pane: it carries the pane's abort signal.
@@ -285,6 +301,7 @@ describe('agent pane keys typed before its PTY binds', () => {
       expect.objectContaining({
         ptyId: 'pty-1',
         content: 'make the tests pass',
+        operationId: 'accepted-held-draft',
         submit: false,
         inputKind: 'driving',
         intent: 'startup'
@@ -292,6 +309,56 @@ describe('agent pane keys typed before its PTY binds', () => {
     )
     pane.dispose()
   })
+
+  it.each(['bind', 'output'] as const)(
+    'seals joined text once when %s arrives first',
+    async (first) => {
+      deliverGeneratedPaste.mockResolvedValue('staged')
+      let ptyId: string | null = null
+      const transport = { getPtyId: () => ptyId }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both installers' accessed members are supplied; no PTY or parser path is invoked.
+      const session = {
+        pane: { id: 1, terminal: {} },
+        transport,
+        paneStartup: { command: 'codex' },
+        deps: {
+          worktreeId: 'wt',
+          tabId: 'tab',
+          paneTransportsRef: { current: new Map([[1, transport]]) }
+        },
+        startupDraftAgent: 'codex',
+        startupDraftPrompt: 'startup',
+        ownsStartupDraftPaste: true,
+        resolveExpectedLaunchTuiAgent: () => 'codex',
+        requestRecoveryForUndeliverableInput: vi.fn(),
+        recordTerminalInputForHibernation: vi.fn()
+      } as unknown as ConnectPanePtySession
+      installAgentPreReadyTypedDraft(session)
+      bindSettlePaneSerializer(session)
+      session.captureAgentPreReadyInput('held', true)
+      ptyId = 'pty-joined'
+      if (first === 'bind') {
+        session.onAgentPreReadyDraftPtyBound(ptyId, true)
+      }
+      session.observeStartupDraftPasteReadiness()
+      expect(acceptGeneratedInput).toHaveBeenCalledExactlyOnceWith({
+        text: 'startup held',
+        agent: 'codex',
+        submit: false
+      })
+      expect(deliverGeneratedPaste).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          content: 'startup held',
+          operationId: 'accepted-held-draft',
+          submit: false
+        })
+      )
+      session.onAgentPreReadyDraftPtyBound(ptyId, true)
+      await flushAsyncTicks(20)
+      expect(acceptGeneratedInput).toHaveBeenCalledTimes(1)
+      expect(session.startupDraftPrompt).toBeNull()
+    }
+  )
 
   it('keeps exact held keys in recovery when the agent never reports ready', async () => {
     waitForPaneAgentToLookReady.mockResolvedValue(false)
@@ -388,7 +455,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(observed?.aborted).toBe(true)
     expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(recoveryNotice).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ content: 'held keys' })
+      expect.objectContaining({ content: 'held keys', operationId: 'accepted-held-draft' })
     )
   })
 
@@ -424,7 +491,11 @@ describe('agent pane keys typed before its PTY binds', () => {
       expect(recoveryNotice).toHaveBeenCalledTimes(notices)
       if (notices) {
         expect(recoveryNotice).toHaveBeenCalledWith(
-          expect.objectContaining({ content: 'held keys', submitted: false })
+          expect.objectContaining({
+            content: 'held keys',
+            submitted: false,
+            operationId: 'accepted-held-draft'
+          })
         )
         expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(certainty, false)
       }

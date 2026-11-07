@@ -54,7 +54,11 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified
+  // Like the real writer: told of its handoff synchronously, just before the bytes go.
+  sendRuntimePtyInputVerified: (...args: unknown[]) => {
+    ;(args[3] as { beforeSend?: () => void } | undefined)?.beforeSend?.()
+    return testState.sendRuntimePtyInputVerified(...args)
+  }
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -132,7 +136,12 @@ describe('post-paste submit retry Enter', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(enterWrites()).toHaveLength(2)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith('pty-1', '\r', 'launch')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
+      'pty-1',
+      '\r',
+      'launch',
+      expect.objectContaining({ generatedInputOperationId: expect.any(String) })
+    )
     expect(vi.getTimerCount()).toBe(0)
   })
 

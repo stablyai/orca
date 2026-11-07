@@ -3,6 +3,7 @@ import { sendGeneratedTerminalInputToHandle } from '@/runtime/generated-terminal
 import type { GeneratedInputOutcome } from '../../../shared/generated-terminal-input'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 import { deliverGeneratedPaste } from './agent-paste-draft'
+import { generatedInputAttempt } from '@/runtime/generated-input-attempt'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import { getTerminalAgentSendReadiness } from './active-agent-terminal-send-readiness'
@@ -49,6 +50,8 @@ async function deliverNotes(
   terminalHandle: string,
   prompt: string
 ): Promise<GeneratedInputOutcome> {
+  // One accepted request: its end and the route it selects carry into the older-host fallback.
+  const attempt = generatedInputAttempt(Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const request = {
     text: prompt,
     submit: true,
@@ -56,7 +59,15 @@ async function deliverNotes(
     intent: 'running' as const,
     timeoutMs: GENERATED_AGENT_INPUT_TIMEOUT_MS
   }
-  const hosted = await sendGeneratedTerminalInputToHandle(runtimeTarget, terminalHandle, request)
+  const hosted = await sendGeneratedTerminalInputToHandle(
+    runtimeTarget,
+    terminalHandle,
+    request,
+    undefined,
+    undefined,
+    undefined,
+    attempt
+  )
   if (hosted !== null) {
     return hosted
   }
@@ -70,7 +81,8 @@ async function deliverNotes(
     submit: true,
     inputKind: 'driving',
     intent: 'running',
-    deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+    deadline: attempt.end!,
+    attempt
   })
 }
 

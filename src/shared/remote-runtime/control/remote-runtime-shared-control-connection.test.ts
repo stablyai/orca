@@ -625,3 +625,25 @@ it('creates no connection or subscription for a pre-aborted setup', async () => 
     connection.close()
   }
 })
+
+// P20: a request retired by its own deadline before the socket is ready withdraws its readiness
+// wait at once, so nothing keeps its continuation or params; a sibling's wait is untouched.
+it('withdraws a timed-out request’s readiness wait, leaving a sibling’s', async () => {
+  const server = await createServer({ suppressReadyFrame: true })
+  const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private readiness state; a renamed field fails the test.
+  const unsafe = connection as unknown as { readyWaiters: unknown[] }
+  try {
+    const retired = connection.request('worktree.ps', { payload: 'retired' }, 200)
+    const sibling = connection.request('worktree.ps', { payload: 'sibling' }, 10_000)
+    const siblingClosed = expect(sibling).rejects.toThrow()
+    await vi.waitFor(() => expect(unsafe.readyWaiters).toHaveLength(2))
+    await expect(retired).rejects.toMatchObject({ code: 'runtime_timeout' })
+    expect(unsafe.readyWaiters).toHaveLength(1)
+    expect(connection.getDiagnostics()).toMatchObject({ pendingRequestCount: 1 })
+    connection.close()
+    await siblingClosed
+  } finally {
+    connection.close()
+  }
+})

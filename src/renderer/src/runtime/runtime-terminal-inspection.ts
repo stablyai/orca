@@ -59,14 +59,23 @@ function normalizeInspectionResult(
 
 export async function inspectRuntimeTerminalProcess(
   ptyId: string,
-  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
+  options?: {
+    expectedIncarnationId?: string
+    scanChildProcesses?: boolean
+    steadyState?: boolean
+    /** The pairing the caller's own request selected this host's status on: its status is not
+     *  read again, and the read is refused if that pairing was retired. */
+    selectedPairingRevision?: number | null
+  }
 ): Promise<RuntimeTerminalProcessInspection> {
+  const { selectedPairingRevision, ...local } = options ?? {}
+  const selected = selectedPairingRevision !== undefined
   const owner = getRemoteRuntimePtyOwner(ptyId)
   const remote = isRemoteInspectionPtyId(ptyId)
   if (!owner) {
     try {
       const result = await (options
-        ? window.api.pty.inspectProcess(ptyId, options)
+        ? window.api.pty.inspectProcess(ptyId, selected ? local : options)
         : window.api.pty.inspectProcess(ptyId))
       return normalizeInspectionResult(result, remote)
     } catch (error) {
@@ -90,7 +99,15 @@ export async function inspectRuntimeTerminalProcess(
         // Close guards request real process scans; dropping this causes unverifiable and confirmation on every idle remote Windows close.
         ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        ...(selected
+          ? {
+              skipCompatibilityCheck: true,
+              expectedEnvironmentPairingRevision: selectedPairingRevision
+            }
+          : {})
+      }
     )
     return normalizeInspectionResult(result.process, true)
   } catch (error) {

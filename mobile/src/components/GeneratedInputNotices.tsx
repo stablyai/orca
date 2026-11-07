@@ -20,6 +20,7 @@ import {
 import { useRelayHosts } from '../worktree/relay-hosts-feed'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import { useHostStatusGates } from '../transport/host-status-gates'
+import { GeneratedInputNoticeList } from './generated-input-notice-list'
 
 const dismissNotice = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -39,8 +40,6 @@ const readNoticePage = bindDeferredRpcOperation(
     read: rpcResultVariant('page', generatedInputNoticesPageSchema)
   })
 )
-
-type Shown = { key: string; notice: GeneratedAgentInputNotice }
 
 /** One notice's banner. Memoized on its notice record, which the indexed view keeps by identity,
  *  so a change to another notice never re-renders it. */
@@ -88,10 +87,9 @@ export function GeneratedInputNotices({
   client: RpcClient | null
   capabilities: readonly string[]
 }) {
-  // Indexed by id in add order: a live change touches only its own entry. The wrapper is new on
-  // each change so React re-renders; the map itself is not copied.
-  const [view, setView] = useState<{ notices: ReadonlyMap<string, Shown> }>(() => ({
-    notices: new Map()
+  const [view, setView] = useState(() => ({
+    notices: new GeneratedInputNoticeList(),
+    revision: 0
   }))
   const capable = capabilities.includes(GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY)
   useEffect(() => {
@@ -99,33 +97,21 @@ export function GeneratedInputNotices({
       return
     }
     // This subscription's view; each change hands React a new wrapper around it.
-    let notices = new Map<string, Shown>()
+    const notices = new GeneratedInputNoticeList()
     const feed = createGeneratedInputNoticeFeed({
       // A refused page throws; the feed then keeps what it has rather than deleting anything.
       readPage: async (from) =>
         readNoticePage.interpret(await readNoticePage.request(client, from ?? {})),
       onSnapshot: (snapshot, session) => {
-        const previous = notices
-        // Unchanged notices keep their record, so their banners do not re-render.
-        notices = new Map(
-          snapshot.map((notice) => {
-            const kept = previous.get(notice.id)
-            const key = `${session}:${notice.id}`
-            return [notice.id, kept?.key === key ? kept : { key, notice }]
-          })
-        )
-        setView({ notices })
+        notices.replace(snapshot, session)
+        setView({ notices, revision: notices.revision })
       },
       onDelta: (delta, session) => {
-        if (delta.kind === 'added') {
-          notices.set(delta.notice.id, {
-            key: `${session}:${delta.notice.id}`,
-            notice: delta.notice
-          })
-        } else {
-          notices.delete(delta.id)
+        const changed =
+          delta.kind === 'added' ? notices.add(delta.notice, session) : notices.dismiss(delta.id)
+        if (changed) {
+          setView({ notices, revision: notices.revision })
         }
-        setView({ notices })
       }
     })
     const unsubscribe = client.subscribe(
@@ -136,7 +122,7 @@ export function GeneratedInputNotices({
     return () => {
       feed.stop()
       unsubscribe()
-      setView({ notices: new Map() })
+      setView({ notices: new GeneratedInputNoticeList(), revision: 0 })
     }
   }, [client, capable])
   const [expanded, setExpanded] = useState(false)
@@ -145,14 +131,8 @@ export function GeneratedInputNotices({
     return null
   }
   // The newest notice shows as a banner; the rest wait behind one row, expanded on request.
-  let newest: Shown | undefined
-  let olderNotes = true
-  for (const shown of view.notices.values()) {
-    if (newest) {
-      olderNotes &&= newest.notice.submitted === false
-    }
-    newest = shown
-  }
+  const newest = view.notices.at(0)
+  const olderNotes = view.notices.promptCount - Number(newest?.notice.submitted !== false) === 0
   const olderCount = view.notices.size - 1
   if (!newest) {
     return null
@@ -169,19 +149,14 @@ export function GeneratedInputNotices({
       ) : null}
       {olderCount > 0 && expanded ? (
         <OlderGeneratedInputNotices
-          items={newestFirstOlder(view.notices, olderCount)}
+          items={view.notices}
+          revision={view.revision}
           keyOf={(shown) => shown.key}
           render={(shown) => <GeneratedInputNoticeBanner notice={shown.notice} client={client} />}
         />
       ) : null}
     </>
   )
-}
-
-/** Every notice but the newest, newest first (built by index: Hermes has no toReversed). */
-function newestFirstOlder(notices: ReadonlyMap<string, Shown>, count: number): Shown[] {
-  const inOrder = Array.from(notices.values())
-  return Array.from({ length: count }, (_, index) => inOrder[count - 1 - index])
 }
 
 /** The row's count: notes wording when every hidden notice is an unsubmitted draft. */

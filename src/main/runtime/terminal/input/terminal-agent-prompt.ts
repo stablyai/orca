@@ -57,6 +57,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       lifetime: attempt,
       observedReady: options.observedReady,
       requireConsumer: options.requireConsumer,
+      ...(options.onGeneratedFrame ? { onFrame: options.onGeneratedFrame } : {}),
       afterWrite: async () => {
         if (!submit) {
           return

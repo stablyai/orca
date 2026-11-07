@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
 import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
+import { acceptGeneratedInput } from '@/lib/generated-paste-notice'
 import { waitForPaneAgentToLookReady } from '@/lib/agent-draft-readiness'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
@@ -56,6 +57,12 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   let takeover: AbortController | null = null
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
+  let operationId: string | undefined
+
+  const acceptDraft = (draftAgent: TuiAgent, content: string): string => {
+    operationId ??= acceptGeneratedInput({ text: content, agent: draftAgent, submit: false })
+    return operationId
+  }
 
   const resolveAgent = (): TuiAgent | null => {
     if (agent === undefined) {
@@ -115,6 +122,9 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   /** Before handoff only: the pane still owns the exact keys and recovers them once. */
   const recoverDraft = (draftAgent: TuiAgent, certainty: 'not-sent' | 'unconfirmed'): void => {
     const content = draft
+    if (content !== '') {
+      acceptDraft(draftAgent, content)
+    }
     draft = ''
     phase = 'closed'
     if (content !== '') {
@@ -132,7 +142,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       tabId: session.deps.tabId,
       agent: draftAgent,
       submitted: false,
-      content
+      content,
+      operationId
     }).onTimeout(certainty, retained)
   }
 
@@ -140,6 +151,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
    *  whether they are recovered. Closing the pane no longer touches them. */
   const handOffDraft = (ptyId: string, draftAgent: TuiAgent, deadline: number): void => {
     const content = draft
+    const accepted = acceptDraft(draftAgent, content)
     draft = ''
     phase = 'closed'
     observation = null
@@ -155,6 +167,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       intent: 'startup',
       // The same deadline the pane's observation spent: no second, fresh budget.
       deadline,
+      operationId: accepted,
       signal: cancel.signal,
       onNoticeRetained: () => (retained = true)
     }).then((outcome) => {
@@ -203,6 +216,11 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     phase = 'delivering'
     if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
       session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, draft)
+      session.startupDraftOperationId = acceptGeneratedInput({
+        text: session.startupDraftPrompt,
+        agent: draftAgent,
+        submit: false
+      })
       draft = ''
       phase = 'closed'
       return
@@ -213,6 +231,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return
     }
     liveInputSinceBind = false
+    acceptDraft(draftAgent, draft)
     const deadline = Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
     // Before handoff, disposal ends this observation and the pane recovers the keys.
     const pending = new AbortController()

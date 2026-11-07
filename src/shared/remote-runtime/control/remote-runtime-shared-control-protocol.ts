@@ -144,6 +144,12 @@ export function sendSharedControlEncryptedSerialized(args: {
   ws: WebSocket | null
   handshake: PairedE2EEClientHandshake | null
   serialized: string
+  /** Runs after sealing, before the handoff; a throw propagates and nothing is sent. Dropping the
+   *  sealed frame is safe: each legacy frame carries a fresh random nonce, spending no sequence. */
+  beforeSend?: () => void
+  /** Told just before the frame is handed to the socket: from here it may have been sent, even
+   *  if the send then throws. Notification only; it never gates the send. */
+  onSendAttempt?: () => void
 }): boolean {
   if (
     (args.state !== 'ready' && args.state !== 'awaiting_authenticated') ||
@@ -153,8 +159,16 @@ export function sendSharedControlEncryptedSerialized(args: {
   ) {
     return false
   }
+  let frame: string
   try {
-    args.ws.send(args.handshake.channel.sealText(args.serialized))
+    frame = args.handshake.channel.sealText(args.serialized)
+  } catch {
+    return false
+  }
+  args.beforeSend?.()
+  args.onSendAttempt?.()
+  try {
+    args.ws.send(frame)
     return true
   } catch {
     return false

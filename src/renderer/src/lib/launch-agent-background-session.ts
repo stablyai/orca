@@ -287,7 +287,7 @@ export async function launchAgentBackgroundSession(
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
     if (pasteDraftAfterLaunch !== null) {
-      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
+      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent, args.promptOperationId)
     }
 
     return {

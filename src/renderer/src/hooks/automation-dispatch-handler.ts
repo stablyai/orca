@@ -1,6 +1,7 @@
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { reusedAutomationPromptRefusal } from '../../../shared/generated-agent-input-notice'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
@@ -95,6 +96,7 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
+    let promptOperationId: string | undefined
     if (automation.reuseSession) {
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
@@ -116,11 +118,14 @@ export async function handleAutomationDispatchRequest({
         state: useAppStore.getState()
       })
       if (reusableSession) {
+        // One id for this run's prompt, carried into the fresh-session fallback below.
+        promptOperationId = createBrowserUuid()
         const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
           try {
             const outcome = await submitPromptToAgentPty({
+              operationId: promptOperationId,
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
               content: automation.prompt,
@@ -197,6 +202,7 @@ export async function handleAutomationDispatchRequest({
       worktreeId: worktree.id,
       resolvedTarget: { worktree, repo: resolved.repo },
       prompt: automation.prompt,
+      ...(promptOperationId ? { promptOperationId } : {}),
       ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,

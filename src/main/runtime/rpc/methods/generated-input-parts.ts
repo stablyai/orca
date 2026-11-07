@@ -49,6 +49,19 @@ export class GeneratedInputParts {
       this.drop(key)
       throw new InvalidArgumentError('Generated input part out of order')
     }
+    // The first part's end bounds the upload; a later part may only bring it closer. Its end is
+    // checked here, whether or not its timer has fired yet.
+    const now = Date.now()
+    if (params.timeoutMs !== undefined && now + budget < entry.deadline) {
+      entry.deadline = now + budget
+      clearTimeout(entry.timer)
+      entry.timer = setTimeout(() => this.staged.delete(key), Math.max(0, budget))
+      entry.timer.unref?.()
+    }
+    if (now >= entry.deadline) {
+      this.drop(key)
+      throw new InvalidArgumentError('Generated input upload expired')
+    }
     entry.text += params.text
     entry.next += 1
     if (entry.text.length > TERMINAL_INPUT_MAX_BYTES) {

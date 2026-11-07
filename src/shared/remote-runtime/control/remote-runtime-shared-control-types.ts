@@ -21,6 +21,10 @@ export type SharedControlPendingRequest<TResult> = {
   preparedRequest?: RemoteRuntimePreparedRequest | null
   // Only opted-in long-polls refresh on unrelated keepalives; short RPCs time out independently of socket liveness.
   refreshTimeoutOnKeepalive: boolean
+  /** Local only: told when this request's own frame is handed to the socket. */
+  onFrameSent?: () => void
+  /** Throws when the request's end passed after its frame was sealed: it is not sent. */
+  assertInTime?: () => void
 }
 
 export type SharedControlSubscriptionCallbacks<TResult> = {

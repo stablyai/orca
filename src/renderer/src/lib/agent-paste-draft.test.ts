@@ -67,8 +67,16 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
-    testState.sendRuntimePtyInputVerified(ptyId, data)
+  // Like the real writer: told of its handoff synchronously, just before the bytes go.
+  sendRuntimePtyInputVerified: (
+    ptyId: string,
+    data: string,
+    _kind: string,
+    options?: { beforeSend?: () => void }
+  ) => {
+    options?.beforeSend?.()
+    return testState.sendRuntimePtyInputVerified(ptyId, data)
+  }
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({

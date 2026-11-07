@@ -322,7 +322,9 @@ vi.mock('../rate-limits', () => ({
 }))
 
 vi.mock('../runtime', () => ({
-  registerRuntimeHandlers: registerRuntimeHandlersMock
+  registerRuntimeHandlers: registerRuntimeHandlersMock,
+  // Forwarding notices to paired hosts is not registration; it has its own tests.
+  forwardGeneratedInputNoticesToHosts: vi.fn()
 }))
 
 vi.mock('../runtime-environments/runtime-environments', () => ({

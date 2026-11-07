@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
@@ -16,6 +16,35 @@ import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { publishMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import {
+  followLegacyGeneratedInputWrite,
+  GeneratedInputIngress,
+  type GeneratedInputReplyObserver
+} from '../runtime/generated-agent-input-notices-ingress'
+import { observeRemoteRuntimeRequestDispatch } from '../../shared/remote-runtime/requests/remote-runtime-request-dispatch-observation'
+import type { GeneratedInputNoticeOwner } from '../runtime/generated-agent-input-notices'
+import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import { generatedInputNoticeOwnerOf } from './runtime-environments/runtime-environment-generated-input-notice-hosts'
+export { forwardGeneratedInputNoticesToHosts } from './runtime-environments/runtime-environment-generated-input-notice-hosts'
+
+/** A window's call for its accepted generated request, on its way to a paired host: the request
+ *  itself, held as that window's pending record (with the host it runs on) before the request is
+ *  prepared, one frame of an older host's write of it, or the ordinary status call choosing its
+ *  route. The observer is told when the request's own frame actually leaves; `pairingRevision` is
+ *  the pairing the request was first resolved to here, which every call of it is held to. */
+export type RemoteGeneratedInputIngress = (
+  event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
+  environment: KnownRuntimeEnvironment,
+  call: {
+    method: string
+    params?: unknown
+    generatedInputOperationId?: string
+    expectedEnvironmentPairingRevision?: number
+  }
+) => { observer: GeneratedInputReplyObserver | null; pairingRevision?: number } | null
+
+// The logical desktop window, stable across its renderer's reloads.
+const noticeOriginOf = (sender: WebContents): string => `desktop-window:${sender.id}`
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -26,9 +55,24 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
-export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGeneratedInputIngress {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
+  const generatedInput = new GeneratedInputIngress(runtime.generatedInputNotices)
+  const acceptGeneratedInput = (
+    sender: WebContents,
+    method: string,
+    params: unknown,
+    owner?: GeneratedInputNoticeOwner,
+    operationId?: string
+  ): GeneratedInputReplyObserver | null =>
+    generatedInput.accept(
+      method,
+      params,
+      { origin: noticeOriginOf(sender), connection: desktopSenders.connectionIdFor(sender) },
+      owner,
+      operationId
+    )
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
   ipcMain.removeHandler('runtime:call')
@@ -73,6 +117,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
+      acceptGeneratedInput(event.sender, args.method, args.params)
       return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
@@ -82,7 +127,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           clientId: 'desktop-renderer',
-          noticeOrigin: `desktop-window:${event.sender.id}`,
+          noticeOrigin: noticeOriginOf(event.sender),
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
@@ -108,6 +153,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
+      acceptGeneratedInput(event.sender, args.method, args.params)
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
         {
@@ -124,7 +170,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           signal: controller.signal,
           clientId: 'desktop-renderer',
-          noticeOrigin: `desktop-window:${event.sender.id}`,
+          noticeOrigin: noticeOriginOf(event.sender),
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId,
@@ -234,4 +280,48 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       }
     }
   )
+  // A private copy is kept only for the window's current document, as local calls require.
+  return (event, environment, call) => {
+    if (event.senderFrame !== event.sender.mainFrame) {
+      return null
+    }
+    const origin = noticeOriginOf(event.sender)
+    const current = generatedInputNoticeOwnerOf(environment)
+    const id = call.generatedInputOperationId ?? retainedOperationIdOf(call.params)
+    // The renderer's own capture when it had one, else this first resolution; never a later one.
+    const pairingRevision = id
+      ? runtime.generatedInputNotices.pinRoute(id, origin, {
+          environmentId: environment.id,
+          pairingRevision: call.expectedEnvironmentPairingRevision ?? current.pairingRevision!
+        })
+      : undefined
+    const observer =
+      call.method === 'terminal.send' && call.generatedInputOperationId
+        ? followLegacyGeneratedInputWrite(
+            runtime.generatedInputNotices,
+            call.generatedInputOperationId,
+            origin
+          )
+        : acceptGeneratedInput(
+            event.sender,
+            call.method,
+            call.params,
+            pairingRevision === undefined ? current : { ...current, pairingRevision },
+            call.generatedInputOperationId
+          )
+    if (observer) {
+      observeRemoteRuntimeRequestDispatch(call.params, observer.dispatched)
+    }
+    return { observer, ...(pairingRevision === undefined ? {} : { pairingRevision }) }
+  }
+}
+
+function retainedOperationIdOf(params: unknown): string | undefined {
+  if (typeof params !== 'object' || params === null) {
+    return undefined
+  }
+  const operationId: unknown = Reflect.get(params, 'operationId')
+  return Reflect.get(params, 'retainNotice') === true && typeof operationId === 'string'
+    ? operationId
+    : undefined
 }

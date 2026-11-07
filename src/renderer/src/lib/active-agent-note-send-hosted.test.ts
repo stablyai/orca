@@ -98,7 +98,12 @@ describe('notes sent through a capable host', () => {
     expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
       { kind: 'local' },
       'term-2',
-      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' })
+      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' }),
+      undefined,
+      undefined,
+      undefined,
+      // One accepted request's end, carried into any older-host fallback.
+      { end: expect.any(Number) }
     )
     expect(methods).not.toContain('terminal.send')
   })

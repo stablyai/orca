@@ -4,13 +4,20 @@ import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-hands
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
+import { remoteRuntimeRequestDispatchExpiredError } from './remote-runtime-request-dispatch-observation'
 
 type SubscriptionFrameRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
   sealAuth: () => Promise<string>
   isSettled: () => boolean
-  serializedRequest: string
+  /** The request's bytes as chosen at its handoff after authentication; null when its end passed
+   *  and nothing of it may be sent. */
+  requestAtHandoff: () => string | null
   requestId: string
+  /** Local only: told when the request's own frame is handed to the socket. */
+  onRequestSent?: () => void
+  /** Throws when the request's end passed after its frame was sealed: it is not sent. */
+  assertInTime?: () => void
   send: (frame: string) => void
   fail: (error: RemoteRuntimeClientError) => void
   onAuthenticated: () => void
@@ -108,7 +115,20 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       return
     }
     this.state = 'ready'
-    this.options.send(this.options.handshake.channel.sealText(this.options.serializedRequest))
+    const request = this.options.requestAtHandoff()
+    if (request === null) {
+      this.options.fail(remoteRuntimeRequestDispatchExpiredError())
+      return
+    }
+    const frame = this.options.handshake.channel.sealText(request)
+    try {
+      this.options.assertInTime?.()
+    } catch {
+      this.options.fail(remoteRuntimeRequestDispatchExpiredError())
+      return
+    }
+    this.options.onRequestSent?.()
+    this.options.send(frame)
     this.options.onAuthenticated()
   }
 

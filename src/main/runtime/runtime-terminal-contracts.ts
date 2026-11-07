@@ -21,6 +21,7 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
 import type { GeneratedInputLifetime } from '../../shared/generated-input-lifetime'
+import type { GeneratedInputFrameObserver } from '../../shared/generated-input-operation'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
@@ -308,6 +309,8 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   onGeneratedOutcome?: (outcome: 'delivered' | 'staged' | 'unconfirmed') => void
   /** Every frame needs the expected consumer (or a wrapper with a child) in front. */
   requireConsumer?: boolean
+  /** Each generated frame's actual handoff to the terminal and how it ended (observation only). */
+  onGeneratedFrame?: GeneratedInputFrameObserver
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

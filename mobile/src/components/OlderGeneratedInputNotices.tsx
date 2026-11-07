@@ -1,5 +1,9 @@
 import type { ReactElement } from 'react'
-import { FlatList, Pressable, Text } from 'react-native'
+import type {
+  GeneratedInputNoticeList,
+  ShownGeneratedInputNotice
+} from './generated-input-notice-list'
+import { VirtualizedList, Pressable, Text } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -34,18 +38,23 @@ export function MoreGeneratedInputNoticesRow({
 }
 
 /** The older notices, newest first, in a bounded scrolling area that mounts only a window of them. */
-export function OlderGeneratedInputNotices<T>({
+export function OlderGeneratedInputNotices({
   items,
+  revision,
   keyOf,
   render
 }: {
-  items: readonly T[]
-  keyOf: (item: T) => string
-  render: (item: T) => ReactElement
+  items: GeneratedInputNoticeList
+  revision: number
+  keyOf: (item: ShownGeneratedInputNotice) => string
+  render: (item: ShownGeneratedInputNotice) => ReactElement
 }) {
   return (
-    <FlatList
+    <VirtualizedList<ShownGeneratedInputNotice>
       data={items}
+      extraData={revision}
+      getItemCount={(data: GeneratedInputNoticeList) => Math.max(0, data.size - 1)}
+      getItem={(data: GeneratedInputNoticeList, index) => data.at(index + 1)!}
       keyExtractor={keyOf}
       renderItem={({ item }) => render(item)}
       style={styles.list}

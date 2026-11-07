@@ -116,6 +116,7 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
+  sonner@2.0.7: config/patches/sonner@2.0.7.patch
   '@xterm/addon-image@0.10.0-beta.331': config/patches/@xterm__addon-image@0.10.0-beta.331.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.330': config/patches/@xterm__addon-ligatures@0.11.0-beta.330.patch

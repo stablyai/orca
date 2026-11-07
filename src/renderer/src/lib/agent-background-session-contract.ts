@@ -13,6 +13,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   worktreeId: string
   resolvedTarget?: ResolvedAgentBackgroundTarget
   prompt?: string
+  /** The automation request's one id when a reused session's attempt already carried it. */
+  promptOperationId?: string
   /** An automation's saved extras, merged over this host's default Arguments. */
   extraAgentArgs?: string
   launchSource?: LaunchSource

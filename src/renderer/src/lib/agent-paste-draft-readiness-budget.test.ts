@@ -53,7 +53,11 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   })
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: testState.sendInput
+  // Like the real writer: told of its handoff synchronously, just before the bytes go.
+  sendRuntimePtyInputVerified: (...args: unknown[]) => {
+    ;(args[3] as { beforeSend?: () => void } | undefined)?.beforeSend?.()
+    return testState.sendInput(...args)
+  }
 }))
 // The notice a producer reports; this window's runtime is absent here, so it shows directly.
 vi.mock('./launch-agent-paste-timeout-notice', () => {
@@ -107,10 +111,12 @@ describe('agent draft readiness budget through the generated-input operation', (
     emit(`${PASTE_MODE}${CODEX_PROMPT}`)
     await vi.advanceTimersByTimeAsync(200)
     await expect(promise).resolves.toBe(true)
+    // The write names the accepted request it carries, so its runtime settles that request.
     expect(testState.sendInput).toHaveBeenCalledExactlyOnceWith(
       'pty-1',
       '\x1b[200~draft\x1b[201~',
-      'launch'
+      'launch',
+      expect.objectContaining({ generatedInputOperationId: expect.any(String) })
     )
   })
 

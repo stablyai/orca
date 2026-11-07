@@ -14,7 +14,11 @@ export async function callAbortableRuntimeEnvironment(
   timeoutMs: number | undefined,
   signal: AbortSignal,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  /** Local only, never sent: the window's accepted generated request this call carries. */
+  generatedInputOperationId?: string,
+  /** Local only, never sent: that request's own end on this machine. */
+  generatedInputEnd?: number
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -59,7 +63,9 @@ export async function callAbortableRuntimeEnvironment(
           params,
           timeoutMs,
           expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId
+          expectedEnvironmentRuntimeId,
+          ...(generatedInputOperationId ? { generatedInputOperationId } : {}),
+          ...(generatedInputEnd === undefined ? {} : { generatedInputEnd })
         },
         {
           onResponse: (response) => finish(() => resolve(response)),

@@ -1,5 +1,8 @@
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
-import { takeRemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
+import {
+  takeRemoteRuntimePreparedRequest,
+  toRemoteRuntimeRequestError
+} from '../requests/remote-runtime-prepared-request-admission'
 import { finishSharedControlSubscription } from './remote-runtime-shared-control-state'
 import type {
   SharedControlLogicalSubscription,
@@ -9,7 +12,7 @@ import type {
 export function sendSharedControlRequest(args: {
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   requestId: string
-  send: (serializedRequest: string) => boolean
+  send: (serializedRequest: string, beforeSend?: () => void, onSendAttempt?: () => void) => boolean
   reject: (requestId: string, error: Error) => void
 }): void {
   const pending = args.pendingRequests.get(args.requestId)
@@ -17,7 +20,17 @@ export function sendSharedControlRequest(args: {
     return
   }
   const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
-  if (serializedRequest === null || !args.send(serializedRequest)) {
+  let sent: boolean
+  try {
+    sent =
+      serializedRequest !== null &&
+      args.send(serializedRequest, pending.assertInTime, pending.onFrameSent)
+  } catch (error) {
+    // Its end passed once sealed: refused unsent, this request only.
+    args.reject(args.requestId, toRemoteRuntimeRequestError(error))
+    return
+  }
+  if (!sent) {
     args.reject(args.requestId, remoteRuntimeUnavailableError())
   }
 }

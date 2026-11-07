@@ -2,6 +2,7 @@ import { createElement, Fragment, type ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { GeneratedInputNotices } from './GeneratedInputNotices'
+import { GeneratedInputNoticeList } from './generated-input-notice-list'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
 
@@ -19,20 +20,20 @@ vi.mock('../transport/host-status-gates', () => ({
   useHostStatusGates: () => ({ hostCapabilities: [] })
 }))
 type RowProps = { label: string; expanded: boolean; onToggle: () => void }
-// The older list's windowing is the platform list's; this stand-in renders every item it is given.
+// Drive the production parent's indexed access for one requested window; device QA covers layout.
 vi.mock('./OlderGeneratedInputNotices', () => ({
   MoreGeneratedInputNoticesRow: (props: RowProps) => createElement('more-row', props),
   OlderGeneratedInputNotices: <T,>(props: {
-    items: readonly T[]
+    items: { size: number; at: (index: number) => T }
     keyOf: (item: T) => string
     render: (item: T) => ReactElement
   }) =>
     createElement(
       'older-list',
-      null,
-      props.items.map((item) =>
-        createElement(Fragment, { key: props.keyOf(item) }, props.render(item))
-      )
+      { items: props.items },
+      Array.from({ length: Math.min(4, Math.max(0, props.items.size - 1)) }, (_, index) =>
+        props.items.at(index + 1)
+      ).map((item) => createElement(Fragment, { key: props.keyOf(item) }, props.render(item)))
     )
 }))
 vi.mock('./HostRouteNoticeBanner', () => ({
@@ -164,7 +165,7 @@ async function mountNotices(n: number, submitted?: false) {
 // The approved phone presentation: the newest notice as a banner plus one "<N> more" row; the
 // older ones open in place in a bounded list and close again. Nothing is discarded.
 it.each([1, 5, 100])(
-  'mounts one banner for %i notices collapsed, and every older one when expanded',
+  'mounts one banner for %i notices collapsed, and accesses only the expanded window',
   async (n) => {
     const view = await mountNotices(n)
     // Collapsed: the newest notice and, when there are older ones, one row.
@@ -180,9 +181,7 @@ it.each([1, 5, 100])(
     )
     await act(async () => view.rows()[0].props.onToggle())
     expect(view.rows()[0].props.expanded).toBe(true)
-    // Expanded under this stand-in every older notice renders; on a device the bounded list
-    // mounts only its window of them.
-    expect(view.banners()).toHaveLength(n)
+    expect(view.banners()).toHaveLength(Math.min(n, 5))
     // An older notice keeps Copy and Dismiss.
     writeText.mockClear()
     await act(async () => view.banners()[1].props.action.onPress())
@@ -193,7 +192,7 @@ it.each([1, 5, 100])(
       { id: `n${n - 2}` }
     ])
     await view.emit({ type: 'dismissed', session: 's', revision: n + 1, id: `n${n - 2}` })
-    expect(view.banners()).toHaveLength(n - 1)
+    expect(view.banners()).toHaveLength(Math.min(n - 1, 5))
     await act(async () => view.rows()[0]?.props.onToggle())
     expect(view.banners()).toHaveLength(1)
     act(() => view.mounted.unmount())
@@ -214,5 +213,67 @@ it('renders only the new newest banner for a live notice, and says notes while e
   expect(bannerRenders.count).toBe(1)
   // The new prompt is the newest; every hidden notice is still a draft.
   expect(view.rows()[0].props.label).toBe('100 more notes not sent')
+  act(() => view.mounted.unmount())
+})
+
+// The production subscription and indexed view do work only for the requested visible rows.
+// This stand-in requests four older rows; native list windowing is checked on the phone.
+it.each([100, 1_000])('isolates visible rows and host subscriptions at %i notices', async (n) => {
+  const view = await mountNotices(n)
+  const otherHost = await mountNotices(n)
+  await act(async () => view.rows()[0].props.onToggle())
+  const select = vi.spyOn(GeneratedInputNoticeList.prototype, 'at')
+  let revision = n
+  const update = async (index: number) => {
+    await view.emit({
+      type: 'notice',
+      session: 's',
+      revision: ++revision,
+      frame: {
+        ...frame(`text ${index}`, 0, `text ${index}`.length),
+        id: `n${index}`,
+        certainty: 'not-sent'
+      }
+    })
+  }
+  try {
+    bannerRenders.count = 0
+    await update(0)
+    // A hidden row's metadata changes neither the five mounted banners nor the other host.
+    expect(bannerRenders.count).toBe(0)
+    expect(select.mock.calls.length).toBeLessThanOrEqual(5)
+    select.mockClear()
+    await update(n - 2)
+    expect(bannerRenders.count).toBe(1)
+    expect(view.banners()[1].props.message).toContain("wasn't sent")
+    expect(otherHost.banners()[0].props.message).toContain('may have received part')
+    expect(select.mock.calls.length).toBeLessThanOrEqual(5)
+    select.mockClear()
+    bannerRenders.count = 0
+    await view.emit({ type: 'dismissed', session: 's', revision: ++revision, id: 'n1' })
+    expect(bannerRenders.count).toBe(0)
+    expect(select.mock.calls.length).toBeLessThanOrEqual(5)
+    expect(view.rows()[0].props.label).toBe(`${n - 2} more prompts not sent`)
+  } finally {
+    select.mockRestore()
+    act(() => {
+      view.mounted.unmount()
+      otherHost.mounted.unmount()
+    })
+  }
+})
+
+it('keeps old list props on the live count and item source after a remote dismissal', async () => {
+  const view = await mountNotices(6)
+  await act(async () => view.rows()[0].props.onToggle())
+  const previous = view.mounted.root.findByType('older-list' as never).props
+    .items as GeneratedInputNoticeList
+  expect(previous.size).toBe(6)
+  await view.emit({ type: 'dismissed', session: 's', revision: 7, id: 'n0' })
+  // A list-only scroll render can run with these earlier props before its parent commits.
+  expect(previous.size).toBe(5)
+  for (let index = 0; index < previous.size - 1; index += 1) {
+    expect(previous.at(index + 1)?.key).toBeDefined()
+  }
   act(() => view.mounted.unmount())
 })

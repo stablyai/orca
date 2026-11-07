@@ -42,10 +42,17 @@ export const GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY =
 export const GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY =
   'terminal.generated-input-notices.register.v1' as const
 
+/** This host refuses a generated send whose qualified terminal names another runtime, before
+ *  staging, resolving or writing anything. Only it makes a retained send's recovery receipt the
+ *  runtime that actually runs it. */
+export const GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY =
+  'terminal.generated-input.fenced-send.v1' as const
+
 export const TERMINAL_RUNTIME_CAPABILITIES = [
   GENERATED_INPUT_RUNTIME_CAPABILITY,
   GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   TERMINAL_ORDERED_INPUT_CAPABILITY,
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',

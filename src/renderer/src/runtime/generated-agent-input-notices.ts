@@ -1,87 +1,47 @@
-import { toast } from 'sonner'
-import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-input-notice'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
+import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
 import {
-  createGeneratedInputNoticeFeed,
-  type GeneratedInputNoticeDelta
-} from '../../../shared/generated-input-notice-feed'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+  callRuntimeRpc,
+  ensureRuntimeEnvironmentCompatible,
+  runtimeEnvironmentSupportsCapability
+} from './runtime-rpc-client'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { showGeneratedInputNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import {
+  generatedInputNoticeWindow,
+  noticeAudience,
+  type GeneratedInputNoticeHost
+} from './generated-input-notice-registration'
+
+import {
+  projectGeneratedInputNotices,
+  localGeneratedInputNoticeSnapshot,
+  resolveLocalGeneratedInputNoticeSnapshot
+} from './generated-input-notice-toast-projection'
 
 const SUBSCRIBE = 'terminal.generatedInputNotices.subscribe'
 
-// Shown toasts belong to the runtime environment, not to one subscription: a replaced or replayed
-// subscription reconciles the same toasts once its snapshot is complete instead of stranding them.
-const shownByEnvironment = new Map<string, Map<string, string>>()
-
-/** Project one runtime's notices as persistent toasts; that runtime owns them and their dismissal. */
-function projectNotices(target: RuntimeClientTarget) {
-  const environment = target.kind === 'local' ? 'local' : target.environmentId
-  const shown = shownByEnvironment.get(environment) ?? new Map<string, string>()
-  shownByEnvironment.set(environment, shown)
-  const show = (notice: GeneratedAgentInputNotice, toastId: string): void => {
-    showGeneratedInputNotice({
-      ...notice,
-      id: toastId,
-      onDismiss: () => {
-        if (!shown.has(notice.id)) {
-          return
-        }
-        void callRuntimeRpc(target, 'terminal.dismissGeneratedInputNotice', {
-          id: notice.id
-        }).catch(() => {
-          // Failed dismissal is not permission to discard the canonical notice.
-          if (shown.has(notice.id)) {
-            show(notice, toastId)
-          }
-        })
-      }
-    })
-  }
-  const add = (notice: GeneratedAgentInputNotice, session: string): void => {
-    if (!shown.has(notice.id)) {
-      const toastId = `generated-input:${environment}:${session}:${notice.id}`
-      shown.set(notice.id, toastId)
-      show(notice, toastId)
-    }
-  }
-  const remove = (id: string): void => {
-    const toastId = shown.get(id)
-    if (toastId !== undefined) {
-      shown.delete(id)
-      toast.dismiss(toastId)
-    }
-  }
-  return {
-    // A (re)subscription's complete view: one pass over what is shown and what is wanted.
-    onSnapshot: (notices: GeneratedAgentInputNotice[], session: string): void => {
-      const wanted = new Map(notices.map((notice) => [notice.id, notice]))
-      for (const [id, toastId] of shown) {
-        if (!wanted.has(id) || !toastId.endsWith(`:${session}:${id}`)) {
-          remove(id)
-        }
-      }
-      for (const notice of notices) {
-        add(notice, session)
-      }
-    },
-    // A live change touches only its own toast.
-    onDelta: (delta: GeneratedInputNoticeDelta, session: string): void =>
-      delta.kind === 'added' ? add(delta.notice, session) : remove(delta.id)
-  }
-}
-
-function feedFor(target: RuntimeClientTarget) {
+function feedFor(target: RuntimeClientTarget, owner?: GeneratedInputNoticeHost) {
   return createGeneratedInputNoticeFeed({
     readPage: (from) =>
-      callRuntimeRpc(target, 'terminal.generatedInputNotices.page', from ?? {}, {
-        timeoutMs: 15_000
-      }),
-    ...projectNotices(target)
+      callRuntimeRpc(
+        target,
+        'terminal.generatedInputNotices.page',
+        { ...from, ...noticeAudience(target) },
+        {
+          timeoutMs: 15_000,
+          ...(owner
+            ? {
+                expectedEnvironmentRuntimeId: owner.runtimeId,
+                expectedEnvironmentPairingRevision: owner.pairingRevision
+              }
+            : {})
+        }
+      ),
+    ...projectGeneratedInputNotices(target, owner)
   })
 }
 
@@ -91,55 +51,144 @@ function receive(feed: ReturnType<typeof feedFor>, response: RuntimeRpcResponse<
   }
 }
 
+const localRecoveries = new Set<() => void>()
+
+/** Existing online, resume and host-ready events wake only failed local work. */
+export function retryLocalGeneratedInputNoticeRecovery(): void {
+  for (const retry of localRecoveries) {
+    retry()
+  }
+}
+
 /** The local runtime is this renderer's own version, so it always speaks the notice protocol. */
 export function subscribeLocalGeneratedInputNotices(): () => void {
-  const feed = feedFor({ kind: 'local' })
+  let feed: ReturnType<typeof feedFor> | undefined
   let stopped = false
+  let generation = 0
+  let subscribing = false
+  let failed = true
+  let wake = false
   let unsubscribe: (() => void) | undefined
-  // A preload without runtime subscriptions has no local notices to show.
   if (typeof window.api?.runtime?.subscribe !== 'function') {
+    resolveLocalGeneratedInputNoticeSnapshot()
     return () => {}
   }
-  void Promise.resolve(
-    window.api.runtime.subscribe({ method: SUBSCRIBE }, (response) => receive(feed, response))
-  )
-    .then((subscription) => {
-      if (stopped) {
-        subscription?.unsubscribe()
-      } else {
-        unsubscribe = subscription?.unsubscribe
-      }
-    })
-    .catch(console.warn)
+  const connect = (): void => {
+    if (stopped || subscribing) {
+      return
+    }
+    const current = ++generation
+    unsubscribe?.()
+    unsubscribe = undefined
+    feed?.stop()
+    const activeFeed = feedFor({ kind: 'local' })
+    feed = activeFeed
+    subscribing = true
+    failed = false
+    wake = false
+    void Promise.resolve()
+      .then(() =>
+        window.api.runtime.subscribe({ method: SUBSCRIBE }, (response) => {
+          if (!stopped && current === generation) {
+            if (!response.ok) {
+              failed = true
+            } else {
+              receive(activeFeed, response)
+            }
+          }
+        })
+      )
+      .then((subscription) => {
+        if (stopped || current !== generation) {
+          subscription?.unsubscribe()
+        } else {
+          unsubscribe = subscription?.unsubscribe
+        }
+      })
+      .catch(() => {
+        if (current === generation) {
+          failed = true
+        }
+      })
+      .finally(() => {
+        if (current !== generation) {
+          return
+        }
+        subscribing = false
+        if (!stopped && wake) {
+          if (failed) {
+            connect()
+          } else {
+            activeFeed.retry()
+          }
+        }
+      })
+  }
+  const retry = (): void => {
+    if (subscribing) {
+      wake = true
+    } else if (failed) {
+      connect()
+    } else {
+      feed?.retry()
+    }
+  }
+  localRecoveries.add(retry)
+  connect()
   return () => {
     stopped = true
-    feed.stop()
+    generation += 1
+    localRecoveries.delete(retry)
+    feed?.stop()
     unsubscribe?.()
   }
 }
 
 /** A paired runtime's notices, only when it advertises the bounded protocol. */
 export function subscribeEnvironmentGeneratedInputNotices(environmentId: string): () => void {
-  const feed = feedFor({ kind: 'environment', environmentId })
+  let feed: ReturnType<typeof feedFor> | undefined
   let stopped = false
   let unsubscribe: (() => void) | undefined
   void runtimeEnvironmentSupportsCapability(
     environmentId,
     GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY
   )
-    .then((capable) =>
-      capable && !stopped
-        ? subscribeRuntimeEnvironment(
-            {
-              selector: environmentId,
-              method: SUBSCRIBE,
-              timeoutMs: 15_000,
-              expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
-            },
-            { onResponse: (response) => receive(feed, response), onError: console.warn }
-          )
-        : null
-    )
+    .then(async (capable) => {
+      if (!capable || stopped) {
+        return null
+      }
+      // The capability probe already established this status. Its runtime, rather than the
+      // feed's session id or an environment guess, fences every page and mutation receipt.
+      const pairingRevision = getRuntimeEnvironmentRevision(environmentId)
+      const status = await ensureRuntimeEnvironmentCompatible(environmentId, {
+        expectedEnvironmentPairingRevision: pairingRevision
+      })
+      if (!isWebClientLocation()) {
+        await localGeneratedInputNoticeSnapshot
+      }
+      if (!status || stopped) {
+        return null
+      }
+      const owner = {
+        environmentId,
+        window: generatedInputNoticeWindow(),
+        runtimeId: status.runtimeId,
+        pairingRevision
+      }
+      const activeFeed = feedFor({ kind: 'environment', environmentId }, owner)
+      feed = activeFeed
+      return subscribeRuntimeEnvironment(
+        {
+          selector: environmentId,
+          method: SUBSCRIBE,
+          params: noticeAudience({ kind: 'environment', environmentId }),
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision: pairingRevision,
+          expectedEnvironmentRuntimeId: status.runtimeId
+        },
+        { onResponse: (response) => receive(activeFeed, response), onError: console.warn }
+      )
+    })
     .then((subscription) => {
       if (stopped) {
         subscription?.unsubscribe()
@@ -150,7 +199,7 @@ export function subscribeEnvironmentGeneratedInputNotices(environmentId: string)
     .catch(console.warn)
   return () => {
     stopped = true
-    feed.stop()
+    feed?.stop()
     unsubscribe?.()
   }
 }

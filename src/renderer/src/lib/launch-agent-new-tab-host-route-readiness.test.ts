@@ -125,7 +125,9 @@ describe('an AI button whose agent is ready before the host answers', () => {
       // No takeover cancellation: a launch prompt is not held keys. The host keeps a failure notice.
       undefined,
       expect.any(Function),
-      expect.any(Function)
+      expect.any(Function),
+      // The accepted request's own end, from the producer's call.
+      { end: expect.any(Number) }
     )
     await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })
     expect(testState.appState.seedNativeChatLaunchPrompt).toHaveBeenCalledOnce()

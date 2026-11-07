@@ -4,6 +4,7 @@ import { hasPtySerializer } from '../pty-buffer-serializer'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
 import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
+import { acceptGeneratedInput } from '@/lib/generated-paste-notice'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -67,6 +68,13 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     settled = true
     session.startupDraftPasteAttempted = true
     const content = session.startupDraftPrompt
+    if (content && session.startupDraftAgent) {
+      session.startupDraftOperationId ??= acceptGeneratedInput({
+        text: content,
+        agent: session.startupDraftAgent,
+        submit: false
+      })
+    }
     session.startupDraftPrompt = null
     if (content && session.startupDraftAgent) {
       createPasteReadinessTimeoutNotice({
@@ -74,7 +82,8 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
         tabId: session.deps.tabId,
         agent: session.startupDraftAgent,
         submitted: false,
-        content
+        content,
+        operationId: session.startupDraftOperationId
       }).onTimeout(certainty, retained)
     }
   }
@@ -97,12 +106,19 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     if (!armed || handedOff || settled || !ptyId) {
       return
     }
+    // Seal held keys with the startup draft even if output races the bind callback.
+    session.onAgentPreReadyDraftPtyBound?.(ptyId, session.spawnedFreshPtyId === ptyId)
     handedOff = true
     const content = session.startupDraftPrompt
     if (!content) {
       settled = true
       return
     }
+    session.startupDraftOperationId ??= acceptGeneratedInput({
+      text: content,
+      agent: session.startupDraftAgent,
+      submit: false
+    })
     session.startupDraftPasteAttempted = true
     let retained = false
     void deliverGeneratedPaste({
@@ -113,6 +129,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       inputKind: 'launch',
       intent: 'startup',
       deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS,
+      operationId: session.startupDraftOperationId,
       onNoticeRetained: () => (retained = true)
     }).then((outcome) => {
       if (outcome === 'staged' || outcome === 'delivered') {

@@ -6,14 +6,15 @@ import {
 } from '../../../shared/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
+import type { RuntimeEnvironmentSelectedPairing } from '../../../shared/runtime-environment-selected-pairing'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
 import {
   requireWslHostWithoutStart,
-  resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
+import { resolveManagedEnvironmentFor } from './runtime-environment-managed-resolution-wait'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -53,14 +54,17 @@ export async function callRuntimeEnvironment(
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** A status call is told which pairing its probe selected. */
+    observeStatusSelection?: (selected: RuntimeEnvironmentSelectedPairing) => void
   }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
-    let statusOptions = options
+    const { observeStatusSelection, ...unobserved } = options ?? {}
+    let statusOptions: typeof options = options && unobserved
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
     if (options?.preparation) {
-      const { preparation, ...rest } = options
-      await requireWslHostWithoutStart(userDataPath, selector, preparation)
+      const { preparation: _preparation, ...rest } = unobserved
+      await requireWslHostWithoutStart(userDataPath, selector, options.preparation)
       statusOptions = rest
     }
     const environment = resolveEnvironment(userDataPath, selector)
@@ -76,7 +80,8 @@ export async function callRuntimeEnvironment(
         selector,
         timeoutMs,
         statusOptions,
-        expectedEnvironmentPairingRevision === undefined
+        expectedEnvironmentPairingRevision === undefined,
+        observeStatusSelection
       )
     )
   }
@@ -88,10 +93,11 @@ export async function callRuntimeEnvironment(
       environment.id,
       method,
       async () => {
-        const currentEnvironment = await resolveManagedRuntimeEnvironment(
+        const currentEnvironment = await resolveManagedEnvironmentFor(
           userDataPath,
           environment.id,
-          options?.preparation
+          options?.preparation,
+          options?.signal
         )
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
@@ -198,7 +204,7 @@ export async function subscribeRuntimeEnvironment(
   crewAttempt?.assertCurrent()
   const environment = crewAttempt
     ? resolveEnvironment(userDataPath, selector)
-    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+    : await resolveManagedEnvironmentFor(userDataPath, selector, preparation, signal)
   crewAttempt?.assertCurrent()
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)

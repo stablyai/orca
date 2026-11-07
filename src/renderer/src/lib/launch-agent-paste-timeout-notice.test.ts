@@ -114,7 +114,7 @@ it.each([true, false])(
     })
     await Promise.resolve()
     await Promise.resolve()
-    expect(toast.message).toHaveBeenCalledTimes(keeps ? 0 : 1)
+    await vi.waitFor(() => expect(toast.message).toHaveBeenCalledTimes(keeps ? 0 : 1))
   }
 )
 

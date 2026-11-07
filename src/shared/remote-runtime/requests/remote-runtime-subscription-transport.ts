@@ -20,6 +20,11 @@ import {
 } from '../remote-runtime-memory-limits'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { RemoteRuntimeSubscriptionFrameRouter } from './remote-runtime-subscription-frame-router'
+import {
+  remoteRuntimeRequestDispatchCutoff,
+  remoteRuntimeRequestDispatchObserver,
+  remoteRuntimeRequestParamsAtHandoff
+} from './remote-runtime-request-dispatch-observation'
 import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
 import { RemoteRuntimeSubscriptionRequestChannel } from './remote-runtime-subscription-request-channel'
 import {
@@ -42,12 +47,14 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
 ): Promise<RemoteRuntimeTransportSubscription> {
   throwIfSignalAborted(options?.signal)
   const requestId = randomUUID()
-  const serializedRequest = serializeRemoteRuntimeRpcRequest({
-    requestId,
-    deviceToken: connection.credential.deviceToken,
-    method,
-    params
-  })
+  const serialize = (selected: unknown): string =>
+    serializeRemoteRuntimeRpcRequest({
+      requestId,
+      deviceToken: connection.credential.deviceToken,
+      method,
+      params: selected
+    })
+  const serializedRequest = serialize(params)
   return await new Promise((resolve, reject) => {
     const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
     let settled = false
@@ -76,8 +83,17 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
           { clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities) }
         ),
       isSettled: () => terminalFailure || closing,
-      serializedRequest,
+      requestAtHandoff: () => {
+        const atHandoff = remoteRuntimeRequestParamsAtHandoff(params)
+        return !atHandoff
+          ? null
+          : atHandoff.params === params
+            ? serializedRequest
+            : serialize(atHandoff.params)
+      },
       requestId,
+      onRequestSent: remoteRuntimeRequestDispatchObserver(params),
+      assertInTime: remoteRuntimeRequestDispatchCutoff(params),
       send: (frame) => ws?.send(frame),
       fail: (error) => fail(error),
       onAuthenticated: () => succeed(),

@@ -1,5 +1,6 @@
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeEnvironmentSelectedPairing } from '../../../shared/runtime-environment-selected-pairing'
 import { isRuntimeStatusCompatible } from './runtime-protocol-compat'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
@@ -17,6 +18,9 @@ export type RuntimeCompatibilityCacheEntry = {
   // Why: statusCheckedAt is cleared after a negative verdict to force async re-probes; the sync
   // peek keeps answering from this so many mounts on an old host do not each fire status.get.
   statusObservedAt: number | null
+  /** The pairing main selected for this status, told beside the same answer (or the one its
+   *  caller asked for): a request routed by this entry goes over that pairing. */
+  selection?: RuntimeEnvironmentSelectedPairing
 }
 
 export const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
@@ -81,12 +85,16 @@ export function rememberRuntimeEnvironmentCompatibility(
 // dropped connection; only proven-compatible successes remain reusable.
 export function clearRecentRuntimeCompatibilityFailure(
   environmentId: string,
-  observedStatus?: RuntimeStatus
+  /** A published status, with the main snapshot (and so the pairing) it came from. */
+  observed?: { status: RuntimeStatus | null; snapshot?: { pairingRevision: number } }
 ): void {
   const trimmed = environmentId.trim()
-  if (!trimmed) {
+  // Only a reachable answer clears anything.
+  if (!trimmed || observed?.status === null) {
     return
   }
+  const observedStatus = observed?.status
+  const observedPairing = observed?.snapshot?.pairingRevision
   const cached = runtimeCompatibilityChecks.get(trimmed)
   if (
     cached &&
@@ -102,7 +110,11 @@ export function clearRecentRuntimeCompatibilityFailure(
     // probe never records it; the published answer is the proof synchronous readers need.
     const answersPendingProbe = cached.failedAt === null && !cached.provenCompatible
     if (observedStatus && answersPendingProbe && isRuntimeStatusCompatible(observedStatus)) {
-      rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(observedStatus))
+      const published = compatibilityEntry(observedStatus)
+      if (observedPairing !== undefined) {
+        published.selection = { revision: observedPairing }
+      }
+      rememberRuntimeEnvironmentCompatibility(trimmed, published)
     }
   }
 }
@@ -116,15 +128,51 @@ export function clearRuntimeCompatibilityCache(environmentId?: string | null): v
   runtimeCompatibilityChecks.clear()
 }
 
+/** Drops `entry` only while it is still the environment's answer: evidence against one status
+ *  never removes a newer verdict that replaced it. */
+export function clearRuntimeCompatibilityEntry(
+  environmentId: string,
+  entry: RuntimeCompatibilityCacheEntry
+): void {
+  const trimmed = environmentId.trim()
+  if (runtimeCompatibilityChecks.get(trimmed) === entry) {
+    runtimeCompatibilityChecks.delete(trimmed)
+  }
+}
+
 export function markRuntimeEnvironmentCompatible(
   environmentId: string,
-  status?: RuntimeStatus
+  status?: RuntimeStatus,
+  /** The pairing main selected for that status; without it the entry proves no route. */
+  selection?: RuntimeEnvironmentSelectedPairing
 ): void {
   const trimmed = environmentId.trim()
   if (!trimmed) {
     return
   }
-  rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(status ?? null, true))
+  const entry = compatibilityEntry(status ?? null, true)
+  if (selection) {
+    entry.selection = selection
+  }
+  rememberRuntimeEnvironmentCompatibility(trimmed, entry)
+}
+
+/** Main's selection beside a local status result, or the pairing its caller asked for (which main
+ *  held the answer to). */
+export function selectionOfStatusResult(
+  response: unknown,
+  expectedRevision?: number
+): RuntimeEnvironmentSelectedPairing | undefined {
+  const told =
+    typeof response === 'object' && response !== null
+      ? Reflect.get(response, 'selectedPairing')
+      : undefined
+  if (typeof told === 'object' && told !== null && typeof told.revision === 'number') {
+    return told.crossedRepair === true
+      ? { revision: told.revision, crossedRepair: true }
+      : { revision: told.revision }
+  }
+  return expectedRevision === undefined ? undefined : { revision: expectedRevision }
 }
 
 /**

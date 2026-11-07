@@ -1,249 +1,189 @@
-import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { GeneratedAgentInputNotice } from '../../shared/generated-agent-input-notice'
 import {
-  GENERATED_INPUT_NOTICE_PAGE_BYTES,
-  generatedInputNoticeFrames,
-  type GeneratedAgentInputNotice,
-  type GeneratedInputNoticesPage
-} from '../../shared/generated-agent-input-notice'
+  completeNoticeOwner,
+  GeneratedInputNoticeCommands,
+  sameNoticeOwner,
+  type CompleteNoticeOwner,
+  type GeneratedInputNoticeCommand,
+  type GeneratedInputNoticeOwner
+} from './generated-agent-input-notice-commands'
+import {
+  conflictsWithNoticeIdentity,
+  noticeIdentityOf,
+  type GeneratedInputNoticeIdentity,
+  type GeneratedInputNoticeRecord,
+  type GeneratedInputNoticeRegistration
+} from './generated-agent-input-notice-record'
+import { GeneratedInputNoticeRecords } from './generated-agent-input-notice-records'
 
-/** `origin` is the audience: the one logical window a private notice belongs to, or null for a
- *  notice every subscriber of this runtime sees. */
-export type GeneratedInputNoticeChange =
-  | { kind: 'added'; revision: number; notice: GeneratedAgentInputNotice; origin: string | null }
-  | { kind: 'dismissed'; revision: number; id: string; origin: string | null }
+export type {
+  GeneratedInputNoticeCommand,
+  GeneratedInputNoticeOwner
+} from './generated-agent-input-notice-commands'
+export type { GeneratedInputNoticeRegistration } from './generated-agent-input-notice-record'
+export type {
+  GeneratedInputNoticeChange,
+  GeneratedInputNoticeUpsert
+} from './generated-agent-input-notice-records'
 
-/** One failed request's notice: its operation id is the notice id, so a send's own failure, a
- *  recovery registration and a reload all land on this one record. */
-export type GeneratedInputNoticeRegistration = Omit<GeneratedAgentInputNotice, 'id'> & {
-  id?: string
-  /** The window that owns a private notice; null keeps today's shared audience. */
-  origin: string | null
-  /** Held before dispatch so a reload mid-request loses nothing; never shown while pending. */
-  pending?: boolean
-  /** The connection that installed a pending record; another connection of the same window
-   *  re-subscribing means that renderer was replaced, so the record becomes a notice. */
-  connection?: string
-  /** The runtime holding the authoritative record when this one projects it (a remote host). */
-  owner?: string
-  /** The owner established the outcome itself (its operation ran); a client's inference never
-   *  overrides that. */
-  proven?: boolean
-}
+/** A paired host's answer to the window's request itself, as it passed back through here. */
+export type GeneratedInputHostReply =
+  | { kind: 'delivered' }
+  | { kind: 'retained'; runtimeId: string }
+  | { kind: 'failed'; certainty: GeneratedAgentInputNotice['certainty']; targetGone: boolean }
 
-type NoticeRecord = {
-  notice: GeneratedAgentInputNotice
-  added: number
-  origin: string | null
-  pending: boolean
-  connection?: string
-  owner?: string
-}
+/** A host's answer to a command: it took it, it is another runtime or pairing now ('stale'), or
+ *  it answered that it never can ('refused'). */
+export type GeneratedInputNoticeAnswer = 'held' | 'stale' | 'refused'
 
-/** These records are the notices, retained for this runtime session until explicit dismissal.
- *  Changes carry only the changed notice; subscribers page the rest, so no message holds them all.
- *  Memory only: nothing here outlives the runtime session. */
-export class GeneratedAgentInputNotices {
-  readonly session = randomUUID()
-  private revisionCounter = 0
-  // Insertion order is add order; each notice keeps the revision that added it as its page cursor.
-  private readonly notices = new Map<string, NoticeRecord>()
-  // Add order as a seekable index: a page binary-searches its cursor instead of rescanning.
-  private order: { added: number; id: string }[] = []
-  // Dismissed operations, until runtime end: a late completion or registration cannot revive them.
-  private readonly dismissed = new Set<string>()
-  private readonly listeners = new Set<(change: GeneratedInputNoticeChange) => void>()
-  /** Records a page touched, for the operation-count contract (linear in what was sent). */
-  pageVisits = 0
+/** The runtime session's notices, and for this desktop's windows the paired host each request
+ *  runs on: the copy a host is owed when its answer was lost, the discard it is owed for a
+ *  Dismiss made here, and the window's copy giving way once it sees the host's own. */
+export class GeneratedAgentInputNotices extends GeneratedInputNoticeRecords {
+  // A window's copy retired because it saw its host hold the operation; no text.
+  private readonly hostHeld = new Map<string, GeneratedInputNoticeIdentity>()
+  /** Owed host work; completed only by the answer to the exact command sent. */
+  readonly commands = new GeneratedInputNoticeCommands()
 
-  get revision(): number {
-    return this.revisionCounter
+  protected override heldElsewhere(
+    id: string,
+    input: GeneratedInputNoticeRegistration
+  ): 'kept' | 'conflict' | null {
+    const identity = this.hostHeld.get(id)
+    if (!identity) {
+      return null
+    }
+    return conflictsWithNoticeIdentity(identity, input) ? 'conflict' : 'kept'
   }
 
-  subscribe(listener: (change: GeneratedInputNoticeChange) => void): () => void {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
-  }
-
-  private publish(change: GeneratedInputNoticeChange): void {
-    for (const listener of this.listeners) {
-      listener(change)
+  /** A visible copy whose host may not hold one is owed to that host. */
+  protected override settled(record: GeneratedInputNoticeRecord): void {
+    const owner = completeNoticeOwner(record.owner)
+    if (owner && !record.pending && !record.fate) {
+      this.commands.owe({ kind: 'register', id: record.notice.id, owner })
     }
   }
 
-  /** A detached runtime-owned failure: shared, as before. */
-  add(notice: Omit<GeneratedAgentInputNotice, 'id'>): void {
-    this.upsert({ ...notice, origin: null, proven: true })
+  protected override removed(id: string): void {
+    this.commands.cancelRegister(id)
   }
 
-  /** The one write path: creates the operation's record or settles the existing one. Text is
-   *  fixed by the first write; a dismissed operation stays dismissed. */
-  upsert(input: GeneratedInputNoticeRegistration): { id: string; retained: boolean } {
-    const { origin, pending = false, connection, owner, proven, id: given, ...fields } = input
-    const id = given ?? randomUUID()
-    if (this.dismissed.has(id)) {
-      return { id, retained: false }
-    }
-    const existing = this.notices.get(id)
-    if (!existing) {
-      this.revisionCounter += 1
-      const record: NoticeRecord = {
-        notice: { ...fields, id },
-        added: this.revisionCounter,
-        origin,
-        pending,
-        ...(connection ? { connection } : {}),
-        ...(owner ? { owner } : {})
-      }
-      this.notices.set(id, record)
-      this.order.push({ added: this.revisionCounter, id })
-      if (!pending) {
-        this.publish({
-          kind: 'added',
-          revision: this.revisionCounter,
-          notice: record.notice,
-          origin
-        })
-      }
-      return { id, retained: true }
-    }
-    // Another request's text under this id would be a conflict: the original text is kept.
-    if (existing.notice.text !== fields.text) {
-      return { id, retained: true }
-    }
-    const revealed = existing.pending && !pending
-    // The owner's own outcome, or the first real one for a placeholder, sets the certainty.
-    if (proven || revealed) {
-      existing.notice = { ...existing.notice, certainty: fields.certainty }
-    }
-    // A host-established shared failure promotes the same record; it never forks a second one.
-    // An unknown agent's notice stays private: older clients require an agent.
-    const promoted = origin === null && existing.origin !== null && existing.notice.agent !== null
-    if (promoted) {
-      existing.origin = null
-    }
-    if (revealed) {
-      existing.pending = false
-      existing.owner = owner
-    }
-    if (promoted || revealed) {
-      this.revisionCounter += 1
-      this.publish({
-        kind: 'added',
-        revision: this.revisionCounter,
-        notice: existing.notice,
-        origin: existing.origin
-      })
-    }
-    return { id, retained: true }
+  protected override withheldPage(
+    viewer: string,
+    from: number,
+    budget: number
+  ): { ids: string[]; next: number | null; bytes: number } {
+    return this.commands.withheldPage(viewer, from, budget)
   }
 
-  /** The request ended without a failure to keep (delivered, or its owner took it): drop the
-   *  pending record. A visible notice is not erased by a later success. */
-  settle(id: string, origin: string | null): void {
+  /** The paired host's answer to the window's request. It settles the copy only; a discard the
+   *  window already owes is never acknowledged by it. */
+  hostAnswered(id: string, origin: string, reply: GeneratedInputHostReply): void {
     const record = this.notices.get(id)
-    if (record?.pending && record.origin === origin) {
-      this.notices.delete(id)
-    }
-  }
-
-  /** A window's renderer was replaced while its requests were pending: each becomes a notice of
-   *  uncertain delivery, since nobody is left to read its answer. */
-  revealPending(origin: string, connection: string | undefined): void {
-    for (const record of this.notices.values()) {
-      if (record.pending && record.origin === origin && record.connection !== connection) {
-        this.upsert({ ...record.notice, certainty: 'unconfirmed', origin, owner: record.owner })
-      }
-    }
-  }
-
-  recovery(
-    notice: Omit<GeneratedAgentInputNotice, 'id' | 'certainty'>
-  ): (certainty: GeneratedAgentInputNotice['certainty']) => void {
-    let recovered = false
-    return (certainty) => {
-      if (recovered) {
-        return
-      }
-      recovered = true
-      this.add({ ...notice, certainty })
-    }
-  }
-
-  /** Whether `viewer` may see (and so dismiss) this record. */
-  visibleTo(id: string, viewer: string | null): boolean {
-    const record = this.notices.get(id)
-    return !!record && !record.pending && (record.origin === null || record.origin === viewer)
-  }
-
-  /** Explicit discard: by a viewer of the notice, or for an operation not recorded yet (a
-   *  late completion or registration then stays discarded). */
-  dismiss(id: string, viewer: string | null = null): void {
-    const record = this.notices.get(id)
-    if (record && !this.visibleTo(id, viewer) && !(record.pending && record.origin === viewer)) {
+    if (!record) {
       return
     }
-    this.dismissed.add(id)
-    if (record && this.notices.delete(id)) {
-      // Compact once dismissed entries outnumber live ones, so the index stays linear in notices.
-      if (this.order.length > 2 * this.notices.size + 16) {
-        this.order = this.order.filter((entry) => this.notices.has(entry.id))
-      }
-      if (!record.pending) {
-        this.revisionCounter += 1
-        this.publish({
-          kind: 'dismissed',
-          revision: this.revisionCounter,
-          id,
-          origin: record.origin
-        })
+    if (reply.kind === 'retained' && record.owner && !record.owner.runtimeId) {
+      // The runtime that actually answered fills a receipt the window could not name.
+      record.owner.runtimeId = reply.runtimeId
+    }
+    if (reply.kind === 'failed') {
+      this.prove(id, reply.certainty, reply.targetGone)
+    }
+    // A host that acknowledged holding this window's copy still holds it whatever the original
+    // send's late answer says, so a later Dismiss still reaches it.
+    if (record.fate !== 'held') {
+      record.fate = reply.kind === 'retained' ? 'held' : 'gone'
+    }
+    this.commands.cancelRegister(id)
+    if (reply.kind !== 'failed') {
+      this.settle(id, origin)
+    }
+  }
+
+  /** The host answered a command; only the exact command still owed is completed by it. */
+  commandAnswered(command: GeneratedInputNoticeCommand, answer: GeneratedInputNoticeAnswer): void {
+    if (this.commands.complete(command) && command.kind === 'register') {
+      const record = this.notices.get(command.id)
+      if (record && record.owner && sameNoticeOwner(record.owner, command.owner)) {
+        record.fate = answer === 'held' ? 'held' : 'gone'
       }
     }
   }
 
-  /** One bounded snapshot page for `viewer`, from the notice added at `cursor` (or the next one)
-   *  at `offset`. Private and pending records are filtered before any frame is built. */
-  page(cursor = 0, offset = 0, viewer: string | null = null): GeneratedInputNoticesPage {
-    const page: GeneratedInputNoticesPage = {
-      session: this.session,
-      revision: this.revisionCounter,
-      frames: [],
-      next: null
+  /** The pairing this window's request goes over, fixed the first time this process resolves its
+   *  environment (an ordinary status call included): every later call of it is held to that
+   *  pairing, whatever the registry says by then. Undefined when the id names no request of this
+   *  window, or one bound to another environment. */
+  pinRoute(
+    id: string,
+    origin: string,
+    route: { environmentId: string; pairingRevision: number }
+  ): number | undefined {
+    const record = this.notices.get(id)
+    if (!record || record.initiator !== origin) {
+      return undefined
     }
-    let low = 0
-    let high = this.order.length
-    while (low < high) {
-      const mid = (low + high) >> 1
-      if (this.order[mid].added < cursor) {
-        low = mid + 1
-      } else {
-        high = mid
-      }
+    if (record.owner && record.owner.environmentId !== route.environmentId) {
+      return undefined
     }
-    let spent = 0
-    for (let index = low; index < this.order.length; index += 1) {
-      const { added, id } = this.order[index]
-      this.pageVisits += 1
-      if (!this.visibleTo(id, viewer)) {
-        continue
-      }
-      const record = this.notices.get(id)!
-      // A notice dismissed between pages restarts its successor from the beginning.
-      const from = added === cursor ? offset : 0
-      const { frames, next, bytes } = generatedInputNoticeFrames(
-        record.notice,
-        from,
-        GENERATED_INPUT_NOTICE_PAGE_BYTES - spent
-      )
-      page.frames.push(...frames)
-      spent += bytes
-      if (next !== null) {
-        // The first notice of a page always fits its metadata, so every page makes progress.
-        page.next = { cursor: added, offset: next }
-        return page
-      }
+    record.owner = {
+      ...record.owner,
+      environmentId: route.environmentId,
+      pairingRevision: record.owner?.pairingRevision ?? route.pairingRevision
     }
-    return page
+    return record.owner.pairingRevision
+  }
+
+  /** The host was re-paired or removed: nothing owed to it can be delivered any more. */
+  retireOwner(environmentId: string): void {
+    for (const command of this.commands.owedTo(environmentId)) {
+      this.commandAnswered(command, 'stale')
+    }
+  }
+
+  /** The window sees the host it sent to hold this operation: its own copy, hidden or shown,
+   *  gives way to the host's, never to another runtime or pairing under the same environment. */
+  observeHost(id: string, viewer: string, host: CompleteNoticeOwner): void {
+    const record = this.notices.get(id)
+    if (
+      !record ||
+      record.initiator !== viewer ||
+      !record.owner ||
+      !sameNoticeOwner(record.owner, host)
+    ) {
+      return
+    }
+    const wasVisible = !record.pending
+    this.remove(id)
+    this.hostHeld.set(id, noticeIdentityOf(record))
+    if (wasVisible) {
+      this.publishDismissed(id, record.origin)
+    }
+  }
+
+  /** Explicit discard: by a viewer of the notice (or the window holding it pending), or for an
+   *  operation not recorded yet, so a late completion or registration stays discarded. A copy of a
+   *  paired host's request, or `host`'s own copy as the window saw it, also owes that host the
+   *  discard. False when this viewer may not discard it. */
+  dismiss(id: string, viewer: string | null = null, host?: GeneratedInputNoticeOwner): boolean {
+    const discarded = this.discard(id, viewer)
+    if (!discarded) {
+      return false
+    }
+    this.hostHeld.delete(id)
+    const removed = discarded.record
+    // Only the exact runtime the copy came from; never whatever answers under that environment now.
+    const owner = removed?.owner
+      ? removed.fate === 'gone'
+        ? null
+        : completeNoticeOwner(removed.owner)
+      : completeNoticeOwner(host)
+    if (owner) {
+      this.commands.owe({ kind: 'discard', id, owner, origin: viewer })
+    }
+    return true
   }
 }
 

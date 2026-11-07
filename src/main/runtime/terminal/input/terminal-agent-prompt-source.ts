@@ -155,8 +155,13 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         enterReserveMs
       )
       const taken = gate.dispatching()
-      const written = this.ptyController?.write(ptyId, data, options.inputKind) === true
-      taken(written)
+      // A provider that throws after the handoff may have taken the bytes.
+      let written: boolean | 'unknown' = 'unknown'
+      try {
+        written = this.ptyController?.write(ptyId, data, options.inputKind) === true
+      } finally {
+        taken(written)
+      }
       if (!written) {
         throw new Error('terminal_not_writable')
       }

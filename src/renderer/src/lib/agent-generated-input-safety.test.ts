@@ -2,12 +2,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { pasteDraftToAgentPtyWhenReady } from './agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from './agent-followup-delivery'
 import { finalReplayFrame } from '../../../main/runtime/agent-transcript-replay-test-harness'
+import type { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 
 const f = vi.hoisted(() => ({
   screen: ['❯ '],
   process: 'claude',
   observe: (_data: string): void => {},
-  write: vi.fn(async () => true),
+  write: vi.fn<typeof sendRuntimePtyInputVerified>(async () => true),
   notice: vi.fn(),
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the initial null to the hold a case may set.
   holdProcessRead: null as Promise<void> | null
@@ -38,7 +39,11 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   }
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: f.write
+  // Like the real writer: told of its handoff synchronously, just before the bytes go.
+  sendRuntimePtyInputVerified: (...args: Parameters<typeof sendRuntimePtyInputVerified>) => {
+    args[3]?.beforeSend?.()
+    return f.write(...args)
+  }
 }))
 // The notice a producer reports; this window's runtime is absent here, so it shows directly.
 vi.mock('./launch-agent-paste-timeout-notice', () => ({
@@ -96,9 +101,27 @@ it('waits for the user to answer a dialog, then submits the prompt once', async 
   f.observe('\x1b[?2004h\x1b[?2031h❯\u00a0')
   await vi.advanceTimersByTimeAsync(100)
   await expect(result).resolves.toBe(true)
+  const operationId = f.write.mock.calls[0][3]?.generatedInputOperationId
+  expect(operationId).toEqual(expect.any(String))
   expect(f.write.mock.calls).toEqual([
-    ['pty-1', '\x1b[200~exact\rprompt\x1b[201~', 'launch'],
-    ['pty-1', '\r', 'launch']
+    [
+      'pty-1',
+      '\x1b[200~exact\rprompt\x1b[201~',
+      'launch',
+      expect.objectContaining({
+        generatedInputOperationId: operationId,
+        beforeSend: expect.any(Function)
+      })
+    ],
+    [
+      'pty-1',
+      '\r',
+      'launch',
+      expect.objectContaining({
+        generatedInputOperationId: operationId,
+        beforeSend: expect.any(Function)
+      })
+    ]
   ])
 })
 
@@ -111,10 +134,13 @@ it('never answers a dialog that appears between paste and Enter and reports unce
   await vi.advanceTimersByTimeAsync(1800)
   await expect(result).resolves.toBe(false)
   expect(f.write).toHaveBeenCalledOnce()
+  const operationId = f.write.mock.calls[0][3]?.generatedInputOperationId
+  expect(operationId).toEqual(expect.any(String))
   expect(f.notice).toHaveBeenCalledExactlyOnceWith({
     agent: 'claude',
     text: args.content,
-    certainty: 'unconfirmed'
+    certainty: 'unconfirmed',
+    operationId
   })
 })
 
@@ -150,9 +176,27 @@ it('delivers a late follow-up to a recorded default-quiet composer without start
   // The current screen's painted composer with Cline in front is positive evidence, no 2004 replay.
   await vi.advanceTimersByTimeAsync(1750)
   await expect(result).resolves.toBe(true)
+  const operationId = f.write.mock.calls[0][3]?.generatedInputOperationId
+  expect(operationId).toEqual(expect.any(String))
   expect(f.write.mock.calls).toEqual([
-    ['pty-1', '\x1b[200~exact\rprompt\x1b[201~', 'launch'],
-    ['pty-1', '\r', 'launch']
+    [
+      'pty-1',
+      '\x1b[200~exact\rprompt\x1b[201~',
+      'launch',
+      expect.objectContaining({
+        generatedInputOperationId: operationId,
+        beforeSend: expect.any(Function)
+      })
+    ],
+    [
+      'pty-1',
+      '\r',
+      'launch',
+      expect.objectContaining({
+        generatedInputOperationId: operationId,
+        beforeSend: expect.any(Function)
+      })
+    ]
   ])
   expect(f.notice).not.toHaveBeenCalled()
 })

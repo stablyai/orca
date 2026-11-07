@@ -115,7 +115,12 @@ describe('active agent note send', () => {
     expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
       { kind: 'local' },
       'term-1',
-      expect.objectContaining({ text: 'File: src/app.ts', submit: true })
+      expect.objectContaining({ text: 'File: src/app.ts', submit: true }),
+      undefined,
+      undefined,
+      undefined,
+      // One accepted request's end, carried into any older-host fallback.
+      { end: expect.any(Number) }
     )
   })
 

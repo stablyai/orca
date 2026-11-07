@@ -105,7 +105,12 @@ describe('active agent note send', () => {
     expect(testState.sendGenerated).toHaveBeenCalledWith(
       { kind: 'local' },
       'term-2',
-      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' })
+      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' }),
+      undefined,
+      undefined,
+      undefined,
+      // One accepted request's end, carried into any older-host fallback.
+      { end: expect.any(Number) }
     )
   })
 
@@ -248,7 +253,12 @@ describe('active agent note send', () => {
     expect(testState.sendGenerated).toHaveBeenCalledWith(
       { kind: 'local' },
       'term-2',
-      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' })
+      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' }),
+      undefined,
+      undefined,
+      undefined,
+      // One accepted request's end, carried into any older-host fallback.
+      { end: expect.any(Number) }
     )
 
     // The host's operation, not the snapshot, decides: a target with no agent reading input refuses.

@@ -33,6 +33,10 @@ export type GeneratedInputFrameGate = {
   dispatching: () => (taken: boolean | 'unknown') => void
 }
 
+/** Told synchronously at each frame's actual handoff, after every final check, then once how it
+ *  ended. Observation only: it cannot refuse or delay the write, and what it throws is dropped. */
+export type GeneratedInputFrameObserver = () => (taken: boolean | 'unknown') => void
+
 /** Where one generated write's facts come from and where its bytes go. A source never decides
  *  readiness or admission; it reports evidence (including that it has none) and performs I/O. */
 export type GeneratedInputSource = GeneratedInputObservationFeed & {
@@ -75,6 +79,7 @@ export type GeneratedInputOperationRequest = {
   requireConsumer?: boolean
   /** Runs after a written outcome, still in this operation's queue turn (turn observation). */
   afterWrite?: () => Promise<void>
+  onFrame?: GeneratedInputFrameObserver
 }
 
 export type GeneratedInputOperationOutcome = GeneratedInputOutcomeKind
@@ -228,7 +233,14 @@ export function runGeneratedInputOperation(
       )
     },
     // Whether this frame is the Enter comes from the sequence's selected target.
-    dispatching: () => lifetime.dispatching(frame === 'enter' || seq.carriesEnter)
+    dispatching: () => {
+      const taken = lifetime.dispatching(frame === 'enter' || seq.carriesEnter)
+      const observed = observeFrame(request.onFrame)
+      return (result) => {
+        taken(result)
+        observed(result)
+      }
+    }
   })
   const textGate = gate('text')
   const enterGate = gate('enter')
@@ -295,4 +307,23 @@ export function runGeneratedInputOperation(
   }
   const finished = body()
   return lifetime.outcome.then((settled) => ({ outcome: settled, error, finished }))
+}
+
+// One observed handoff, settled at most once; the observer's own failure never reaches the write.
+function observeFrame(observer: GeneratedInputFrameObserver | undefined) {
+  let settle: ((taken: boolean | 'unknown') => void) | undefined
+  try {
+    settle = observer?.()
+  } catch {
+    settle = undefined
+  }
+  return (taken: boolean | 'unknown'): void => {
+    const once = settle
+    settle = undefined
+    try {
+      once?.(taken)
+    } catch {
+      // Bookkeeping only.
+    }
+  }
 }

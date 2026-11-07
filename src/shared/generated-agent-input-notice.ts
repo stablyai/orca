@@ -36,6 +36,9 @@ export type GeneratedInputNoticesPage = {
   revision: number
   frames: GeneratedInputNoticeFrame[]
   next: { cursor: number; offset: number } | null
+  /** On a window's first page from its own runtime: notices it discarded whose paired host has not
+   *  applied the discard yet, so their copies from that host stay hidden meanwhile. */
+  withheld?: string[]
 }
 
 // A UTF-16 unit costs at most 6 bytes once JSON-escaped. A live frame holds at most this many

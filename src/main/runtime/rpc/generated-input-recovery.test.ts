@@ -322,9 +322,8 @@ it('keeps the index bounded across dismissals and fans one change out once per c
     for (const id of all.slice(0, population - live)) {
       notices.dismiss(id)
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the owner's private seek index to bound it.
-    const order = (notices as unknown as { order: unknown[] }).order
-    expect(order.length).toBeLessThanOrEqual(2 * live + 16)
+    const rows = notices.sizes.rows
+    expect(rows).toBeLessThanOrEqual(2 * live + 16)
     notices.pageVisits = 0
     let pages = 0
     for (
@@ -335,7 +334,7 @@ it('keeps the index bounded across dismissals and fans one change out once per c
       pages += 1
       cursor = page.next
     }
-    expect(notices.pageVisits).toBeLessThanOrEqual(order.length + pages)
+    expect(notices.pageVisits).toBeLessThanOrEqual(rows + pages)
 
     const received = Array.from({ length: 100 }, (): unknown[] => [])
     const unsubscribe = received.map((changes) =>

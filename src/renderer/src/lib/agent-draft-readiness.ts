@@ -27,6 +27,11 @@ import {
   subscribeToRuntimeTerminalData
 } from '@/runtime/runtime-terminal-stream'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type {
+  GeneratedInputAttempt,
+  GeneratedInputSelection
+} from '@/runtime/generated-input-attempt'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 
@@ -38,8 +43,14 @@ import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 const HOST_SCREEN_READ_TIMEOUT_MS = 5_000
 let observationSeq = 0
 
-async function readLegacyProcess(ptyId: string): Promise<GeneratedInputProcess> {
-  const process = await inspectRuntimeTerminalProcess(ptyId)
+async function readLegacyProcess(
+  ptyId: string,
+  selection: GeneratedInputSelection | undefined
+): Promise<GeneratedInputProcess> {
+  const process = await inspectRuntimeTerminalProcess(
+    ptyId,
+    selection ? { selectedPairingRevision: selection.pairingRevision } : undefined
+  )
   // An old host's missing evidence is unknown, never a shell or a wrong agent.
   return process.verdict === 'unverifiable' || !process.foregroundProcess
     ? { known: false }
@@ -52,8 +63,13 @@ async function readLegacyProcess(ptyId: string): Promise<GeneratedInputProcess> 
 
 /** The mounted pane's grid, else the host's own screen; 'unknown' otherwise (the operation's own
  *  streamed tail and the blind policy take it from there). */
-async function readLegacyEvidence(ptyId: string): Promise<GeneratedInputEvidence> {
-  const process = await readLegacyProcess(ptyId)
+async function readLegacyEvidence(
+  ptyId: string,
+  /** The status this request already selected for the host: its reads do not ask for it again,
+   *  and go only to the pairing it was selected on. */
+  selection: GeneratedInputSelection | undefined
+): Promise<GeneratedInputEvidence> {
+  const process = await readLegacyProcess(ptyId, selection)
   const mounted = await readPtyInputScreen(ptyId)
   if (mounted) {
     return { screen: mounted, process, bracketedPaste: readPtyBracketedPasteMode(ptyId) }
@@ -66,7 +82,15 @@ async function readLegacyEvidence(ptyId: string): Promise<GeneratedInputEvidence
         owner.target,
         'terminal.read',
         { terminal: owner.terminal, screen: true },
-        { timeoutMs: HOST_SCREEN_READ_TIMEOUT_MS }
+        {
+          timeoutMs: HOST_SCREEN_READ_TIMEOUT_MS,
+          ...(selection
+            ? {
+                skipCompatibilityCheck: true,
+                expectedEnvironmentPairingRevision: selection.pairingRevision
+              }
+            : {})
+        }
       )
       if (read.terminal.source === 'screen') {
         return {
@@ -80,7 +104,11 @@ async function readLegacyEvidence(ptyId: string): Promise<GeneratedInputEvidence
       if (tail.trim()) {
         return { screen: 'unknown', process, bracketedPaste: null, tail }
       }
-    } catch {
+    } catch (error) {
+      // Its selected pairing was retired: this attempt ends, no other pairing's screen stands in.
+      if (error instanceof RuntimeRpcCallError && error.code === 'runtime_environment_changed') {
+        throw error
+      }
       // An unanswered read is no observation.
     }
   }
@@ -93,6 +121,12 @@ export function createLegacyGeneratedInputSource(args: {
   content: string
   agent?: TuiAgent | null
   inputKind: TerminalInputKind
+  /** The window's accepted request these writes carry; its runtime settles it as they happen. */
+  operationId?: string
+  /** That request's own end and the route it selected; every frame spends and keeps them. */
+  attempt?: GeneratedInputAttempt
+  /** That request's caller cancellation. */
+  signal?: AbortSignal
 }): GeneratedInputSource {
   const { ptyId, content, inputKind } = args
   let replay = ''
@@ -100,14 +134,24 @@ export function createLegacyGeneratedInputSource(args: {
     gate: Parameters<GeneratedInputSource['writeText']>[0],
     data: string
   ): Promise<boolean> => {
-    const taken = gate.dispatching()
+    // Progress starts only as these bytes are actually handed to IPC, after every wait before it;
+    // a request that ended meanwhile refuses there, so nothing of it leaves later.
+    let taken: ((written: boolean | 'unknown') => void) | undefined
     try {
-      const accepted = await sendRuntimePtyInputVerified(ptyId, data, inputKind)
-      taken(accepted)
+      const accepted = await sendRuntimePtyInputVerified(ptyId, data, inputKind, {
+        ...(args.operationId ? { generatedInputOperationId: args.operationId } : {}),
+        ...(args.attempt ? { attempt: args.attempt } : {}),
+        ...(args.signal ? { signal: args.signal } : {}),
+        beforeSend: () => {
+          taken = gate.dispatching()
+        }
+      })
+      taken?.(accepted)
       return accepted
     } catch {
-      // A lost answer may have been written: it stays unconfirmed, never retried.
-      taken('unknown')
+      // A lost answer may have been written: it stays unconfirmed, never retried. Never handed
+      // over, nothing was.
+      taken?.('unknown')
       return false
     }
   }
@@ -130,7 +174,16 @@ export function createLegacyGeneratedInputSource(args: {
     },
     replay: () => replay,
     acquire: (signal) => acquireTerminalPtyInputTurn(ptyId, signal),
-    read: () => readLegacyEvidence(ptyId),
+    read: () => {
+      const selection = args.attempt?.selection
+      return readLegacyEvidence(
+        ptyId,
+        selection &&
+          selection.environmentId === getRemoteRuntimePtyOwner(ptyId)?.target.environmentId
+          ? selection
+          : undefined
+      )
+    },
     enterReserveMs: 0,
     writeText: async (gate) => {
       let wrote = false

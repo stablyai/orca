@@ -7,7 +7,7 @@ import {
   type RefObject,
   type SyntheticEvent
 } from 'react'
-import { useSonner } from 'sonner'
+import { useSonnerIds } from 'sonner'
 import { track } from '@/lib/telemetry'
 
 // Mirrored by installBodyOverlayAttributes; only Dialog/Sheet overlays set it, not menus.
@@ -63,7 +63,7 @@ export function useToasterModalLayer(wrapperRef: RefObject<HTMLDivElement | null
     setRaisedBy(null)
   }
 
-  const { toasts } = useSonner()
+  const toastIds = useSonnerIds()
   const toastIdsBeforeModalRef = useRef<Set<string | number> | null>(null)
   // Layout effect: a toast raised by the modal's own flow (e.g. its error) never paints dimmed.
   useLayoutEffect(() => {
@@ -73,16 +73,16 @@ export function useToasterModalLayer(wrapperRef: RefObject<HTMLDivElement | null
     }
     const known = toastIdsBeforeModalRef.current
     if (known === null) {
-      toastIdsBeforeModalRef.current = new Set(toasts.map((toast) => toast.id))
+      toastIdsBeforeModalRef.current = new Set(toastIds)
       return
     }
-    if (toasts.some((toast) => !known.has(toast.id))) {
+    if (toastIds.some((id) => !known.has(id))) {
       setRaisedBy((previous) => previous ?? 'new_toast')
     }
-    for (const toast of toasts) {
-      known.add(toast.id)
+    for (const id of toastIds) {
+      known.add(id)
     }
-  }, [modalOpen, toasts])
+  }, [modalOpen, toastIds])
 
   useEffect(() => {
     if (!modalOpen || raisedBy !== null) {
@@ -120,11 +120,11 @@ export function useToasterModalLayer(wrapperRef: RefObject<HTMLDivElement | null
     if (!toastElement || !control || control.matches('[data-close-button]')) {
       return
     }
-    // DOM and useSonner both list live toasts newest first.
+    // DOM and useSonnerIds both list live toasts newest first.
     const liveToasts = Array.from(
       wrapper.querySelectorAll('[data-sonner-toast]:not([data-removed="true"])')
     )
-    const id = toasts[liveToasts.indexOf(toastElement)]?.id
+    const id = toastIds[liveToasts.indexOf(toastElement)]
     track('toast_action_over_modal', {
       toast_id: typeof id === 'string' && STATIC_TOAST_ID.test(id) ? id : 'unnamed',
       modal_kind: document.body.querySelector(":scope > [data-slot='sheet-overlay']")

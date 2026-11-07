@@ -11,6 +11,15 @@ import { createAgentPromptSubmissionRuntime } from '../../../main/runtime/agent-
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../../../main/runtime/rpc/core'
 import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/generated-input'
 import type { OrcaRuntimeService } from '../../../main/runtime/orca-runtime'
+import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
+import {
+  compatibilityEntry,
+  rememberRuntimeEnvironmentCompatibility
+} from '@/runtime/runtime-compatibility-cache'
+import {
+  GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
+} from '../../../shared/terminal-runtime-capabilities'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuledScreen } from '../../../shared/screen-input-veto'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -33,6 +42,8 @@ type Facts = {
   streamTail: string[]
   writes: string[]
   runtime: OrcaRuntimeService | null
+  /** This window's own runtime's notices; the host's are its runtime's. */
+  local: GeneratedAgentInputNotices | null
   handle: string
   holdProcessRead: Promise<void> | null
   /** Another process takes the terminal once the producer's own first inspection has answered. */
@@ -55,6 +66,7 @@ const f = vi.hoisted((): Facts => ({
   streamTail: [],
   writes: [],
   runtime: null,
+  local: null,
   handle: '',
   holdProcessRead: null,
   processAfterInspect: null,
@@ -120,7 +132,14 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   }
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: async (_ptyId: string, data: string) => {
+  sendRuntimePtyInputVerified: async (
+    _ptyId: string,
+    data: string,
+    _kind: string,
+    options?: { beforeSend?: () => void }
+  ) => {
+    // Like the real writer: told of its handoff synchronously, just before the bytes go.
+    options?.beforeSend?.()
     f.writes.push(data)
     f.afterWrite?.(f.writes.length)
     return true
@@ -132,26 +151,48 @@ vi.mock('../../../shared/agent-input-dialog', async (importOriginal) => {
   return { ...actual, prepareTypedText: vi.fn(actual.prepareTypedText) }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: async (_environment: string, capability: string) =>
-    capability === 'terminal.generated-input-notices.register.v1'
-      ? f.capable && f.registers
-      : f.capable,
+  // The paired host's ordinary status: the runtime it last answered as, with these capabilities.
+  selectRuntimeEnvironmentStatus: async (environmentId: string) => ({
+    entry: {},
+    status: {
+      runtimeId: (
+        await import('@/runtime/runtime-compatibility-cache')
+      ).runtimeCompatibilityChecks.get(environmentId)?.status?.runtimeId,
+      capabilities: f.capable
+        ? [
+            'terminal.generated-input.v1',
+            'terminal.generated-input.fenced-send.v1',
+            ...(f.registers ? ['terminal.generated-input-notices.register.v1'] : [])
+          ]
+        : []
+    }
+  }),
+  forgetMissingRuntimeCapability: () => {},
   callRuntimeRpc: async (
-    _target: unknown,
+    target: { kind: string },
     method: string,
     params: Record<string, unknown>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; beforeSend?: () => void }
   ) => {
+    options?.beforeSend?.()
     // The host's (and, for an older host, this window's own runtime's) generated-input methods.
     const real = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
       (entry): entry is RpcMethod => entry.name === method && !('stream' in entry)
     )
     if (real) {
+      // This window's runtime over local IPC, or the paired host over this desktop's pairing.
+      const caller =
+        target.kind === 'local'
+          ? {
+              runtime: { generatedInputNotices: f.local, getRuntimeId: () => 'local' },
+              noticeOrigin: 'desktop-window:1'
+            }
+          : { runtime: f.runtime, pairedDeviceId: 'desktop' }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only the runtime, connection and window identity.
       const context = {
-        runtime: f.runtime,
+        ...caller,
         connectionId: 'contract',
-        noticeOrigin: 'desktop-window:1',
+        clientCapabilities: ['terminal.generated-input-notices.register.v1'],
         // The caller's abort reaches the host's request context, as the transport delivers it.
         signal: options?.signal
       } as unknown as RpcContext
@@ -186,6 +227,19 @@ const { prepareTypedText } = await import('../../../shared/agent-input-dialog')
 const { showGeneratedInputNotice, noticeGeneratedInputFailure } =
   await import('./launch-agent-paste-timeout-notice')
 
+/** What this window shows (its runtime's notices and its host's, one per operation) and what a
+ *  phone paired to the host shows. */
+function windowSees() {
+  const byId = new Map(
+    [
+      ...f.local!.page(0, 0, 'desktop-window:1').frames,
+      ...f.runtime!.generatedInputNotices.page(0, 0, 'device:desktop/window:w').frames
+    ].map((frame) => [frame.id, frame])
+  )
+  return [...byId.values()]
+}
+const phoneSees = () => f.runtime!.generatedInputNotices.page(0, 0, 'device:phone').frames
+
 const DIALOG = [
   'Bypass Permissions',
   '❯ 1. No, exit',
@@ -210,6 +264,20 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   f.registers = true
   const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, agent)
   f.runtime = runtime
+  f.local = new GeneratedAgentInputNotices()
+  // The ordinary compatibility check's verified status, as every remote call leaves it cached.
+  rememberRuntimeEnvironmentCompatibility(
+    'env',
+    compatibilityEntry({
+      runtimeId: runtime.getRuntimeId(),
+      capabilities: capable
+        ? [
+            GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY,
+            GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY
+          ]
+        : []
+    } as never)
+  )
   f.handle = handle
   f.writes = writes
   vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
@@ -607,12 +675,9 @@ describe.each([
     await vi.advanceTimersByTimeAsync(1100)
     await expect(result).resolves.toBe(false)
     expect(f.writes).toEqual([])
-    const notices = f.runtime!.generatedInputNotices
     // The window sees one notice; another client (the phone) sees it only when the host owns it.
-    expect(notices.page(0, 0, 'desktop-window:1').frames.map((frame) => frame.chunk)).toEqual([
-      'kept text'
-    ])
-    expect(notices.page(0, 0, 'device:phone').frames).toHaveLength(capable ? 1 : 0)
+    expect(windowSees().map((frame) => frame.chunk)).toEqual(['kept text'])
+    expect(phoneSees()).toHaveLength(capable ? 1 : 0)
     expect(showGeneratedInputNotice).not.toHaveBeenCalled()
     expect(noticeGeneratedInputFailure).not.toHaveBeenCalled()
   })
@@ -645,13 +710,12 @@ describe.each([
       })
       await vi.advanceTimersByTimeAsync(1100)
       await expect(result).resolves.toBe(false)
-      const notices = f.runtime!.generatedInputNotices
-      const kept = notices.page(0, 0, 'desktop-window:1').frames
+      const kept = windowSees()
       expect(kept.map(({ chunk, agent }) => ({ chunk, agent }))).toEqual([
         { chunk: 'exact\r\ntext 😀', agent: exit === 'unknown agent' ? null : 'claude' }
       ])
       // Only a failure the host itself kept is shared; the others stay with this window.
-      expect(notices.page(0, 0, 'device:phone').frames).toHaveLength(exit === 'lost reply' ? 1 : 0)
+      expect(phoneSees()).toHaveLength(exit === 'lost reply' ? 1 : 0)
       expect(noticeGeneratedInputFailure).not.toHaveBeenCalled()
     }
   )
@@ -675,15 +739,13 @@ describe.each([
     })
     await vi.advanceTimersByTimeAsync(1100)
     await expect(result).resolves.toBe(false)
-    const notices = f.runtime!.generatedInputNotices
-    expect(notices.page(0, 0, 'desktop-window:1').frames.map(({ chunk }) => chunk)).toEqual([
-      'old host'
-    ])
-    expect(notices.page(0, 0, 'device:phone').frames).toEqual([])
+    expect(windowSees().map(({ chunk }) => chunk)).toEqual(['old host'])
+    expect(phoneSees()).toEqual([])
   })
 
-  // E1: no terminal ever bound for the tab, so no request was sent; the producer reports it.
-  it('reports a prompt whose tab never got a terminal, with its exact text', async () => {
+  // E1: no terminal ever bound for the tab, so no request was sent; this window's runtime keeps
+  // it as not sent, and the producer shows no notice of its own.
+  it('keeps a prompt whose tab never got a terminal, with its exact text', async () => {
     await setUp('claude', capable)
     vi.mocked(noticeGeneratedInputFailure).mockClear()
     const result = pasteDraftWhenAgentReady({
@@ -695,11 +757,10 @@ describe.each([
     })
     await vi.advanceTimersByTimeAsync(9000)
     await expect(result).resolves.toBe(false)
-    expect(noticeGeneratedInputFailure).toHaveBeenCalledExactlyOnceWith({
-      agent: 'claude',
-      text: 'exact\r\ntext',
-      certainty: 'not-sent'
-    })
+    expect(windowSees().map(({ chunk, certainty }) => ({ chunk, certainty }))).toEqual([
+      { chunk: 'exact\r\ntext', certainty: 'not-sent' }
+    ])
+    expect(noticeGeneratedInputFailure).not.toHaveBeenCalled()
     expect(f.writes).toEqual([])
   })
 

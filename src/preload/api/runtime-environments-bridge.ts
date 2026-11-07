@@ -6,6 +6,7 @@ import {
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeEnvironmentCallResult } from '../../shared/runtime-environment-selected-pairing'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
@@ -80,7 +81,7 @@ export const runtimeEnvironmentsApi = {
     selector: string
     timeoutMs?: number
     observeOnly?: true
-  }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+  }): Promise<RuntimeEnvironmentCallResult<RuntimeStatus>> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
   onSharedControlDiagnostics: (
     callback: (event: {
@@ -121,7 +122,11 @@ export const runtimeEnvironmentsApi = {
     timeoutMs?: number
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
-  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
+    /** Local only: the window's accepted generated request a terminal.send carries. */
+    generatedInputOperationId?: string
+    /** Local only: that request's own end on this machine. */
+    generatedInputEnd?: number
+  }): Promise<RuntimeEnvironmentCallResult> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
     cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),
   subscribeCrewAttempt: (args, callbacks) =>
@@ -135,6 +140,10 @@ export const runtimeEnvironmentsApi = {
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
+      /** Local only: the window's accepted generated request this call carries. */
+      generatedInputOperationId?: string
+      /** Local only: that request's own end on this machine. */
+      generatedInputEnd?: number
     },
     callbacks: {
       onResponse: (response: RuntimeRpcResponse<unknown>) => void

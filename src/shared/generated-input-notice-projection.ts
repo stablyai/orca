@@ -3,7 +3,11 @@ import type {
   GeneratedInputNoticeFrame
 } from './generated-agent-input-notice'
 
-type Entry = { frame: GeneratedInputNoticeFrame; text: string }
+type Entry = {
+  frame: GeneratedInputNoticeFrame
+  text: string
+  notice?: GeneratedAgentInputNotice
+}
 
 /** One complete notice appearing or going, for consumers that keep their own indexed view. */
 export type GeneratedInputNoticeDelta =
@@ -16,7 +20,12 @@ export type GeneratedInputNoticeDelta =
 export class GeneratedInputNoticeProjection {
   private session: string | null = null
   private readonly entries = new Map<string, Entry>()
-  private snapshot: { token: number; seen: Set<string>; dismissed: Set<string> } | null = null
+  private snapshot: {
+    token: number
+    seen: Set<string>
+    dismissed: Set<string>
+    live: Set<string>
+  } | null = null
   private tokens = 0
   /** Bumped only when a notice becomes complete or a complete one goes; partial chunks don't. */
   private completeVersion = 0
@@ -35,7 +44,7 @@ export class GeneratedInputNoticeProjection {
       this.changes = 'full'
     }
     this.tokens += 1
-    this.snapshot = { token: this.tokens, seen: new Set(), dismissed: new Set() }
+    this.snapshot = { token: this.tokens, seen: new Set(), dismissed: new Set(), live: new Set() }
     return this.tokens
   }
 
@@ -50,6 +59,9 @@ export class GeneratedInputNoticeProjection {
       }
     }
     this.snapshot?.seen.add(frame.id)
+    if (token === undefined) {
+      this.snapshot?.live.add(frame.id)
+    }
     let entry = this.entries.get(frame.id)
     if (!entry) {
       if (frame.offset !== 0) {
@@ -58,6 +70,14 @@ export class GeneratedInputNoticeProjection {
       entry = { frame, text: '' }
       this.entries.set(frame.id, entry)
     }
+    // A page requested before a live change may finish after it; its text is still useful,
+    // but only the live frame speaks for the current metadata.
+    const metadataChanged =
+      (token === undefined || !this.snapshot?.live.has(frame.id)) &&
+      !sameMetadata(entry.frame, frame)
+    if (metadataChanged) {
+      entry.frame = frame
+    }
     const have = entry.text.length
     if (frame.offset <= have && frame.offset + frame.chunk.length > have) {
       entry.text += frame.chunk.slice(have - frame.offset)
@@ -65,15 +85,20 @@ export class GeneratedInputNoticeProjection {
         this.completed(entry, token)
       }
     } else if (have === 0 && frame.textLength === 0) {
+      if (!entry.notice || metadataChanged) {
+        this.completed(entry, token)
+      }
+    } else if (metadataChanged && entry.text.length === entry.frame.textLength) {
       this.completed(entry, token)
     }
   }
 
   private completed(entry: Entry, token: number | undefined): void {
+    entry.notice = toNotice(entry)
     this.completeVersion += 1
     // A page's notice is reconciled when its snapshot finishes; a live one is news on its own.
     if (token === undefined && this.changes !== 'full') {
-      this.changes.push({ kind: 'added', notice: toNotice(entry) })
+      this.changes.push({ kind: 'added', notice: entry.notice })
     }
   }
 
@@ -138,11 +163,23 @@ export class GeneratedInputNoticeProjection {
     const notices: GeneratedAgentInputNotice[] = []
     for (const entry of this.entries.values()) {
       if (entry.text.length === entry.frame.textLength) {
-        notices.push(toNotice(entry))
+        notices.push((entry.notice ??= toNotice(entry)))
       }
     }
     return notices
   }
+}
+
+function sameMetadata(a: GeneratedInputNoticeFrame, b: GeneratedInputNoticeFrame): boolean {
+  return (
+    a.agent === b.agent &&
+    a.handle === b.handle &&
+    a.worktreeId === b.worktreeId &&
+    a.ptyId === b.ptyId &&
+    a.certainty === b.certainty &&
+    a.submitted === b.submitted &&
+    a.textLength === b.textLength
+  )
 }
 
 function toNotice({ frame, text }: Entry): GeneratedAgentInputNotice {

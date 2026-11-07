@@ -9,6 +9,7 @@ import {
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY,
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 } from './protocol-version'
+import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from './terminal-runtime-capabilities'
 
 // Electron clients can decode client-hosted page placement; becoming a page
 // host still requires the separate authenticated browser-client lease.
@@ -26,5 +27,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // Only the renderer shows Deleting for a `removing` row; CLI and mobile get those rows omitted.
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   // The renderer shows a restored, unconfirmed agent row as identity only.
-  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
+  // The renderer reads window-private generated-input notices (unknown agents included).
+  GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
 ] as const

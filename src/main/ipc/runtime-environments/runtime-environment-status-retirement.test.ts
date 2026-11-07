@@ -145,10 +145,22 @@ it('answers from the successor owner when the probe itself re-paired the server'
     }
   })
   mocks.request.mockResolvedValueOnce(response())
+  const pairingOf = () => {
+    const environment = resolveEnvironment(directory, envId)
+    return environment.pairingRevision ?? environment.createdAt
+  }
+  const first = pairingOf()
+  const selected = vi.fn()
   await expect(
-    getRuntimeEnvironmentStatus(directory, envId, undefined, { reconnect: true })
+    getRuntimeEnvironmentStatus(directory, envId, undefined, { reconnect: true }, true, selected)
   ).resolves.toMatchObject({ ok: true })
   expect(mocks.request).toHaveBeenCalledTimes(2)
+  // The answer is the successor's: told as crossing this probe's selection, never as its own.
+  expect(selected).toHaveBeenCalledExactlyOnceWith({ revision: first, crossedRepair: true })
+  selected.mockClear()
+  mocks.request.mockResolvedValueOnce(response())
+  await getRuntimeEnvironmentStatus(directory, envId, undefined, undefined, true, selected)
+  expect(selected).toHaveBeenCalledExactlyOnceWith({ revision: pairingOf() })
 })
 
 it.each([

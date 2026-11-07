@@ -7,10 +7,18 @@ export function showAutomationPromptNotSentToast(
   text: string,
   certainty?: 'not-sent' | 'unconfirmed',
   /** The host keeps this notice in its runtime session. */
-  retained = false
+  retained = false,
+  /** The accepted request this notice is of, and whether it was a prompt or notes. */
+  operation?: { operationId?: string; submitted?: boolean }
 ): void {
   if (!retained) {
-    noticeGeneratedInputFailure({ agent, text, certainty })
+    noticeGeneratedInputFailure({
+      agent,
+      text,
+      certainty,
+      ...(operation?.operationId ? { operationId: operation.operationId } : {}),
+      ...(operation?.submitted === false ? { submitted: false } : {})
+    })
   }
   track('agent_error', {
     error_class: 'paste_readiness_timeout',

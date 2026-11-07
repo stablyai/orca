@@ -26,7 +26,7 @@ import { registerExportHandlers } from '../export'
 import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
-import { registerRuntimeHandlers } from '../runtime'
+import { forwardGeneratedInputNoticesToHosts, registerRuntimeHandlers } from '../runtime'
 import {
   invalidateRuntimeEnvironmentTransport,
   registerRuntimeEnvironmentHandlers
@@ -260,8 +260,8 @@ export function registerCoreHandlers(
   registerLocalhostWorktreeLabelHandlers(store)
   registerFilesystemHandlers(store, commitMessageAgentEnv)
   registerFilesystemWatcherHandlers()
-  registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers(store)
+  registerRuntimeEnvironmentHandlers(store, registerRuntimeHandlers(runtime))
+  forwardGeneratedInputNoticesToHosts(runtime)
   registerWslHostHandlers({
     store,
     getUserDataPath: () => app.getPath('userData'),
