@@ -95,9 +95,12 @@ it.skipIf(process.platform === 'win32')(
     // Someone already signed in to Orca's own Chat keeps it.
     const managedAcp = join(stateDirectory, 'antigravity-chat', 'antigravity-acp')
     await mkdir(managedAcp, { recursive: true })
-    await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
-    await writeFile(join(managedAcp, 'antigravity-oauth-token'), '{}')
-    await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
+    for (const tokenFile of ['acp_token.json', 'acp_business_token.json']) {
+      await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
+      await writeFile(join(managedAcp, tokenFile), '{}')
+      await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
+      await rm(join(managedAcp, tokenFile))
+    }
   }
 )
 
