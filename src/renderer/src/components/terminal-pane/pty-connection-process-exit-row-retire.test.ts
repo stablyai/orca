@@ -5,8 +5,8 @@ import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { RESET_MOUSE_REPORTING } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import type * as CoordinatorModule from './agent-completion-coordinator'
-import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
+import type * as CoordinatorModule from './agent-completion/agent-completion-coordinator'
+import type { AgentCompletionCoordinatorOptions } from './agent-completion/agent-completion-coordinator-types'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -60,7 +60,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -91,7 +91,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -103,7 +103,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
@@ -113,7 +113,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -122,7 +122,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 // Why: lets a test deliver the monitor's confirmed exit without driving a remote host's verdict.
-vi.mock('./agent-completion-coordinator', async (importOriginal) => {
+vi.mock('./agent-completion/agent-completion-coordinator', async (importOriginal) => {
   const actual = await importOriginal<typeof CoordinatorModule>()
   return {
     ...actual,

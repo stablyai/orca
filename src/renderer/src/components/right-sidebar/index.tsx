@@ -30,7 +30,7 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
 function RightSidebarInner(): React.JSX.Element {
   useUiLanguageRevision()

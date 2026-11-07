@@ -3,7 +3,7 @@ import type {
   DispatchStatus,
   WorkerDispatchRow,
   LegacyWorkerTerminalRecoveryRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'

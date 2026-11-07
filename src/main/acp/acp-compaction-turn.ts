@@ -5,7 +5,7 @@ import { providerDiagnostic } from '../../shared/agent-session/failures/agent-se
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../shared/agent-session/agent-session-compaction'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
+import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/operations/structured-conversation-command-outcome'
 import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
 import {
   acpProviderFailed,

@@ -1,6 +1,6 @@
 import { e2eConfig } from '@/lib/e2e-config'
-import type { PtyBufferSnapshot } from '../pty-transport-types'
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyBufferSnapshot } from '../pty-transport/pty-transport-types'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean

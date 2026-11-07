@@ -1,12 +1,13 @@
 /** Capability verdicts must change only on async daemon answers, never pane mount/unmount; repeatedly flip them between commits while mount writes update other exemption inputs to catch React #185 loops. */
 /** @vitest-environment happy-dom */
+import type * as ParkedWatcherRegistryModule from './parking/output-watchers/terminal-parked-watcher-registry'
 import { act, StrictMode } from 'react'
 import type * as ReactModule from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type * as ParkedTabWatchersModule from './terminal-parked-tab-watchers'
+import type * as ParkedTabWatchersModule from './parking/output-watchers/terminal-parked-tab-watchers'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -45,7 +46,7 @@ vi.mock('../native-chat/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: () => {}
 }))
 
-vi.mock('./terminal-parking-e2e-overrides', () => ({
+vi.mock('./parking/instrumentation/terminal-parking-e2e-overrides', () => ({
   getTerminalParkingPolicyOverrides: () => ({})
 }))
 
@@ -88,9 +89,9 @@ vi.mock('./TerminalOverlaySlot', async () => {
   }
 })
 
-vi.mock('./terminal-parked-tab-watchers', async () => {
+vi.mock('./parking/output-watchers/terminal-parked-tab-watchers', async () => {
   const actual = await vi.importActual<typeof ParkedTabWatchersModule>(
-    './terminal-parked-tab-watchers'
+    './parking/output-watchers/terminal-parked-tab-watchers'
   )
   return {
     ...actual,
@@ -113,12 +114,16 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
           harness.watcherEntries.add(tab.id)
         }
       }
-    },
-    disposeParkedTerminalWatchersForWorktree: () => {
-      harness.watcherEntries.clear()
     }
   }
 })
+
+vi.mock('./parking/output-watchers/terminal-parked-watcher-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+  disposeParkedTerminalWatchersForWorktree: () => {
+    harness.watcherEntries.clear()
+  }
+}))
 
 import { useAppStore } from '../../store'
 import TerminalPaneOverlayLayer from './TerminalPaneOverlayLayer'

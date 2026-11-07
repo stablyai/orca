@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
-import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'

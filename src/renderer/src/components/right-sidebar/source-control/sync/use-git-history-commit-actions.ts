@@ -7,8 +7,8 @@ import { getRuntimeGitCommitCompare } from '@/runtime/runtime-git-diff-client'
 import { getRuntimeGitRemoteCommitUrl } from '@/runtime/runtime-git-working-tree-client'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { resolveDefaultAgentForWorktreeNewTab } from '@/lib/agent-tab-shortcuts'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
 import { translate } from '@/i18n/i18n'
@@ -22,7 +22,7 @@ import {
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
 import type { GitHistoryCommitAction } from './git-history-commit-context-menu'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 

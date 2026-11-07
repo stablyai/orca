@@ -1160,7 +1160,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -2318,6 +2320,7 @@
         "cb55b0390f": "Verwalten",
         "4f9313984d": "Prüfer",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Dieses Element konnte nicht geladen werden. Aktualisiere, um es erneut zu versuchen.",
         "be3d291837": "Dateien",
         "c996e2962c": "Unterhaltung",
         "b3c156dd51": "Aktualisieren",
@@ -3034,7 +3037,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",
@@ -8293,7 +8295,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Coding-Agenten die Steuerung des aktiven mobilen Emulators über Orca-CLI-Befehle ermöglichen.",
           "f2f8d97bb6": "Steuerung mobiler Emulatoren durch Agenten",
-          "143961d031": "Standardgerät",
           "8aec2f99a0": "Emulatorverfügbarkeit aktualisieren",
           "ae1612c58c": "Verfügbarkeit",
           "f9af91ea26": "Zeigt die Aktion „Neuer mobiler Emulator“ an und ermöglicht Agenten, sich mit dem aktiven Emulator zu verbinden.",
@@ -8306,9 +8307,7 @@
           "d704fb5023": "Einrichtung erforderlich",
           "06b06429c6": "Unterstützung für Android SDK und iOS Simulator wird geprüft.",
           "6d1483d4a0": "1 Emulatorgerät erkannt.",
-          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt.",
-          "f62a1bb759": "Orca wählt automatisch ein Emulatorgerät aus, sobald Geräte erkannt werden.",
-          "b2fd62ea75": "Standardgerät für neue Emulator-Tabs und Verbindungsbefehle von Agenten. Die automatische Auswahl bevorzugt ein bereits laufendes Gerät."
+          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Keine Schnittstellen gefunden"
@@ -15913,7 +15912,6 @@
                 "06e10d7356": "Emulator herunterfahren",
                 "e7a0d1897e": "Startbildschirm",
                 "6bd8dff42a": "Drehen",
-                "3d836b879c": "Emulator auswählen",
                 "81b3571a07": "Verbinden",
                 "868c0f2938": "In Bearbeitung…"
               }
@@ -17629,6 +17627,8 @@
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
           "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
+          "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+          "retryFullOutput": "Erneut versuchen",
           "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",
@@ -19362,6 +19362,7 @@
       },
       "composer": {
         "send": "Senden",
+        "planMode": "Planen",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
         "previewQueue": "Einreihen",
         "previewSteer": "Steuern",
@@ -20085,6 +20086,13 @@
         "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
         "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
         "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copyIdentity": "{{value0}} kopieren",
+        "folder": "Ordner",
+        "mainCheckout": "Haupt-Checkout",
+        "worktree": "Worktree"
       }
     },
     "tab": {

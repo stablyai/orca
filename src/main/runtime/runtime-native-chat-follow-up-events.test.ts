@@ -42,7 +42,7 @@ it('client-events ready snapshots the same normalized setting after installing i
   const { OrcaRuntimeService } = await import('./orca-runtime')
   const { RuntimeClientSettingsController } =
     await import('./client/settings/runtime-client-settings')
-  const { CLIENT_EVENT_METHODS } = await import('./rpc/methods/client-events')
+  const { CLIENT_EVENT_METHODS } = await import('./rpc/methods/client-events/client-events')
   const runtime = new OrcaRuntimeService()
   const settings = getDefaultSettings('/tmp')
   const controller = new RuntimeClientSettingsController({

@@ -63,6 +63,7 @@ import {
   featureWallOpenedSchema,
   featureWallTileClickedSchema,
   featureWallTileFocusedSchema,
+  mobileSessionOpenedSchema,
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
   nativeChatPickerOpenedSchema,
@@ -177,6 +178,7 @@ export const eventSchemas = {
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
   native_chat_send_classified: nativeChatSendClassifiedSchema,
   native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
+  mobile_session_opened: mobileSessionOpenedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,

@@ -4,10 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type {
-  AntigravityChatSignInState,
-  AntigravityChatSignInStatus
-} from '../../shared/antigravity-account-types'
+import type * as accountTypes from '../../shared/antigravity-account-types'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpPrivateTempConnect } from '../acp/acp-private-temp'
@@ -16,7 +13,8 @@ import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolut
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
@@ -43,7 +41,7 @@ const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
 const SESSION_FAILED =
   'Antigravity authenticated, but could not initialize a session or load models.'
 
-type Phase = AntigravityChatSignInState['phase']
+type Phase = accountTypes.AntigravityChatSignInState['phase']
 type Flow = {
   id: string
   owner: string
@@ -73,7 +71,7 @@ const running = (current: Flow | null): current is Flow => {
 
 function publish(
   current: Flow,
-  next: Omit<AntigravityChatSignInState, 'flowId'>,
+  next: Omit<accountTypes.AntigravityChatSignInState, 'flowId'>,
   cleanupFailed = false
 ): void {
   const { value } = antigravityChatSignIn.get()
@@ -276,7 +274,7 @@ function ownFlow(owner: string, flowId: string): Flow {
 export async function cancelAntigravityChatSignIn(
   owner: string,
   flowId: string
-): Promise<AntigravityChatSignInState | null> {
+): Promise<accountTypes.AntigravityChatSignInState | null> {
   const current = ownFlow(owner, flowId)
   publish(current, { phase: 'cancelled' })
   await current.done
@@ -291,7 +289,7 @@ export async function completeAntigravityChatSignIn(
   owner: string,
   flowId: string,
   callbackUrl: string
-): Promise<AntigravityChatSignInState | null> {
+): Promise<accountTypes.AntigravityChatSignInState | null> {
   const current = ownFlow(owner, flowId)
   if (current.callbackSent) {
     throw new Error('That address was already sent. Wait for Google to finish signing in.')
@@ -319,7 +317,9 @@ export const subscribeAntigravityChatSignIn = (onChange: () => void): (() => voi
   antigravityChatSignIn.subscribe(onChange)
 
 /** Hide the flow ID and sign-in link from other clients. */
-export function readAntigravityChatSignInStatus(owner: string): AntigravityChatSignInStatus {
+export function readAntigravityChatSignInStatus(
+  owner: string
+): accountTypes.AntigravityChatSignInStatus {
   const { value, revision } = antigravityChatSignIn.get()
   if (!value.flow) {
     return { revision, auth: value.auth, flow: null }

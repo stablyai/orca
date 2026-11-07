@@ -58,6 +58,7 @@ describe('OpenCode worker model execution host', () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version: '1.18.30',
       pluginApi: 'v1',
+      v1SessionPolicyFiltersTools: true,
       promptMode: 'submit'
     })
   })
@@ -65,6 +66,7 @@ describe('OpenCode worker model execution host', () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version: '2.0.14',
       pluginApi: 'v2',
+      v1SessionPolicyFiltersTools: false,
       promptMode: 'unknown'
     })
     await expect(probe(host())).rejects.toMatchObject({

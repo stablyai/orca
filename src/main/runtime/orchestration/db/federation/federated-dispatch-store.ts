@@ -1,4 +1,4 @@
-import type { FederatedDispatchRow } from '../../types'
+import type { FederatedDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

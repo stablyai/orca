@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/index'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { usePluginNewFiles } from '@/store/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
-import { dedupePaletteWorktrees } from '@/lib/palette-repo-resolution'
+import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs

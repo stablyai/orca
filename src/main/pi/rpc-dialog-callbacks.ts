@@ -1,8 +1,9 @@
 import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'

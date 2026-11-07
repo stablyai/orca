@@ -120,7 +120,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         pane.terminal.write.mockClear()
 
         const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
+          await import('./pty-transport/delivery/pty-model-restore-channel')
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'hidden-drop',
@@ -154,7 +154,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
 
         // Why: with the skip grammar gone, gated drops latch the restore via main's out-of-band marker, not a renderer content scan.
         const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
+          await import('./pty-transport/delivery/pty-model-restore-channel')
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'hidden-drop',
@@ -200,7 +200,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
 
         dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
         const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
+          await import('./pty-transport/delivery/pty-model-restore-channel')
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'hidden-drop',
@@ -267,7 +267,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
 
         const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
+          await import('./pty-transport/delivery/pty-model-restore-channel')
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'hidden-drop',
@@ -551,7 +551,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           .mockReturnValueOnce(firstSnapshot.promise)
           .mockResolvedValue({ data: 'post-flood repaint\r\n', cols: 100, rows: 30, seq: 96 })
         const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
+          await import('./pty-transport/delivery/pty-model-restore-channel')
 
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',

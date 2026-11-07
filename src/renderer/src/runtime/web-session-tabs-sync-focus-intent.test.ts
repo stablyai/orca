@@ -28,6 +28,40 @@ vi.mock('../store', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
+  it('honors a caller chat target even when the host observation selects another chat', () => {
+    const state = makeState()
+    const chat = (id: string, isActive: boolean) => ({
+      type: 'agent-session' as const,
+      id,
+      title: id,
+      sessionId: id.slice('agent-session:'.length),
+      agent: 'codex' as const,
+      isActive
+    })
+    const snapshot = makeSnapshot([chat('agent-session:a', true), chat('agent-session:c', false)], {
+      activeTabId: 'agent-session:a',
+      activeTabType: 'agent-session',
+      tabGroups: [
+        {
+          id: 'host-group-1',
+          activeTabId: 'agent-session:a',
+          tabOrder: ['agent-session:a', 'agent-session:c']
+        }
+      ]
+    })
+    recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'agent-session:c')
+    const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+    if (!patch) {
+      throw new Error('Expected caller focus to produce a navigation patch')
+    }
+    const selected = patch.groupsByWorktree?.[WT]?.find(
+      (group) => group.id === patch.activeGroupIdByWorktree?.[WT]
+    )?.activeTabId
+    expect(patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.id === selected)?.entityId).toBe(
+      'c'
+    )
+  })
+
   it('replays a snapshot that beat the RPC response and focuses the exact adopted leaf', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const root = {

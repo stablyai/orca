@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -82,7 +82,7 @@ vi.mock('@/lib/resolve-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof ResolveOwnerModule>()),
   runtimeEnvironmentIdUnlessTwin: (_state: unknown, key: string) => hoisted.owners.get(key) ?? null
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   runtimeEnvironmentIdOrLocalUnlessTwin: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null

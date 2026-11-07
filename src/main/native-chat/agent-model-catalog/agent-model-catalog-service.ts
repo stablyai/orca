@@ -16,7 +16,7 @@ import type {
   AgentModelCatalogReadParams
 } from './agent-model-catalog-service-contract'
 export type { AgentModelCatalogServiceDeps, AgentModelCatalogService }
-import { onAtRestCommandContextRetired } from '../agent-session-wire/at-rest-command-context'
+import { onAtRestCommandContextRetired } from '../agent-session-wire/options/at-rest-command-context'
 import {
   createAgentModelCatalogSnapshot,
   agentModelCatalogRequestKey,

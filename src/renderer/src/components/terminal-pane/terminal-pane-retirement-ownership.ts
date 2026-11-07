@@ -3,7 +3,7 @@ import {
   getTerminalPtyOwnershipIdentity,
   hasTerminalPtyOwnerOutsidePane
 } from '@/store/slices/terminal-tab-retirement'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 export type UnboundTerminalPaneRetirement = {
   getState: () => AppState

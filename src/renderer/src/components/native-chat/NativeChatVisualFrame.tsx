@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import {
   NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX,
   NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,

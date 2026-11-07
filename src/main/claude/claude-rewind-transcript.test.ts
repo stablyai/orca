@@ -1,3 +1,4 @@
+import './claude-conversation-worker.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -1,7 +1,7 @@
 // Window writes OpenFile immediately but selects proposed tabs only after main frames draw them. Tab consumers wait via afterPendingTab.
 
 import type { Tab } from '../../../../../../shared/tab-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'

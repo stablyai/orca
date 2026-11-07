@@ -6,11 +6,10 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
-import {
-  AgentSessionAcquisitionRefusal,
-  type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing

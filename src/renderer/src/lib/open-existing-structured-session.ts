@@ -14,7 +14,7 @@ import {
   activateStructuredAgentSessionById
 } from './agent-session/structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './workspace/ownership/worktree-runtime-owner'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'

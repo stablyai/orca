@@ -4,7 +4,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   resolveWorktreeHostConnection,
   type WorktreeHostConnection
-} from '@/lib/worktree-host-connection-phase'
+} from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import {
   selectRuntimeAwareSshError,

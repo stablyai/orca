@@ -1,7 +1,12 @@
 import type { ExecutionHostId } from '../../execution-host'
+import type { BuiltInEditorId } from '../../open-in-applications'
 
 export type ShellOpenExternalEditorRequest = {
   path: string
+  /** Id of a persisted Open In application; main launches its saved command. */
+  openInApplicationId?: string
+  builtInEditorId?: BuiltInEditorId
+  /** Legacy callers only; main accepts it solely when it equals a saved or built-in command. */
   command?: string
   connectionId?: string | null
   /** Host that owns `path`; main refuses unless it is `local`, a WSL host (Windows), or, with `connectionId`, that SSH host or a server running on it. */

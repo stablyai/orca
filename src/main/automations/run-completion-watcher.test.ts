@@ -10,6 +10,7 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
@@ -152,7 +153,7 @@ describe('authority-owned automation run completion', () => {
       )
     })
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
     await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
 
     await service.markDispatchResult({
@@ -194,7 +195,7 @@ describe('authority-owned automation run completion', () => {
       )
     })
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
     service.stop()
     await vi.waitFor(() => expect(aborted).toEqual([true]))
     expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
