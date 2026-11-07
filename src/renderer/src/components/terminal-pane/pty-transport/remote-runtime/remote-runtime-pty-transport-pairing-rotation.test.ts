@@ -154,9 +154,9 @@ async function createCatalogStore() {
     toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
   }))
   const { createRuntimeStatusTestStore } =
-    await import('@/store/slices/runtime-status.test-fixture')
+    await import('@/store/slices/runtime-status/runtime-status.test-fixture')
   const { resetDeferredPeerChecksForTests } =
-    await import('@/store/slices/runtime-environment-peer-replacement')
+    await import('@/store/slices/runtime-status/runtime-environment-peer-replacement')
   resetDeferredPeerChecksForTests()
   return createRuntimeStatusTestStore()
 }

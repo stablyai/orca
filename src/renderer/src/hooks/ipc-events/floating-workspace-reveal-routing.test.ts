@@ -4,7 +4,7 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
 import type * as MountedTerminalTabRegistry from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { drawTabsFromMain } from '../../store/slices/tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }

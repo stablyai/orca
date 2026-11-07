@@ -184,7 +184,8 @@ it('queued initial detail setters cannot revoke settled intent or cross a full-s
 
 it('actual runtime-status session loss and recovery reacquire hydration and finish loading', async () => {
   const s = store()
-  const { createRuntimeStatusSlice } = await import('@/store/slices/runtime-status')
+  const { createRuntimeStatusSlice } =
+    await import('@/store/slices/runtime-status/create-runtime-status-slice')
   // SAFETY: this fixture installs the production runtime slice over the same Zustand store.
   const runtime = createRuntimeStatusSlice(
     s.setState,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resetAgentPaneAuthorityAliasesForTests } from '../agent-pane-authority'
+import { resetAgentPaneAuthorityAliasesForTests } from './agent-pane-authority'
 import { wslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
 import { createTestStore } from '../store-test-helpers'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'

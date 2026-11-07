@@ -14,7 +14,7 @@ import {
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose

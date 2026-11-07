@@ -7,19 +7,11 @@ import {
   isValidMirroredHostTerminalTabId
 } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
-import { singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
+import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import {
-  buildOrphanTerminalCleanupPatch,
-  getOrphanTerminalIds
-} from '../slices/terminal-orphan-helpers'
-import {
-  ensureGroup,
-  findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  updateGroup
-} from '../slices/tab-group-state'
+import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-cleanup'
+import { ensureGroup, findTabByEntityInGroup, updateGroup } from '../slices/tabs/tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-selection-history'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'

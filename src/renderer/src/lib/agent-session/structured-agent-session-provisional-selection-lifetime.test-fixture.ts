@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { StructuredAgentLaunchHandle } from './launch/continuation/structured-agent-launch-settlement'
 import type { OpenedAgentSessionTab } from './launch/pane/structured-agent-session-tab-open-through-layout-owner'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
 import {
   nativeChatComposerDraftWritesSettled,

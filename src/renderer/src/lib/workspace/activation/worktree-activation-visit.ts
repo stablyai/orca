@@ -3,7 +3,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-input
 import type { AppState } from '@/store/types'
 import type { ActiveWorktreeStateTransition } from '@/store/slices/worktree-helpers'
 import { stampWorktreeVisit } from '@/store/slices/worktrees/session/worktree-visit-recency'
-import { appendHistoryEntry } from '@/store/slices/worktree-nav-history'
+import { appendHistoryEntry } from '@/store/slices/ui/workspace-navigation-history'
 import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
 
 type PreviousActive = { worktreeId: string | null; hostId: ExecutionHostId | null }

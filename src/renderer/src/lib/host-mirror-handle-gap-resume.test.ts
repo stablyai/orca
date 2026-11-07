@@ -14,9 +14,9 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,

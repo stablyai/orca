@@ -16,7 +16,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
 vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({

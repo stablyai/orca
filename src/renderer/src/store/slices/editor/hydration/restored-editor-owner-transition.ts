@@ -3,7 +3,7 @@ import type { TabGroup } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { sanitizeRecentTabIds } from '../../tab-group-state'
+import { sanitizeRecentTabIds } from '../../tabs/tab-selection-history'
 import {
   nextActiveIdAfterRemoval,
   removeEmptyEditorGroups,

@@ -8,7 +8,7 @@ import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mob
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const { storeRef } = vi.hoisted(() => {
   const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }

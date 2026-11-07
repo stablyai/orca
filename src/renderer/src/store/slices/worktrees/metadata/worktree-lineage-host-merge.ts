@@ -8,7 +8,8 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { findWorktreeById } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { reuseEqualRecordMap } from '../../../catalog-record-reconciliation'
 import {

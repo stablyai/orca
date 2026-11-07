@@ -5,8 +5,8 @@ import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import '@/store/slices/runtime-status'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import '@/store/slices/runtime-status/create-runtime-status-slice'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   createStructuredSessionSelectionController,
   type StructuredSessionSelectionController

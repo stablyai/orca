@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PreflightStatus } from '../../../../preload/api-types'
+import type { PreflightStatus } from '../../../../preload/api/preflight-api'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../shared/constants'

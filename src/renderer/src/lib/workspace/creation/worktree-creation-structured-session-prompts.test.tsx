@@ -19,7 +19,7 @@ import type { AgentJournalRenderItem } from '../../../../../shared/agent-session
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import type * as Admission from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as Launch from '../../agent-session/launch/structured-agent-session-launch-create-call'
 import { resetStructuredAgentLaunchRegistryForTests } from '../../agent-session/launch/structured-agent-session-launch-registry'

@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '../../types'
 import './agent-status'
-import { resetAgentPaneAuthorityAliasesForTests } from '../agent-pane-authority'
+import { resetAgentPaneAuthorityAliasesForTests } from './agent-pane-authority'
 import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
 import type {
   AgentStatusBatchUpdate,

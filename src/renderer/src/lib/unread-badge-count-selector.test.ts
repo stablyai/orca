@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import {
   createTestStore,
   makeTab,
