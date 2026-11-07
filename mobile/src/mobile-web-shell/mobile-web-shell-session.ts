@@ -55,6 +55,7 @@ export function createMobileWebShellSession(
     state: CHECKING,
     retriedOnce: false,
     remountedOnce: false,
+    reclaimedOnce: false,
     pageRemountedOnce: false,
     pageReady: false,
     pagePainted: false,
@@ -277,7 +278,11 @@ export function reduceMobileWebShellSession(
       return step(
         session,
         session.state.kind === 'ready'
-          ? { ...pageDocumentStatePatch(session, event), remountedOnce: false }
+          ? {
+              ...pageDocumentStatePatch(session, event),
+              remountedOnce: false,
+              reclaimedOnce: false
+            }
           : {}
       )
     case 'page-back-claim':
@@ -286,7 +291,12 @@ export function reduceMobileWebShellSession(
       return onLayoutChanged(session, event.wide)
     case 'retry-pressed': {
       // Only explicit retry resets recovery latches; reconnect must not grant another remount.
-      const reset = { retriedOnce: false, remountedOnce: false, pageRemountedOnce: false }
+      const reset = {
+        retriedOnce: false,
+        remountedOnce: false,
+        reclaimedOnce: false,
+        pageRemountedOnce: false
+      }
       const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
         ? [{ kind: 'delete-cache' }]
         : []

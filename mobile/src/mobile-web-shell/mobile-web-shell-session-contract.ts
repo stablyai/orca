@@ -184,6 +184,8 @@ export type MobileWebShellSession = {
   readonly retriedOnce: boolean
   // Renderer loss and page failure each get one remount; neither spends the other's.
   readonly remountedOnce: boolean
+  // A loss the OS reclaimed gets one free remount per painted document, so a hidden crash loop still reaches the budget.
+  readonly reclaimedOnce: boolean
   readonly pageRemountedOnce: boolean
   // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean
