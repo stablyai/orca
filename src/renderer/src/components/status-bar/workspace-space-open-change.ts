@@ -5,7 +5,7 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-s
 import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-space/workspace-space-change'
 import { useAppStore } from '@/store'
 import { getWorktreeOnHostFromState } from '@/store/selectors'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'

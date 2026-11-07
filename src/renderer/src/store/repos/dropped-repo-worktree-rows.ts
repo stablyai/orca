@@ -1,7 +1,7 @@
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { worktreeMatchesHost } from '../slices/worktrees/listing/worktree-host-ownership'
 import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 

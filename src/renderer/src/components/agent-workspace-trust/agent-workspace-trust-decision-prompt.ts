@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getRepoRowIdentity, repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoRowIdentity, repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import {
   TUI_AGENT_CONFIG,
   isTuiAgent
