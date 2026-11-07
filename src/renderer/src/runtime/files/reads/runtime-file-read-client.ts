@@ -1,5 +1,5 @@
 import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-file-contracts'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileDownloadResult,
   RuntimeFileOperationArgs,
@@ -23,7 +23,7 @@ import {
   isHostFileOutsideWorkspaces,
   readHostFilePreview,
   readHostFileOutsideWorkspaces
-} from '../../runtime-terminal-artifact-read'
+} from '../grants/runtime-terminal-artifact-read'
 import { readRemoteFilePreview } from './runtime-paged-file-read'
 import {
   downloadRemoteFileViaPreview,

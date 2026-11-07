@@ -1,5 +1,5 @@
 import * as emulatorPreferences from '@/lib/emulator-opening-preferences-capability'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
 // @vitest-environment happy-dom
 

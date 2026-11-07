@@ -10,7 +10,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const filePath = '/repo/readme.txt'
 const hostTab: RuntimeMobileSessionFileTab = {

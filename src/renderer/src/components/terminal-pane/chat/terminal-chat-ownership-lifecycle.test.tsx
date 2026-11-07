@@ -60,7 +60,7 @@ vi.mock('../../../store/index', async () => {
   const useAppStore = create(() => mocks.state)
   return { useAppStore }
 })
-vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({
+vi.mock('@/runtime/hosted-terminals/actions/web-runtime-terminal-buffer-actions', () => ({
   clearWebRuntimeTerminalBuffer: vi.fn()
 }))
 

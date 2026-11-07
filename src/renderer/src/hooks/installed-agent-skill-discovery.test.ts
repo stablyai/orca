@@ -11,7 +11,9 @@ const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
   >()
 )
 
-vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarget }))
+vi.mock('@/runtime/skills/configuration/runtime-skills-client', () => ({
+  discoverSkillsForRuntimeTarget
+}))
 
 const {
   discoverInstalledAgentSkills,

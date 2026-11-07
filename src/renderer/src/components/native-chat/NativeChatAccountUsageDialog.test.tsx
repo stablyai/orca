@@ -17,7 +17,7 @@ const hostStream = vi.hoisted(() => {
   const stream: { snapshot: ((snapshot: unknown) => void) | null } = { snapshot: null }
   return stream
 })
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (_target: unknown, handlers: { onSnapshot: (s: unknown) => void }) => {
     hostStream.snapshot = handlers.onSnapshot
     return {
@@ -30,7 +30,9 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.read
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.reset }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.reset
+}))
 vi.mock('@/store', () => {
   const state = {
     usagePercentageDisplay: 'used',

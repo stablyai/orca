@@ -9,7 +9,7 @@ import {
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useAppStore } from '@/store'
 import { capturePRCheckContract, type PRCheckContract } from '@/lib/pr-check-observation-contract'
 import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'

@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../shared/github/check-types'

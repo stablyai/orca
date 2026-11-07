@@ -36,7 +36,7 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

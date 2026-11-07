@@ -10,8 +10,8 @@ import {
   makeSnapshot,
   resetBrowserTabCreateEnvironment,
   stubBrowserTabCreateEnvironment
-} from './web-runtime-session-test-harness'
-import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),

@@ -1,5 +1,5 @@
 import type { RepoSlug } from '@/lib/github-links'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeTarget

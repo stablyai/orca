@@ -153,21 +153,24 @@ const multiplexerHarness = vi.hoisted(() => {
   const subscriptions: RemotePreviewSubscription[] = []
   return { environments, subscriptions, sendInput: vi.fn(() => true), close: vi.fn() }
 })
-vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
-    multiplexerHarness.environments.push(environmentId)
-    return {
-      subscribeTerminal: async (args: RemotePreviewSubscription) => {
-        multiplexerHarness.subscriptions.push(args)
-        return {
-          sendInput: multiplexerHarness.sendInput,
-          claimViewport: vi.fn(() => true),
-          close: multiplexerHarness.close
+vi.mock(
+  '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
+      multiplexerHarness.environments.push(environmentId)
+      return {
+        subscribeTerminal: async (args: RemotePreviewSubscription) => {
+          multiplexerHarness.subscriptions.push(args)
+          return {
+            sendInput: multiplexerHarness.sendInput,
+            claimViewport: vi.fn(() => true),
+            close: multiplexerHarness.close
+          }
         }
       }
     }
-  }
-}))
+  })
+)
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'

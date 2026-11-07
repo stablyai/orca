@@ -6,7 +6,7 @@
     "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
-    "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts",
+    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",

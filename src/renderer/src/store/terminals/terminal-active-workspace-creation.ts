@@ -57,7 +57,7 @@ export async function openNewTerminalTabInWorkspace(
     }
     try {
       const { createWebRuntimeSessionTerminal } =
-        await import('@/runtime/web-runtime-terminal-creation')
+        await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation')
       await createWebRuntimeSessionTerminal(
         {
           worktreeId,

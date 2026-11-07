@@ -17,7 +17,11 @@ import { captureLinkOpenIntent } from '../lib/link-open-intent'
 import { beginLinkOpenRequest } from '../lib/link-open-request'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
-import { resetWebSessionTabsSyncTestState, ENV, WT } from './web-session-tabs-sync-test-harness'
+import {
+  resetWebSessionTabsSyncTestState,
+  ENV,
+  WT
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   G1,
   G2,

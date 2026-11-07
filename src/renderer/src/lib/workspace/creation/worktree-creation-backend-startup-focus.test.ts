@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as MountedTerminalTabRegistryModule from '@/runtime/mounted-terminal-tab-registry'
+import type * as MountedTerminalTabRegistryModule from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { PreloadApi } from '../../../../../preload/api-types'
 
 type CreateTerminalPayload = Parameters<Parameters<PreloadApi['ui']['onCreateTerminal']>[0]>[0]
@@ -8,10 +8,13 @@ const { focusRuntimeTerminalSurface } = vi.hoisted(() => ({
   focusRuntimeTerminalSurface: vi.fn(() => true)
 }))
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof MountedTerminalTabRegistryModule>()),
-  focusRuntimeTerminalSurface
-}))
+vi.mock(
+  '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MountedTerminalTabRegistryModule>()),
+    focusRuntimeTerminalSurface
+  })
+)
 
 import { useAppStore } from '@/store/index'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'

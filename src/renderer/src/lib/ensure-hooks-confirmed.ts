@@ -9,7 +9,7 @@ import {
   checkRuntimeHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
-} from '@/runtime/runtime-hooks-client'
+} from '@/runtime/repo-hooks/runtime-hooks-client'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,

@@ -5,7 +5,7 @@ import { openDetectedFilePath } from './terminal-file-open-routing'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../../../../shared/files-runtime-capabilities'
 import { installTerminalLinkTestEnvironment } from '../terminal-link-handlers-test-harness'
 

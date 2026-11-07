@@ -17,8 +17,10 @@ const runtime = vi.hoisted(() => ({
   search: vi.fn(),
   statusOrder: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  assertRuntimeEnvironmentCapability: runtime.capability,
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  assertRuntimeEnvironmentCapability: runtime.capability
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: runtime.rpc
 }))
 vi.mock('@/runtime/jira/runtime-jira-client', () => ({

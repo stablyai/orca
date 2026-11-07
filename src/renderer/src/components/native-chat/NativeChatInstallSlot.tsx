@@ -6,7 +6,7 @@ import {
 import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
-} from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'

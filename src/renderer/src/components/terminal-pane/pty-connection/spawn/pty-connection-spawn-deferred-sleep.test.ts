@@ -52,7 +52,7 @@ let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -104,7 +104,7 @@ const { canResumeHostAutomaticRestores, resumeHostAutomaticRestores } = vi.hoist
   resumeHostAutomaticRestores: vi.fn(async () => {})
 }))
 
-vi.mock('@/runtime/resume-host-automatic-restores', () => ({
+vi.mock('@/runtime/hosts/connections/resume-host-automatic-restores', () => ({
   canResumeHostAutomaticRestores,
   resumeHostAutomaticRestores
 }))

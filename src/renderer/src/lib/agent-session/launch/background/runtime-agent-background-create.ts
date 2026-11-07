@@ -7,7 +7,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import type { LaunchAgentBackgroundSessionArgs } from './agent-background-session-contract'
 import type { AgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -20,15 +20,15 @@ import {
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
-} from '@/runtime/agent-session-create-operation'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest
-} from '@/runtime/agent-session-create-request'
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
+import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 
 type RuntimeAgentBackgroundCreateArgs = {
   environmentId: string

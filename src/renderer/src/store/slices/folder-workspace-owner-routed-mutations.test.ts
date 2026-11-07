@@ -6,8 +6,8 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createTestStore } from './store-test-helpers'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 

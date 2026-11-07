@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
+import { refreshLocalRuntimeCapabilities } from '../hosts/capabilities/local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
   latchLocalStructuredSessionRestore,
@@ -12,7 +12,7 @@ import {
 } from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 
 type StructuredSessionInventoryResponse = {

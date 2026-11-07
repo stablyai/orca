@@ -15,8 +15,8 @@ import { markLiveCodexSessionsForRestart } from './codex-session-restart'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { liveRemoteEvidence } from './codex-session-restart-test-fixture'
 
 const ACCOUNT_A = 'account-a@example.com'

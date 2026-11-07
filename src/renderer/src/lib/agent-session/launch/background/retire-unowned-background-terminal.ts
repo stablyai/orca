@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

@@ -15,7 +15,7 @@ type TransportFixture = typeof TransportFixtureModule
 const main = vi.hoisted((): { transport: TransportFixture['layoutApplyTestTransport'] | null } => ({
   transport: null
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const fixture = await import('@/runtime/layout-apply-test-transport.test-fixture')
   main.transport = fixture.layoutApplyTestTransport
   return fixture.runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -40,7 +40,8 @@ const load = perClientLoader(async () => ({
   phone: await import('@/runtime/sync-runtime-graph/mobile-session-snapshots'),
   switch: await import('../../../../../../shared/layout-owner-switch'),
   remoteCreate: await import('./runtime-agent-background-create'),
-  remoteStream: await import('@/runtime/runtime-terminal-stream'),
+  remoteStream:
+    await import('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'),
   preferences:
     await import('@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'),
   settingsTransport:

@@ -14,7 +14,7 @@ import {
 } from '@/components/editor/external-changes/editor-self-write-registry'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export type EditorExternalWatchNotification = {
   worktreeId: string

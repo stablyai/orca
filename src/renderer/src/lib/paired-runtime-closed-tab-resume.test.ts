@@ -4,7 +4,7 @@ import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/sna
 import {
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests

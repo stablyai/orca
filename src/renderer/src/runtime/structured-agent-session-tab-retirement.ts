@@ -15,7 +15,7 @@ import {
 import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'

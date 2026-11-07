@@ -1,9 +1,9 @@
 import { expect, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { resetRemoteRuntimeTerminalMultiplexersForTests } from '@/runtime/remote-runtime-terminal-multiplexer'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { resetRemoteRuntimeTerminalMultiplexersForTests } from '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
 
 type TestMock = ReturnType<typeof vi.fn>
 

@@ -108,8 +108,10 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({

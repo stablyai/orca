@@ -4,11 +4,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,
   selectCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 import {
   markLiveCodexSessionsForRestart,

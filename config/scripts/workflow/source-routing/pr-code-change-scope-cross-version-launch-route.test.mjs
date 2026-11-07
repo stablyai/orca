@@ -6,7 +6,7 @@ describe('cross-version wire routing for the paired launch route', () => {
   it.each([
     'src/shared/structured-native-chat-launch-route.ts',
     'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
-    'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+    'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
     'src/shared/electron-remote-runtime-client-capabilities.ts',
     'src/shared/remote-runtime/remote-runtime-client-capabilities.ts'
   ])('runs the cross-version suites when %s changes', (file) => {

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
-import { stubRuntimeEnvironmentBridge } from '../runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../rpc/testing/runtime-environment-bridge-fixture'
 
 type RuntimeEnvironmentSubscribeCallbacks = Parameters<
   typeof window.api.runtimeEnvironments.subscribe

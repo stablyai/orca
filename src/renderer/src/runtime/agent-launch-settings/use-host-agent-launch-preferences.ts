@@ -10,7 +10,7 @@ import {
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   type AgentLaunchPreferences,
   type Snapshot,

@@ -89,7 +89,9 @@ vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.clos
 vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))

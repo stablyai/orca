@@ -14,7 +14,7 @@ import {
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { retireProvider } from '@/lib/agent-session/launch/background/retire-unowned-background-terminal'
 import {
   agentBackgroundPaneLaunchRequest,
@@ -22,7 +22,7 @@ import {
   prepareRuntimeAgentBackgroundTerminal
 } from '@/lib/agent-session/launch/background/runtime-agent-background-create'
 import type { TerminalLaunchResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { subscribeToRuntimeTerminalData } from '@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-session/launch/background/agent-background-session-cleanup'

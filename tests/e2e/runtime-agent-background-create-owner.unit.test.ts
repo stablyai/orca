@@ -5,9 +5,9 @@ import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib
 import {
   createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { stubRuntimeEnvironmentBridge } from '@/runtime/rpc/testing/runtime-environment-bridge-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const runtimeCall = vi.fn()
 beforeEach(() => {

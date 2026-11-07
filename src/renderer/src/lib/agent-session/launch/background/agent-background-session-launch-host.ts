@@ -1,7 +1,7 @@
 import {
   hostRouteForAuthority,
   runtimeTargetForOwnerEnvironment
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { resolveOwner } from '../../../resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '../../../local-preflight-context'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'

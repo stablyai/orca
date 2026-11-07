@@ -1,7 +1,7 @@
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import './prepared-action-launch.test-fixture'
 import '../../src/renderer/src/lib/agent-session/launch/background/runtime-agent-background-create'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {

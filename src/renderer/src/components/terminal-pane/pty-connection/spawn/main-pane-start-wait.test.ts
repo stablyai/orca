@@ -27,7 +27,9 @@ const store = vi.hoisted(() => {
 vi.mock('@/store/index', () => ({ useAppStore: store }))
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 const callRuntimeRpc = vi.hoisted(() => vi.fn(async () => ({ started: true })))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 
 const PANE_KEY = 'tab-1:leaf-1'
 

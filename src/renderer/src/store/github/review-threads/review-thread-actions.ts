@@ -3,7 +3,7 @@ import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot

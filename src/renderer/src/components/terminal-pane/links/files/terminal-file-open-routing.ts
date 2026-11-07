@@ -36,7 +36,7 @@ import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
 
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   httpLinkDirectClickDestination,
   type HttpLinkDestination

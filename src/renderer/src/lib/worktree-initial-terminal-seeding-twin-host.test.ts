@@ -8,7 +8,7 @@ import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { applyCreatedWorktree } from '@/store/slices/worktrees/create/created-worktree-state-merge'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

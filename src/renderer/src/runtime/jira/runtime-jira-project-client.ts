@@ -4,7 +4,7 @@ import type {
   JiraSiteSelection
 } from '../../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
 
 export async function jiraStatusForTarget(

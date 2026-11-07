@@ -9,7 +9,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import { NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE } from '../../../../shared/native-chat/native-chat-visual-shell'
 
 const callRuntimeRpc = vi.fn()
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 // The visual's row is in view, so its frame mounts.

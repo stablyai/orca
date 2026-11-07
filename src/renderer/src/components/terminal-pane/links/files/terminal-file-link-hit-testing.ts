@@ -18,8 +18,8 @@ import {
   type FileLinkTarget
 } from './terminal-file-link-target'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 type FileLinkHitTestDeps = {
   startupCwd: string

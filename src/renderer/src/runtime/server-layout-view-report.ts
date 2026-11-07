@@ -2,7 +2,7 @@
 
 import { errorMessage } from '../../../shared/error-message'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { changedActiveGroups } from './sync-runtime-graph/active-group-publication'
 
 export type ServerViewReport = {

@@ -1,4 +1,4 @@
-import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/hosts/capabilities/local-runtime-capabilities'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,7 @@ import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { TEST_REPO, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,

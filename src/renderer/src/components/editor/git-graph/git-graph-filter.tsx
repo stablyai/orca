@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { GIT_HISTORY_REFS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
 import { gitGraphScope, useGitGraphScope } from '@/lib/git-graph-tab'
 import { translate } from '@/i18n/i18n'

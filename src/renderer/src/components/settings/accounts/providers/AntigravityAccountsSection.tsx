@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
   AntigravityAccountState,
@@ -15,7 +15,7 @@ import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-acc
 import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
   AntigravityChatSignInRow,
   antigravityChatSignInBlocked,
