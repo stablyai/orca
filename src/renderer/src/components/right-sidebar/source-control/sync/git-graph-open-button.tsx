@@ -19,7 +19,7 @@ export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
   )
   const status = useSourceControlState((state) => {
     const environmentId = gitGraphScope(worktreeId, state)?.route.runtimeEnvironmentId
-    return environmentId ? state.runtimeStatusByEnvironmentId[environmentId] : undefined
+    return environmentId ? state.runtimeStatusByEnvironmentId.get(environmentId) : undefined
   })
   const [probe, setProbe] = useState<{ owner: string; support: boolean | null }>()
   const support = probe?.owner === owner ? probe.support : null
