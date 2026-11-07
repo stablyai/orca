@@ -19761,7 +19761,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": false,
@@ -19819,7 +19820,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": true,

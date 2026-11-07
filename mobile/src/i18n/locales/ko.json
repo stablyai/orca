@@ -1309,10 +1309,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
       "loadFolderFailed": "폴더를 불러올 수 없습니다.",
+      "loadedOfTotal": "{{total}}개 중 {{loaded}}개",
       "loading": "로드 중…",
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
+      "searchAll": "모두 검색",
+      "searchAllIn": "{{folder}} 전체 검색",
+      "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
+      "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
+      "showMore": "{{rows}}개 더 보기",
       "unavailable": "모바일에서 사용 불가"
     },
     "fileExplorerRowActions": {

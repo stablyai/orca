@@ -1309,10 +1309,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
       "loadFolderFailed": "无法加载文件夹",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "加载中…",
       "openFolder": "打开文件夹 {{name}}",
       "previewFile": "预览文件 {{name}}",
       "retryLoading": "重试加载 {{path}}",
+      "searchAll": "全部搜索",
+      "searchAllIn": "搜索整个 {{folder}}",
+      "searched": "已在 {{folder}} 中搜索 {{total}} 项中的 {{loaded}} 项。",
+      "searching": "正在搜索 {{folder}}… {{loaded}} / {{total}}",
+      "showMore": "再显示 {{rows}} 项",
       "unavailable": "移动端不可用"
     },
     "fileExplorerRowActions": {
