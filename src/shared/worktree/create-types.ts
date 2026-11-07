@@ -50,6 +50,15 @@ export type SetupDecision = 'inherit' | 'run' | 'skip'
 /** The created worktree's shared setup commands, when they differ from what the client approved. */
 export type SetupTrustMismatch = { contentHash: string; scriptContent: string }
 
+/** Run a created worktree's setup and default-tab commands the user approved after its create skipped them. */
+export type RunApprovedWorktreeSetupArgs = { worktreeId: string; approvedSetupHash: string }
+
+export type RunApprovedWorktreeSetupResult =
+  // `unsupported`: the client's host predates the operation.
+  | { status: 'started' | 'not_configured' | 'unsupported' }
+  // The content changed again since the prompt; nothing ran.
+  | { status: 'mismatch'; setupTrustMismatch: SetupTrustMismatch }
+
 export type WorktreeCreateTimingPhase = {
   phase: string
   startedAtMs: number
@@ -132,6 +141,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** The workspace note; a task id in it names the parent the same way it does for a CLI create. */
+  comment?: string
   /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
   crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */

@@ -9127,8 +9127,8 @@
           "proxyConnectionReuseHelp": "Yavaş ProxyCommand veya ProxyJump sunucuları üzerinden daha hızlı bağlantı sağlar. Yalnızca ssh_config yapılandırmanız sunucuya özgü Match veya %h kurallarına dayanmıyorsa etkinleştirin.",
           "reconnectOnLaunch": "Açılışta yeniden bağlan",
           "reconnectOnLaunchHelp": "Kapalıyken Orca, siz bağlanana kadar bu sunucuya ve onun üzerinden erişilen Orca sunucularına açılışta bağlanmaz.",
-          "allowRemoteCliControl": "Bu sunucudaki orca CLI aracının Orca'yı kontrol etmesine izin ver",
-          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucuda çalıştırılan orca komutlarının, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açmasına ve yönetmesine izin verir. Ayrıca bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin kendi gözetimli işleri için orkestrasyon komutlarını (check, inbox, send, ask, reply) çalıştırmasına izin verir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamazlar. Kapalı olduğunda yalnızca bu sunucunun kendi Orca sunucusuna erişirler.",
+          "allowRemoteCliControl": "Bu sunucunun kendi çalışma alanlarındaki Orca tarayıcı sekmelerini kontrol etmesine izin ver",
+          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucudaki ajanlar ve orca komutları, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açabilir, okuyabilir ve kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin orca orkestrasyon komutlarını çalıştırması için de bu ayarın açık olması gerekir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamaz.",
           "editTitle": "SSH sunucusunu düzenle",
           "addTitle": "SSH sunucusu ekle",
           "editDescription": "Bu makine için bağlantı bilgilerini güncelleyin. Değişiklikler bir sonraki bağlantıda uygulanır.",
@@ -22245,7 +22245,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "Bir ajan bu sayfayı kullanıyor"
+    "agentDriving": "Bir ajan bu sayfayı kullanıyor",
+    "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
     "math": {
@@ -23226,5 +23227,14 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} bir tarayıcı sekmesini kontrol ediyor",
+    "description": "Bu SSH sunucusundaki ajanlar, sunucunun çalışma alanlarındaki Orca tarayıcı sekmelerini açıp kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bunu Ayarlar > SSH bölümünden değiştirebilirsiniz.",
+    "stop": "Durdur",
+    "disallow": "İzin verme",
+    "stopped": "{{host}}, Orca yeniden başlatılana kadar tarayıcı sekmelerini kontrol etmeyecek.",
+    "disallowed": "{{host}} artık tarayıcı sekmelerini kontrol edemez. Ayarlar > SSH bölümünden yeniden açabilirsiniz.",
+    "failed": "{{host}} durdurulamadı. Tarayıcı kontrolünü Ayarlar > SSH bölümünden kapatın."
   }
 }

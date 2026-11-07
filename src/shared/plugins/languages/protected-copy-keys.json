@@ -1001,7 +1001,10 @@
     "worktree.nestedRemoval.refreshFailed",
     "worktree.nestedRemoval.retry",
     "worktree.nestedRemoval.review",
-    "worktree.nestedRemoval.title"
+    "worktree.nestedRemoval.title",
+    "worktree.setupTrust.branchDiffersBody",
+    "worktree.setupTrust.branchDiffersTitle",
+    "worktree.setupTrust.branchSetupScript"
   ],
   "prefixes": []
 }
