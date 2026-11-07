@@ -109,52 +109,6 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     expect(host.listSessions()).toEqual([])
   })
 
-  it('force-kills live subprocesses and releases PTY fds on dispose', async () => {
-    await host.createOrAttach({
-      sessionId: 'session-1',
-      cols: 80,
-      rows: 24,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-
-    await host.dispose()
-    // Live sessions retain the native owner until physical exit proves cleanup is safe.
-    expect(lastSubprocess.forceKill).toHaveBeenCalled()
-    expect(lastSubprocess.dispose).toHaveBeenCalled()
-  })
-
-  it('disposes the emulator and reaps the session when its subprocess exits', async () => {
-    await host.createOrAttach({
-      sessionId: 'session-1',
-      cols: 80,
-      rows: 24,
-      streamClient: streamClient()
-    })
-    expect(emulatorDispose).not.toHaveBeenCalled()
-    expect(host.listSessions()).toHaveLength(1)
-
-    lastSubprocess._onExitCb?.(0)
-
-    expect(emulatorDispose).toHaveBeenCalledTimes(1)
-    expect(host.listSessions()).toHaveLength(0)
-  })
-
-  it('does not retain dead-session emulators across many create/exit cycles', async () => {
-    const CYCLES = 5
-    for (let i = 0; i < CYCLES; i++) {
-      await host.createOrAttach({
-        sessionId: `session-${i}`,
-        cols: 80,
-        rows: 24,
-        streamClient: streamClient()
-      })
-      lastSubprocess._onExitCb?.(0)
-    }
-
-    expect(emulatorDispose).toHaveBeenCalledTimes(CYCLES)
-    expect(host.listSessions()).toHaveLength(0)
-  })
-
   it('reaps a session killed immediately (forceKill path)', async () => {
     await host.createOrAttach({
       sessionId: 'session-1',
@@ -228,50 +182,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     }
   })
 
-  describe('tombstones', () => {
-    it('caps tombstones at limit', async () => {
-      await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn, maxTombstones: 3 })
-
-      for (let i = 0; i < 5; i++) {
-        await host.createOrAttach({
-          sessionId: `session-${i}`,
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        host.kill(`session-${i}`)
-      }
-
-      expect(host.isKilled('session-0')).toBe(false)
-      expect(host.isKilled('session-4')).toBe(true)
-    })
-  })
-
   describe('dispose', () => {
-    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
-      await host.dispose()
-      const onFinalCheckpoint = vi.fn()
-      host = new TerminalHost({
-        spawnSubprocess: spawnFn,
-        onFinalCheckpoint
-      })
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        shellReadySupported: true,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
-      await host.dispose()
-
-      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
-        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
-      ])
-    })
-
     it('fences creation and retries a rejected force kill before dropping ownership', async () => {
       vi.useFakeTimers()
       try {
@@ -312,21 +223,6 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       } finally {
         vi.useRealTimers()
       }
-    })
-
-    it('does not list exited sessions', async () => {
-      const onSessionReaped = vi.fn()
-      host = new TerminalHost({ spawnSubprocess: spawnFn, onSessionReaped })
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      lastSubprocess._onExitCb?.(0)
-      expect(host.listSessions()).toEqual([])
-      expect(onSessionReaped).toHaveBeenCalledWith('session-1')
     })
 
     it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {

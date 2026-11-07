@@ -8,7 +8,7 @@ import {
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
@@ -80,7 +80,9 @@ vi.mock('./terminal-agent-tab-shortcut', async (importOriginal) => {
   mocks.actualResolveAgentShortcut.mockImplementation(actual.resolveTerminalAgentTabShortcut)
   return { ...actual, resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut }
 })
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: mocks.launchAgentInNewTab
+}))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -398,6 +400,7 @@ describe('shared tab navigation routing', () => {
 describe('tab.closeAll confirmation', () => {
   const worktreeId = controller.activeWorktreeId!
   const closeFile = vi.fn()
+  const closeUnifiedTabs = vi.fn()
   const queueEditorCloseRequests = vi.fn()
   let settle: (confirmed: boolean) => void
 
@@ -411,7 +414,18 @@ describe('tab.closeAll confirmation', () => {
       openFiles: [makeOpenFile({ id: 'file-1', worktreeId })],
       editorBufferIdOf: {},
       editorBufferViews: {},
-      unifiedTabsByWorktree: { [worktreeId]: [] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({
+            id: 'file-tab',
+            entityId: 'file-1',
+            worktreeId,
+            groupId: 'group',
+            contentType: 'editor'
+          })
+        ]
+      },
+      closeUnifiedTabs,
       getActiveTab: () => null
     }
     confirmBulkClose.mockImplementation(
@@ -458,7 +472,7 @@ describe('tab.closeAll confirmation', () => {
       await act(async () => {
         settle(true)
       })
-      expect(closeFile).toHaveBeenCalledExactlyOnceWith('file-1')
+      expect(closeUnifiedTabs).toHaveBeenCalledExactlyOnceWith(['file-tab'])
     }
   )
 
@@ -481,7 +495,7 @@ describe('tab.closeAll confirmation', () => {
       settle(true)
     })
     expect(closeFile).not.toHaveBeenCalled()
-    expect(queueEditorCloseRequests).toHaveBeenCalledExactlyOnceWith(['file-1'])
+    expect(queueEditorCloseRequests).toHaveBeenCalledExactlyOnceWith(['file-tab'])
   })
 
   it('skips files pinned while shortcut confirmation is pending', async () => {

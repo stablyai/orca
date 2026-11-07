@@ -21,6 +21,7 @@ const props = (overrides: Partial<Props> = {}): Props => ({
   activeRepoTarget: { kind: 'local' },
   activeWorktreeId: 'wt-1',
   worktreePath: '\\\\wsl.localhost\\Ubuntu\\repo',
+  branchName: 'main',
   compareBaseRef: 'main',
   isFolder: false,
   isBranchVisible: true,

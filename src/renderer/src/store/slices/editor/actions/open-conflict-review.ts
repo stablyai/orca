@@ -1,3 +1,5 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
+import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
@@ -6,18 +8,7 @@ import type { ConflictReviewState } from '../../../../../../shared/editor-tab-vi
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
-import type { AppState } from '../../../types'
-
-/** The runtime owner `openFile` gives a file opened in this workspace; null when it cannot tell. */
-function conflictFileRuntimeOwner(s: AppState, worktreeId: string): string | null {
-  try {
-    return captureEditorFileOperationProvenance(s, worktreeId, undefined, false).generation.route
-      .runtimeEnvironmentId
-  } catch {
-    return null
-  }
-}
+import { editorOpenOwner, qualifyEditorContentId } from '../git/editor-open-owner'
 
 export function createOpenConflictReview(
   set: EditorSet,
@@ -26,14 +17,24 @@ export function createOpenConflictReview(
   return {
     openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {
       const absolutePath = joinPath(worktreePath, entry.path)
-      const reviewTab = (get().unifiedTabsByWorktree?.[worktreeId] ?? []).find(
-        (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
-      )
+      const reviewTab = Object.values(get().unifiedTabsByWorktree ?? {})
+        .flat()
+        .find((tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review')
+      const placementId = reviewTab?.worktreeId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
       let openedConflictFile = true
       let conflictFileId = absolutePath
       set((s) => {
         const conflict = toOpenConflictMetadata(entry)
-        const runtimeEnvironmentId = conflictFileRuntimeOwner(s, worktreeId)
+        const reviewFile = s.openFiles.find((file) => file.id === reviewFileId)
+        const contentOwner = reviewFile
+          ? {
+              runtimeEnvironmentId: reviewFile.runtimeEnvironmentId,
+              operationProvenance: reviewFile.operationProvenance,
+              externalSshTargetId: reviewFile.externalSshTargetId
+            }
+          : editorOpenOwner(s, worktreeId)
+        const { runtimeEnvironmentId } = contentOwner
         // Why: a server's file is open under its owned id; looking up the bare path would open a second copy.
         const fileId = resolveEditorFileIdForOwner(
           s,
@@ -43,6 +44,7 @@ export function createOpenConflictReview(
           ['edit']
         )
         conflictFileId = fileId
+        intent.register(fileId)
         const existing = s.openFiles.find((f) => f.id === fileId)
         const nextTracked =
           entry.conflictStatus === 'unresolved' && entry.conflictKind
@@ -102,7 +104,7 @@ export function createOpenConflictReview(
                 isDirty: false,
                 mode: 'edit' as const,
                 conflict,
-                ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
+                ...contentOwner
               }
             ]
 
@@ -110,8 +112,8 @@ export function createOpenConflictReview(
           openFiles: nextOpenFiles,
           activeFileId: reviewFileId,
           activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: reviewFileId },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [placementId]: reviewFileId },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [placementId]: 'editor' },
           trackedConflictPathsByWorktree:
             nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
               ? s.trackedConflictPathsByWorktree
@@ -121,17 +123,20 @@ export function createOpenConflictReview(
 
       // Why: no conflict metadata means no OpenFile was added, so a workspace tab would point at nothing.
       if (!openedConflictFile) {
+        intent.finish(null)
         return
       }
       // Conflict files need backing editor tabs for save/close; restore review focus after opening them.
-      void openWorkspaceEditorItem(
-        get(),
-        conflictFileId,
-        worktreeId,
-        entry.path,
-        'editor',
-        undefined,
-        reviewTab?.groupId
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          conflictFileId,
+          placementId,
+          entry.path,
+          'editor',
+          undefined,
+          reviewTab?.groupId
+        )
       )
       if (reviewTab) {
         get().activateTab?.(reviewTab.id)
@@ -139,9 +144,17 @@ export function createOpenConflictReview(
     },
 
     // Snapshot entries/time keeps conflict review stable across status polls.
-    openConflictReview: (worktreeId, worktreePath, entries, source) => {
-      const id = `${worktreeId}::conflict-review`
+    openConflictReview: (worktreeId, worktreePath, entries, source, options) => {
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
+      const id = qualifyEditorContentId(
+        `${worktreeId}::conflict-review`,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
       set((s) => {
+        intent.register(id)
         const conflictReview: ConflictReviewState = {
           source,
           snapshotTimestamp: Date.now(),
@@ -165,10 +178,7 @@ export function createOpenConflictReview(
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
 
@@ -180,18 +190,26 @@ export function createOpenConflictReview(
           language: 'plaintext',
           isDirty: false,
           mode: 'conflict-review',
-          conflictReview
+          conflictReview,
+          ...contentOwner
         }
 
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          id,
+          placementId,
+          'Conflict Review',
+          'conflict-review',
+          false,
+          options?.targetGroupId
+        )
+      )
     }
   }
 }

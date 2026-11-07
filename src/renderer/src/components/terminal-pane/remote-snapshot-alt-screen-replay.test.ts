@@ -1,28 +1,33 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
-import { buildMainModelSnapshotReplayWrites } from './terminal-snapshot-replay-paint'
+import {
+  flushAsyncTicks,
+  writeHeadlessTerminal
+} from './pty-connection/test-fixtures/pty-connection-test-async'
+import { buildMainModelSnapshotReplayWrites } from './snapshots/terminal-snapshot-replay-paint'
 import {
   terminalWriteText,
   createMockTransport,
   createPane,
-  createManager
-} from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import type { PtyReplayDataMeta } from './pty-transport-types'
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+
+import type { PtyReplayDataMeta } from './pty-transport/pty-transport-types'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo } = vi.hoisted(
   () => ({
@@ -51,7 +56,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -67,7 +73,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
@@ -149,7 +155,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     // 'alternate-queued': the TUI's ?1049h is still queued and parses with the first write.
     paneBuffer: 'normal' | 'alternate' | 'alternate-queued' = 'alternate'
   ): Promise<PaneEvent[]> {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }

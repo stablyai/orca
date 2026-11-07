@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -7,7 +8,7 @@ import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import {
@@ -157,7 +158,7 @@ export function useHostAgentMenuSettings(
     agentPermissionDefault,
     agentPermissionOverrides,
     pending
-  ] = useSyncExternalStore(
+  ] = useAppViewExternalStore(
     useCallback(
       (listener: () => void) => {
         if (!subscription.environmentId || !subscription.active) {

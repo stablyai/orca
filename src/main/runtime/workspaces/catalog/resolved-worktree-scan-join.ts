@@ -16,7 +16,6 @@ import { getAgentLaunchPlatformForRepo } from '../../terminal/launch/runtime-age
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import {
-  projectRepoWorktreeRows,
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps,
@@ -90,23 +89,13 @@ export function joinResolvedWorktreeScans(
   const platformByRepoId = store
     ? platformsByRepoId(repos, resolveLocalProjectRuntimesForRepos(store, repos))
     : new Map<string, NodeJS.Platform>()
-  return { ...joinRows(store, rowDeps, scans, joinRepoWorktreeRows), platformByRepoId }
-}
-
-/** The same rows from memory only: no identity stamping and no launch platforms. */
-export function projectResolvedWorktreeScans(
-  store: RuntimeStore | null,
-  rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans
-): ResolvedWorktreeRowsJoin {
-  return joinRows(store, rowDeps, scans, projectRepoWorktreeRows)
+  return { ...joinRows(store, rowDeps, scans), platformByRepoId }
 }
 
 function joinRows(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans,
-  rowsForRepo: typeof joinRepoWorktreeRows
+  scans: ResolvedWorktreeRepoScans
 ): ResolvedWorktreeRowsJoin {
   if (!store) {
     return {
@@ -127,7 +116,7 @@ function joinRows(
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = rowsForRepo(deps, repo, scan, metaById)
+    const rows = joinRepoWorktreeRows(deps, repo, scan, metaById)
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {

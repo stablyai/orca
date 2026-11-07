@@ -30,7 +30,7 @@ import type {
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
+} from '@/lib/browser/history/browser-page-conversion-history'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import type { GrabIntent } from '../describe-page/browser-page-types'
 

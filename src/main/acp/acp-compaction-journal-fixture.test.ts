@@ -4,8 +4,8 @@ import {
   applyJournalRow,
   createJournalReducerState,
   renderJournalState
-} from '../native-chat/agent-session-journal/journal-reducer'
-import { parseJournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
+} from '../native-chat/agent-session-journal/projection/journal-reducer'
+import { parseJournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 
 async function capturedCompaction() {
   const text = await readFile(

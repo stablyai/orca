@@ -69,6 +69,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'wslDistro'
         | 'incarnationId'
         | 'agentSessionOwners'
+        | 'worktreeInferredFromCwd'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -95,6 +96,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         ptyId,
         incarnationId: state.incarnationId ?? null,
         worktreeId,
+        ...(state.worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
         connectionId,
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
@@ -132,7 +134,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
-        title: state.title ?? null,
+        title: state.title || null,
         titleUpdatedAt: titleObservedAt,
         titleObservedAtEpochMs: titleObservedAt !== null ? Date.now() : null,
         lastOutputAt: state.lastOutputAt ?? null,
@@ -165,7 +167,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       return pty
     }
 
-    this.terminalIdentity.setPtyWorktreeId(pty, worktreeId)
+    this.terminalIdentity.setPtyWorktree(pty, worktreeId, state.worktreeInferredFromCwd === true)
     if (
       state.incarnationId !== undefined &&
       pty.incarnationId !== null &&

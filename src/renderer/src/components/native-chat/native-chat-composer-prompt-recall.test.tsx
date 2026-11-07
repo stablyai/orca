@@ -7,6 +7,8 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
@@ -55,7 +57,7 @@ vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (impo
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),

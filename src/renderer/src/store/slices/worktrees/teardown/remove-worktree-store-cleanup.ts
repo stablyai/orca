@@ -78,10 +78,8 @@ export function applyRemoveWorktreeSuccessState(
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
-      recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
       defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
         s.defaultTerminalTabsAppliedByWorktreeId
       ),

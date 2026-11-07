@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/keybindings'
 import { normalizeTerminalCopyModeConfig } from '../../../../shared/terminal-copy-mode-config'
 import { paneIsCoveredByNativeChat } from './native-chat-covered-pane'
-import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
+import { hasPendingTerminalImeComposition } from './input/ime/terminal-ime-composition-route'
 import { createTerminalCopyModeView, type TerminalCopyModeView } from './terminal-copy-mode-view'
 import { registerTerminalCopyModeTarget } from './terminal-copy-mode-targets'
 import { installCopyModeMenuGuard } from './terminal-copy-mode-menu'

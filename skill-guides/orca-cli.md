@@ -91,6 +91,8 @@ A native folder parent with an explicit Git destination:
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ```
 
+A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and listed in its Attached worktrees panel. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
+
 Other common commands:
 
 ```text
@@ -112,12 +114,13 @@ ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree folder:<folderId> --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
-`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; folder workspaces have no Git worktrees or source control. With `--environment`, pass an absolute path on that server.
+`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
 
@@ -130,7 +133,7 @@ Selectors:
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
-- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
+- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`.
 
 Lineage rules:
 
@@ -240,6 +243,7 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- A chat tab has no terminal handle, so `terminal rename` cannot rename it. Use `ORCA chat rename --session <sessionId> --name "New Name" --json` with the `sessionId` `agent launch` printed; inside a chat, omit `--session` to rename that chat.
 - `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
 - `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
@@ -305,11 +309,11 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 
 ## Plugins
 
-Make, validate, load and manage Orca plugins with `ORCA plugin ...`. Themes, icons, syntaxes and
-translations load without approval; anything that runs code returns `approval_required` with
-exactly what it would get and an `--approve <fingerprint>` re-run command. Load
-`references/plugins.md` before creating, loading, enabling or publishing a plugin. To design,
-write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
+Make, validate, load, install, update and manage Orca plugins with `ORCA plugin ...`. Themes,
+icons, syntaxes and translations install without approval; anything that runs code returns
+`approval_required` with exactly what it would get and an `--approve <fingerprint>` re-run
+command. Load `references/plugins.md` before creating, loading, installing, enabling or publishing
+a plugin. To design, write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
 
 ## Agent Session Search
 
@@ -347,5 +351,5 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
-| Creating, validating, loading, enabling, approving, or publishing an Orca plugin                                | `references/plugins.md`          |
+| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -13,7 +14,11 @@ import {
   loadGitHubLinkPreview,
   readCachedGitHubLinkPreview
 } from './native-chat-github-link-preview'
-import { githubLinkBelongsToRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
+import {
+  githubLinkBelongsToRepo,
+  githubLinkOnRepoHost,
+  type NativeChatGitHubRepo
+} from './native-chat-github-repo'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
 
 function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
@@ -61,16 +66,24 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
 
 export function NativeChatGitHubPeekBody({
   repo,
-  link
+  link,
+  otherRepoFallback
 }: {
   repo: Repo
   link: GitHubIssueOrPRLink
-}): React.JSX.Element {
+  /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
+   *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
+   *  Null shows just the name until then. Undefined for the chat repo's own links. */
+  otherRepoFallback?: ReactNode
+}): ReactNode {
   const { state, retry } = useNativeChatHoverPreview(
     githubLinkPreviewKey(repo, link),
     () => readCachedGitHubLinkPreview(repo, link),
     () => loadGitHubLinkPreview(repo, link)
   )
+  if (otherRepoFallback && state.status !== 'ready') {
+    return otherRepoFallback
+  }
   return (
     <div className="flex flex-col gap-1.5">
       {/* Known from the URL, so the card has a header before the lookup answers. */}
@@ -107,7 +120,7 @@ export function NativeChatGitHubPeekBody({
           ) : null}
           <PeekFooter item={state.value} />
         </>
-      ) : state.status === 'loading' ? (
+      ) : otherRepoFallback !== undefined ? null : state.status === 'loading' ? (
         <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
           <div className="h-3.5 w-11/12 rounded bg-muted" />
           <div className="h-3.5 w-1/2 rounded bg-muted" />
@@ -127,11 +140,14 @@ export function NativeChatGitHubPeekBody({
   )
 }
 
-/** A PR or issue link into the chat's own GitHub repo, or null when the link isn't one. */
+/** A PR or issue link on a host the chat's GitHub repo uses, and whether it is that repo's own; null
+ *  when the link isn't one. */
 export function resolveGitHubPeekLink(
   githubRepo: NativeChatGitHubRepo | null,
   href: string
-): GitHubIssueOrPRLink | null {
+): { link: GitHubIssueOrPRLink; ownRepo: boolean } | null {
   const link = githubRepo ? parseGitHubIssueOrPRLink(href) : null
-  return githubRepo && link && githubLinkBelongsToRepo(githubRepo, link.slug) ? link : null
+  return githubRepo && link && githubLinkOnRepoHost(githubRepo, link.slug)
+    ? { link, ownRepo: githubLinkBelongsToRepo(githubRepo, link.slug) }
+    : null
 }

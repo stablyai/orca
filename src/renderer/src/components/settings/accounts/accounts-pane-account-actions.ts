@@ -11,7 +11,7 @@ import { translate } from '@/i18n/i18n'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+} from '@/lib/agent-session/accounts/codex/codex-session-restart'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime

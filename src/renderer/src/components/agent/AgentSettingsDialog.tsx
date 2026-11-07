@@ -1,4 +1,6 @@
-import React from 'react'
+import { useAppStateValue, useAppStateViewActive } from '@/store/app-state-view'
+import React, { useCallback } from 'react'
+import { useAppStore } from '@/store'
 import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'
 import {
   Dialog,
@@ -8,7 +10,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { AgentsPane } from '@/components/settings/agents/AgentsPane'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
   isWindowsTerminalCapabilityHost,
@@ -29,10 +30,17 @@ export default function AgentSettingsDialog({
   onOpenChange,
   onCloseAutoFocus
 }: AgentSettingsDialogProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
+  const viewActive = useAppStateViewActive()
+  const settings = useAppStateValue((s) => s.settings)
+  const updateSettings = useCallback(
+    (...args: Parameters<ReturnType<typeof useAppStore.getState>['updateSettings']>) =>
+      useAppStore.getState().updateSettings(...args),
+    []
+  )
+  const runtimeEnvironments = useAppStateValue((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStateValue(
+    (s) => s.runtimeEnvironmentCatalogHydrated
+  )
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
@@ -41,7 +49,7 @@ export default function AgentSettingsDialog({
   )
   const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
   const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
-    open && (isWindowsRenderer || isWebClient),
+    viewActive && open && (isWindowsRenderer || isWebClient),
     false,
     localCapabilityOwnerKey
   )

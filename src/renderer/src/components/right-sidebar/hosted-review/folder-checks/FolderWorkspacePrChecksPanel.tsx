@@ -1,3 +1,7 @@
+import {
+  selectSidebarLineageParentIdentities,
+  selectCrossStoreFolderChildrenById
+} from '@/store/cross-store-lineage-parents'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -28,7 +32,9 @@ export default function FolderWorkspacePrChecksPanel({
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -48,16 +54,20 @@ export default function FolderWorkspacePrChecksPanel({
         activeWorktreeId,
         folderWorkspaces,
         workspaceLineageByChildKey,
+        lineageParentIdentities,
         worktreeLineageById,
-        worktreesByRepo
+        worktreesByRepo,
+        crossStoreChildrenByFolderId
       }),
     [
       activeWorkspaceKey,
       activeWorktreeId,
       folderWorkspaces,
       workspaceLineageByChildKey,
+      lineageParentIdentities,
       worktreeLineageById,
-      worktreesByRepo
+      worktreesByRepo,
+      crossStoreChildrenByFolderId
     ]
   )
   const projectionSelector = useMemo(

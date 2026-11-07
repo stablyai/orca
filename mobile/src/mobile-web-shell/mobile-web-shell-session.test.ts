@@ -126,7 +126,7 @@ describe('recovery follows the shell view contract', () => {
       gates: gates({ statusReadable: false, hostCapabilities: [] })
     })
     expect(stale.session.state).toMatchObject({ kind: 'ready' })
-    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const step = run(stale.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(step.session.state).toEqual({
       kind: 'failed',
       reason: 'status-unreadable',
@@ -143,7 +143,7 @@ describe('recovery follows the shell view contract', () => {
       type: 'gates-changed',
       gates: gates({ hostCapabilities: [] })
     })
-    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const step = run(stale.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(step.session.state).toEqual(NO_BUNDLE_WALL)
     expect(step.effects).toEqual([{ kind: 'delete-cache' }])
   })
@@ -161,16 +161,18 @@ describe('recovery follows the shell view contract', () => {
     ])
   })
 
-  it.each(['generation-unreadable', 'document-load-failed'] as const)(
-    'is terminal the second time %s is reported',
-    (reason) => {
-      const first = run(readySession().session, { type: 'shell-failed', reason })
-      const refetched = readyAgain(first.session, 'session-two')
-      const second = run(refetched.session, { type: 'shell-failed', reason })
-      expect(second.effects).toEqual([])
-      expect(second.session.state).toEqual({ kind: 'failed', reason, retriedOnce: true })
-    }
-  )
+  it('is terminal the second time an unreadable generation needs a refetch', () => {
+    const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
+    const first = run(readySession().session, unreadable)
+    const refetched = readyAgain(first.session, 'session-two')
+    const second = run(refetched.session, unreadable)
+    expect(second.effects).toEqual([])
+    expect(second.session.state).toEqual({
+      kind: 'failed',
+      reason: 'generation-unreadable',
+      retriedOnce: true
+    })
+  })
 
   it('is terminal the second time the render process is gone, still without a delete', () => {
     const first = run(readySession().session, {
@@ -186,28 +188,39 @@ describe('recovery follows the shell view contract', () => {
       retriedOnce: false
     })
   })
+
+  it('remounts again when the render process goes after the remounted page painted', () => {
+    const recovered = run(
+      readySession().session,
+      { type: 'shell-failed', reason: 'render-process-gone' },
+      { type: 'remounted', sessionId: 'session-two' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    )
+    const second = run(recovered.session, { type: 'shell-failed', reason: 'render-process-gone' })
+    expect(second.effects).toEqual([{ kind: 'remount' }])
+    expect(second.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-two' })
+  })
 })
 
 describe('try again', () => {
-  it('clears both latches and restarts the flow', () => {
+  it('clears every latch, deletes the unreadable files and restarts the flow', () => {
+    const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
     const lost = run(readySession().session, {
       type: 'shell-failed',
       reason: 'render-process-gone'
     })
     const remounted = run(lost.session, { type: 'remounted', sessionId: 'session-remounted' })
-    const first = run(remounted.session, {
-      type: 'shell-failed',
-      reason: 'document-load-failed'
-    })
+    const first = run(remounted.session, unreadable)
     const refetched = readyAgain(first.session, 'session-two')
-    const failed = run(refetched.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const failed = run(refetched.session, unreadable)
     expect(failed.session.retriedOnce).toBe(true)
     expect(failed.session.remountedOnce).toBe(true)
     const retried = run(failed.session, { type: 'retry-pressed' })
     expect(retried.session.retriedOnce).toBe(false)
     expect(retried.session.remountedOnce).toBe(false)
     expect(retried.session.cached).toBeNull()
-    expect(retried.effects).toEqual([{ kind: 'open-cache' }])
+    expect(retried.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
     const again = run(
       run(retried.session, { type: 'cache-read', generation: CACHED }).session,
       { type: 'manifest-read', manifest: MANIFEST },
@@ -219,7 +232,7 @@ describe('try again', () => {
         totalBytes: 4096,
         elapsedMs: 3
       },
-      { type: 'shell-failed', reason: 'document-load-failed' }
+      unreadable
     )
     expect(again.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
   })
@@ -303,7 +316,7 @@ describe('a result from a superseded flow reports into nothing', () => {
   })
 })
 
-describe('the remount budget is one per session, not one per reconnect', () => {
+describe('a reconnect does not refill the remount budget', () => {
   it('keeps the latch set when the gates restart the flow after a load failure', () => {
     const remounted = run(
       readySession().session,
@@ -322,7 +335,7 @@ describe('only the state that mounted the view hears the view', () => {
   it('ignores the second failure of one native batch, leaving the first recovery running', () => {
     const recovering = run(readySession().session, {
       type: 'shell-failed',
-      reason: 'document-load-failed'
+      reason: 'generation-unreadable'
     })
     const batched = run(recovering.session, {
       type: 'shell-failed',
@@ -414,12 +427,17 @@ describe('the page has to speak for the document that loaded', () => {
     expect(step.session.pageReady).toBe(true)
   })
 
-  it('deletes the cache and runs the flow again when the wait expires', () => {
+  it('remounts the same files when the wait expires', () => {
     const ready = run(readySession().session, { type: 'document-loaded' })
     const step = run(ready.session, { type: 'page-ready-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
-    expect(step.session.retriedOnce).toBe(true)
-    expect(step.session.state.kind).toBe('checking')
+    expect(step.effects).toEqual([{ kind: 'remount' }])
+    expect(step.session.retriedOnce).toBe(false)
+  })
+
+  it('retires both waits once the page speaks', () => {
+    expect(run(readySession().session, { type: 'page-ready' }).effects).toEqual([
+      { kind: 'cancel-deadlines' }
+    ])
   })
 
   it('does nothing when the wait expires after the page has spoken', () => {
@@ -471,11 +489,10 @@ describe('the page has to speak for the document that loaded', () => {
 
 // Refused/uncommitted loads may report nothing; retain a deadline for iOS cancellation (#28626).
 describe('the view has to finish the document it was given', () => {
-  it('deletes the cache and runs the flow again when no document ever finished', () => {
+  it('remounts the same files when no document ever finished', () => {
     const started = run(readySession().session, { type: 'document-started' })
     const step = run(started.session, { type: 'document-load-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
-    expect(step.session.state.kind).toBe('checking')
+    expect(step.effects).toEqual([{ kind: 'remount' }])
   })
 
   it('does nothing once the document finished or the page spoke', () => {

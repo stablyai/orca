@@ -15,7 +15,7 @@ import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/p
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRActionsMergeMenu({
   itemUrl,

@@ -1,9 +1,9 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from '../pty-connection-types'
-import type { PtyTransport } from '../pty-transport-types'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import type { TerminalStreamPosition } from '../terminal-stream-position'
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 
 // Extracted installers share the closure’s mutable bindings through this bag without changing call order.
 export type ConnectPanePtySession = {

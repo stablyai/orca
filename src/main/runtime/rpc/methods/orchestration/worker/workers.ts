@@ -9,7 +9,7 @@ import { withWorkerStartNext } from '../receipt-next'
 import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
-} from '../../orchestration-worker-start-mode'
+} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,

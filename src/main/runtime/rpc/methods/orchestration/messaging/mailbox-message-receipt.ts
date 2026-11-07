@@ -1,6 +1,6 @@
-import type { MessageRow } from '../../../../orchestration/types'
+import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import { formatMessageBanner } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [

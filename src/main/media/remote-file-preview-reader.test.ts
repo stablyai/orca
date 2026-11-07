@@ -11,7 +11,8 @@ vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => (
 import {
   assertRemoteChunkReadsSupported,
   readRemotePreviewRange,
-  readRemotePreviewChunk
+  readRemotePreviewChunk,
+  renewRemotePreviewGrant
 } from './remote-file-preview-reader'
 
 const address = {
@@ -62,6 +63,53 @@ describe('remote file preview reader', () => {
       signal
     )
     expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
+  })
+
+  // Why: a host can answer files.readChunk yet lack the grant's paging method.
+  it('pages a granted file through its grant, proven apart from workspace reads', async () => {
+    callRuntimeEnvironment.mockResolvedValue(
+      ok({ contentBase64: 'AA==', bytesRead: 1, eof: false })
+    )
+    const workspace = { ...address, environmentId: 'env-kinds' }
+    const { relativePath: _relativePath, ...base } = workspace
+    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
+    await assertRemoteChunkReadsSupported(workspace, signal)
+    await assertRemoteChunkReadsSupported(granted, signal)
+    expect(callRuntimeEnvironment).toHaveBeenLastCalledWith(
+      '/user-data',
+      'env-kinds',
+      'files.readTerminalArtifactChunk',
+      { worktree: 'id:wt-1', grantId: 'g-1', absolutePath: '/tmp/clip.mp4', offset: 0, length: 1 },
+      20_000,
+      7,
+      undefined,
+      { signal }
+    )
+    expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
+  })
+
+  it('renews a granted file only at the path its first grant named', async () => {
+    const { relativePath: _relativePath, ...base } = address
+    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
+    const answer = (absolutePath: string) =>
+      ok({ openTarget: { kind: 'absolute-file', absolutePath, grantId: 'g-2' } })
+    callRuntimeEnvironment.mockResolvedValueOnce(answer('/tmp/clip.mp4'))
+    await expect(renewRemotePreviewGrant(granted, signal)).resolves.toEqual({
+      ...granted,
+      grantId: 'g-2'
+    })
+    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'files.resolveTerminalPath',
+      { worktree: 'id:wt-1', pathText: '/tmp/clip.mp4' },
+      15_000,
+      7,
+      undefined,
+      { signal }
+    )
+    callRuntimeEnvironment.mockResolvedValueOnce(answer('/tmp/other.mp4'))
+    await expect(renewRemotePreviewGrant(granted, signal)).rejects.toThrow('no longer grants')
   })
 
   it('reads a range in host-sized chunks, clipped to the file and stopping at EOF', async () => {

@@ -17,7 +17,7 @@ import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
-} from '@/lib/agent-hibernation-planner'
+} from '@/lib/agent-session/hibernation/agent-hibernation-planner'
 
 const MS_PER_MINUTE = 60 * 1000
 

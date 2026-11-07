@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { AppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 import type { TerminalCopyModeConfig } from '../../../../shared/terminal-copy-mode-config'
 import { createCopyModeKeybindings } from './terminal-copy-mode-keybindings'
-import { copyTerminalSelection } from './terminal-selection-copy'
+import { copyTerminalSelection } from './clipboard/terminal-selection-copy'
 import { createTerminalCopyModeSnapshot } from './terminal-copy-mode-snapshot'
 import {
   createCopyModeSelection,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  checkPluginLanguagePackForAuthoring,
   parsePluginLanguagePackArtifact,
   PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH,
   PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES,
@@ -49,6 +50,26 @@ describe('plugin language-pack artifacts', () => {
       ok: true,
       catalog: { common: { save: 'Sávé' }, components: { 'native-chat': { title: 'Çhát' } } }
     })
+  })
+
+  it('counts protected copy for authors instead of rejecting, still rejecting other problems', () => {
+    expect(
+      checkPluginLanguagePackForAuthoring(
+        JSON.stringify({
+          common: { save: 'Sávé' },
+          components: { 'native-chat': { approval: { allow: 'Álló', deny: 'Déný' } } },
+          browser: { loadFailure: { proceedUnsafe: 'Continuar' } }
+        })
+      )
+    ).toEqual({ ok: true, ignoredProtectedStrings: 3 })
+    expect(
+      checkPluginLanguagePackForAuthoring(
+        JSON.stringify({
+          common: { save: 'a\u202esave' },
+          components: { 'native-chat': { approval: { allow: 'Álló' } } }
+        })
+      )
+    ).toMatchObject({ ok: false })
   })
 
   it.each([

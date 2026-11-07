@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ALL_TUI_AGENTS } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { CliWorktreeBuilder } from '../../rpc/methods/agent-launch-cwd-cli.test-fixture'
+import type { CliWorktreeBuilder } from '../../rpc/methods/agent-launch/agent-launch-cwd-cli.test-fixture'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 import { WorktreeCreate as PreObservationCreate } from '../../../../shared/rpc-contract/worktree-create-params.pre-observation.test-fixture'
@@ -10,6 +10,7 @@ import {
   AgentLaunchReplay as PreObservationReplay
 } from '../../../../shared/rpc-contract/agent-launch-params.pre-observation.test-fixture'
 import { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import {
   formatAmbiguousCwdParentMessage,
@@ -19,7 +20,7 @@ import {
   makeRuntimeOrchestrationDb,
   taskLineageRow
 } from '../../orca-runtime-tests/runtime-orchestration-db.test-fixture'
-import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { mapRuntimeError } from '../../rpc/errors'
 
 const fixturesPath = '../../../../cli/test-fixtures'
@@ -68,8 +69,7 @@ function fixture() {
     getStore: () => null,
     getDb: () => db,
     showTerminal,
-    resolveWorktree,
-    listResolvedWorktrees: async () => []
+    resolveWorktree
   })
   return { controller, db, showTerminal, resolveWorktree }
 }
@@ -457,6 +457,51 @@ describe('caller parent for a create on another machine', () => {
         instanceId: 'repo-a::/tmp/env-parent'
       },
       source: 'env-workspace'
+    })
+  })
+})
+
+describe('a task id in the note of a create on another machine', () => {
+  it('names the folder workspace the task was made in', async () => {
+    const db = makeRuntimeOrchestrationDb()
+    vi.spyOn(db, 'getDispatchContext').mockReturnValue(undefined)
+    vi.spyOn(db, 'getTask').mockReturnValue(
+      taskLineageRow({ id: 'task_folder', created_by_terminal_handle: 'term_folder' })
+    )
+    const controller = new RuntimeWorktreeLineageController({
+      getStore: () => null,
+      getDb: () => db,
+      showTerminal: async () => ({ worktreeId: 'folder:f-1' }),
+      resolveWorktree: async () => {
+        throw new Error('selector_not_found')
+      }
+    })
+    const folderWorkspace: FolderWorkspace = {
+      id: 'f-1',
+      projectGroupId: 'group-1',
+      name: 'Release',
+      folderPath: '/work/multi',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    vi.spyOn(controller, 'resolveParent').mockImplementation(async (selector) => {
+      if (selector !== 'id:folder:f-1') {
+        throw new Error('selector_not_found')
+      }
+      return { type: 'folder', workspaceKey: 'folder:f-1', folderWorkspace, instanceId: null }
+    })
+    await expect(
+      controller.resolveCallerParentForAnotherStore({ comment: 'for task_folder' }, 'desktop-1')
+    ).resolves.toEqual({
+      parent: { installationId: 'desktop-1', workspaceKey: 'folder:f-1', instanceId: 'f-1' },
+      source: 'orchestration-context'
     })
   })
 })

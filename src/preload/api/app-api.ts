@@ -1,6 +1,7 @@
 import type { UiLanguageDetection } from '../../shared/ui-locale'
 import type { WindowMaterial } from '../../shared/window-material'
 import type { AppIdentity } from '../../shared/app-identity'
+import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -24,6 +25,8 @@ export type AppApi = {
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>
+  /** Local Mac only; optional for older clients. */
+  getMacosUpgradeSupport?: (minimumMacosVersion: string) => Promise<MacosUpgradeSupport>
   /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
   restartAsAdministrator: () => Promise<void>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */

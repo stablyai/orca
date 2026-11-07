@@ -1,4 +1,4 @@
-import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/provider-frame-activity'
+import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
 import {
