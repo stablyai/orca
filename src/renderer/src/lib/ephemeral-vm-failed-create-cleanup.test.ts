@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { cleanupFailedEphemeralVmWorkspace } from './ephemeral-vm-failed-create-cleanup'
 
 function request(): WorktreeCreationRequest {

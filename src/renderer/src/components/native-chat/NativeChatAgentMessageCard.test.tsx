@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
@@ -11,11 +12,11 @@ import {
   resetSenderStore,
   setSenderSessionStatus
 } from './native-chat-agent-sender.test-fixture'
-import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
+import * as terminalLinks from '@/components/terminal-pane/links/handles/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
-import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
+
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
@@ -182,8 +183,8 @@ it.each([false, true])(
 )
 
 const navigation = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
-  ...(await original<typeof RuntimeRpc>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
+  ...(await original<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: navigation.rpc
 }))
 vi.mock('sonner', async (importOriginal) => {

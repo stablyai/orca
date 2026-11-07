@@ -202,11 +202,17 @@ export function useAiVaultPanelSearch(
   const hostSearchOff =
     search.response?.kind === 'unavailable' &&
     TITLE_ONLY_UNAVAILABLE_REASONS.has(search.response.reason)
-  useEffect(() => {
+  // Latch title-only mode during render to skip a second commit per unavailable response.
+  const [titleOnlyCheckedFor, setTitleOnlyCheckedFor] = useState<{
+    hostSearchOff: boolean
+    scope: typeof scope
+  } | null>(null)
+  if (titleOnlyCheckedFor?.hostSearchOff !== hostSearchOff || titleOnlyCheckedFor.scope !== scope) {
+    setTitleOnlyCheckedFor({ hostSearchOff, scope })
     if (hostSearchOff && scope !== ALL_EXECUTION_HOSTS_SCOPE) {
       setTitleOnlyScope(scope)
     }
-  }, [hostSearchOff, scope])
+  }
   const sessions = useMemo(
     () => search.hits.map((hit) => aiVaultSearchHitToSession(hit, hitExecutionHostId(hit, host))),
     [search.hits, host]

@@ -3,7 +3,7 @@
  * indistinguishable from repeated single-snapshot reconciliation. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { resetWebSessionReorderIntentForTests } from './web-session-reorder-intent'

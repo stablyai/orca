@@ -14,6 +14,7 @@ import {
 } from './review-animated-visual-shared'
 import { ReviewShipVisualStyles } from './review-animated-visual-ship-styles'
 import { translate } from '@/i18n/i18n'
+import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
 export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
@@ -104,7 +105,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
       cursor.classList.remove('is-visible', 'is-clicking')
       cursor.style.transition = 'none'
       cursor.style.transform = 'translate(-30px, 220px)'
-      void cursor.offsetWidth
+      forceLayoutReflow(cursor)
       cursor.style.transition = ''
     }
 

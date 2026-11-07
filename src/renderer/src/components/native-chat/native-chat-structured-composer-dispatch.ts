@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -20,7 +21,12 @@ export async function dispatchNativeChatStructuredComposerText(
   onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   const prompt = draftText
-  const { handled, ...command } = await transport.dispatchCommand(prompt)
+  const pickedModeSkill =
+    agentSessionInteractionCommand('codex', prompt) !== null &&
+    skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)
+  const { handled, ...command } = pickedModeSkill
+    ? { handled: false, accepted: false, error: null }
+    : await transport.dispatchCommand(prompt)
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
     return { ...command, revealsTranscript: false }

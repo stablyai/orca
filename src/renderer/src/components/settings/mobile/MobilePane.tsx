@@ -25,6 +25,7 @@ import {
 import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
+import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
 import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
@@ -33,6 +34,7 @@ export function MobilePane(): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [qrSize, setQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [qrExpiresAt, setQrExpiresAt] = useState<number | null>(null)
   const [qrError, setQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
@@ -185,6 +187,7 @@ export function MobilePane(): React.JSX.Element {
             setQrDataUrl(result.qrDataUrl)
             setQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
+            setQrExpiresAt(result.expiresAt ?? null)
             setQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
             setEndpoint(result.endpoint)
@@ -328,6 +331,9 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [devicesLoaded, loadDevices])
 
+  // Refresh ahead of expiry; the old code stays valid for a phone mid-scan.
+  usePairingOfferExpiry(pairingUrl != null ? qrExpiresAt : null, () => void generateQR())
+
   useMobilePairingDevicePolling({
     deviceCountAtQr,
     currentDeviceCount: devices.length,
@@ -389,6 +395,7 @@ export function MobilePane(): React.JSX.Element {
         qrError={qrError}
         pairingUrl={pairingUrl}
         endpoint={endpoint}
+        refreshesAutomatically={qrExpiresAt != null}
         qrEnlarged={qrEnlarged}
         codeCopied={codeCopied}
         onQrEnlargedChange={setQrEnlarged}

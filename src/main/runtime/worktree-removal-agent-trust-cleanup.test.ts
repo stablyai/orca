@@ -73,6 +73,19 @@ describe('worktree removal drops the workspace trust Orca wrote', () => {
     })
   })
 
+  it('removes a WSL guest entry recorded under the host workspace path', async () => {
+    const agyHome = join(userDataDir, 'agy-home')
+    const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
+    markAntigravityWorkspaceTrusted(PROJECT, agyHome, '/home/u/feature-r1')
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).trustedWorkspaces).toEqual([
+      '/home/u/feature-r1'
+    ])
+
+    await purgeWithMeta()(WORKTREE_ID)
+
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).trustedWorkspaces).toEqual([])
+  })
+
   it('keeps an Antigravity entry that was trusted before Orca saw the path', async () => {
     const agyHome = join(userDataDir, 'agy-home')
     const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')

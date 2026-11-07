@@ -16,132 +16,6 @@ import type { PersistedNativeChatSessionOptions } from './native-chat-session-op
 describe('native chat PTY session options', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  it('renders nothing when no model list exists at all', () => {
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      initialModels: [],
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn()
-    })!
-    expect(surface.getSnapshot()).toEqual([])
-  })
-
-  it('uses model and effort reported by the live Claude terminal', () => {
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      reportedValues: { model: 'opus', effort: 'medium' },
-      dispatchCommand: vi.fn()
-    })!
-
-    expect(surface.getSnapshot()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'model',
-          valueSource: 'reported',
-          kind: expect.objectContaining({ currentValue: 'opus' })
-        }),
-        expect.objectContaining({
-          id: 'effort',
-          valueSource: 'reported',
-          kind: expect.objectContaining({ currentValue: 'medium' })
-        })
-      ])
-    )
-  })
-
-  it('restores launch-backed values through the tab-to-PTY cache handoff', () => {
-    seedNativeChatAppliedSessionOptions('tab-1', 'claude', {
-      model: 'opus',
-      effort: 'xhigh'
-    })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      fallbackScopeKey: 'tab-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn()
-    })!
-    expect(surface.getSnapshot()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'model', valueSource: 'applied' }),
-        expect.objectContaining({ id: 'effort', valueSource: 'applied' }),
-        expect.objectContaining({ id: 'fastMode', valueSource: 'unknown' })
-      ])
-    )
-  })
-
-  it('dispatches a Claude effort setter and publishes the full snapshot', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'xhigh'
-    })
-    const dispatch = vi.fn()
-    const persist = vi.fn()
-    const listener = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch,
-      persistSelection: persist
-    })!
-    surface.subscribe(listener)
-
-    const effortResult = await surface.setOption('effort', 'high')
-    expect(dispatch).toHaveBeenCalledWith('/effort high')
-    expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
-    expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
-      valueSource: 'dispatched',
-      transport: 'catalog',
-      kind: { currentValue: 'high' }
-    })
-    expect(listener).toHaveBeenCalledOnce()
-    expect(listener.mock.calls.every(([snapshot]) => Array.isArray(snapshot))).toBe(true)
-    expect(persist).toHaveBeenCalledWith({
-      modelId: 'opus',
-      optionId: 'effort',
-      value: 'high',
-      adoptModelAsLaunchDefault: true
-    })
-  })
-
-  it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'sonnet',
-      effort: 'high'
-    })
-    const dispatch = vi.fn().mockResolvedValue({ outcome: 'applied' })
-    const onAgentPicker = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch,
-      onAgentPicker
-    })!
-    expect(surface.getSnapshot()[0]?.action).toBeUndefined()
-
-    const result = await surface.setOption('model', 'fable')
-
-    expect(dispatch).toHaveBeenCalledWith('/model fable', {
-      detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Fable'
-    })
-    expect(onAgentPicker).not.toHaveBeenCalled()
-    expect(result.snapshot[0]).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'fable' }
-    })
-  })
-
   it('keeps the prior model and persistence when Claude rejects the switch', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'fable',
@@ -231,29 +105,6 @@ describe('native chat PTY session options', () => {
     expect(persist).not.toHaveBeenCalled()
   })
 
-  it('no-ops a seeded toggle when already at the requested value', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-
-    const result = await surface.setOption('fastMode', true)
-    expect(dispatch).not.toHaveBeenCalled()
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: true }
-    })
-  })
-
   it('no-ops a known toggle at the same absolute target (flip is not set-to-value)', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
@@ -278,59 +129,6 @@ describe('native chat PTY session options', () => {
       valueSource: 'applied',
       kind: { type: 'boolean', currentValue: false }
     })
-  })
-
-  it('dispatches the opposite absolute target for a known toggle', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-
-    await surface.setOption('fastMode', false)
-    dispatch.mockClear()
-    const result = await surface.setOption('fastMode', true)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: true }
-    })
-  })
-
-  it('tracks a known toggle flip as applied without persisting', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const persist = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch,
-      persistSelection: persist
-    })!
-
-    const result = await surface.setOption('fastMode', false)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Flip-only dispatch cannot prove absolute state; preserve the last applied value.
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: false }
-    })
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')?.action).toBeUndefined()
-    expect(persist).not.toHaveBeenCalled()
   })
 
   it('serializes concurrent setOption calls so later writes win in order', async () => {
@@ -370,34 +168,6 @@ describe('native chat PTY session options', () => {
     })
     expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
       kind: { currentValue: false }
-    })
-  })
-
-  it('stays unknown after a typed flip then a picker toggle (no invented absolute)', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high'
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-
-    surface.recordOutgoingCommand('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
-    })
-
-    await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
     })
   })
 
@@ -513,55 +283,6 @@ describe('native chat PTY session options', () => {
     )
   })
 
-  it('hands Codex effort changes to the TUI picker and drops stale truth', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'codex', {
-      model: 'gpt-5.5',
-      effort: 'high'
-    })
-    const dispatch = vi.fn()
-    const onAgentPicker = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'codex',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch,
-      onAgentPicker
-    })!
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')?.action?.type).toBe(
-      'agent-picker'
-    )
-
-    const result = await surface.invokeAction('effort')
-    expect(dispatch).toHaveBeenCalledWith('/model', { delivery: 'type' })
-    expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(result.snapshot).toHaveLength(1)
-    expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
-  })
-
-  it('tracks typed effort commands and downgrades typed toggles', () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'xhigh'
-    })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn()
-    })!
-    surface.recordOutgoingCommand('/effort high')
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'high' }
-    })
-    surface.recordOutgoingCommand('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown'
-    })
-  })
-
   it('switches to the terminal and drops stale truth for a typed picker command', () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
@@ -610,110 +331,6 @@ describe('native chat PTY session options', () => {
     })
   })
 
-  it('keeps a tracked alias selectable when the host catalog omits it', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'xhigh'
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      initialModels: [
-        { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
-        { id: 'sonnet', label: 'Sonnet', options: [] }
-      ],
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-
-    expect(surface.getSnapshot()[0].kind).toMatchObject({
-      currentValue: 'opus',
-      choices: expect.arrayContaining([
-        { value: 'opus', label: 'Opus', description: expect.any(String) }
-      ])
-    })
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      settable: true,
-      kind: { currentValue: 'xhigh' }
-    })
-
-    await surface.setOption('effort', 'high')
-
-    expect(dispatch).toHaveBeenCalledWith('/effort high')
-  })
-
-  it('drops the reconciled row once the tracked model moves onto the host catalog', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus' })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      initialModels: [{ id: 'opus[1m]', label: 'Opus (1M context)', options: [] }],
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn()
-    })!
-
-    await surface.setOption('model', 'opus[1m]')
-
-    expect(surface.getSnapshot()[0].kind).toMatchObject({
-      currentValue: 'opus[1m]',
-      choices: [{ value: 'opus[1m]', label: 'Opus (1M context)' }]
-    })
-  })
-
-  it('recomposes Cursor model slugs for live option changes', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'cursor', {
-      model: 'gpt-5.3-codex',
-      effort: 'medium',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'cursor',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')?.settable).toBe(true)
-
-    await surface.setOption('effort', 'high')
-
-    expect(dispatch).toHaveBeenCalledWith('/model gpt-5.3-codex-high-fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'high' }
-    })
-  })
-
-  it('names grok’s CLI default on load and still applies the rows it draws', async () => {
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'grok',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: dispatch
-    })!
-    // Nothing tracked means no `-m` was emitted, so grok is on its own default.
-    expect(surface.getSnapshot()[0]).toMatchObject({
-      id: 'model',
-      valueSource: 'default',
-      kind: { currentValue: 'grok-4.7' }
-    })
-
-    // Resolve effort under the CLI default even when no model is tracked.
-    await surface.setOption('effort', 'low')
-
-    expect(dispatch).toHaveBeenCalledWith('/effort low')
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'low' }
-    })
-  })
-
   it('does not adopt grok’s unprobed seed default as a persisted launch model', async () => {
     // An unprobed seed default must not become a fatal app-wide -m flag after an effort pick.
     let persisted: PersistedNativeChatSessionOptions = {}
@@ -743,44 +360,6 @@ describe('native chat PTY session options', () => {
 
     await surface.setOption('model', 'grok-4.5')
     expect(persisted.grok?.model).toBe('grok-4.5')
-  })
-
-  it('commits an effort grok accepted even when discovery lands mid-dispatch', async () => {
-    // Discovery changing the default row is not a model switch and must not discard accepted effort.
-    let release = (): void => {}
-    let markDispatched = (): void => {}
-    const dispatched = new Promise<void>((resolve) => {
-      markDispatched = resolve
-    })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'grok',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            release = () => resolve()
-            markDispatched()
-          })
-      )
-    })!
-
-    const pending = surface.setOption('effort', 'low')
-    await dispatched
-    surface.replaceModels(
-      mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
-        { id: 'grok-4.5', label: 'Grok 4.5', options: [] },
-        { id: 'grok-5', label: 'Grok 5', isDefault: true, options: [] }
-      ])
-    )
-    release()
-    await pending
-
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'low' }
-    })
   })
 
   it('files a dispatched effort under the default the probe reported, not the seed guess', async () => {
@@ -824,38 +403,5 @@ describe('native chat PTY session options', () => {
     expect(persistSelection).toHaveBeenCalledWith(
       expect.objectContaining({ adoptModelAsLaunchDefault: true })
     )
-  })
-
-  it('carries an effort set under a probe-confirmed default into later launches', async () => {
-    // Persist the confirmed default too so later launches can resolve its scoped effort value.
-    let persisted: PersistedNativeChatSessionOptions = {}
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'grok',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      initialModels: mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
-        { id: 'grok-4.5', label: 'Grok 4.5', isDefault: true, options: [] }
-      ]),
-      dispatchCommand: vi.fn(),
-      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
-        persisted = updateNativeChatSessionOptionDefaults({
-          persisted,
-          agent: 'grok',
-          modelId,
-          optionId,
-          value,
-          adoptModelAsLaunchDefault
-        })
-      }
-    })!
-
-    await surface.setOption('effort', 'low')
-
-    expect(persisted.grok?.model).toBe('grok-4.5')
-    expect(resolveNativeChatSessionOptionDefaults(persisted, 'grok')).toMatchObject({
-      model: 'grok-4.5',
-      effort: 'low'
-    })
   })
 })

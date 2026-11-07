@@ -10,7 +10,7 @@ import {
   type SourceControlTreeNode
 } from '../../../../shared/source-control/listing/source-control-tree'
 import { VirtualizedList } from '@/components/virtualized-list'
-import type { ConflictReviewEntry } from '@/store/slices/editor'
+import type { ConflictReviewEntry } from '../../../../shared/editor-tab-view-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { translate } from '@/i18n/i18n'
 

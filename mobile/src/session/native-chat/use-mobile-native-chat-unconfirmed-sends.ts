@@ -1,4 +1,4 @@
-// Lost acknowledgements may hide delivered sends: hold them quietly until transcript confirmation or deadline, without restoring drafts. Structured sends own a separate hold.
+// Lost acknowledgements may hide delivered sends: hold them quietly until the transcript confirms them, or hand them back at the deadline. Structured sends own a separate hold.
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -10,6 +10,7 @@ import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-ec
 
 export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 export const UNCONFIRMED_SEND_MESSAGE = 'Delivery unconfirmed — check chat before retrying'
+export const UNCONFIRMED_SEND_RESTORED_MESSAGE = 'Not confirmed. Restored to the box.'
 
 export function useMobileNativeChatUnconfirmedSends(args: {
   draftKey: string | null

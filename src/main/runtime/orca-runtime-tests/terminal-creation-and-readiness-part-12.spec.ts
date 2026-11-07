@@ -8,8 +8,8 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch-surfaces'
-import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch-tab-publication'
+import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch/agent-launch-surfaces'
+import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch/agent-launch-tab-publication'
 import { AgentLaunch } from '../../../shared/rpc-contract/agent-launch-params'
 import { DESKTOP_RPC_CALLER } from '../rpc/rpc-caller-identity'
 import type { RpcContext } from '../rpc/core'

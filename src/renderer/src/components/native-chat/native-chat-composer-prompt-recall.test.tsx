@@ -33,7 +33,7 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
 vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
@@ -57,7 +57,7 @@ vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (impo
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),

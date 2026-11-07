@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
+import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { createTestStore } from './store-test-helpers'
 
 export function registerReposProjectHostCapabilityTests(): void {

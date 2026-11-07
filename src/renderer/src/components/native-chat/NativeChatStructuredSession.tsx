@@ -67,11 +67,7 @@ import { useNativeChatHostSendGate } from './use-native-chat-host-send-gate'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
-import {
-  isClaudeSignInFailureKind,
-  NativeChatClaudeSignInContext,
-  useNativeChatClaudeSignIn
-} from './native-chat-claude-sign-in'
+import { NativeChatSignInContext, useNativeChatSignIn } from './native-chat-sign-in'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -222,20 +218,21 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   })
 
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  const signIn = useNativeChatSignIn({
+    ...props,
+    worktreeId: ownerWorktreeId,
+    failure: provisionalLaunch.failure,
+    startFailures
+  })
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
+    signIn: props.agent === 'claude' ? null : signIn,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
     journalItems: controller.journalItems,
     submissions: controller.submissions,
     deliveryNotices
-  })
-  const claudeSignIn = useNativeChatClaudeSignIn({
-    agent: props.agent,
-    target: props.target,
-    failure: provisionalLaunch.failure,
-    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
   })
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
   const notices = structuredSessionNotices({
@@ -245,7 +242,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
     readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
     composerError: composerError ?? continuation.continueError,
-    claudeSignIn,
+    signIn,
     availability,
     hostPermission: hostSendGate.notice
   })
@@ -300,7 +297,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 messages={controller.messages}
                 view={continuation.view}
               >
-                <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                <NativeChatSignInContext.Provider value={signIn}>
                   <NativeChatMessageList
                     // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
                     key={`${controller.epoch}:${controller.contextClear.clears}`}
@@ -324,7 +321,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
-                </NativeChatClaudeSignInContext.Provider>
+                </NativeChatSignInContext.Provider>
               </NativeChatUsageLimitActionsProvider>
             </NativeChatRowActionsProvider>
           )}

@@ -7,11 +7,9 @@ import {
   subscribeWorktreeDeselectionIntent,
   type EnclosingWorktreeRemoval
 } from '@/store/active-worktree-deselection-intent'
-import {
-  findIndexedWorktreeOwnerForHost,
-  worktreeOwnerHostIds
-} from '@/lib/worktree-runtime-owner-index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import {

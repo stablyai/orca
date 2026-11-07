@@ -148,6 +148,20 @@
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIBE ON",
+      "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
+      "automatic": "Automatic",
+      "phone": "This phone",
+      "computer": "Computer",
+      "phoneReady": "Ready on this phone",
+      "phoneNeedsDownload": "Needs a language download",
+      "phoneDownloading": "Downloading… {{progress}}%",
+      "phoneUnsupported": "Not available on this phone",
+      "download": "Download for this phone",
+      "downloadSize": "About {{size}} MB",
+      "phoneChecking": "Checking…"
     }
   },
   "common": {
@@ -246,7 +260,8 @@
       "pastePairingCode": "Or paste pairing code",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "tryAgain": "Try Again"
+      "tryAgain": "Try Again",
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -491,7 +506,9 @@
   "dictation": {
     "setup": {
       "serverUpdateRequired": "Update Orca on this server to use voice dictation.",
-      "alreadyActive": "Dictation is already in use on the computer or another phone.",
+      "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
+      "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
+      "modelBusy": "Another device is dictating with a different speech model. Try again when it finishes.",
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
       "sessionLost": "Dictation lost its connection to the computer. Try again.",
       "desktopUpdateRequired": "Update the paired desktop Orca app to use mobile voice settings.",
@@ -605,7 +622,10 @@
       "microphoneInitFailed": "Failed to initialize microphone",
       "noSpeech": "No speech detected.",
       "microphoneInterrupted": "Voice dictation stopped because the microphone was interrupted. Try again.",
-      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again."
+      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again.",
+      "phoneUnavailable": "Dictation on this phone isn’t ready. Download it in Voice settings, or choose Automatic.",
+      "phoneFailed": "Dictation on this phone stopped working. Try again.",
+      "phoneBusy": "Dictation on this phone is still starting. Try again in a moment."
     }
   },
   "hostScreen": {
@@ -1400,6 +1420,10 @@
         "changedFiles_other": "{{count}} changed files",
         "partial": "Partial diff",
         "showMoreFiles": "Show {{count}} more"
+      },
+      "composer": {
+        "planMode": "Plan",
+        "exitPlanMode": "Exit plan mode"
       }
     }
   },
@@ -1805,7 +1829,6 @@
       "connecting": "Connecting to desktop...",
       "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load files",
-      "loadInterrupted": "Folder load interrupted",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
       "title": "Files",
@@ -2073,6 +2096,7 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
+      "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close"
     },
@@ -2245,8 +2269,6 @@
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
       "desktopUpdateRequired": "Update Orca desktop to review changes on mobile.",
-      "changesLoadFailed": "Unable to load changes",
-      "invalidSourceControlResponse": "Source control response was invalid",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",
@@ -2600,6 +2622,7 @@
       "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
       "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
       "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+      "antigravitySystemNotSignedIn": "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
       "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
       "interactiveAgentNotSignedIn": "Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.",
       "agentNotSignedIn": "Sign in to {{agent}}.",
@@ -2804,6 +2827,7 @@
       "sendMessage": "Send message",
       "sendQueue": "Queue",
       "sendSteer": "Steer",
+      "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
     },
@@ -4567,6 +4591,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "The original agent pane is unavailable. Saved output remains here.",
       "openAgent": "Open agent",
       "retryHistory": "Retry history",
+      "fullOutputUnavailable": "Couldn't load the full output.",
+      "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
       "noMatchingRunsYet": "No matching runs yet.",
@@ -4619,7 +4645,11 @@
       "notReported": "Not reported",
       "searchOptions": "Search options",
       "task": "Task",
-      "review": "Review"
+      "review": "Review",
+      "discardChangesTitle": "Discard changes?",
+      "discardChangesMessage": "Unsaved edits to this automation will be lost.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -4637,6 +4667,7 @@
       "noRunnableHost": "This automation has no host to run on.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
       "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",

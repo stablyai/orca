@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, Fragment, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type * as DraftHook from './use-native-chat-draft'
 import type * as AttachmentsHook from './use-native-chat-composer-attachments'
 import type * as SendHook from './use-native-chat-structured-composer-send'
@@ -18,7 +18,9 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (import
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 const mocks = vi.hoisted(() => {
   const launchDrafts: Record<string, NativeChatLaunchDraft> = {}
   return { launchDrafts }

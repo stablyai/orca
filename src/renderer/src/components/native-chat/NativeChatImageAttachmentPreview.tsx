@@ -11,7 +11,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment

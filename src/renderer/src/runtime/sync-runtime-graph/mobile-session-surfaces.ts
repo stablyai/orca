@@ -1,6 +1,5 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import type { AppState } from '@/store/types'
-
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'

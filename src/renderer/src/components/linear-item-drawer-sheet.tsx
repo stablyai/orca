@@ -30,7 +30,7 @@ import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-ty
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (

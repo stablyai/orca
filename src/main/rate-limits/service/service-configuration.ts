@@ -7,6 +7,7 @@ import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
+import type { AntigravityAccountUsageRecorder } from '../antigravity-account-usage'
 import {
   type CodexAccountSelectionTarget,
   type CodexHomePathResolver,
@@ -16,6 +17,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
@@ -80,8 +82,17 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     }
     this.antigravityFetchTarget = { ...target }
     this.antigravityFetchGeneration += 1
+    this.antigravityAccounts = []
     this.activeFailureStreakByProvider.antigravity = 0
     this.updateState({ ...this.state, antigravity: null })
+  }
+
+  setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
+    this.antigravityAccountUsageRecorder = recorder
+  }
+
+  setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
+    this.museUsageEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
@@ -185,7 +196,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
-      )
+      ),
+      antigravityAccounts: this.antigravityAccounts
     }
   }
 }

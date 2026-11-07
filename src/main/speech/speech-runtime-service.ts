@@ -47,3 +47,8 @@ export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   }
   return sttService
 }
+
+/** The service only if something already created it, so a host with voice off never builds one. */
+export function findSpeechSttService(): SttService | null {
+  return sttService
+}

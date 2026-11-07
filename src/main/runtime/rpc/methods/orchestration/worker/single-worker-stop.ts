@@ -14,7 +14,7 @@ import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
 import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
-} from '../../orchestration-structured-worker-lifecycle'
+} from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 export type StopMutation = RpcContext['orchestrationMutation']

@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
 import type { AppState } from '../types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
 import {

@@ -65,9 +65,16 @@ export function markCopilotFolderTrusted(workspacePath: string, home: string): v
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
 }
 
-/** Antigravity trust is exact-path; parent entries do not cover new child workspaces. */
-export function markAntigravityWorkspaceTrusted(workspacePath: string, home: string): void {
-  const absPath = canonicalize(workspacePath)
+/**
+ * Antigravity trust is exact-path; parent entries do not cover new child workspaces.
+ * `guestPath` is the path a WSL agent sees, which this host cannot canonicalize.
+ */
+export function markAntigravityWorkspaceTrusted(
+  workspacePath: string,
+  home: string,
+  guestPath?: string
+): void {
+  const absPath = guestPath ?? canonicalize(workspacePath)
   const configDir = join(home, '.gemini', 'antigravity-cli')
   const configPath = join(configDir, 'settings.json')
   let config: Record<string, unknown> = {}

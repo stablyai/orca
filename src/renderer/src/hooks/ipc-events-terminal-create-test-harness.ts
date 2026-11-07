@@ -153,7 +153,7 @@ export async function setupTerminalCreateSurfacing(
   vi.doMock('@/lib/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
@@ -184,14 +184,16 @@ export async function setupTerminalCreateSurfacing(
   vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
     createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
   }))
-  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({ createWebRuntimeSessionTerminal }))
+  vi.doMock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+    createWebRuntimeSessionTerminal
+  }))
   vi.doMock('@/runtime/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({
     focusTerminalTabSurface
   }))
-  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
+  vi.doMock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({

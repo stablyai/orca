@@ -5,6 +5,7 @@ import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { getOptionalServePort } from '../runtime/serve-port-flag'
+import { getOptionalServeBind, resolveServeBindValue } from '../runtime/serve-bind-flag'
 import { formatServeServiceInstall, formatServeServiceStatus } from './serve-service-format'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
 import { getPlatformUserDataPath } from '../runtime/metadata'
@@ -57,9 +58,25 @@ function requireManager(platform: NodeJS.Platform): void {
   }
 }
 
+/** Normalize an optional service bind value while preserving the omitted default. */
+function resolveServeServiceBind(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) {
+    return null
+  }
+  return resolveServeBindValue(raw)
+}
+
+/** Build the platform service unit after validating all serve network options. */
 function serviceSpec(
   deps: ServeServiceDeps,
-  options: { command: string; port?: string | null; pairingAddress?: string | null }
+  options: {
+    command: string
+    port?: string | null
+    bind?: string | null
+    pairingAddress?: string | null
+    allowPublic?: boolean
+    refusePublic?: boolean
+  }
 ): ServeServiceSpec {
   return renderServeService({
     platform: deps.platform,
@@ -69,7 +86,10 @@ function serviceSpec(
     defaultUserDataPath: getPlatformUserDataPath(deps.platform, deps.homeDir),
     path: resolveServicePath(deps.env),
     port: options.port,
-    pairingAddress: options.pairingAddress
+    bind: resolveServeServiceBind(options.bind),
+    pairingAddress: options.pairingAddress,
+    allowPublic: options.allowPublic,
+    refusePublic: options.refusePublic
   })
 }
 
@@ -94,11 +114,15 @@ async function mustRun(deps: ServeServiceDeps, program: string, args: string[]):
   }
 }
 
+/** Render and optionally install the supervised serve service for the current platform. */
 export async function installServeService(
   options: {
     command: string | null
     port?: string | null
+    bind?: string | null
     pairingAddress?: string | null
+    allowPublic?: boolean
+    refusePublic?: boolean
     dryRun: boolean
   },
   deps: ServeServiceDeps = defaultDeps()
@@ -238,11 +262,20 @@ function optionalString(value: unknown): string | null {
 
 export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
   'serve service install': async ({ flags, json }) => {
+    if (flags.get('allow-public') === true && flags.get('refuse-public') === true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use either --allow-public or --refuse-public, not both.'
+      )
+    }
     const result = await installServeService({
       command: optionalString(flags.get('command')),
       // Validate before launchd can loop on a bad value and trip the supervisor brake.
       port: getOptionalServePort(flags),
+      bind: getOptionalServeBind(flags),
       pairingAddress: optionalString(flags.get('pairing-address')),
+      allowPublic: flags.get('allow-public') === true,
+      refusePublic: flags.get('refuse-public') === true,
       dryRun: flags.get('dry-run') === true
     })
     emit(result, json, formatServeServiceInstall)

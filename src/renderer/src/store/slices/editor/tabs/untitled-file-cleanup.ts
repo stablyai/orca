@@ -7,8 +7,8 @@ import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline
 import {
   deleteRuntimePath,
   deleteRuntimeRelativePath
-} from '@/runtime/runtime-file-mutation-client'
-import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
+} from '@/runtime/files/mutations/runtime-file-mutation-client'
+import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {

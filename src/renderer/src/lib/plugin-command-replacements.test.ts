@@ -30,6 +30,7 @@ vi.mock('@/store/plugin-panels', () => ({
 
 import {
   PLUGIN_REPLACEMENT_TIMEOUT_MS,
+  PLUGIN_REPLACEMENT_UNANSWERED_GRACE_MS,
   runBuiltInOrReplacement
 } from './plugin-command-replacements'
 
@@ -62,12 +63,39 @@ afterEach(() => {
 })
 
 describe('a built-in action a plugin replaces', () => {
-  it("runs Orca's own after 2 s of silence, and only once", async () => {
+  it("runs Orca's own when main gives up at the deadline, and only once", async () => {
+    const builtIn = vi.fn()
+    invokeCommand.mockReturnValueOnce(
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error('late')), PLUGIN_REPLACEMENT_TIMEOUT_MS)
+      )
+    )
+    runBuiltInOrReplacement('view.tasks', builtIn)
+    await vi.advanceTimersByTimeAsync(PLUGIN_REPLACEMENT_TIMEOUT_MS)
+    expect(builtIn).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(PLUGIN_REPLACEMENT_UNANSWERED_GRACE_MS)
+    expect(builtIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the 2 s cutoff to main, so a command main let finish never also falls back', async () => {
     const builtIn = vi.fn()
     let answer: (value: unknown) => void = () => {}
     invokeCommand.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
     runBuiltInOrReplacement('view.tasks', builtIn)
-    await vi.advanceTimersByTimeAsync(PLUGIN_REPLACEMENT_TIMEOUT_MS - 1)
+    await vi.advanceTimersByTimeAsync(PLUGIN_REPLACEMENT_TIMEOUT_MS + 100)
+    answer('ok')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(builtIn).not.toHaveBeenCalled()
+  })
+
+  it("runs Orca's own when main never answers, and only once", async () => {
+    const builtIn = vi.fn()
+    let answer: (value: unknown) => void = () => {}
+    invokeCommand.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    runBuiltInOrReplacement('view.tasks', builtIn)
+    await vi.advanceTimersByTimeAsync(
+      PLUGIN_REPLACEMENT_TIMEOUT_MS + PLUGIN_REPLACEMENT_UNANSWERED_GRACE_MS - 1
+    )
     expect(builtIn).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(builtIn).toHaveBeenCalledTimes(1)

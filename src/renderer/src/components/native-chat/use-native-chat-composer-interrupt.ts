@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 
 // Write ESC through the PTY path so existing input observers infer interrupt intent just as for xterm.

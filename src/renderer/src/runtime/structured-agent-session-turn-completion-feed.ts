@@ -3,7 +3,7 @@
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { AgentSessionAttentionEdge } from '../../../shared/agent-session/agent-session-attention'
 import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from './structured-agent-session-client'
 

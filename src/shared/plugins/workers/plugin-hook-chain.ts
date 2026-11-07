@@ -127,6 +127,14 @@ export async function runPluginHookChain(
     }
     const result = spec.result.safeParse(decision.data.result)
     if (!result.success) {
+      // Why: a malformed denial (e.g. a reason over the length cap) is the plugin failing, so a
+      // guard that declared onError: "deny" must refuse instead of letting the action through.
+      if (failClosed) {
+        const denied = fail(`malformed result: ${result.error.issues[0]?.message ?? 'invalid'}`)
+        if (denied) {
+          return denied
+        }
+      }
       input.log(pluginKey, `hook ${event}: result ignored: return next(event) or { deny: reason }`)
       continue
     }

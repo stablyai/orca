@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './pairing/device-registry'
-import { FILE_METHODS } from '../methods/files'
+import { FILE_METHODS } from '../methods/files/files'
 import { E2EEChannel } from '../e2ee-channel'
 import {
   decrypt,

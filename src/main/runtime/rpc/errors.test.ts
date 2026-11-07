@@ -1,6 +1,8 @@
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
+import { RecipeVmWakeUnavailableError } from '../../../shared/remote-runtime/recipe-vm-wake'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
@@ -32,6 +34,21 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  // #36923: the CLI tells a recipe VM that is waking, failed to wake, or was slept apart.
+  it.each([
+    'runtime_environment_waking',
+    'runtime_environment_wake_failed',
+    'runtime_environment_asleep',
+    'runtime_manually_disconnected'
+  ])('keeps the recipe VM refusal %s', (code) => {
+    const response = mapRuntimeError(
+      'open',
+      { runtimeId: 'host' },
+      new RemoteRuntimeClientError(code, 'VM')
+    )
+    expect(response).toMatchObject({ ok: false, error: { code, message: 'VM' } })
+  })
+
   it.each(['agent_session_exited_during_start', 'agent_session_operation_unknown'] as const)(
     'preserves %s while explaining the failed start',
     (code) => {
@@ -482,5 +499,20 @@ describe('thrown agent-session refusals', () => {
     expect(
       'code' in agentSessionRefusalError('agent_session_conflict', { reason: 'claimConflicted' })
     ).toBe(false)
+  })
+
+  // A host without recipe VMs answers the CLI's wake as an older host does; other handlers'
+  // method_not_found-coded errors are not passed through.
+  it('answers the recipe VM wake on a host without VMs as method_not_found, and only it', () => {
+    expect(
+      mapRuntimeError('wake', { runtimeId: 'host' }, new RecipeVmWakeUnavailableError())
+    ).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(
+      mapRuntimeError(
+        'other',
+        { runtimeId: 'host' },
+        new RemoteRuntimeClientError('method_not_found', 'x')
+      )
+    ).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
   })
 })

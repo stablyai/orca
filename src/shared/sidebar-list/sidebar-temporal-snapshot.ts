@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Workspaces "Hide sleeping" keeps through a rebind gap; null while sleeping ones are shown. */
 const RetentionSchema = z.object({

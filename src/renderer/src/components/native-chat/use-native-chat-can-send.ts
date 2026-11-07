@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { deriveNativeChatCanSend } from './native-chat-send-eligibility'
+import { recomputeOn } from '@/lib/recompute-on'
 
 /** Subscribe to the external driver map so mobile-owned PTYs guard composer sends just like xterm input. */
 export function useNativeChatCanSend(ptyId: string | null): boolean {
@@ -16,8 +17,11 @@ export function useNativeChatCanSend(ptyId: string | null): boolean {
       }),
     [ptyId]
   )
-  return useMemo(() => {
-    void driverTick
-    return deriveNativeChatCanSend(ptyId ? getDriverForPty(ptyId) : null)
-  }, [ptyId, driverTick])
+  return useMemo(
+    () =>
+      recomputeOn([driverTick], () =>
+        deriveNativeChatCanSend(ptyId ? getDriverForPty(ptyId) : null)
+      ),
+    [ptyId, driverTick]
+  )
 }

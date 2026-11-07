@@ -8,7 +8,11 @@ import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layou
 import type { AgentStatusTiming } from './agent-status-contract'
 import { retainedAgentEntryFromLive } from './agent-status-pane-key-tab-binding'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
-import { ENV, makeSnapshot, makeState } from '@/runtime/web-session-tabs-sync-test-harness'
+import {
+  ENV,
+  makeSnapshot,
+  makeState
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const pane = makePaneKey('tab-order', '11111111-1111-4111-8111-111111111111')
 const quiet = makePaneKey('tab-quiet', '22222222-2222-4222-8222-222222222222')

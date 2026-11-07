@@ -19,6 +19,11 @@ import {
   createLinearTask,
   isGitHubPrMergeBlocked
 } from './mobile-tasks-legacy-foundation'
+import {
+  type CommentDraftSlot,
+  isCommentSendUnconfirmed,
+  useMobileTaskCommentSendOutcome
+} from './use-mobile-task-comment-send-outcome'
 
 export type useMobileTasksGithubReplyMergeActionsInput = Pick<
   GithubCheckFileActionsModel,
@@ -28,6 +33,7 @@ export type useMobileTasksGithubReplyMergeActionsInput = Pick<
   | 'client'
   | 'itemReplyDrafts'
   | 'captureTaskListRefresh'
+  | 'requestDetailRefresh'
   | 'setActionItem'
   | 'setDetailPayload'
   | 'setError'
@@ -53,6 +59,8 @@ export function useMobileTasksGithubReplyMergeActions<
     tryBeginMutation,
     taskUiReady
   } = model
+  const { commentSendNotice, beginCommentSend, holdUnconfirmedCommentSend, noteCommentNotSent } =
+    useMobileTaskCommentSendOutcome(model)
   const replyToGitHubComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
@@ -71,15 +79,28 @@ export function useMobileTasksGithubReplyMergeActions<
         return
       }
       setError('')
+      const send = beginCommentSend(item)
       const isCurrent = claimPublication(item)
+      const slot: CommentDraftSlot = `reply:${key}`
+      const clearDraft = () =>
+        setItemReplyDrafts((current) => {
+          if ((current[key] ?? '').trim() !== body) {
+            return current
+          }
+          const next = { ...current }
+          delete next[key]
+          return next
+        })
+      const reviewAnchor =
+        item.source.type === 'pr' &&
+        comment.path &&
+        typeof comment.line === 'number' &&
+        typeof comment.id === 'number'
+          ? { path: comment.path, line: comment.line, commentId: comment.id }
+          : null
+      // Without a review anchor the reply posts as an issue comment that mentions the author.
+      const postedBody = reviewAnchor ? body : `@${commentAuthor(comment)} ${body}`
       try {
-        const reviewAnchor =
-          item.source.type === 'pr' &&
-          comment.path &&
-          typeof comment.line === 'number' &&
-          typeof comment.id === 'number'
-            ? { path: comment.path, line: comment.line, commentId: comment.id }
-            : null
         const replyResult = reviewAnchor
           ? githubReviewCommentReplyWrite.interpret(
               await githubReviewCommentReplyWrite.request(
@@ -103,7 +124,7 @@ export function useMobileTasksGithubReplyMergeActions<
                 {
                   repo: `id:${item.source.repoId}`,
                   number: item.source.number,
-                  body: `@${commentAuthor(comment)} ${body}`,
+                  body: postedBody,
                   type: item.source.type,
                   prRepo: requireGitHubTaskTarget(item.source).repository
                 },
@@ -113,6 +134,7 @@ export function useMobileTasksGithubReplyMergeActions<
         if (replyResult.ok === false) {
           throw new Error(replyResult.error ?? 'Failed to reply')
         }
+        clearDraft()
         if (!isCurrent()) {
           return
         }
@@ -125,17 +147,17 @@ export function useMobileTasksGithubReplyMergeActions<
           line: comment.line,
           threadId: comment.threadId
         }
-        setItemReplyDrafts((current) => {
-          const next = { ...current }
-          delete next[key]
-          return next
-        })
         setDetailPayload((current) =>
           current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
             ? { ...current, comments: [...current.comments, reply] }
             : current
         )
       } catch (err) {
+        if (isCommentSendUnconfirmed(err)) {
+          holdUnconfirmedCommentSend(send, slot, postedBody, clearDraft)
+        } else if (!isCurrent()) {
+          noteCommentNotSent(send, slot)
+        }
         if (!isCurrent()) {
           return
         }
@@ -274,7 +296,12 @@ export function useMobileTasksGithubReplyMergeActions<
     },
     [claimPublication, client, captureTaskListRefresh, tryBeginMutation, taskUiReady]
   )
-  return Object.assign(model, { replyToGitHubComment, mergeHostedReview, setLinearStatus })
+  return Object.assign(model, {
+    replySendNotice: commentSendNotice,
+    replyToGitHubComment,
+    mergeHostedReview,
+    setLinearStatus
+  })
 }
 
 export type GithubReplyMergeActionsModel = GithubCheckFileActionsModel &

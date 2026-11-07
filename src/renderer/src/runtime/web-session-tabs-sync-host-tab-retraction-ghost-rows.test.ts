@@ -13,7 +13,7 @@ import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
-} from '../components/terminal-pane/renderer-owned-agent-status-registry'
+} from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import {
   applyFreshWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshots

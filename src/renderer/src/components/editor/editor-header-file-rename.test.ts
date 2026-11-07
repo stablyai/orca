@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
 import type * as EditorAutosave from './autosave/editor-autosave'
-import type * as RuntimeFileMetadataClient from '@/runtime/runtime-file-metadata-client'
+import type * as RuntimeFileMetadataClient from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { useAppStore } from '@/store'
@@ -18,7 +18,7 @@ const renameIO = vi.hoisted(() => ({
   save: vi.fn(),
   move: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-metadata-client', async (original) => ({
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', async (original) => ({
   ...(await original<typeof RuntimeFileMetadataClient>()),
   runtimePathExists: renameIO.exists
 }))

@@ -12,7 +12,7 @@ import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
-import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 import type { Tab } from '../../../../shared/tab-types'
 
 const initialStoreState = useAppStore.getInitialState()

@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
@@ -16,7 +17,7 @@ import {
   isPRCommentGroupQueueableForAI,
   partitionPRCommentGroupsForTriage,
   sortPRCommentGroupsByRecency
-} from '@/lib/pr-comment-action-state'
+} from '@/lib/source-control/review/comments/pr-comment-action-state'
 import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import type {
   GitHubReactionContent,
@@ -45,6 +46,8 @@ export function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMod
 }
 
 export type PRCommentsListProps = {
+  imageUploadAddress?: GitHubImageIntake['address']
+  editImageUploadAddress?: GitHubImageIntake['address']
   comments: PRComment[]
   /** Set when the last read failed; replaces the empty-list copy. */
   commentsError?: string | null
@@ -71,6 +74,8 @@ export type PRCommentsListProps = {
 }
 
 export function useCommentsListState({
+  imageUploadAddress,
+  editImageUploadAddress,
   comments,
   commentsDisabled,
   commentsDisabledReason,
@@ -231,6 +236,8 @@ export function useCommentsListState({
       !isSelectingForAI
     return (
       <PRCommentGroupView
+        imageUploadAddress={imageUploadAddress}
+        editImageUploadAddress={editImageUploadAddress}
         key={groupId}
         group={group}
         botAuthorOverrides={botAuthorOverrides}
@@ -262,6 +269,7 @@ export function useCommentsListState({
       className={cn(empty ? 'px-3 py-2' : 'border-t border-border px-3 py-2')}
     >
       <RightPanelCommentComposer
+        imageUploadAddress={imageUploadAddress}
         placeholder={
           empty
             ? translate(
