@@ -14,6 +14,7 @@ import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing
 import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-reach'
 import { resolveAdvertisedPairingEndpoint } from '../../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
+import { publicSourceRefusalNotice } from './serve-network-source-policy'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
@@ -146,6 +147,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getWebSocketEndpoint(): string | null {
     const ws = this.transports.find((t) => t.kind === 'websocket')
     return ws?.endpoint ?? null
+  }
+
+  // The guard exists only while public sources are refused.
+  getPublicSourceRefusalNotice(): string | null {
+    return this.webSocketSourceGuard ? publicSourceRefusalNotice() : null
   }
 
   createPairingOffer(args: {
