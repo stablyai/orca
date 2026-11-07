@@ -6,7 +6,7 @@ import {
   SettingsSubsectionHeader
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ShellIcon } from '../../../tab-bar/shell-icons'
 
 type TerminalWindowsShellSectionProps = {
@@ -29,6 +29,7 @@ export function TerminalWindowsShellSection({
   windowsShell,
   gitBashAvailable
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
   // New WSL choices need a distro; retain only existing WSL defaults here.
   const showWslOption = windowsShell === 'wsl.exe'
@@ -36,8 +37,8 @@ export function TerminalWindowsShellSection({
   return (
     <section key="windows-shell" className="space-y-3">
       <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
-        description={translate(
+        title={t('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+        description={t(
           'auto.components.settings.TerminalPane.a55eee649f',
           'Default shell for new terminal panes on Windows.'
         )}
@@ -46,8 +47,8 @@ export function TerminalWindowsShellSection({
       <div className="divide-y divide-border/40">
         <SearchableSetting
           className="@container"
-          title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
-          description={translate(
+          title={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+          description={t(
             'auto.components.settings.TerminalPane.bd68f3170d',
             'Choose the default shell for new terminal panes on Windows.'
           )}
@@ -65,8 +66,8 @@ export function TerminalWindowsShellSection({
         >
           <SettingsRow
             className="flex-col items-stretch @lg:flex-row @lg:items-center"
-            label={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
-            description={translate(
+            label={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+            description={t(
               'auto.components.settings.TerminalPane.09bf02de9a',
               'Shell used when opening a new terminal pane. Takes effect for new terminals.'
             )}
@@ -75,10 +76,7 @@ export function TerminalWindowsShellSection({
                 size="sm"
                 equalWidth
                 wrap
-                ariaLabel={translate(
-                  'auto.components.settings.TerminalPane.27e301f22c',
-                  'Default Shell'
-                )}
+                ariaLabel={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
                 value={windowsShell}
                 onChange={(value) => updateSettings({ terminalWindowsShell: value })}
                 options={[
@@ -86,23 +84,17 @@ export function TerminalWindowsShellSection({
                     value: 'powershell.exe',
                     label: windowsShellLabel(
                       'powershell.exe',
-                      translate('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
+                      t('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
                     ),
-                    ariaLabel: translate(
-                      'auto.components.settings.TerminalPane.eb7fc4d98a',
-                      'PowerShell'
-                    )
+                    ariaLabel: t('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
                   },
                   {
                     value: 'cmd.exe',
                     label: windowsShellLabel(
                       'cmd.exe',
-                      translate(
-                        'auto.components.settings.TerminalPane.0f1b8669e6',
-                        'Command Prompt'
-                      )
+                      t('auto.components.settings.TerminalPane.0f1b8669e6', 'Command Prompt')
                     ),
-                    ariaLabel: translate(
+                    ariaLabel: t(
                       'auto.components.settings.TerminalPane.0f1b8669e6',
                       'Command Prompt'
                     )
@@ -113,12 +105,9 @@ export function TerminalWindowsShellSection({
                           value: WINDOWS_GIT_BASH_SHELL,
                           label: windowsShellLabel(
                             WINDOWS_GIT_BASH_SHELL,
-                            translate(
-                              'auto.components.settings.TerminalPane.f61ac77f16',
-                              'Git Bash'
-                            )
+                            t('auto.components.settings.TerminalPane.f61ac77f16', 'Git Bash')
                           ),
-                          ariaLabel: translate(
+                          ariaLabel: t(
                             'auto.components.settings.TerminalPane.f61ac77f16',
                             'Git Bash'
                           ),
@@ -132,12 +121,9 @@ export function TerminalWindowsShellSection({
                           value: 'wsl.exe',
                           label: windowsShellLabel(
                             'wsl.exe',
-                            translate('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
+                            t('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
                           ),
-                          ariaLabel: translate(
-                            'auto.components.settings.TerminalPane.b637dd57a7',
-                            'WSL'
-                          ),
+                          ariaLabel: t('auto.components.settings.TerminalPane.b637dd57a7', 'WSL'),
                           disabled: true
                         }
                       ]

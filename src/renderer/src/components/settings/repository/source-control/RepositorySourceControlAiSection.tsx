@@ -14,7 +14,7 @@ import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourc
 import { normalizeRepoAiDraft } from './repository-source-control-ai-draft'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
 import { getSettingOwnershipSummary } from '../../page/setting-ownership'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
@@ -29,6 +29,7 @@ export function RepositorySourceControlAiSection({
   updateRepo,
   writeSourceControlAiSettings
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore(
     useShallow(
       (state) =>
@@ -39,7 +40,7 @@ export function RepositorySourceControlAiSection({
         }
     )
   )
-  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
+  const ownership = getSettingOwnershipSummary('repositorySourceControlAi', t)
   const source = useMemo(
     () => normalizeSourceControlAiSettings(settings?.sourceControlAi, settings?.commitMessageAi),
     [settings?.sourceControlAi, settings?.commitMessageAi]
@@ -83,7 +84,7 @@ export function RepositorySourceControlAiSection({
     >
       <div className="min-w-0 space-y-1">
         <h3 className="text-sm font-semibold">
-          {translate(
+          {t(
             'auto.components.settings.RepositorySourceControlAiSection.71b003b62b',
             'Source Control AI'
           )}

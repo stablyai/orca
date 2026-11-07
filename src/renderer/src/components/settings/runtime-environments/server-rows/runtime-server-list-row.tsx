@@ -1,6 +1,6 @@
 import type React from 'react'
 import { MoreHorizontal, Server } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
@@ -79,6 +79,7 @@ export function ServerListRow({
   menuDisabled = false,
   footer
 }: ServerListRowProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div data-settings-section={sectionId} className="scroll-mt-8">
       <div className="flex min-h-14 items-center gap-3 px-4 py-2.5">
@@ -114,7 +115,7 @@ export function ServerListRow({
                       variant="ghost"
                       size="icon-xs"
                       disabled={menuDisabled}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.serverList.moreActions',
                         'More actions for {{name}}',
                         { name }
@@ -125,10 +126,7 @@ export function ServerListRow({
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate(
-                    'auto.components.settings.serverList.moreActionsTooltip',
-                    'More actions'
-                  )}
+                  {t('auto.components.settings.serverList.moreActionsTooltip', 'More actions')}
                 </TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end" className="min-w-52">
@@ -150,6 +148,7 @@ export function ServerRowDetailsToggle({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
@@ -158,8 +157,8 @@ export function ServerRowDetailsToggle({
       onClick={onToggle}
     >
       {expanded
-        ? translate('auto.components.settings.serverList.hideDetails', 'Hide details')
-        : translate('auto.components.settings.serverList.details', 'Details')}
+        ? t('auto.components.settings.serverList.hideDetails', 'Hide details')
+        : t('auto.components.settings.serverList.details', 'Details')}
     </button>
   )
 }

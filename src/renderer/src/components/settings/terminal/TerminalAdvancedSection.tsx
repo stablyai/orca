@@ -22,7 +22,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './platform/terminal-windows-search'
 import { TerminalMacKeyboardSection } from './platform/TerminalMacKeyboardSection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 type TerminalAdvancedSectionProps = {
@@ -56,6 +56,7 @@ export function TerminalAdvancedSection({
   pwshAvailable,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const scrollbackRows = normalizeDesktopTerminalScrollbackRows(settings.terminalScrollbackRows)
   const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
@@ -102,8 +103,8 @@ export function TerminalAdvancedSection({
   return (
     <section key="advanced" className="space-y-3">
       <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
-        description={translate(
+        title={t('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
+        description={t(
           'auto.components.settings.TerminalPane.267d020745',
           'Scrollback, word boundaries, and platform-specific terminal behaviors.'
         )}
@@ -111,8 +112,8 @@ export function TerminalAdvancedSection({
 
       <div className="divide-y divide-border/40">
         <SearchableSetting
-          title={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
-          description={translate(
+          title={t('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
+          description={t(
             'auto.components.settings.TerminalPane.c3810b2b42',
             'Retained desktop terminal rows.'
           )}
@@ -120,8 +121,8 @@ export function TerminalAdvancedSection({
         >
           <SettingsRow
             alignTop={scrollbackMode === 'custom'}
-            label={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
-            description={translate(
+            label={t('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
+            description={t(
               'auto.components.settings.TerminalPane.81d86b2dd2',
               'Retained desktop terminal rows for new and open panes.'
             )}
@@ -153,7 +154,7 @@ export function TerminalAdvancedSection({
                       key={preset}
                       value={`${preset}`}
                       className="h-8 px-3 text-xs"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.TerminalPane.5336c096af',
                         '{{value0}} rows',
                         { value0: preset }
@@ -165,12 +166,9 @@ export function TerminalAdvancedSection({
                   <ToggleGroupItem
                     value="custom"
                     className="h-8 px-3 text-xs"
-                    aria-label={translate(
-                      'auto.components.settings.TerminalPane.907b0b9d3e',
-                      'Custom'
-                    )}
+                    aria-label={t('auto.components.settings.TerminalPane.907b0b9d3e', 'Custom')}
                   >
-                    {translate('auto.components.settings.TerminalPane.907b0b9d3e', 'Custom')}
+                    {t('auto.components.settings.TerminalPane.907b0b9d3e', 'Custom')}
                   </ToggleGroupItem>
                 </ToggleGroup>
                 {scrollbackMode === 'custom' ? (
@@ -191,7 +189,7 @@ export function TerminalAdvancedSection({
                       className="number-input-clean w-24 tabular-nums"
                     />
                     <span className="text-xs text-muted-foreground">
-                      {translate('auto.components.settings.TerminalPane.12e06178fa', 'rows')}
+                      {t('auto.components.settings.TerminalPane.12e06178fa', 'rows')}
                     </span>
                   </div>
                 ) : null}
@@ -203,16 +201,16 @@ export function TerminalAdvancedSection({
         {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
 
         <SearchableSetting
-          title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
-          description={translate(
+          title={t('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
+          description={t(
             'settings.terminal.wordSeparators.description',
             'Characters treated as word boundaries for double-click selection, including space.'
           )}
           keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
         >
           <SettingsRow
-            label={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
-            description={translate(
+            label={t('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
+            description={t(
               'settings.terminal.wordSeparators.description',
               'Characters treated as word boundaries for double-click selection, including space.'
             )}
@@ -233,13 +231,13 @@ export function TerminalAdvancedSection({
                       size="xs"
                       onClick={() => commitWordSeparatorDraft(TERMINAL_DEFAULT_WORD_SEPARATOR)}
                     >
-                      {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+                      {t('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
                     </Button>
                   ) : null}
                 </div>
                 {wordSeparatorDraft && !wordSeparatorDraft.includes(' ') ? (
                   <p className="text-xs text-status-warning">
-                    {translate(
+                    {t(
                       'settings.terminal.wordSeparators.noSpaceHint',
                       'No space included — double-click will select across spaces.'
                     )}
@@ -256,11 +254,8 @@ export function TerminalAdvancedSection({
           getTerminalWindowsPowershellImplementationSearchEntry()
         ) ? (
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.TerminalPane.fe20f79dd1',
-              'PowerShell Version'
-            )}
-            description={translate(
+            title={t('auto.components.settings.TerminalPane.fe20f79dd1', 'PowerShell Version')}
+            description={t(
               'auto.components.settings.TerminalPane.3d88af864d',
               'Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.'
             )}
@@ -277,19 +272,16 @@ export function TerminalAdvancedSection({
           >
             <SettingsRow
               alignTop
-              label={translate(
-                'auto.components.settings.TerminalPane.fe20f79dd1',
-                'PowerShell Version'
-              )}
+              label={t('auto.components.settings.TerminalPane.fe20f79dd1', 'PowerShell Version')}
               description={
                 pwshAvailable ? (
-                  translate(
+                  t(
                     'auto.components.settings.TerminalPane.5ed5c95344',
                     'Choose between Windows PowerShell and PowerShell 7+ for new terminal panes.'
                   )
                 ) : (
                   <>
-                    {translate(
+                    {t(
                       'auto.components.settings.TerminalPane.a016ffbeed',
                       'Auto uses Windows PowerShell now and switches to PowerShell 7+ when installed.'
                     )}{' '}
@@ -300,7 +292,7 @@ export function TerminalAdvancedSection({
                       rel="noopener noreferrer"
                       className="underline hover:text-foreground"
                     >
-                      {translate(
+                      {t(
                         'auto.components.settings.TerminalPane.822f62ddcd',
                         'Download PowerShell 7+'
                       )}
@@ -311,7 +303,7 @@ export function TerminalAdvancedSection({
               }
               control={
                 <SettingsSegmentedControl
-                  ariaLabel={translate(
+                  ariaLabel={t(
                     'auto.components.settings.TerminalPane.fe20f79dd1',
                     'PowerShell Version'
                   )}
@@ -322,21 +314,18 @@ export function TerminalAdvancedSection({
                   options={[
                     {
                       value: 'auto',
-                      label: translate('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
+                      label: t('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
                     },
                     {
                       value: 'powershell.exe',
-                      label: translate(
+                      label: t(
                         'auto.components.settings.TerminalPane.d26174e1dd',
                         'Windows PowerShell'
                       )
                     },
                     {
                       value: 'pwsh.exe',
-                      label: translate(
-                        'auto.components.settings.TerminalPane.96be03b8eb',
-                        'PowerShell 7+'
-                      ),
+                      label: t('auto.components.settings.TerminalPane.96be03b8eb', 'PowerShell 7+'),
                       disabled: !pwshAvailable
                     }
                   ]}
