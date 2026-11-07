@@ -16,8 +16,12 @@ import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
-import { resolveStoredWorkspaceContext } from './active-worktree-context-fallback'
+import {
+  activeSessionWorkspaceId,
+  resolveRemoteWorkspaceContext,
+  type ActiveWorkspaceContext,
+  type PairedWorkspaceContextSource
+} from './active-worktree-context-fallback'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -139,20 +143,18 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
   }
 
+  /** Paired servers' workspace rows the desktop holds; set while relay hosts are attached. */
+  private pairedWorkspaceContexts: PairedWorkspaceContextSource | null = null
+
+  setPairedWorkspaceContextSource(source: PairedWorkspaceContextSource | null): void {
+    this.pairedWorkspaceContexts = source
+  }
+
   /** The focused workspace, preferring stored selection, then the renderer graph. */
-  async resolveActiveWorktreeContext(): Promise<{
-    worktreeId: string
-    path: string
-    branch: string
-    displayName: string
-  } | null> {
+  async resolveActiveWorktreeContext(): Promise<ActiveWorkspaceContext | null> {
     const session = this.store?.getWorkspaceSession?.()
     const hostId = session?.activeWorkspaceExecutionHostId ?? undefined
-    // The scoped key is set for folder workspaces and remote focus; the legacy id alone misses those.
-    let worktreeId = getActiveSidebarWorkspaceId(
-      session?.activeWorkspaceKey ?? null,
-      session?.activeWorktreeId ?? null
-    )
+    let worktreeId = activeSessionWorkspaceId(session)
     if (!worktreeId && this.graphStatus === 'ready') {
       for (const tab of this.tabs.values()) {
         if (tab.activeLeafId && tab.worktreeId) {
@@ -178,7 +180,12 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // A remote worktree is not in the local catalog; project what the stored row knows.
     }
-    return resolveStoredWorkspaceContext(this.store, worktreeId, hostId)
+    return resolveRemoteWorkspaceContext(
+      this.store,
+      this.pairedWorkspaceContexts,
+      worktreeId,
+      hostId
+    )
   }
 
   getExactWorkerProviderSession(

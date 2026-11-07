@@ -1,12 +1,60 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getActiveSidebarWorkspaceId, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
 type WorktreeMetaLabel = { displayName?: string }
+export type ActiveWorkspaceContext = {
+  worktreeId: string
+  path: string
+  branch: string
+  displayName: string
+}
+
+/** The scoped key is set for folder workspaces and remote focus; the legacy id alone misses those. */
+export function activeSessionWorkspaceId(
+  session:
+    | { activeWorkspaceKey?: string | null; activeWorktreeId?: string | null }
+    | null
+    | undefined
+): string | null {
+  return getActiveSidebarWorkspaceId(
+    session?.activeWorkspaceKey ?? null,
+    session?.activeWorktreeId ?? null
+  )
+}
+
+/** What `MobileRelayHostCatalog.workspaceContext` answers: a paired server's listed workspace. */
+export type PairedWorkspaceContextSource = {
+  workspaceContext(
+    hostId: ExecutionHostId,
+    worktreeId: string
+  ): Promise<ActiveWorkspaceContext | null>
+}
+
+/**
+ * The focused workspace the local catalog could not resolve. A paired server's workspace lives in
+ * that server's store, so it comes from the server rows the desktop holds; anything else, and a
+ * server the desktop cannot answer for, falls back to the desktop's stored rows.
+ */
+export async function resolveRemoteWorkspaceContext(
+  store: StoredWorkspaceContextStore | null | undefined,
+  paired: PairedWorkspaceContextSource | null,
+  worktreeId: string,
+  hostId?: ExecutionHostId
+): Promise<ActiveWorkspaceContext | null> {
+  if (paired && hostId && parseExecutionHostId(hostId)?.kind === 'runtime') {
+    const context = await paired.workspaceContext(hostId, worktreeId).catch(() => null)
+    if (context) {
+      return context
+    }
+  }
+  return resolveStoredWorkspaceContext(store, worktreeId, hostId)
+}
 
 /** The stored facts needed to describe a workspace the local catalog cannot resolve. */
 export type StoredWorkspaceContextStore = {
@@ -40,7 +88,7 @@ export function resolveStoredWorkspaceContext(
   store: StoredWorkspaceContextStore | null | undefined,
   worktreeId: string,
   hostId?: ExecutionHostId
-): { worktreeId: string; path: string; branch: string; displayName: string } | null {
+): ActiveWorkspaceContext | null {
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     return null
   }

@@ -380,6 +380,41 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it("resolves a focused paired-server workspace from the server's rows the desktop holds", async () => {
+    const serverWorktreeId = 'server-repo::/srv/app'
+    const runtimeStore = {
+      ...store,
+      // The paired server's workspace lives in its own store, not the desktop's.
+      getRepos: () => [],
+      getRepo: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getWorktreeMetaForHost: () => undefined,
+      getWorkspaceSession: () => ({
+        activeWorktreeId: serverWorktreeId,
+        activeWorkspaceExecutionHostId: 'runtime:env-1'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
+
+    const workspaceContext = vi.fn(async (hostId: string, worktreeId: string) =>
+      hostId === 'runtime:env-1' && worktreeId === serverWorktreeId
+        ? { worktreeId, path: '/srv/app', branch: 'refs/heads/feature', displayName: 'App' }
+        : null
+    )
+    runtime.setPairedWorkspaceContextSource({ workspaceContext })
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toEqual({
+      worktreeId: serverWorktreeId,
+      path: '/srv/app',
+      branch: 'refs/heads/feature',
+      displayName: 'App'
+    })
+    workspaceContext.mockRejectedValueOnce(new Error('host_unreachable'))
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
+  })
+
   it('keeps a stale focus on a removed local worktree null', async () => {
     const localRepo = {
       id: 'local-repo',
