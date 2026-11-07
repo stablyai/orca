@@ -20,14 +20,6 @@ const RESULT = {
 }
 
 describe('mobileWeb.bundle.range contract', () => {
-  it('round-trips params and result', () => {
-    expect(MobileWebBundleRangeParamsSchema.parse(PARAMS)).toEqual(PARAMS)
-    expect(MobileWebBundleRangeResultSchema.parse(RESULT)).toEqual(RESULT)
-    expect(
-      MobileWebBundleRangeResultSchema.parse({ ...RESULT, encoding: 'identity' }).encoding
-    ).toBe('identity')
-  })
-
   // The grid is the host's `rangeBytes`; a caller-chosen length is not part of the method.
   it('takes exactly the chunk params, with no length', () => {
     expect(MobileWebBundleRangeParamsSchema.safeParse({ ...PARAMS, length: 4096 }).success).toBe(

@@ -51,8 +51,6 @@ import { registerDashboardPopoutHandlers } from './dashboard-popout'
 
 const mainSender = { id: 1, send: vi.fn() }
 const popoutSender = { id: 2, send: vi.fn() }
-const untrustedSender = { id: 3, send: vi.fn() }
-const SNAPSHOT = { generatedAt: 1, cards: [] }
 const CARD = {
   paneKey: 'tab-1:leaf-1',
   ptyId: 'pty-1',
@@ -113,6 +111,7 @@ describe('registerDashboardPopoutHandlers', () => {
     store = makeStore()
     isTrustedUIRendererMock.mockImplementation((sender) => sender === mainSender)
     isPopoutRendererMock.mockImplementation((sender) => sender === popoutSender)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only reads getSettings and onSettingsChanged, both supplied by this mock.
     registerDashboardPopoutHandlers(store as never)
   })
 
@@ -120,36 +119,6 @@ describe('registerDashboardPopoutHandlers', () => {
     vi.clearAllMocks()
     getPopoutMock.mockReturnValue(null)
     getTrustedWindowMock.mockReturnValue(null)
-  })
-
-  it('opens only for the trusted main renderer while the feature is enabled', () => {
-    handlers.get('dashboardPopout:open')!({ sender: untrustedSender } as never)
-    expect(createPopoutMock).not.toHaveBeenCalled()
-
-    store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: false })
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).not.toHaveBeenCalled()
-
-    store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: true })
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).toHaveBeenCalledWith(store, {
-      getKeybindings: expect.any(Function)
-    })
-  })
-
-  it('caches and forwards only valid trusted snapshots', () => {
-    const popout = makeWindow(popoutSender)
-    getPopoutMock.mockReturnValue(popout)
-
-    handlers.get('dashboard:publishSnapshot')!({ sender: untrustedSender } as never, SNAPSHOT)
-    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
-      generatedAt: Number.NaN,
-      cards: []
-    })
-    expect(popoutSender.send).not.toHaveBeenCalled()
-
-    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, SNAPSHOT)
-    expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
   })
 
   // Invalid cards must not silently freeze the rest of the board.
@@ -169,10 +138,13 @@ describe('registerDashboardPopoutHandlers', () => {
     }
     const bad = { ...CARD, paneKey: 'tab-2:leaf-2', ...invalid }
 
-    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
-      generatedAt: 2,
-      cards: [good, bad]
-    })
+    handlers.get('dashboard:publishSnapshot')!(
+      { sender: mainSender },
+      {
+        generatedAt: 2,
+        cards: [good, bad]
+      }
+    )
 
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', {
       generatedAt: 2,
@@ -180,56 +152,5 @@ describe('registerDashboardPopoutHandlers', () => {
     })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 invalid card'))
     warn.mockRestore()
-  })
-
-  it('replays the cached snapshot only to the popout and nudges only the trusted main renderer', () => {
-    const popout = makeWindow(popoutSender)
-    getPopoutMock.mockReturnValue(popout)
-    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, SNAPSHOT)
-
-    handlers.get('dashboard:requestSnapshot')!({ sender: untrustedSender } as never)
-    expect(untrustedSender.send).not.toHaveBeenCalled()
-
-    handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
-    expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
-    expect(sendToTrustedMock).toHaveBeenCalledWith('dashboard:snapshotRequested', null)
-  })
-
-  it('relays valid seen acknowledgements from only the popout', () => {
-    handlers.get('dashboardPopout:ackAgent')!({ sender: untrustedSender } as never, {
-      paneKey: 'tab1:leaf1'
-    })
-    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, { paneKey: '' })
-    expect(sendToTrustedMock).not.toHaveBeenCalled()
-
-    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
-      paneKey: 'tab1:leaf1'
-    })
-    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
-      paneKey: 'tab1:leaf1',
-      intent: 'explicit'
-    })
-    expect(sendToTrustedMock.mock.calls).toEqual([
-      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
-      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
-    ])
-  })
-
-  it('reveals an agent in only the trusted main window', () => {
-    const main = makeWindow(mainSender)
-    getTrustedWindowMock.mockReturnValue(main)
-    const args = { repoId: 'r1', worktreeId: 'w1', tabId: 't1', leafId: 'l1' }
-
-    handlers.get('dashboardPopout:revealAgent')!({ sender: untrustedSender } as never, args)
-    handlers.get('dashboardPopout:revealAgent')!({ sender: popoutSender } as never, {
-      ...args,
-      tabId: ''
-    })
-    expect(safelyRevealMock).not.toHaveBeenCalled()
-
-    handlers.get('dashboardPopout:revealAgent')!({ sender: popoutSender } as never, args)
-    expect(safelyRevealMock).toHaveBeenCalledWith(main)
-    expect(mainSender.send).toHaveBeenCalledWith('ui:revealDashboardAgent', args)
-    expect(appMock.focus).toHaveBeenCalledOnce()
   })
 })

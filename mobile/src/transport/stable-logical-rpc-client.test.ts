@@ -107,6 +107,24 @@ describe('stable logical RPC client', () => {
     pending.resolve(success('late'))
   })
 
+  it('attaches a subscription its owner holds at cutover only when the owner resumes it', async () => {
+    const oldSession = new FakeSession('connected')
+    const nextSession = new FakeSession('connected')
+    const client = createStableLogicalRpcClient(oldSession, 'lan')
+    const held: (() => void)[] = []
+    client.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn(), {
+      holdReplay: (resend) => held.push(resend) > 0
+    })
+    oldSession.subscribe.mockClear()
+
+    await client.migrateTo(nextSession, 'relay')
+    expect(nextSession.subscribe).not.toHaveBeenCalled()
+
+    held[0]!()
+    expect(nextSession.subscribe).toHaveBeenCalledOnce()
+    expect(oldSession.subscribe).not.toHaveBeenCalled()
+  })
+
   it('keeps replies that commit before cutover and carries viewport state into replay', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connected')

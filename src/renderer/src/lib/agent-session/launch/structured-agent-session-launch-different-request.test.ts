@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -61,8 +63,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     mocks.callRuntimeRpc(target, method, params)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
@@ -87,8 +91,8 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import {

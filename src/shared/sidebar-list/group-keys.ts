@@ -19,6 +19,10 @@ export function isProjectSectionGroupKey(key: string): boolean {
   return key.startsWith('repo:') || key.startsWith('project:') || key.startsWith('project-group:')
 }
 
+export function isProjectOrPinnedSectionGroupKey(key: string): boolean {
+  return key === PINNED_GROUP_KEY || isProjectSectionGroupKey(key)
+}
+
 export const ALL_GROUP_KEY = 'all'
 
 export const LINEAGE_GROUP_PREFIX = 'lineage:'

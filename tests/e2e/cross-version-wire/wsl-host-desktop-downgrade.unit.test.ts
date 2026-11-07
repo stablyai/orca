@@ -19,7 +19,7 @@ import {
 import {
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
-} from '../../../src/renderer/src/runtime/runtime-rpc-result'
+} from '../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-result'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

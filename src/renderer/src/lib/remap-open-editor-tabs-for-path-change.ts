@@ -5,10 +5,12 @@ import { isOpenFileOnMoveOwner, type EditorMoveOwner } from '@/lib/open-editor-m
 import {
   buildDiffEditorFileId,
   buildOwnedEditorFileId,
-  resolveEditorFileIdForOwner,
-  type OpenFilePathRekey,
-  type RekeyOpenFilesResult
-} from '@/store/slices/editor'
+  resolveEditorFileIdForOwner
+} from '@/store/slices/editor/file-ids/editor-file-ids'
+import type {
+  OpenFilePathRekey,
+  RekeyOpenFilesResult
+} from '@/store/slices/editor/types/open-file-path-rekey'
 import {
   isPathInsideOrEqual,
   isWindowsAbsolutePathLike,

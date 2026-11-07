@@ -9,7 +9,7 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 
-import { useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { resolveRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import {

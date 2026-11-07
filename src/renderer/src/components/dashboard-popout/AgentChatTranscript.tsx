@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
-import { MessageRow } from '../native-chat/NativeChatMessageRow'
+import { MessageRow } from '../native-chat/messages/rows/NativeChatMessageRow'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Preserve reading position when history is prepended; follow new messages only while the reader stays near the bottom. */
 export function AgentChatTranscript({
@@ -27,7 +26,7 @@ export function AgentChatTranscript({
   loadOlder: () => void
   className?: string
 }): React.JSX.Element {
-  useTranslation()
+  const t = useTranslate()
   const viewport = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
   const olderHeight = useRef<number | null>(null)
@@ -48,11 +47,11 @@ export function AgentChatTranscript({
       {!current && (
         <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
           {status === 'error'
-            ? translate(
+            ? t(
                 'dashboardPopout.chat.readFailed',
                 'Unable to load this chat. Open the workspace to reconnect.'
               )
-            : translate('dashboardPopout.chat.connecting', 'Connecting to chat…')}
+            : t('dashboardPopout.chat.connecting', 'Connecting to chat…')}
         </p>
       )}
       <div
@@ -76,12 +75,12 @@ export function AgentChatTranscript({
               loadOlder()
             }}
           >
-            {translate('dashboardPopout.chat.loadOlder', 'Load earlier messages')}
+            {t('dashboardPopout.chat.loadOlder', 'Load earlier messages')}
           </Button>
         )}
         {current && messages.length === 0 && (
           <p className="py-3 text-sm text-muted-foreground">
-            {translate('dashboardPopout.chat.empty', 'No messages in this chat yet.')}
+            {t('dashboardPopout.chat.empty', 'No messages in this chat yet.')}
           </p>
         )}
         {messages.map((message) => (

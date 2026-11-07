@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The store slices a workspace's owning server derives from. */
 export function routingInputs(state: AppState): unknown[] {

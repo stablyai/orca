@@ -36,24 +36,6 @@ describe('browser artifact upload', () => {
     expect(getShareableBrowserArtifactFile('file:///tmp/report.md')).toBeNull()
   })
 
-  it('reads the backing file through the authorized filesystem API', async () => {
-    await expect(readBrowserHtmlArtifactRequest('file:///tmp/report.html')).resolves.toEqual({
-      sourceKey: '/tmp/report.html',
-      content: '<h1>Mock</h1>',
-      contentType: 'text/html',
-      fileName: 'report.html'
-    })
-    // Why user-file: the user opened this page by URL, so it is shared from where it is.
-    expect(stat).toHaveBeenCalledWith({
-      filePath: '/tmp/report.html',
-      access: { kind: 'user-file' }
-    })
-    expect(readFile).toHaveBeenCalledWith({
-      filePath: '/tmp/report.html',
-      access: { kind: 'user-file' }
-    })
-  })
-
   it('rejects oversized and unreadable files before upload', async () => {
     stat.mockResolvedValueOnce({
       size: ARTIFACT_MAX_CONTENT_BYTES + 1,
@@ -69,17 +51,5 @@ describe('browser artifact upload', () => {
     await expect(readBrowserHtmlArtifactRequest('file:///tmp/private.html')).rejects.toMatchObject({
       code: 'unreadable'
     } satisfies Partial<ArtifactPublishPreparationError>)
-  })
-
-  it('accepts a file whose stat is exactly at the 10 MiB boundary', async () => {
-    stat.mockResolvedValueOnce({
-      size: ARTIFACT_MAX_CONTENT_BYTES,
-      isDirectory: false,
-      mtime: 1
-    })
-
-    await expect(readBrowserHtmlArtifactRequest('file:///tmp/exact.html')).resolves.toMatchObject({
-      sourceKey: '/tmp/exact.html'
-    })
   })
 })

@@ -1,4 +1,4 @@
-import { publicRuntimeEnvironment } from '@/runtime/paired-runtime-environment-test-fixture'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 // @vitest-environment happy-dom
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -6,10 +6,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StrictMode, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
-import { createTestStore, createBrowserMockApi } from '@/store/slices/browser-slice-test-harness'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import {
+  createTestStore,
+  createBrowserMockApi
+} from '@/store/slices/browser/browser-slice-test-harness'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import type { AppState } from '@/store/types'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import type { GoogleCookieClearLocalTarget } from '../../../../../../shared/browser-google-cookie-clear'
 import { i18n } from '@/i18n/i18n'
 
@@ -36,8 +39,8 @@ vi.mock('../../../BrowserCookieImportMachineNotice', () => ({
   BrowserCookieImportMachineNotice: () => null
 }))
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const profile = {
   id: 'default',

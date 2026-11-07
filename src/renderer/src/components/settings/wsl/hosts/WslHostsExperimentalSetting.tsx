@@ -22,7 +22,7 @@ export function WslHostsExperimentalSetting({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="flex items-start justify-between gap-4 py-2"
+      className="flex items-start justify-between gap-4 py-3"
       id="wsl-hosts"
     >
       <div className="min-w-0 shrink space-y-0.5">

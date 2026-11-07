@@ -104,7 +104,7 @@ describe('useIpcEvents updater integration', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))

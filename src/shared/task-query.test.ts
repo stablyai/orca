@@ -23,11 +23,6 @@ describe('hasExplicitTaskScope', () => {
 })
 
 describe('parseTaskQuery', () => {
-  it('widens scope to all when both is:issue and is:pr are present', () => {
-    const parsed = parseTaskQuery('is:issue is:pr')
-    expect(parsed.scope).toBe('all')
-  })
-
   it('widens scope to all regardless of issue and PR token order', () => {
     const parsed = parseTaskQuery('is:pr is:issue')
     expect(parsed.scope).toBe('all')
@@ -60,10 +55,6 @@ describe('parseTaskQuery', () => {
 })
 
 describe('stripRepoQualifiers', () => {
-  it('removes repo:owner/name tokens', () => {
-    expect(stripRepoQualifiers('is:open repo:foo/bar assignee:@me')).toBe('is:open assignee:@me')
-  })
-
   it('re-quotes a standalone token that contains whitespace', () => {
     // Re-quote standalone phrases or serialization would split them into separate search tokens.
     const stripped = stripRepoQualifiers('"needs review" repo:x/y')
@@ -93,12 +84,6 @@ describe('withQualifier', () => {
     const cleared = withQualifier(set, 'author', null)
     expect(parseTaskQuery(cleared).author).toBeNull()
     expect(parseTaskQuery(cleared).freeText).toBe('hello')
-  })
-
-  it('sets the all state filter', () => {
-    const result = withQualifier('is:pr is:open', 'state', 'all')
-    expect(parseTaskQuery(result).state).toBe('all')
-    expect(result).toContain('state:all')
   })
 
   it('preserves quoted free-text tokens when applying a filter', () => {

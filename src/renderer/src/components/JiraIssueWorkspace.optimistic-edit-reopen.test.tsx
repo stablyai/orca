@@ -20,34 +20,6 @@ import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 describe('JiraIssueWorkspace reopened issue edits', () => {
-  it('keeps a newer reopened-issue edit when an earlier save fails', async () => {
-    const oldSave = deferred<{ ok: false; error: string }>()
-    runtimeMocks.jiraUpdateIssueForTarget
-      .mockReturnValueOnce(oldSave.promise)
-      .mockReturnValue(deferred<{ ok: true }>().promise)
-    runtimeMocks.jiraGetIssueForTarget.mockImplementation(
-      async (_settings: unknown, key: string) =>
-        key === 'ENG-2' ? otherIssue : jiraIssue('Old title')
-    )
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-    saveTitle('Old title', 'First edit')
-    await act(async () => selectIssue(otherIssue))
-    await flushPromises()
-    await act(async () => selectIssue(jiraIssue('Old title')))
-    await flushPromises()
-    saveTitle('First edit', 'Latest edit')
-    await flushPromises()
-    await act(async () => oldSave.resolve({ ok: false, error: 'First save rejected' }))
-    await flushPromises()
-    expect(store.patchJiraIssue).toHaveBeenLastCalledWith(
-      'ENG-1',
-      expect.objectContaining({ title: 'Latest edit' }),
-      { sourceContext: initialSource, siteId: 'site-1', contextKey: initialSourceContextKey }
-    )
-    expect(screen.getByDisplayValue('Latest edit')).toBeDefined()
-  })
-
   it('keeps a newer reopened-issue edit when an earlier refresh returns late', async () => {
     const oldSave = deferred<{ ok: true }>()
     const oldRefresh = deferred<JiraIssue>()

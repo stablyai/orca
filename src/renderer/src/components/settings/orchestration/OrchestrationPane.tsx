@@ -29,6 +29,7 @@ import {
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -107,66 +108,70 @@ export function OrchestrationPane({
       )}
       keywords={searchEntries[0].keywords}
       forceVisible
-      className="space-y-5 py-2"
+      className="space-y-8"
     >
-      <AgentSkillSetupPanel
-        title={translate(
-          'auto.components.settings.OrchestrationPane.07641b9768',
-          'Orchestration skill'
-        )}
-        description={translate(
-          'auto.components.settings.OrchestrationPane.9bedd2a6e5',
-          'Enables agents to hand off context and coordinate work through Orca.'
-        )}
-        skillNames={[ORCHESTRATION_SKILL_NAME]}
-        installed={orchestrationSkillDetected}
-        loading={orchestrationSkillLoading}
-        error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
-        installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
-        icon={<Workflow className="size-5" />}
-        onBeforeInstall={() => {
-          useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
-        }}
-        // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-        actionHint={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' && !orchestrationSkillDetected ? (
-            <button
-              type="button"
-              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              onClick={() => setSkillPromptOpen(true)}
-            >
-              {translate(
-                'auto.components.settings.OrchestrationPane.7bc082f4de',
-                'Copy install command'
-              )}
-            </button>
-          ) : undefined
-        }
-        footer={renderCoverage}
-        onRecheck={refreshOrchestrationSkill}
-        freshnessSkillName={
-          activeSkillRuntime.canUseSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
-        }
-      />
-
-      {showLocalRuntimeSettings ? (
-        <NumberField
-          label={getNestedWorkerDepthTitle()}
-          description={getNestedWorkerDepthDescription()}
-          value={resolveNestedWorkerMaxDepth(settings)}
-          min={1}
-          integer
-          onChange={(nestedWorkerMaxDepth) => {
-            void updateSettings({ nestedWorkerMaxDepth })
-          }}
-        />
-      ) : null}
-      {showLocalRuntimeSettings ? (
-        <OrchestrationWorkerAutoReleaseSetting
-          settings={settings}
-          updateSettings={updateSettings}
-        />
-      ) : null}
+      <SettingsGroup>
+        <div className="py-4">
+          <AgentSkillSetupPanel
+            variant="inline"
+            title={translate(
+              'auto.components.settings.OrchestrationPane.07641b9768',
+              'Orchestration skill'
+            )}
+            description={translate(
+              'auto.components.settings.OrchestrationPane.9bedd2a6e5',
+              'Enables agents to hand off context and coordinate work through Orca.'
+            )}
+            skillNames={[ORCHESTRATION_SKILL_NAME]}
+            installed={orchestrationSkillDetected}
+            loading={orchestrationSkillLoading}
+            error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
+            installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
+            icon={<Workflow className="size-5" />}
+            onBeforeInstall={() => {
+              useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
+            }}
+            // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+            actionHint={
+              activeSkillRuntime.agentRuntime?.runtime === 'wsl' && !orchestrationSkillDetected ? (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => setSkillPromptOpen(true)}
+                >
+                  {translate(
+                    'auto.components.settings.OrchestrationPane.7bc082f4de',
+                    'Copy install command'
+                  )}
+                </button>
+              ) : undefined
+            }
+            footer={renderCoverage}
+            onRecheck={refreshOrchestrationSkill}
+            freshnessSkillName={
+              activeSkillRuntime.canUseSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
+            }
+          />
+        </div>
+        {showLocalRuntimeSettings ? (
+          <NumberField
+            label={getNestedWorkerDepthTitle()}
+            description={getNestedWorkerDepthDescription()}
+            value={resolveNestedWorkerMaxDepth(settings)}
+            min={1}
+            integer
+            onChange={(nestedWorkerMaxDepth) => {
+              void updateSettings({ nestedWorkerMaxDepth })
+            }}
+          />
+        ) : null}
+        {showLocalRuntimeSettings ? (
+          <OrchestrationWorkerAutoReleaseSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+      </SettingsGroup>
 
       {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}
       {activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? (

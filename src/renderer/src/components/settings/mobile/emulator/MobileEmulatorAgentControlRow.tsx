@@ -4,6 +4,7 @@ import { useMobileEmulatorAgentSetupState } from '../../../emulator-pane/use-mob
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { translate } from '@/i18n/i18n'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 const EMULATOR_CLI_COMMANDS = [
   'orca emulator list --json',
@@ -17,25 +18,17 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const activeSkillRuntime = setup.skillRuntime
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <p className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.MobileEmulatorAgentControlRow.2a674aa810',
-              'Agent Mobile Emulator Control'
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6',
-              'Let coding agents control the active mobile emulator with Orca CLI commands.'
-            )}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 divide-y divide-border/40">
+    <SettingsGroup
+      title={translate(
+        'auto.components.settings.MobileEmulatorAgentControlRow.2a674aa810',
+        'Agent Mobile Emulator Control'
+      )}
+      description={translate(
+        'auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6',
+        'Let coding agents control the active mobile emulator with Orca CLI commands.'
+      )}
+    >
+      <div className="divide-y divide-border">
         <div className="py-3">
           <AgentSkillSetupPanel
             variant="inline"
@@ -91,6 +84,6 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
 
         <MobileEmulatorExamples variant="inline" />
       </div>
-    </div>
+    </SettingsGroup>
   )
 }

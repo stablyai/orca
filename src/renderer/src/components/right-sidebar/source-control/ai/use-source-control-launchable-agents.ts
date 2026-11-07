@@ -1,3 +1,4 @@
+import { useSourceControlState } from '../panel/worktree-scope'
 import { useCallback, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import {
@@ -24,7 +25,7 @@ export function useSourceControlLaunchableAgents(args: {
   const workspace = sourceControlLaunchWorkspace(target)
   useChatProgramFacts(workspace, active && !connectionUnavailable)
   // Source Control renders with the dialog closed; only an open dialog lists agents.
-  const detected = useAppStore((state) =>
+  const detected = useSourceControlState((state) =>
     !active
       ? null
       : worktreeId

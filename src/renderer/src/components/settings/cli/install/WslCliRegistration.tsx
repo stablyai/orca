@@ -148,17 +148,17 @@ export function WslCliRegistration({
     }
   }
 
+  const wslShellCommandLabel = translate(
+    'auto.components.settings.WslCliRegistration.d9c6880dbd',
+    'WSL shell command'
+  )
+
   return (
     <>
-      <div className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-4">
+      <div data-settings-row="" className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <Label>
-              {translate(
-                'auto.components.settings.WslCliRegistration.d9c6880dbd',
-                'WSL shell command'
-              )}
-            </Label>
+            <Label>{wslShellCommandLabel}</Label>
             <p className="text-xs text-muted-foreground">
               {loading
                 ? translate(

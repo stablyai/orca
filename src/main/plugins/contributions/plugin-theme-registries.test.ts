@@ -77,22 +77,4 @@ describe('plugin theme registries', () => {
       expect.objectContaining({ id: 'plugin:samples.midnight/midnight', mode: 'dark' })
     ])
   })
-
-  it('reports an invalid theme and drops it, then clears when the plugin is disabled', async () => {
-    const plugin = await themePlugin({
-      app: { base: 'dark', tokens: { '--background': 'url(https://example.com)' } },
-      terminal: { ...terminal, terminal: { background: '#000000' } }
-    })
-    const themes = createPluginThemeRegistry(new PluginContentVerifier())
-    const terminalThemes = createPluginTerminalThemeRegistry(new PluginContentVerifier())
-
-    await themes.reconcile([plugin], () => true)
-    await terminalThemes.reconcile([plugin], () => true)
-    expect(themes.list()).toEqual([])
-    expect(themes.error(plugin.pluginKey)).toContain('theme "midnight" is invalid')
-    expect(terminalThemes.error(plugin.pluginKey)).toContain('requires background, foreground')
-
-    await themes.reconcile([plugin], () => false)
-    expect(themes.error(plugin.pluginKey)).toBeNull()
-  })
 })

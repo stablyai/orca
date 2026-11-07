@@ -1,6 +1,6 @@
 import { defineFixture } from '@/component-fixtures/component-fixture'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
-import { getStructuredAgentSessionReadOwner } from '../native-chat/structured-agent-session-read-owner'
+import { getStructuredAgentSessionReadOwner } from '../native-chat/session/structured/read/structured-agent-session-read-owner'
 import { AgentTerminalPanel } from './AgentTerminalDialog'
 
 const session = { sessionId: 'dashboard-demo', target: { kind: 'local' } } as const

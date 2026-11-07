@@ -1,3 +1,4 @@
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
@@ -15,7 +16,10 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
+import {
+  structuredSummaryConversationNaming,
+  structuredSummaryHostProgram
+} from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import {
   normalizeOptionalField,
@@ -33,6 +37,7 @@ export function savedStructuredAgentSessionStatus(
   const outcome =
     turn?.state === 'open' || (!turn && markerAt !== undefined) ? 'cancellation' : turn?.outcome
   const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const interactionMode = record.options?.interactionMode
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
   return {
     sessionId: record.sessionId,
@@ -45,10 +50,12 @@ export function savedStructuredAgentSessionStatus(
     ...(outcome ? { turnOutcome: outcome } : {}),
     ...(at !== undefined ? { statusStartedAt: at } : {}),
     ...(model ? { model } : {}),
+    ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...(isAgentChatPermissionMode(record.permissionMode)
       ? { permissionMode: record.permissionMode }
       : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, undefined),
     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: at ?? record.createdAt

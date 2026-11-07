@@ -1,5 +1,6 @@
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
+import type { LayoutClientVisibility } from './workspace-layout-client-visibility'
 import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
@@ -363,6 +364,7 @@ export type LayoutApplyReply = (
 ) & { frameSeq?: number }
 
 export type LayoutContext = {
+  visibility?: LayoutClientVisibility
   mintId: () => string
   /** Pane ids must be UUIDs (pane keys and PTY env carry them). */
   mintLeafId: () => string

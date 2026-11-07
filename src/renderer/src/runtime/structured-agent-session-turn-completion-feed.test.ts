@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supportsCapability: vi.fn(
 vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionTurnCompletions: mocks.subscribe
 }))
-vi.mock('./runtime-rpc-client', () => ({
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 

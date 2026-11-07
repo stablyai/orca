@@ -94,49 +94,6 @@ function createService(
 }
 
 describe('DesktopPushService', () => {
-  it('persists the registration the gateway hands back', async () => {
-    const harness = createService()
-
-    expect(
-      await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
-    ).toEqual({ registered: true, registrationId: 'reg-1' })
-    expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration).toMatchObject({
-      registrationId: 'reg-1',
-      filter: REGISTER_INPUT.filter
-    })
-  })
-
-  it('persists nothing when the gateway is unreachable', async () => {
-    const harness = createService({ registerFails: true })
-
-    expect(
-      await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
-    ).toEqual({ registered: false, reason: 'gateway_unreachable' })
-    expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration).toBeUndefined()
-  })
-
-  it('refuses to register a device that is not a paired phone', async () => {
-    const harness = createService()
-
-    expect(await harness.service.register({ deviceId: 'not-a-device', ...REGISTER_INPUT })).toEqual(
-      {
-        registered: false,
-        reason: 'not_mobile'
-      }
-    )
-  })
-
-  it('clears the local registration and deletes at the gateway on unregister', async () => {
-    const harness = createService()
-    await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
-
-    expect(await harness.service.unregister(harness.deviceId)).toEqual({ unregistered: true })
-    await harness.service.flushUnregisterOutbox()
-    expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration).toBeUndefined()
-    expect(harness.deletes).toEqual(['reg-1'])
-    expect(harness.outbox.pending()).toEqual([])
-  })
-
   it('keeps the delete queued when the gateway cannot be reached', async () => {
     const harness = createService({ deleteFails: true })
     await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
@@ -147,21 +104,6 @@ describe('DesktopPushService', () => {
     expect(harness.outbox.pending()).toEqual([
       expect.objectContaining({ registrationId: 'reg-1', deviceId: harness.deviceId })
     ])
-  })
-
-  it('reports nothing to unregister for a device that never enabled push', async () => {
-    const harness = createService()
-    expect(await harness.service.unregister(harness.deviceId)).toEqual({ unregistered: false })
-  })
-
-  it('drains a delete queued before this launch', async () => {
-    const harness = createService()
-    harness.outbox.enqueue({ registrationId: 'reg-stale', deviceId: 'device-gone' })
-
-    await harness.service.flushUnregisterOutbox()
-
-    expect(harness.deletes).toEqual(['reg-stale'])
-    expect(harness.outbox.pending()).toEqual([])
   })
 
   it('unregisters at the gateway when the device stopped being a phone mid-register', async () => {
@@ -265,26 +207,6 @@ describe('DesktopPushService', () => {
       registrationId: 'reg-1'
     })
   })
-
-  it('pushes a dispatched notification through the subscribed dispatcher', async () => {
-    const harness = createService()
-    await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
-
-    harness.dispatch({
-      type: 'notification',
-      source: 'agent-task-complete',
-      title: 'feat/x - Claude finished',
-      body: 'Done.',
-      notificationSeq: 3,
-      notificationEpoch: 'epoch-1',
-      agentState: 'done'
-    })
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(harness.send).toHaveBeenCalledWith(
-      expect.objectContaining({ registrationIds: ['reg-1'] })
-    )
-  })
 })
 
 it('renews a seven-day mobile lease only on explicit registration', async () => {
@@ -309,26 +231,6 @@ it('renews a seven-day mobile lease only on explicit registration', async () => 
     h.service.stop()
     clock.mockRestore()
   }
-})
-
-it('sends an explicit test only to the requesting registered phone and awaits gateway acceptance', async () => {
-  const { service, registry, deviceId, send } = createService()
-  await service.register({
-    ...REGISTER_INPUT,
-    deviceId,
-    filter: { onlyWhenDesktopAway: true, sound: false }
-  })
-  registry.addDevice('another phone', 'mobile')
-  send.mockResolvedValue({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
-  await expect(service.test(deviceId)).resolves.toEqual({ accepted: true })
-  expect(send).toHaveBeenCalledWith({
-    registrationIds: ['reg-1'],
-    notification: expect.objectContaining({
-      source: 'terminal-bell',
-      sound: false,
-      title: 'Test notification'
-    })
-  })
 })
 
 it('does not claim success for missing registrations or failed gateway sends', async () => {

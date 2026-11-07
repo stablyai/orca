@@ -1,3 +1,4 @@
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import {
   structuredAgentSessionRuntimeModel,
   structuredAgentSessionRuntimePermission
@@ -23,6 +24,7 @@ import type {
   StatusPublication
 } from './structured-agent-session-status-feed-deps'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
+import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -65,6 +67,7 @@ export function structuredAgentSessionStatusSummary({
   const effort = record?.options?.effort
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
+  const interactionMode = record?.options?.interactionMode
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -93,13 +96,27 @@ export function structuredAgentSessionStatusSummary({
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
+    ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }
+}
+
+/** Marks chats whose pinned account runs a host program, which need no managed install. */
+export function structuredSummaryHostProgram(
+  record: Pick<AgentSessionConversationView, 'provider' | 'accountHome'> | null
+): Pick<AgentSessionStatusSummary, 'hostProgram'> {
+  return record &&
+    structuredAgentRuntimeMetadata(record.provider)?.definition.runsHostProgram?.(
+      record.accountHome
+    )
+    ? { hostProgram: true }
+    : {}
 }
 
 /** The record's name, and the failure to replace it only while that is still the name. */

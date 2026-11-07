@@ -15,10 +15,8 @@ vi.mock('@/attention/agent-subject-read-actions', async (importOriginal) => ({
 }))
 import AgentChatPreview from './AgentChatPreview'
 import { TooltipProvider } from '../ui/tooltip'
-import {
-  getStructuredAgentSessionReadOwner,
-  resetStructuredAgentSessionReadOwnersForTests
-} from '../native-chat/structured-agent-session-read-owner'
+import { getStructuredAgentSessionReadOwner } from '../native-chat/session/structured/read/structured-agent-session-read-owner'
+import { resetStructuredAgentSessionReadOwnersForTests } from '../native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store'
 
 const originalState = useAppStore.getState()

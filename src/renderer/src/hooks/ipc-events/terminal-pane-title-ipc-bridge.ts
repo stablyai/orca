@@ -2,8 +2,8 @@ import {
   SET_TERMINAL_PANE_TITLE_EVENT,
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
-import { findTerminalTabWorktreeId } from '@/components/native-chat/native-chat-file-link'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/structured-chat-tab-index'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { useAppStore } from '../../store'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'

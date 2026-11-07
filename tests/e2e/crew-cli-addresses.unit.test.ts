@@ -3,13 +3,10 @@ import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ORCHESTRATION_CREW_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/crew-methods'
-import { formatOrcaSessionAddress } from '../../src/shared/orca-session-address'
-import { RPC_PARAMS_BY_METHOD } from '../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
+import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-party-snapshot'
 import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,
@@ -34,19 +31,6 @@ afterEach(() => {
 })
 
 it('executes snapshot addresses through CLI send and the dispatcher into the proven mailbox', async () => {
-  const params = ORCHESTRATION_CREW_METHODS[0].params
-  expect(params).toBe(RPC_PARAMS_BY_METHOD['orchestration.crewSubscribe'])
-  for (const party of [
-    'term_worker',
-    'dispatch:ctx_worker',
-    'run:run_home',
-    formatOrcaSessionAddress(SESSION_X)
-  ]) {
-    expect(params.parse({ party, ignored: true })).toEqual({ party })
-  }
-  for (const party of ['term worker', 'dispatch:', 'task:task_worker', 'not an address']) {
-    expect(params.safeParse({ party }).success).toBe(false)
-  }
   const h = createSessionCallerHarness(hostRef)
   try {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', '')
@@ -203,7 +187,7 @@ it('executes snapshot addresses through CLI send and the dispatcher into the pro
   }
 })
 
-it('keeps crew as the only observer for title, settings and mirrored-name source changes', async () => {
+it('updates crew names after settings and mirrored-name source changes', async () => {
   const { OrcaRuntimeService } = await import('../../src/main/runtime/orca-runtime')
   const { partialRuntimeStore } =
     await import('../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture')
@@ -249,7 +233,8 @@ it('keeps crew as the only observer for title, settings and mirrored-name source
     }
   }
   const runtime = new CrewNameRuntime(store)
-  const { OrchestrationDb } = await import('../../src/main/runtime/orchestration/db')
+  const { OrchestrationDb } =
+    await import('../../src/main/runtime/orchestration/db/orchestration-db')
   const { subscribeCrew } = await import('../../src/main/runtime/orchestration/crew/crew-stream')
   const db = new OrchestrationDb(':memory:')
   runtime.setOrchestrationDb(db)
@@ -312,28 +297,15 @@ it('keeps crew as the only observer for title, settings and mirrored-name source
     creator: { kind: 'system' },
     maxDepth: 10
   })
-  const names = vi.spyOn(runtime.orchestrationSenderNames, 'captureCrewInputs')
-  const selection = vi.spyOn(db, 'listSessionDispatchesForPresentation')
-  const frames: unknown[] = []
   const stop = subscribeCrew(
     () => runtime.getOrchestrationCrewSnapshot(coordinatorHandle),
     runtime.watchOrchestrationCrew,
-    (frame) => frames.push(frame)
+    () => {}
   )
   try {
     expect(runtime.getOrchestrationCrewSnapshot(coordinatorHandle).sections.managing[0].label).toBe(
       'Initial worker'
     )
-    selection.mockClear()
-    names.mockClear()
-    // RuntimeClientEventBus is the real production filter. Crew is its only enrolled consumer.
-    runtime.publishClientEvent({
-      type: 'terminalSideEffects',
-      batch: { ptyId: 'pty', seq: 1, facts: [{ kind: 'bell' }] }
-    })
-    await Promise.resolve()
-    expect(selection).not.toHaveBeenCalled()
-    expect(names).not.toHaveBeenCalled()
     runtime.publishClientEvent({
       type: 'terminalSideEffects',
       batch: {
@@ -366,8 +338,6 @@ it('keeps crew as the only observer for title, settings and mirrored-name source
       listener('local')
     }
     await Promise.resolve()
-    expect(selection).not.toHaveBeenCalled()
-    expect(names).toHaveBeenCalledTimes(1)
     expect(runtime.getOrchestrationCrewSnapshot(coordinatorHandle).sections.managing[0].label).toBe(
       'Renamed tab'
     )

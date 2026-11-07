@@ -41,6 +41,8 @@ const PLAIN_NODE_ENTRY_NAMES = [
   'browser-extension-native-host-supervisor-entry',
   'daemon-entry',
   'parcel-watcher-process-entry',
+  // Utility process on desktop, forked child in orcad.
+  'stt-worker',
   'session-scanner-service-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
@@ -52,7 +54,6 @@ const PLAIN_NODE_ENTRY_NAMES = [
 
 // Electron is unavailable in main-process worker threads too (verified Electron 43); scan their graphs rather than trusting entry comments.
 const WORKER_THREAD_ENTRY_NAMES = [
-  'stt-worker',
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',

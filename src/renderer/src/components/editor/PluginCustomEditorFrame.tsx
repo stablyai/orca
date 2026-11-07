@@ -1,10 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   useCustomEditorViewStore,
   type ActivePluginCustomEditor
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../plugins/frames/plugin-panel-design-token-css'

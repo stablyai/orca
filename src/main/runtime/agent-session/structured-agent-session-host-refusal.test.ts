@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
-import { requireStructuredHost } from '../rpc/methods/structured-agent-session-gate'
+import { requireStructuredHost } from '../rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import type { RpcContext } from '../rpc/core'
 import {
   ensureStructuredAgentSessionHost,

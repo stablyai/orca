@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
-import { useStructuredAgentSessionRead } from '../native-chat/use-structured-agent-session-read'
-import { projectStructuredAgentSessionMessages } from '../native-chat/structured-agent-session-message-projection'
-import { createNativeChatMessageListProjection } from '../native-chat/native-chat-message-list-projection'
+import { useStructuredAgentSessionRead } from '../native-chat/session/structured/read/use-structured-agent-session-read'
+import { projectStructuredAgentSessionMessages } from '../native-chat/conversation/projection/structured-agent-session-message-projection'
+import { createNativeChatMessageListProjection } from '../native-chat/conversation/projection/native-chat-message-list-projection'
 import { AgentChatTranscript } from './AgentChatTranscript'
 
 export default function AgentChatPreview({

@@ -17,7 +17,7 @@ export type ProcessSpec = {
   env?: NodeJS.ProcessEnv
   timeoutMs?: number | null
   /** Written to stdin then closed. Omit to leave stdin empty and closed. */
-  input?: string
+  input?: string | Uint8Array
   /** Cap on captured stdout/stderr; output past it is discarded. */
   maxOutputBytes?: number
   /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */

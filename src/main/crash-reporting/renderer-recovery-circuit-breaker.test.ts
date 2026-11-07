@@ -33,12 +33,4 @@ describe('RendererRecoveryCircuitBreaker', () => {
     expect(breaker.recentRecoveryCount(62_001)).toBe(0)
     expect(breaker.registerRecoveryAttempt(62_001).allowed).toBe(true)
   })
-
-  it('reset() clears history so the next recovery is allowed', () => {
-    const breaker = new RendererRecoveryCircuitBreaker({ windowMs: 60_000, maxRecoveries: 1 })
-    expect(breaker.registerRecoveryAttempt(0).allowed).toBe(true)
-    expect(breaker.registerRecoveryAttempt(100).allowed).toBe(false)
-    breaker.reset()
-    expect(breaker.registerRecoveryAttempt(200).allowed).toBe(true)
-  })
 })

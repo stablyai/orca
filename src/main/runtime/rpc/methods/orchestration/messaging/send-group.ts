@@ -1,19 +1,27 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageType
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { resolveGroupAddress } from '../../../../orchestration/groups'
+import { resolveGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import {
+  resolveBareOrchestrationRecipient,
+  type BareRecipientResolution,
+  type SendRecipientWarning
+} from './recipient-routing'
 import {
   listAddressableStructuredWorkers,
   type OrchestrationAddressableAgent
-} from '../../../../orchestration/structured-worker-group-addressing'
+} from '../../../../orchestration/addressing/groups/structured-worker-group-addressing'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
-import type { BareRecipientResolution, SendRecipientWarning } from './recipient-routing'
-import type { SendParams } from '../schemas'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+
+import type { SendParams } from './send-params'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>

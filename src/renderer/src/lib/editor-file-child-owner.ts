@@ -19,7 +19,7 @@ import {
   captureWorktreeOperationGenerationSnapshot
 } from './worktree-operation-generation'
 import type { WorktreeOperationRoute } from './worktree-operation-route'
-import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** A tab retains its owner; a new operation uses that paired host's current session. */
 export function captureEditorFileOperationForOwner(

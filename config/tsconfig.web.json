@@ -11,12 +11,12 @@
     "../src/shared/**/*"
   ],
   "exclude": [
-    "../src/renderer/src/components/native-chat/NativeChatAcpQuestionCard.test.tsx",
+    "../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-main-surface.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
-    "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts"
+    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {
     "composite": true,

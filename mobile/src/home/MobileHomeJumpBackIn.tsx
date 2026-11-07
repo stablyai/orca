@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react-native'
-import { useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
@@ -9,6 +9,7 @@ import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useHostDisplay } from '../transport/use-host-display'
+import { areStructurallyEqual } from '../worktree/structural-equality'
 import type { HostCatalogEntry } from '../transport/types'
 import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
@@ -30,7 +31,8 @@ const TINTED_STATUSES: ReadonlySet<WorktreeStatus> = new Set(['permission', 'fai
 // Enough to see what needs you without the list pushing Desktops off the first screen.
 const AGENT_ROWS_COLLAPSED = 5
 
-export function MobileHomeJumpBackIn(props: {
+// Usage, stats and connection ticks re-render Home; the section redraws only when its rows change.
+export const MobileHomeJumpBackIn = memo(function MobileHomeJumpBackIn(props: {
   rows: readonly HomeJumpBackInRow[]
   hosts: readonly HostCatalogEntry[]
   first: boolean
@@ -40,6 +42,11 @@ export function MobileHomeJumpBackIn(props: {
   useMobileColorScheme()
   const reducedMotion = useReducedMotionEnabled() === true
   const [expanded, setExpanded] = useState(false)
+  // Rows glide to their new place when an agent's state reorders the list.
+  const layout = useMemo(
+    () => (reducedMotion ? undefined : LinearTransition.duration(220).easing(HOME_EASE_OUT)),
+    [reducedMotion]
+  )
   if (props.rows.length === 0) {
     return null
   }
@@ -48,8 +55,6 @@ export function MobileHomeJumpBackIn(props: {
   const collapsible = props.rows.length > AGENT_ROWS_COLLAPSED
   const shown = expanded || !collapsible ? props.rows : props.rows.slice(0, AGENT_ROWS_COLLAPSED)
   const activeCount = props.rows.filter((row) => !row.lastOpened).length
-  // Rows glide to their new place when an agent's state reorders the list.
-  const layout = reducedMotion ? undefined : LinearTransition.duration(220).easing(HOME_EASE_OUT)
   const entering = reducedMotion ? undefined : FadeIn.duration(180)
   return (
     <>
@@ -99,9 +104,10 @@ export function MobileHomeJumpBackIn(props: {
       </Animated.View>
     </>
   )
-}
+})
 
-function JumpBackInRow(props: {
+// Each refresh rebuilds every row object; compare by value so only changed rows redraw.
+const JumpBackInRow = memo(function JumpBackInRow(props: {
   row: HomeJumpBackInRow
   host: HostCatalogEntry | null
   nameDesktop: boolean
@@ -162,4 +168,4 @@ function JumpBackInRow(props: {
       </View>
     </Pressable>
   )
-}
+}, areStructurallyEqual)

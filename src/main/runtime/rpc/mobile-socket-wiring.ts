@@ -11,11 +11,12 @@ import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RpcBinarySender } from './rpc-binary-sender'
+import type { NetworkSourceClass } from './network-source-class'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
 export type MobileSocketTransportMetadata =
-  | { transport: 'direct' }
+  | { transport: 'direct'; sourceClass?: NetworkSourceClass }
   | {
       transport: 'relay'
       relayHostId: string
@@ -244,7 +245,14 @@ export class MobileSocketWiring {
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceId)
           // Do not delay e2ee_authenticated for the secure-file rewrite.
-          this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
+          this.deviceRegistry.updateLastSeenDeferred(
+            device.deviceId,
+            metadata.transport === 'direct' ? metadata.sourceClass : undefined,
+            channel.transcriptHashB64 ? 'v2' : 'legacy'
+          )
+          if (device.deviceToken === undefined) {
+            this.deviceRegistry.retireForkedTicket(device.deviceId)
+          }
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

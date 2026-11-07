@@ -7,7 +7,7 @@ import {
   source
 } from '../../src/renderer/src/components/task-page/linear/task-page-linear-refresh-test-fixtures'
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as RuntimeLinearProjectClient from '@/runtime/runtime-linear-project-client'
+import type * as RuntimeLinearProjectClient from '@/runtime/linear/runtime-linear-project-client'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { listProjectIssues } from '../../src/main/linear/linear-project-issue-queries'
 import { listCustomViewIssues } from '../../src/main/linear/linear-custom-view-queries'
@@ -31,7 +31,7 @@ vi.mock('../../src/main/linear/client', () => ({
 }))
 vi.mock('../../src/main/linear/linear-token-store', () => ({ clearToken: vi.fn() }))
 const actual = await vi.importActual<typeof RuntimeLinearProjectClient>(
-  '@/runtime/runtime-linear-project-client'
+  '@/runtime/linear/runtime-linear-project-client'
 )
 let restoreApi = () => {}
 afterEach(() => {

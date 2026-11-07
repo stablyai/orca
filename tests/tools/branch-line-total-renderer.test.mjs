@@ -6,7 +6,7 @@ import { expect, it } from 'vitest'
 import { getBranchCompare } from '../../src/main/git/source-control/branch-compare'
 import { getStatus } from '../../src/main/git/source-control/status-read'
 import { invalidateGitReadCaches } from '../../src/main/git/source-control/git-read-cache-invalidation'
-import { createEditorStore } from '../../src/renderer/src/store/slices/editor-slice-test-harness'
+import { createEditorStore } from '../../src/renderer/src/store/slices/editor/editor-slice-test-harness'
 
 async function git(repo, ...args) {
   const result = await runProcess({ program: 'git', args, cwd: repo })

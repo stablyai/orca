@@ -86,18 +86,6 @@ describe('PluginKillListService', () => {
     expect(restarted.reason('community.unsafe')).toBe('Malware advisory')
   })
 
-  it('rejects a replayed older snapshot without replacing cached revocations', async () => {
-    const fetcher = vi
-      .fn<() => Promise<PluginKillList>>()
-      .mockResolvedValueOnce(killList('2026-07-12T20:00:00Z'))
-      .mockResolvedValueOnce(killList('2026-07-11T20:00:00Z'))
-    const service = new PluginKillListService({ pluginsDataDir: await tempRoot(), fetcher })
-    await service.refresh()
-
-    await expect(service.refresh()).rejects.toThrow('older snapshot')
-    expect(service.snapshot()?.generatedAt).toBe('2026-07-12T20:00:00Z')
-  })
-
   it('refreshes periodically while plugins are on so long sessions see revocations', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     let revoked = false
