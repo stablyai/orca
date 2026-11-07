@@ -127,3 +127,28 @@ it('marks the transcript for a focus ring only when a key, not a click, brought 
   h.root.blur()
   expect(h.root.dataset.keyboardFocus).toBeUndefined()
 })
+it('keeps the transcript focus mark as it was when the app regains focus', () => {
+  const h = harness()
+  const hasFocus = vi.spyOn(document, 'hasFocus')
+  try {
+    fireEvent.pointerDown(h.getByTestId('text'))
+    h.root.focus()
+    fireEvent.keyDown(document, { key: 'Meta' })
+    hasFocus.mockReturnValue(false)
+    h.root.blur()
+    hasFocus.mockReturnValue(true)
+    h.root.focus()
+    expect(h.root.dataset.keyboardFocus).toBeUndefined()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    h.root.blur()
+    h.root.focus()
+    expect(h.root.dataset.keyboardFocus).toBe('true')
+    hasFocus.mockReturnValue(false)
+    h.root.blur()
+    hasFocus.mockReturnValue(true)
+    h.root.focus()
+    expect(h.root.dataset.keyboardFocus).toBe('true')
+  } finally {
+    hasFocus.mockRestore()
+  }
+})

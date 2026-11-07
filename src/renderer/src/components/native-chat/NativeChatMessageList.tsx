@@ -349,7 +349,7 @@ export function NativeChatMessageList({
               data-native-chat-scroll
               aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none data-[keyboard-focus]:ring-1 data-[keyboard-focus]:ring-inset data-[keyboard-focus]:ring-ring"
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none data-[keyboard-focus]:focus:ring-1 data-[keyboard-focus]:focus:ring-inset data-[keyboard-focus]:focus:ring-ring"
             >
               {showOlderHistory ? (
                 <NativeChatOlderHistoryRow

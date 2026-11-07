@@ -76,17 +76,24 @@ type ReaderScrollCallbacks = {
   onReaderAct?: () => void
 }
 
-const lastInputByDocument = new WeakMap<Document, { keyboard: boolean }>()
+type LastInput = { keyboard: boolean; count: number }
+const lastInputByDocument = new WeakMap<Document, LastInput>()
+/** The input count when a window blur took focus from the transcript. */
+const windowBlurInputCount = new WeakMap<HTMLElement, number>()
 
 // Unlike :focus-visible, scripted focus after a click is not inherited from a previously focused field.
 function trackLastInput(doc: Document): void {
   if (lastInputByDocument.has(doc)) {
     return
   }
-  const lastInput = { keyboard: false }
+  const lastInput: LastInput = { keyboard: false, count: 0 }
   lastInputByDocument.set(doc, lastInput)
-  doc.addEventListener('keydown', () => (lastInput.keyboard = true), true)
-  doc.addEventListener('pointerdown', () => (lastInput.keyboard = false), true)
+  const record = (keyboard: boolean) => () => {
+    lastInput.keyboard = keyboard
+    lastInput.count += 1
+  }
+  doc.addEventListener('keydown', record(true), true)
+  doc.addEventListener('pointerdown', record(false), true)
 }
 
 export type NativeChatReaderScrollInputHandlers = Pick<
@@ -162,19 +169,35 @@ export function nativeChatReaderScrollInputHandlers({
       report({ kind: 'content-press' }, event)
     },
     onFocus: (event) => {
-      if (event.target !== event.currentTarget) {
+      const transcript = event.currentTarget
+      if (event.target !== transcript) {
         return
       }
-      if (lastInputByDocument.get(event.currentTarget.ownerDocument)?.keyboard) {
-        event.currentTarget.dataset.keyboardFocus = 'true'
+      const lastInput = lastInputByDocument.get(transcript.ownerDocument)
+      const blurredAt = windowBlurInputCount.get(transcript)
+      windowBlurInputCount.delete(transcript)
+      // Returning to the app with no input since leaving restores focus as it was.
+      if (blurredAt !== undefined && blurredAt === lastInput?.count) {
+        return
+      }
+      if (lastInput?.keyboard) {
+        transcript.dataset.keyboardFocus = 'true'
       } else {
-        delete event.currentTarget.dataset.keyboardFocus
+        delete transcript.dataset.keyboardFocus
       }
     },
-    // Window blur keeps the mark: the transcript is still focused when the app comes back.
     onBlur: (event) => {
-      if (event.target === event.currentTarget && event.currentTarget.ownerDocument.hasFocus()) {
-        delete event.currentTarget.dataset.keyboardFocus
+      const transcript = event.currentTarget
+      if (event.target !== transcript) {
+        return
+      }
+      if (transcript.ownerDocument.hasFocus()) {
+        delete transcript.dataset.keyboardFocus
+      } else {
+        windowBlurInputCount.set(
+          transcript,
+          lastInputByDocument.get(transcript.ownerDocument)?.count ?? 0
+        )
       }
     }
   }
