@@ -53,7 +53,13 @@ type StreamCoverage = {
   inputSamples: number
   resampledSamples: number
   reportedSamples: number
+  slowPhraseDecodes: number
 }
+
+// Whisper pads every decode to a 30 s window, so each phrase costs a full decode. Where that takes longer than the
+// speech (and silence) it covers, per-pause decodes queue up behind the speaker, so that dictation stops cutting.
+// Two in a row, so one slow first run or load spike doesn't.
+const SLOW_PHRASE_DECODES_BEFORE_NO_CUTS = 2
 
 // Dropped silence still counts as covered; report it so the host's replay buffer and stall watch don't grow through long pauses.
 const SILENCE_COVERAGE_REPORT_SECONDS = 5
@@ -111,24 +117,26 @@ export async function createTranscribeCppRecognizer(
   const modelRate = model.capabilities.nativeSampleRate || init.sampleRate
   const vadModel = await loadSileroVad(transcribe, init.vadModelPath, modelRate)
   const streams = new Map<string, StreamCoverage>()
-  // Whisper pads every decode to a 30 s window, so a phrase costs a full decode; on a CPU that's slower than speaking,
-  // and per-pause decodes would queue up behind the speaker. Two in a row (not a first-run shader compile) stop the cuts.
-  let slowPhraseDecodes = 0
-  const cutsAtPauses = () => slowPhraseDecodes < 2
-
   const openStream = (): StreamCoverage => {
     // A VAD stream is per-dictation state, so each dictation gets its own session.
     const vad = vadModel?.createVadSession({ nThreads: 1 }) ?? null
-    return {
-      segmenter:
-        vad && vadModel
-          ? new VadPauseSegmenter(vad, modelRate, vadModel.vadInfo.frameSamples, cutsAtPauses)
-          : boundedChunks(modelRate),
+    const stream: StreamCoverage = {
+      segmenter: boundedChunks(modelRate),
       vad,
       inputSamples: 0,
       resampledSamples: 0,
-      reportedSamples: 0
+      reportedSamples: 0,
+      slowPhraseDecodes: 0
     }
+    if (vad && vadModel) {
+      stream.segmenter = new VadPauseSegmenter(
+        vad,
+        modelRate,
+        vadModel.vadInfo.frameSamples,
+        () => stream.slowPhraseDecodes < SLOW_PHRASE_DECODES_BEFORE_NO_CUTS
+      )
+    }
+    return stream
   }
 
   const transcribeChunk = async (chunk: Float32Array): Promise<string> => {
@@ -163,16 +171,33 @@ export async function createTranscribeCppRecognizer(
     for (const chunk of chunks) {
       const startedAt = performance.now()
       const text = await transcribeChunk(chunk)
-      if (stream.vad && cutsAtPauses()) {
-        const slow = performance.now() - startedAt > (chunk.length / modelRate) * 1000
-        slowPhraseDecodes = slow ? slowPhraseDecodes + 1 : 0
-      }
+      const decodeMs = performance.now() - startedAt
+      const spokenSince = stream.reportedSamples
       undecoded -= chunk.length
       report(streamId, stream, text.trim(), undecoded)
+      if (stream.vad) {
+        noteDecodeSpeed(
+          stream,
+          decodeMs,
+          ((stream.reportedSamples - spokenSince) / modelRate) * 1000
+        )
+      }
     }
     const dropped = stream.resampledSamples - stream.segmenter.heldSamples - stream.reportedSamples
     if (dropped >= SILENCE_COVERAGE_REPORT_SECONDS * modelRate) {
       report(streamId, stream, '', 0)
+    }
+  }
+
+  const noteDecodeSpeed = (stream: StreamCoverage, decodeMs: number, spokenMs: number) => {
+    if (stream.slowPhraseDecodes >= SLOW_PHRASE_DECODES_BEFORE_NO_CUTS) {
+      return
+    }
+    stream.slowPhraseDecodes = decodeMs > spokenMs ? stream.slowPhraseDecodes + 1 : 0
+    if (stream.slowPhraseDecodes === SLOW_PHRASE_DECODES_BEFORE_NO_CUTS) {
+      console.warn(
+        '[speech] Phrases decode slower than they are spoken; this dictation cuts only at 30 s'
+      )
     }
   }
 
