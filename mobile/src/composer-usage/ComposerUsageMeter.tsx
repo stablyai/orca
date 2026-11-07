@@ -116,7 +116,11 @@ export function ComposerUsageMeter({
 }
 
 const styles = themedStyleSheet(() => ({
+  // Basis is the meter's width, not 0: with flex:1 the growing leading controls split the space and squeeze it.
   slot: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
     alignItems: 'center',
     minWidth: 0
   },
@@ -132,11 +136,13 @@ const styles = themedStyleSheet(() => ({
   text: {
     fontSize: typography.metaSize,
     color: colors.textSecondary,
+    flexShrink: 0,
     fontVariant: ['tabular-nums']
   },
   track: {
     flexShrink: 1,
     width: 36,
+    minWidth: 12,
     height: 4,
     borderRadius: radii.pill,
     backgroundColor: colors.translucentFill,
