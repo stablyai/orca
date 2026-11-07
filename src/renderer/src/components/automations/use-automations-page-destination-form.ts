@@ -273,6 +273,7 @@ export function useAutomationsPageDestinationForm({
 
   return {
     editingRow,
+    editingDestination,
     editorSaveAuthority,
     recordedTargetSelected,
     editingRowCapturedOwner,
