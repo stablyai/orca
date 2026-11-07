@@ -227,8 +227,8 @@ it.each([false, true])(
       const first = historyFirst ? history() : neutral()
       const joined = historyFirst ? neutral() : history()
       release.resolve()
-      expect(await first).toBe(historyFirst ? true : outcome)
-      expect(await joined).toBe(historyFirst ? outcome : true)
+      expect(await first).toBe(historyFirst ? outcome === 'activated' : outcome)
+      expect(await joined).toBe(historyFirst ? outcome : outcome === 'activated')
       expect(parts.reveal).toHaveBeenCalledOnce()
       expect(present).toHaveBeenCalledTimes(historyFirst ? 0 : 1)
       if (!historyFirst) {
@@ -279,8 +279,8 @@ it.each([false, true])(
       parts
     )
     release.resolve()
-    expect(await first).toBe(historyFirst ? true : 'unavailable')
-    expect(await joined).toBe(historyFirst ? 'unavailable' : true)
+    expect(await first).toBe(historyFirst ? false : 'unavailable')
+    expect(await joined).toBe(historyFirst ? 'unavailable' : false)
     expect(await rich).toEqual({
       kind: 'failed',
       failure: { reason: 'unreachable', beforeEffects: false }
@@ -314,7 +314,7 @@ it('preserves History success-only navigation, the active-workspace shortcut and
     hostCannotOpen: vi.fn()
   }
   mocks.state.activeWorktreeId = 'elsewhere'
-  expect(await activateAiVaultStructuredSession(session, parts, TARGET)).toBe(true)
+  expect(await activateAiVaultStructuredSession(session, parts, TARGET)).toBe(false)
   expect(parts.gone).toHaveBeenCalledOnce()
   expect(mocks.navigate).not.toHaveBeenCalled()
   expect(mocks.moved).not.toHaveBeenCalled()
@@ -567,7 +567,7 @@ it.each([
           undefined,
           host
         )
-      ).toBe(true)
+      ).toBe(false)
       expect(toast.error).toHaveBeenCalledExactlyOnceWith(message)
       expect(mocks.navigate).not.toHaveBeenCalled()
       expect(mocks.activateTab).not.toHaveBeenCalled()
@@ -582,3 +582,20 @@ it.each([
     }
   }
 )
+
+it('reports a failed open when the revealed workspace cannot be activated', async () => {
+  mocks.state.activeWorktreeId = 'elsewhere'
+  mocks.moved.mockReturnValue(false)
+  mocks.navigate.mockReturnValue(false)
+
+  await expect(
+    activateAiVaultStructuredSession(
+      { structuredSession: { workspaceId: 'workspace', sessionId: 'sender' } },
+      undefined,
+      TARGET
+    )
+  ).resolves.toBe(false)
+
+  expect(mocks.navigate).toHaveBeenCalledWith('workspace')
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith('This workspace is no longer available.')
+})
