@@ -4,7 +4,7 @@ export type StopCaptureOptions = {
   preserveBufferedAudio?: boolean
 }
 
-// Stop lands on the last syllable while the processor still holds up to one unread 4096-frame buffer.
+// Stop lands on the last syllable while the capture worklet still holds up to one unsent 100 ms frame.
 const STOP_TAIL_MS = 250
 
 /** Keep capturing briefly after a user stop so the word being finished reaches the recognizer. */
