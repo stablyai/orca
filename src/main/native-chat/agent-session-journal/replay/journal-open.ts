@@ -231,5 +231,5 @@ export function startJournalRowFold(
   return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
 }
 
-export { journalRowsAfterReader, readJournalRowsAfterCursor } from './journal-read-row'
+import './journal-read-row'
 import { memoryJournalMap } from '../journal-memory-collections'
