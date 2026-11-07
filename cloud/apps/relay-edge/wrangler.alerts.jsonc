@@ -12,5 +12,19 @@
     "DATASET": "orca_relay_edge_spike",
     "ENVIRONMENT": "spike",
     "MIN_VOLUME": "200"
+  },
+  "env": {
+    // Reads the production edge's dataset (orca-relay-edge on edge.relay.orca.dev).
+    "production": {
+      "name": "orca-relay-edge-alerts",
+      "workers_dev": false,
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "vars": {
+        "ACCOUNT_ID": "57e6ddd3bb755dbf8e8dc7ff557e9014",
+        "DATASET": "orca_relay_edge_production",
+        "ENVIRONMENT": "production",
+        "MIN_VOLUME": "200"
+      }
+    }
   }
 }
