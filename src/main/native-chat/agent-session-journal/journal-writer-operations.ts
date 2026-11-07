@@ -18,6 +18,7 @@ import type {
   JournalItemAppendOptions,
   JournalLateDispatchInput,
   JournalShutdownCutInput,
+  JournalCommandSettlementInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   ResolveDispatchInput
@@ -59,6 +60,7 @@ export type JournalWriterInputOperation =
   | { kind: 'accept-late'; input: Extract<ResolveDispatchInput, { state: 'accepted' }> }
   | { kind: 'late-dispatch'; input: JournalLateDispatchInput }
   | { kind: 'shutdown-cut'; input: JournalShutdownCutInput }
+  | { kind: 'command-settle'; input: JournalCommandSettlementInput }
   | {
       kind: 'queue-insert'
       input: {
@@ -136,6 +138,8 @@ export async function runJournalWriterOperation(
       return submissionWriter.settleLate(operation.input)
     case 'shutdown-cut':
       return collaborators.itemAppender.appendShutdownCut(operation.input)
+    case 'command-settle':
+      return settled(submissionWriter.settleCommand(operation.input))
     case 'queue-insert':
       return queue.insert(operation.input, receipt)
     case 'queue-update':

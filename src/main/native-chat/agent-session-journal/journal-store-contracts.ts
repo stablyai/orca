@@ -169,6 +169,11 @@ export type JournalShutdownCutInput = {
   fence: number
 }
 
+export type JournalCommandSettlementInput = {
+  dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>
+  failureBody?: Extract<AgentJournalItemBody, { kind: 'status' }>
+}
+
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>

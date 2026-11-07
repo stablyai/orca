@@ -298,6 +298,9 @@ export class AgentSessionJournal {
   appendShutdownCut = (input: contracts.JournalShutdownCutInput) =>
     this.itemAppender.appendShutdownCut(input)
 
+  settleCommand = (input: contracts.JournalCommandSettlementInput) =>
+    this.submissionWriter.settleCommand(input)
+
   appendTombstone(
     identity: AgentJournalItemIdentity,
     { fence }: contracts.JournalTombstoneInput,

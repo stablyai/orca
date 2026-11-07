@@ -166,7 +166,9 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       identity: host.identity,
       rowWriter,
       queuedMessages,
-      claimAttachments
+      claimAttachments,
+      lifecycle: lifecycleBatchAppender,
+      now: host.now
     }),
     itemAppender: new JournalItemAppender({
       inputReceipt,

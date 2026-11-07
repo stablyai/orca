@@ -54,6 +54,8 @@ import {
 } from './journal-writer-host-facts'
 import { QueuedMessageNotConsumableError } from './queued-messages/queued-message-consume-error'
 import { journalSqlFailure, restoreJournalSqlFailure } from './journal-sql-failure'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import type { JournalCommandSettlementInput } from './journal-store-contracts'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'session',
@@ -594,4 +596,82 @@ it('records a shutdown cut only for an interrupted turn and does not duplicate i
   const cursor = side.memory.cursor()
   await cut()
   expect(side.memory.cursor()).toEqual(cursor)
+})
+
+it('settles unsent commands against current turns and keeps dispatch when lifecycle fails', async () => {
+  const side = await sides()
+  const rejection = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+    surface: 'rejection'
+  })
+  const failureBody = { kind: 'status' as const, text: 'Command failed', tone: 'error' as const }
+  const options = { fence: 1, turnScope: { kind: 'thread' as const } }
+  const settled = (run: Promise<void>) =>
+    run.then(
+      (value) => ({ value }),
+      (error: unknown) => ({ failure: journalSqlFailure(error) })
+    )
+  for (const id of ['rejected', 'unknown', 'completed', 'partial']) {
+    const input = {
+      clientMessageId: id,
+      payloadFingerprint: id,
+      body: text(id),
+      fence: 1
+    }
+    await both(side, (j) => j.submissionWriter.append(input), { kind: 'submission', input })
+    const turn = structuredAgentSessionCommandTurn(id)
+    const body = {
+      kind: 'turn' as const,
+      turnId: turn.turnId,
+      state: 'running' as const
+    }
+    await both(side, (j) => j.itemAppender.append(turn.identity, body, options), {
+      kind: 'item',
+      identity: turn.identity,
+      body,
+      options
+    })
+    if (id === 'completed') {
+      const completed = { ...body, state: 'completed' as const, outcome: 'success' as const }
+      await both(side, (j) => j.itemAppender.append(turn.identity, completed, options), {
+        kind: 'item',
+        identity: turn.identity,
+        body: completed,
+        options
+      })
+    }
+    if (id === 'partial') {
+      for (const db of [side.memoryDb, side.sqlDb]) {
+        db.exec(`CREATE TRIGGER fail_command_settlement BEFORE INSERT ON journal_outcomes
+          WHEN NEW.field='items' AND NEW.entry_key='"orca:command-result%3Apartial"'
+          BEGIN SELECT RAISE(ABORT, 'settlement failed'); END`)
+      }
+    }
+    const settlement: JournalCommandSettlementInput = {
+      dispatch:
+        id === 'unknown'
+          ? { clientMessageId: id, state: 'unknown', reason: 'lost reply', fence: 1 }
+          : { clientMessageId: id, state: 'rejected', ...rejection, fence: 1 },
+      failureBody
+    }
+    const result = await both(side, (j) => settled(j.submissionWriter.settleCommand(settlement)), {
+      kind: 'command-settle',
+      input: settlement
+    })
+    if (id !== 'partial') {
+      expect(result).toEqual({ value: { value: undefined } })
+    } else {
+      expect(result).toMatchObject({ value: { failure: { message: 'settlement failed' } } })
+    }
+    expect(side.memory.state().submissions.get(id)?.dispatchState).toBe(
+      id === 'unknown' ? 'unknown' : 'rejected'
+    )
+    expect(side.memory.state().items.get(turn.itemId)?.body).toMatchObject({
+      state: id === 'unknown' ? 'unverifiable' : id === 'partial' ? 'running' : 'completed',
+      ...(id === 'rejected' ? { outcome: 'failure', completedAt: 1_000 } : {}),
+      ...(id === 'completed' ? { outcome: 'success' } : {})
+    })
+    if (id === 'partial') {
+      expect(side.memory.state().items.has(agentJournalItemKey(turn.resultIdentity))).toBe(false)
+    }
+  }
 })

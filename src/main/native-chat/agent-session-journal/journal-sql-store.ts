@@ -15,7 +15,13 @@ import type {
   JournalStagedReceipt
 } from './writing/journal-row-writer'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
-import type { JournalLateDispatchInput, JournalShutdownCutInput } from './journal-store-contracts'
+import type {
+  JournalLateDispatchInput,
+  JournalShutdownCutInput,
+  JournalCommandSettlementInput
+} from './journal-store-contracts'
+import type { JournalWriterSettled } from './journal-writer-operations'
+import { restoreJournalSqlFailure } from './journal-sql-failure'
 
 /** Queue commands join this surface after their ordered-list owner has landed. */
 export type JournalSqlStoreOperation =
@@ -30,6 +36,7 @@ export type JournalSqlStoreOperation =
           | 'dispatch'
           | 'late-dispatch'
           | 'shutdown-cut'
+          | 'command-settle'
           | 'stop'
           | 'context-clear'
           | 'context-rewind'
@@ -168,6 +175,14 @@ export class SqlAgentSessionJournal {
 
   async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
     await this.write({ kind: 'shutdown-cut', input })
+  }
+
+  async settleCommand(input: JournalCommandSettlementInput): Promise<void> {
+    const { value } = await this.write({ kind: 'command-settle', input })
+    const result = value as JournalWriterSettled
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
   }
 
   /** Pure readers can join preceding commands without allowing another command between reads. */

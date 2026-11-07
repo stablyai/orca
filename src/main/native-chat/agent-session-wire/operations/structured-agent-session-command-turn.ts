@@ -28,11 +28,7 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import {
-  agentJournalTurnBody,
-  readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type {
   AgentSessionCommandAdmission,
@@ -255,47 +251,20 @@ async function settleUnsentCommand(
     | { state: 'unknown'; reason: string },
   rowFailure?: AgentSessionFailureFact
 ): Promise<void> {
-  const turn = structuredAgentSessionCommandTurn(clientMessageId)
-  const running = readAgentJournalTurn(ctx.journal.itemBody(turn.itemId) ?? undefined)
-  await ctx.journal.resolveDispatch({ clientMessageId, ...unsent, fence: ctx.fence })
-  if (running?.state !== 'running') {
-    return
-  }
-  const refused = unsent.state === 'rejected'
-  const mutations: JournalLifecycleMutationInput[] = [
-    ...(refused
-      ? [
-          {
-            kind: 'item' as const,
-            identity: turn.resultIdentity,
-            body: {
-              kind: 'status' as const,
-              ...agentSessionFailureWords(rowFailure ?? unsent.rejection, {
-                ...ctx.failureTextContext,
-                surface: 'row'
-              }),
-              tone: 'error' as const
-            },
-            turnScope: { kind: 'turn' as const, turnItemId: turn.itemId }
+  await ctx.journal.settleCommand({
+    dispatch: { clientMessageId, ...unsent, fence: ctx.fence },
+    ...(unsent.state === 'rejected'
+      ? {
+          failureBody: {
+            kind: 'status',
+            ...agentSessionFailureWords(rowFailure ?? unsent.rejection, {
+              ...ctx.failureTextContext,
+              surface: 'row'
+            }),
+            tone: 'error'
           }
-        ]
-      : []),
-    {
-      kind: 'item',
-      identity: turn.identity,
-      body: agentJournalTurnBody({
-        ...running,
-        ...(refused
-          ? { state: 'completed', outcome: 'failure', completedAt: ctx.now() }
-          : { state: 'unverifiable' })
-      }),
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }
-  ]
-  await ctx.journal.appendLifecycleBatch({
-    settlementId: `command-settled:${clientMessageId}`,
-    fence: ctx.fence,
-    mutations
+        }
+      : {})
   })
 }
 

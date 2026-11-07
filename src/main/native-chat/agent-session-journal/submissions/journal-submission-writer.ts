@@ -21,8 +21,11 @@ import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
   JournalLateDispatchInput,
+  JournalCommandSettlementInput,
   ResolveDispatchInput
 } from '../journal-store-contracts'
+import { settleJournalCommand } from '../writing/journal-command-settlement'
+import type { JournalLifecycleBatchAppender } from '../writing/journal-lifecycle-batch-appender'
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
@@ -31,10 +34,15 @@ export type JournalSubmissionWriterDeps = {
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
   claimAttachments: JournalAttachmentClaim
+  lifecycle: JournalLifecycleBatchAppender
+  now: () => number
 }
 
 export class JournalSubmissionWriter {
   constructor(private readonly deps: JournalSubmissionWriterDeps) {}
+
+  settleCommand = (input: JournalCommandSettlementInput) =>
+    settleJournalCommand({ ...this.deps, writer: this.deps.rowWriter }, input)
 
   /** Persist before dispatch; accepted echoes reuse the optimistic bubble. */
   append(
