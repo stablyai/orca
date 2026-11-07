@@ -16,10 +16,11 @@ import {
 } from './ephemeral-vm-runtime-feature-store'
 import {
   mergeRuntimeFeatures,
-  projectRuntimeForRollback,
+  partitionRuntimesForRollback,
   runtimeFeatureListsEqual
 } from './ephemeral-vm-runtime-rollback-projection'
 import {
+  hasEphemeralVmRecipeResult,
   EphemeralVmRuntimeRecordSchema,
   EphemeralVmRuntimeStoreSchema,
   RollbackEphemeralVmRuntimeStoreSchema,
@@ -28,6 +29,12 @@ import {
   type EphemeralVmRuntimeStatus,
   type EphemeralVmRuntimeStore
 } from './ephemeral-vm-runtimes'
+import {
+  withWriteAheadRuntimes,
+  writeWriteAheadRuntimes
+} from './ephemeral-vm-runtime-write-ahead-store'
+
+export { getEphemeralVmWriteAheadRuntimeStorePath } from './ephemeral-vm-runtime-write-ahead-store'
 
 const EPHEMERAL_VM_RUNTIMES_FILE = 'orca-ephemeral-vm-runtimes.json'
 export const MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES = 1024 * 1024
@@ -52,20 +59,6 @@ export function listEphemeralVmRuntimes(userDataPath: string): EphemeralVmRuntim
   return readEphemeralVmRuntimeStore(userDataPath).store.runtimes
 }
 
-/** The live recipe VM behind a workspace, if it has one its recipe can suspend and resume. */
-export function findWorkspaceEphemeralVmRuntime(
-  userDataPath: string,
-  workspaceId: string
-): (EphemeralVmRuntimeRecord & { repoId: string }) | undefined {
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (entry) =>
-      entry.workspaceId === workspaceId &&
-      entry.status !== 'cleaned' &&
-      entry.status !== 'cleanup_pending'
-  )
-  return runtime?.repoId ? { ...runtime, repoId: runtime.repoId } : undefined
-}
-
 export function upsertEphemeralVmRuntime(
   userDataPath: string,
   record: EphemeralVmRuntimeRecord
@@ -75,6 +68,7 @@ export function upsertEphemeralVmRuntime(
   const previous = loaded.store.runtimes.find((entry) => entry.id === parsed.id)
   if (
     previous &&
+    hasEphemeralVmRecipeResult(previous) &&
     featureIdentity(previous) === featureIdentity(parsed) &&
     !runtimeFeaturesEqual(previous, parsed)
   ) {
@@ -108,9 +102,11 @@ export function upsertEphemeralVmRuntimeRollbackRecovery(
       path,
       RollbackEphemeralVmRuntimeStoreSchema.parse({
         version: 1,
-        runtimes: [...loaded.store.runtimes.filter((entry) => entry.id !== parsed.id), parsed]
-          .sort(compareRuntimeRecords)
-          .map(projectRuntimeForRollback)
+        runtimes: partitionRuntimesForRollback(
+          [...loaded.store.runtimes.filter((entry) => entry.id !== parsed.id), parsed].sort(
+            compareRuntimeRecords
+          )
+        ).rollback
       }),
       MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
       { durable: true }
@@ -228,7 +224,10 @@ function readEphemeralVmRuntimeStore(userDataPath: string): LoadedEphemeralVmRun
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
   if (!existsSync(path)) {
     return {
-      store: { version: 1, runtimes: [] },
+      store: {
+        version: 1,
+        runtimes: withWriteAheadRuntimes(userDataPath, []).sort(compareRuntimeRecords)
+      },
       features: readEphemeralVmRuntimeFeatureStore(userDataPath)
     }
   }
@@ -243,9 +242,10 @@ function readEphemeralVmRuntimeStore(userDataPath: string): LoadedEphemeralVmRun
     const features = readEphemeralVmRuntimeFeatureStore(userDataPath)
     const store: EphemeralVmRuntimeStore = {
       version: 1,
-      runtimes: restoreRuntimeFeatureList(parsed.runtimes, features.features).sort(
-        compareRuntimeRecords
-      )
+      runtimes: withWriteAheadRuntimes(
+        userDataPath,
+        restoreRuntimeFeatureList(parsed.runtimes, features.features)
+      ).sort(compareRuntimeRecords)
     }
     if (features.writable && !RollbackEphemeralVmRuntimeStoreSchema.safeParse(persisted).success) {
       try {
@@ -271,9 +271,10 @@ function writeEphemeralVmRuntimeStore(
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
   try {
     const parsed = EphemeralVmRuntimeStoreSchema.parse(store)
+    const { rollback, writeAhead } = partitionRuntimesForRollback(parsed.runtimes)
     const requiredFeatures = mergeRuntimeFeatures(
       [],
-      parsed.runtimes.flatMap((entry) => {
+      parsed.runtimes.filter(hasEphemeralVmRecipeResult).flatMap((entry) => {
         const feature = featureEntryFromRuntime(entry)
         return feature ? [feature] : []
       })
@@ -281,13 +282,12 @@ function writeEphemeralVmRuntimeStore(
     const preparedFeatures = mergeRuntimeFeatures(features.features, requiredFeatures)
     writeSecureJsonFileWithinLimit(
       path,
-      RollbackEphemeralVmRuntimeStoreSchema.parse({
-        version: 1,
-        runtimes: parsed.runtimes.map(projectRuntimeForRollback)
-      }),
+      RollbackEphemeralVmRuntimeStoreSchema.parse({ version: 1, runtimes: rollback }),
       MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
       { durable: preparedFeatures.length > 0 || features.features.length > 0 }
     )
+    // Main first so a record gaining its recipe result is never absent from both files.
+    writeWriteAheadRuntimes(userDataPath, writeAhead)
     if (!features.writable && requiredFeatures.length > 0) {
       throw new EphemeralVmRuntimeStoreError(
         'runtime_error',

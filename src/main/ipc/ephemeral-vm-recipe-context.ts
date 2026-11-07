@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import type { Store } from '../persistence/loading-store/store'
 import { loadHooks } from '../workspace-hooks/hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
@@ -96,19 +97,23 @@ export function getRuntimeRecipeContext(
   runtimeId: string
 ): {
   runtime: EphemeralVmRuntimeRecord
-  repo: Extract<RecipeRepoResult, { ok: true }>
+  repoPath: string
   recipe: OrcaVmRecipe
 } {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
   if (!runtime) {
     throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeNotFound', { runtimeId }))
   }
-  if (!runtime.repoId) {
-    throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeRepoMissing', { runtimeId }))
-  }
-  const repo = getRecipeRepo(store, runtime.repoId)
-  if (!repo.ok) {
-    throw new EphemeralVmFailureError(repo.failure)
+  const repo = runtime.repoId ? getRecipeRepo(store, runtime.repoId) : null
+  if (!repo?.ok) {
+    // Why: a re-added or removed repo must not strand the VM; the snapshot plus recorded checkout
+    // path are everything destroy needs (stablyai/orca#17293).
+    if (runtime.recipe && runtime.repoPath && existsSync(runtime.repoPath)) {
+      return { runtime, repoPath: runtime.repoPath, recipe: runtime.recipe }
+    }
+    throw new EphemeralVmFailureError(
+      repo ? repo.failure : ephemeralVmFailure('runtimeRepoMissing', { runtimeId })
+    )
   }
   const repoRecipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
     (entry) => entry.id === runtime.recipeId
@@ -126,7 +131,7 @@ export function getRuntimeRecipeContext(
       ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })
     )
   }
-  return { runtime, repo, recipe }
+  return { runtime, repoPath: repo.repo.path, recipe }
 }
 
 export function resolveRecipeForRepo(

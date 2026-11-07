@@ -34,7 +34,7 @@ import {
 import { registerRecipeVmWaker } from '../runtime/recipe-vm-waker-registry'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
