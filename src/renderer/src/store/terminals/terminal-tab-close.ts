@@ -1,16 +1,14 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
-import {
-  getRecentlyClosedTabPosition,
-  pushClosedTerminalTabSnapshot,
-  pushRecentlyClosedTabKind
-} from '../slices/recently-closed-tabs'
+import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
+import { getRecentlyClosedTabPosition } from '../slices/tabs/recently-closed-tab-position'
+import { pushClosedTerminalTabSnapshot } from './recently-closed-terminal-tabs'
+import { pushRecentlyClosedTabKind } from '../slices/tabs/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   buildTerminalTabRetirementPlan,
   removeSleepingAgentSessionsForTab
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'

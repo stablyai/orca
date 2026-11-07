@@ -15,7 +15,7 @@ import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
 } from './workspace-layout-frame-drawn-workspaces'
-import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
+import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-title-batch'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'

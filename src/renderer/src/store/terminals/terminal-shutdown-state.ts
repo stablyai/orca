@@ -1,6 +1,6 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { clearTransientTerminalState } from '../slices/terminal-helpers'
+import { clearTransientTerminalState } from './terminal-transient-state'
 import {
   clearCommittedPtyShutdownSettlements,
   markCommittedPtyShutdowns,

@@ -22,7 +22,7 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-re
 import {
   clearRuntimeEnvironmentConnectionGenerations,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status-connection-generation'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { useAppStore } from '@/store/index'

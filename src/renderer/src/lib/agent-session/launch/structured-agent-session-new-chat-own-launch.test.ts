@@ -161,7 +161,7 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE_ID = 'wt-new-chat'
 

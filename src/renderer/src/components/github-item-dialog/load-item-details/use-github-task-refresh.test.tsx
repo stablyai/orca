@@ -19,7 +19,7 @@ import type {
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { patchCachedWorkItemBody, workItemDetailsCache } from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 

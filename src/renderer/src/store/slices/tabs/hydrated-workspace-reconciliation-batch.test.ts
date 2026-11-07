@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
+import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../store-test-helpers'
 import {
   buildHydratedWorkspaceFixture,

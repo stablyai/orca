@@ -37,7 +37,7 @@ import { layoutApplyTestTransport } from '../../src/renderer/src/runtime/layout-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../../src/renderer/src/store/slices/tabs-drawn-from-main.test-fixture'
+} from '../../src/renderer/src/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 type CloseRequest = { requestId: string; tabId: string; worktreeId: string; expiresAt?: number }
 

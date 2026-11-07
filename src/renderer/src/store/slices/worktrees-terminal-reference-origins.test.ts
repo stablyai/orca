@@ -3,7 +3,7 @@ import type {
   HostedReviewInfo,
   HostedReviewForBranchArgs
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { singlePaneLayoutSnapshot } from './terminal-helpers'
+import { singlePaneLayoutSnapshot } from '../terminals/terminal-single-pane-layout'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import {

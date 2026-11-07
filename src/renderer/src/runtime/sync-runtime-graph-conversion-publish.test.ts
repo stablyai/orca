@@ -5,7 +5,7 @@ import { createTestStore, makeWorktree } from '../store/slices/store-test-helper
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),

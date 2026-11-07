@@ -9,9 +9,9 @@ import {
   makeWorktree,
   seedStore
 } from './store-test-helpers'
-import './terminal-orphan-helpers'
+import '../terminals/terminal-orphan-cleanup'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs/tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))

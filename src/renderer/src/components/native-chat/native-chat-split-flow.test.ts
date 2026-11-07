@@ -6,7 +6,7 @@ import type * as importCreation from '@/runtime/hosted-terminals/creation/web-ru
 import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'

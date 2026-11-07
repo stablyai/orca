@@ -5,7 +5,7 @@ import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */

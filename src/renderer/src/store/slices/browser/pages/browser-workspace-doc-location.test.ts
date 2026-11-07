@@ -4,7 +4,10 @@ import { buildBrowserSessionData } from '@/lib/workspace/persistence/workspace-s
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore } from '../../store-test-helpers'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn() }))
 vi.mock('@/lib/doc-preview-grants', () => ({

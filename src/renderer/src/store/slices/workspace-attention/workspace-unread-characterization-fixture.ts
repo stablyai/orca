@@ -3,7 +3,7 @@ import { getDefaultSettings } from '../../../../../shared/constants'
 import type { AppState } from '../../types'
 import { persistWorktreeMeta } from '../worktrees/metadata/worktree-meta-persist'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '../tabs/tabs-slice-test-harness'
 import { createUnreadBadgeCountSelector } from '@/lib/unread-badge-count-selector'
 import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,

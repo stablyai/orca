@@ -8,7 +8,10 @@ import { createTestStore, seedStore } from '../../store-test-helpers'
 import { makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

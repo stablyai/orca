@@ -12,7 +12,7 @@ import {
 import {
   classifyTerminalRetirementWorktree,
   type TerminalTabRetirementPlan
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 
 export function startTerminalTabProviderRetirement({
   localPtyTeardownOwnedExternally,

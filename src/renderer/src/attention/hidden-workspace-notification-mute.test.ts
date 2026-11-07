@@ -6,7 +6,7 @@ import { getDefaultNotificationSettings } from '../../../shared/notification-set
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
-import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
 import { createTestStore, makeWorktree, TEST_REPO } from '../store/slices/store-test-helpers'
 import { isWorkspaceNotificationMutedBySidebarFilters } from './hidden-workspace-notification-mute'
 

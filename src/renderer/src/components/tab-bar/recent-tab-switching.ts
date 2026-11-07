@@ -3,7 +3,7 @@ import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../.
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 import type { AppState } from '../../store/types'
-import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
+import { sanitizeRecentTabIds } from '../../store/slices/tabs/tab-selection-history'
 import { getActiveTabNavOrder, type VisibleTabRef } from './group-tab-order'
 import { getActiveEntityIdForTabType, type TypeCyclableTab } from '../terminal/tab-type-cycle'
 

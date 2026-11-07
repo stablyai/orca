@@ -1,14 +1,15 @@
 import type { StateCreator } from 'zustand'
-import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
+import type {
+  PreflightRuntimeContext,
+  PreflightStatus
+} from '../../../../preload/api/preflight-api'
 import type { AppState } from '../types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
-import {
-  getLocalPreflightContext,
-  localPreflightContextKey,
-  type LocalPreflightContext
-} from '@/lib/local-preflight-context'
+import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
+import type { LocalPreflightContext } from '@/lib/local-preflight-context-cache'
 
 export type PreflightSlice = {
   preflightStatus: PreflightStatus | null

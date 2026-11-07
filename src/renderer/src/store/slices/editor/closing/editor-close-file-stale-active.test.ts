@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '../../store-test-helpers'
 import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
