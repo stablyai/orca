@@ -888,7 +888,6 @@
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
 4 test-timeout-needs-reason:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-real-git.test.ts
-1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
 1 test-timeout-needs-reason:src/main/ipc/filesystem/filesystem-quick-open-options.integration.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
 1 test-timeout-needs-reason:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
