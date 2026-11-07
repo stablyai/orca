@@ -49,6 +49,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined
   protected abstract getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost
+  abstract getTerminalPtyIdForHandle(handle: string): string | null
   protected abstract getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree
   ): WorktreeTerminalProvisioningHost
