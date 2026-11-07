@@ -27,5 +27,6 @@ export function withNativeChatSideChatCommands(
     argumentHint: copy.argumentHint,
     orcaOwned: true
   }))
-  return [...commands.filter(({ name }) => !isNativeChatSideChatCommand(name)), ...rows]
+  // Ahead of the agent's own, as Orca's built-ins are, so a long catalog never pushes them out.
+  return [...rows, ...commands.filter(({ name }) => !isNativeChatSideChatCommand(name))]
 }

@@ -4,6 +4,7 @@ import { findSiblingGroupId } from '@/store/slices/tabs'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { requestNativeChatComposerFocus } from './native-chat-composer-focus-intent'
 import { moveTabToGroup, moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -49,6 +50,8 @@ export function beginNativeChatSideChatPlacement(
     retire()
     const state = useAppStore.getState()
     state.activateTab(tabId, { worktreeId })
+    // Typing goes to the side chat once its composer shows, wherever it lands below.
+    requestNativeChatComposerFocus(tabId)
     const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
     const fork = tabs.find((tab) => tab.id === tabId)
     const sourceGroupId = tabs.find((tab) => tab.id === sourceTabId)?.groupId

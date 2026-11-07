@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
   moveTabToGroup: vi.fn(),
   moveTabToNewPaneColumn: vi.fn(),
+  focusComposer: vi.fn(),
   lookups: 0,
   selectionReads: 0
 }))
@@ -50,6 +51,9 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-surface', ()
 }))
 vi.mock('@/runtime/layout-owner-pending-tabs', () => ({
   afterPendingTab: (tabId: string, run: (outcome: string | null) => void) => run(tabId)
+}))
+vi.mock('./native-chat-composer-focus-intent', () => ({
+  requestNativeChatComposerFocus: mocks.focusComposer
 }))
 vi.mock('../tab-bar/tab-move-to-pane-column', () => ({
   canMoveTabToNewPaneColumn: () => true,
@@ -107,6 +111,7 @@ it('selects and moves the side chat beside its source once a later frame draws i
   publishSideChat()
 
   expect(mocks.activateTab).toHaveBeenCalledWith('tab-side', { worktreeId: 'wt-1' })
+  expect(mocks.focusComposer).toHaveBeenCalledWith('tab-side')
   expect(mocks.moveTabToGroup).toHaveBeenCalledWith({
     worktreeId: 'wt-1',
     unifiedTabId: 'tab-side',
