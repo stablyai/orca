@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../../../shared/runtime-file-watch-limits'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
@@ -10,6 +11,7 @@ import { subscribeViaWatcherProcess } from '../watcher-process/parcel-watcher-pr
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
+  rememberUnwatchableRoot,
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
@@ -244,6 +246,10 @@ export async function createLocalWatcher(
       rootPath,
       (err, events) => {
         if (err) {
+          // A wedged or storming root must not be subscribed again in a loop.
+          if (err.message.includes('timed out') || err.message.includes('storm')) {
+            rememberUnwatchableRoot(rootKey)
+          }
           // Errors invalidate path precision; force a conservative renderer refresh.
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
           notifyLocalWatcherInterrupted(root)
@@ -273,7 +279,8 @@ export async function createLocalWatcher(
         // A child restart or bounded-queue overflow loses path precision; both need the same conservative renderer refresh.
         onInterruption: markWatcherInterrupted,
         onOverflow: markWatcherInterrupted,
-        signal
+        signal,
+        subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS
       }
     )
 

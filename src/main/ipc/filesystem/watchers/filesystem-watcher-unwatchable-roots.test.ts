@@ -61,6 +61,19 @@ describe('filesystem watcher unwatchable root cache', () => {
     }
   })
 
+  it('refuses to watch a filesystem drive root', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sender = createWatcherSender(1)
+    try {
+      await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/' })
+      expect(stat).not.toHaveBeenCalled()
+      expect(watcherLifecycleState.unwatchableRoots.size).toBe(1)
+    } finally {
+      warnSpy.mockRestore()
+      await closeAllWatchers()
+    }
+  })
+
   it('evicts oldest failed local roots while suppressing recent retries', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createWatcherSender(1)
