@@ -1,12 +1,11 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import {
-  dashboardCardBaseDisplayState,
-  type DashboardCard,
-  type DashboardCardSubagent,
-  type DashboardSnapshot
+import type {
+  DashboardCard,
+  DashboardCardSubagent,
+  DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
-import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
+import { dashboardCardBucket } from '../dashboard/dashboard-card-bucket'
 import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
 import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
 
@@ -54,9 +53,7 @@ export function patchDashboardSnapshotFromAgentStatus(
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
-  const bucket = dashboardBucketForDotState(
-    dashboardCardBaseDisplayState({ dotState, workingMode, unseen })
-  )
+  const bucket = dashboardCardBucket({ dotState, workingMode, unseen })
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
@@ -76,7 +73,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     statusUpdatedAt: event.receivedAt,
     finishedAt: dotState === 'done' && stateChanged ? event.stateStartedAt : card.finishedAt,
     askSummary:
-      bucket === 'attention'
+      bucket === 'attention' && dotState !== 'done'
         ? event.interactivePrompt !== undefined
           ? event.interactivePrompt || undefined
           : card.askSummary
