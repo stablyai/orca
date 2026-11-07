@@ -63,7 +63,7 @@ export function useAiVaultSearch(
     let pending = false
     let followUp = false
     let started = false
-    async function run(cursor?: string, revalidate = false) {
+    async function run(cursor?: string, _revalidate = false) {
       if (pending || cancelled || !request || !scope) {
         return
       }
@@ -75,14 +75,15 @@ export function useAiVaultSearch(
         identity,
         // Keep the previous query's hits on screen while this query runs; replacing
         // them with [] makes every keystroke blank the list (#39298).
-        hits:
-          (cursor || revalidate) && previous?.identity === identity
-            ? previous.hits
-            : (previous?.hits ?? []),
+        hits: previous?.hits ?? [],
         response: null,
         error: false,
         loading: true,
-        inherited: true
+        // Only mark as inherited when the hits came from a different query;
+        // loadMore and revalidation serve the same identity's hits.
+        inherited: Boolean(
+          previous && (previous.identity !== identity || previous.inherited === true)
+        )
       }))
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
@@ -108,7 +109,9 @@ export function useAiVaultSearch(
               : (previous?.hits ?? []),
           response,
           error: false,
-          loading: false
+          loading: false,
+          // A non-results response cannot produce hits for this query; any hits shown are inherited.
+          inherited: response.kind !== 'results' && (previous?.hits.length ?? 0) > 0
         }))
       } catch {
         if (isCurrent()) {
@@ -118,7 +121,8 @@ export function useAiVaultSearch(
             hits: previous?.hits ?? [],
             response: null,
             error: true,
-            loading: false
+            loading: false,
+            inherited: (previous?.hits.length ?? 0) > 0
           }))
         }
       } finally {
