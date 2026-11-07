@@ -28,6 +28,7 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
   /** The paired host that advertised `worktreeCardStyle`; older hosts reject the unknown key. */
   worktreeCardStyleRuntimeEnvironmentId: string | null
+  worktreeCardDetailsRowRuntimeEnvironmentId: string | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
@@ -38,6 +39,7 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
   worktreeVisibilityDefaultsRuntimeValue: null,
   worktreeCardStyleRuntimeEnvironmentId: null,
+  worktreeCardDetailsRowRuntimeEnvironmentId: null,
   activeClient: null,
   activeClientEnvironmentId: null,
   cachedDetectedWorktrees: null

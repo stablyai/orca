@@ -1,7 +1,7 @@
 import {
   getWorktreeCardStyle,
   isExperimentalWorktreeCardStyle
-} from '../../../../shared/worktree/card-style'
+} from '../../../../../shared/worktree/card-style'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'

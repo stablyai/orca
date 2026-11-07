@@ -1,9 +1,10 @@
+import { createLineageSlotReader, type WorkspaceSlot } from './worktree-card-slot-range'
+import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   toLineageSlotRecord,
   fromLineageSlotRecord,
-  mergeRecord,
-  type LineageSlotRecord
+  mergeRecord
 } from './worktree-card-slot-summary'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -20,8 +21,7 @@ import {
 import {
   isLineageRange,
   lineageIdentities,
-  type WorktreeLineageSource,
-  type WorktreeLineageTree
+  type WorktreeLineageSource
 } from '../../../../shared/sidebar-list/worktree-lineage-range'
 import {
   createWorktreeAgentRowsSelector,
@@ -52,16 +52,19 @@ export function worktreeForIdentity(
   ).find((row) => getWorktreeHostIdentity(row) === identity)
 }
 
-type WorkspaceSlot = { targets: SlotTarget[]; record: LineageSlotRecord; latestAt: number | null }
 const ownSelectors = new Map<
   HostScopedWorktreeKey,
   ReturnType<typeof createWorktreeAgentRowsSelector>
 >()
 
-let ownSlotInputs: readonly unknown[] = []
 const ownSlots = new Map<
   HostScopedWorktreeKey,
-  { worktree: Worktree | undefined; slot: WorkspaceSlot }
+  {
+    worktree: Worktree | undefined
+    slot: WorkspaceSlot
+    agents: DashboardAgentRow[]
+    unread: boolean[]
+  }
 >()
 
 function ownSlot(
@@ -69,16 +72,8 @@ function ownSlot(
   identity: HostScopedWorktreeKey,
   fallback?: Worktree
 ): WorkspaceSlot {
-  const inputs = worktreeAgentProjectionInputs(state)
-  if (!inputs.every((value, index) => value === ownSlotInputs[index])) {
-    ownSlotInputs = inputs
-    ownSlots.clear()
-  }
   const cached = ownSlots.get(identity)
   const worktree = worktreeForIdentity(state, identity) ?? fallback ?? cached?.worktree
-  if (cached && cached.worktree === worktree) {
-    return cached.slot
-  }
   let selector = ownSelectors.get(identity)
   if (!selector) {
     selector = createWorktreeAgentRowsSelector(
@@ -91,7 +86,17 @@ function ownSlot(
     }
   }
   const agents = selector(state)
-  const signals = buildSlotAgentSignals(agents, selectAgentRowsUnread(state, agents))
+  const unread = selectAgentRowsUnread(state, agents)
+  if (
+    cached &&
+    cached.worktree === worktree &&
+    cached.agents === agents &&
+    unread.length === cached.unread.length &&
+    unread.every((value, index) => value === cached.unread[index])
+  ) {
+    return cached.slot
+  }
+  const signals = buildSlotAgentSignals(agents, unread)
   const targets = slotTargetsFromAgentLines(
     getWorktreeIdFromHostIdentity(identity),
     signals,
@@ -111,41 +116,15 @@ function ownSlot(
     record: toLineageSlotRecord(slotExceptionsFor(targets)),
     latestAt: at > 0 ? at : null
   }
-  ownSlots.set(identity, { worktree, slot: result })
+  ownSlots.delete(identity)
+  ownSlots.set(identity, { worktree, slot: result, agents, unread })
+  if (ownSlots.size > 2048) {
+    ownSlots.delete(ownSlots.keys().next().value!)
+  }
   return result
 }
 
-type TreeSlots = {
-  inputs: readonly unknown[]
-  own: WorkspaceSlot[]
-  descendants: LineageSlotRecord[]
-  latest: (number | null)[]
-}
-const treeSlots = new WeakMap<WorktreeLineageTree, TreeSlots>()
-function slotsForTree(state: AppState, tree: WorktreeLineageTree): TreeSlots {
-  const inputs = worktreeAgentProjectionInputs(state)
-  const cached = treeSlots.get(tree)
-  if (cached && inputs.every((value, index) => value === cached.inputs[index])) {
-    return cached
-  }
-  const own = tree.identities.map((identity, index) =>
-    ownSlot(state, identity, tree.worktrees[index])
-  )
-  const descendants = own.map(() => toLineageSlotRecord([]))
-  const latest: (number | null)[] = own.map(() => null)
-  for (let index = own.length - 1; index >= 0; index--) {
-    const parent = tree.parents[index]!
-    if (parent >= 0) {
-      mergeRecord(descendants[parent]!, own[index]!.record)
-      mergeRecord(descendants[parent]!, descendants[index]!)
-      latest[parent] =
-        Math.max(latest[parent] ?? 0, own[index]!.latestAt ?? 0, latest[index] ?? 0) || null
-    }
-  }
-  const result = { inputs, own, descendants, latest }
-  treeSlots.set(tree, result)
-  return result
-}
+const { slotsForTree, descendantSlot } = createLineageSlotReader(ownSlot)
 
 export function collectLineageSlotTargets(
   state: AppState,
@@ -167,8 +146,7 @@ export function selectCollapsedLineageSlot(
   source: WorktreeLineageSource
 ): SlotSignal | null {
   return isLineageRange(source)
-    ? (fromLineageSlotRecord(slotsForTree(state, source.tree).descendants[source.index]!)[0] ??
-        null)
+    ? (fromLineageSlotRecord(descendantSlot(state, source.tree, source.index).record)[0] ?? null)
     : slotExceptionFor(collectLineageSlotTargets(state, source))
 }
 
@@ -183,7 +161,7 @@ export function useCollapsedLineageSlots(source: WorktreeLineageSource): SlotExc
       }
       inputs = next
       record = isLineageRange(source)
-        ? slotsForTree(state, source.tree).descendants[source.index]!
+        ? descendantSlot(state, source.tree, source.index).record
         : toLineageSlotRecord(slotExceptionsFor(collectLineageSlotTargets(state, source)))
       return record
     }
@@ -197,7 +175,7 @@ export function selectLineageLatestAt(
   source: WorktreeLineageSource
 ): number | null {
   if (isLineageRange(source)) {
-    return slotsForTree(state, source.tree).latest[source.index]!
+    return descendantSlot(state, source.tree, source.index).latestAt
   }
   let at = 0
   for (const identity of lineageIdentities(source)) {
@@ -233,7 +211,7 @@ function childSlot(
   }
   const slots = slotsForTree(state, range.tree)
   const record = { ...slots.own[range.index]!.record }
-  mergeRecord(record, slots.descendants[range.index]!)
+  mergeRecord(record, descendantSlot(state, range.tree, range.index).record)
   return fromLineageSlotRecord(record)[0] ?? null
 }
 

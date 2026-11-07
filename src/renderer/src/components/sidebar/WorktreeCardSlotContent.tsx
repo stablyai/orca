@@ -318,7 +318,20 @@ export function WorktreeCardSlotContent({
                 />
               )}
               <WorktreeCardPrRollup
-                own={card.prDisplay}
+                own={card.statusLaneReview}
+                ownRepresentsDescendant={card.statusPrDisplay != null}
+                onOpenOwn={(event) => {
+                  const review = card.statusLaneReview
+                  if (review?.provider === 'github' && card.repo && review.url) {
+                    card.handleOpenReviewInOrca(event, review)
+                  } else if (review?.url) {
+                    event.stopPropagation()
+                    card.handleOpenReviewInBrowser(review.url)
+                  } else {
+                    event.stopPropagation()
+                    card.detailsHoverControl.handleHoverOpenChange(true)
+                  }
+                }}
                 hiddenDescendants={lineageHidden ? descendants : NO_DESCENDANTS}
               />
               {sshDown && host ? (

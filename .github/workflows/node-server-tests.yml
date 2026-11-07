@@ -217,7 +217,15 @@ jobs:
         with:
           arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
       - uses: actions/download-artifact@v8
+        id: mobile-web-artifact
         if: needs.changes.outputs.qualification != 'false'
+        continue-on-error: true
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
+      - name: Retry mobile web artifact download
+        if: steps.mobile-web-artifact.outcome == 'failure'
+        uses: actions/download-artifact@v8
         with:
           name: orcad-mobile-web-bundle
           path: out/mobile-web

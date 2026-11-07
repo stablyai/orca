@@ -10,6 +10,7 @@ const WORKSPACE_VIEW_SETTINGS: readonly (keyof GlobalSettings)[] = [
   'compactWorktreeCards',
   'experimentalNewWorktreeCardStyle',
   'worktreeCardStyle',
+  'worktreeCardDetailsRow',
   'showPinnedWorktreesInGroups'
 ]
 

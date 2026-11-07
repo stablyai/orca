@@ -1,3 +1,4 @@
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -30,22 +31,29 @@ export function projectCardDisclosureRows(
   const result: HostSectionRow[] = []
   let hiddenBelow: { section: string; depth: number } | undefined
   for (const row of rows) {
-    if (row.type !== 'item') {
+    if (row.type !== 'item' && row.type !== 'folder-workspace') {
       hiddenBelow = undefined
       result.push(row)
       continue
     }
-    if (hiddenBelow && row.sectionKey === hiddenBelow.section && row.depth > hiddenBelow.depth) {
+    const section = row.type === 'item' ? row.sectionKey : row.occurrence?.sectionKey
+    if (hiddenBelow && section === hiddenBelow.section && row.depth > hiddenBelow.depth) {
       continue
     }
     hiddenBelow = undefined
-    const source = ranges.get(row.rowKey)
-    const identity = getWorktreeHostIdentity(row.worktree)
+    const source = ranges.get(row.type === 'item' ? row.rowKey : (row.occurrence?.key ?? row.key))
+    const identity = getWorktreeHostIdentity(
+      row.type === 'item' ? row.worktree : folderWorkspaceToWorktree(row.folderWorkspace)
+    )
     const open = resolveWorktreeCardOpen(identity, source, cards.get(identity), selection)
-    if (!open) {
-      hiddenBelow = { section: row.sectionKey, depth: row.depth }
+    if (!open && section) {
+      hiddenBelow = { section, depth: row.depth }
     }
-    result.push({ ...row, lineageDescendantIdentities: source })
+    result.push({
+      ...row,
+      lineageDescendantIdentities: source,
+      lineageDescendantsHidden: !open || row.lineageCollapsed === true
+    })
   }
   return result
 }

@@ -1,3 +1,4 @@
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { makePRRefreshWorktree } from '@/store/github/github-slice-test-harness'
@@ -41,4 +42,34 @@ describe('actual visible review cards', () => {
       })
     ).toEqual(['visible'])
   })
+})
+
+it('reports hidden descendants through an on-screen ancestor without requiring mounted child cards', () => {
+  const parent = {
+    ...row('parent'),
+    lineageDescendantsHidden: true,
+    lineageDescendantIdentities: [
+      composeWorktreeHostIdentity('local', 'uncached-child'),
+      composeWorktreeHostIdentity('ssh:box', 'stale-child')
+    ]
+  }
+  expect(
+    visibleReviewCardIds({
+      enabled: true,
+      renderRows: [parent],
+      virtualItems: [virtualItem(0)],
+      viewportTop: 0,
+      viewportHeight: 100,
+      isOnScreen: (id) => id === 'parent'
+    })
+  ).toEqual(['parent', 'uncached-child', 'stale-child'])
+  expect(
+    visibleReviewCardIds({
+      enabled: true,
+      renderRows: [parent],
+      virtualItems: [virtualItem(0)],
+      viewportTop: 100,
+      viewportHeight: 100
+    })
+  ).toEqual([])
 })

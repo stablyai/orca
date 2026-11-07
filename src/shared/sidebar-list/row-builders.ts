@@ -8,6 +8,7 @@ import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-work
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
+  type WorktreeOccurrence,
   type WorktreeOccurrencePlan
 } from '../worktree-occurrence-plan'
 import type { NoticeHostContext } from './host-labels'
@@ -105,6 +106,7 @@ export function appendWorktreeRows(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
           childWorktreeIds: childIdsByParent.get(occurrence.key),
+          childIdentities: childIdentitiesByParent.get(occurrence.key),
           hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
             getWorktreeHostIdentity(worktree)
           )
@@ -147,6 +149,7 @@ export function buildFolderWorkspaceRow(
   options?: {
     collapsedGroups: ReadonlySet<string>
     childWorktreeIds?: readonly string[]
+    childIdentities?: readonly HostScopedWorktreeKey[]
     hostContextLabel?: string
   }
 ): FolderWorkspaceRow {
@@ -154,6 +157,8 @@ export function buildFolderWorkspaceRow(
     occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
   return {
     type: 'folder-workspace',
+    occurrence,
+    lineageChildIdentities: options?.childIdentities,
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,

@@ -14,6 +14,45 @@ describe('web settings preload API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('reads the paired host details row preference and writes changes back to that host', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: {
+              settings: {
+                worktreeCardStyle: 'experimental-2',
+                worktreeCardDetailsRow: method === 'settings.update'
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ worktreeCardDetailsRow: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
+    expect(
+      (await globals.window.api.settings.set({ worktreeCardDetailsRow: true }))
+        .worktreeCardDetailsRow
+    ).toBe(true)
+    expect(runtimeCalls.find((call) => call.method === 'settings.update')?.params).toMatchObject({
+      worktreeCardDetailsRow: true
+    })
+  })
+
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
     // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')

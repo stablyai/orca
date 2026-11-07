@@ -73,6 +73,7 @@ function iconForTab(state: AppState, tab: Tab, worktreeId: string): LeadingTabIc
     case 'diff':
     case 'conflict-review':
     case 'check-details':
+    case 'git-graph':
       return { kind: 'file', filePath: tab.entityId }
   }
 }
