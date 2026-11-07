@@ -45,7 +45,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
-        <AgentWorkingSpinner className="size-2" />
+        <AgentWorkingSpinner className="size-2.5" />
       </span>
     )
   } else if (status === 'monitoring') {

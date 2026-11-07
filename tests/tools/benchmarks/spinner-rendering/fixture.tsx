@@ -5,16 +5,30 @@ import { AgentStateDot } from '../../../../src/renderer/src/components/AgentStat
 import { UI_ZOOM_MIN, UI_ZOOM_MAX } from '../../../../src/shared/ui-zoom-level'
 import './fixture.css'
 
-type FixtureOptions = { count: number; baseline?: boolean; offset?: number; paired?: boolean }
+type FixtureOptions = {
+  count: number
+  baseline?: boolean
+  reference?: boolean
+  offset?: number
+  paired?: boolean
+}
 
-function anchorBaseline(event: React.AnimationEvent<HTMLSpanElement>): void {
+/** Matches production's document-wide phase so remounts cannot skew comparisons. */
+function anchorPhase(event: React.AnimationEvent<HTMLSpanElement>): void {
   const animation = event.currentTarget.getAnimations()[0]
   if (animation) {
     animation.startTime = 0
   }
 }
 
-function Fixture({ count, baseline = false, offset = 0, paired = false }: FixtureOptions) {
+/** Keeps the current visual reference separate from the historical CPU baseline. */
+function Fixture({
+  count,
+  baseline = false,
+  reference = false,
+  offset = 0,
+  paired = false
+}: FixtureOptions) {
   return (
     <div id="scroller" style={{ height: 700, overflow: 'auto', overflowAnchor: 'none' }}>
       <div style={{ height: offset }} />
@@ -33,14 +47,19 @@ function Fixture({ count, baseline = false, offset = 0, paired = false }: Fixtur
                 justifyContent: 'center'
               }}
             >
-              {baseline || (paired && index % 2 === 0) ? (
+              {baseline || reference || (paired && index % 2 === 0) ? (
                 <span
                   className={`inline-flex shrink-0 items-center justify-center ${size === 'size-2' ? 'h-3 w-3' : 'h-2.5 w-2.5'}`}
                 >
                   <span
-                    data-baseline=""
-                    onAnimationStart={anchorBaseline}
-                    className={`spinner-benchmark-baseline block rounded-full border-2 border-yellow-500 border-t-transparent ${size}`}
+                    data-baseline={reference ? undefined : ''}
+                    data-reference={reference ? '' : undefined}
+                    onAnimationStart={anchorPhase}
+                    className={
+                      reference
+                        ? `spinner-benchmark-reference block rounded-full border-[1.5px] border-agent-working border-t-transparent ${size === 'size-2' ? 'size-2.5' : 'size-2'}`
+                        : `spinner-benchmark-baseline block rounded-full border-2 border-yellow-500 border-t-transparent ${size}`
+                    }
                   />
                 </span>
               ) : (

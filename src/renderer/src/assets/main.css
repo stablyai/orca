@@ -1826,15 +1826,15 @@ html.native-shell .app-layout {
 }
 
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
-/* One day per iteration avoids per-second React animation events; still 12 steps/second. */
+/* One day per iteration avoids per-second React animation events. */
 @keyframes agent-spinner-rotate {
   to {
-    transform: rotate(86400turn);
+    transform: rotate(72000turn);
   }
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+  animation: agent-spinner-rotate 86400s linear infinite;
 }
 
 /* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
