@@ -3,7 +3,7 @@
 // the relay's database module (pg, node:sqlite), so src/object-store-schema.generated.ts holds the
 // result and test/object-store-schema.test.ts fails if it drifts. Regenerate:
 //   UPDATE_OBJECT_STORE_SCHEMA=1 ./node_modules/.bin/vitest run test/object-store-schema.test.ts
-import { openInMemoryRelayDatabase } from '../../relay/src/database'
+import { openInMemoryRelayDatabase } from '../../relay/src/database/database'
 
 export const OBJECT_STORE_TABLES = [
   'relay_invites',

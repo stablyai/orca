@@ -1,5 +1,5 @@
 // What the edge needs from the relay database, behind one interface. Both real backends run the
-// cells' own RelayCredentialStore (cloud/apps/relay/src/credential-store.ts) unchanged:
+// cells' own RelayCredentialStore (cloud/apps/relay/src/credentials/credential-store.ts) unchanged:
 // - object (phase 2): on the HostRelay's own SQLite; the assignment is what the director pushed.
 // - postgres (phase 1, staging): over Hyperdrive; plus the two assignment reads the cells make.
 // - spike: no database (load tests on workers.dev); stub credentials from env, no epoch check.
@@ -17,9 +17,9 @@ import {
   type CredentialReservation,
   type InstallInput,
   type RelayIdentity
-} from '../../relay/src/credential-store'
+} from '../../relay/src/credentials/credential-store'
 import { metric } from './metrics'
-import type { RelayDatabase } from '../../relay/src/database'
+import type { RelayDatabase } from '../../relay/src/database/database'
 import { EdgePostgresDatabase, isEdgeDatabaseTransientError } from './edge-database'
 import { edgeConfig, type Env } from './env'
 

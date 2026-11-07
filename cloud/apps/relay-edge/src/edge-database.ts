@@ -1,5 +1,5 @@
 // The relay's RelayDatabase interface over Hyperdrive, so the credential store runs unchanged.
-// Mirrors cloud/apps/relay/src/database.ts PostgresDatabase where the store depends on it:
+// Mirrors cloud/apps/relay/src/database/database.ts PostgresDatabase where the store depends on it:
 // `?` placeholders become $n, writes without RETURNING answer [{ changes }], transactions retry
 // serialization/deadlock/lock/statement-timeout aborts up to 3 times on a fresh connection.
 // Hyperdrive pools connections to the origin, so each operation opens a short-lived client (the
@@ -10,7 +10,7 @@ import type {
   RelayLockOptions,
   RelayTransactionOptions,
   SqlRow
-} from '../../relay/src/database'
+} from '../../relay/src/database/database'
 
 const TRANSACTION_ATTEMPTS = 3
 const RETRY_MAX_DELAY_MS = 25

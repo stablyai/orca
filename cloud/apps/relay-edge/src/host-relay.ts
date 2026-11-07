@@ -34,7 +34,7 @@ import { relayHostCloseReasonFrom } from '../../../packages/relay-contract/src/h
 import { verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
-import { RelayCredentialStore } from '../../relay/src/credential-store'
+import { RelayCredentialStore } from '../../relay/src/credentials/credential-store'
 import type { AssignBody, DeviceRow } from './admin'
 import { ObjectStore, type AssignResult, type StoredAssignment } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'

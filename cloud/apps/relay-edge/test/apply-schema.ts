@@ -2,7 +2,7 @@
 // database, so the edge runs the credential store against the same tables as production.
 //   tsx test/apply-schema.ts postgres://relay@127.0.0.1:55433/relay
 import pg from 'pg'
-import { relayPostgresSchemaStatements } from '../../relay/src/database'
+import { relayPostgresSchemaStatements } from '../../relay/src/database/database'
 
 const url = process.argv[2]
 if (!url) throw new Error('usage: apply-schema.ts <postgres-url>')

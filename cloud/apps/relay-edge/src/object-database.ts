@@ -4,7 +4,7 @@
 // - transaction: the object's storage transaction (BEGIN/SAVEPOINT are refused in objects); it
 //   rolls back every write when the operation throws. Nested calls join the open transaction.
 // The store's queries are synchronous underneath, so nothing else runs inside a transaction.
-import type { RelayDatabase, RelayLockOptions, SqlRow } from '../../relay/src/database'
+import type { RelayDatabase, RelayLockOptions, SqlRow } from '../../relay/src/database/database'
 import { OBJECT_STORE_SCHEMA } from './object-store-schema.generated'
 
 // The subset of SqlStorage this needs (a node:sqlite fake implements it in tests).

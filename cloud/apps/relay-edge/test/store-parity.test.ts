@@ -3,10 +3,10 @@
 import { vi } from 'vitest'
 import { openObjectDatabaseOnNodeSqlite } from './object-sqlite-fake'
 
-vi.mock('../../relay/src/database.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../relay/src/database.js')>()),
+vi.mock('../../relay/src/database/database.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../relay/src/database/database.js')>()),
   openInMemoryRelayDatabase: async () => openObjectDatabaseOnNodeSqlite()
 }))
 
-await import('../../relay/src/credential-store.test.ts')
-await import('../../relay/src/credential-store-cleanup.test.ts')
+await import('../../relay/src/credentials/credential-store.test.ts')
+await import('../../relay/src/credentials/credential-store-cleanup.test.ts')

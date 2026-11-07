@@ -1,9 +1,9 @@
 // Relay JWT verification: same claims, algorithm, issuer and audience as the GCE cells
-// (cloud/apps/relay/src/relay-token-verifier.ts), and the same stale-if-error JWKS cache, reused
+// (cloud/apps/relay/src/authentication/relay-token-verifier.ts), and the same stale-if-error JWKS cache, reused
 // unchanged, so an auth outage does not turn valid hosts away with 4401.
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
 import { z } from 'zod'
-import { createStaleIfErrorJWKSet } from '../../relay/src/stale-if-error-jwks'
+import { createStaleIfErrorJWKSet } from '../../relay/src/authentication/stale-if-error-jwks'
 import type { EdgeClaims, Env } from './env'
 
 export const HOST_ID = /^[A-Za-z0-9_-]{16}$/

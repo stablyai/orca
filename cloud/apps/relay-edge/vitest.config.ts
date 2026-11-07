@@ -6,9 +6,10 @@ export default defineConfig({
   oxc: { tsconfig: false },
   resolve: {
     alias: {
-      '@orca-cloud/relay-contract': fileURLToPath(new URL('../../packages/relay-contract/src/index.ts', import.meta.url)),
+      // The directory, so subpath imports (relay-contract/relay-regions) resolve too.
+      '@orca-cloud/relay-contract': fileURLToPath(new URL('../../packages/relay-contract/src', import.meta.url)),
       // Tests only: lets them import the relay's database module for the live schema.
-      '@orca-cloud/postgres-schema': fileURLToPath(new URL('../../packages/postgres-schema/src/index.ts', import.meta.url))
+      '@orca-cloud/postgres-schema': fileURLToPath(new URL('../../packages/postgres-schema/src', import.meta.url))
     }
   },
   test: { include: ['test/**/*.test.ts'] }
