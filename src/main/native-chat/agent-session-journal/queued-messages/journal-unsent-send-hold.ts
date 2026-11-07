@@ -46,6 +46,20 @@ export function unsentSendKeptAsCard(
   return persons || body.command || orchestrationMailNotice(body.from) ? body : null
 }
 
+/** A refused initialization returns only direct personal text; custody and commands own their failures. */
+function failedStartSendKeptAsCard(
+  submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
+  body: AgentJournalItemBody | null
+): AgentJournalMessageItem | null {
+  if (submission.queuedMessageId !== undefined || body?.kind !== 'message' || body.command) {
+    return null
+  }
+  return submission.source?.kind === USER_MESSAGE_SOURCE.kind ||
+    (submission.source === undefined && submission.origin === 'client')
+    ? body
+    : null
+}
+
 /** Failed initialization proves unanswered handed-over sends never ran. */
 export function isUnansweredHandedOverSubmission(
   entry: Pick<
@@ -184,7 +198,7 @@ export function keepFailedStartSends(
       const send = state.submissions.get(dispatch.clientMessageId)
       const body =
         send &&
-        unsentSendKeptAsCard(
+        failedStartSendKeptAsCard(
           send,
           state.items.get(agentJournalSubmissionKey(send.clientMessageId))?.body ?? null
         )

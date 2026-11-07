@@ -26,9 +26,8 @@ import type {
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import {
   type AgentSessionTurnContext,
-  agentSessionAttachmentExpiredRefusal
+  agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
-import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import {
@@ -44,6 +43,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   ctx: Pick<
     AgentSessionTurnContext,
     | 'sessionId'
+    | 'logger'
     | 'journal'
     | 'fence'
     | 'operationReceipt'
@@ -114,10 +114,7 @@ export async function maybeQueueStructuredAgentSessionSend(
       ctx.operationReceipt
     )
   } catch (error) {
-    if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal(error)
-    }
-    throw error
+    return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {
     ok: true,
