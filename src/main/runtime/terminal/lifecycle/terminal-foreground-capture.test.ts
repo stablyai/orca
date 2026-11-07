@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { judgeTerminalForeground } from './terminal-foreground-group'
-import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
-import { resolvePtyForegroundMembers } from '../../../pty/process-retirement/pty-master-foreground-observation'
+import {
+  observePtyForeground,
+  resolvePtyForegroundMembers
+} from '../../../pty/process-retirement/pty-master-foreground-observation'
+import {
+  parseTerminalSessionRows,
+  readTerminalProcessRows
+} from '../../../pty/process-retirement/terminal-process-rows'
 import { readLaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import { createAdapter } from '../../../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from '../../../daemon/providers/routing/daemon-pty-router'
@@ -10,8 +16,12 @@ const mocks = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 vi.mock('../../../../shared/libproc-process-table', () => ({ runPsInProcess: async () => null }))
 
-const rows = (pid: number) =>
+// Linux ps prefixes the sid column readPtyTerminalRows asks for there.
+const rows = (pid: number, withSid = process.platform === 'linux') =>
   `${pid} 1 ${pid} ${pid + 1} Ss -zsh\n${pid + 1} ${pid} ${pid + 1} ${pid + 1} S+ claude\n`
+    .split('\n')
+    .map((line) => (withSid && line ? `${pid} ${line}` : line))
+    .join('\n')
 const result = (stdout: string, outputTruncated = false) => ({
   code: 0,
   signal: null,
@@ -87,9 +97,10 @@ describe('fresh target foreground regressions', () => {
     expect(await readTerminalProcessRows(90300)).toBeNull()
   })
   it('keeps a capture whose blank-argv row sits outside the foreground group', async () => {
+    const blankOutside = `${process.platform === 'linux' ? '90400 ' : ''}90410 90400 90410 90401 S`
     mocks.runProcess
       .mockResolvedValueOnce(result('ttys904'))
-      .mockResolvedValueOnce(result(`${rows(90400)}90410 90400 90410 90401 S   \n`))
+      .mockResolvedValueOnce(result(`${rows(90400)}${blankOutside}\n`))
       .mockResolvedValueOnce(result('ttys904'))
     const captured = (await readTerminalProcessRows(90400)) ?? []
     expect(resolvePtyForegroundMembers(captured, 90401).verdict).toBe('observed')
@@ -97,5 +108,56 @@ describe('fresh target foreground regressions', () => {
     const blank = captured.map((row) => (row.pid === 90401 ? { ...row, command: '' } : row))
     expect(judgeTerminalForeground(blank, 90400, 'claude')).toBe('unknown')
     expect(resolvePtyForegroundMembers(blank, 90401).verdict).toBe('unverifiable')
+  })
+})
+
+// #39488: a docker run -t container holds its own pts/0, so host ps -t pts/0 lists its sleep beside the
+// terminal's shell and agent. Rows follow the reporter's ps -o pid,sid,tpgid,tty,args capture.
+const CONTAINER_SHARING_PTS = [
+  '58769 58769 58768 58769 58769 Ss+ sleep 900',
+  '58824 58824 100 58824 58826 Ss+ /bin/sh -l',
+  '58824 58826 58824 58826 58826 S+ claude --print-output'
+].join('\n')
+
+describe('terminal foreground across container sessions sharing a pts number', () => {
+  beforeEach(() => {
+    mocks.runProcess.mockReset()
+  })
+
+  it('parseTerminalSessionRows keeps only the anchor session', () => {
+    const rows = parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\n`, 58824)
+    expect(rows.map((row) => row.pid)).toEqual([58824, 58826])
+    expect(rows.every((row) => row.tpgid === 58826)).toBe(true)
+    expect(resolvePtyForegroundMembers(rows, 58826).verdict).toBe('observed')
+    // A missing anchor row (terminal torn down) degrades to every row, as before.
+    expect(
+      parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\n`, 99999).map((row) => row.pid)
+    ).toEqual([58769, 58824, 58826])
+    expect(() =>
+      parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\npartial broken row\n`, 58824)
+    ).toThrow()
+  })
+
+  it('observes the foreground instead of reporting it changing forever', async () => {
+    const original = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      mocks.runProcess.mockImplementation(async ({ args }: { args: readonly string[] }) =>
+        args.includes('-p') ? result('pts/0\n') : result(`${CONTAINER_SHARING_PTS}\n`)
+      )
+      const owner = {
+        pid: 58824,
+        fd: 9,
+        ptsName: '/dev/pts/0',
+        getForegroundProcessGroup: (): number | null | undefined => 58826
+      }
+      await expect(observePtyForeground(owner, () => true)).resolves.toMatchObject({
+        verdict: 'observed',
+        source: 'pty-master',
+        foregroundPgid: 58826
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    }
   })
 })

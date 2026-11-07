@@ -137,7 +137,7 @@ export async function observePtyForeground(
     ) {
       return unknown('terminal_unavailable')
     }
-    const rows = await readPtyTerminalRows(tty, deadlineMs - Date.now())
+    const rows = await readPtyTerminalRows(tty, deadlineMs - Date.now(), proc.pid)
     if (!alive()) {
       return unknown('session_changed')
     }
