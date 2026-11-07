@@ -8,8 +8,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { Store } from '../persistence/loading-store/store'
 import { createSqliteTestStore, closeTestStores } from '../persistence/persistence-test-harness'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { isOrchestrationRetryRequestId } from '../../shared/orchestration-retry-request-id'
@@ -18,22 +18,22 @@ import {
   hostTestState,
   hostTestRecoveryCapsuleSettled,
   replaceHostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host-test-abandon'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
@@ -43,8 +43,8 @@ const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
 function loadRuntimeModules() {
   return Promise.all([
     import('./orca-runtime'),
-    import('./orchestration/db'),
-    import('./runtime-rpc')
+    import('./orchestration/db/orchestration-db'),
+    import('./rpc/server/runtime-rpc')
   ])
 }
 

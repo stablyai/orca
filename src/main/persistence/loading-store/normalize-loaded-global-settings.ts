@@ -1,23 +1,28 @@
 import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
-import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
+import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
-import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
-import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
+import {
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../shared/plugin-theme-settings'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
+import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
-import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   expandWorkspaceDirHome,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { replaceRetiredSpeechModelId } from '../../speech/model-catalog'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -45,6 +50,7 @@ export function normalizeLoadedGlobalSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,
@@ -64,6 +70,13 @@ export function normalizeLoadedGlobalSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder
   } = profile
+  const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
+  const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
+  const matchTerminalSidebarInputs = {
+    pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
+    pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
+    leftSidebarAppearanceMode: parsed.settings?.leftSidebarAppearanceMode
+  }
 
   return {
     ...defaults.settings,
@@ -89,6 +102,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
     // False was always explicit; the old true default may be reset once.
@@ -122,7 +136,11 @@ export function normalizeLoadedGlobalSettings(
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
-    ...normalizePluginOwnedSettings(parsed.settings ?? {}),
+    ...pluginOwnedSettings,
+    ...syncLegacyMatchTerminalSidebar(
+      matchTerminalSidebarInputs,
+      hasLegacyMatchTerminalSidebar(matchTerminalSidebarInputs)
+    ),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
@@ -152,6 +170,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
+    agentWorkspaceTrustExistingReposMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
@@ -163,9 +182,6 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: {
-      ...getDefaultVoiceSettings(),
-      ...parsed.settings?.voice
-    }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) }
   }
 }

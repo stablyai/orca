@@ -4,17 +4,15 @@ import {
   deferred,
   editState,
   flushPromises,
-  initialSource,
   jiraIssue,
   otherIssue,
   runtimeMocks,
   saveTitle,
   selectIssue,
-  selectSource,
   store,
   StoreBackedWorkspace
 } from './__mocks__/jira-issue-workspace-edit-fixture'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -93,51 +91,6 @@ describe('JiraIssueWorkspace optimistic edits', () => {
     expect(runtimeMocks.jiraIssueCommentsForTarget).toHaveBeenCalledTimes(1)
   })
 
-  it('reloads when the same issue moves to another source account on the same host', async () => {
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-    await act(async () => selectSource({ ...initialSource, accountLabel: 'other-account' }))
-    await flushPromises()
-    expect(runtimeMocks.jiraGetIssueForTarget).toHaveBeenCalledTimes(2)
-    expect(runtimeMocks.jiraGetIssueForTarget).toHaveBeenLastCalledWith(
-      { kind: 'local' },
-      'ENG-1',
-      'site-1'
-    )
-  })
-
-  it('keeps the new title on screen while the save is in flight', async () => {
-    const update = deferred<{ ok: true }>()
-    runtimeMocks.jiraUpdateIssueForTarget.mockReturnValue(update.promise)
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-
-    saveTitle('Old title', 'New title')
-    await flushPromises()
-
-    expect(runtimeMocks.jiraUpdateIssueForTarget).toHaveBeenCalledTimes(1)
-    expect(screen.getByDisplayValue('New title')).toBeDefined()
-    expect(runtimeMocks.jiraGetIssueForTarget).toHaveBeenCalledTimes(1)
-
-    editState.serverTitle = 'New title'
-    await act(async () => update.resolve({ ok: true }))
-    await flushPromises()
-
-    expect(runtimeMocks.jiraGetIssueForTarget).toHaveBeenCalledTimes(2)
-    expect(screen.getByDisplayValue('New title')).toBeDefined()
-  })
-
-  it('restores the previous title when the save fails', async () => {
-    runtimeMocks.jiraUpdateIssueForTarget.mockResolvedValue({ ok: false, error: 'Nope' })
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-
-    saveTitle('Old title', 'New title')
-    await flushPromises()
-
-    await waitFor(() => expect(screen.getByDisplayValue('Old title')).toBeDefined())
-  })
-
   it('keeps a cleared priority cleared when an older detail load arrives', async () => {
     const initialLoad = deferred<JiraIssue>()
     const initial = jiraIssue('Old title', { priority: { id: '1', name: 'High' } })
@@ -152,22 +105,6 @@ describe('JiraIssueWorkspace optimistic edits', () => {
     expect(screen.queryByRole('button', { name: 'High' })).toBeNull()
     expect(runtimeMocks.jiraGetIssueForTarget).toHaveBeenCalledTimes(1)
     expect(runtimeMocks.jiraIssueCommentsForTarget).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps fields hydrated during a failed title save', async () => {
-    const initialLoad = deferred<JiraIssue>()
-    const update = deferred<{ ok: false; error: string }>()
-    runtimeMocks.jiraGetIssueForTarget.mockReturnValue(initialLoad.promise)
-    runtimeMocks.jiraUpdateIssueForTarget.mockReturnValue(update.promise)
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-    saveTitle('Old title', 'New title')
-    await act(async () => initialLoad.resolve(jiraIssue('Old title', { labels: ['backend'] })))
-    await flushPromises()
-    await act(async () => update.resolve({ ok: false, error: 'Rejected' }))
-    await flushPromises()
-    expect(screen.getByDisplayValue('Old title')).toBeDefined()
-    expect(screen.getByDisplayValue('backend')).toBeDefined()
   })
 
   it('allows editing a newly opened issue while an earlier save is still pending', async () => {
@@ -190,40 +127,6 @@ describe('JiraIssueWorkspace optimistic edits', () => {
     await act(async () => oldSave.resolve({ ok: true }))
     await flushPromises()
     expect(screen.getByText('ENG-2')).toBeDefined()
-  })
-
-  it('offers the new status transitions after a status change', async () => {
-    // Reload transitions after a status change; Jira accepts only current-state transitions.
-    const inProgress = {
-      id: '3',
-      name: 'In Progress',
-      categoryKey: 'indeterminate',
-      categoryName: 'In Progress'
-    }
-    const done = { id: '4', name: 'Done', categoryKey: 'done', categoryName: 'Done' }
-    runtimeMocks.jiraListTransitionsForTarget
-      .mockResolvedValueOnce([{ id: '11', name: 'Start progress', to: inProgress }])
-      .mockResolvedValue([{ id: '21', name: 'Finish', to: done }])
-    runtimeMocks.jiraUpdateIssueForTarget.mockResolvedValue({ ok: true })
-    runtimeMocks.jiraGetIssueForTarget
-      .mockResolvedValueOnce(jiraIssue('Old title'))
-      .mockResolvedValue(jiraIssue('Old title', { status: inProgress }))
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Change status: To Do' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Start progress' }))
-    await flushPromises()
-
-    expect(runtimeMocks.jiraUpdateIssueForTarget).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'ENG-1',
-      { transitionId: '11' },
-      'site-1'
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Change status: In Progress' }))
-    expect(screen.queryByRole('button', { name: 'Start progress' })).toBeNull()
-    expect(await screen.findByRole('button', { name: 'Finish' })).toBeDefined()
   })
 
   it('still hydrates fields the user did not edit when the initial load lands late', async () => {

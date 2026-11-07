@@ -6,14 +6,22 @@ import {
   type PluginContributionPoint
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
+import {
+  fontContributionRows,
+  statusBarContributionRows,
+  statusBarItemTitles,
+  withMode
+} from './plugin-contribution-row-labels'
 
-/** The manifest points shown as named rows; commands, shortcuts and events have their own lists. */
+/** The manifest points shown as named rows; commands, shortcuts, events and settings have their
+ *  own lists, and hooks show as the trusted-worker access they need. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events'
+  'commands' | 'keybindings' | 'events' | 'hooks' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */
@@ -30,6 +38,8 @@ export type PluginContributionSource = {
   themes: readonly { id: string; label: string; base?: 'light' | 'dark' }[]
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
+  /** Family names as the manifest writes them. */
+  fonts: readonly string[]
   syntaxes: readonly {
     id: string
     label: string
@@ -49,18 +59,21 @@ export type PluginContributionSource = {
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
+  statusBarItems: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   themes: [],
   terminalThemes: [],
   iconThemes: [],
+  fonts: [],
   syntaxes: [],
   languagePacks: [],
   panels: [],
   customEditors: [],
   vmRecipes: [],
-  newFiles: []
+  newFiles: [],
+  statusBarItems: []
 }
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
@@ -71,14 +84,6 @@ export function nameFromContributionPath(path: string): string {
     .replace(/[-_.]+/g, ' ')
     .trim()
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
-}
-
-export function languageDisplayName(locale: string): string {
-  try {
-    return new Intl.DisplayNames(getIntlLocale(), { type: 'language' }).of(locale) ?? locale
-  } catch {
-    return locale
-  }
 }
 
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {
@@ -92,6 +97,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     themes: contributes.themes.map(titled),
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
+    fonts: contributes.fonts.map((font) => font.family),
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
@@ -101,7 +107,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
       priority: editor.priority ?? 'default'
     })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
-    newFiles: contributes.newFiles
+    newFiles: contributes.newFiles,
+    statusBarItems: statusBarItemTitles(contributes.statusBarItems)
   }
 }
 
@@ -125,6 +132,7 @@ export function summaryContributionSource(
       mode: base(item.name)
     })),
     iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
+    fonts: of('fonts').map((item) => item.name),
     syntaxes: of('syntaxes').map((item) => ({
       id: item.name,
       label: item.name,
@@ -139,18 +147,9 @@ export function summaryContributionSource(
       filenames: []
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
-    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' }))
+    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
+    statusBarItems: of('statusBarItems').map((item) => item.name)
   }
-}
-
-function withMode(kindLabel: string, mode: 'light' | 'dark' | 'unknown' | undefined): string {
-  if (mode === 'dark') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.dark', 'Dark')}`
-  }
-  if (mode === 'light') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.light', 'Light')}`
-  }
-  return kindLabel
 }
 
 function languageDetail(coverage: number | undefined): Pick<PluginContribution, 'detail' | 'tone'> {
@@ -225,6 +224,7 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
+  rows.push(...fontContributionRows(source.fonts))
   for (const syntax of source.syntaxes) {
     const files = fileList(syntax.extensions, syntax.filenames)
     const label = translate(
@@ -289,6 +289,7 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
+  rows.push(...statusBarContributionRows(source.statusBarItems))
   for (const [index, title] of source.vmRecipes.entries()) {
     rows.push({
       key: `vmRecipes:${index}`,

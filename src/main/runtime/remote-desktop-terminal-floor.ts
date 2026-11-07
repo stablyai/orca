@@ -1,4 +1,4 @@
-import { clampTerminalViewport } from '../../shared/terminal-viewport'
+import { clampTerminalViewport } from '../../shared/terminal/viewport/terminal-viewport'
 
 type Viewport = { cols: number; rows: number }
 type Viewer = Viewport & { clientId: string; activity: number }

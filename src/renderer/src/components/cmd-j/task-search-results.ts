@@ -6,7 +6,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
+import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 
 export type CmdJTask =

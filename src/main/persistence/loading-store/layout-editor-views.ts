@@ -8,7 +8,7 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutEditorView } from '../../../shared/workspace-layout/layout-editor-view'
 import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/workspace-layout-model'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
 
 export type PartitionEditorViews = Readonly<

@@ -15,7 +15,7 @@ const pluginHostCallRequestSchema = z
 
 export type PluginHostCallPolicy = Pick<
   ExecutePluginHostCallInput,
-  'grantedCapabilities' | 'services' | 'audit'
+  'grantedCapabilities' | 'services' | 'audit' | 'scope'
 >
 
 export type ResolvePluginHostCallPolicy = (

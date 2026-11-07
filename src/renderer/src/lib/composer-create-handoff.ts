@@ -4,12 +4,12 @@ import { translate } from '@/i18n/i18n'
 import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationRequest
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
-} from '@/lib/worktree-creation-flow'
+} from '@/lib/workspace/creation/worktree-creation-flow'
 
 // Why: composer preflight (PR fetch, hook checks, settings writes) can stall on
 // the network; past this delay the sidebar row owns the submit so the modal closes.
@@ -117,6 +117,7 @@ export function scheduleComposerCreateHandoff({
       const existingCreationId = findPendingLinkedWorkItemCreationId(others, request)
       if (existingCreationId) {
         store.removePendingWorktreeCreation(stagedCreationId)
+        store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
         store.setActivePendingWorktreeCreation(existingCreationId)
         store.setActiveView('terminal')
         store.setSidebarOpen(true)

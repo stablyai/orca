@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -7,12 +7,12 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { jiraListGridStyle } from '../../jira-list-columns'
 import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
-import { TaskPageJiraSortControls } from '../../task-page-jira-sort-controls'
+import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
 import { TaskPageJiraErrorBanner } from '../linear/task-page-linear-jira-list-model'
 import { TaskPageJiraTextFallbackNotice } from './task-page-jira-text-fallback-notice'
-import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
-import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
-import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
+import { TaskPageJiraIssueList } from '@/components/task-page/jira/task-page-jira-issue-list'
+import { TaskPageJiraBoardView } from '@/components/task-page/jira/task-page-jira-board-view'
+import { TaskPageJiraViewControls } from '@/components/task-page/jira/task-page-jira-view-controls'
 import { formatRelativeTime } from '../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page/jira/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
@@ -20,7 +20,7 @@ import { TaskPageLinearContent } from '../linear/Content'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 export function TaskPageJiraContent({
   model

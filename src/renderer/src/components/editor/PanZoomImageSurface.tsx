@@ -3,7 +3,14 @@ import { cn } from '@/lib/utils'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import type { PanZoomViewport } from './use-pan-zoom-viewport'
 
-/** The drag-to-pan canvas and its positioned image; callers own the controls around it. */
+const CURSOR_CLASS = {
+  'zoom-in': 'cursor-zoom-in',
+  'zoom-out': 'cursor-zoom-out',
+  grab: 'cursor-grab',
+  grabbing: 'cursor-grabbing'
+} as const
+
+/** The click-to-zoom, Alt-drag-to-pan canvas and its positioned image; callers own the controls around it. */
 export function PanZoomImageSurface({
   panZoom,
   src,
@@ -26,16 +33,12 @@ export function PanZoomImageSurface({
   onLoad?: React.ReactEventHandler<HTMLImageElement>
   onError?: React.ReactEventHandler<HTMLImageElement>
 }): React.JSX.Element {
-  const { setCanvas, canvasHandlers, dragging, scale, offset } = panZoom
+  const { setCanvas, canvasHandlers, cursor, scale, offset } = panZoom
   return (
     <div
       ref={setCanvas}
       data-testid="pan-zoom-image-canvas"
-      className={cn(
-        'touch-none overflow-hidden',
-        src && (dragging ? 'cursor-grabbing' : 'cursor-grab'),
-        className
-      )}
+      className={cn('touch-none overflow-hidden', src && cursor && CURSOR_CLASS[cursor], className)}
       style={background ? { backgroundColor: background } : undefined}
       {...canvasHandlers}
     >

@@ -3,10 +3,10 @@ import { admitTranscriptPath } from './transcript-path-admission'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 
 export type StructuredAgentTranscriptImportSettings = {

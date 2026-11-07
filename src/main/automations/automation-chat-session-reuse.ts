@@ -4,13 +4,13 @@ import type {
   AutomationChatAgentLaunch
 } from './automation-chat-agent-launch'
 import { automationRunRecency } from '../../shared/automation-session-reuse'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../shared/structured-agent-session-send-mutation'
+} from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunAcceptedTarget } from './automation-agent-run-result'
 
 export async function reuseAutomationChat(

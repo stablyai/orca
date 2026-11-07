@@ -5,18 +5,18 @@ import {
 import { expect, it, vi } from 'vitest'
 import { resolveActiveSessionTab } from '../../mobile/src/session/active-session-tab'
 import { notificationPaneTab } from '../../mobile/src/session/notification-pane-tab'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_SESSION
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { readPersistedTestAgentSessionStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { readPersistedTestAgentSessionStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   WORKTREE,
   directory,
@@ -29,7 +29,7 @@ import {
   openHost,
   closeSession,
   send
-} from '../../src/main/runtime/rpc/methods/structured-chat-tab-table.test-fixture'
+} from '../../src/main/runtime/rpc/methods/session-tabs/structured-chat-tab-table.test-fixture'
 
 const logical = `agent-session:${HOST_TEST_SESSION}`
 const phone = (pairedDeviceId: string) => ({

@@ -184,7 +184,7 @@ export function PluginInstallTrustDialog({
   )
 }
 
-/** Shows whichever install is waiting; leaving the pane declines it so nothing installs unseen. */
+/** Shows whichever install is waiting; leaving Settings declines it so nothing installs unseen. */
 export function PluginInstallTrustDialogHost(): React.JSX.Element {
   const pending = usePluginInstallTrustStore((state) => state.pending)
   useEffect(() => () => settlePluginInstallTrust(false), [])

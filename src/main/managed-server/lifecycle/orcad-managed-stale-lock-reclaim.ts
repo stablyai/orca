@@ -1,6 +1,6 @@
 // Let the active slot gather lock evidence and apply nonce-pinned confirmation; clients only relay it.
 import { z } from 'zod'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   ORCAD_STALE_LOCK_DATA_ROOT_FLAG,

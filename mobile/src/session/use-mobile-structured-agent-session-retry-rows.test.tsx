@@ -1,10 +1,11 @@
 import { createElement } from 'react'
 import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -73,6 +74,7 @@ it('draws one row for a run of provider retries, with what failed on its second 
   function Harness(): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
@@ -85,7 +87,7 @@ it('draws one row for a run of provider retries, with what failed on its second 
   }
 
   await act(async () => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   act(() => listener?.(snapshot([retry(1, 1), retry(2, 2), retry(3, 3)])))

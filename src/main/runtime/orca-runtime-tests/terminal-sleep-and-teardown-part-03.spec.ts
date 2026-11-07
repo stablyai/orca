@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { RuntimeMachineName } from '../runtime-machine-name'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
+import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop-targets'
 
@@ -15,8 +16,8 @@ describe('OrcaRuntimeService', () => {
       stopAndWait,
       getForegroundProcess: async () => null,
       listProcesses: async () => [
-        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' },
+        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ]
     })
 
@@ -141,10 +142,10 @@ describe('OrcaRuntimeService', () => {
     const stopped: string[] = []
     const processLists = [
       [
-        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-shell', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' },
+        { id: 'pty-shell', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ],
-      [{ id: 'pty-shell', cwd: TEST_WORKTREE_PATH, title: 'Shell' }]
+      [{ id: 'pty-shell', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }]
     ]
     runtime.setPtyController({
       write: () => true,

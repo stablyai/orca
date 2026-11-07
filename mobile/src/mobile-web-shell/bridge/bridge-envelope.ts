@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
@@ -277,6 +277,9 @@ const BridgeHostMessageSchema = z.union([
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
+    // The status the shell's compatibility gate already read; older shells omit it and the page asks.
+    // Opaque here: the page's status gate validates it with the reader it already loads.
+    hostStatus: salvagedOptional('hostStatus', z.looseObject({})).optional(),
     storage: BridgeInitStorageSchema.optional(),
     refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
     /**

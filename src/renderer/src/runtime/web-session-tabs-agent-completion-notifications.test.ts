@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusChange } from '@/store/slices/agent-status/agent-status-contract'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
 const mocks = vi.hoisted(() => ({
   observeAgentHookCompletionForNotification: vi.fn()
@@ -13,16 +13,14 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import {
-  createAgentCompletionCoordinator,
-  resetAgentCompletionCoordinatorIdentitiesForTest
-} from '@/components/terminal-pane/agent-completion-coordinator'
-import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
+import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '@/components/terminal-pane/agent-completion/agent-completion-identity-store'
+import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
-} from '@/components/terminal-pane/renderer-owned-agent-status-registry'
+} from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -77,6 +75,22 @@ function makeAgentSnapshot(
         }
       }
     ]
+  }
+}
+
+/** An older host omits the worktree on agents restored after a restart. */
+function withoutAgentWorktree(
+  snapshot: RuntimeMobileSessionTabsResult
+): RuntimeMobileSessionTabsResult {
+  return {
+    ...snapshot,
+    tabs: snapshot.tabs.map((tab) => {
+      if (tab.type !== 'terminal' || !tab.agentStatus) {
+        return tab
+      }
+      const { worktreeId: _worktreeId, ...agentStatus } = tab.agentStatus
+      return { ...tab, agentStatus }
+    })
   }
 }
 
@@ -178,62 +192,30 @@ describe('paired session-tab agent completion notifications', () => {
     }
   )
 
-  it('forwards accepted working snapshots and live statuses', () => {
-    applySnapshot(makeAgentSnapshot(1, NOW), false)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
-
-    applySnapshot(makeAgentSnapshot(2, NOW + 1_000), true)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(2)
-
-    const turnCompletedAt = NOW + 2_000
-    applySnapshot(makeAgentSnapshot(3, NOW + 2_000, turnCompletedAt), true)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenLastCalledWith({
-      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
-      worktreeId: WORKTREE_ID,
-      payload: expect.objectContaining({
-        state: 'working',
-        stateStartedAt: NOW,
-        turnCompletedAt
+  it.each([
+    ['a host naming the worktree', (snapshot: RuntimeMobileSessionTabsResult) => snapshot],
+    ['an older host that omits it', withoutAgentWorktree]
+  ])(
+    'announces one live stamped completion after a late-pair working seed from %s',
+    (_label, frame) => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
       })
-    })
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
+        seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
+      )
 
-    applySnapshot(makeAgentSnapshot(4, NOW + 3_000, turnCompletedAt + 1_000), false)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
-  })
+      applySnapshot(frame(makeAgentSnapshot(1, NOW)), false)
+      applySnapshot(frame(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000)), true)
 
-  // STA-12043: a cold-restored host republishes the old turn as unverifiable under a new date.
-  it('announces no completion for an unverifiable done', () => {
-    applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW), true)
-    const announced = mocks.observeAgentHookCompletionForNotification.mock.calls.length
-    const restored = makeAgentSnapshot(2, NOW + 60_000, undefined, 'done', NOW + 60_000)
-    const [tab] = restored.tabs
-    if (tab?.type === 'terminal' && tab.agentStatus) {
-      tab.agentStatus.restoredUnconfirmed = true
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     }
-
-    applySnapshot(restored, true)
-
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(announced)
-  })
-
-  it('announces one live stamped completion after a late-pair working seed', () => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
-      getPtyId: () => 'pty-1',
-      inspectProcess: vi.fn(),
-      dispatchCompletion,
-      isLive: () => true
-    })
-    mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
-      seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
-    )
-
-    applySnapshot(makeAgentSnapshot(1, NOW), false)
-    applySnapshot(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000), true)
-
-    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-  })
+  )
 
   it('announces a host-stamped turn while client OSC status owns the pane', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)

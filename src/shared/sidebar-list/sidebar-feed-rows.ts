@@ -20,13 +20,14 @@ import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
+  feedPairedDeviceIdsByEnvironment,
   indexSidebarFeed,
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
 } from './sidebar-feed-index'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 import {
   filterFolderWorkspacesForVisibleHosts,
@@ -50,6 +51,7 @@ import type {
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
+import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
@@ -146,14 +148,7 @@ export function planSidebarFeedRows(
   const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
-  const pairedDeviceIdsByEnvironment = new Map(
-    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
-      const environmentId = parseExecutionHostId(hostId)
-      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
-        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
-        : []
-    })
-  )
+  const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
@@ -182,6 +177,7 @@ export function planSidebarFeedRows(
       }
     },
     worktreeLineageById: lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     filterRepoIds: view.filters.filterRepoIds,
     preserveLineageParentOrder: view.sortBy === 'manual',
     forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds
@@ -223,19 +219,20 @@ export function planSidebarFeedRows(
     visibleWorktrees,
     filterRepoIds: view.filters.filterRepoIds
   })
-  // The catalog's order, not the feed's repoOrder: only it places a paired server's projects.
-  const repoOrder = getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   const plan = planSidebarRows({
     groupBy,
+    sortBy: view.sortBy,
     worktrees: visibleWorktrees,
     repoMap,
     repoOfWorktree: index.repoOf,
     prGroupOf: (worktree) =>
       prGroupOfReviewFact(domains.review.get(getWorktreeHostIdentity(worktree))),
-    repoOrder,
+    // The catalog's order, not the feed's repoOrder: only it places a paired server's projects.
+    repoOrder: getLogicalRepoOrderRankById(repos.map((repo) => repo.id)),
     workspaceStatuses: view.workspaceStatuses,
     projectOrderBy: view.projectOrderBy,
     lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     worktreeMap,
     nestLineage: true,
     projectGroups: visibleProjectGroups,
@@ -299,9 +296,10 @@ export function renderSidebarFeedRows(
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,
-  view: SidebarFeedView
+  view: SidebarFeedView,
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedRows {
-  const index = indexSidebarFeed(domains, catalog.repos)
+  const index = indexSidebarFeed(domains, catalog.repos, lineagePolicy)
   const planned = planSidebarFeedRows(
     domains,
     index,

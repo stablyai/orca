@@ -349,18 +349,22 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 7,
+          "maxItems": 11,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "workspace:read",
+              "workspace:write",
               "agent:read",
+              "agent:launch",
               "terminal:send",
+              "terminal:read",
               "notifications:show",
               "storage:own",
               "secrets:own",
-              "settings:own"
+              "settings:own",
+              "appearance:write"
             ]
           }
         },
@@ -554,15 +558,19 @@
             "panels",
             "commands",
             "events",
+            "hooks",
             "languagePacks",
             "keybindings",
             "vmRecipes",
             "themes",
             "terminalThemes",
             "iconThemes",
+            "fonts",
             "syntaxes",
             "customEditors",
-            "newFiles"
+            "newFiles",
+            "settings",
+            "statusBarItems"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

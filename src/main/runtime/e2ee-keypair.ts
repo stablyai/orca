@@ -10,7 +10,7 @@ import {
 import {
   E2EE_KEYPAIR_FILENAME as KEYPAIR_FILENAME,
   MAX_E2EE_KEYPAIR_FILE_BYTES as MAX_KEYPAIR_FILE_BYTES
-} from '../../shared/runtime-e2ee-keypair-file'
+} from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 
 const KEYPAIR_VERSION = 1
 

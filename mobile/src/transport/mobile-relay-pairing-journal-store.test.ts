@@ -30,7 +30,7 @@ import {
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
 } from './mobile-relay-pairing-journal-store'
-import type { PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const now = Date.UTC(2026, 6, 13)
 const GENERATION_KEY = 'orca:pairing-keychain-generation'

@@ -8,7 +8,7 @@ export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneT
 // The inherited built-in syntax colors are checked against the plugin's editor background.
 // Why 3:1 for them: Monaco's own dark comment color is 4.2:1 on its own background.
 const MIN_TEXT_CONTRAST = 4.5
-const MIN_SYNTAX_CONTRAST = 3
+export const MIN_SYNTAX_CONTRAST = 3
 const BUILT_IN_SYNTAX: Record<'light' | 'dark', readonly string[]> = {
   // comment, string, keyword, type, number in vs / vs-dark.
   light: ['#008000', '#a31515', '#0000ff', '#008080', '#098658'],
@@ -39,7 +39,8 @@ function hex([r, g, b, a]: Rgba): string {
   return `#${byte(r)}${byte(g)}${byte(b)}${a < 1 ? byte(a * 255) : ''}`
 }
 
-function hashName(text: string): string {
+/** A short stable hash, so a theme's name or revision changes with its content. */
+export function hashThemeContent(text: string): string {
   let hash = 0
   for (let index = 0; index < text.length; index += 1) {
     hash = (hash * 31 + text.charCodeAt(index)) | 0
@@ -132,5 +133,5 @@ export function derivePluginMonacoTheme(input: {
     }),
     colors
   }
-  return { name: `orca-plugin-${hashName(JSON.stringify(data))}`, data }
+  return { name: `orca-plugin-${hashThemeContent(JSON.stringify(data))}`, data }
 }

@@ -1,23 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import {
-  applyDetectedWorktreeUpdates,
-  folderWorkspaceMatchesHost,
-  findKnownWorktreeById
-} from './detected-worktree-meta'
+
+import { findKnownWorktreeById } from './detected-worktree-meta'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../../../../components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { selectWorkspaceByHostTarget } from '../../../workspace-record-selectors'
 import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { findIndexedFolderWorkspaceOwner } from '@/lib/worktree-runtime-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { findIndexedFolderWorkspaceOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { getWorktreeDeleteStateKey } from '../teardown/worktree-delete-state'
 
@@ -116,84 +111,43 @@ describe('inherited folder consumer identity', () => {
   )
 })
 
-describe('folderWorkspaceMatchesHost', () => {
-  it('prefers the host stamp, then the connection id, then local', () => {
-    type Row = Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>
-    const ssh: Row = { executionHostId: 'ssh:target-1', connectionId: null }
-    expect(folderWorkspaceMatchesHost(ssh, 'ssh:target-1')).toBe(true)
-    expect(folderWorkspaceMatchesHost(ssh, 'local')).toBe(false)
-    const stamped: Row = { executionHostId: 'runtime:env-1', connectionId: 'target-1' }
-    expect(folderWorkspaceMatchesHost(stamped, 'runtime:env-1')).toBe(true)
-    expect(folderWorkspaceMatchesHost(stamped, 'ssh:target-1')).toBe(false)
-    const legacy: Row = { executionHostId: undefined, connectionId: 'target-1' }
-    expect(folderWorkspaceMatchesHost(legacy, 'ssh:target-1')).toBe(true)
-    expect(folderWorkspaceMatchesHost({ connectionId: '  ' }, 'local')).toBe(true)
-    expect(folderWorkspaceMatchesHost({ connectionId: null }, 'local')).toBe(true)
-  })
-})
-
-describe('applyDetectedWorktreeUpdates display-name provenance', () => {
-  it('projects pinning changes into detected rows', () => {
-    const detected = {
-      id: 'repo-1::/workspace/feature',
-      displayName: 'feature',
-      displayNameMode: 'automatic',
-      repoId: 'repo-1',
-      branch: 'refs/heads/feature'
-    }
-    const state = {
-      'repo-1': {
-        repoId: 'repo-1',
-        authoritative: true,
-        source: 'git',
-        worktrees: [detected]
+describe('missing selected folder lookup cost', () => {
+  it('keeps warm unrelated writes bounded at N and 10N folders and observes catalog changes', () => {
+    for (const size of [100, 1_000]) {
+      let reads = 0
+      const folderWorkspaces = Array.from({ length: size }, (_, index) => ({
+        ...makeFolderWorkspace(),
+        get id() {
+          reads += 1
+          return `folder-${index}`
+        }
+      }))
+      const state = {
+        folderWorkspaces,
+        projectGroups: [makeProjectGroup()],
+        repos: [],
+        worktreesByRepo: {},
+        detectedWorktreesByRepo: {},
+        floatingWorkspacePath: null
       }
-    } as unknown as Record<string, DetectedWorktreeListResult>
-
-    const fixed = applyDetectedWorktreeUpdates(state, detected.id, {
-      displayName: 'Agent workspace',
-      displayNameIsPinned: true
-    })
-    expect(fixed['repo-1']?.worktrees[0]).toMatchObject({
-      displayName: 'Agent workspace',
-      displayNameMode: 'fixed'
-    })
-
-    const automatic = applyDetectedWorktreeUpdates(state, detected.id, {
-      displayName: '',
-      displayNameIsPinned: false
-    })
-    expect(automatic['repo-1']?.worktrees[0]).toMatchObject({
-      displayName: 'feature',
-      displayNameMode: 'automatic'
-    })
-  })
-
-  it('keeps text until the host resolves a detached fallback', () => {
-    const detached = {
-      id: 'repo-1::/workspace/feature',
-      displayName: 'Agent workspace',
-      displayNameMode: 'fixed' as const,
-      repoId: 'repo-1',
-      branch: ''
-    }
-    const detachedState = {
-      'repo-1': {
-        repoId: 'repo-1',
-        authoritative: true,
-        source: 'git',
-        worktrees: [detached]
+      expect(findKnownWorktreeById(state, 'folder:missing', 'local')).toBeUndefined()
+      expect(reads).toBeLessThanOrEqual(size * 2)
+      reads = 0
+      for (let update = 0; update < 100; update += 1) {
+        expect(findKnownWorktreeById({ ...state }, 'folder:missing', 'local')).toBeUndefined()
       }
-    } as unknown as Record<string, DetectedWorktreeListResult>
-
-    const automatic = applyDetectedWorktreeUpdates(detachedState, detached.id, {
-      displayName: '',
-      displayNameIsPinned: false
-    })
-
-    expect(automatic['repo-1']?.worktrees[0]).toMatchObject({
-      displayName: 'Agent workspace',
-      displayNameMode: 'automatic'
-    })
+      expect(reads).toBe(0)
+      const folder = makeFolderWorkspace({ id: 'missing', folderPath: '/new-folder' })
+      const next = { ...state, folderWorkspaces: [...folderWorkspaces, folder] }
+      expect(findKnownWorktreeById(next, 'folder:missing', 'local')?.path).toBe('/new-folder')
+      const narrow = {
+        ...state,
+        folderWorkspaces: [folder],
+        projectGroups: undefined,
+        repos: undefined
+      }
+      expect(findKnownWorktreeById(narrow, 'folder:missing')?.path).toBe('/new-folder')
+      expect(findKnownWorktreeById(narrow, 'folder:missing', 'local')).toBeUndefined()
+    }
   })
 })

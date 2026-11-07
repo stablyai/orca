@@ -1,5 +1,10 @@
 import type { PluginHostListEntry, PluginHostNewFile } from '../../../preload/api-types'
-import { isLivePlugin, keyedPluginContribution, usePluginListDerived } from './plugin-panels'
+import {
+  installedPluginDisplayNames,
+  isLivePlugin,
+  keyedPluginContribution,
+  usePluginListDerived
+} from './plugin-panels'
 
 /** A new-file type from an enabled plugin. `key` is unique across plugins; `iconUrl` is its own
  *  icon, else the plugin's. */
@@ -16,7 +21,9 @@ export function collectActivePluginNewFiles(
   return plugins
     .filter(isLivePlugin)
     .flatMap((plugin) =>
-      (plugin.newFiles ?? []).map((newFile) => keyedPluginContribution(plugin, newFile))
+      (plugin.newFiles ?? []).map((newFile) =>
+        keyedPluginContribution(plugin, newFile, installedPluginDisplayNames(plugins))
+      )
     )
 }
 

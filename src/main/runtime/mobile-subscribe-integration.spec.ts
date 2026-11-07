@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { listWorktrees } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Legacy restore cases need finite 5s (the clamp floor); production defaults to indefinite hold.

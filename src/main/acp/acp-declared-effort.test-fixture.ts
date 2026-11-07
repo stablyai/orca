@@ -6,7 +6,7 @@ import type {
   AcpDeclaredEffortFixtureModule,
   DeclaredEffortCase
 } from '../../shared/acp-declared-effort.test-fixture-contract'
-import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../shared/agent-session/agent-session-wire'
 import recordedGrok from './fixtures/grok-v1-model.json'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
 import { grokModelCatalogFromState, grokModelEfforts } from './acp-dialects/grok-model-catalog'
@@ -19,22 +19,22 @@ import {
   agentModelCatalogResultFromEntry,
   entryWithConfiguredDefault
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
-import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/options/structured-agent-session-options-read'
+import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../runtime/agent-session-record-store-test-harness'
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const unused = (): never => {
   throw new Error('declaration fixture must not start or mutate an agent')
@@ -142,6 +142,7 @@ export function declaredEffortReadAdapter(options: AcpStructuredOptions) {
     changeThreadGoal: unused,
     rewind: unused,
     recoverRewind: unused,
+    copyConversation: unused,
     readOptions: () =>
       readAcpLiveOptions({
         connection: { initialize: async () => ({ protocolVersion: 1, agentCapabilities: {} }) },
@@ -239,7 +240,8 @@ export const recordedEffortCase: AcpDeclaredEffortFixtureModule['recordedEffortC
     agent: source.agent,
     model: source.model,
     policy: source.agent === 'grok' ? 'high' : 'low',
-    display: input === 'low' ? 'low' : input === 'absent' ? undefined : null,
+    display:
+      input === 'low' || input === 'opencode' ? 'low' : input === 'absent' ? undefined : null,
     catalog: source.catalog,
     live,
     resting,

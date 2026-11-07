@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
 // Exercise the real attention path from completion stream to indicators/OS delivery; mock only transport and preload.
@@ -5,18 +6,17 @@
 import { useEffect, useMemo } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 type TestStore = {
   getState: () => AppState
@@ -51,8 +51,8 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClientModule>()),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 

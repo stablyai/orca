@@ -2,13 +2,14 @@ import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session-visible-failures'
-import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
-import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -21,9 +22,9 @@ export {
   agentSessionVisibleFailureFacts as structuredAgentSessionStartFailureFacts,
   agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow,
   sameAgentSessionFailureFact
-} from '../../../../shared/agent-session-visible-failures'
+} from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
-/** Show sending until host rows arrive and host-worded rejections afterward; unconfirmed sends explain their return in the composer instead. */
+/** Show sending until host rows arrive and host-worded rejections afterward; settled uncertain input remains ordinary transcript content. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -36,35 +37,36 @@ export function structuredAgentSessionDeliveryNotices(args: {
   // A row under the id is the host's to describe, before the sender settles from it.
   const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
   for (const entry of args.pending) {
-    if (entry.phase === 'sending' && !recorded.has(entry.clientMessageId)) {
+    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
   }
-  const shown = structuredAgentSessionRejectedShownInPlace(
-    submissions,
-    args.commandItemIds ?? NO_COMMANDS
-  )
+  const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
+    ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
+    : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    if (submission.dispatchState === 'pending') {
+      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
+      const statedByRow = agentSessionFailureStatedByRow(fact, args.startFailures)
       const detail =
         fact &&
         classifyDispatchRejection({ reason: null, rejection: fact }).category === 'startFailed' &&
-        !agentSessionFailureStatedByRow(fact, args.startFailures)
+        !statedByRow
           ? agentSessionFailureDetailText(fact)
           : undefined
       notices.set(id, {
+        failureKind: statedByRow ? undefined : fact?.kind,
         text: agentSessionWriteNoticeText(
-          structuredAgentSessionRecordedRejectionParts(
-            submission,
-            { agentName },
-            args.startFailures
-          )
+          statedByRow
+            ? agentSessionWriteNotDoneParts('send')
+            : structuredAgentSessionRejectionParts(submission.reason, 'send', fact, { agentName })
         ),
         ...(detail ? { detail } : {})
       })

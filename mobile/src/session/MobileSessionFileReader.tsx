@@ -21,7 +21,7 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
 import { MobileSvgPreview } from '../components/MobileSvgPreview'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -98,15 +98,8 @@ function FileReaderDocument({
     return map
   }, [diffCommentsForFile])
 
-  const startComment = useCallback((lineNumber: number) => {
-    setActiveCommentLine(lineNumber)
-    setCommentDraft('')
-  }, [])
-
-  const cancelComment = useCallback(() => {
-    setActiveCommentLine(null)
-    setCommentDraft('')
-  }, [])
+  // The draft follows the reader to another line and survives Cancel; only a saved note clears it.
+  const cancelComment = useCallback(() => setActiveCommentLine(null), [])
 
   const submitComment = useCallback(
     (lineNumber: number) => {
@@ -135,7 +128,7 @@ function FileReaderDocument({
         activeCommentLine={activeCommentLine}
         commentDraft={commentDraft}
         commentsBusy={diffCommentActions?.busy === true}
-        onStartComment={startComment}
+        onStartComment={setActiveCommentLine}
         onCancelComment={cancelComment}
         onDraftChange={setCommentDraft}
         onSubmitComment={submitComment}
@@ -152,7 +145,6 @@ function FileReaderDocument({
       commentDraft,
       diffCommentActions,
       diffCommentsByLine,
-      startComment,
       submitComment,
       title
     ]
@@ -223,9 +215,10 @@ function FileReaderDocument({
             </View>
             <View style={styles.diffNotesActions}>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
+                  !canCopyNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canCopyNotes}
                 onPress={() => void diffCommentActions.onCopyAll()}
@@ -235,9 +228,10 @@ function FileReaderDocument({
                 <Text style={styles.diffNotesActionText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
+                  !canSendNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canSendNotes}
                 onPress={diffCommentActions.onSendAll}

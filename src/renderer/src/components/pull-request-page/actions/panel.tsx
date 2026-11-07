@@ -32,7 +32,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { WorkItemStateBadge } from '../presentation/state-badge'
 import { changePullRequestState, mergePullRequest, setPullRequestAutoMerge } from './merge-actions'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRActionsPanel({
   item,

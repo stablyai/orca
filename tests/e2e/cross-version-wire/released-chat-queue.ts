@@ -1,5 +1,5 @@
-import type { AgentJournalMessageItem } from '../../../src/shared/agent-session-journal-types'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session-queued-message-wire'
+import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 
 // Queue edits as each release's queue writes them: two cards, an edit, a move, a hold and a

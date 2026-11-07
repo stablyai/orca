@@ -1,5 +1,6 @@
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
 import { MEDIA_FILE_MIME_TYPES } from './media-file-extensions'
+import { isKnownRasterImageMimeType } from './raster-image-preview-limits'
 
 export type FilePreviewKind = 'image' | 'pdf' | 'audio' | 'video'
 export type FilePreview = { kind: FilePreviewKind; mimeType: string }
@@ -30,6 +31,12 @@ export function filePreviewForPath(filePath: string): FilePreview | null {
     return { kind: media.startsWith('audio/') ? 'audio' : 'video', mimeType: media }
   }
   return null
+}
+
+/** Images an image element without an SVG engine (React Native's) can draw. */
+export function isRasterImagePath(filePath: string): boolean {
+  const preview = filePreviewForPath(filePath)
+  return preview?.kind === 'image' && isKnownRasterImageMimeType(preview.mimeType)
 }
 
 /** Audio and video always stream by range; their players can't take base64. */

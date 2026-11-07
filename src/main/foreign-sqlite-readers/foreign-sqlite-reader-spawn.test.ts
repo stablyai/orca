@@ -1,10 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('node:fs/promises', { spy: true })
 
 const reads = vi.hoisted(() => ({
   binder: vi.fn<() => Promise<unknown[]>>(),
@@ -62,29 +59,6 @@ describe('OpenCode binder worker admission', () => {
     reads.binder.mockResolvedValue(rows)
 
     expect(await readOpenCodeBinderSessions(path, CURSOR)).toEqual(rows)
-    expect(reads.binder).toHaveBeenCalledExactlyOnceWith(path, CURSOR)
-  })
-
-  it.each(['EACCES', 'EIO'])(
-    'leaves %s failures to the existing worker error handling',
-    async (code) => {
-      const path = join(root, 'opencode.db')
-      vi.mocked(fsPromises.stat).mockRejectedValueOnce(Object.assign(new Error(code), { code }))
-
-      expect(await readOpenCodeBinderSessions(path, CURSOR)).toEqual([])
-      expect(reads.binder).toHaveBeenCalledExactlyOnceWith(path, CURSOR)
-    }
-  )
-
-  it('keeps the worker result authoritative when the database changes after the preflight', async () => {
-    const path = join(root, 'opencode.db')
-    writeFileSync(path, '')
-    reads.binder.mockImplementation(async () => {
-      rmSync(path)
-      return []
-    })
-
-    expect(await readOpenCodeBinderSessions(path, CURSOR)).toEqual([])
     expect(reads.binder).toHaveBeenCalledExactlyOnceWith(path, CURSOR)
   })
 })

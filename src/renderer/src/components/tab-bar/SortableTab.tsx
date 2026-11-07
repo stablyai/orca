@@ -2,13 +2,13 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
-import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import {
@@ -197,7 +197,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -211,7 +211,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -261,6 +261,7 @@ export default function SortableTab({
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
+          density="compact"
           data-tab-rename-input="true"
           value={renameValue}
           aria-label={translate(
@@ -276,15 +277,12 @@ export default function SortableTab({
           onMouseDown={(event) => {
             // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
+            preventMiddleButtonDefault(event)
           }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onAuxClick={(event) => event.stopPropagation()}
-          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
-          className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
+          className="mr-1 min-w-0 flex-1"
           spellCheck={false}
         />
       ) : (

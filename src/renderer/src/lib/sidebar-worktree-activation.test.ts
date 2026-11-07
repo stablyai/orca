@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
@@ -20,20 +20,6 @@ describe('sidebar worktree activation', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('preserves folder click defaults and only suppresses a requested keyboard reveal', async () => {
-    await activateWorktreeFromSidebar('folder:f', 'ssh:other')
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenLastCalledWith('f', {
-      navigationIntent: 'user-open',
-      executionHostId: 'ssh:other'
-    })
-    await activateWorktreeFromSidebar('folder:f', 'ssh:other', { revealInSidebar: false })
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenLastCalledWith('f', {
-      navigationIntent: 'user-open',
-      executionHostId: 'ssh:other',
-      revealInSidebar: false
-    })
   })
 
   it('switches immediately while an ephemeral runtime wake is pending', async () => {

@@ -1,8 +1,9 @@
+import { pendingEditorEntityIds } from '@/runtime/layout-owner-pending-tabs'
 // Patch framed workspaces, reusing equal objects to avoid rerenders and retaining window-owned terminal/editor/page state. Every built patch applies and records staged browser handover (L284).
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from './types'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
@@ -218,19 +219,31 @@ export function buildLayoutFrameStorePatch(
     new Set(
       keys.flatMap((key) =>
         (tabs[key] ?? []).flatMap((tab) =>
-          isEditorTabContentType(tab.contentType) ? [`${key}\0${tab.entityId}`] : []
+          isEditorTabContentType(tab.contentType) ? [tab.entityId] : []
         )
       )
     )
   const shown = editorEntities(state.unifiedTabsByWorktree)
   const stillShown = editorEntities(built.unifiedTabsByWorktree)
+  const pendingEntities = pendingEditorEntityIds()
+  const unframedEntities = new Set<string>()
+  for (const [key, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+    if (!keySet.has(key)) {
+      for (const tab of tabs) {
+        if (isEditorTabContentType(tab.contentType)) {
+          unframedEntities.add(tab.entityId)
+        }
+      }
+    }
+  }
   const keeps = (file: AppState['openFiles'][number]): boolean => {
-    const entity = `${file.worktreeId}\0${file.id}`
+    const entity = file.id
     return (
-      !keySet.has(file.worktreeId) ||
-      builtFileIds.has(file.id) ||
+      builtFileIds.has(entity) ||
       stillShown.has(entity) ||
-      !shown.has(entity)
+      !shown.has(entity) ||
+      pendingEntities.has(entity) ||
+      unframedEntities.has(entity)
     )
   }
   const files = [

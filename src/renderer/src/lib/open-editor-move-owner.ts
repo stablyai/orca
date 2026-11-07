@@ -1,10 +1,10 @@
-import type { OpenFile } from '@/store/slices/editor'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
-} from '@/components/right-sidebar/file-explorer-operation-owner'
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { resolveOwner } from './resolve-owner'
 
 /** Track server owner (null for this app) and nested SSH owner (null for server-local, undefined for unknown). */

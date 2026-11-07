@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-11-01T21:46:25.000Z",
+  "platform": "darwin",
+  "command": ["claude", "--permission-mode", "bypassPermissions"],
+  "env": {
+    "TERM": "xterm-256color"
+  },
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.316; real PTY in a throwaway home; default simulated cursor (no CLAUDE_CODE_NATIVE_CURSOR), so the native cursor is hidden and parked at the painted caret. No prompt submitted. Unlabelled frame. Two-row draft with the caret moved into the middle of the second row (inverse cell on a real character).",
+  "exitCode": -9
+}

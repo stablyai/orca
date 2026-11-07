@@ -1,12 +1,12 @@
 import { assertWorkspaceAttachmentWriteCapability } from '../../../../runtime/runtime-workspace-attachment-capabilities'
-import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
-import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shared/workspace-attachment-legacy'
-import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachment-capabilities'
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shared/workspace-attachments/workspace-attachment-legacy'
+import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
-} from '../../../../runtime/runtime-rpc-client'
+} from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,

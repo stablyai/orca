@@ -4,6 +4,12 @@
   "family": "session.terminal-input-send",
   "namedDeltas": [],
   "values": {
+    "13757a453325": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "liveAccepted": true
+    },
     "49c62bc1232e": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -64,14 +70,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f0a0a85e7632": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "input": "",
-      "liveAccepted": true,
-      "sending": false
     }
   },
   "recording": {
@@ -86,7 +84,7 @@
             "mount": "eb79a9b3682a",
             "live": "84e5ca07cb7a"
           },
-          "state": "f0a0a85e7632",
+          "state": "13757a453325",
           "effects": []
         }
       }

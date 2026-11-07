@@ -31,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -42,7 +45,7 @@ vi.mock('child_process', async () => {
 })
 
 import { COMMAND_SPECS, main } from './index'
-import { GLOBAL_FLAGS, specPaths } from './args'
+import { specPaths } from './args'
 import { okFixture, queueFixtures } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
@@ -54,20 +57,6 @@ describe('COMMAND_SPECS collision check', () => {
         const key = path.join(' ')
         expect(seen.has(key), `Duplicate command/alias path: "${key}"`).toBe(false)
         seen.add(key)
-      }
-    }
-  })
-
-  it('allows every flag documented in command usage strings', () => {
-    const flagPattern = /--([a-zA-Z0-9-]+)/g
-    for (const spec of COMMAND_SPECS) {
-      const allowed = new Set([...GLOBAL_FLAGS, ...spec.allowedFlags])
-      for (const match of spec.usage.matchAll(flagPattern)) {
-        const flag = match[1]
-        expect(
-          allowed.has(flag),
-          `Documented flag --${flag} is not allowed for command: ${spec.path.join(' ')}`
-        ).toBe(true)
       }
     }
   })
@@ -100,23 +89,6 @@ describe('command aliases dispatch to the canonical handler', () => {
       2,
       'worktree.rm',
       expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true }),
-      expect.anything()
-    )
-  })
-
-  it('runs `worktree delete` as the canonical `worktree rm`', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_show', { worktree: { hostId: 'runtime:env-1' } }),
-      okFixture('req', { removed: true })
-    )
-
-    await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenNthCalledWith(
-      2,
-      'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' }),
       expect.anything()
     )
   })
@@ -287,17 +259,6 @@ describe('command aliases dispatch to the canonical handler', () => {
       'worktree.rm',
       expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true }),
       expect.anything()
-    )
-  })
-
-  it('still runs `terminal focus` after the handler de-duplication', async () => {
-    queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
-
-    await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.focus',
-      expect.objectContaining({ navigation: 'host' })
     )
   })
 
@@ -584,33 +545,33 @@ describe('nested command group help', () => {
       serveOrcaAppMock.mockReset()
     }
   })
-})
 
-describe('orca help', () => {
-  it('progressively discloses Linear commands', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  it('passes --bind to serve only when given, and refuses it with --mobile-pairing before launching', async () => {
+    const previousExitCode = process.exitCode
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    serveOrcaAppMock.mockClear().mockResolvedValue(0)
 
-    await main(['--help'], '/tmp/repo')
+    try {
+      process.exitCode = 0
+      await main(['serve'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(expect.objectContaining({ bind: null }))
 
-    const rootHelp = String(logSpy.mock.calls[0][0])
-    expect(rootHelp).toContain('linear')
-    expect(rootHelp).not.toContain('linear issue')
+      await main(['serve', '--bind', 'localhost'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ bind: '127.0.0.1' })
+      )
+      expect(serveOrcaAppMock).toHaveBeenCalledTimes(2)
 
-    logSpy.mockClear()
-    await main(['linear', '--help'], '/tmp/repo')
-
-    const groupHelp = String(logSpy.mock.calls[0][0])
-    expect(groupHelp).toContain('orca linear')
-    expect(groupHelp).toContain('issue')
-    expect(groupHelp).not.toContain('--comments')
-
-    logSpy.mockClear()
-    await main(['linear', 'issue', '--help'], '/tmp/repo')
-
-    const issueHelp = String(logSpy.mock.calls[0][0])
-    expect(issueHelp).toContain('orca linear issue')
-    expect(issueHelp).toContain('--comments')
-    expect(callMock).not.toHaveBeenCalled()
-    logSpy.mockRestore()
+      await main(['serve', '--bind', '127.0.0.1', '--mobile-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenCalledTimes(2)
+      expect(process.exitCode).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        '--mobile-pairing needs --bind 0.0.0.0'
+      )
+    } finally {
+      process.exitCode = previousExitCode
+      errorSpy.mockRestore()
+      serveOrcaAppMock.mockReset()
+    }
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 
 const fakes = vi.hoisted(() => ({
   readRelayAuthContext: vi.fn(),

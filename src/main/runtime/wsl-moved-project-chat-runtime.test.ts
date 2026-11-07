@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { makeTerminalTab } from '../persistence/persistence-session-fixtures'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -18,9 +18,9 @@ import {
   resetWslMoveFenceForTests
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
-import { runtimeHiddenRepos } from './runtime-visible-catalog'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
+import type { ResolvedWorktreeSnapshot } from './workspaces/catalog/runtime-resolved-worktree-cache'
+import { runtimeHiddenRepos } from './workspaces/catalog/runtime-visible-catalog'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

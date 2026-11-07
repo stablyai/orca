@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
@@ -25,7 +25,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,

@@ -2,27 +2,33 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
-} from '../../../../shared/agent-session-availability'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
-import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { StructuredAgentSessionOptionRecord } from '../../../../shared/structured-agent-session-option-state'
+import {
+  structuredAgentSessionHostKey,
+  useStructuredAgentSessionHostCapabilityState
+} from '@/runtime/structured-agent-session-host-capability'
+import type { StructuredAgentSessionOptionRecord } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../../shared/host-model-listing-waits'
+import { usesModelSpecificAcpEfforts } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 /** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */
 export function useHostModelCatalogUpgrade(args: {
   agent: AgentType
+  selectedModel?: string
   sessionId: string
   target: RuntimeClientTarget
   optionCatalog: AgentSessionOptionCatalog | null
@@ -80,6 +86,12 @@ export function useHostModelCatalogUpgrade(args: {
   const reportedUnpickedModel = args.reportedUnpickedModel === true
   // Agent start/stop invalidates reasons derived from its previous run.
   const running = args.providerRunning === true
+  const canDiscoverEfforts =
+    useStructuredAgentSessionHostCapabilityState(
+      usesModelSpecificAcpEfforts(agent) ? target : null,
+      AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY
+    ) === 'supported'
+  const selectedModel = canDiscoverEfforts ? args.selectedModel : undefined
   useEffect(() => {
     if (!said) {
       return
@@ -92,7 +104,12 @@ export function useHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
-    const params = { agent, sessionId, ...(newLaunch && worktree ? { worktree } : {}) }
+    const params = {
+      agent,
+      sessionId,
+      ...(selectedModel ? { selectedModel } : {}),
+      ...(newLaunch && worktree ? { worktree } : {})
+    }
     const read = (waitForListing: boolean): Promise<AgentSessionModelCatalogResult> =>
       callStructuredAgentSession<AgentSessionModelCatalogResult>(
         target,
@@ -140,6 +157,12 @@ export function useHostModelCatalogUpgrade(args: {
       )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
+      // Register a newly chosen target with the host's shared in-flight discovery.
+      if (selectedModel) {
+        void read(false)
+          .then((catalog) => apply(catalog))
+          .catch(() => {})
+      }
       // A joined listing is still pending, so it cannot settle the seed as installed inventory.
       updateOptionState((current) =>
         current.record === activeOptionRecordRef.current
@@ -181,6 +204,7 @@ export function useHostModelCatalogUpgrade(args: {
     rereads,
     running,
     sessionId,
+    selectedModel,
     turnWhileSaid,
     target,
     updateOptionState,

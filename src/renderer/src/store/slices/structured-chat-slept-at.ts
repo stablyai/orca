@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
 

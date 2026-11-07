@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
@@ -81,7 +81,12 @@ export function useMobileAgentMessageNavigation(
       const failure = (outcome: StructuredSessionOpenFailure) => {
         if (current()) {
           showToast(
-            mobileStructuredSessionOpenMessage(outcome.reason, sender.name ?? '', outcome.surface),
+            mobileStructuredSessionOpenMessage(
+              outcome.reason,
+              sender.name ?? '',
+              outcome.surface,
+              outcome.workspaceKind
+            ),
             3000
           )
         }

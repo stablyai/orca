@@ -148,6 +148,7 @@ export function SkillsList({
       <div
         ref={listRef}
         role="listbox"
+        data-focus-behavior="page"
         aria-multiselectable={selectionMode !== null || undefined}
         aria-label={translate('auto.components.skills.SkillsList.listLabel', 'Skills')}
         aria-orientation="vertical"

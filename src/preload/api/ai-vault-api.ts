@@ -2,11 +2,11 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
@@ -14,20 +14,20 @@ import type {
   AiVaultListResult,
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../shared/ai-vault-session-title'
+} from '../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate
-} from '../../shared/ai-vault-scan-progress'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 export type AiVaultApi = {
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */

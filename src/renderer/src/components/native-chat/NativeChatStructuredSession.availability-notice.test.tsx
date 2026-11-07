@@ -1,30 +1,62 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
-import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session-visible-failures'
-import type * as AgentSessionVisibleFailures from '../../../../shared/agent-session-visible-failures'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
-vi.mock('../../../../shared/agent-session-visible-failures', async (importOriginal) => {
-  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
-  return {
-    ...original,
-    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+vi.mock(
+  '../../../../shared/agent-session/failures/agent-session-visible-failures',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+    return {
+      ...original,
+      agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+    }
   }
-})
-
-const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
-  (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
 
-vi.mock('@/lib/structured-agent-session-launch', () =>
-  moduleFactories.structuredAgentSessionLaunch()
+const { mocks, moduleFactories, resetStructuredSessionMocks, launchModule } = await vi.hoisted(
+  async () => {
+    const setup = (
+      await import('./NativeChatStructuredSession.test-harness')
+    ).createStructuredSessionMocks()
+    return {
+      ...setup,
+      launchModule: setup.moduleFactories.structuredAgentSessionLaunch()
+    }
+  }
+)
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
+  retryStructuredAgentSessionLaunch: launchModule.retryStructuredAgentSessionLaunch,
+  relaunchFailedStructuredAgentSessionForMessage:
+    launchModule.relaunchFailedStructuredAgentSessionForMessage
+}))
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchRegistry>()),
+    getStructuredAgentSessionLaunchLifecycle: launchModule.getStructuredAgentSessionLaunchLifecycle,
+    getStructuredAgentSessionLaunchResumes: launchModule.getStructuredAgentSessionLaunchResumes,
+    useStructuredAgentSessionLaunchLifecycle: launchModule.useStructuredAgentSessionLaunchLifecycle,
+    useStructuredAgentSessionLaunchFailure: launchModule.useStructuredAgentSessionLaunchFailure
+  })
+)
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-options',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchOptions>()),
+    useStructuredAgentSessionLaunchSelection: launchModule.useStructuredAgentSessionLaunchSelection
+  })
 )
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()

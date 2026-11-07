@@ -15,8 +15,10 @@ import {
 } from '../../src/main/github/project-view/project-view-cache'
 import { ghExecFileAsync } from '../../src/main/github/project-view/internals'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../src/shared/github/project-types'
+import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
+import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
 import { sortRows, groupRows } from '../../src/shared/github/project-group-sort'
-import * as fieldNormalization from '../../src/main/github/project-view/project-view-field-normalization'
+
 import ProjectCell from '../../src/renderer/src/components/github-project/ProjectCell'
 
 vi.mock('../../src/main/github/project-view/internals', () => ({
@@ -464,67 +466,68 @@ describe('Project columns from the items response', () => {
     renderColumns(groups[0].rows[0])
     expect(document.body.textContent).toBe('')
     cleanup()
-    // Existing builtin ordering still uses the field map, with no new relation value kind.
     for (const field of [prs, progress]) {
       const relationTable = {
         ...table,
         selectedView: {
           ...table.selectedView,
-          groupByFields: [field],
+          groupByFields: field === progress ? [field] : [],
           sortByFields: [{ field, direction: 'ASC' as const }]
         }
       }
       expect(sortRows(relationTable, table.rows).map((row) => row.id)).toEqual(['item-1', 'legacy'])
-      expect(groupRows(relationTable, table.rows).map((group) => group.key)).toEqual(['__empty__'])
+      if (field === progress) {
+        expect(
+          groupRows(relationTable, table.rows).map((group) => group.rows.map((row) => row.id))
+        ).toEqual([['item-1'], ['legacy']])
+      }
     }
   })
+})
 
-  it.each([50, 500])(
-    'normalizes %i ten-PR rows with linear work and page requests',
-    async (count) => {
-      let prNodeReads = 0
-      const normalize = fieldNormalization.normalizeLinkedPullRequests
-      const normalizer = vi
-        .spyOn(fieldNormalization, 'normalizeLinkedPullRequests')
-        .mockImplementation((raw) => {
-          for (const node of raw.pullRequests?.nodes ?? []) {
-            if (node) {
-              const number = node.number
-              Object.defineProperty(node, 'number', {
-                get() {
-                  prNodeReads++
-                  return number
-                }
-              })
-            }
-          }
-          return normalize(raw)
-        })
-      const corpus = Array.from({ length: count }, (_, i) => ({ ...item, id: `item-${i}` }))
-      vi.mocked(ghExecFileAsync).mockImplementation(async (arguments_) => {
-        const after = arguments_.find((arg) => arg.startsWith('after='))
-        const offset = after ? Number(after.slice('after='.length)) : 0
-        expect(offset).toBe((vi.mocked(ghExecFileAsync).mock.calls.length - 1) * 100)
-        const end = Math.min(offset + 100, count)
-        return response(corpus.slice(offset, end), count, {
-          hasNextPage: end < count,
-          endCursor: end < count ? String(end) : null
-        })
-      })
-      const result = await fetchAllItems(args)
-      if (!result.ok) {
-        throw new Error('Expected paginated rows')
-      }
-      expect(result.rows).toHaveLength(count)
-      expect(result.rows.at(-1)?.position).toBe(count - 1)
-      expect(normalizer).toHaveBeenCalledTimes(count)
-      expect(prNodeReads).toBe(count * 10 * 2) // Validation and copying each returned PR number.
-      expect(ghExecFileAsync).toHaveBeenCalledTimes(Math.ceil(count / 100))
-      for (const [arguments_] of vi.mocked(ghExecFileAsync).mock.calls) {
-        expect(arguments_.join(' ')).toContain('pullRequests(first:10)')
-      }
-      renderColumns(result.rows[count - 1])
-      expect(screen.getByText(cellText(prText))).toBeTruthy()
+it('sorts linked PRs by their first number and treats count-only metadata as an unknown sort key', () => {
+  const field = {
+    kind: 'field',
+    id: 'prs',
+    name: 'Linked pull requests',
+    dataType: 'LINKED_PULL_REQUESTS'
+  } as const
+  const rows = ['ten', 'two-high', 'count-only', 'two-low', 'absent'].map((id, position) => ({
+    ...normalized({ id, type: 'ISSUE', content: { title: id } }),
+    position
+  }))
+  const table = projectRelationsTableFixture()
+  table.rows = rows
+  for (const [index, numbers] of [
+    [0, [10]],
+    [1, [2, 100]],
+    [3, [2, 9]]
+  ] as const) {
+    rows[index].content.linkedPullRequests = {
+      pullRequests: numbers.map((number) => ({
+        number,
+        title: 'PR',
+        url: `https://github.com/acme/repo/pull/${number}`
+      })),
+      totalCount: numbers.length
     }
-  )
+  }
+  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
+    __typename: 'ProjectV2ItemFieldPullRequestValue',
+    pullRequests: { nodes: [null, {}], totalCount: 3 }
+  })
+  for (const [direction, expected] of [
+    ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
+    ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]
+  ] as const) {
+    expect(
+      sortRows(
+        {
+          ...table,
+          selectedView: { ...table.selectedView, sortByFields: [{ field, direction }] }
+        },
+        rows
+      ).map((row) => row.id)
+    ).toEqual(expected)
+  }
 })

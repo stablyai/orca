@@ -1,7 +1,13 @@
+import {
+  matchesGitHubWorkItemTarget,
+  resolveGitHubWorkItemTarget,
+  githubWorkItemTargetKey
+} from '../../../src/shared/github/work-item-target'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
 import {
@@ -13,6 +19,7 @@ import {
 import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
 import { translate } from '../i18n/mobile-i18n'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -24,12 +31,18 @@ export type PrSidebarData = {
   pushTarget: GitPushTarget | null
 }
 
+// PR numbers repeat across repos (forks, relinks), so details and checks belong to repo + number.
+export function prSidebarReviewKey(pr: PRInfo): string {
+  return `${pr.prRepo ? githubRepoIdentityKey(pr.prRepo) : ''}#${pr.number}`
+}
+
 // Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
 export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
-  | { kind: 'ready'; data: PrSidebarData }
-  | { kind: 'none' }
+  // refreshFailed: a current PR read failed while this accepted result stayed on screen.
+  | { kind: 'ready'; data: PrSidebarData; refreshFailed?: true }
+  | { kind: 'none'; refreshFailed?: true }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 
@@ -53,9 +66,7 @@ export type PrSidebarLoadDeps = {
   fetchForBranch: (
     worktreeId: string,
     args: { branch: string; linkedGitHubPR?: number | null }
-  ) => Promise<
-    GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
-  >
+  ) => Promise<GitHubPrReadOutcome<HostedReviewInfo | null>>
   // Resolve persisted links in parallel so closed/merged PRs add no serial read.
   fetchWorktreeGitHubPRLink: (worktreeId: string) => Promise<WorktreeGitHubPRLink>
   clearWorktreeReviewLink: (
@@ -69,11 +80,12 @@ export type PrSidebarLoadDeps = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       currentHeadOid?: string | null
+      refresh?: boolean
     }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
     worktreeId: string,
-    args: { prNumber: number }
+    args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
   ) => Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>>
   fetchPRChecks: (
     worktreeId: string,
@@ -120,6 +132,7 @@ export async function loadPrSidebarData(
     branch: string
     headSha?: string | null
     prRepo?: GitHubPrRepoSlug | null
+    refresh?: boolean
   }
 ): Promise<PrSidebarState> {
   try {
@@ -137,7 +150,8 @@ export async function loadPrSidebarData(
         branch: args.branch,
         linkedPRNumber,
         fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
-        currentHeadOid: requestHeadOid
+        currentHeadOid: requestHeadOid,
+        ...(args.refresh ? { refresh: true } : {})
       })
     let linkedPR = link.linkedPR
     let prOutcome = await fetchPR(linkedPR)
@@ -210,11 +224,23 @@ export async function loadPrSidebarData(
 export async function loadPrSidebarDetails(
   deps: PrSidebarLoadDeps,
   worktreeId: string,
-  prNumber: number
+  pr: PRInfo,
+  /** The user's explicit Refresh; every other load (recovery, polls, demand) is an ordinary read. */
+  refresh = false
 ): Promise<GitHubWorkItemDetails | null> {
   try {
-    const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
-    return outcome.ok ? outcome.result : null
+    const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
+    if (!target) {
+      return null
+    }
+    const outcome = await deps.fetchWorkItemDetails(worktreeId, {
+      prNumber: pr.number,
+      prRepo: target.repository,
+      refresh
+    })
+    return outcome.ok && matchesGitHubWorkItemTarget(outcome.result?.item, target)
+      ? outcome.result
+      : null
   } catch {
     // Details failure leaves the PR usable without comments.
     return null
@@ -227,10 +253,16 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
   prior: GitHubWorkItemDetails | null
   pr: PRInfo
 }): GitHubWorkItemDetails {
-  if (args.fetched != null) {
+  const target = resolveGitHubWorkItemTarget({ ...args.pr, type: 'pr' })
+  if (target && args.fetched != null && matchesGitHubWorkItemTarget(args.fetched.item, target)) {
     return args.fetched
   }
-  if (args.prior != null) {
+  if (
+    target &&
+    args.prior != null &&
+    !isPrSidebarDetailsPlaceholder(args.prior) &&
+    matchesGitHubWorkItemTarget(args.prior.item, target)
+  ) {
     return args.prior
   }
   return emptyPrSidebarDetails(args.pr)
@@ -272,4 +304,9 @@ export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kin
 
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
   return resultSeq === latestSeq
+}
+
+export function prSidebarResourceKey(pr: PRInfo): string {
+  const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
+  return target ? githubWorkItemTargetKey(target) : pr.url
 }

@@ -3,15 +3,15 @@ import { Gauge, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
 } from '../../../../shared/gitlab-types'
-import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
-import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 

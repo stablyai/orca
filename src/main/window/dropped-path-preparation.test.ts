@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session/agent-session-attachments'
 import { runProcess } from '@orca/process-host'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'

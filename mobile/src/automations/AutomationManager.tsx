@@ -1,21 +1,21 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { describeLoadError } from '../components/load-error-description'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automation-owner-precondition'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { RpcClient } from '../transport/rpc-client'
-import { AutomationButton, AutomationChoice } from './AutomationControls'
+import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditor } from './AutomationEditor'
+import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNavigation'
 import { AutomationRunList } from './AutomationRunList'
 import { AutomationRunDetails } from './AutomationRunDetails'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
@@ -41,11 +41,18 @@ export function AutomationManager(props: {
   client: RpcClient | null
   hostId: string
   executionHost?: ExecutionHostId
+  /** Opens on a new automation's editor, shown once the catalog loads; read on mount only. */
+  startInEditor?: boolean
+  /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
+  renderHeader?: (tabs: ReactNode) => ReactNode
+  /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
+  leaveGuard?: AutomationLeaveSlot
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const catalog = useAutomationCatalog(props.client, !!props.executionHost)
-  const [view, setView] = useState<AutomationView>({ kind: 'list' })
+  const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
+  const [view, setView] = useState<AutomationView>(startView)
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
   const [filter, setFilter] = useState<AutomationRunScope>(null)
   const filterId = filter?.automationId ?? ''
@@ -96,14 +103,16 @@ export function AutomationManager(props: {
       })
     }
   }
-  function allAutomations() {
-    setTab('automations')
+  function showList(next: 'automations' | 'runs') {
+    setTab(next)
     setView({ kind: 'list' })
+  }
+  function allAutomations() {
+    showList('automations')
   }
   function allRuns(automationId = '') {
     selectFilter(automationId)
-    setTab('runs')
-    setView({ kind: 'list' })
+    showList('runs')
   }
   function toggle(selected: MobileAutomationRow, enabled: boolean) {
     void catalog.perform(
@@ -236,26 +245,21 @@ export function AutomationManager(props: {
       }
     )
   }
+  const tabs = (
+    <AutomationTabs
+      selected={tab}
+      onSelect={(next) => leaveThrough(props.leaveGuard, () => showList(next))}
+      disabled={catalog.busy}
+    />
+  )
   return (
     <>
+      {props.renderHeader ? props.renderHeader(tabs) : tabs}
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <MobileSegmentedControl
-          fill
-          segments={[
-            { value: 'automations', label: t('automations.mobile.automations', 'Automations') },
-            { value: 'runs', label: t('automations.mobile.runs', 'Runs') }
-          ]}
-          selected={tab}
-          onSelect={(next) => {
-            setTab(next)
-            setView({ kind: 'list' })
-          }}
-          disabled={catalog.busy}
-        />
         {!catalog.connected ? (
           <Text style={styles.meta}>
             {t(
@@ -276,13 +280,14 @@ export function AutomationManager(props: {
             />
           </View>
         ) : null}
-        {view.kind === 'editor' && props.client ? (
+        {view.kind === 'editor' && props.client && catalog.loaded ? (
           <AutomationEditor
             key={view.row?.automation.id ?? 'create'}
             client={props.client}
             current={view.row?.automation}
             initialDraft={view.initialDraft}
             onDraftChange={createAttempt.observeDraft}
+            leaveGuard={props.leaveGuard}
             capabilities={catalog.capabilities}
             busy={catalog.busy}
             connected={catalog.connected}
@@ -325,10 +330,7 @@ export function AutomationManager(props: {
             executionHost={props.executionHost}
             connected={catalog.connected}
             history={history}
-            onBack={() => {
-              setTab('runs')
-              setView({ kind: 'list' })
-            }}
+            onBack={() => showList('runs')}
           />
         ) : null}
         {view.kind === 'list' && tab === 'automations' ? (
@@ -383,7 +385,7 @@ export function AutomationManager(props: {
           </View>
         ) : null}
       </ScrollView>
-      <SetupHookTrustDrawer {...setupConsent.drawer} />
+      <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
         title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}

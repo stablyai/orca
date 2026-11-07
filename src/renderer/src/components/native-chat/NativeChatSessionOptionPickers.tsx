@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,7 +18,7 @@ import {
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason
-} from '../../../../shared/native-chat-session-option-labels'
+} from '../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
@@ -103,9 +103,12 @@ function PickerTrigger(props: {
             className="max-w-64"
             onKeyDown={props.onKeyDown}
           >
-            <span className="truncate text-chat-foreground">{props.modelLabel}</span>
-            {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
-            <ChevronDown className="size-3" />
+            <span data-composer-label className="flex min-w-0 items-center gap-1">
+              <span className="truncate text-chat-foreground">{props.modelLabel}</span>
+              {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
+              <ChevronDown className="size-3" />
+            </span>
+            <SlidersHorizontal data-composer-compact-icon className="hidden size-3.5" />
           </Button>
         </PopoverTrigger>
       </TooltipTrigger>
@@ -318,9 +321,9 @@ function NativeChatSessionOptionPickersInner({
     return null
   }
   const model = withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
-  const options = sortNativeChatSessionOptions(snapshot).map((descriptor) =>
-    withPendingValue(descriptor, pending.get(descriptor.id) ?? null)
-  )
+  const options = sortNativeChatSessionOptions(snapshot)
+    .filter((descriptor) => descriptor.id !== 'interactionMode')
+    .map((descriptor) => withPendingValue(descriptor, pending.get(descriptor.id) ?? null))
 
   const markPending = (id: string) => (pick: PendingPick | null) => {
     setPending((current) => {

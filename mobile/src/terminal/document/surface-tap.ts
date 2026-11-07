@@ -7,11 +7,11 @@ import {
 } from './mouse-input-encoding'
 import { oscLinkAtViewportPoint } from './osc-link-tap'
 import { viewportToCell } from './viewport-cell'
-import type { ParsedFileLinkLocation } from '../../../../src/shared/file-link-location'
+import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
 import {
   findTerminalFileLinksAtBufferPosition,
   findTerminalHttpLinkAtBufferPosition
-} from '../../../../src/shared/terminal-link-buffer-hit-testing'
+} from '../../../../src/shared/terminal/links/terminal-link-buffer-hit-testing'
 
 export function notifyTerminalSurfaceTap(
   scope: TerminalDocumentScope,

@@ -17,6 +17,7 @@ import {
   GLEAM_PLUGIN_KEY
 } from './helpers/plugin-gleam-catalog-fixture'
 import { editorTokenClasses } from './helpers/plugin-smoke'
+import { pluginGuest, ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
 
 async function openPluginPage(
   app: ElectronApplication,
@@ -44,7 +45,11 @@ test('Try it opens a blank highlighted file and a new drawing', async ({}, testI
   test.setTimeout(180_000)
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-try-it-e2e-'))
   const fixture = await createGleamCatalogFixture(root)
-  const session = createRestartSession(testInfo, fixture.gitEnvironment)
+  // Its own launch, so the isolated-frames switch rides the session env, not test.use.
+  const session = createRestartSession(testInfo, {
+    ...fixture.gitEnvironment,
+    ...ISOLATED_FRAMES_E2E.orcaAppExtraEnv
+  })
   let launched: Awaited<ReturnType<typeof session.launch>> | null = null
   try {
     launched = await session.launch()
@@ -94,7 +99,7 @@ test('Try it opens a blank highlighted file and a new drawing', async ({}, testI
     await expect(
       page.locator('[data-tab-id]').filter({ hasText: 'untitled.excalidraw' })
     ).toBeVisible()
-    await expect(page.locator('iframe[title="Excalidraw"]')).toBeVisible({ timeout: 15_000 })
+    await expect(pluginGuest(page, 'Excalidraw')).toBeVisible({ timeout: 15_000 })
   } finally {
     if (launched) {
       await session.close(launched.app)

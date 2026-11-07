@@ -5,8 +5,8 @@ import { queuedEditPublicationKey } from '../../../../shared/queued-message-edit
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedCardOnScreen,
   queuedEditChangedNotice,

@@ -1,11 +1,11 @@
 import type { AppState } from './types'
-import type { HostRoute } from '../runtime/runtime-client-target'
+import type { HostRoute } from '../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
-} from '../runtime/runtime-environment-revision'
+} from '../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isRemovedRuntimeHostId } from './slices/stale-runtime-host-rows'
 import {
   getEnvironmentSshStateGeneration,
@@ -13,7 +13,7 @@ import {
 } from './slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from './slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
-import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../runtime/rpc/targets/runtime-client-target'
 
 /** Fence by pairing/runtime incarnation and SSH target generation, not unrelated catalog/connection churn. */
 export type HostIdentityFence = {
@@ -45,20 +45,29 @@ export function captureHostIdentityFence(route: HostRoute): HostIdentityFence {
   }
 }
 
+/** The same machine, across reconnects: only a re-pair to a different machine changes it. */
+export function isHostIdentityContinued(fence: HostIdentityFence): boolean {
+  const { route } = fence
+  if (route.target.kind !== 'environment') {
+    return true
+  }
+  const { environmentId } = route.target
+  // Why continuity: a re-pair proven to be the same machine keeps the identity.
+  return (
+    resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) ===
+    getRuntimeEnvironmentRevision(environmentId)
+  )
+}
+
 export function isHostIdentityFenceCurrent(fence: HostIdentityFence): boolean {
   const { route } = fence
-  if (route.target.kind === 'environment') {
-    const { environmentId } = route.target
-    // Why continuity: a re-pair proven to be the same machine keeps the identity.
-    if (
-      resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) !==
-        getRuntimeEnvironmentRevision(environmentId) ||
-      getRuntimeEnvironmentConnectionGeneration(environmentId) !== fence.runtimeConnectionGeneration
-    ) {
-      return false
-    }
-  }
-  return sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  return (
+    isHostIdentityContinued(fence) &&
+    (route.target.kind !== 'environment' ||
+      getRuntimeEnvironmentConnectionGeneration(route.target.environmentId) ===
+        fence.runtimeConnectionGeneration) &&
+    sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  )
 }
 
 export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces'

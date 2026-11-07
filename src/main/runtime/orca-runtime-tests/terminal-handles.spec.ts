@@ -3,13 +3,13 @@ import {
   dropFromHostInventory,
   registerBoundPty,
   registerLivePty
-} from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
-import type {
-  RuntimeClientEvent,
-  RuntimeSyncWindowGraph,
-  RuntimeTerminalCreate
-} from '../orca-runtime-test-mocks.spec'
+} from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -18,7 +18,7 @@ import {
   createRuntime,
   createRuntimeWithSshLease,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('lists live terminals and issues stable handles for synced leaves', async () => {
@@ -396,7 +396,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 
@@ -577,7 +578,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 

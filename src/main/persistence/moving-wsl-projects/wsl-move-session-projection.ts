@@ -1,11 +1,11 @@
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
+import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
   worktreeIdForPaneKey
-} from '../../../shared/workspace-session-host-records'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-host-records'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { isRecord, parseEditorFileId } from './wsl-move-canonical-form'
 import { WORKSPACE_SESSION_DISPOSITIONS } from '../../../shared/wsl-move/wsl-move-dispositions'
 import { UI_STATE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-move-ui-dispositions'

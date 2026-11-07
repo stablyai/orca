@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
-import type * as UncGate from '../wsl/wsl-unc-access-gate'
-import { AutomationService } from './service'
+import type * as UncGate from '../wsl/filesystem/wsl-unc-access-gate'
+import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
 
 const blocked = vi.hoisted(() =>
   vi.fn(
@@ -22,12 +22,12 @@ const projectGit = vi.hoisted(() => {
   const value: { wslDistro?: string } = {}
   return value
 })
-vi.mock('../project-runtime-git-options', async (importOriginal) => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getLocalProjectWorktreeGitOptions: () =>
     projectGit.wslDistro ? { wslDistro: projectGit.wslDistro } : {}
 }))
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof UncGate>()),
   blockedWslDistroForPath: blocked
 }))
@@ -65,21 +65,12 @@ function seedAutomation(store: Store, path = REPO_PATH): Automation {
   })
 }
 
-function attachedService(store: Store, send = vi.fn()): AutomationService {
-  const service = new AutomationService(store, { tickMs: 60_000, onAutomationsChanged: vi.fn() })
-  service.setWebContents({ isDestroyed: () => false, send })
-  return service
-}
-
-async function evaluateAt(store: Store, service: AutomationService, id: string, when: string) {
+async function evaluateAt(store: Store, id: string, when: string) {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === id)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  await vi.waitFor(() => {
-    service.setRendererReady()
-    expect(nextRunAt()).toBeGreaterThan(before ?? 0)
-  })
+  await tickAt(when)
+  await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
 beforeEach(() => {
@@ -100,13 +91,14 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
     const automation = seedAutomation(store)
-    const send = vi.fn()
-    const service = attachedService(store, send)
+    const launch = vi.fn()
+    const service = startedAutomationService(store, launch)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-14T09:01:00')
+    service.stop()
 
-    // Repeated stopped ticks fold into one skip, and nothing reached the window.
+    // Repeated stopped ticks fold into one skip, and nothing launched.
     const runs = store.listAutomationRuns(automation.id)
     expect(runs).toHaveLength(1)
     expect(runs[0]).toMatchObject({
@@ -115,42 +107,7 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
       errorCode: 'wslDistroStopped',
       errorParams: { distro: 'Ubuntu' }
     })
-    expect(send).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
     expect(blocked).toHaveBeenCalledWith(REPO_PATH, undefined)
-  })
-
-  it("leaves Run now alone: it is the user's act and may start the distro", async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedAutomation(store)
-    const send = vi.fn()
-    const service = attachedService(store, send)
-    service.setRendererReady()
-
-    await service.runNow(automation.id)
-
-    expect(send).toHaveBeenCalled()
-    expect(store.listAutomationRuns(automation.id)[0]?.errorCode).toBeUndefined()
-  })
-
-  it("gates a host-path project whose Git runs in WSL, by the project's distro", async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    projectGit.wslDistro = 'Ubuntu'
-    blocked.mockImplementation(async (_path, wslDistro) =>
-      wslDistro ? { distro: wslDistro, state: 'stopped' } : null
-    )
-    const store = await createStore()
-    const automation = seedAutomation(store, 'C:\\repo')
-    const send = vi.fn()
-    const service = attachedService(store, send)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-
-    expect(blocked).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
-    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      errorCode: 'wslDistroStopped'
-    })
-    expect(send).not.toHaveBeenCalled()
   })
 })

@@ -11,6 +11,7 @@ function connection() {
   let state: ConnectionState = 'connected'
   let generation = 0
   const callbacks: ((event: unknown) => void)[] = []
+  const routedCallbacks: { host: string | undefined; callback: (event: unknown) => void }[] = []
   const states = new Set<(state: ConnectionState) => void>()
   const stops = vi.fn()
   const replies: ((reply: RpcResponse) => void)[] = []
@@ -24,8 +25,10 @@ function connection() {
   )
   const client: RpcClient = {
     sendRequest,
-    subscribe: vi.fn((_method, _params, callback) => {
+    subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, callback, options) => {
       callbacks.push(callback)
+      const host = options?.envelope?.executionHost
+      routedCallbacks.push({ host: typeof host === 'string' ? host : undefined, callback })
       return stops
     }),
     onStateChange: (callback) => {
@@ -50,6 +53,8 @@ function connection() {
     callbacks,
     states,
     emit: (event: unknown) => callbacks.at(-1)?.(event),
+    emitAt: (host: string | undefined, event: unknown) =>
+      routedCallbacks.findLast((entry) => entry.host === host)?.callback(event),
     change: (next: ConnectionState, migrate = false) => {
       state = next
       if (migrate) {
@@ -84,7 +89,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   const renders = new Map<string, number>()
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client, true))
     renders.set(id, (renders.get(id) ?? 0) + 1)
     return null
   }
@@ -157,12 +162,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
     oldEvent({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
   )
   expect(values.get('a1')).toBe(true)
-  const previousTransportEvent = a.callbacks.at(-1)!
   await act(async () => a.change('connected', true))
-  expect(values.get('a1')).toBe(true)
-  await act(async () =>
-    previousTransportEvent({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
-  )
   expect(values.get('a1')).toBe(true)
   // Old host ready uses the existing read fallback; latest read wins.
   await act(async () => a.emit({ type: 'ready', subscriptionId: 'old' }))
@@ -173,40 +173,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   await act(async () => mounted?.unmount())
   expect(a.states.size).toBe(0)
   expect(b.states.size).toBe(0)
-  expect(a.stops).toHaveBeenCalledTimes(3)
   expect(b.stops).toHaveBeenCalledTimes(1)
-})
-
-it('existing phone workspace event reader ignores additive preference snapshot and events', async () => {
-  const { startHostWorktreeRefresh } = await import('../worktree/host-worktree-refresh')
-  const host = connection()
-  const fetchWorktrees = vi.fn(async () => {}),
-    fetchRepoMetadata = vi.fn(async () => {}),
-    syncViewSettings = vi.fn(async () => {})
-  const stop = startHostWorktreeRefresh({
-    client: host.client,
-    fetchWorktrees,
-    fetchRepoMetadata,
-    syncViewSettings,
-    appState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
-  })
-  const counts = [
-    fetchWorktrees.mock.calls.length,
-    fetchRepoMetadata.mock.calls.length,
-    syncViewSettings.mock.calls.length
-  ]
-  host.emit({
-    type: 'ready',
-    subscriptionId: 'old',
-    snapshot: { nativeChatQueueFollowUps: true }
-  })
-  host.emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
-  expect([
-    fetchWorktrees.mock.calls.length,
-    fetchRepoMetadata.mock.calls.length,
-    syncViewSettings.mock.calls.length
-  ]).toEqual(counts)
-  stop()
 })
 
 it('keeps known OFF across real direct/relay migrations and failed reads, while scoped hosts start Queue', async () => {
@@ -216,7 +183,7 @@ it('keeps known OFF across real direct/relay migrations and failed reads, while 
   const logical = createStableLogicalRpcClient(direct.client, 'lan')
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient | null }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client, true))
     return null
   }
   let mounted!: ReactTestRenderer

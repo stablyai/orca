@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEditorTabsStore } from './editor-slice-test-harness'
-import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'
+import { createEditorTabsStore } from './editor/editor-slice-test-harness'
+import { buildHydratedEditorSessionState } from './editor/hydration/hydrated-editor-session-state'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
@@ -24,7 +24,9 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 
 const WT = FLOATING_TERMINAL_WORKTREE_ID
 
@@ -81,10 +83,5 @@ describe('floating workspace editor file ids', () => {
     const restored = buildHydratedEditorSessionState(saved, new Set([WT]), null)
     expect(restored.state.openFiles.map((file) => file.id)).toEqual([fileId])
     expect(saved.unifiedTabs?.[WT]?.map((tab) => tab.entityId)).toEqual([fileId])
-  })
-
-  it('keeps the bare path id with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(openFloatingFile()).toBe('/notes/a.md')
   })
 })

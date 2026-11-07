@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { createStructuredSessionSelectionController } from '../../../src/shared/structured-agent-session-selection-operations'
+import { createStructuredSessionSelectionController } from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import { persistMobileStructuredOptionPicks } from './native-chat/input/mobile-native-chat-session-option-persistence'
 import type { RpcClient } from '../transport/rpc-client'
 

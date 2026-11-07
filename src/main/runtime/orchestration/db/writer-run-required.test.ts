@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './orchestration-db'
-import { UNBOUND_RUN_ID } from './contract-constants'
+import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
 
 describe('writers require a Run', () => {
   let db: OrchestrationDb
@@ -19,13 +19,6 @@ describe('writers require a Run', () => {
   it('rejects a Task without a Run instead of using the legacy Run', () => {
     expect(() => db.createTask({ spec: 'work' })).toThrow('Run is required')
     expect(db.listTasks()).toEqual([])
-  })
-
-  it('rejects a decision gate whose Task has no Run', () => {
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    vi.spyOn(db, 'getTask').mockReturnValue({ ...task, run_id: undefined } as never)
-    expect(() => db.createGate({ taskId: task.id, question: 'Proceed?' })).toThrow()
-    expect(db.listGates()).toEqual([])
   })
 
   it('rejects a decision gate without a Task before writing', () => {

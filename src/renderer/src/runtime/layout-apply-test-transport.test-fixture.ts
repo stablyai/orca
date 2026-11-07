@@ -9,7 +9,7 @@
 // and, for frames, `@/runtime/runtime-layout-client` with `runtimeLayoutClientWithTestFrames`.
 // Imports stay clear of the RPC client at runtime: a mock factory must not reach what it replaces.
 
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type {
   LayoutApplyReply,
@@ -35,7 +35,7 @@ import {
   observeLayoutFrameApply
 } from './workspace-layout-frame-apply-observer'
 import type * as LayoutClient from './runtime-layout-client'
-import type * as RpcClient from './runtime-rpc-client'
+import type * as RpcClient from './rpc/calls/runtime-rpc-call'
 
 type Refusal = Extract<LayoutApplyReply, { ok: false }>['code']
 

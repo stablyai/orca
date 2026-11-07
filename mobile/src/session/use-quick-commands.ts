@@ -4,14 +4,15 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { quickCommandsRead } from './mobile-session-read-operations'
 import { quickCommandsWrite } from './mobile-session-write-operations'
+import '../terminal/quick-commands'
 import {
   applyTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,
   type TerminalQuickCommandMutation
-} from '../terminal/quick-commands'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 
 type Args = {
   client: RpcClient | null

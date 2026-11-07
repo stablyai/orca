@@ -1,3 +1,4 @@
+import { classifyPRRefreshError } from '../../pr-refresh-error-classification'
 import { ghExecFileAsync } from '../../gh-utils'
 import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
@@ -8,8 +9,8 @@ import {
 } from './../gh-error-predicates'
 import {
   PR_LOOKUP_JSON_FIELDS,
-  mapRestPullRequest,
   normalizePullRequestLookupData,
+  mapRestPullRequest,
   type PullRequestLookupData,
   type PullRequestLookupPolicy,
   type RestPullRequest
@@ -18,6 +19,7 @@ import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
 import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
@@ -61,22 +63,59 @@ export async function getPRByNumber(
   options: { includeStackSummary?: boolean } = {}
 ): Promise<PullRequestLookupData | null> {
   try {
-    const sidebarData =
-      options.includeStackSummary && knownPullRequestData === undefined
-        ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
-        : undefined
+    let sidebarData: Awaited<ReturnType<typeof readPullRequestSidebarQuery>>
+    try {
+      sidebarData =
+        options.includeStackSummary || knownPullRequestData !== undefined
+          ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
+          : undefined
+    } catch (error) {
+      if (
+        !knownPullRequestData ||
+        ['repo_unavailable', 'permission', 'rate_limited', 'auth'].includes(
+          classifyPRRefreshError(error)
+        )
+      ) {
+        throw error
+      }
+      // Optional combined reads retain the exact metadata recovery path.
+      sidebarData = undefined
+    }
     if (sidebarData === null) {
       return null
     }
     if (sidebarData) {
       const { stack, ...prData } = sidebarData
+      const known = knownPullRequestData
+      const sameIdentity =
+        known &&
+        known.number === number &&
+        sameOwnerRepo(ownerRepoFromPullRequestUrl(known.url), ownerRepo) &&
+        known.headRepositoryOwner?.login?.toLowerCase() ===
+          prData.headRepositoryOwner?.login?.toLowerCase() &&
+        known.headRepository?.name?.toLowerCase() === prData.headRepository?.name?.toLowerCase()
+      const compatibleStack =
+        sameIdentity &&
+        known.headRefOid === prData.headRefOid &&
+        known.baseRefOid === prData.baseRefOid &&
+        stack &&
+        known.stack?.number === stack.number &&
+        known.stack.position === stack.position &&
+        known.stack.baseRefName === stack.baseRefName
+          ? { ...known.stack, ...stack }
+          : stack
       const hydrated = await hydratePullRequestLookupData(
         ownerRepo,
-        prData,
+        {
+          ...prData,
+          ...(sameIdentity && known.headDefaultBranchName
+            ? { headDefaultBranchName: known.headDefaultBranchName }
+            : {})
+        },
         ghOptions,
         executionScope
       )
-      return { ...hydrated, ...(stack ? { stack } : {}) }
+      return { ...hydrated, ...(compatibleStack ? { stack: compatibleStack } : {}) }
     }
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(
@@ -97,6 +136,7 @@ export async function getPRByNumber(
       {
         ...knownPullRequestData,
         ...exactData,
+        checksUnavailable: true,
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
@@ -113,7 +153,12 @@ export async function getPRByNumber(
           ? await getRestPRByNumber(ownerRepo, number, ghOptions)
           : knownPullRequestData
       return restData
-        ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions, executionScope)
+        ? hydratePullRequestLookupData(
+            ownerRepo,
+            { ...restData, checksUnavailable: true },
+            ghOptions,
+            executionScope
+          )
         : null
     } catch (restErr) {
       if (isNotFoundGhError(restErr)) {
@@ -169,10 +214,21 @@ export async function lookupPRByNumber(args: {
       ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
     )
-    const lookup = {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
-      dataRepo: null
-    }
+    const parsedData: PullRequestLookupData = JSON.parse(stdout)
+    const repository = ownerRepoFromPullRequestUrl(parsedData.url)
+    const data = repository
+      ? await hydratePullRequestLookupData(
+          repository,
+          { ...parsedData, checksUnavailable: true },
+          args.ghOptions,
+          args.executionScope
+        )
+      : {
+          ...normalizePullRequestLookupData(parsedData),
+          statusCheckRollup: [],
+          checksUnavailable: true
+        }
+    const lookup = { data, dataRepo: null }
     return !args.policy || (await args.policy.accepts(lookup.data, null))
       ? lookup
       : { data: null, dataRepo: null }

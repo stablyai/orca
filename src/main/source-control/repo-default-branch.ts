@@ -1,5 +1,9 @@
-import { resolveDefaultBaseRefViaExec } from '../git/repo'
-import { resolveRemoteHeadBranchViaExec, type GitExec } from '../../shared/git-default-base-ref'
+import {
+  resolveDefaultBaseRefViaExec,
+  resolveRemoteHeadBranchViaExec,
+  type GitExec
+} from '../../shared/git/refs/git-default-base-ref'
+
 import { gitExecFileAsync } from '../git/runner'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewRepoScope, scopeGeneration } from './hosted-review-scope-generations'

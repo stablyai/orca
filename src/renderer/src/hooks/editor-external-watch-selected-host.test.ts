@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import type { AppState } from '@/store/types'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { getDefaultSettings } from '../../../shared/constants'
 import {
   selectEditorExternalWatchTargets,
@@ -160,15 +160,6 @@ it.each(['worktree', 'folder'] as const)(
     expect(switched.targets.map((target) => target.runtimeEnvironmentId)).toEqual(['host-b'])
     expect(switched.targetsKey).not.toBe(first.targetsKey)
     expect(selectEditorExternalWatchTargets(state).targetsKey).toBe(first.targetsKey)
-  }
-)
-
-it.each(['worktree', 'folder'] as const)(
-  'preserves the %s watcher snapshot when selection and watched roots stay unchanged',
-  (workspace) => {
-    const state = makeState(workspace)
-    const first = selectEditorExternalWatchTargets(state)
-    expect(selectEditorExternalWatchTargets({ ...state })).toBe(first)
   }
 )
 

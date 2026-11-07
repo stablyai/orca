@@ -2,15 +2,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
   GetRateLimitResult,
   GitHubRateLimitSnapshot
 } from '../../../../shared/github/rate-limit-types'
-import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
-import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 const REFRESH_INTERVAL_MS = 60_000

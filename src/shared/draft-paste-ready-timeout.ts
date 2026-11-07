@@ -1,5 +1,5 @@
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 
 const DEFAULT_DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 

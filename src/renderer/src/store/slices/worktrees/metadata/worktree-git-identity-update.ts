@@ -1,9 +1,8 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { type WorktreeSlice, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { branchName } from '@/lib/git-utils'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
 import {

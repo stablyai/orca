@@ -1,6 +1,7 @@
 import { nativeChatQueueFollowUpsRead } from '../transport/settings-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
-import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
+import { subscribeSharedClientEvents } from '../transport/shared-client-events'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 
 const projections = new WeakMap<RpcClient, MobileNativeChatFollowUpPreference>()
 
@@ -17,7 +18,7 @@ export function mobileNativeChatFollowUpPreference(
 }
 
 class MobileNativeChatFollowUpPreference {
-  private value = nativeChatQueueFollowUps(null)
+  private value: boolean | null = null
   private readonly listeners = new Set<() => void>()
   private stopState?: () => void
   private stopStream?: () => void
@@ -26,7 +27,8 @@ class MobileNativeChatFollowUpPreference {
 
   constructor(private readonly client: RpcClient) {}
 
-  getSnapshot = (): boolean => this.value
+  getSnapshot = (): boolean => this.value ?? nativeChatQueueFollowUps(null)
+  getReportedSnapshot = (): boolean | null => this.value
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -47,7 +49,7 @@ class MobileNativeChatFollowUpPreference {
     }
   }
 
-  private publish(value: boolean): void {
+  private publish(value: boolean | null): void {
     if (value !== this.value) {
       this.value = value
       for (const listener of this.listeners) {
@@ -79,19 +81,22 @@ class MobileNativeChatFollowUpPreference {
           }
         })
         .catch(() => {
-          // Keep this host's last answer until a ready snapshot repairs the gap.
+          // Keep this host's last answer until a change event, or the next connection's ready, repairs it.
         })
     }
     read()
-    this.stopStream = this.client.subscribe('runtime.clientEvents.subscribe', null, (payload) => {
-      if (!current() || !payload || typeof payload !== 'object') {
+    this.stopStream = subscribeSharedClientEvents(this.client, (event) => {
+      if (!current()) {
         return
       }
-      const event: { type?: unknown; queueFollowUps?: unknown; snapshot?: unknown } = payload
       let queueFollowUps: unknown
       if (event.type === 'nativeChatQueueFollowUpsChanged') {
         queueFollowUps = event.queueFollowUps
       } else if (event.type === 'ready') {
+        if ('joined' in event) {
+          // The stream was live before this connect's read went out, so that read already covers it.
+          return
+        }
         const snapshot = event.snapshot
         if (snapshot && typeof snapshot === 'object' && 'nativeChatQueueFollowUps' in snapshot) {
           queueFollowUps = snapshot.nativeChatQueueFollowUps

@@ -1,15 +1,18 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
-import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
-import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
-import type { MarkdownRenderState } from './markdown-render-mode'
-import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import {
+  extractFrontMatter,
+  prependFrontMatter
+} from './markdown/source-scanning/markdown-frontmatter'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown/render-mode/markdown-rich-size-limit'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
+import { RichMarkdownErrorBoundary } from './rich-markdown/instance/RichMarkdownErrorBoundary'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 
@@ -111,6 +114,7 @@ export function EditorMarkdownFileSurface({
               worktreeId={activeFile.worktreeId}
               externalSshTargetId={activeFile.externalSshTargetId}
               runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+              operationProvenance={activeFile.operationProvenance}
               scrollCacheKey={`${editorViewStateKey}:rich`}
               onContentChange={onContentChange}
               onDirtyStateHint={handleDirtyStateHint}
@@ -154,6 +158,7 @@ export function EditorMarkdownFileSurface({
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${editorViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}

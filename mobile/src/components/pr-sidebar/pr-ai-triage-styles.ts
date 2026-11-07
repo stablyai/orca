@@ -6,46 +6,6 @@ export const prAiTriageStyles = themedStyleSheet(() => ({
   triageArea: {
     gap: spacing.xs
   },
-  // Match desktop failure-tinted triage strip: count summary and Fix action.
-  triageStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusRed,
-    backgroundColor: colors.diffDeletedBg
-  },
-  triageStripText: {
-    flex: 1,
-    minWidth: 0
-  },
-  triageStripTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  triageStripSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  triageStripButton: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.control,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  triageStripButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
   triageButton: {
     minHeight: 36,
     flexDirection: 'row',

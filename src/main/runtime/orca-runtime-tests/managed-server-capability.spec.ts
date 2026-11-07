@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createRuntime } from '../orca-runtime-test-fixtures.spec'
+import { createRuntime } from './orca-runtime-test-fixtures.spec'
 import {
   registerManagedServerActions,
   type ManagedServerActions
@@ -20,7 +20,8 @@ describe('managed server capability', () => {
       recover: unusedAction,
       stop: unusedAction,
       cancelStop: unusedAction,
-      forget: unusedAction
+      forget: unusedAction,
+      forgetRedundant: unusedAction
     }
     registerManagedServerActions(actions)
     try {

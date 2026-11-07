@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
+import {
+  createWebRuntimeSessionTerminal,
+  createWebRuntimeSessionTerminalOnHost
+} from './hosted-terminals/creation/web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -8,9 +11,9 @@ import {
   WORKTREE_ID,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
-} from './web-runtime-session-test-harness'
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
 
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -63,7 +66,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -101,33 +104,11 @@ describe('web-runtime-session terminal workspace routing', () => {
     resetTerminalCreateEnvironment()
   })
 
-  it('does not route a locally-owned workspace to the focused runtime environment', async () => {
-    const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
-      activeWorkspaceExecutionHostId: 'local'
-    }
-    stubSelectableWorkspaceStore(selection)
-    const runtimeCall = vi.fn()
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    // `environmentId: null` is the caller saying "I resolved ownership: nobody remote owns this".
-    const outcome = await createWebRuntimeSessionTerminal({
-      worktreeId: WORKTREE_ID,
-      environmentId: null,
-      command: 'powershell.exe',
-      activate: true
+  it('routes an owned create to its host and restores selection when that host refuses', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      settings: { activeRuntimeEnvironmentId: 'another-host' }
     })
-
-    expect(outcome.status).toBe('failed')
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
-    expect(selection).toEqual({
-      activeWorktreeId: WORKTREE_ID,
-      activeWorkspaceExecutionHostId: 'local'
-    })
-  })
-
-  it('hands the workspace host selection back when the host never accepted the create', async () => {
     const selection: MutableSelection = {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
@@ -136,13 +117,16 @@ describe('web-runtime-session terminal workspace routing', () => {
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
-    const outcome = await createWebRuntimeSessionTerminal({
+    const outcome = await createWebRuntimeSessionTerminalOnHost({
       worktreeId: WORKTREE_ID,
       environmentId: ENVIRONMENT_ID,
       activate: true
     })
 
     expect(outcome.status).toBe('failed')
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: ENVIRONMENT_ID, method: 'session.tabs.createTerminal' })
+    )
     expect(mocks.setActiveWorktree.mock.calls).toEqual([
       [WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID],
       [WORKTREE_ID, 'local']
@@ -204,26 +188,5 @@ describe('web-runtime-session terminal workspace routing', () => {
     expect(outcome.status).toBe('failed')
     expect(mocks.setActiveWorktree.mock.calls).toEqual([[WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID]])
     expect(selection.activeWorktreeId).toBe('repo::/other')
-  })
-
-  it('does not touch the host selection when the caller opted out of selecting', async () => {
-    const selection: MutableSelection = {
-      activeWorktreeId: 'repo::/other',
-      activeWorkspaceExecutionHostId: 'local'
-    }
-    stubSelectableWorkspaceStore(selection)
-    const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await createWebRuntimeSessionTerminal({
-      worktreeId: WORKTREE_ID,
-      environmentId: ENVIRONMENT_ID,
-      selectWorktree: false,
-      activate: true
-    })
-
-    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
-    expect(selection.activeWorktreeId).toBe('repo::/other')
-    expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })

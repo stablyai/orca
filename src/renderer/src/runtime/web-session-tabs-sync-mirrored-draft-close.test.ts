@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 
 const closeWebRuntimeSessionTabMock = vi.fn(async (_args: unknown) => 'applied' as const)
 
@@ -12,7 +12,7 @@ vi.mock('./web-runtime-session-tab-lifecycle', () => ({
 
 import { useAppStore } from '../store'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
-import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -20,7 +20,7 @@ import {
   WT,
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const notesPath = '/repo/NOTES.md'
 const clientDraft = '# unsaved client edits'

@@ -1,4 +1,4 @@
-import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavailable'
 
 // Only probes establish chat unavailability; live listings cannot replace that verdict.

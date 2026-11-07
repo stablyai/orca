@@ -1,21 +1,22 @@
 import { verifyWorkerStartCardScenario } from './worker-start-card-scenario.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
-import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../../../shared/agent-session-journal-types'
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
@@ -212,7 +213,7 @@ it.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation((message) => {
       if (
         scenario === 'logging-throws' &&
-        message === '[orchestration] recording a started worker in its caller chat failed'
+        message === '[orchestration] recording a started agent in its caller chat failed'
       ) {
         throw new Error('logger failed')
       }
@@ -326,7 +327,7 @@ it.each([
     ) {
       await eventually(() =>
         expect(warn).toHaveBeenCalledWith(
-          '[orchestration] recording a started worker in its caller chat failed',
+          '[orchestration] recording a started agent in its caller chat failed',
           expect.any(Error)
         )
       )

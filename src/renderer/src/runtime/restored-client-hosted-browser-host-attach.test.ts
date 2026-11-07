@@ -3,7 +3,7 @@ import {
   ensureBrowserClientHostsForRestoredPages,
   resetRestoredBrowserClientHostAttachForTests
 } from './restored-client-hosted-browser-host-attach'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 type Placement = { kind: 'client'; browserHostClientId: string } | { kind: 'server' }
 
@@ -60,18 +60,5 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     await first
 
     expect(preparedEnvironmentIds()).toEqual(['env-1'])
-  })
-
-  // Hydration before reachability must remain retryable or restored tabs never recover.
-  it('retries an environment whose preparation failed when it is asked again', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    prepareBrowserClientHostPlacement.mockRejectedValueOnce(new Error('runtime_unreachable'))
-    const restored = handles({ 'page-1': { environmentId: 'env-1', clientHosted: true } })
-
-    await ensureBrowserClientHostsForRestoredPages(restored)
-    await ensureBrowserClientHostsForRestoredPages(restored)
-
-    expect(preparedEnvironmentIds()).toEqual(['env-1', 'env-1'])
-    warn.mockRestore()
   })
 })

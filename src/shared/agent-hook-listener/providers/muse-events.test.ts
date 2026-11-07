@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { normalizeAndAccept, PANE_KEY } from '../../agent-hook-listener-test-harness'
+import { normalizeAndAccept, PANE_KEY } from '../normalization/agent-hook-listener-test-harness'
 
 const SESSION_ID = '01a0caa3-0e77-7d41-bad7-46283a45633d'
 const TURN_ID = 'e495d1a5-59aa-47b4-8efb-a1bd75509afc'
@@ -141,59 +141,52 @@ describe('Muse hook events', () => {
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
   })
 
-  it('shows the approval card only once Muse notifies a permission prompt', () => {
-    const bash = { command: 'rm -rf build' }
+  // Muse 1.4.14 subagent_spawn trace: the child starts before the lead's Stop and ends long after it.
+  const SPAWNED_ID = '01a1afae-e716-7a93-8ecf-67cb69c7e7aa'
+  const spawned = { ...envelope, session_id: CHILD_ID, turn_id: CHILD_ID }
+  const leadStop = {
+    ...main,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'SPAWNED'
+  }
+
+  function holdLeadStopForSpawnedChild(): void {
     normalizeAndAccept(state, 'muse', {
       ...main,
-      hook_event_name: 'PreToolUse',
-      tool_name: 'bash',
-      tool_input: bash,
-      tool_use_id: 'call_1'
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go'
     })
+    normalizeAndAccept(state, 'muse', {
+      ...spawned,
+      hook_event_name: 'SubagentStart',
+      subagent_id: SPAWNED_ID,
+      child_session_id: CHILD_ID
+    })
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
+  }
+
+  it('holds the finished turn working until the spawned subagent stops', () => {
+    holdLeadStopForSpawnedChild()
     expect(
       normalizeAndAccept(state, 'muse', {
-        ...main,
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'bash',
-        tool_input: bash
+        ...spawned,
+        hook_event_name: 'SubagentStop',
+        subagent_id: SPAWNED_ID,
+        child_session_id: CHILD_ID
       })
     ).toBeNull()
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
-
-    const waiting = normalizeAndAccept(state, 'muse', {
-      ...main,
-      hook_event_name: 'Notification',
-      notification_type: 'permission_prompt',
-      title: 'ws — waiting for approval',
-      message: 'bash wants to run rm -rf build'
-    })
-    expect(waiting?.payload).toMatchObject({
-      agentType: 'muse',
-      state: 'waiting',
-      toolName: 'bash',
-      interactivePrompt: JSON.stringify({ approval: { tool: 'bash', summary: 'rm -rf build' } })
-    })
-
-    const approved = normalizeAndAccept(state, 'muse', {
-      ...main,
-      hook_event_name: 'PostToolUse',
-      tool_name: 'bash',
-      tool_input: bash,
-      tool_use_id: 'call_1'
-    })
-    expect(approved?.payload.state).toBe('working')
-    expect(approved?.payload.interactivePrompt).toBeUndefined()
+    // The transcript poll replays the held Stop.
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload.state).toBe('done')
   })
 
-  it('ignores Notification types other than permission_prompt', () => {
-    expect(
-      normalizeAndAccept(state, 'muse', {
-        ...main,
-        hook_event_name: 'Notification',
-        notification_type: 'idle_prompt',
-        message: 'Muse is waiting for your input'
-      })
-    ).toBeNull()
+  it('releases a held turn when the user interrupts Muse', () => {
+    holdLeadStopForSpawnedChild()
+    expect(normalizeAndAccept(state, 'muse', { ...main, hook_event_name: 'Interrupt' })).toBeNull()
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload.state).toBe('done')
   })
 
   it('reports a request_user_input question from the session log until it settles', () => {

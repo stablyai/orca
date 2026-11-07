@@ -1,9 +1,11 @@
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusReason
-} from '../../../shared/folder-workspace-path-status'
-import { blocksFolderWorkspaceActivation } from '../../../shared/folder-workspace-path-status'
+
+import {
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusReason,
+  blocksFolderWorkspaceActivation
+} from '../../../shared/folder-workspaces/folder-workspace-path-status'
 import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 
 // Guard unknown RPC reasons at runtime; union-keyed records make newly known reasons fail typecheck here and in both switches.
@@ -171,6 +173,11 @@ export function humanizeFolderWorkspacePathError(message: string): string {
     : message
 }
 
+// Why: a moved or deleted folder is the user's to fix, so it gets actionable copy, not an issue link.
+export function humanizeFolderWorkspacePathErrors(error: string): string {
+  return error.split('\n').map(humanizeFolderWorkspacePathError).join('\n')
+}
+
 export function formatFolderWorkspaceCreateError(error: unknown): {
   title: string
   description: string
@@ -191,4 +198,18 @@ export function folderWorkspaceActivationBlocked(
   status: FolderWorkspacePathStatus | null | undefined
 ): boolean {
   return blocksFolderWorkspaceActivation(status)
+}
+
+export function notifyBlockedFolderWorkspacePath(
+  status: FolderWorkspacePathStatus | null | undefined,
+  folderPath: string
+): void {
+  toast.error(
+    getFolderWorkspacePathStatusTitle(status) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      ),
+    { description: getFolderWorkspacePathStatusDescription(status) ?? folderPath }
+  )
 }

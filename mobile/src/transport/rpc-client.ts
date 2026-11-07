@@ -18,6 +18,7 @@ type StreamingListener = (result: unknown) => void
 
 // Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
 export type RpcClient = UnvalidatedRpcRequestPort & {
+  requestRoute?: (params: unknown) => { client: RpcClient; intermediary?: RpcClient }
   subscribe: (
     method: string,
     params: unknown,
@@ -39,6 +40,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getPendingPath?: () => MobileConnectionPath | null
   getRelayHostReachability?: () => RelayHostReachability
   onConnectionPathChange?: (listener: () => void) => () => void
+  // A page's client: the status its shell's gate already proved, so the page need not ask again.
+  getShellHostStatus?: () => unknown
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void

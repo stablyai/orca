@@ -6,9 +6,7 @@ import { TooltipProvider } from '../ui/tooltip'
 import { ActivityBarButton } from '../right-sidebar/activity-bar-buttons'
 import { ACTIVE_TAB_INDICATOR_CLASSES, getTabRootStateClasses } from './drop-indicator'
 
-interface ThemeVariables extends CSSProperties {
-  [key: `--${string}`]: string
-}
+type ThemeVariables = CSSProperties & Record<`--${string}`, string>
 
 const palette: ThemeVariables = {
   '--radius': '0.625rem',
@@ -110,7 +108,9 @@ export const selected = defineFixture({
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     )
     const scope = frame.querySelector('[data-selection-fixture]')
-    if (!(scope instanceof HTMLElement)) throw new Error('Missing selection fixture')
+    if (!(scope instanceof HTMLElement)) {
+      throw new Error('Missing selection fixture')
+    }
     const probe = document.createElement('span')
     scope.append(probe)
     const token = (name: string) => {
@@ -120,14 +120,18 @@ export const selected = defineFixture({
     const marker = scope.querySelector('[data-tab-marker]')
     const tool = scope.querySelector('button[aria-label="Files"]')
     const card = scope.querySelector('[data-worktree-card-active="primary"]')
-    if (!marker || getComputedStyle(marker).backgroundColor !== token('--tab-active-indicator'))
+    if (!marker || getComputedStyle(marker).backgroundColor !== token('--tab-active-indicator')) {
       throw new Error('Active tab marker must use its dedicated theme color')
+    }
     probe.style.color = 'color-mix(in srgb, var(--sidebar-ring) 20%, var(--sidebar-foreground))'
-    if (!tool || getComputedStyle(tool).color !== getComputedStyle(probe).color)
+    if (!tool || getComputedStyle(tool).color !== getComputedStyle(probe).color) {
       throw new Error('Active tool icon must blend theme accent with sidebar foreground')
+    }
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('Missing color probe context')
+    if (!context) {
+      throw new Error('Missing color probe context')
+    }
     const color = (value: string): readonly [number, number, number, number] => {
       context.fillStyle = value
       context.fillRect(0, 0, 1, 1)
@@ -138,13 +142,16 @@ export const selected = defineFixture({
     for (const button of scope.querySelectorAll('button[aria-pressed="true"]')) {
       const icon = getComputedStyle(button).color
       const indicator = button.querySelector('div')
-      if (contrastRatio(color(icon), surface) < 3)
+      if (contrastRatio(color(icon), surface) < 3) {
         throw new Error('Active tool icon must have at least 3:1 sidebar contrast')
-      if (!indicator || getComputedStyle(indicator).backgroundColor !== icon)
+      }
+      if (!indicator || getComputedStyle(indicator).backgroundColor !== icon) {
         throw new Error('Both tool layouts must share the accessible selection color')
+      }
     }
-    if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-active'))
+    if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-active')) {
       throw new Error('Current worktree must use its dedicated theme fill')
+    }
     probe.remove()
   }
 })
@@ -153,9 +160,12 @@ export const builtIn = defineFixture({
   ...selected,
   interact: async (frame) => {
     const scope = frame.querySelector('[data-selection-fixture]')
-    if (!(scope instanceof HTMLElement)) throw new Error('Missing selection fixture')
-    for (const token of ['--sidebar', '--sidebar-foreground', '--sidebar-ring'])
+    if (!(scope instanceof HTMLElement)) {
+      throw new Error('Missing selection fixture')
+    }
+    for (const token of ['--sidebar', '--sidebar-foreground', '--sidebar-ring']) {
       scope.style.removeProperty(token)
+    }
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await Promise.all(scope.getAnimations({ subtree: true }).map((animation) => animation.finished))
     await selected.interact?.(frame)

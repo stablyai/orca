@@ -1,20 +1,23 @@
-import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { OrchestrationDb } from './orchestration/db'
+import { creatorFirstParent, crewTaskDisplay } from './orchestration/crew/crew-rules'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import type { OrchestrationCompatibilityTerminalAuthority } from './orchestration/terminal-authority/orchestration-compatibility-authority'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   buildWorkerAttentionContext,
   projectWorkerAttentionContext
-} from './orchestration/worker-attention-context'
+} from './orchestration/workers/reports/worker-attention-context'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
-import type { AgentSessionRecordReader } from './orchestration/structured-session-lineage'
+import type { AgentSessionRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
 import { isRecentPresentationDispatch } from './orchestration/db/dispatch-context/dispatch-lookup'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
-import type { DispatchContextRow } from './orchestration/types'
+import type { DispatchContextRow } from './orchestration/db/orchestration-records'
 import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 export type RuntimeAgentOrchestrationDependencies = {
@@ -166,14 +169,7 @@ export class RuntimeAgentOrchestrationProjection {
   ): AgentStatusOrchestrationContext {
     const { paneKey, evidence, deferAttention = false } = options
     const task = scope.task(dispatch.task_id, dispatch.run_id)
-    const display =
-      typeof task?.spec === 'string'
-        ? buildOrchestrationTaskDisplayMetadata({
-            spec: task.spec,
-            taskTitle: task.task_title,
-            displayName: task.display_name
-          })
-        : { taskTitle: '', displayName: '' }
+    const display = crewTaskDisplay(task)
     const owningRun =
       task?.run_id && task.run_id === dispatch.run_id ? scope.run(dispatch.run_id) : undefined
     const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
@@ -266,15 +262,15 @@ export class RuntimeAgentOrchestrationProjection {
         coordinator.paneKey === paneKey)
     // Why: a creator whose pane is gone still has a coordinator to nest under.
     const parent =
-      (creator?.handle || (creatorSession && creator?.paneKey)) &&
-      (!selfPane || creator?.paneKey !== selfPane) &&
-      creator?.handle !== handle
-        ? creator
-        : coordinatorIsSelf
-          ? {}
-          : coordinator.paneKey === selfPane
-            ? {}
-            : coordinator
+      creatorFirstParent(
+        (creator?.handle || (creatorSession && creator?.paneKey)) &&
+          (!selfPane || creator?.paneKey !== selfPane) &&
+          creator?.handle !== handle
+          ? creator
+          : undefined,
+        coordinator,
+        coordinatorIsSelf || coordinator.paneKey === selfPane
+      ) ?? {}
     const attention =
       !deferAttention && db && typeof db.getWorkerAttentionFacts === 'function'
         ? buildWorkerAttentionContext({ db, dispatch, task, evidence, now: scope.now })

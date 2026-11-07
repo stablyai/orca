@@ -6,13 +6,13 @@
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../shared/orchestration-ask-timeout'
 import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {
   hashCanonical,
   readPromptBasePayloadHash,
   replayStableCallerParams
 } from '../../runtime/rpc/orchestration-mutation-receipt'
-import { getCompiledSchema } from '../../zod-schema-compilation'
+import { getCompiledSchema } from '../../schema-validation/zod-schema-compilation'
 import type { LegacyRelayCliCall } from './legacy-relay-cli-caller'
 
 /** Enough for a coordinator and its workers' waits; past it a host is flooding this desktop. */

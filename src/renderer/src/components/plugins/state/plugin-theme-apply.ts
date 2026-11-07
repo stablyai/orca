@@ -8,8 +8,13 @@ import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-set
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
-} from '../../../../../shared/terminal-color-overrides'
+} from '../../../../../shared/terminal-themes/terminal-color-overrides'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
+import { BUILTIN_TERMINAL_THEME_NAMES } from '@/lib/terminal-theme'
+import {
+  disambiguatedPluginContentLabels,
+  type PluginContentLabelItem
+} from '../presentation/plugin-name-disambiguation'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { usePluginIconThemeStore } from '@/store/plugin-icon-themes'
@@ -80,6 +85,33 @@ export function terminalThemeUpdate(
   )
 }
 
+/** The name the theme's picker shows it by, so the toast names the same one. */
+function shownLabel(
+  theme: { id: string; label: string },
+  pickerThemes: readonly PluginContentLabelItem[],
+  builtInLabels: readonly string[] = []
+): string {
+  return disambiguatedPluginContentLabels(pickerThemes, builtInLabels).get(theme.id) ?? theme.label
+}
+
+/** Puts one just-installed app theme in its mode's slot, as picking it there would. */
+export async function applyPluginAppThemeToSlot(
+  pluginKey: string,
+  pick: Pick<PluginThemeRegistration, 'base' | 'label'>
+): Promise<boolean> {
+  const own = (await usePluginThemeStore.getState().fetchEntries()).filter(
+    (candidate) => candidate.pluginKey === pluginKey && candidate.base === pick.base
+  )
+  // Why the lone fallback: a catalog preview's label is display text and may differ from the title.
+  const theme =
+    own.find((candidate) => candidate.label === pick.label) ?? (own.length === 1 ? own[0] : null)
+  if (!theme) {
+    return false
+  }
+  await useAppStore.getState().updateSettings(pluginAppThemeSlotUpdate(pick.base, theme.id))
+  return true
+}
+
 /**
  * Applies a plugin's themes right after the user installs or enables it, so the change is
  * visible at once, and offers one click back. Only for clicks; never updates or startup.
@@ -146,7 +178,16 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
   }
   await updateSettings(next)
   const shown = appSlots.find((theme) => (theme.base === 'dark') === dark)
-  const label = (shown ?? icon ?? terminalPicks[0])?.label ?? ''
+  const label = shown
+    ? shownLabel(
+        shown,
+        apps.filter((theme) => theme.base === shown.base)
+      )
+    : icon
+      ? shownLabel(icon, icons)
+      : terminalPicks[0]
+        ? shownLabel(terminalPicks[0], terminals, BUILTIN_TERMINAL_THEME_NAMES)
+        : ''
   toast.success(
     translate('auto.components.settings.pluginThemeApply.nowUsing', 'Now using {{value0}}', {
       value0: label

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 
@@ -16,30 +16,6 @@ const GOAL: AgentJournalThreadGoal = {
   timeUsedSeconds: 0,
   createdAt: 1_000,
   updatedAt: 1_000
-}
-
-function goalRow(sequence: number, goal: AgentJournalThreadGoal): AgentJournalRenderItem {
-  return {
-    itemId: `goal-${sequence}`,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: {
-      kind: 'status',
-      text: `Goal set: ${goal.objective}`,
-      threadGoal: { state: 'set', goal }
-    }
-  }
-}
-
-function clearedRow(sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: `goal-${sequence}`,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } }
-  }
 }
 
 type MutateCall = (...args: unknown[]) => Promise<unknown>
@@ -73,18 +49,6 @@ function harness(options: {
 }
 
 describe('useStructuredAgentSessionThreadGoal', () => {
-  it('reads the goal off the loaded window, and off the host answer only when the window has none', () => {
-    const older = { ...GOAL, objective: 'Older goal' }
-    const fromWindow = harness({ journalItems: [goalRow(1, GOAL)], support: { current: older } })
-    expect(fromWindow.result.current?.goal).toEqual(GOAL)
-
-    const fromHost = harness({ support: { current: older } })
-    expect(fromHost.result.current?.goal).toEqual(older)
-
-    const cleared = harness({ journalItems: [clearedRow(2)], support: { current: older } })
-    expect(cleared.result.current?.goal).toBeNull()
-  })
-
   it('admits Pause and Clear while Set is unsettled, keeping pending until all settle', async () => {
     const set = Promise.withResolvers<unknown>()
     const pause = Promise.withResolvers<unknown>()

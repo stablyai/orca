@@ -1,9 +1,9 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle,

@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   terminalLinkClickBehaviorFor,
   type TerminalLinkClickBehavior
-} from '@/components/terminal-pane/terminal-link-click-behavior'
+} from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 
 /** Preserve direct link opens for profiles that disabled terminal popovers before click actions existed. */
 export function nativeChatPlainLinkClickBehavior(

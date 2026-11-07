@@ -308,13 +308,6 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
-    "kind": "jsx-expression",
-    "text": "..HEAD",
-    "dynamic": true,
-    "count": 1
-  },
-  {
     "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitHub",
@@ -581,14 +574,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "filePath": "mobile/src/transport/web-bundle/mobile-web-bundle-reply-schemas.ts",
     "kind": "object-property:message",
     "text": "assets sum to more than the contract total",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "filePath": "mobile/src/transport/web-bundle/mobile-web-bundle-reply-schemas.ts",
     "kind": "object-property:message",
     "text": "buildId must be the content hash of the asset list",
     "dynamic": false,

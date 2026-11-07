@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  OrcaRuntimeService
-} from '../orca-runtime-test-mocks.spec'
-import { store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import './runtime-test-module-registration.spec'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../terminal/output/provider-snapshot-budget'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('terminal side-effect fact channel', () => {
   it('emits 2031-subscribe facts across chunk splits', () => {

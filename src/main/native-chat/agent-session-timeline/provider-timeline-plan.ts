@@ -1,11 +1,11 @@
 // Resolve rows on the write lane; advance state/text bookkeeping only after admission so refusal is retryable.
 
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/structured-agent-session-transition'
+} from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>

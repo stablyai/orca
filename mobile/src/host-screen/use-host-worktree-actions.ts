@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
-import { triggerError, triggerSuccess } from '../platform/haptics'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/host-client-hooks'
@@ -16,20 +15,17 @@ import {
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import type { ConnectionState } from '../transport/types'
 import { leaveHostRoute } from '../host-route-exit'
-import {
-  getWorktreeRowIdentity,
-  isSameWorktreeRow,
-  removeWorktreeRow
-} from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity, isSameWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { noteLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
 import {
   worktreeActivate,
+  worktreeDisplayNameWrite,
   worktreePinWrite,
-  worktreeRemove,
   worktreeSleep
 } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
+import { useHostWorktreeDelete } from './use-host-worktree-delete'
 
 export function useHostWorktreeActions(args: {
   client: RpcClient | null
@@ -174,38 +170,25 @@ export function useHostWorktreeActions(args: {
     [client, setSleptIds]
   )
 
-  const handleDeleteWorktree = useCallback(
-    async (item: Worktree) => {
+  // Written at the row's owner, as desktop does; empty text returns the label to automatic.
+  const renameWorktree = useCallback(
+    async (item: Worktree, displayName: string) => {
       const rowClient = clientForRow(item)
       if (!rowClient) {
-        return
+        throw new Error('Not connected: worktree.set')
       }
-
-      const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
-      setWorktrees(removeFromList)
-      setLastKnownWorktrees(removeFromList)
-
-      try {
-        const reply = await worktreeRemove.request(rowClient, {
+      worktreeDisplayNameWrite.interpret(
+        await worktreeDisplayNameWrite.request(rowClient, {
           worktree: `id:${item.worktreeId}`,
-          force: true
+          displayName
         })
-        if (worktreeRemove.interpret(reply).accepted) {
-          triggerSuccess()
-        } else {
-          triggerError()
-          setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
-        }
-        void fetchWorktrees()
-      } catch {
-        triggerError()
-        setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
-      }
+      )
+      void fetchWorktrees()
     },
     [clientForRow, fetchWorktrees]
   )
+
+  const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -304,7 +287,7 @@ export function useHostWorktreeActions(args: {
   }, [hostId, navigateFromHostList])
 
   return {
-    handleDeleteWorktree,
+    ...worktreeDelete,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
@@ -313,6 +296,7 @@ export function useHostWorktreeActions(args: {
     closeNewWorktreeModal,
     openWorktreeSession,
     putWorktreeToSleep,
+    renameWorktree,
     togglePin
   }
 }

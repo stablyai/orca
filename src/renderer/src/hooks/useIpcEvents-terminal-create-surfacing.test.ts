@@ -1,6 +1,6 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-harness'
 
 describe('useIpcEvents updater integration', () => {

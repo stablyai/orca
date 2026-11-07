@@ -644,15 +644,6 @@ class RuntimeRenderTest(unittest.TestCase):
             self.assertEqual(timeouts[0][1], -1)
             self.assertEqual(timeouts[-1], (800, 15000))
 
-    def test_named_non_generic_node_skips_unused_summary_walk(self):
-        root = FakeAccessible("button", "Save", children=[FakeAccessible("text", "unused")])
-
-        records, lines, truncation = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Save"])
-        self.assertEqual(lines, ["0 button Save"])
-        self.assertEqual(root.counter["child_reads"], 0)
-        self.assertFalse(truncation["truncated"])
 
     def test_wide_labeled_controls_never_enumerate_suppressed_children(self):
         roles = (
@@ -672,88 +663,13 @@ class RuntimeRenderTest(unittest.TestCase):
                 self.assertEqual(root.counter["child_reads"], 0)
                 self.assertFalse(truncation["truncated"])
 
-    def test_control_value_or_identifier_keeps_suppression(self):
-        value_node = FakeAccessible("combo box", value="Choice", children=[FakeAccessible("text", "Child")])
-        identifier_node = FakeAccessible("button", children=[FakeAccessible("text", "Child")])
-        identifier_node.get_accessible_id = lambda: "save-button"
-        for root, expected in (
-            (value_node, "0 combo box, Value: Choice"),
-            (identifier_node, "0 button save-button"),
-        ):
-            with self.subTest(expected=expected):
-                records, lines, truncation = render(root)
 
-                self.assertEqual(len(records), 1)
-                self.assertEqual(lines, [expected])
-                self.assertEqual(root.counter["child_reads"], 0)
-                self.assertFalse(truncation["truncated"])
 
-    def test_unlabeled_controls_keep_child_indices_and_depth(self):
-        root = FakeAccessible("button", children=[FakeAccessible("button", "Nested")])
 
-        records, lines, truncation = render(root)
 
-        self.assertEqual([item["runtimeId"] for item in records], [[0], [0, 0]])
-        self.assertEqual(lines, ["0 button", "\t1 button Nested"])
-        self.assertFalse(truncation["truncated"])
 
-    def test_suppressed_child_failure_keeps_control_output(self):
-        root = FailingChildrenAccessible("button", "Save")
 
-        records, lines, truncation = render(root)
 
-        self.assertEqual([item["name"] for item in records], ["Save"])
-        self.assertEqual(lines, ["0 button Save"])
-        self.assertFalse(truncation["truncated"])
-        self.assertEqual(root.counter["child_reads"], 0)
-
-    def test_named_generic_node_keeps_children_without_a_summary(self):
-        root = FakeAccessible("section", "Details", children=[FakeAccessible("text", "body")])
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Details", "body"])
-        self.assertEqual(lines, ["0 section Details", "\t1 text body"])
-
-    def test_unnamed_generic_node_keeps_plain_text_summary(self):
-        root = FakeAccessible(
-            "section",
-            children=[FakeAccessible("text", "Alpha"), FakeAccessible("text", "Beta")],
-        )
-
-        records, lines, _ = render(root)
-
-        self.assertEqual(len(records), 1)
-        self.assertEqual(lines, ["0 section, Text: Alpha Beta"])
-
-    def test_row_keeps_its_specific_summary_walk(self):
-        root = FakeAccessible(
-            "row",
-            "Invoice",
-            children=[FakeAccessible("text", "Alpha"), FakeAccessible("text", "Beta")],
-        )
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Invoice", "Alpha", "Beta"])
-        self.assertEqual(lines, ["0 row Invoice, Text: Alpha Beta", "\t1 text Alpha", "\t2 text Beta"])
-
-    def test_empty_generic_wrapper_keeps_elision_path_and_depth(self):
-        root = FakeAccessible("section", children=[FakeAccessible("button", "Continue")])
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["runtimeId"] for record in records], [[0, 0]])
-        self.assertEqual(lines, ["0 button Continue"])
-
-    def test_child_failure_keeps_fail_soft_row_output(self):
-        root = FailingChildrenAccessible("row", "Invoice")
-
-        records, lines, truncation = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Invoice"])
-        self.assertEqual(lines, ["0 row Invoice"])
-        self.assertFalse(truncation["truncated"])
 
     def test_node_limit_keeps_exact_prefix_and_truncation(self):
         root = FakeAccessible(

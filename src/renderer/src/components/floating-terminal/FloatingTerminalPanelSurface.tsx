@@ -2,7 +2,7 @@ import TabBar from '@/components/tab-bar/TabBar'
 import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
 import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
-import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
+import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { FloatingTerminalEmptyState } from './FloatingTerminalEmptyState'
@@ -181,6 +181,12 @@ export function renderFloatingTerminalPanelSurface({
                   tabStripChrome="floating-panel"
                 />
               </div>
+              {/* Keep a grab area even when the tab strip overflows. */}
+              <div
+                className="h-full w-16 shrink-0 select-none"
+                data-floating-terminal-drag-handle
+                aria-hidden
+              />
               <FloatingTerminalWindowControls
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}

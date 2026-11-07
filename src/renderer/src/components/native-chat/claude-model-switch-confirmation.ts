@@ -1,10 +1,10 @@
-import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
+import { subscribeToPtyData } from '../terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat-paste-bytes'
+import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
+import { subscribeToRuntimeTerminalData } from '@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'
+import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
-import type { ClaudeModelSwitchOutcome } from '../../../../shared/native-chat-session-option-dispatch'
+import type { ClaudeModelSwitchOutcome } from '../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 
 const DETECTION_TIMEOUT_MS = 5_000
 const MAX_OBSERVED_BYTES = 64 * 1024

@@ -9,10 +9,10 @@ import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-f
 import { translate } from '@/i18n/i18n'
 import {
   createPendingProviderSnapshot,
-  hasUsageData,
   hasUsageProviderSettingsForProvider,
   isProviderConfigured
 } from './status-bar-provider-visibility'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
@@ -48,7 +48,8 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   minimax: 'minimax',
   grok: 'grok',
   cursor: 'cursor',
-  zcode: 'zcode'
+  zcode: 'zcode',
+  muse: 'muse'
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.
@@ -93,7 +94,8 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
     claudeTarget: partial.claudeTarget ?? { runtime: 'host', wslDistro: null },
     codexTarget: partial.codexTarget ?? { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: partial.inactiveClaudeAccounts ?? [],
-    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? []
+    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? [],
+    antigravityAccounts: partial.antigravityAccounts ?? []
   }
 }
 
@@ -126,7 +128,8 @@ const NOT_SET_UP_NEEDS_REASON: ReadonlySet<UsageProviderKey> = new Set([
   'minimax',
   'zcode',
   'cursor',
-  'antigravity'
+  'antigravity',
+  'muse'
 ])
 
 /** Null may mean an unfinished or skipped fetch; only positive absence can establish missing host setup. */

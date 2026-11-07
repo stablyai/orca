@@ -1,5 +1,10 @@
 import { AutomationDraftReview } from './AutomationDraftReview'
-import { AutomationEditorHeader, AutomationEditorNavigation } from './AutomationEditorNavigation'
+import {
+  AutomationEditorHeader,
+  AutomationEditorNavigation,
+  useAutomationLeaveGuard,
+  type AutomationLeaveSlot
+} from './AutomationEditorNavigation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
@@ -7,7 +12,7 @@ import { useAutomationTargetDrafts } from './use-automation-target-drafts'
 import { Text, View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileAutomation } from './automation-reply-schema'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import type { MobileNewTabAgentOption } from '../session/mobile-new-tab-agent-options'
 import { AutomationAdvancedFields } from './AutomationAdvancedFields'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
@@ -36,12 +41,14 @@ export function AutomationEditor(props: {
   connected: boolean
   capabilities: readonly string[]
   onCancel: () => void
+  leaveGuard?: AutomationLeaveSlot
   onSave: (draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const [draft, setDraft] = useState(() => props.initialDraft ?? newAutomationDraft(props.current))
   const original = useRef(newAutomationDraft(props.current))
+  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard)
   const selectTargetDraft = useAutomationTargetDrafts()
   const initialized = useRef(false)
   const [targets, setTargets] = useState<AutomationTargets | null>(null)
@@ -124,9 +131,10 @@ export function AutomationEditor(props: {
           return
         }
         setAgents(options)
-        setDraft((current) =>
-          current.agentId ? current : { ...current, agentId: options[0]?.agent ?? null }
-        )
+        const agentId = options[0]?.agent ?? null
+        // The default agent is part of the untouched form, not an edit to ask about.
+        original.current.agentId ??= agentId
+        setDraft((current) => (current.agentId ? current : { ...current, agentId }))
       })
       .catch((failure: unknown) => {
         if (active && generation === props.client.getGeneration?.()) {
@@ -148,12 +156,15 @@ export function AutomationEditor(props: {
     props.onDraftChange(draft)
   }, [draft, props.onDraftChange])
 
-  const agentOptions = agents.map((option) => ({ value: option.agent, label: option.label }))
+  const agentOptions: { value: string; label: string }[] = agents.map((option) => ({
+    value: option.agent,
+    label: option.label
+  }))
   if (draft.agentId && !agentOptions.some((option) => option.value === draft.agentId)) {
     agentOptions.unshift({
       value: draft.agentId,
       label: t('automations.mobile.savedAgent', '{{agent}} (saved)', {
-        agent: MOBILE_TUI_AGENT_LABELS[draft.agentId]
+        agent: mobileTuiAgentLabel(draft.agentId)
       })
     })
   }
@@ -200,7 +211,7 @@ export function AutomationEditor(props: {
         step={step}
         editing={!!props.current}
         busy={props.busy}
-        onCancel={props.onCancel}
+        onCancel={() => leave.guard(props.onCancel)}
       />
       {error || agentError ? (
         <View style={styles.stack}>
@@ -385,6 +396,7 @@ export function AutomationEditor(props: {
         onBack={() => setStep(step - 1)}
         onNext={next}
       />
+      {leave.confirm}
     </View>
   )
 }

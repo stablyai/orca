@@ -1,4 +1,4 @@
-import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
 
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [

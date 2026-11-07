@@ -1,5 +1,5 @@
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WslOrcadHostTarget } from '../wsl/wsl-orcad-host-target'
+import type { WslOrcadHostTarget } from '../wsl/orcad/wsl-orcad-host-target'
 import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
 import type { OrcadLaunchDetach } from '../managed-server/install/orcad-remote-launch'
 

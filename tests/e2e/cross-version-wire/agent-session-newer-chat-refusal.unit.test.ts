@@ -4,12 +4,14 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
@@ -17,8 +19,8 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/journal-open-failure'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open-failure'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

@@ -1,4 +1,4 @@
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { paneTerminalFact, type RuntimePtyRegistryView } from '../../runtime-leaf-record-projection'

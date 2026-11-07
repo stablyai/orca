@@ -1,3 +1,4 @@
+import { markRpcDeliveryUnknown } from '../../../transport/rpc-delivery-ambiguity'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import {
@@ -26,21 +27,34 @@ import { structuredSendResultFixture } from '../../structured-agent-send-result.
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
-import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { useMobileStructuredAgentOptions } from '../../use-mobile-structured-agent-options'
+import {
+  optionsClient,
+  recordingMutate,
+  accepted
+} from '../../use-mobile-structured-agent-options.test-fixture'
+import type { AgentSessionOptionResult } from '../../../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
+import { createElement, useState, type ComponentProps } from 'react'
+import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  MobileNativeChatComposer as NativeChatComposer,
+  MobileNativeChatDraftComposer
+} from './MobileNativeChatComposer'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
 }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
 }))
-import { createElement, type ComponentProps } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  MobileNativeChatComposer as NativeChatComposer,
-  MobileNativeChatDraftComposer
-} from './MobileNativeChatComposer'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -53,12 +67,18 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -83,6 +103,8 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   CornerDownRight: 'CornerDownRight',
   FileText: 'FileText',
+  Goal: 'Goal',
+  PencilRuler: 'PencilRuler',
   ListEnd: 'ListEnd',
   Mic: 'Mic',
   Package: 'Package',
@@ -93,10 +115,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../../../components/mounted-bottom-drawer', () => ({
+vi.mock('../../../components/bottom-drawer/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'BottomDrawer'
 }))
-vi.mock('../../../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../../../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 
@@ -141,9 +163,234 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
   const drawers = () => renderer!.root.findAll((node) => node.props.onHidden !== undefined)
 
-  it.each(['', 'See this'])(
-    'sends an ordinary image with %j text through the real RPC and clears its visible chip',
-    async (text) => {
+  it.each(['claude', 'codex'] as const)(
+    '%s picks native mode without sending its draft or attachments',
+    async (agent) => {
+      const snapshot: SessionOptionDescriptor[] = [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ]
+      let eligible = false
+      const reply = Promise.withResolvers<boolean>()
+      const setOption = vi.fn(() => reply.promise)
+      const onSend = vi.fn(async () => true)
+      const focus = vi.fn()
+      const onRemoveAttachment = vi.fn()
+      function Conversation() {
+        const [value, onChangeText] = useState('keep /pl tail')
+        return draw({
+          agent,
+          value,
+          onChangeText,
+          onSend,
+          structured: structured(),
+          sessionOptions: {
+            isWorking: false,
+            controller: {
+              snapshot,
+              optionSurface: {
+                admits: () => eligible,
+                getSnapshot: () => snapshot,
+                setOption: async () => ({ snapshot }),
+                invokeAction: async () => ({ snapshot }),
+                subscribe: () => () => {}
+              },
+              pendingId: null,
+              setOption,
+              invokeAction: async () => false,
+              recordCommand: () => {}
+            }
+          },
+          attachments: [
+            { id: 'kept-image', path: '/remote/kept.png', previewUri: 'file:///kept.png' }
+          ],
+          onRemoveAttachment
+        })
+      }
+      await act(async () => {
+        renderer = createWithQueryClient(createElement(Conversation), {
+          createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+        })
+      })
+      act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(field().props.value).toBe('keep /pl tail')
+      expect(setOption).not.toHaveBeenCalled()
+      expect(labelled('/plan')).not.toHaveLength(0)
+      eligible = true
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'plan')
+      expect(field().props.value).toBe('keep  tail')
+      expect(field().props.selection).toEqual({ start: 5, end: 5 })
+      expect(focus).toHaveBeenCalled()
+      act(() => field().props.onChangeText('later typing'))
+      focus.mockClear()
+      await act(async () => reply.resolve(false))
+      expect(field().props.value).toBe('later typing')
+      expect(focus).not.toHaveBeenCalled()
+      if (agent === 'codex') {
+        act(() => field().props.onChangeText('/def'))
+        act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+        await act(async () => labelled('/default')[0]!.props.onPress())
+        expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
+        expect(field().props.value).toBe('')
+      }
+      expect(onSend).not.toHaveBeenCalled()
+      expect(onRemoveAttachment).not.toHaveBeenCalled()
+    }
+  )
+
+  it('retries a held opposite pick after settlement and exits Plan without consuming the draft', async () => {
+    let mode: 'default' | 'plan' = 'default'
+    const client = optionsClient(async () => ({
+      models: [],
+      current: { interactionMode: mode, acceptedInputSources: { interactionMode: 'saved' } }
+    }))
+    const reply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const exitReply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { calls, mutate } = recordingMutate(async (index, fields) =>
+      index === 0
+        ? reply.promise
+        : index === 4
+          ? exitReply.promise
+          : accepted({ key: String(fields.key), value: String(fields.value) }, true)
+    )
+    let options: ReturnType<typeof useMobileStructuredAgentOptions> | undefined
+    const focus = vi.fn()
+    const onSend = vi.fn(async () => true)
+    function Conversation() {
+      const [value, onChangeText] = useState('keep /pl tail')
+      options = useMobileStructuredAgentOptions({
+        agent: 'codex',
+        client: client.client,
+        sessionId: 'phone-plan-pending',
+        enabled: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate,
+        hostSupport: CAPABLE
+      })
+      return draw({
+        agent: 'codex',
+        value,
+        onChangeText,
+        onSend,
+        structured: structured(),
+        sessionOptions: {
+          isWorking: false,
+          controller: {
+            snapshot: options.optionSnapshot,
+            optionSurface: options.optionSurface,
+            pendingId: options.pendingOptionId,
+            setOption: options.setStructuredOption,
+            invokeAction: options.invokeStructuredOption,
+            recordCommand: () => {}
+          }
+        },
+        attachments: [{ id: 'retained', path: '/remote/kept.png', previewUri: 'file:///kept.png' }]
+      })
+    }
+    await act(async () => {
+      renderer = createWithQueryClient(createElement(Conversation), {
+        createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+      })
+    })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(1)
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(true)
+    expect(labelled('Exit plan mode')[0]!.props.accessibilityState).toEqual({ disabled: true })
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    await act(async () => {
+      await options!.setStructuredOption('effort', 'high')
+    })
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    act(() => field().props.onChangeText('keep /def tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 9 } } }))
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep /def tail')
+    expect(calls).toHaveLength(2)
+    expect(labelled('/default')).not.toHaveLength(0)
+    mode = 'plan'
+    await act(async () =>
+      reply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'plan', options: { interactionMode: 'plan' } },
+          true
+        )
+      )
+    )
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      true
+    )
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(false)
+    mode = 'default'
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(3)
+    expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    mode = 'plan'
+    act(() => field().props.onChangeText('keep /pl tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(calls).toHaveLength(4)
+    act(() => field().props.onChangeText('keep /def tail'))
+    focus.mockClear()
+    act(() => labelled('Exit plan mode')[0]!.props.onPress())
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    expect(field().props.value).toBe('keep /def tail')
+    expect(focus).toHaveBeenCalled()
+    expect(calls).toHaveLength(5)
+    expect(calls[4]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    mode = 'default'
+    await act(async () =>
+      exitReply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'default', options: { interactionMode: 'default' } },
+          true
+        )
+      )
+    )
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    expect(field().props.value).toBe('keep /def tail')
+    expect(
+      renderer!.root.findAll((node) => node.props.source?.uri === 'file:///kept.png')
+    ).not.toHaveLength(0)
+    expect(focus).toHaveBeenCalled()
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['', 'accepted'],
+    ['See this', 'accepted'],
+    ['See this', 'unknown']
+  ] as const)(
+    'keeps an ordinary image with %j text after a real RPC %s result and clears its visible chip',
+    async (text, outcome) => {
       const scope = mobileNativeChatScopeKey('host', 'worktree', `image-rpc-${text}`)!
       resetMobileNativeChatDraftInputsForTests()
       setMobileNativeChatDraftText(scope, text)
@@ -152,11 +399,16 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         images: [{ id: 'photo', path: '/remote/photo.png', previewUri: 'file:///phone-photo.png' }]
       }))
       let publish: ((data: unknown) => void) | undefined
-      const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method) =>
-        method === 'agentSession.send'
-          ? mutationOk(structuredSendResultFixture('accepted'))
-          : ok({ models: [], current: {} })
-      )
+      let sessionView: ReturnType<typeof useMobileStructuredAgentSession> | undefined
+      const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method) => {
+        if (method === 'agentSession.send') {
+          if (outcome === 'unknown') {
+            throw markRpcDeliveryUnknown(new Error('connection lost'))
+          }
+          return mutationOk(structuredSendResultFixture('accepted'))
+        }
+        return ok({ models: [], current: {} })
+      })
       const client: RpcClient = {
         sendRequest,
         subscribe: (_m, _p, listener) => {
@@ -174,6 +426,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -183,6 +436,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           composerScopeKey: scope,
           onSendError: vi.fn()
         })
+        sessionView = session
         const drafts = useMobileNativeChatDrafts({
           hostId: 'host',
           worktreeId: 'worktree',
@@ -195,6 +449,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent: 'codex',
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         const image = useMobileNativeChatImageAttachments({
@@ -221,7 +476,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         })
       }
       await act(async () => {
-        renderer = create(createElement(Conversation))
+        renderer = createWithQueryClient(createElement(Conversation))
       })
       act(() => publish?.(snapshotEvent()))
       expect(labelled('Remove image')[0]).toBeDefined()
@@ -237,6 +492,16 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       })
       expect(readMobileNativeChatDraftInputs(scope).images).toEqual([])
       expect(labelled('Remove image')).toEqual([])
+      if (outcome === 'unknown') {
+        expect(sessionView!.session.messages).toHaveLength(1)
+        expect(sessionView!.session.messages[0]?.blocks).toEqual([
+          { type: 'text', text },
+          { type: 'image-ref', path: '/remote/photo.png' }
+        ])
+        expect(Object.values(sessionView!.imagePreviewsByMessageId)).toEqual([
+          ['file:///phone-photo.png']
+        ])
+      }
     }
   )
 
@@ -272,6 +537,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -293,6 +559,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent,
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         return createElement(MobileNativeChatDraftComposer, {
@@ -313,7 +580,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         })
       }
       await act(async () => {
-        renderer = create(createElement(Conversation))
+        renderer = createWithQueryClient(createElement(Conversation))
       })
       act(() => publish?.(snapshotEvent()))
       act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 3 } } }))
@@ -354,117 +621,6 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     }
   )
 
-  it('puts a picked skill at the start of the draft, highlighted, and deletes it as one unit', async () => {
-    const onChangeText = vi.fn()
-    const onSlashMenuDemand = vi.fn()
-    const catalog = structured({ onSlashMenuDemand })
-    await act(async () => {
-      renderer = create(draw({ value: '/re', onChangeText, structured: catalog }))
-    })
-    await act(async () =>
-      field().props.onSelectionChange({ nativeEvent: { selection: { end: 3 } } })
-    )
-    expect(catalog.onSlashMenuOpen).toHaveBeenCalled()
-    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(true)
-    await act(async () => labelled('/review-pr')[0]!.props.onPress())
-    expect(onChangeText).toHaveBeenLastCalledWith('/review-pr ')
-    expect(field().props.selection).toEqual({ start: 11, end: 11 })
-
-    await act(async () =>
-      renderer!.update(draw({ value: '/review-pr focus', onChangeText, structured: catalog }))
-    )
-    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(false)
-    const token = field().find((node) => node.props.children === '/review-pr')
-    expect(token.props.style).toMatchObject({ backgroundColor: expect.any(String) })
-    await act(async () => field().props.onChangeText('/review-pr focus on auth'))
-    expect(onChangeText).toHaveBeenLastCalledWith('/review-pr focus on auth')
-    await act(async () => field().props.onChangeText('/review-prfocus'))
-    expect(onChangeText).toHaveBeenLastCalledWith('focus')
-  })
-
-  it('opens the + sheet on a structured chat, and the photo library at once otherwise', async () => {
-    const onAttachImage = vi.fn()
-    await act(async () => {
-      renderer = create(draw({ onAttachImage, structured: structured() }))
-    })
-    await act(async () => labelled('Add to message')[0]!.props.onPress())
-    expect(onAttachImage).not.toHaveBeenCalled()
-    expect(drawers()).toHaveLength(1)
-
-    await act(async () => renderer!.update(draw({ onAttachImage, structured: null })))
-    await act(async () => labelled('Attach image')[0]!.props.onPress())
-    expect(onAttachImage).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    {
-      locale: 'en',
-      send: 'Send message',
-      queue: 'Queue',
-      steer: 'Steer',
-      queueHint: 'Runs after the current turn',
-      steerHint: 'Goes into what the agent is doing now'
-    },
-    {
-      locale: 'de',
-      send: 'Nachricht senden',
-      queue: 'Einreihen',
-      steer: 'Steuern',
-      queueHint: 'Läuft nach dem aktuellen Durchgang',
-      steerHint: 'Fließt in das ein, was der Agent gerade tut'
-    }
-  ] as const)(
-    'mid-turn Send shows what a tap does, and holding it offers the other way first-marked in $locale',
-    async (labels) => {
-      await activateMobileUiLocale(labels.locale)
-      const onSend = vi.fn().mockResolvedValue(true)
-      const choices = () =>
-        drawers()[0]!.findAll(
-          (node) => String(node.type) === 'Pressable' && node.props.onPress !== undefined
-        )
-      const text = (node: ReactTestInstance) =>
-        node
-          .findAll((child) => typeof child.props.children === 'string')
-          .map((child) => child.props.children)
-      await act(async () => {
-        renderer = create(
-          draw({ value: 'hi', onSend, sendFollowUp: { action: 'steer', offersChoice: true } })
-        )
-      })
-      const send = () => labelled(labels.steer)[0]!
-      expect(send().findAll((node) => String(node.type) === 'CornerDownRight')).toHaveLength(1)
-      await act(async () => send().props.onLongPress())
-      await act(async () => drawers()[0]!.props.onClose())
-      expect(onSend).not.toHaveBeenCalled()
-
-      await act(async () => send().props.onLongPress())
-      expect(choices().map(text)).toEqual([
-        [labels.steer, labels.steerHint],
-        [labels.queue, labels.queueHint]
-      ])
-      expect(choices().map((choice) => choice.props.accessibilityState?.checked)).toEqual([
-        true,
-        undefined
-      ])
-      await act(async () => choices()[1]!.props.onPress())
-      expect(onSend).toHaveBeenCalledExactlyOnceWith('hi', { alternate: true })
-      await act(async () => send().props.onLongPress())
-      await act(async () => choices()[0]!.props.onPress())
-      expect(onSend).toHaveBeenCalledTimes(2)
-      expect(onSend).toHaveBeenLastCalledWith('hi')
-
-      // A waiting command queues either way: the button says so, and a hold is a tap.
-      await act(async () =>
-        renderer!.update(
-          draw({ value: 'hi', onSend, sendFollowUp: { action: 'queue', offersChoice: false } })
-        )
-      )
-      expect(labelled(labels.queue)[0]!.props.onLongPress).toBeUndefined()
-      await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendFollowUp: null })))
-      expect(labelled(labels.send)[0]!.props.onLongPress).toBeUndefined()
-    }
-  )
-
   it('the hold choice and a tap reach the outgoing request through the real send path', async () => {
     const scope = mobileNativeChatScopeKey('host', 'worktree', 'hold-choice')!
     resetMobileNativeChatDraftInputsForTests()
@@ -499,6 +655,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     function Conversation() {
       const session = useMobileStructuredAgentSession({
         client,
+        pairedHostClient: client,
         sessionId: SESSION_ID,
         sourceIdentity: 'host',
         enabled: true,
@@ -520,6 +677,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         ...drafts,
         agent: 'claude',
         sendStructured: session.sendWithOutcome,
+        holdUnconfirmed: session.holdUnconfirmed,
         onSendError: vi.fn()
       })
       const image = useMobileNativeChatImageAttachments({
@@ -545,7 +703,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       })
     }
     await act(async () => {
-      renderer = create(createElement(Conversation))
+      renderer = createWithQueryClient(createElement(Conversation))
     })
     await act(async () =>
       publish?.({
@@ -560,7 +718,9 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
     const sends = () =>
       sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send').map(([, p]) => p)
-    const send = () => labelled('Queue')[0]!
+    const send = () => labelled('Send message')[0]!
+    // Like desktop, the arrow stays while the agent works; a hold is the only other way.
+    expect(send().findAll((node) => String(node.type) === 'ArrowUp')).toHaveLength(1)
     await act(async () => send().props.onLongPress())
     const steer = drawers()[0]!.findAll(
       (node) =>
@@ -583,31 +743,6 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     await act(async () => publish?.(batchEvent([compact])))
     expect(send().props.onLongPress).toBeUndefined()
   })
-
-  it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
-    const onSend = vi.fn().mockResolvedValue(true)
-    const file = { id: 'f1', name: 'spec.pdf', mime: 'application/pdf', byteLength: 10 }
-    await act(async () => {
-      renderer = create(
-        draw({
-          value: 'see attached',
-          onSend,
-          structured: structured({ files: [{ ...file, path: null }] })
-        })
-      )
-    })
-    expect(labelled('Send message')[0]!.props.disabled).toBe(true)
-    await act(async () => labelled('Send message')[0]!.props.onPress())
-    expect(onSend).not.toHaveBeenCalled()
-    await act(async () =>
-      renderer!.update(
-        draw({ onSend, structured: structured({ files: [{ ...file, path: '/s/spec.pdf' }] }) })
-      )
-    )
-    expect(labelled('Send message')[0]!.props.disabled).toBe(false)
-    await act(async () => labelled('Send message')[0]!.props.onPress())
-    expect(onSend).toHaveBeenCalledExactlyOnceWith('')
-  })
   it('forgets inline picked skill identity after its token is removed and retyped', async () => {
     const scope = 'removed-skill'
     updateMobileNativeChatDraftInputs(scope, () => ({
@@ -616,7 +751,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       skills: [{ name: 'review', path: '/remote/SKILL.md' }]
     }))
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(MobileNativeChatComposer, {
           draftScopeKey: scope,
           value: '$review draft',

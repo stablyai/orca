@@ -1,4 +1,4 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status/contracts/agent-status-freshness'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
 import {

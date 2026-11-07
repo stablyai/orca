@@ -6,7 +6,7 @@ import {
   resolveAgentLaunchPaneVerdict,
   trackRunningAgentLaunchPane
 } from '../../../agent-launch/agent-launch-pane-attachment'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_A,
   LEAF_B,

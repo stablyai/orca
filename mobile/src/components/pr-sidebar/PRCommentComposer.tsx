@@ -19,6 +19,7 @@ type Props = {
   onSubmit: (body: string) => Promise<boolean>
   onCancel?: () => void
   autoFocus?: boolean
+  inline?: boolean
 }
 
 export function PRCommentComposer({
@@ -28,7 +29,8 @@ export function PRCommentComposer({
   initialBody,
   onSubmit,
   onCancel,
-  autoFocus
+  autoFocus,
+  inline
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -59,6 +61,7 @@ export function PRCommentComposer({
       placeholder={placeholder}
       editable={!submitting}
       autoFocus={autoFocus}
+      inline={inline}
       onSend={() => void submit()}
       canSend={isSubmittableCommentBody(body)}
       sending={submitting}

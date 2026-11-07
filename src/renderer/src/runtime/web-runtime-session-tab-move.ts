@@ -4,13 +4,16 @@ import type {
   RuntimeMobileSessionTabMoveResult
 } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionReorderIntent,
   recordWebSessionReorderIntent
 } from './web-session-reorder-intent'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,

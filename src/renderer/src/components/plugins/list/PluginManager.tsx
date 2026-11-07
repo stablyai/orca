@@ -13,6 +13,7 @@ import type { InstalledRowHandlers } from './PluginManagerRows'
 import { PluginMarketplaceSourceDialog } from '../dialogs/PluginMarketplaceSourceDialog'
 import { PluginCatalogLinkDialog } from '../dialogs/PluginCatalogLinkDialog'
 import { usePluginInstallLink } from '../state/use-plugin-install-link'
+import { usePluginBrowseRequest } from '../state/use-plugin-browse-request'
 import { usePluginCatalog } from '../state/use-plugin-catalog'
 import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import { usePluginInstallAction } from '../state/use-plugin-install-action'
@@ -73,7 +74,6 @@ type PluginManagerProps = {
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   onShowLogs: (pluginKey: string) => void
   onOpenShortcuts: () => void
-  /** Which plugin's page is open; owned by the pane, which hides its header and cards for it. */
   page: PluginPageNavigation
   sourcesOpen: boolean
   setSourcesOpen: (open: boolean) => void
@@ -105,10 +105,8 @@ export function PluginManager({
   const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const { openKey, open, back } = page
-  const catalog = usePluginCatalog({
-    onRefreshInstalled,
-    onOpenRequested: open
-  })
+  usePluginBrowseRequest({ page, setTab, setSearch, setListFilter })
+  const catalog = usePluginCatalog({ onRefreshInstalled, onOpenRequested: open })
   // Why: an install counts as from a link only while the page that link opened is showing.
   const [linkedKey, setLinkedKey] = useState<string | null>(null)
   const installLink = usePluginInstallLink({
@@ -273,8 +271,7 @@ export function PluginManager({
   )
 
   const openedEntry = openKey
-    ? ([...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey) ??
-      null)
+    ? [...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey)
     : null
   const dialogs = (
     <>
@@ -322,7 +319,10 @@ export function PluginManager({
           refreshing={catalog.refreshBusy}
           onConsent={onConsent}
           onBack={back}
+          hasPreviousPage={page.previousKey !== null}
           onOpenShortcuts={onOpenShortcuts}
+          entries={entries}
+          onOpenPlugin={openEntry}
         />
         {dialogs}
       </>

@@ -4,15 +4,9 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
+  // Inset like Source Control's switch under its bar.
+  tabs: { marginHorizontal: spacing.md, marginTop: spacing.sm, backgroundColor: colors.bgPanel },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   grow: { flex: 1, minWidth: 0 },
@@ -32,11 +26,6 @@ export const automationStyles = themedStyleSheet(() => ({
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
   field: { gap: spacing.sm },
   input: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.control,
-    color: colors.textPrimary,
     padding: spacing.md,
     fontSize: TEXT_INPUT_FONT_SIZE,
     minHeight: 44
