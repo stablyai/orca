@@ -13569,7 +13569,8 @@
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
           "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
-          "statusBar": "Status bar"
+          "statusBar": "Status bar",
+          "font": "Font for the terminal, editor or interface"
         },
         "PluginCardAction": {
           "installed": "Installed",

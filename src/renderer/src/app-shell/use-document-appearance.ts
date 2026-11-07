@@ -28,6 +28,7 @@ import {
   usePluginThemes
 } from '../store/plugin-themes'
 import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
+import { usePluginFontRegistration } from '../store/plugin-fonts'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
@@ -92,6 +93,7 @@ export function useDocumentAppearance(): void {
   const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
+  usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
