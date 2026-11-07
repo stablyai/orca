@@ -1,6 +1,5 @@
 import { useAppStateValue } from '@/store/app-state-view'
-import React, { useCallback, useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import React, { useCallback } from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
 import {
   ContextMenuItem,
@@ -9,18 +8,19 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import {
-  getOpenInEntryAvailability,
   openOpenInAppsSettings,
   openWorktreePath
 } from '@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'
+import {
+  getOpenInApplicationAvailability,
+  useOpenInPathRoute
+} from '@/components/sidebar/workspace-actions/open/use-open-in-path-route'
 
 type OpenInContextSubmenuProps = {
   path?: string
@@ -36,11 +36,7 @@ export function OpenInContextSubmenu({
   const openInApplications = useAppStateValue(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
-  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(owner), [owner])
-  const workspace = useMemo(() => (workspaceId ? { workspaceId } : null), [workspaceId])
-  const runtimeSshHost = useAppStateValue(
-    useShallow((s) => getWorkspaceEditorSshHost(s, workspace))
-  )
+  const { route: openInRoute, workspace, runtimeSshHost } = useOpenInPathRoute(workspaceId, owner)
 
   const handleOpen = useCallback(
     (application: OpenInApplication) => {
@@ -68,11 +64,9 @@ export function OpenInContextSubmenu({
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
         {openInApplications.map((application) => {
-          const availability = getOpenInEntryAvailability(
-            { ...application, target: 'external-editor' },
-            openInRoute.connectionId,
-            openInRoute.runtimeEnvironmentId,
-            openInRoute.ownerUnresolved,
+          const availability = getOpenInApplicationAvailability(
+            application,
+            openInRoute,
             runtimeSshHost
           )
           return (

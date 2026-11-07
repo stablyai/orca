@@ -229,6 +229,7 @@ export function GeneralWorkspaceSettingsSection({
         >
           <OpenInMenuSetting
             applications={settings.openInApplications}
+            fileExplorerApplicationId={settings.fileExplorerOpenInApplicationId}
             updateSettings={updateSettings}
           />
         </SearchableSetting>

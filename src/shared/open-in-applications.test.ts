@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_OPEN_IN_APPLICATIONS, normalizeOpenInApplications } from './open-in-applications'
+import {
+  DEFAULT_OPEN_IN_APPLICATIONS,
+  normalizeOpenInApplicationId,
+  normalizeOpenInApplications
+} from './open-in-applications'
+
+describe('normalizeOpenInApplicationId', () => {
+  it('trims a string id and treats anything else as no app', () => {
+    expect(normalizeOpenInApplicationId(' zed ')).toBe('zed')
+    expect(normalizeOpenInApplicationId('   ')).toBeNull()
+    expect(normalizeOpenInApplicationId(undefined)).toBeNull()
+    expect(normalizeOpenInApplicationId(42)).toBeNull()
+  })
+})
 
 describe('normalizeOpenInApplications', () => {
   it('trims fields, drops invalid rows, keeps first duplicate id, and caps list', () => {
