@@ -39,10 +39,12 @@ export function createDictationMeterAnalyzerState(): DictationMeterAnalyzerState
   }
 }
 
-function measureDictationAudioChunk(samples: Float32Array): {
+export type DictationAudioLevel = {
   rms: number
   peak: number
-} {
+}
+
+export function measureDictationAudioChunk(samples: Float32Array): DictationAudioLevel {
   if (samples.length === 0) {
     return { rms: 0, peak: 0 }
   }
@@ -65,7 +67,14 @@ export function analyzeDictationAudioChunk(
   now: number,
   previous: DictationMeterAnalyzerState
 ): DictationMeterAnalyzerState {
-  const { rms, peak } = measureDictationAudioChunk(samples)
+  return analyzeDictationAudioLevel(measureDictationAudioChunk(samples), now, previous)
+}
+
+export function analyzeDictationAudioLevel(
+  { rms, peak }: DictationAudioLevel,
+  now: number,
+  previous: DictationMeterAnalyzerState
+): DictationMeterAnalyzerState {
   const noiseFloor = Math.max(
     0.004,
     previous.noiseFloor * 0.96 + Math.min(rms, previous.noiseFloor * 2) * 0.04

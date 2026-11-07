@@ -1,5 +1,12 @@
 import { useRef, useCallback } from 'react'
 import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
+import captureWorkletUrl from '@/components/dictation/dictation-capture-worklet?worker&url'
+import {
+  DICTATION_CAPTURE_WORKLET_NAME,
+  type DictationCaptureWorkletMessage,
+  type DictationCaptureWorkletOptions
+} from '@/components/dictation/dictation-capture-worklet-protocol'
+import { DICTATION_SAMPLE_RATE } from '../../../shared/rpc-contract/speech-params'
 import { useAudioCaptureMeter, type DictationMeterPublisher } from './use-audio-capture-meter'
 import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 
@@ -28,11 +35,16 @@ export type StartAudioCaptureResult = {
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
 const MAX_BUFFERED_AUDIO_BYTES = 8 * 1024 * 1024
+const CAPTURE_WORKLET_OPTIONS: DictationCaptureWorkletOptions = {
+  outputSampleRate: DICTATION_SAMPLE_RATE,
+  frameSamples: DICTATION_SAMPLE_RATE / 10,
+  levelWindowMs: 50
+}
 
 export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const streamRef = useRef<MediaStream | null>(null)
   const contextRef = useRef<AudioContext | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const processorRef = useRef<AudioWorkletNode | null>(null)
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const isCapturingRef = useRef(false)
   const startRequestRef = useRef(0)
@@ -44,7 +56,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const capturedChunkCountRef = useRef(0)
   const sessionIdRef = useRef('desktop')
   const trackLostCleanupRef = useRef<(() => void) | null>(null)
-  const { resetMeter, measureChunk, getLastSpeechAt } = useAudioCaptureMeter(publishMeter)
+  const { resetMeter, measureLevel, getLastSpeechAt } = useAudioCaptureMeter(publishMeter)
 
   const cleanupCaptureResources = useCallback(() => {
     trackLostCleanupRef.current?.()
@@ -130,9 +142,9 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
 
       let context: AudioContext | null = null
       let source: MediaStreamAudioSourceNode | null = null
-      let processor: ScriptProcessorNode | null = null
+      let processor: AudioWorkletNode | null = null
       try {
-        // Use hardware sample rate and let sherpa resample; forcing 16kHz can produce macOS microphone silence.
+        // Run at the hardware rate and resample in the worklet; forcing 16kHz can produce macOS microphone silence.
         context = new AudioContext()
         contextRef.current = context
 
@@ -140,6 +152,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         if (context.state === 'suspended') {
           await context.resume()
         }
+        await context.audioWorklet.addModule(captureWorkletUrl)
         if (startRequestRef.current !== startRequest || streamRef.current !== stream) {
           if (contextRef.current === context) {
             contextRef.current = null
@@ -155,13 +168,13 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         }
 
         source = context.createMediaStreamSource(stream)
-
-        // ScriptProcessorNode avoids a separate AudioWorklet module in the Vite build.
-        processor = context.createScriptProcessor(4096, 1, 1)
-
-        const actualRate = context.sampleRate
-
-        processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        // Mono downmix as before; the worklet sends 16 kHz frames and a level per meter window.
+        processor = new AudioWorkletNode(context, DICTATION_CAPTURE_WORKLET_NAME, {
+          channelCount: 1,
+          channelCountMode: 'explicit',
+          processorOptions: CAPTURE_WORKLET_OPTIONS
+        })
+        processor.port.onmessage = ({ data }: MessageEvent<DictationCaptureWorkletMessage>) => {
           if (
             !isCapturingRef.current ||
             startRequestRef.current !== startRequest ||
@@ -169,19 +182,21 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           ) {
             return
           }
-          const samples = new Float32Array(e.inputBuffer.getChannelData(0))
-          measureChunk(samples)
+          if (data.type === 'level') {
+            measureLevel(data)
+            return
+          }
           capturedChunkCountRef.current += 1
           if (bufferAudioRef.current) {
             appendBufferedAudioChunk({
-              samples,
-              sampleRate: actualRate,
+              samples: data.samples,
+              sampleRate: DICTATION_SAMPLE_RATE,
               sessionId: sessionIdRef.current
             })
             return
           }
           void window.api.speech
-            .feedAudio(samples, actualRate, sessionIdRef.current)
+            .feedAudio(data.samples, DICTATION_SAMPLE_RATE, sessionIdRef.current)
             .then((limitReached) => limitReached && options.onAudioLimitReached?.())
             .catch(() => undefined)
         }
@@ -241,7 +256,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     [
       appendBufferedAudioChunk,
       cleanupCaptureResources,
-      measureChunk,
+      measureLevel,
       resetBufferedAudio,
       resetMeter
     ]
