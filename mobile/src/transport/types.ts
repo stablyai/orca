@@ -1,9 +1,14 @@
 import { z } from 'zod'
-import '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import {
+  PAIRING_IROH_DIRECT_ADDRESS_MAX_CHARACTERS,
+  PAIRING_IROH_DIRECT_ADDRESS_MAX_COUNT,
+  PAIRING_IROH_ENDPOINT_ID_PATTERN,
+  PAIRING_RELAY_URL_MAX_CHARACTERS
+} from '../../../src/shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import type { HostMachine } from '../../../src/shared/host-machine-line'
@@ -36,7 +41,7 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
-export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay' | 'iroh'
 
 export type ConnectionDiagnosticCode =
   | 'native-render-failed'
@@ -91,6 +96,18 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Retain previously stored hints verbatim; strict format checks happen before dialing.
+const HostIrohEndpointSchema = z.object({
+  endpointId: z.string().regex(PAIRING_IROH_ENDPOINT_ID_PATTERN),
+  relayUrl: z.string().min(1).max(PAIRING_RELAY_URL_MAX_CHARACTERS).optional(),
+  directAddresses: z
+    .array(z.string().min(1).max(PAIRING_IROH_DIRECT_ADDRESS_MAX_CHARACTERS))
+    .max(PAIRING_IROH_DIRECT_ADDRESS_MAX_COUNT)
+    .optional()
+})
+
+export type HostIrohEndpoint = z.infer<typeof HostIrohEndpointSchema>
+
 // Attention nudges probe healthy relays; only a network change justifies replacing the socket.
 export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
 
@@ -110,6 +127,8 @@ export type HostProfile = {
   lastConnected: number
   /** Relay routing, joined from the overlay; only `setRelayRouting` and pairing write it. */
   relay?: MobileRelayEndpoint
+  // Why: optional iroh dial target from pairing offers; reconnects reuse it.
+  iroh?: HostIrohEndpoint
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -139,7 +158,8 @@ export const HostProfileSchema = z.object({
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
-  relay: MobileRelayEndpointSchema.optional()
+  relay: MobileRelayEndpointSchema.optional(),
+  iroh: HostIrohEndpointSchema.optional()
 })
 
 // Never persist deviceToken in AsyncStorage; join it from Keychain when loading the host.
@@ -149,7 +169,8 @@ export const StoredHostProfileSchema = z.object({
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
   publicKeyB64: z.string().min(1),
-  lastConnected: z.number().finite()
+  lastConnected: z.number().finite(),
+  iroh: HostIrohEndpointSchema.optional()
 })
 
 export type StoredHostProfile = z.infer<typeof StoredHostProfileSchema>

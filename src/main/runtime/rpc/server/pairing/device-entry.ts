@@ -1,5 +1,8 @@
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import {
+  parseMobilePairingConnectionMode,
+  type MobilePairingConnectionMode
+} from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
@@ -151,6 +154,7 @@ export function findPrincipalDevice(
     : null
 }
 
+/** Normalize mobile grants' saved mode; non-mobile grants have no mobile transport policy. */
 export function mobilePairingConnectionModeOf(
   device: DeviceEntry | null
 ): MobilePairingConnectionMode | null {
@@ -158,5 +162,5 @@ export function mobilePairingConnectionModeOf(
     return null
   }
   // Legacy pairings used automatic direct-first Relay fallback.
-  return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+  return parseMobilePairingConnectionMode(device.mobilePairingConnectionMode)
 }

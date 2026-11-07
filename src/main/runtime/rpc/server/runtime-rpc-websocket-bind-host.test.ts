@@ -126,12 +126,22 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
-  it('binds all interfaces at startup when a previously-connected device can reconnect', async () => {
+  it.each([
+    { name: 'a WS mobile grant', modes: ['local-only'], host: '0.0.0.0' },
+    { name: 'only an Iroh mobile grant', modes: ['iroh'], host: '127.0.0.1' },
+    {
+      name: 'mixed Iroh and WS mobile grants',
+      modes: ['iroh', 'local-only'],
+      host: '0.0.0.0'
+    }
+  ] as const)('restarts with $name bound to $host', async ({ modes, host }) => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    // Previously connected devices may reconnect without another pairing action.
     const registry = new DeviceRegistry(userDataPath)
-    const device = registry.getOrCreatePendingDevice('Paired phone', 'mobile')
-    registry.updateLastSeen(device.deviceId)
+    for (const mode of modes) {
+      const device = registry.getOrCreatePendingDevice('Paired phone', 'mobile', 'network')
+      registry.setMobilePairingConnectionMode(device.deviceId, mode)
+      registry.updateLastSeen(device.deviceId)
+    }
 
     const server = new OrcaRuntimeRpcServer({
       methods: [],
@@ -143,13 +153,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
 
     await server.start()
     try {
-      expect(
-        server
-          .getDeviceRegistry()
-          ?.listDevices()
-          .some((d) => d.lastSeenAt > 0)
-      ).toBe(true)
-      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(wsTransportOf(server)?.resolvedHost).toBe(host)
     } finally {
       await server.stop()
     }

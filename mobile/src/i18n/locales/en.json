@@ -53,11 +53,46 @@
       "saveFailed": "Could not save browser preferences. Try again.",
       "openTerminalLinks": "Open terminal links"
     },
+    "irohRelayScreen": {
+      "automatic": "Automatic (N0)",
+      "europe": "Europe",
+      "usEast": "US-East",
+      "usWest": "US-West",
+      "asia": "Asia / Singapore",
+      "custom": "Custom HTTPS",
+      "defaultRelaysDescription": "Use the default N0 relays.",
+      "customRelayDescription": "Enter a single HTTPS relay origin.",
+      "invalidCustomRelay": "Enter a single HTTPS relay origin without credentials, paths, queries, or fragments.",
+      "loadFailed": "Could not load the phone relay preference. Try again.",
+      "saved": "Saved. Iroh connections will reconnect using this phone preference.",
+      "saveFailed": "Could not save the phone relay preference. The previous selection is still active.",
+      "loading": "Loading phone relay preference...",
+      "saving": "Saving phone relay preference...",
+      "loaded": "Phone relay preference loaded.",
+      "unavailable": "Phone relay preference unavailable.",
+      "title": "Iroh relay",
+      "description": "Home relay for this phone, used by all Iroh connections. This does not change your desktop's relay or its saved pairing hint. Direct and LAN connections remain enabled. You can change this setting while offline or if a relay is unavailable.",
+      "homeRelayAccessibilityLabel": "Phone Iroh home relay",
+      "notLoaded": "Not loaded",
+      "homeRelay": "Phone home relay",
+      "loadingPreference": "Loading preference",
+      "customRelay": "Custom HTTPS relay",
+      "customUrlLabel": "Custom Iroh relay URL",
+      "customUrlHint": "Enter an HTTPS origin, then use Save relay to apply it.",
+      "customUrlPlaceholder": "https://relay.example.com/",
+      "saveRelay": "Save relay",
+      "draftHint": "Draft changes are not applied until you save.",
+      "savedHomeRelay": "Saved home relay: {{relay}}",
+      "statusLabel": "Iroh relay status",
+      "retryLabel": "Retry loading relay preference",
+      "tryAgain": "Try again"
+    },
     "menuItems": {
       "appearance": "Appearance",
       "terminal": "Terminal",
       "chatUi": "Chat UI",
       "browser": "Browser",
+      "irohRelay": "Iroh relay",
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
@@ -860,6 +895,18 @@
     },
     "rpcClientTerminalBinaryFrame": {
       "unsupportedFrame": "Unsupported terminal stream frame (opcode {{opcode}})."
+    },
+    "mobileIrohPhysicalLink": {
+      "openFailed": "Iroh native open failed"
+    },
+    "socketDeadlineSuspension": {
+      "connectInterrupted": "Transport connect interrupted",
+      "handshakeInterrupted": "Handshake interrupted",
+      "suspendedDetail": "Connection deadline delayed for {{elapsed}}; app may have been suspended. Connection state unknown, re-dialing",
+      "connectTimeout": "Transport connect timeout",
+      "connectTimeoutDetail": "Transport did not open within {{seconds}}s",
+      "handshakeTimeout": "Handshake timeout",
+      "handshakeTimeoutDetail": "No e2ee_ready/e2ee_authenticated within {{seconds}}s"
     }
   },
   "worktree": {

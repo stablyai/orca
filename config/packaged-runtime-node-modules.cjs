@@ -5,7 +5,8 @@ const {
   readFileSync,
   readdirSync,
   realpathSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
@@ -26,6 +27,7 @@ const requireFromProject = createRequire(join(projectDir, 'package.json'))
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@linear/sdk',
+  '@number0/iroh',
   '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
@@ -164,6 +166,7 @@ function isKnownOmittedServeSimDependency(packageName, fromDir) {
   }
 }
 
+/** Return sorted target-OS runtime package locations, including installed watcher/iroh native variants. */
 function collectPackagedRuntimePackages(electronPlatformName = process.platform) {
   const packages = new Map()
   const visit = (packageName, fromDir = projectDir) => {
@@ -201,15 +204,16 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
     visit(packageName)
   }
 
-  // @parcel/watcher loads native optional subpackages absent from dependency traversal; include installed target variants, then afterPack prunes foreign binaries.
-  const parcelWatcherDir = packages.get('@parcel/watcher')
-  if (parcelWatcherDir) {
-    const parcelWatcherPackage = JSON.parse(
-      readFileSync(join(parcelWatcherDir, 'package.json'), 'utf8')
-    )
-    for (const optionalName of Object.keys(parcelWatcherPackage.optionalDependencies ?? {})) {
+  // Native optional subpackages are absent from dependency traversal; include installed variants, then afterPack prunes foreign binaries.
+  for (const napiRootName of ['@parcel/watcher', '@number0/iroh']) {
+    const napiRootDir = packages.get(napiRootName)
+    if (!napiRootDir) {
+      continue
+    }
+    const napiRootPackage = JSON.parse(readFileSync(join(napiRootDir, 'package.json'), 'utf8'))
+    for (const optionalName of Object.keys(napiRootPackage.optionalDependencies ?? {})) {
       try {
-        visit(optionalName)
+        visit(optionalName, napiRootDir)
       } catch {
         // Optional platform subpackage is not installed for this build; skip it.
       }
@@ -504,6 +508,143 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
+const IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM = {
+  darwin: 'iroh-darwin-',
+  linux: 'iroh-linux-',
+  win32: 'iroh-win32-'
+}
+
+/** Reject missing published target binaries; warn when the SDK does not support the target. */
+function assertPackagedIrohNativeVariantInstalled(
+  electronPlatformName,
+  electronArch,
+  nodeModulesDir = join(projectDir, 'node_modules')
+) {
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const suffix =
+    electronPlatformName === 'linux'
+      ? architecture === 'arm'
+        ? '-gnueabihf'
+        : '-gnu'
+      : electronPlatformName === 'win32'
+        ? '-msvc'
+        : ''
+  const packageName = `@number0/iroh-${electronPlatformName}-${architecture}${suffix}`
+  const loader = JSON.parse(
+    readFileSync(join(nodeModulesDir, '@number0', 'iroh', 'package.json'), 'utf8')
+  )
+  if (!Object.hasOwn(loader.optionalDependencies ?? {}, packageName)) {
+    console.warn(
+      `[packaged-iroh] @number0/iroh ${loader.version} does not publish ${packageName}; ` +
+        `Iroh is unavailable on ${electronPlatformName}/${architecture}.`
+    )
+    return
+  }
+  const packageDir = join(nodeModulesDir, packageName)
+  const manifestPath = join(packageDir, 'package.json')
+  if (!existsSync(manifestPath)) {
+    throw new Error(`Packaging Iroh requires ${packageName}; run pnpm install:release.`)
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (
+    typeof manifest.main !== 'string' ||
+    !manifest.main.endsWith('.node') ||
+    !existsSync(join(packageDir, manifest.main))
+  ) {
+    throw new Error(`Packaging Iroh requires the native .node binary from ${packageName}.`)
+  }
+}
+
+/** Replace supported copied SDK natives with verified patched artifacts, including cross-host builds. */
+async function stagePackagedIrohNative(
+  resourcesDir,
+  electronPlatformName,
+  electronArch,
+  prebuildsDir = process.env.ORCAD_PREBUILDS_DIR || join(projectDir, 'out', 'orcad-prebuilds')
+) {
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const slot = `${electronPlatformName}-${architecture}${electronPlatformName === 'linux' ? '-glibc' : ''}`
+  const { IROH_PREBUILD_FILES, verifyIrohPrebuild } =
+    await import('./scripts/orcad-distribution/prebuilds/iroh-prebuild.mjs')
+  if (!Object.hasOwn(IROH_PREBUILD_FILES, slot)) {
+    return
+  }
+  const { readManifest } =
+    await import('./scripts/orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs')
+  const nodeModulesDir = join(resourcesDir, 'node_modules')
+  const loaderPath = join(nodeModulesDir, '@number0', 'iroh', 'package.json')
+  const loader = JSON.parse(readFileSync(loaderPath, 'utf8'))
+  const filename = IROH_PREBUILD_FILES[slot].split('/').at(-1)
+  const packageName = `@number0/${filename.replace(/^iroh\./, 'iroh-').replace(/\.node$/, '')}`
+  if (loader.optionalDependencies?.[packageName] !== loader.version) {
+    throw new Error(`Packaging Iroh requires the pinned ${packageName} SDK declaration.`)
+  }
+  const nativeSource = verifyIrohPrebuild({
+    slotDir: join(prebuildsDir, slot),
+    slot,
+    entry: readManifest(prebuildsDir)?.slots?.[slot],
+    version: loader.version
+  })
+  // The upstream loader tries colocated natives before the optional package; none may bypass qualification.
+  const loaderDir = dirname(loaderPath)
+  // The collected closure is hoisted; nested npm natives would shadow the qualified package.
+  rmSync(join(loaderDir, 'node_modules'), { recursive: true, force: true })
+  for (const entry of readdirSync(loaderDir)) {
+    if (entry.endsWith('.node')) {
+      rmSync(join(loaderDir, entry), { force: true })
+    }
+  }
+  const nativeDir = join(nodeModulesDir, packageName)
+  // Recreate only the copied package: never overwrite pnpm's linked npm native or retain stale binaries.
+  rmSync(nativeDir, { recursive: true, force: true })
+  mkdirSync(nativeDir, { recursive: true })
+  copyFileSync(nativeSource, join(nativeDir, filename))
+  writeFileSync(
+    join(nativeDir, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: packageName,
+        version: loader.version,
+        main: filename,
+        license: loader.license
+      },
+      null,
+      2
+    )}\n`
+  )
+  // The published SDK points main at nonexistent iroh-js/index.js; change only the copied manifest.
+  rmSync(loaderPath)
+  writeFileSync(loaderPath, `${JSON.stringify({ ...loader, main: 'index.js' }, null, 2)}\n`)
+}
+
+/** Keep the loader and target architecture's native packages, pruning foreign iroh variants. */
+function prunePackagedIrohNapi(resourcesDir, electronPlatformName, electronArch) {
+  const scopeDir = join(resourcesDir, 'node_modules', '@number0')
+  if (!existsSync(scopeDir)) {
+    return
+  }
+  // Why: mirrors prunePackagedParcelWatcher — every installed platform
+  // subpackage ships in the copy step; each build only needs its own.
+  const keepPrefix = IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM[electronPlatformName]
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPrefix = keepPrefix ? `${keepPrefix}${architecture}` : null
+  for (const entry of readdirSync(scopeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'iroh') {
+      continue
+    }
+    if (!entry.name.startsWith('iroh-')) {
+      continue
+    }
+    if (
+      targetPrefix &&
+      (entry.name === targetPrefix || entry.name.startsWith(`${targetPrefix}-`))
+    ) {
+      continue
+    }
+    rmSync(join(scopeDir, entry.name), { recursive: true, force: true })
+  }
+}
+
 // Declarations are compile-only; dependency maps embed unused sources (megabytes for Linear). Orca main maps ship separately.
 function isPrunableTypeOrSourceMapArtifact(filename) {
   return TYPE_DECLARATION_ARTIFACT_RE.test(filename) || JS_SOURCE_MAP_ARTIFACT_RE.test(filename)
@@ -550,8 +691,10 @@ function prunePackagedZodSources(resourcesDir) {
 }
 
 // Fail missing target natives: electron-builder only warns for absent extraResources and could ship host-only installs as foreign slices.
+/** Reject missing target-native dependencies before extraResources can silently omit them. */
 function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
+  // Iroh is provisioned separately before copying and checked only after patched-native staging.
   const nodeModulesDir = join(projectDir, 'node_modules')
   const isInstalled = (name) => existsSync(join(nodeModulesDir, name, 'package.json'))
   const missing = []
@@ -631,6 +774,7 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
+  prunePackagedIrohNapi(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
   prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
@@ -651,6 +795,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS,
+  assertPackagedIrohNativeVariantInstalled,
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
@@ -658,11 +803,13 @@ module.exports = {
   isPackagedExternalSpecifier,
   normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
+  prunePackagedIrohNapi,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
   prunePackagedRuntimeTypeAndSourceMapArtifacts,
   prunePackagedSherpaOnnx,
   prunePackagedZodSources,
+  stagePackagedIrohNative,
   verifyPackagedMainRuntimeDeps
 }

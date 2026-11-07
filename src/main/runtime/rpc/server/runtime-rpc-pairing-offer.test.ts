@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { IrohTransport } from '../iroh-transport'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { DEVICE_REGISTRY_FILENAME } from './pairing/mobile-pairing-files'
 import { E2EE_KEYPAIR_FILENAME } from '../../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
@@ -304,6 +305,82 @@ describe('OrcaRuntimeRpcServer', () => {
       const parsed = parsePairingCode(offer.pairingUrl)
       expect(parsed?.endpoint).toBe(offer.endpoint)
       expect(parsed?.endpoint).toContain('100.64.1.20')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('refuses Iroh pairing without attempting startup when the kill switch is enabled', async () => {
+    vi.stubEnv('ORCA_DISABLE_IROH', '1')
+    const start = vi
+      .spyOn(IrohTransport.prototype, 'start')
+      .mockRejectedValue(new Error('Iroh startup must remain disabled'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    try {
+      await server.start()
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        name: 'Mobile test',
+        connectionMode: 'iroh'
+      })
+      expect(offer.available).toBe(false)
+      expect(server.getIrohStatus().bound).toBe(false)
+      expect(start).not.toHaveBeenCalled()
+    } finally {
+      try {
+        await server.stop()
+      } finally {
+        start.mockRestore()
+        vi.unstubAllEnvs()
+      }
+    }
+  })
+
+  // Why: a local-only QR advertising iroh would grant off-LAN reachability via
+  // the public relay — "same network only" must mean exactly that.
+  it('omits iroh from local-only offers even when the transport is bound', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const endpointId = 'b'.repeat(64)
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      irohBindEndpoint: async () => ({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The double supplies the endpoint operations consumed by IrohTransport.
+        endpoint: {
+          online: async () => {},
+          acceptNext: async () => null,
+          close: async () => {},
+          id: () => ({ toString: () => endpointId })
+        } as never,
+        endpointId
+      })
+    })
+    await server.start()
+    await server.setIrohRelayUrl(null)
+    try {
+      expect(server.getIrohStatus().endpointId).toBe(endpointId)
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        name: 'Mobile test',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('pairing unavailable')
+      }
+      const parsed = parsePairingCode(offer.pairingUrl)
+      expect(parsed).toEqual(expect.objectContaining({ scope: 'mobile' }))
+      expect(parsed).not.toHaveProperty('iroh')
     } finally {
       await server.stop()
     }

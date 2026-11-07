@@ -11,6 +11,7 @@ import {
 import { DeviceRegistry } from './server/pairing/device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './server/pairing/mobile-pairing-files'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
+import { pairingAuthorizationForContext } from '../mobile-cloud-relay/relay-pairing-authorization'
 import { registerSocketDeviceKey } from './server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
@@ -225,6 +226,87 @@ describe('device-key authentication (host)', () => {
       })
     }
   })
+
+  it.each([
+    ['runtime this-computer', 'runtime', 'this-computer', undefined, false],
+    ['mobile local-only', 'mobile', 'network', 'local-only', false],
+    ['mobile automatic', 'mobile', 'network', 'automatic', false],
+    ['mobile legacy', 'mobile', 'network', undefined, false],
+    ['mobile Iroh this-computer', 'mobile', 'this-computer', 'iroh', false],
+    ['mobile Iroh legacy reach', 'mobile', undefined, 'iroh', true],
+    ['mobile Iroh', 'mobile', 'network', 'iroh', true]
+  ] as const)(
+    'enforces Iroh token and device-key policy for %s',
+    (_name, scope, pairingReach, mode, allowed) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
+      let registry = new DeviceRegistry(userDataPath)
+      const legacy = registry.addDevice('Device', scope, pairingReach)
+      if (mode !== undefined) {
+        expect(registry.setMobilePairingConnectionMode(legacy.deviceId, mode)).toBe(true)
+      }
+      if (pairingReach === undefined) {
+        writeFileSync(
+          join(userDataPath, DEVICE_REGISTRY_FILENAME),
+          JSON.stringify([{ ...registry.getDevice(legacy.deviceId), pairingReach }])
+        )
+      }
+      // Persisted mobile + Iroh rows may explicitly restrict reach to this computer.
+      registry = new DeviceRegistry(userDataPath)
+      expect(registry.getDevice(legacy.deviceId)?.pairingReach).toBe(pairingReach ?? 'network')
+      // Both credentials remain valid over direct E2EE regardless of Iroh eligibility.
+      const direct = harness(registry)
+      const migrating = direct.connect(() => ({ deviceToken: legacy.token }))
+      expect(migrating.reply).toMatchObject({ type: 'e2ee_authenticated' })
+      const key = nacl.sign.keyPair()
+      const forked = registerSocketDeviceKey(registry, migrating.socket!, {
+        devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64'),
+        deviceProofB64: sign(key, 'register', migrating.transcriptHashB64)
+      })
+      expect(registry.getMobilePairingConnectionMode(forked.deviceId)).toBe(
+        scope === 'mobile' ? (mode ?? 'automatic') : null
+      )
+      const keyAuth = (hash: string) => ({
+        deviceId: forked.deviceId,
+        deviceProofB64: sign(key, 'auth', hash)
+      })
+      expect(direct.connect(keyAuth).reply).toMatchObject({ type: 'e2ee_authenticated' })
+
+      const iroh = harness(registry, { transport: 'iroh' })
+      const tokenAttempt = iroh.connect(() => ({ deviceToken: legacy.token }))
+      const keyAttempt = iroh.connect(keyAuth)
+      if (allowed) {
+        expect(tokenAttempt.reply).toMatchObject({ type: 'e2ee_authenticated' })
+        expect(keyAttempt.reply).toMatchObject({ type: 'e2ee_authenticated' })
+        expect(iroh.ready.map((socket) => socket.device.deviceId)).toEqual([
+          legacy.deviceId,
+          forked.deviceId
+        ])
+        expect(keyAttempt.socket?.transport).toEqual({ transport: 'iroh' })
+        expect(
+          pairingAuthorizationForContext(
+            {
+              deviceId: forked.deviceId,
+              connectionId: keyAttempt.socket!.connectionId,
+              transport: keyAttempt.socket!.transport
+            },
+            'AbCdEf0123_-xyZ9'
+          )
+        ).toEqual({
+          mode: 'authenticated-direct',
+          directAuthId: keyAttempt.socket!.connectionId
+        })
+      } else {
+        for (const attempt of [tokenAttempt, keyAttempt]) {
+          expect(attempt.reply).toEqual({
+            type: 'e2ee_error',
+            error: { code: 'unauthorized' }
+          })
+          expect(attempt.ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+        }
+        expect(iroh.ready).toEqual([])
+      }
+    }
+  )
 
   it('answers registry_unavailable, never device_revoked, after loading a corrupt registry', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-'))

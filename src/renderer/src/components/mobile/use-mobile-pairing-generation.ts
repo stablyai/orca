@@ -9,7 +9,10 @@ import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/r
 
 type MutableRef<T> = { current: T }
 
-/** Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR; Relay failures clear the code. */
+/**
+ * Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR;
+ * Relay failures clear the code. Iroh offers are key-only and never include a selected LAN address.
+ */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean
@@ -66,7 +69,7 @@ export function useMobilePairingGeneration(params: {
         setPairLoading(true)
       }
       try {
-        const address = addressOverride ?? selectedAddress
+        const address = preferredMode === 'iroh' ? undefined : (addressOverride ?? selectedAddress)
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           connectionMode: preferredMode,

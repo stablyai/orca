@@ -249,6 +249,37 @@ describe('init and state', () => {
     })
   })
 
+  it('preserves pending and connected Iroh paths through the page frame reader', () => {
+    let activePath: 'lan' | 'iroh' = 'lan'
+    let pendingPath: 'iroh' | null = 'iroh'
+    let notifyPath = () => {}
+    const client = createFakeRpcClient({
+      getActivePath: () => activePath,
+      getPendingPath: () => pendingPath,
+      onConnectionPathChange: (listener) => {
+        notifyPath = listener
+        return () => {}
+      }
+    })
+    const bridge = harness({ client })
+    bridge.host.receive(clientFrame({ type: 'ready', connectionPathFrames: true }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.connection).toMatchObject({
+      activePath: 'lan',
+      pendingPath: 'iroh'
+    })
+
+    activePath = 'iroh'
+    pendingPath = null
+    notifyPath()
+
+    const pushed = bridge.last()
+    expect(pushed.type === 'connectionPath' && pushed.connection).toMatchObject({
+      activePath: 'iroh',
+      pendingPath: null
+    })
+  })
+
   it('sends no path frame to a page that never said it reads them', () => {
     let notifyPath = () => {}
     const client = createFakeRpcClient({

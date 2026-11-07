@@ -10,7 +10,7 @@ import {
   type HostServerOnConnectDeps
 } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { unservedServerStatus } from './ssh-host-unserved-status'
+import { unservedHostServerMessage, unservedServerStatus } from './ssh-host-unserved-status'
 import { sshHostServerSetupRemedy } from '../../shared/ssh-host-server-setup-remedy'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
@@ -253,14 +253,31 @@ describe('which server an SSH host runs on connect', () => {
     warn.mockRestore()
   })
 
-  it('touches no host when this build carries no orcad template', async () => {
+  it('classifies a missing template as a local build problem without touching the host', async () => {
     const d = deps({ hasTemplate: () => false, isEmptyHost: () => true })
-    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+    const result = await resolveHostServerOnConnect(target, d)
+    expect(result).toEqual({
       route: 'unserved',
       reason: 'orcad_unavailable',
       detail: 'artifacts_unavailable'
     })
     expect(d.deploy).not.toHaveBeenCalled()
+    expect(d.convert).not.toHaveBeenCalled()
+    expect(d.relayTerminals).not.toHaveBeenCalled()
+    expect(d.recordUnavailable).not.toHaveBeenCalled()
+    if (result.route !== 'unserved') {
+      throw new Error('Expected missing-template refusal')
+    }
+    expect(unservedServerStatus(result)).toMatchObject({
+      kind: 'relay',
+      reason: 'orcad_unavailable',
+      detail: 'artifacts_unavailable'
+    })
+    const message = unservedHostServerMessage(result)
+    expect(message).toMatch(/this Orca build.*SSH server deployment template/i)
+    expect(message).toMatch(/build or install.*template.*host’s platform/i)
+    expect(message).toMatch(/restart Orca.*reconnect/i)
+    expect(message).not.toMatch(/older version|host isn’t supported/i)
   })
 
   it('retries a transient failure on the next connect without recording it', async () => {

@@ -21,6 +21,7 @@ import { directProbeTimeoutMsForEndpoint } from './mobile-direct-return-probe'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import { hostHasIrohEndpoint } from './mobile-iroh-availability'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -32,6 +33,10 @@ type EndpointOwner = EndpointLifecycle & {
   start(): Promise<void>
 }
 
+/**
+ * Owns relay supervision or direct-to-relay upgrades until stop.
+ * Iroh-only hosts need neither: their RPC client owns native reconnects.
+ */
 export function startMobileEndpointLifecycle(
   logical: StableLogicalRpcClient,
   initialHost: HostProfile,
@@ -55,6 +60,10 @@ export function startMobileEndpointLifecycle(
   if (initialHost.relay) {
     owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
     void owner.start()
+  } else if (hostHasIrohEndpoint(initialHost)) {
+    // Why: iroh-primary hosts have exactly one physical path — rpc-client
+    // reconnects it itself. No ws probe, no relay upgrade, nothing to supervise.
+    owner = { start: async () => {}, setForeground: () => {}, nudge: () => {}, stop: () => {} }
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
       upgrade: (client, host) =>

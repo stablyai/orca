@@ -24,6 +24,7 @@ import { browserSessionRegistry } from '../browser/sessions/browser-session-regi
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
+import { parseIrohRelayUrl } from '../../shared/iroh-relay-preference'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
@@ -57,6 +58,10 @@ const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTitlebarAppName'
 ]
 
+/**
+ * Register settings/cache IPC and forward store updates to windows other than the writer.
+ * Sanitize and normalize renderer writes before persistence and runtime side effects.
+ */
 export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
@@ -111,6 +116,9 @@ export function registerSettingsHandlers(
     delete sanitizedArgs.activeRuntimeEnvironmentId
     // Only the main-process directory picker may grant trusted floating-workspace paths.
     delete sanitizedArgs.floatingTerminalTrustedCwds
+    if ('mobileIrohRelayUrl' in sanitizedArgs) {
+      sanitizedArgs.mobileIrohRelayUrl = parseIrohRelayUrl(sanitizedArgs.mobileIrohRelayUrl)
+    }
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
         sanitizedArgs,
@@ -305,9 +313,7 @@ export function registerSettingsHandlers(
 
   registerSettingsImportHandlers(store)
 
-  ipcMain.handle('cache:getGitHub', () => {
-    return store.getGitHubCache()
-  })
+  ipcMain.handle('cache:getGitHub', () => store.getGitHubCache())
 
   ipcMain.handle('cache:setGitHub', (_event, args: { cache: PersistedState['githubCache'] }) => {
     store.setGitHubCache(args.cache)

@@ -214,6 +214,12 @@ describe('desktop startup activation', () => {
       noteAgentLaunchStartupSettled: startupSettled,
       setAgentSenderPeerKey: () => {}
     } as unknown as NonNullable<typeof state.runtime>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: startup reads relay settings, subscribes to changes and freezes writes after a failed launch.
+    state.store = {
+      getSettings: () => ({ mobileIrohRelayUrl: null }),
+      onSettingsChanged: () => () => {},
+      freezeWritesAsync: async () => {}
+    } as unknown as NonNullable<typeof state.store>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {
       whenReady: () => Promise.resolve()
@@ -390,6 +396,7 @@ describe('desktop startup activation', () => {
     })
     const order: string[] = []
     const store = {
+      ...state.store,
       flushPendingOrThrowAsync: vi.fn(async (options?: { fullCheckpoint?: boolean }) => {
         order.push(options?.fullCheckpoint ? 'store-checkpoint' : 'store-flush')
       })
@@ -400,7 +407,7 @@ describe('desktop startup activation', () => {
       }),
       syncActiveWslSelectionsBeforeRestart: vi.fn(async () => {})
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only flushes the store.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this extends the startup store fixture with the update restart flush method.
     state.store = store as unknown as NonNullable<typeof state.store>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only calls the two sync methods.
     state.codexRuntimeHome = codexRuntimeHome as unknown as NonNullable<

@@ -24,7 +24,7 @@ export function cachedOrcadSlotProbeCommand(
     recordedRemoteNodeRuntimeProbeCommand(host, runtimeDir, target),
     `printf '\\n%s\\n' ${SECTION_END}`,
     probeRemoteInstallCompleteCommand(host, remoteDir, [
-      ...ORCAD_INSTALL_MODEL.requiredArtifacts(host),
+      ...ORCAD_INSTALL_MODEL.requiredArtifacts(host, target),
       ORCAD_INSTALL_MODEL.installCompleteFilename
     ])
   ].join('; ')

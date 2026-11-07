@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { IROH_BUILD_IDENTITY, IROH_PREBUILD_FILES, verifyIrohPrebuild } from './iroh-prebuild.mjs'
 
 const require = createRequire(import.meta.url)
 
@@ -182,7 +183,7 @@ export function mergeManifest(existing, next) {
   }
 }
 
-/** Problems with the named slots: absent, or a listed file missing or not matching its hash. */
+/** Problems with required slot contents, SDK build identity, and the hashes of every shipped file. */
 export function findSlotProblems(manifest, prebuildsDir, requiredSlots) {
   if (manifest?.schemaVersion !== MANIFEST_SCHEMA_VERSION) {
     return [`manifest.json is missing or not schema ${MANIFEST_SCHEMA_VERSION}`]
@@ -201,7 +202,23 @@ export function findSlotProblems(manifest, prebuildsDir, requiredSlots) {
         }
       }
     }
+    if (Object.hasOwn(IROH_PREBUILD_FILES, slot)) {
+      try {
+        verifyIrohPrebuild({
+          slotDir: join(prebuildsDir, slot),
+          slot,
+          entry,
+          version: IROH_BUILD_IDENTITY.sdkVersion
+        })
+      } catch (error) {
+        problems.push(error.message)
+      }
+    }
     for (const [file, expected] of Object.entries(entry.files ?? {})) {
+      // The SDK verifier above owns this one known file, including its hash and architecture.
+      if (Object.hasOwn(IROH_PREBUILD_FILES, slot) && file === IROH_PREBUILD_FILES[slot]) {
+        continue
+      }
       const path = join(prebuildsDir, slot, ...file.split('/'))
       if (!existsSync(path)) {
         problems.push(`${slot}/${file}: missing`)

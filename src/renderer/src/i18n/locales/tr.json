@@ -12641,7 +12641,6 @@
           "failureDetails": "Ayrıntılar",
           "cause": {
             "unsupportedHost": "Orca'nın bu sistem için bir sunucu derlemesi yok",
-            "artifactsUnavailable": "bu Orca derlemesi sunucuyu içermiyor",
             "libcUnidentified": "Orca ana makinenin sistem kitaplıklarını belirleyemedi",
             "runtimeSelfTest": "sunucunun çalışma zamanı kendi testini geçemedi",
             "securitySoftware": "güvenlik yazılımı sunucunun çalışma zamanını değiştirdi",

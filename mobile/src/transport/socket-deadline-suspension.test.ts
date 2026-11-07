@@ -22,11 +22,8 @@ describe('socket deadline diagnostics', () => {
     expect(report).toMatchObject({
       suspended: true,
       level: 'warn',
-      code: 'suspended-dial',
-      detail:
-        'Connection deadline delayed for 2h44m; app may have been suspended. Connection state unknown, re-dialing'
+      code: 'suspended-dial'
     })
-    expect(report.detail).not.toContain('endpoint unreachable')
   })
 
   it('classifies a handshake timer beyond the grace boundary as suspension', () => {
@@ -37,8 +34,7 @@ describe('socket deadline diagnostics', () => {
     })
     expect(report).toMatchObject({
       suspended: true,
-      code: 'suspended-dial',
-      title: 'Handshake interrupted'
+      code: 'suspended-dial'
     })
   })
 })

@@ -27,20 +27,21 @@ describe('first pairing rejected by the desktop', () => {
     )
   })
 
-  it('recognizes the direct client refusal', async () => {
-    const race = racePairingCandidates([
-      { path: 'direct', client: failing(new Error(AUTH_REJECTED)) }
-    ])
+  it.each(['direct', 'iroh'] as const)('recognizes the %s client refusal', async (path) => {
+    const race = racePairingCandidates([{ path, client: failing(new Error(AUTH_REJECTED)) }])
     await expect(race).rejects.toBeInstanceOf(PairingCodeRejectedError)
   })
 
-  it('keeps the generic failure for network errors', async () => {
+  it.each([
+    ['direct', 'direct and relay pairing paths both failed'],
+    ['iroh', 'iroh pairing path failed']
+  ] as const)('keeps the generic failure for %s network errors', async (path, message) => {
     const error = await racePairingCandidates([
-      { path: 'direct', client: failing(new Error('connect ECONNREFUSED')) }
+      { path, client: failing(new Error('connect ECONNREFUSED')) }
     ]).catch((e: unknown) => e)
     expect(error).not.toBeInstanceOf(PairingCodeRejectedError)
     expect(
       getPairingFailureMessage({ screen: 'confirm', error, timedOut: false, timeoutMs: 1, t })
-    ).toBe('Pairing failed: direct and relay pairing paths both failed')
+    ).toBe(`Pairing failed: ${message}`)
   })
 })

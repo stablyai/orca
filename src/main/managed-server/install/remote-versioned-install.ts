@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { remoteInstallDirName, type RemoteInstallModel } from './remote-install-model'
@@ -66,11 +67,17 @@ export function computeRemoteInstallDir(
   )
 }
 
+/**
+ * Check the completion marker and host/target-specific required artifacts.
+ * Treat ordinary probe failures as incomplete; propagate aborts and unconfirmed termination,
+ * plus session-limit errors when requested.
+ */
 export async function isRemoteInstallComplete(
   conn: RemoteInstallTransport,
   model: RemoteInstallModel,
   remoteInstallDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  host: RemoteHostPlatform,
+  target: NodeRuntimeTarget,
   options?: RemoteInstallProbeOptions
 ): Promise<boolean> {
   try {
@@ -78,7 +85,7 @@ export async function isRemoteInstallComplete(
       conn,
       host,
       probeRemoteInstallCompleteCommand(host, remoteInstallDir, [
-        ...model.requiredArtifacts(host),
+        ...model.requiredArtifacts(host, target),
         model.installCompleteFilename
       ]),
       { signal: options?.signal }

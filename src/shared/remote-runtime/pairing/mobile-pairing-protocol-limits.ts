@@ -4,3 +4,7 @@ export const PAIRING_ENDPOINT_MAX_CHARACTERS = 16 * 1024
 export const PAIRING_DEVICE_TOKEN_MAX_CHARACTERS = 64 * 1024
 export const PAIRING_PUBLIC_KEY_MAX_CHARACTERS = 4 * 1024
 export const PAIRING_RELAY_URL_MAX_CHARACTERS = 2048
+// iroh 1.1.0 serializes its 32-byte EndpointId as lowercase hexadecimal.
+export const PAIRING_IROH_ENDPOINT_ID_PATTERN = /^[0-9a-f]{64}$/
+export const PAIRING_IROH_DIRECT_ADDRESS_MAX_CHARACTERS = 64
+export const PAIRING_IROH_DIRECT_ADDRESS_MAX_COUNT = 8

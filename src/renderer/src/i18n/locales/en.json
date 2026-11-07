@@ -10860,6 +10860,8 @@
           },
           "pane": {
             "search": {
+              "irohRelayDescription": "Choose an Iroh home relay region or a custom HTTPS origin without restarting Orca.",
+              "irohRelayKeywords": "Iroh N0 HTTPS URL relay region",
               "dbccde3a60": "close",
               "9e16be01d6": "background",
               "3a5e31e84b": "leave",
@@ -12096,6 +12098,20 @@
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
+        "MobileIrohRelaySettingField": {
+          "saveFailed": "Could not save the home relay. Your previous preference is unchanged.",
+          "invalidOrigin": "Enter one HTTPS origin without credentials, a path, a query, or a fragment.",
+          "label": "Iroh home relay",
+          "automatic": "Automatic (N0)",
+          "europe": "Europe",
+          "usEast": "US East",
+          "usWest": "US West",
+          "asia": "Asia (Singapore)",
+          "custom": "Custom HTTPS",
+          "help": "Sets this computer’s Iroh home relay, not the phone’s. Saving reconnects Iroh and refreshes its pairing QR without unpairing devices.",
+          "customLabel": "Custom HTTPS relay origin",
+          "save": "Save relay"
+        },
         "MobilePairingConnectionOptions": {
           "ready": "Ready",
           "connecting": "Connecting",
@@ -12112,6 +12128,9 @@
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
           "relayCell": "Relay cell",
+          "irohTitle": "Iroh",
+          "irohDescription": "Phone can be on cellular or any Wi‑Fi. No sign-in, no address setup. Direct P2P (hole-punched) with configured home-relay fallback.",
+          "irohUnavailable": "Transport is unavailable. Choose another home relay or check logs.",
           "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
         },
         "MobilePairingSetupSection": {
@@ -12957,9 +12976,9 @@
           "notServing": "Orca couldn’t confirm that its server on {{host}} is answering.",
           "hostNewer": "Runs a newer version of Orca’s server than this app; it keeps that version.",
           "failureDetails": "Details",
+          "artifactsUnavailable": "This Orca build doesn’t include the SSH server deployment template. Build or install Orca with the template for this host’s platform, then restart Orca and reconnect.",
           "cause": {
             "unsupportedHost": "Orca has no server build for this system",
-            "artifactsUnavailable": "this Orca build doesn’t include the server",
             "libcUnidentified": "Orca couldn’t identify the host’s system libraries",
             "runtimeSelfTest": "the server’s runtime failed its self-test",
             "securitySoftware": "security software changed the server’s runtime",

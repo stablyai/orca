@@ -4,6 +4,7 @@ import {
   RELAY_INSTALL_COMPLETE_FILENAME,
   RELAY_VERSION_FILENAME
 } from '../../ssh/relay-install-artifacts'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import {
   orcadArtifactFilenames,
   ORCAD_INSTALL_COMPLETE_FILENAME,
@@ -22,8 +23,8 @@ export type RemoteInstallModel = {
   readonly nativeDepsPackageName: string
   readonly versionFilename: string
   readonly installCompleteFilename: string
-  /** Files whose absence means a torn install, so the probe forces a re-deploy. */
-  requiredArtifacts(host: RemoteHostPlatform): string[]
+  /** Files whose absence means a torn install; the full runtime target preserves libc-specific deps. */
+  requiredArtifacts(host: RemoteHostPlatform, target: NodeRuntimeTarget): string[]
 }
 
 export const RELAY_INSTALL_MODEL: RemoteInstallModel = {
@@ -41,8 +42,8 @@ export const ORCAD_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'orca-orcad',
   versionFilename: ORCAD_VERSION_FILENAME,
   installCompleteFilename: ORCAD_INSTALL_COMPLETE_FILENAME,
-  // libc does not change slot filenames; require the manifest for hashed page assets.
-  requiredArtifacts: (host) => orcadArtifactFilenames(`${host.os}-${host.arch}`, [])
+  // The manifest accounts for hashed page assets; native dependencies need the full target.
+  requiredArtifacts: (_host, target) => orcadArtifactFilenames(target, [])
 }
 
 export const REMOTE_INSTALL_MODELS: readonly RemoteInstallModel[] = [

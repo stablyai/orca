@@ -1,3 +1,5 @@
+import type { IrohTransport, IrohTransportOptions } from '../iroh-transport'
+import { parseIrohRelayUrl } from '../../../../shared/iroh-relay-preference'
 import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -13,6 +15,7 @@ import type { MobileSocketWiring } from '../mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
+import { RelayRetrySchedule } from '../../mobile-cloud-relay/relay-retry-schedule'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../../runtime-binary-message-router'
 
@@ -55,6 +58,17 @@ export class RuntimeRpcState {
   protected readonly serveNetworkSources: ServeNetworkSourceOptions | null
   protected webSocketSourceGuard: WebSocketSourceGuard | null = null
   protected readonly webClientRoot: string | undefined
+  protected readonly irohBindEndpoint: IrohTransportOptions['bindEndpoint']
+  protected irohTransport: IrohTransport | null = null
+  protected pendingIrohTransport: IrohTransport | null = null
+  protected detachIrohWiring: (() => void) | null = null
+  protected desiredIrohRelayUrl: string | null
+  protected irohRelayGeneration = 0
+  protected appliedIrohRelayGeneration = -1
+  protected irohRebindPromise: Promise<void> | null = null
+  protected readonly irohRelayRetry = new RelayRetrySchedule()
+  protected irohRuntimeStarted = false
+  protected onStop: (() => void) | null
   // Track actual WS bind host for pairing exposure transitions (STA-2370).
   protected wsBoundHost: string | null = null
   // Share one pending rebind across concurrent pairing offers (STA-2370).
@@ -127,6 +141,9 @@ export class RuntimeRpcState {
     pinnedBindHost,
     serveNetworkSources,
     webClientRoot,
+    irohBindEndpoint,
+    irohRelayUrl,
+    onStop,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
@@ -144,6 +161,9 @@ export class RuntimeRpcState {
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.serveNetworkSources = serveNetworkSources ?? null
+    this.irohBindEndpoint = irohBindEndpoint
+    this.desiredIrohRelayUrl = parseIrohRelayUrl(irohRelayUrl)
+    this.onStop = onStop ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap

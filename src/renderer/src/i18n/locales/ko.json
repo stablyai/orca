@@ -11196,6 +11196,9 @@
           "localTitle": "LAN",
           "retrying": "재시도 중",
           "relayCell": "릴레이 셀",
+          "irohTitle": "Iroh",
+          "irohDescription": "휴대폰이 셀룰러나 어떤 Wi‑Fi에 있어도 됩니다. 로그인·주소 설정 불필요. 직접 P2P(홀 펀칭), 설정된 홈 릴레이 폴백.",
+          "irohUnavailable": "전송을 사용할 수 없습니다. 다른 홈 릴레이를 선택하거나 로그를 확인하세요.",
           "relaySignInDetail": "이 데스크톱에서 Orca에 로그인하고 휴대폰 연결을 Orca 서버를 통해 전달합니다. LAN 연결에는 계정이 필요하지 않습니다."
         },
         "MobilePairingSetupSection": {
@@ -12122,9 +12125,9 @@
           "notServing": "Orca가 {{host}}의 서버 응답 여부를 확인하지 못했습니다.",
           "hostNewer": "이 앱보다 새로운 Orca 서버를 실행합니다. 해당 버전을 유지합니다.",
           "failureDetails": "세부 정보",
+          "artifactsUnavailable": "이 Orca 빌드에는 SSH 서버 배포 템플릿이 포함되어 있지 않습니다. 이 호스트의 플랫폼에 맞는 템플릿을 포함하여 Orca를 빌드하거나 설치한 다음, Orca를 다시 시작하고 다시 연결하세요.",
           "cause": {
             "unsupportedHost": "Orca에는 이 시스템용 서버 빌드가 없습니다",
-            "artifactsUnavailable": "이 Orca 빌드에는 서버가 포함되어 있지 않습니다",
             "libcUnidentified": "Orca가 호스트의 시스템 라이브러리를 식별하지 못했습니다",
             "runtimeSelfTest": "서버 런타임이 자체 테스트에 실패했습니다",
             "securitySoftware": "보안 소프트웨어가 서버 런타임을 변경했습니다",

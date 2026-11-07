@@ -3,7 +3,8 @@ import type { ConnectionLogSink } from './types'
 
 const PATH_PREFIX: Record<PairingCandidatePath, string> = {
   direct: 'Direct: ',
-  relay: 'Relay: '
+  relay: 'Relay: ',
+  iroh: 'Iroh: '
 }
 
 // Attribute at the candidate seam so direct LAN diagnostics cannot look like relay retries when call sites omit path labels.

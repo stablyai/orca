@@ -80,6 +80,8 @@ const transforms = {
     ]
   }
 }
+// iroh is on by default in production; tests stay hermetic (no UDP binds or public relay).
+const hermeticEnv = { ORCA_DISABLE_IROH: '1' }
 const testOptions = {
   environment: 'node',
   clearMocks: false,
@@ -87,7 +89,7 @@ const testOptions = {
   // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
-  env: { ORCA_VITEST_RUNTIME: 'node' },
+  env: { ...hermeticEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
@@ -103,7 +105,7 @@ const nodeProject = {
   test: {
     ...testOptions,
     name: process.versions.bun ? 'node-runtime' : 'node',
-    env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+    env: { ...hermeticEnv, ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? nodeRuntimeInclude : UNIT_INCLUDE,
     exclude: [...testOptions.exclude, ...measurementFiles],
     sequence: { groupOrder: 1 },
@@ -118,7 +120,7 @@ const bunProject = {
   test: {
     ...testOptions,
     name: 'bun',
-    env: { ORCA_VITEST_RUNTIME: 'bun' },
+    env: { ...hermeticEnv, ORCA_VITEST_RUNTIME: 'bun' },
     pool: 'forks',
     exclude: [...testOptions.exclude, ...nodeRuntimeInclude, ...measurementFiles],
     sequence: { groupOrder: 1 }

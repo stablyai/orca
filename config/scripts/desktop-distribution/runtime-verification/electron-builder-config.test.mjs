@@ -161,6 +161,26 @@ describe('arch-aware packaging guard', () => {
       () => undefined
     )
 
+  it.each([
+    ['linux', 3],
+    ['darwin', 1],
+    ['win32', 1]
+  ])('rejects the Linux x64-only template for %s arch %i', (electronPlatformName, arch) => {
+    const previous = process.env.ORCA_LINUX_X64_ONLY_TEMPLATE
+    process.env.ORCA_LINUX_X64_ONLY_TEMPLATE = '1'
+    try {
+      expect(() => electronBuilderConfig.beforePack({ electronPlatformName, arch })).toThrow(
+        'ORCA_LINUX_X64_ONLY_TEMPLATE is only supported for Linux x64 packages.'
+      )
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ORCA_LINUX_X64_ONLY_TEMPLATE
+      } else {
+        process.env.ORCA_LINUX_X64_ONLY_TEMPLATE = previous
+      }
+    }
+  })
+
   it('refuses to package a dark layout-owner build', () => {
     const previous = process.env.ORCA_LAYOUT_OWNER
     process.env.ORCA_LAYOUT_OWNER = 'main'

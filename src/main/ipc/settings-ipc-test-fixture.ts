@@ -97,7 +97,7 @@ vi.mock('../menu/register-app-menu', () => ({
   rebuildAppMenu: rebuildAppMenuMock
 }))
 
-vi.mock('../../shared/runtime-environment-store', () => ({
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock,
   listEnvironments: listEnvironmentsMock
 }))

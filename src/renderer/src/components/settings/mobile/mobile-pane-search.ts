@@ -69,6 +69,49 @@ export const getMobilePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.MobileIrohRelaySettingField.label',
+      'Iroh home relay'
+    ),
+    description: translate(
+      'auto.components.settings.mobile.pane.search.irohRelayDescription',
+      'Choose an Iroh home relay region or a custom HTTPS origin without restarting Orca.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.automatic',
+        'Automatic (N0)'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.europe',
+        'Europe'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.usEast',
+        'US East',
+        { aliases: ['US-East'] }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.usWest',
+        'US West',
+        { aliases: ['US-West'] }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.asia',
+        'Asia (Singapore)',
+        { aliases: ['Asia/Singapore'] }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.MobileIrohRelaySettingField.custom',
+        'Custom HTTPS'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.pane.search.irohRelayKeywords',
+        'Iroh N0 HTTPS URL relay region'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.mobile.pane.search.9d3a9397ba', 'Connected Devices'),
     description: translate(
       'auto.components.settings.mobile.pane.search.13419718b3',

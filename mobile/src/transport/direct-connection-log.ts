@@ -11,28 +11,46 @@ export class DirectConnectionLog {
   private sequence = 0
   private readonly path: MobileConnectionDiagnosticPath
 
+  /** Attributes diagnostics to the physical transport unless an individual entry overrides its path. */
   constructor(
     endpoint: string,
     private readonly sink?: ConnectionLogSink
   ) {
-    this.path = isTailscaleEndpoint(endpoint) ? 'tailscale' : 'lan'
+    this.path = endpoint.startsWith('iroh:')
+      ? 'iroh'
+      : isTailscaleEndpoint(endpoint)
+        ? 'tailscale'
+        : 'lan'
   }
 
+  /** Emits a path-attributed entry without allowing a diagnostic sink to interrupt RPC lifecycle work. */
   emit = (
     level: ConnectionLogLevel,
     message: string,
     detail?: string,
     evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
   ): void => {
-    this.sink?.({
-      id: `log-${++this.sequence}-${Date.now()}`,
-      ts: Date.now(),
-      level,
-      message,
-      detail,
-      ...evidence,
-      path: evidence?.path ?? this.path
-    })
+    try {
+      this.sink?.({
+        id: `log-${++this.sequence}-${Date.now()}`,
+        ts: Date.now(),
+        level,
+        message,
+        detail,
+        ...evidence,
+        path: evidence?.path ?? this.path
+      })
+    } catch {
+      // Diagnostics must not interrupt authentication or close/reconnect cleanup.
+    }
+  }
+
+  emitWarning = (
+    message: string,
+    detail: string,
+    evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+  ): void => {
+    this.emit('warn', message, detail, evidence)
   }
 
   livenessTimeout = (evidence: LivenessTimeoutEvidence): void => {

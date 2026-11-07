@@ -1,10 +1,12 @@
-// pnpm installs the local native package under node_modules/.pnpm, which the fingerprint skips as a
-// nested node_modules; hash its sources here so native edits to it still invalidate builds.
-const localNativePackageSources = ['android', 'ios', 'expo-module.config.json'].map((entry) => ({
-  type: entry.includes('.') ? 'file' : 'dir',
-  filePath: `packages/expo-two-way-audio/${entry}`,
-  reasons: ['localNativePackage']
-}))
+// pnpm installs local native packages under node_modules/.pnpm, which the fingerprint skips as
+// nested node_modules; hash their sources here so native edits still invalidate builds.
+const localNativePackageSources = ['expo-two-way-audio', 'expo-iroh'].flatMap((name) =>
+  ['android', 'ios', 'expo-module.config.json'].map((entry) => ({
+    type: entry.includes('.') ? 'file' : 'dir',
+    filePath: `packages/${name}/${entry}`,
+    reasons: ['localNativePackage']
+  }))
+)
 
 module.exports = {
   extraSources: localNativePackageSources,

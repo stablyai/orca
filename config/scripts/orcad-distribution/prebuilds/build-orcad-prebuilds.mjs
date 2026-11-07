@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Build patched node-pty for current platform/arch/libc so deployment needs no compiler; compat slots also build COMPAT_SLOT_ADDONS.
+// Supported SDK slots also build pinned iroh with its native handshake deadline; the manifest hashes both payloads.
 // Require repo patch: GLIBC symbol pins plus no-as-needed retain libutil/libpthread and prevent #9902.
 // Use pinned, hash-verified Node headers at N-API 8; glibc slots target 2.28, optional compat 2.17, musl stays separate.
 // CI merges per-slot outputs; --slot overrides detection. Options: --require-slots [a,b], --smoke, --print-slot, --print-runtime.
@@ -23,6 +24,7 @@ import {
   SLOT_NAPI_VERSION
 } from './orcad-prebuild-slot-contents.mjs'
 import { compileCompatAddons } from './orcad-prebuild-compat-addons.mjs'
+import { buildIrohPrebuild, IROH_PREBUILD_FILES } from './iroh-prebuild.mjs'
 import { nodeGypRebuild, stageNodeAddonApi } from './orcad-prebuild-node-gyp.mjs'
 import { ensurePinnedNodeExecutable, preparePinnedNodeDir } from './pinned-node-downloads.mjs'
 
@@ -253,6 +255,10 @@ async function build() {
   const compatAddons = isCompatSlot(slot)
     ? await compileCompatAddons({ slot, workDir: join(WORK_DIR, slot), nodeDir })
     : []
+  // compileNodePty clears this slot's scratch directory, so stage the SDK only afterwards.
+  const iroh = Object.hasOwn(IROH_PREBUILD_FILES, slot)
+    ? await buildIrohPrebuild({ root: ROOT, slot, workDir: join(WORK_DIR, slot, 'iroh') })
+    : null
 
   rmSync(slotDir, { recursive: true, force: true })
   const files = {}
@@ -263,7 +269,8 @@ async function build() {
       buildDir,
       nodePtyDir: sourceDir
     }),
-    ...compatAddons
+    ...compatAddons,
+    ...(iroh ? [[iroh.relative, iroh.source]] : [])
   ]) {
     if (!existsSync(source)) {
       throw new Error(`[orcad-prebuilds] ${slot} needs ${relative}, but ${source} is missing`)
@@ -297,7 +304,8 @@ async function build() {
       libc,
       glibc,
       napi: SLOT_NAPI_VERSION,
-      files
+      files,
+      ...(iroh ? { iroh: iroh.identity } : {})
     }
   })
   writeFileSync(join(PREBUILDS_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)

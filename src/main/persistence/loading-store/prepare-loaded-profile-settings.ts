@@ -12,6 +12,7 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
+import { parseIrohRelayUrl } from '../../../shared/iroh-relay-preference'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
@@ -59,6 +60,7 @@ export type PreparedLoadedProfileSettings = {
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
   loadedCompactWorktreeCards: boolean
+  mobileIrohRelayUrl: GlobalSettings['mobileIrohRelayUrl']
   mobilePairingCustomAddress: GlobalSettings['mobilePairingCustomAddress']
   mobilePairingCustomAddresses: GlobalSettings['mobilePairingCustomAddresses']
   normalizedNotifications: GlobalSettings['notifications']
@@ -67,6 +69,7 @@ export type PreparedLoadedProfileSettings = {
   normalizedProjectGroups: ProjectGroup[]
 }
 
+/** Prepare migrated profile settings, treating corrupt saved relay origins as Automatic. */
 export function prepareLoadedProfileSettings(
   parsed: PersistedState,
   defaults: PersistedState,
@@ -88,9 +91,7 @@ export function prepareLoadedProfileSettings(
   const autoRenameBranchFromWorkDefaultedOn =
     parsed.settings?.autoRenameBranchFromWorkDefaultedOn === true
   // Migrate default-on once so subsequent opt-outs survive.
-  const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
-    parsed.settings
-  )
+  const autoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(parsed.settings)
   const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
     markNeedsSave()
@@ -208,16 +209,10 @@ export function prepareLoadedProfileSettings(
       : parsed.settings?.localAccountRuntime === 'wsl'
         ? 'wsl'
         : 'auto'
-  if (!localAccountRuntimeAlreadyMigrated) {
+  if (!localAccountRuntimeAlreadyMigrated || !autoRenameBranchFromWorkDefaultedOn) {
     markNeedsSave()
   }
-  if (!autoRenameBranchFromWorkDefaultedOn) {
-    markNeedsSave()
-  }
-  const normalizedOnboarding = normalizeLoadedOnboardingState(
-    parsed.onboarding,
-    defaults.onboarding
-  )
+  const onboarding = normalizeLoadedOnboardingState(parsed.onboarding, defaults.onboarding)
   if (!parsed.onboarding) {
     markNeedsSave()
   }
@@ -226,6 +221,18 @@ export function prepareLoadedProfileSettings(
     parsed.settings?.compactWorktreeCards ??
     parsed.settings?.experimentalCompactWorktreeCards ??
     defaults.settings.compactWorktreeCards
+  let mobileIrohRelayUrl: string | null = null
+  try {
+    mobileIrohRelayUrl = parseIrohRelayUrl(parsed.settings?.mobileIrohRelayUrl)
+  } catch {
+    // Corrupt saved preferences reset to Automatic; new writes reject instead.
+  }
+  if (
+    parsed.settings?.mobileIrohRelayUrl !== undefined &&
+    parsed.settings.mobileIrohRelayUrl !== mobileIrohRelayUrl
+  ) {
+    markNeedsSave()
+  }
   const mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
     parsed.settings?.mobilePairingCustomAddress
   )
@@ -273,7 +280,7 @@ export function prepareLoadedProfileSettings(
   return {
     migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
-    migratedAutoRenameBranchFromWork,
+    migratedAutoRenameBranchFromWork: autoRenameBranchFromWork,
     migratedPluginSystemEnabled,
     migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
@@ -290,11 +297,12 @@ export function prepareLoadedProfileSettings(
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,
+    mobileIrohRelayUrl,
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
     normalizedNotifications,
     normalizedSourceControlGroupOrder,
-    normalizedOnboarding,
+    normalizedOnboarding: onboarding,
     normalizedProjectGroups
   }
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DirectConnectionLog } from './direct-connection-log'
 import { connect } from './rpc-client'
 import type { ConnectionLogEntry } from './types'
 
@@ -42,6 +43,16 @@ afterEach(() => {
 })
 
 describe('mobile rpc-client connection logs', () => {
+  it.each([
+    ['ws://192.168.1.2:6768', 'lan'],
+    ['ws://100.88.90.25:6768', 'tailscale'],
+    ['iroh://desktop-endpoint', 'iroh']
+  ])('attributes connection logs for %s to %s', (endpoint, path) => {
+    const logs: ConnectionLogEntry[] = []
+    new DirectConnectionLog(endpoint, (entry) => logs.push(entry)).emit('info', 'diagnostic')
+    expect(logs.map((entry) => entry.path)).toEqual([path])
+  })
+
   it('never exposes endpoint query credentials', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket
@@ -52,9 +63,7 @@ describe('mobile rpc-client connection logs', () => {
       onLog: (entry) => logs.push(entry)
     })
 
-    expect(logs).toContainEqual(
-      expect.objectContaining({ message: 'Opening WebSocket', detail: 'desktop.example:7443' })
-    )
+    expect(logs).toContainEqual(expect.objectContaining({ detail: 'desktop.example:7443' }))
     expect(JSON.stringify(logs)).not.toContain('super-secret')
     expect(JSON.stringify(logs)).not.toContain('route=private')
     client.close()

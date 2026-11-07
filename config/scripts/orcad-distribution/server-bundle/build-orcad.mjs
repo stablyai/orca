@@ -31,11 +31,12 @@ import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-smoke.mjs'
 import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
-import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
+import { materializeNativePackage } from './orcad-native-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
 import { stageOrcadWindowsSecurity } from './orcad-windows-security.mjs'
 import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
+import { stageOrcadIroh } from './orcad-iroh-package.mjs'
 import { stageOrcadMobileWebBundle } from './orcad-mobile-web-bundle.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
@@ -57,6 +58,7 @@ import {
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
 import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from '../prebuilds/orcad-prebuild-slot-contents.mjs'
+import { IROH_PREBUILD_FILES } from '../prebuilds/iroh-prebuild.mjs'
 import { orcadAgentBrowserNativeName } from '../../../../src/shared/orcad-agent-browser-name.ts'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
@@ -104,7 +106,13 @@ async function stageParcelWatcher(target) {
   const requireFromWatcher = createRequire(
     join(ROOT, 'node_modules', '@parcel', 'watcher', 'index.js')
   )
-  const nativeSource = await materializeWatcherPackage(target)
+  const { version } = requireFromWatcher('@parcel/watcher/package.json')
+  const nativeSource = await materializeNativePackage({
+    root: ROOT,
+    name: `@parcel/watcher-${target}`,
+    version,
+    filename: 'watcher.node'
+  })
   const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
   mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
   await build({
@@ -131,11 +139,14 @@ async function stageParcelWatcher(target) {
 
 /** node-pty's JS plus only this target's prebuild slot, laid out the way node-pty's loader looks. */
 function stageNodePty(target) {
-  const problems = findSlotProblems(readManifest(PREBUILDS_DIR), PREBUILDS_DIR, [target])
+  const manifest = readManifest(PREBUILDS_DIR)
+  const problems = findSlotProblems(manifest, PREBUILDS_DIR, [target])
   if (problems.length > 0) {
     throw new Error(`[build-orcad] node-pty prebuild for ${target}: ${problems.join('; ')}`)
   }
-  const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files).sort()
+  const slotFiles = Object.keys(manifest.slots[target].files)
+    .filter((file) => file !== IROH_PREBUILD_FILES[target])
+    .sort()
   const expected = orcadNodePtySlotFiles(target).sort()
   if (slotFiles.join('\0') !== expected.join('\0')) {
     throw new Error(
@@ -184,6 +195,7 @@ copyFileSync(
   emojiDatasetOutput
 )
 await stageOrcadLinearSdk(ROOT, OUT_DIR)
+await stageOrcadIroh(ROOT, OUT_DIR, BUILD_TARGET, PREBUILDS_DIR)
 // The desktop template omits it: ~10 MB per target, and orcad already treats it as optional.
 if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !== '1') {
   copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)

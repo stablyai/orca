@@ -10,6 +10,8 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata } from './runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { UnixSocketTransport } from '../unix-socket-transport'
+import type { WebSocketTransport } from '../ws-transport'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
 
@@ -67,6 +69,111 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({
       runtimeId: runtime.getRuntimeId()
     })
+  })
+
+  it('closes a Unix listener whose startup finishes after stop without publishing metadata', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime,
+      userDataPath,
+      enableWebSocket: false
+    })
+    const endpoint = createRuntimeTransportMetadata(
+      userDataPath,
+      process.pid,
+      process.platform,
+      runtime.getRuntimeId()
+    ).endpoint
+    const bound = Promise.withResolvers<UnixSocketTransport>()
+    const release = Promise.withResolvers<void>()
+    const originalStart = UnixSocketTransport.prototype.start
+    const startSpy = vi
+      .spyOn(UnixSocketTransport.prototype, 'start')
+      .mockImplementationOnce(async function (this: UnixSocketTransport) {
+        await originalStart.call(this)
+        bound.resolve(this)
+        await release.promise
+      })
+    const starting = server.start()
+    let transport: UnixSocketTransport | null = null
+    try {
+      transport = await bound.promise
+      const listener = transport['server']
+      const stopSpy = vi.spyOn(transport, 'stop')
+      expect(listener?.listening).toBe(true)
+      await server.stop()
+      expect(readRuntimeMetadata(userDataPath)).toBeNull()
+      release.resolve()
+      await starting
+
+      expect(stopSpy).toHaveBeenCalledOnce()
+      expect(listener?.listening).toBe(false)
+      expect(existsSync(endpoint)).toBe(false)
+      expect(readRuntimeMetadata(userDataPath)).toBeNull()
+      expect(server['transports']).toEqual([])
+      expect(server['activeTransports']).toEqual([])
+      expect(server['metadataOwnershipWatch']).toBeNull()
+    } finally {
+      release.resolve()
+      await starting.catch(() => {})
+      await server.stop()
+      await transport?.stop()
+      startSpy.mockRestore()
+    }
+  })
+
+  it('closes a WebSocket listener whose startup finishes after stop without publishing metadata', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const endpoint = createRuntimeTransportMetadata(
+      userDataPath,
+      process.pid,
+      process.platform,
+      runtime.getRuntimeId()
+    ).endpoint
+    const bound = Promise.withResolvers<WebSocketTransport>()
+    const release = Promise.withResolvers<void>()
+    const originalStart = server['startWebSocketTransport'].bind(server)
+    server['startWebSocketTransport'] = async (options) => {
+      const result = await originalStart(options)
+      bound.resolve(result.transport)
+      await release.promise
+      return result
+    }
+    const starting = server.start()
+    let transport: WebSocketTransport | null = null
+    try {
+      transport = await bound.promise
+      const listener = transport['httpServer']
+      const stopSpy = vi.spyOn(transport, 'stop')
+      expect(listener?.listening).toBe(true)
+      await server.stop()
+      expect(existsSync(endpoint)).toBe(false)
+      expect(readRuntimeMetadata(userDataPath)).toBeNull()
+      release.resolve()
+      await starting
+
+      expect(stopSpy).toHaveBeenCalledOnce()
+      expect(listener?.listening).toBe(false)
+      expect(readRuntimeMetadata(userDataPath)).toBeNull()
+      expect(server['transports']).toEqual([])
+      expect(server['activeTransports']).toEqual([])
+      expect(server['metadataOwnershipWatch']).toBeNull()
+    } finally {
+      release.resolve()
+      await starting.catch(() => {})
+      await server.stop()
+      await transport?.stop()
+    }
   })
 
   it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {

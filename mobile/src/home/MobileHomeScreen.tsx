@@ -43,6 +43,7 @@ import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
 
+/** Coordinates persistent home tabs and desktop actions. */
 export function MobileHomeScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()

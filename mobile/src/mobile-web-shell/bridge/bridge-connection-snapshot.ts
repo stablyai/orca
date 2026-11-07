@@ -17,7 +17,8 @@ export const BRIDGE_CONNECTION_STATES = [
 export const BRIDGE_CONNECTION_PATHS = [
   'lan',
   'tailscale',
-  'relay'
+  'relay',
+  'iroh'
 ] as const satisfies readonly MobileConnectionPath[]
 
 export const BRIDGE_RELAY_HOST_REACHABILITIES = [

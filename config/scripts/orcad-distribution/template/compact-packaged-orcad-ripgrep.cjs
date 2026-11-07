@@ -14,10 +14,10 @@ function sha256(path) {
 }
 
 /** Only compact the desktop's copy; the qualified template artifact remains self-contained. */
-function compactPackagedOrcadRipgrep(resourcesDir) {
+function compactPackagedOrcadRipgrep(resourcesDir, targets) {
   const templateDir = join(resourcesDir, 'orcad-template')
   const manifestPath = join(templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME)
-  verifyPackagedOrcadTemplate(resourcesDir)
+  verifyPackagedOrcadTemplate(resourcesDir, targets)
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
   let removedBytes = 0
   for (const [target, entry] of Object.entries(manifest.targets)) {
@@ -47,7 +47,7 @@ function compactPackagedOrcadRipgrep(resourcesDir) {
     manifest.schemaVersion = 4
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
   }
-  verifyPackagedOrcadTemplate(resourcesDir)
+  verifyPackagedOrcadTemplate(resourcesDir, targets)
   return removedBytes
 }
 

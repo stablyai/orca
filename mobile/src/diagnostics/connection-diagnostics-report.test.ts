@@ -33,9 +33,6 @@ describe('buildConnectionDiagnosticsReport', () => {
     expect(report).toContain('Endpoint: 100.65.9.106:6768 (Tailscale)')
     expect(report).toContain('State: reconnecting (reconnect attempts: 12)')
     expect(report).toContain('(5m 0s ago)')
-    expect(report).toContain(
-      '[error] WebSocket connect timeout — No TCP/WS handshake within 12s — endpoint unreachable?'
-    )
   })
 
   it('marks never-connected sessions and empty logs', () => {

@@ -12478,7 +12478,6 @@
           "failureDetails": "詳情",
           "cause": {
             "unsupportedHost": "Orca 沒有適用於此系統的伺服器建置版本",
-            "artifactsUnavailable": "此 Orca 建置版本不包含該伺服器",
             "libcUnidentified": "Orca 無法辨識主機的系統函式庫",
             "runtimeSelfTest": "伺服器的執行環境未通過自我測試",
             "securitySoftware": "安全軟體更改了伺服器的執行環境",

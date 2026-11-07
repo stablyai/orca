@@ -48,6 +48,10 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
   }
 }
 
+/**
+ * Derives a likely cause, next action, and Relay-reportability flag from the selected failure.
+ * Structured paths distinguish Iroh timeouts and direct liveness failures from Relay incidents.
+ */
 function diagnoseFailure(
   args: DiagnoseConnectionArgs,
   failure: ConnectionLogEntry | undefined,
@@ -88,7 +92,7 @@ function diagnoseFailure(
     const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
     const structuredDirectLiveness =
       failure?.code === 'liveness-timeout' &&
-      (failure.path === 'lan' || failure.path === 'tailscale')
+      (failure.path === 'lan' || failure.path === 'tailscale' || failure.path === 'iroh')
     const path =
       relayLiveness || (!structuredDirectLiveness && args.activePath === 'relay')
         ? 'Relay'
@@ -117,15 +121,24 @@ function diagnoseFailure(
     }
   }
 
-  if (/connect-timeout|websocket connect timeout/i.test(evidence)) {
+  if (/connect-timeout|(?:websocket|transport) connect timeout/i.test(evidence)) {
+    if (failure?.path === 'iroh') {
+      return {
+        likelyCause:
+          'The native Iroh connection did not become ready before the connection timeout.',
+        nextStep:
+          'Check Iroh direct/relay connectivity on both devices and confirm the desktop is awake with Orca running.',
+        reportability: 'none'
+      }
+    }
     return {
       likelyCause: isTailscaleEndpoint(args.endpoint)
         ? 'The saved Tailscale endpoint did not answer before the connection timeout.'
-        : 'The saved direct endpoint did not answer before the connection timeout.',
+        : 'The transport did not become ready before the connection timeout.',
       nextStep:
         args.pendingPath === 'relay'
           ? 'Relay recovery is in progress; keep Orca open while it retries.'
-          : 'Check the local/VPN network and confirm the desktop is awake.',
+          : 'Confirm the desktop is awake with Orca running and check network connectivity on both devices.',
       reportability: 'none'
     }
   }
@@ -253,11 +266,12 @@ function diagnosticEvidence(entry: ConnectionLogEntry): string {
   return `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
 }
 
+/** Recognizes connection-failure evidence while excluding native rendering errors from diagnosis. */
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
   if (entry.code === 'native-render-failed') {
     return false
   }
-  return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+  return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|(?:websocket|transport) connect timeout|handshake-timeout|handshake timeout/i.test(
     diagnosticEvidence(entry)
   )
 }
@@ -271,9 +285,13 @@ function formatDelay(ms: number): string {
   return ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`
 }
 
+/** Labels diagnostic paths, distinguishing Iroh and Relay from LAN/Tailscale direct connections. */
 function formatPath(path: MobileConnectionDiagnosticPath): string {
   if (path === 'relay') {
     return 'Relay'
+  }
+  if (path === 'iroh') {
+    return 'Iroh'
   }
   return path === 'tailscale' ? 'Tailscale/direct' : 'LAN/direct'
 }

@@ -6,7 +6,7 @@ export function pairingAuthorizationForContext(
   context: MobilePairingConnectionContext,
   relayHostId: string
 ): DeviceCredentialInstallAuthorization | null {
-  if (context.transport.transport === 'direct') {
+  if (context.transport.transport !== 'relay') {
     return { mode: 'authenticated-direct', directAuthId: context.connectionId }
   }
   if (context.transport.relayHostId !== relayHostId) {
