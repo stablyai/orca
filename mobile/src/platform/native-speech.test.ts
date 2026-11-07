@@ -76,3 +76,26 @@ describe('text a cancelled session sends while the next one is arming', () => {
     expect(await server.serve({ action: 'read' })).toMatchObject({ committed: 'new words' })
   })
 })
+
+describe('a recognizer that fails while its start is still resolving', () => {
+  it('reports the failure once armed, so the page stops recording into nothing', async () => {
+    const error: { emit: (code: string) => void } = { emit: () => {} }
+    let resolveStart: (value: { started: true; locale: string }) => void = () => {}
+    const engine: NativeSpeechEngine = {
+      ...engineWith('automatic'),
+      start: () =>
+        new Promise((resolve) => {
+          resolveStart = resolve
+        }),
+      onError: (handler) => {
+        error.emit = handler
+      }
+    }
+    const server = createNativeSpeechServer(engine)
+    const starting = server.serve({ action: 'start', locale: 'en-US' })
+    error.emit('failed')
+    resolveStart({ started: true, locale: 'en-US' })
+    await starting
+    expect(await server.serve({ action: 'read' })).toMatchObject({ failure: 'failed' })
+  })
+})

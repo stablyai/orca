@@ -29,7 +29,8 @@ export type NativeSpeechServer = {
   readonly dispose: () => void
 }
 
-// armed: native's start resolved; earlier events may be a cancelled session's last words.
+// armed: native's start resolved. Text before then may be a cancelled session's last words, so it's dropped;
+// an error then is kept, because a recognizer that died while starting must not leave the page recording into nothing.
 type Session = {
   text: Omit<BridgeSpeechRead, 'failure'>
   failure: BridgeSpeechFailure | null
@@ -60,7 +61,7 @@ function engineState(engine: NativeSpeechEngine): EngineState {
     }
   })
   engine.onError((code) => {
-    if (state.live?.armed === true) {
+    if (state.live !== null) {
       state.live.failure ??= failureOf(code)
     }
   })

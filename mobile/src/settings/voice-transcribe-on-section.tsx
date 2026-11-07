@@ -104,6 +104,9 @@ export function VoiceTranscribeOnSection() {
     void saveDictationEnginePreference(next).catch(() => {})
   }
 
+  const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
+  const downloadSize = downloadSizeText(t)
+
   const download = () => {
     if (downloadingRef.current) {
       return
@@ -151,8 +154,10 @@ export function VoiceTranscribeOnSection() {
       {phone?.status === 'needs-download' || phone?.status === 'downloading' ? (
         <ListRow
           key="download"
-          title={t('settings.voiceTranscribeOn.download', 'Download for this phone')}
-          subtitle={downloadSizeText(t)}
+          title={downloadTitle}
+          subtitle={downloadSize}
+          // The row's default label is its title alone; screen readers need the size before the tap too.
+          accessibilityLabel={downloadSize ? `${downloadTitle}, ${downloadSize}` : downloadTitle}
           busy={phone.status === 'downloading'}
           onPress={download}
         />
