@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types';
-import { getDefaultSettings } from '../../../../../shared/constants';
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mock = vi.hoisted(
@@ -13,8 +13,8 @@ const mock = vi.hoisted(
 
 vi.mock('../../../store/index', () => ({ useAppStore: { getState: () => mock.state } }))
 
-import { writeNativeChatAppearance } from './native-chat-appearance-write';
-import { writeNativeChatFontSize } from './native-chat-font-size-write';
+import { writeNativeChatAppearance } from './native-chat-appearance-write'
+import { writeNativeChatFontSize } from './native-chat-font-size-write'
 
 beforeEach(() => {
   mock.state.settings = getDefaultSettings('/tmp')

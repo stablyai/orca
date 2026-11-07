@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown';
-import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals';
-import type { NativeChatReplyReveals } from '../../../../../shared/native-chat/transcript/native-chat-reply-reveals';
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../shared/native-chat/transcript/native-chat-text-reveal';
+import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
+import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
+import type { NativeChatReplyReveals } from '../../../../../shared/native-chat/transcript/native-chat-reply-reveals'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../shared/native-chat/transcript/native-chat-text-reveal'
 
 const reveals: NativeChatReplyReveals = { begun: new Set(['reply']), drawn: new Map() }
 

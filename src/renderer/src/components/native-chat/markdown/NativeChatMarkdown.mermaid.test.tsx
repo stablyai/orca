@@ -32,9 +32,9 @@ vi.mock('@/store/index', async () => {
   }
 })
 
-import { NativeChatMarkdown } from './NativeChatMarkdown';
-import { NativeChatCodeBlock } from './code/NativeChatCodeBlock';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatCodeBlock } from './code/NativeChatCodeBlock'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const partial = 'flowchart TD\n A["Sync with main '
 const complete = `${partial}once"]`

@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { WslHostStatus } from '../../../../shared/wsl-host-types';
+import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 
 const { moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -17,8 +17,12 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
-vi.mock('./links/actions/use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
-vi.mock('./links/actions/use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
+vi.mock('./links/actions/use-native-chat-file-link-context', () =>
+  moduleFactories.useNativeChatFileLinkContext()
+)
+vi.mock('./links/actions/use-native-chat-file-link-click', () =>
+  moduleFactories.useNativeChatFileLinkClick()
+)
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
@@ -27,8 +31,8 @@ vi.mock('@/components/status-bar/runtime-environment-explicit-connect', () => ({
   connectRuntimeHostAndReloadProjects: reconnectHost
 }))
 
-import { useAppStore } from '@/store/index';
-import { NativeChatStructuredSession } from './NativeChatStructuredSession';
+import { useAppStore } from '@/store/index'
+import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const initialState = useAppStore.getState()
 

@@ -5,7 +5,11 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 
-import { clearNativeChatVisualCacheForTests, peekCachedNativeChatVisual, readNativeChatVisual } from './native-chat-visual-read-client';
+import {
+  clearNativeChatVisualCacheForTests,
+  peekCachedNativeChatVisual,
+  readNativeChatVisual
+} from './native-chat-visual-read-client'
 
 const local = { target: { kind: 'local' as const }, sessionId: 'session-alpha', file: 'a.html' }
 const remote = {

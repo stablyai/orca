@@ -11,11 +11,14 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 
-import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown';
+import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 
-import { NativeChatVisualOwnerContext, type NativeChatVisualOwner } from './native-chat-visual-owner';
-import { clearNativeChatVisualCacheForTests } from './native-chat-visual-read-client';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  NativeChatVisualOwnerContext,
+  type NativeChatVisualOwner
+} from './native-chat-visual-owner'
+import { clearNativeChatVisualCacheForTests } from './native-chat-visual-read-client'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const owner: NativeChatVisualOwner = {
   target: { kind: 'local' },
