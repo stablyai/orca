@@ -3120,18 +3120,6 @@
           "checkpoint": "refresh-pending"
         },
         {
-          "complete": "status.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["mobile.tasks.v1"]
-            }
-          }
-        },
-        {
           "complete": "settings.get#2",
           "params": {
             "$undefined": true
@@ -20352,18 +20340,6 @@
           }
         },
         {
-          "complete": "status.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
-          }
-        },
-        {
           "checkpoint": "worktrees-listed"
         }
       ]
@@ -20415,18 +20391,6 @@
         },
         {
           "complete": "platform-status",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
-          }
-        },
-        {
-          "complete": "status.get#2",
           "params": {
             "$undefined": true
           },
