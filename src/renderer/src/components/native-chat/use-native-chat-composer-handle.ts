@@ -1,6 +1,9 @@
-import { useImperativeHandle, type ForwardedRef } from 'react'
+import { useCallback, useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from './native-chat-clipboard-payload'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import {
   useNativeChatComposerPaste,
   type UseNativeChatComposerPasteArgs
@@ -11,6 +14,14 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
   Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
+    /** Stable pane/session identity, excluding the replaceable PTY. */
+    draftTarget?: {
+      paneKey: string
+      transport?: Pick<
+        NativeChatStructuredComposerTransport,
+        'sessionId' | 'worktreeId' | 'runtimeEnvironmentId'
+      >
+    }
     /** Intake only: captured with the paste action, never consulted during settlement. */
     resend?: NativeChatComposerHandle['resend']
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
@@ -40,14 +51,41 @@ export function useNativeChatComposerHandle(
     insertTypedText: insertPastedText,
     setNotice: args.setNotice
   })
-  const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
+  const insertCommentText = useCallback(
+    (text: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        insertPastedTextOrFile(text, resolve)
+      }),
+    [insertPastedTextOrFile]
+  )
+  const {
+    handlePaste: handlePasteEvent,
+    pasteFromClipboard,
+    attachCommentedImage
+  } = useNativeChatComposerPaste({
     ...pasteArgs,
-    insertTypedText: insertPastedTextOrFile
+    insertTypedText: insertPastedTextOrFile,
+    insertCommentText
   })
 
+  const target = args.draftTarget
+  const draftKey = args.attachmentScopeKey
+    ? JSON.stringify([
+        args.attachmentScopeKey,
+        ...(target
+          ? [
+              target.paneKey,
+              target.transport?.sessionId,
+              target.transport?.worktreeId,
+              target.transport?.runtimeEnvironmentId
+            ]
+          : [args.targetKey])
+      ])
+    : undefined
   useImperativeHandle(
     ref,
     () => ({
+      draftKey,
       insertAgentReferences: (references) => {
         const input = textareaRef.current
         if (!input || input.disabled || !input.insertAgentReferences || isComposing()) {
@@ -59,6 +97,7 @@ export function useNativeChatComposerHandle(
       },
       isComposing,
       focus,
+      attachCommentedImage,
       resend: args.resend,
       insertTypedText,
       insertPastedText: insertPastedTextOrFile,
@@ -69,9 +108,11 @@ export function useNativeChatComposerHandle(
       contains
     }),
     [
+      draftKey,
       textareaRef,
       isComposing,
       focus,
+      attachCommentedImage,
       args.resend,
       insertTypedText,
       insertPastedTextOrFile,

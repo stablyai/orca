@@ -37,6 +37,10 @@ export function readNativeChatCopyImage(
   if (!src) {
     return undefined
   }
+  return captureNativeChatImage(src)
+}
+
+export function captureNativeChatImage(src: string): NativeChatCopyImage {
   if (/^https?:/i.test(src)) {
     return () => readImageBlob(src)
   }

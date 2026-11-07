@@ -182,6 +182,7 @@ export function useNativeChatPasteLifetime(args: {
     (pendingId: string | null) => {
       if (pendingId) {
         lifetime.pending.delete(pendingId)
+        lifetime.uploads.delete(pendingId)
         dropPendingImageAttachment(pendingId)
       }
     },

@@ -13,22 +13,23 @@ function captureNativeChatPasteDestination(
 ) {
   const destination = scope ? captureNativeChatEditDraftDestination(scope) : undefined
   const canComplete = (): boolean => (destination ? destination.active : canPaste())
-  const insertCapturedText = (text: string): void => {
+  const insertCapturedText = (text: string): boolean => {
     if (!text || !canComplete()) {
-      return
+      return false
     }
     if (
       (!destination || destination.scopeKey === currentDraftScope(scope ?? '')) &&
       lifetime.active &&
       insertTypedText(text)
     ) {
-      return
+      return true
     }
     if (destination) {
       insertNativeChatComposerDraftText(destination.scopeKey, text, { paste: true })
-    } else {
-      setNotice(nativeChatPasteUnavailableNotice())
+      return true
     }
+    setNotice(nativeChatPasteUnavailableNotice())
+    return false
   }
   const showPasteUnavailable = (): void => {
     if (lifetime.active) {

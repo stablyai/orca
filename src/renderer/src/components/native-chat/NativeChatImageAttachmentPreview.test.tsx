@@ -1,3 +1,4 @@
+import { NativeChatImageCommentsContext } from './NativeChatImageCommentsProvider'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -83,4 +84,25 @@ describe('NativeChatImageAttachmentPreview', () => {
     menu.remove()
     elsewhere.remove()
   })
+})
+
+it('offers comments only after the original attachment is available', async () => {
+  const attachment = {
+    id: 'image',
+    path: '/tmp/original.png',
+    previewUrl: 'data:image/png;base64,cG5n'
+  }
+  mocks.useLocalImageSrc.mockReturnValue(undefined)
+  const openComments = vi.fn()
+  const view = () => (
+    <NativeChatImageCommentsContext.Provider value={openComments}>
+      <NativeChatImageAttachmentPreview attachment={attachment} onRemove={() => {}} />
+    </NativeChatImageCommentsContext.Provider>
+  )
+  const result = render(view())
+  fireEvent.click(screen.getByRole('button', { name: 'View image: original.png' }))
+  expect(screen.queryByRole('button', { name: 'Comment on image' })).toBeNull()
+  mocks.useLocalImageSrc.mockReturnValue('blob:original')
+  result.rerender(view())
+  expect(screen.getByRole('button', { name: 'Comment on image' })).toBeTruthy()
 })

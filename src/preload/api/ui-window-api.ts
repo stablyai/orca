@@ -10,6 +10,7 @@ export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {
+    imageDataUrl?: string
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget

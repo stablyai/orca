@@ -62,6 +62,7 @@ import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { handleNativeChatPaneShortcut } from './native-chat-pane-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { NativeChatImageCommentsProvider } from './NativeChatImageCommentsProvider'
 
 export function NativeChatResolvedView({
   paneKey,
@@ -267,12 +268,9 @@ export function NativeChatResolvedView({
     ) {
       setWorkingInterrupted(false)
     }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
-    if (!liveWorking) {
-      previousWorkingEpochRef.current = null
-    }
+    previousWorkingEpochRef.current = liveWorking
+      ? (workingEpoch ?? previousWorkingEpochRef.current)
+      : null
   }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
@@ -315,7 +313,8 @@ export function NativeChatResolvedView({
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   const root = (
-    <div
+    <NativeChatImageCommentsProvider
+      composerRef={composerRef}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={isWorking ? 'true' : 'false'}
@@ -417,7 +416,7 @@ export function NativeChatResolvedView({
       </div>
       {contextMenu.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </NativeChatImageCommentsProvider>
   )
   return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

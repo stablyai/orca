@@ -1,7 +1,7 @@
 import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
+import { NativeChatImageCommentsProvider } from './NativeChatImageCommentsProvider'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
-import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
@@ -76,7 +76,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const paneKey = structuredAgentSessionPaneKey(props.tabId, props.sessionId)
-  // Chat-wide preference; an alternate send flips it for one message.
   const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
@@ -250,7 +249,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     notices.push(hostNotice)
   }
   const root = (
-    <div
+    <NativeChatImageCommentsProvider
+      composerRef={composerRef}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
@@ -265,10 +265,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
         rootInput.onKeyDownCapture(event)
       }}
       onContextMenuCapture={paneCommands.onContextMenuCapture}
-      className={cn(
-        NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-        'flex h-full min-h-0 w-full flex-col focus:outline-none'
-      )}
+      className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} flex h-full min-h-0 w-full flex-col focus:outline-none`}
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
@@ -405,7 +402,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       {paneCommands.menu}
       {handOff.dialog}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </NativeChatImageCommentsProvider>
   )
   return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

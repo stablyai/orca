@@ -1,7 +1,8 @@
+import { useNativeChatImageSave } from './use-native-chat-image-save'
+import { useNativeChatCommentedImageAttachment } from './use-native-chat-commented-image-attachment'
 import { useNativeChatPasteDestination } from './native-chat-paste-destination'
 import { useCallback } from 'react'
 import { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetime'
-import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
 import { assertClipboardTextWithinLimit } from '../../../../shared/clipboard-text'
 import { setNativeChatPasteFailure } from './native-chat-composer-notice'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
@@ -17,13 +18,9 @@ import {
 } from '../../../../shared/native-chat/input/native-chat-clipboard-event'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
-  nativeChatWorktreeNotReadyNotice,
-  type NativeChatAttachmentOwner
+  nativeChatWorktreeNotReadyNotice
 } from './native-chat-attachment-upload'
-import {
-  ownerAcceptsClipboardImage,
-  saveNativeChatPastedClipboardImage
-} from './native-chat-clipboard-image-save'
+import { ownerAcceptsClipboardImage } from './native-chat-clipboard-image-save'
 
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 export type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
@@ -42,7 +39,9 @@ export function useNativeChatComposerPaste({
   resolvePendingImageAttachment,
   revealPendingImageAttachment,
   dropPendingImageAttachment,
+  removeImageAttachment,
   insertTypedText,
+  insertCommentText,
   setCaret,
   setNotice
 }: UseNativeChatComposerPasteArgs) {
@@ -70,58 +69,16 @@ export function useNativeChatComposerPaste({
       setNotice
     )
 
-  /** Settle the operation started at paste time, or attach directly if chips are unavailable. */
-  const settleImagePaste = useCallback(
-    (pendingId: string | null, path: string, originalOwner: NativeChatAttachmentOwner) => {
-      if (!nativeChatAttachmentOwnerUnchanged(originalOwner, resolveAttachmentOwner())) {
-        dropImagePaste(pendingId)
-        setNotice(nativeChatWorktreeNotReadyNotice())
-        return
-      }
-      if (pendingId) {
-        lifetime.pending.delete(pendingId)
-        resolvePendingImageAttachment(pendingId, path, null)
-      } else {
-        attachResolvedPaths([path], null)
-      }
-    },
-    [
-      attachResolvedPaths,
-      lifetime,
-      dropImagePaste,
-      resolveAttachmentOwner,
-      resolvePendingImageAttachment,
-      setNotice
-    ]
-  )
-
-  // Image failures do not decide whether text can be inserted. Resolves whether the image settled.
-  const saveClipboardImage = useCallback(
-    async (
-      owner: NativeChatAttachmentOwner,
-      pendingId: string | null,
-      besideText: boolean,
-      ready?: () => void
-    ): Promise<boolean> => {
-      const saved = await saveNativeChatPastedClipboardImage(owner, {
-        pendingId,
-        besideText,
-        ready,
-        canNotify: canComplete,
-        setNotice
-      })
-      if (keepStoreUploadAfterUnmount(pendingId, saved)) {
-        return false
-      }
-      if (!canComplete() || saved.status !== 'saved') {
-        dropImagePaste(pendingId)
-        return false
-      }
-      settleImagePaste(pendingId, saved.tempPath, owner)
-      return true
-    },
-    [canComplete, dropImagePaste, keepStoreUploadAfterUnmount, setNotice, settleImagePaste]
-  )
+  const saveClipboardImage = useNativeChatImageSave({
+    resolveAttachmentOwner,
+    resolvePendingImageAttachment,
+    attachResolvedPaths,
+    setNotice,
+    lifetime,
+    dropImagePaste,
+    keepStoreUploadAfterUnmount,
+    canComplete
+  })
 
   const handlePaste = useCallback(
     (event: ClipboardEventLike) => {
@@ -310,5 +267,16 @@ export function useNativeChatComposerPaste({
     setNotice
   ])
 
-  return { handlePaste, pasteFromClipboard }
+  const attachCommentedImage = useNativeChatCommentedImageAttachment({
+    canPaste,
+    resolveAttachmentOwner,
+    showPasteUnavailable,
+    startImageChip,
+    saveClipboardImage,
+    insertCapturedText,
+    insertCommentText,
+    removeImageAttachment
+  })
+
+  return { handlePaste, pasteFromClipboard, attachCommentedImage }
 }

@@ -56,13 +56,18 @@ export function useNativeChatPastedTextFile(args: {
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
   insertTypedText: (text: string) => boolean
   setNotice: (notice: string | null, errorText?: string) => void
-}): (text: string) => boolean {
+}): (text: string, onSettled?: (saved: boolean) => void) => boolean {
   const { scopeKey, scopeEditor, resolveAttachmentOwner, insertTypedText, setNotice } = args
   return useCallback(
-    (text: string): boolean => {
+    (text: string, onSettled?: (saved: boolean) => void): boolean => {
+      const insert = (): boolean => {
+        const accepted = insertTypedText(text)
+        onSettled?.(accepted)
+        return accepted
+      }
       const input = scopeEditor?.()
       if (!scopeEditor || !input?.stagePastedText || input.disabled) {
-        return insertTypedText(text)
+        return insert()
       }
       const { value, selectionStart, selectionEnd } = input
       const tooLarge = nativeChatDraftTooLarge(
@@ -75,20 +80,24 @@ export function useNativeChatPastedTextFile(args: {
         owner.kind === 'runtime-session' ? cachedNativeChatPasteUploadTarget(owner) : null
       const canAttach = owner.kind === 'local' || target !== null
       if (!tooLarge && (!long || !canAttach)) {
-        return insertTypedText(text)
+        return insert()
       }
       if (!canAttach) {
         setNotice(pastedTextTooLargeNotice())
+        onSettled?.(false)
         return true
       }
       input.focus()
       const id = createUuidV4()
-      nativeChatPastedTextOperations.set(id, { scopeKey, text })
-      input.stagePastedText(nativeChatPastedTextToken(id))
+      if (!onSettled) {
+        nativeChatPastedTextOperations.set(id, { scopeKey, text })
+        input.stagePastedText(nativeChatPastedTextToken(id))
+      }
       const fail = (notice: string) => {
-        if (settleNativeChatPastedText(id)) {
+        if (settleNativeChatPastedText(id) || onSettled) {
           setNotice(notice)
         }
+        onSettled?.(false)
       }
       void window.api.ui
         .savePastedTextAsFile({
@@ -99,6 +108,21 @@ export function useNativeChatPastedTextFile(args: {
         })
         .then(
           (path) => {
+            if (onSettled) {
+              const current = scopeEditor?.()
+              if (
+                !path ||
+                !current?.stagePastedText ||
+                current.disabled ||
+                !nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
+              ) {
+                releaseBrowserAttachmentFiles([path])
+                fail(nativeChatAttachmentOwnerChangedNotice())
+                return
+              }
+              nativeChatPastedTextOperations.set(id, { scopeKey, text })
+              current.stagePastedText(nativeChatPastedTextToken(id))
+            }
             const destinationScope = nativeChatPastedTextOperations.get(id)?.scopeKey
             if (nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())) {
               const retained = settleNativeChatPastedText(id, path)
@@ -109,6 +133,7 @@ export function useNativeChatPastedTextFile(args: {
                   releaseBrowserAttachmentFiles([path])
                 }
               }
+              onSettled?.(retained)
             } else {
               releaseBrowserAttachmentFiles([path])
               fail(nativeChatAttachmentOwnerChangedNotice())

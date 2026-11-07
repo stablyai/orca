@@ -18,6 +18,7 @@ import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
+import { NativeChatImageCommentButton } from './NativeChatImageCommentsProvider'
 
 type VisibilityListener = (isVisible: boolean) => void
 
@@ -167,6 +168,13 @@ function TranscriptImagePreview({
         src={displaySrc}
         title={label}
         showTitle
+        toolbarActions={
+          <NativeChatImageCommentButton
+            src={displaySrc}
+            title={label}
+            onStart={() => setOpen(false)}
+          />
+        }
         onInteractOutside={keepPreviewOpenForChatMenu}
         data-native-chat-copy-image-src={copySrc}
         fallback={fallback}

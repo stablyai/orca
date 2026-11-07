@@ -18,26 +18,30 @@ import {
   nativeChatPastedTextOperations,
   nativeChatPastedTextToken
 } from './native-chat-pasted-text-reference'
+import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 
 const save = vi.fn(() => new Promise<string>(() => {}))
 const notice = vi.fn()
-let paste: (text: string) => boolean
+let paste: ReturnType<typeof useNativeChatPastedTextFile>
 const SCOPE = 'agent-session:sizing'
 const ID = '00000000-0000-4000-8000-000000000000'
-function Composer({ text }: { text: string }) {
+function Composer({ text, local = false }: { text: string; local?: boolean }) {
   const input = useRef<NativeChatComposerInput>(null)
   paste = useNativeChatPastedTextFile({
     scopeKey: SCOPE,
     scopeEditor: () => input.current,
-    resolveAttachmentOwner: () => ({
-      kind: 'runtime-session',
-      environmentId: 'e1',
-      sessionId: 's1',
-      pairingRevision: 7
-    }),
+    resolveAttachmentOwner: () =>
+      local
+        ? { kind: 'local', stagingScope: SCOPE }
+        : {
+            kind: 'runtime-session',
+            environmentId: 'e1',
+            sessionId: 's1',
+            pairingRevision: 7
+          },
     insertTypedText: (value) => insertNativeChatPastedText(input.current, value),
     setNotice: notice
   })
@@ -108,5 +112,46 @@ it.each([
     expect(promptValue(view.getByRole('textbox'))).toBe(tooLarge ? input : candidate)
     expect(save).not.toHaveBeenCalled()
     expect(notice).toHaveBeenCalledTimes(tooLarge ? 1 : 0)
+  }
+)
+
+it.each([true, false])(
+  'settles awaited comment text only after the file save (saved=%s)',
+  async (saved) => {
+    let finish!: (path: string) => void
+    let fail!: (error: Error) => void
+    const pending = new Promise<string>((resolve, reject) => {
+      finish = resolve
+      fail = reject
+    })
+    save.mockReturnValueOnce(pending)
+    vi.stubGlobal('api', { ui: { savePastedTextAsFile: save } })
+    updateNativeChatComposerDraft(SCOPE, { text: 'Keep my draft', images: [] }, 'immediate')
+    const view = render(<Composer text="Keep my draft" local />)
+    act(() => {
+      promptEditor(view.getByRole('textbox')).commands.focus('end')
+    })
+    let settled: boolean | undefined
+    act(() => {
+      paste('Comment details'.repeat(3000), (accepted) => {
+        settled = accepted
+      })
+    })
+    expect(settled).toBeUndefined()
+    expect(promptValue(view.getByRole('textbox'))).toBe('Keep my draft')
+    await act(async () => {
+      if (saved) {
+        finish('/tmp/comments.txt')
+      } else {
+        fail(new Error('write failed'))
+      }
+    })
+    expect(settled).toBe(saved)
+    const text = resolveNativeChatPastedText(SCOPE, promptValue(view.getByRole('textbox')))
+    if (saved) {
+      expect(text).toContain('@/tmp/comments.txt')
+    } else {
+      expect(text).toBe('Keep my draft')
+    }
   }
 )

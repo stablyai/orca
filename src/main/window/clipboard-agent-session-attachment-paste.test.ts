@@ -8,6 +8,7 @@ import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attach
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
   readImage: vi.fn(),
+  createFromBuffer: vi.fn(),
   callRuntimeEnvironment: vi.fn()
 }))
 
@@ -19,7 +20,7 @@ vi.mock('electron', () => ({
     readBuffer: () => Buffer.alloc(0)
   },
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
-  nativeImage: { createFromBuffer: vi.fn() }
+  nativeImage: { createFromBuffer: mocks.createFromBuffer }
 }))
 vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
@@ -84,6 +85,29 @@ beforeEach(() => {
 })
 
 describe('clipboard:saveImageAsTempFile for a local structured chat', () => {
+  it('stores the supplied marked image without reading the system clipboard', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-commented-image-'))
+    try {
+      const store = new AgentSessionAttachmentStore(root, { hasSession: () => false })
+      mocks.createFromBuffer.mockReturnValue({
+        getSize: () => ({ width: 1200, height: 800 }),
+        isEmpty: () => false,
+        toPNG: () => Buffer.from('marked-image')
+      })
+      registerClipboardHandlers({} as never, { localChatAttachmentStore: async () => store })
+      const saved = await saveHandler()(event, {
+        forNativeChatDraft: true,
+        forStructuredChat: true,
+        imageDataUrl: 'data:image/png;base64,bWFya2VkLWltYWdl'
+      })
+      expect(await readFile(String(saved), 'utf8')).toBe('marked-image')
+      expect(mocks.createFromBuffer).toHaveBeenCalledWith(Buffer.from('marked-image'))
+      expect(mocks.readImage).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it("stores the image in this machine's attachment store, where a send can claim it", async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-local-paste-store-'))
     try {

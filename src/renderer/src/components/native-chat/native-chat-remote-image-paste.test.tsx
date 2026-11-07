@@ -1,3 +1,4 @@
+import { saveNativeChatClipboardImage } from './native-chat-clipboard-image-save'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, useEffect, useRef, useState } from 'react'
@@ -51,17 +52,25 @@ type Api = {
   paste: ReturnType<typeof useNativeChatComposerPaste>
   draft: string
   notice: string | null
+  setDisabled: (disabled: boolean) => void
 }
 
 function Probe({
   acceptsImages,
   owner,
-  onReady
+  onReady,
+  declineText = false,
+  refuseSettlement = false,
+  insertCommentText
 }: {
   acceptsImages: boolean
+  declineText?: boolean
+  refuseSettlement?: boolean
+  insertCommentText?: (text: string) => Promise<boolean>
   owner: () => NativeChatAttachmentOwner
   onReady: (api: Api) => void
 }): React.JSX.Element {
+  const [disabled, setDisabled] = useState(false)
   const [caret, setCaret] = useState(0)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -70,7 +79,7 @@ function Probe({
     attachmentScopeKey: 'remote-scope',
     acceptsImages,
     caret,
-    disabled: false,
+    disabled,
     isComposing: () => false,
     resolveTarget: () => ({ ptyId: 'remote:env-1@@pty-1' }),
     textareaRef,
@@ -79,25 +88,35 @@ function Probe({
     setNotice
   })
   const paste = useNativeChatComposerPaste({
-    targetKey: 'remote-scope',
-    attachmentScopeKey: 'remote-scope',
+    targetKey: declineText ? undefined : 'remote-scope',
+    attachmentScopeKey: declineText ? undefined : 'remote-scope',
     agent: 'claude',
-    disabled: false,
+    disabled,
     caret,
     resolveAttachmentOwner: owner,
     attachResolvedPaths: attachments.attachResolvedPaths,
     attachCopiedFiles: () => {},
     captureCopiedFiles: () => async () => {},
     beginPendingImageAttachment: attachments.beginPendingImageAttachment,
-    resolvePendingImageAttachment: attachments.resolvePendingImageAttachment,
+    resolvePendingImageAttachment: refuseSettlement
+      ? () => false
+      : attachments.resolvePendingImageAttachment,
     revealPendingImageAttachment: attachments.revealPendingImageAttachment,
     dropPendingImageAttachment: attachments.dropPendingImageAttachment,
-    insertTypedText: () => true,
+    removeImageAttachment: attachments.removeImageAttachment,
+    insertCommentText,
+    insertTypedText: (text) => {
+      if (declineText) {
+        return false
+      }
+      setDraft((previous) => previous + text)
+      return true
+    },
     setCaret,
     setNotice
   })
   useEffect(() => {
-    onReady({ attachments, paste, draft, notice })
+    onReady({ attachments, paste, draft, notice, setDisabled })
   })
   return createElement('textarea', { ref: textareaRef })
 }
@@ -106,14 +125,26 @@ let root: Root | null = null
 
 async function render(
   owner: () => NativeChatAttachmentOwner,
-  acceptsImages = true
+  acceptsImages = true,
+  declineText = false,
+  refuseSettlement = false,
+  insertCommentText?: (text: string) => Promise<boolean>
 ): Promise<() => Api> {
   const container = document.createElement('div')
   document.body.append(container)
   let api: Api | null = null
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(Probe, { acceptsImages, owner, onReady: (next) => (api = next) }))
+    root?.render(
+      createElement(Probe, {
+        acceptsImages,
+        owner,
+        declineText,
+        refuseSettlement,
+        insertCommentText,
+        onReady: (next) => (api = next)
+      })
+    )
   })
   return () => {
     if (!api) {
@@ -152,6 +183,54 @@ afterEach(() => {
 })
 
 describe('clipboard image paste into a remote terminal-backed chat', () => {
+  it('attaches an edited image to the owning server without reading the clipboard', async () => {
+    const latest = await render(() => SERVER_OWNER)
+    let attached = false
+    await act(async () => {
+      attached = await latest().paste.attachCommentedImage(
+        'data:image/png;base64,cG5n',
+        '1. [x=25%, y=75%] Align graph'
+      )
+    })
+    expect(attached).toBe(true)
+    expect(latest().draft).toContain('1. [x=25%, y=75%] Align graph')
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      runtimeEnvironmentId: 'env-1',
+      imageDataUrl: 'data:image/png;base64,cG5n'
+    })
+    expect(latest().attachments.imageAttachments).toMatchObject([
+      { path: '/tmp/orca-paste-remote.png' }
+    ])
+    expect(mocks.readClipboardImageThumbnail).not.toHaveBeenCalled()
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
+  })
+
+  it.each(['save failure', 'owner changed'] as const)(
+    'keeps edited-image text out of the draft after %s',
+    async (failure) => {
+      let owner = SERVER_OWNER
+      mocks.saveClipboardImageAsTempFile.mockImplementation(async () => {
+        if (failure === 'save failure') {
+          throw new Error('Upload failed')
+        }
+        owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-2' }
+        return '/tmp/orca-paste-remote.png'
+      })
+      const latest = await render(() => owner)
+      let attached = true
+      await act(async () => {
+        attached = await latest().paste.attachCommentedImage(
+          'data:image/png;base64,cG5n',
+          '1. [x=25%, y=75%] Align graph'
+        )
+      })
+      expect(attached).toBe(false)
+      expect(latest().attachments.imageAttachments).toHaveLength(0)
+      expect(latest().draft).toBe('')
+      expect(latest().notice).not.toBeNull()
+    }
+  )
+
   it.each(['event', 'menu'] as const)(
     'attaches the image saved on the server via %s paste',
     async (source) => {
@@ -193,4 +272,137 @@ describe('clipboard image paste into a remote terminal-backed chat', () => {
     expect(latest().attachments.imageAttachments).toHaveLength(0)
     expect(latest().notice).toBe('Local attachments are not available for remote sessions.')
   })
+})
+
+it('preserves an explicitly empty image payload so the save bridge rejects it', async () => {
+  mocks.saveClipboardImageAsTempFile.mockImplementation(async (args) => {
+    if (args.imageDataUrl !== undefined) {
+      throw new Error('Expected a PNG data URL')
+    }
+    return '/tmp/unrelated-clipboard-image.png'
+  })
+  const notice = vi.fn()
+  const result = await saveNativeChatClipboardImage(SERVER_OWNER, {
+    imageDataUrl: '',
+    setNotice: notice
+  })
+  expect(result).toEqual({ status: 'failed' })
+  expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+    runtimeEnvironmentId: 'env-1',
+    imageDataUrl: ''
+  })
+})
+
+it('rolls back a saved commented image if its text cannot enter the draft', async () => {
+  const latest = await render(() => SERVER_OWNER, true, true)
+  let attached = true
+  await act(async () => {
+    attached = await latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+  })
+  expect(attached).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
+})
+
+it('drops a commented image when its composer unmounts before the save finishes', async () => {
+  let finishSave!: (path: string) => void
+  let saveStarted!: () => void
+  const started = new Promise<void>((resolve) => {
+    saveStarted = resolve
+  })
+  mocks.saveClipboardImageAsTempFile.mockImplementation(() => {
+    saveStarted()
+    return new Promise<string>((resolve) => {
+      finishSave = resolve
+    })
+  })
+  const latest = await render(() => SERVER_OWNER)
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+    await started
+  })
+  act(() => root?.unmount())
+  root = null
+  await act(async () => {
+    finishSave('/tmp/annotated.png')
+    await result
+  })
+  expect(await result).toBe(false)
+  const remounted = await render(() => SERVER_OWNER)
+  expect(remounted().attachments.imageAttachments).toEqual([])
+  expect(remounted().draft).toBe('')
+})
+
+it('does not insert comments when disabling the composer clears its pending image', async () => {
+  let finishSave!: (path: string) => void
+  let saveStarted!: () => void
+  const started = new Promise<void>((resolve) => {
+    saveStarted = resolve
+  })
+  mocks.saveClipboardImageAsTempFile.mockImplementation(() => {
+    saveStarted()
+    return new Promise<string>((resolve) => {
+      finishSave = resolve
+    })
+  })
+  const latest = await render(() => SERVER_OWNER)
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+    await started
+  })
+  act(() => latest().setDisabled(true))
+  await act(async () => {
+    finishSave('/tmp/annotated.png')
+    await result
+  })
+  expect(await result).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
+})
+
+it('refuses comment insertion when an enabled composer cannot settle its pending image', async () => {
+  const latest = await render(() => SERVER_OWNER, true, false, true)
+  let result = true
+  await act(async () => {
+    result = await latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+  })
+  expect(result).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
+})
+
+it('waits for comment text and rolls back the saved image when text saving fails', async () => {
+  let finish!: (saved: boolean) => void
+  let entered!: () => void
+  const textSave = new Promise<boolean>((resolve) => {
+    finish = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const latest = await render(
+    () => SERVER_OWNER,
+    true,
+    false,
+    false,
+    () => {
+      entered()
+      return textSave
+    }
+  )
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Long comments')
+    await started
+  })
+  expect(latest().attachments.imageAttachments).toHaveLength(1)
+  expect(latest().draft).toBe('')
+  await act(async () => {
+    finish(false)
+    expect(await result).toBe(false)
+  })
+  expect(latest().attachments.imageAttachments).toHaveLength(0)
+  expect(latest().draft).toBe('')
 })
