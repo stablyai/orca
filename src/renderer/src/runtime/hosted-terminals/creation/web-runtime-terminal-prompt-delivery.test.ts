@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { deliverCreatedWebRuntimeAgentSessionPrompt } from './hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from './web-runtime-created-agent-prompt-delivery'
 import { useAppStore } from '@/store'
 
 const mocks = vi.hoisted(() => ({
@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   write: vi.fn<(_pty: string, _data: string) => Promise<boolean>>(),
   draft: vi.fn()
 }))
-vi.mock('../lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady: mocks.ready }))
+vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady: mocks.ready }))
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: mocks.write
 }))
