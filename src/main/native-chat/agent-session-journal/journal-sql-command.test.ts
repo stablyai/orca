@@ -24,6 +24,7 @@ import { journalInputOrder } from './input-order/journal-input-order'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { CommandReceipt } from './writing/command-receipt-schema'
 import { readCommandReceipt } from './writing/command-receipt-table'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -272,4 +273,26 @@ it('refuses stale ownership, changed epochs and log coverage even for an empty p
   db.prepare('UPDATE journal_outcome_epochs SET through_seq=2').run()
   expect((await run()).committed).toBe(false)
   expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(1)
+})
+
+it('replaces the epoch inside one writer command, moving the logical cursor epoch', async () => {
+  const { engine, batch } = fixture()
+  const run = async (entry: JournalWriterCommand) =>
+    (await batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)))
+      .outcomes[0]!
+  const before = await run(command(item('before')))
+  const replaced = await run(
+    command({
+      kind: 'epoch-replace',
+      reason: 'handle_forked',
+      fence: 1,
+      items: [],
+      providerHandle: agentSessionJournalProviderHandle({ agent: 'codex', providerHandle: null })
+    })
+  )
+  if (!before.committed || !replaced.committed) {
+    throw new Error('both commands commit')
+  }
+  expect(replaced.value.cursor.epoch).not.toBe(before.value.cursor.epoch)
+  expect(replaced.value.cursor.sequence).toBeGreaterThan(before.value.cursor.sequence)
 })

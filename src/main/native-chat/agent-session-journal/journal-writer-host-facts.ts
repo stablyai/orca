@@ -25,12 +25,20 @@ export type JournalWriterHostFacts = {
   withdrawsStoppedCuts?: true
   /** The host's staged withdrawal for that cut; null when its record already withdrew it. */
   stoppedCut?: { cut: UsageLimitContinueIdentity; store: JournalWriterStoreEffect | null }
+  /** What a rewind or replacement left, for the host's staged completion receipt. */
+  rewound?: JournalRewoundFacts
+}
+
+export type JournalRewoundFacts = {
+  cursor: AgentJournalCursor
+  cancel: UsageLimitContinueIdentity | null
 }
 
 export type JournalHostFactsNeeded = {
   mail?: AgentMessageSource[]
   owed?: true
   stoppedCut?: UsageLimitContinueIdentity
+  rewound?: JournalRewoundFacts
 }
 
 /** The command rolled back without effects; the host answers and resends it on the same lane. */

@@ -3,6 +3,10 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { JournalRow, JournalStopEvent } from './durable-rows/journal-row-schema'
 import {
+  runJournalWriterContextOperation,
+  type JournalWriterContextOperation
+} from './journal-writer-context-operations'
+import {
   composeJournalOperationReceipts,
   type JournalOperationReceipt
 } from './writing/journal-row-writer'
@@ -95,6 +99,7 @@ export type JournalWriterInputOperation =
       options: JournalItemAppendOptions
     }
   | { kind: 'open' }
+  | JournalWriterContextOperation
 
 /** Recovery tries every send; earlier settlements stay committed when a later one fails, as they
  *  do on the host, so a failure is part of the answer rather than a rollback. */
@@ -193,6 +198,10 @@ export async function runJournalWriterOperation(
         receipt ? composeJournalOperationReceipts(goal, receipt) : goal
       )
     }
+    case 'context-clear':
+    case 'context-rewind':
+    case 'epoch-replace':
+      return runJournalWriterContextOperation(session, operation, receipt)
     case 'open':
       if (receipt) {
         throw new Error('journal opens carry no receipt')

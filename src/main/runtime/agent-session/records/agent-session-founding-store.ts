@@ -39,12 +39,27 @@ export function createAgentSessionFoundingStore(
           })
         }
       })
+      const founded = () => {
+        if (!heldBefore) {
+          firstRecordListeners.forEach((listener) => listener())
+        }
+      }
       return {
         write: receipt.write,
         committed: () => {
           receipt.committed()
-          if (!heldBefore) {
-            firstRecordListeners.forEach((listener) => listener())
+          founded()
+        },
+        stage: async (context) => {
+          const staged = await receipt.stage(context)
+          return {
+            effects: staged.effects,
+            settle: (results) => {
+              staged.settle(results)
+              if (results) {
+                founded()
+              }
+            }
           }
         }
       }

@@ -165,7 +165,7 @@ export class AgentSessionStoreTransactions {
   receipt(
     apply: (draft: AgentSessionStoreState) => void,
     options: { insertOperationsIfAbsent?: true; submissionSessionId?: string } = {}
-  ): JournalOperationReceipt {
+  ): JournalOperationReceipt & Required<Pick<JournalOperationReceipt, 'stage'>> {
     let staged: StagedStoreTransaction<void> | null = null
     let admitted: string | undefined
     return {
