@@ -93,6 +93,7 @@ export const uiClipboardAndWindowControlsApi = {
   },
   readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readText', options),
+  readClipboardLinkHtml: (): Promise<string> => ipcRenderer.invoke('clipboard:readLinkHtml'),
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
   saveClipboardImageAsTempFile: (args?: {

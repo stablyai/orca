@@ -147,6 +147,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await (navigator.clipboard?.readText?.() ?? ''),
         options
       ),
+    // Browser paste events carry their own HTML; a programmatic read would prompt.
+    readClipboardLinkHtml: async () => '',
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
