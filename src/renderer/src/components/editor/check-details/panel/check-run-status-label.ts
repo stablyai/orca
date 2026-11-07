@@ -6,6 +6,7 @@ export type CheckStatusLike = {
   conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
+/** Status label for the check details panel; unknown failure states read as "Failed". */
 export function getCheckStatusLabel(check: CheckStatusLike): string {
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
@@ -40,6 +41,7 @@ export function getCheckStatusLabel(check: CheckStatusLike): string {
   }
 }
 
+/** Whether a check or job state is a failure; allowed GitLab failures are not. */
 export function isFailureState(state: string | null | undefined): boolean {
   return (
     state === 'failure' ||

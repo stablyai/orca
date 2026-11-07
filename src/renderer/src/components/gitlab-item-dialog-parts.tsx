@@ -27,7 +27,7 @@ export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
   draft: 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
 }
 
-// Keep status tones in the renderer to avoid importing the main-process mapper.
+/** Badge tone for a GitLab job status; kept here to avoid importing the main-process mapper. */
 export function jobStatusTone(status: string, allowFailure = false): string {
   switch (status) {
     case 'success':
@@ -189,6 +189,7 @@ export function CommentCard({
   )
 }
 
+/** One GitLab job row in the dialog's Pipeline tab, with log toggle and retry. */
 export function PipelineJobRow({
   job,
   expanded,
