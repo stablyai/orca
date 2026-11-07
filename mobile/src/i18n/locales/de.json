@@ -1981,13 +1981,11 @@
       "saveNote": "Notiz speichern"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Änderungen konnten nicht geladen werden.",
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
       "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
-      "invalidSourceControlResponse": "Die Antwort der Quellcodeverwaltung war ungültig.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
     "diffReviewQueue": {

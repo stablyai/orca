@@ -1977,13 +1977,11 @@
       "saveNote": "保存注释"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "无法加载更改",
       "committedChangesFailed": "加载已提交的更改失败",
       "committedChangesUnavailable": "已提交的更改不可用",
       "committedDiffUnavailable": "已提交的差异不可用",
       "desktopUpdateRequired": "请更新 Orca 桌面端，以便在手机上评审更改。",
       "diffLoadFailed": "无法加载差异",
-      "invalidSourceControlResponse": "源代码控制响应无效",
       "reviewNotesLoadFailed": "无法加载评审笔记"
     },
     "diffReviewQueue": {
