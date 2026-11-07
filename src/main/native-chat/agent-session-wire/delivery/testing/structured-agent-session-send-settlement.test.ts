@@ -128,7 +128,7 @@ it('a row wait follows a replacement handoff and resolves withdrawal or returned
   const state: SendSettlementJournal = {
     ...journal('pending'),
     queuedSend: () => row,
-    submission: () => undefined
+    submission: async () => undefined
   }
   const settlements = new StructuredAgentSessionSendSettlement(() => state)
   const pending = settlements.wait('session-1', 'row')
