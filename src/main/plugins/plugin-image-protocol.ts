@@ -3,8 +3,9 @@ import {
   PLUGIN_IMAGE_SCHEME,
   parsePluginImageUrl
 } from '../../shared/plugins/images/plugin-image-url'
-import { pluginThemeBackgroundPath } from './contributions/plugin-theme-background-image'
+import { pluginThemeBackgroundFile } from './contributions/plugin-theme-background-image'
 import { readCheckedPluginImage, type CheckedPluginImage } from './plugin-image-read'
+import { readCheckedPluginThemeVideo } from './plugin-theme-video-read'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
@@ -37,10 +38,13 @@ async function readInstalledImage(
   if (declared) {
     return readCheckedPluginImage(plugin.rootDir, declared.kind, declared.path)
   }
-  const themeBackground = await pluginThemeBackgroundPath(plugin, slot)
-  return themeBackground
-    ? readCheckedPluginImage(plugin.rootDir, 'theme-background', themeBackground)
-    : null
+  const themeBackground = await pluginThemeBackgroundFile(plugin, slot)
+  if (!themeBackground) {
+    return null
+  }
+  return themeBackground.video
+    ? readCheckedPluginThemeVideo(plugin.rootDir, themeBackground.path)
+    : readCheckedPluginImage(plugin.rootDir, 'theme-background', themeBackground.path)
 }
 
 export function createPluginImageRequestHandler(

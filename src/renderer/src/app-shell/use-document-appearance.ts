@@ -7,6 +7,9 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
+import { syncThemeBackgroundVideo } from '../lib/theme-background-video'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
+import { useWindowActive } from '../hooks/use-window-active'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
 import {
   findCodeEditorTheme,
@@ -162,14 +165,23 @@ export function useDocumentAppearance(): void {
 
   // Why gated: the image only shows through translucent terminals and chats, so otherwise it would
   // cost decode and switch terminals to transparent rendering for nothing.
+  const paintsBackground = surfaceOpacity < 1 && !reduceEffects
   useEffect(() => {
     if (pluginThemesLoaded) {
-      applyThemeBackground(
-        surfaceOpacity < 1 && !reduceEffects ? themeBackground : null,
-        surfaceOpacity
-      )
+      applyThemeBackground(paintsBackground ? themeBackground : null, surfaceOpacity)
     }
-  }, [pluginThemesLoaded, surfaceOpacity, reduceEffects, themeBackground])
+  }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
+
+  const reduceMotion = usePrefersReducedMotion()
+  const video =
+    paintsBackground && !reduceMotion && themeBackground?.videoUrl ? themeBackground : null
+  // Why only while active: each frame costs a decode and a window composite, even unfocused.
+  const windowActive = useWindowActive(video !== null)
+  useEffect(() => {
+    if (pluginThemesLoaded) {
+      syncThemeBackgroundVideo(video, windowActive)
+    }
+  }, [pluginThemesLoaded, video, windowActive])
 
   // Why after the paint above: a followed editor reads the colors it just painted. Built-in
   // choices resolve before the plugin list loads; a plugin choice follows the app until then.
