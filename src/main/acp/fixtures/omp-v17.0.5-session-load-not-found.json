@@ -1,0 +1,11 @@
+{
+  "agent": "omp",
+  "version": "17.0.5",
+  "method": "session/load",
+  "sessionId": "01a19b5d-43a0-7000-8795-e9fdbfa2cda3",
+  "error": {
+    "code": -32603,
+    "message": "Internal error",
+    "data": { "details": "ACP session not found: 01a19b5d-43a0-7000-8795-e9fdbfa2cda3" }
+  }
+}

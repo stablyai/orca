@@ -57,7 +57,108 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  describe('a thread Codex never saved', () => {
+  it.each([
+    ['success', '', 3],
+    ['second-archive', 'is archived', 3],
+    ['retry-no-rollout', 'no rollout found', 3],
+    ['retry-active-writer', 'already has an active writer', 3],
+    ['unarchive-refusal', 'is archived', 2],
+    ['cancel-before-unarchive', 'cancelled opening', 1],
+    ['cancel-before-retry', 'cancelled opening', 2],
+    ['start', 'is archived', 1]
+  ] as const)(
+    'recovers an archived resume once through the real connection: %s',
+    async (mode, error, calls) => {
+      const fakeAppServer = String.raw`
+      const readline = require('node:readline')
+      const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
+      let resumes = 0
+      let mode
+      readline.createInterface({ input: process.stdin }).on('line', (line) => {
+        const { id, method, params } = JSON.parse(line)
+        if (method === 'initialize') return send({ id, result: {} })
+        if (!id) return
+        mode ??= params.cwd
+        if (method === 'thread/unarchive' && mode !== 'unarchive-refusal') {
+          return send({ id, result: {} })
+        }
+        if (method === 'thread/resume' && ++resumes === 2 && mode !== 'second-archive') {
+          if (mode === 'retry-active-writer') {
+            return send({ id, error: { code: -32600, message: 'thread thread-1 already has an active writer' } })
+          }
+          if (mode === 'retry-no-rollout') {
+            return send({ id, error: { code: -32600, message: 'no rollout found for thread id thread-1' } })
+          }
+          return send({ id, result: { thread: { id: 'thread-1' }, model: 'gpt-saved' } })
+        }
+        send({ id, error: { code: -32600, message: 'session thread-1 is archived. Run ' +
+          String.fromCharCode(96) + 'codex unarchive thread-1' + String.fromCharCode(96) +
+          ' to unarchive it first.' } })
+      })
+    `
+      const connection = await openCodexAppServerConnection({
+        command: process.execPath,
+        args: ['-e', fakeAppServer]
+      })
+      const controller = new AbortController()
+      const request = vi.fn<CodexAppServerConnection['request']>(async (...args) => {
+        try {
+          return await connection.request(...args)
+        } finally {
+          if (
+            (mode === 'cancel-before-unarchive' && args[0] === 'thread/resume') ||
+            (mode === 'cancel-before-retry' && args[0] === 'thread/unarchive')
+          ) {
+            controller.abort(new Error('cancelled opening'))
+          }
+        }
+      })
+      try {
+        const opened = openCodexThread(
+          connectionFor(request),
+          {
+            cwd: mode,
+            resumeThreadId: mode === 'start' ? null : 'thread-1',
+            model: 'gpt-selected',
+            permissionPolicy: codexStructuredPermissionPolicy('ask'),
+            threadConfig: { service_tier: 'priority' },
+            commandEnv: { ORCA_SESSION_ID: 'session-1' }
+          },
+          null,
+          controller.signal
+        )
+        if (error) {
+          await expect(opened).rejects.toThrow(error)
+          if (mode === 'retry-active-writer') {
+            await expect(opened).rejects.toMatchObject({ reason: 'conversationOpenElsewhere' })
+          }
+          if (mode === 'retry-no-rollout') {
+            await expect(opened).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+          }
+        } else {
+          await expect(opened).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-saved' })
+          expect(request.mock.calls[2]).toEqual(request.mock.calls[0])
+          expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
+        }
+        const methods =
+          mode === 'start'
+            ? ['thread/start']
+            : ['thread/resume', 'thread/unarchive', 'thread/resume'].slice(0, calls)
+        expect(request.mock.calls.map(([method]) => method)).toEqual(methods)
+        if (methods.includes('thread/unarchive')) {
+          expect(request.mock.calls[1]).toEqual([
+            'thread/unarchive',
+            { threadId: 'thread-1' },
+            { timeoutMs: null }
+          ])
+        }
+      } finally {
+        await connection.close()
+      }
+    }
+  )
+
+  describe('a saved thread Codex holds no rollout for', () => {
     const noRollout = (threadId: string, code = -32600) =>
       new CodexAppServerRequestError(
         'thread/resume',
@@ -107,7 +208,7 @@ describe('openCodexThread', () => {
         await expect(
           openCodexThread(
             connectionFor(request),
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
             2_000
           )
         ).rejects.toBe(failure)
@@ -115,7 +216,7 @@ describe('openCodexThread', () => {
       }
     })
 
-    it('recognizes the raw frame Codex sends, through the real connection', async () => {
+    it('refuses on the raw frame Codex sends, through the real connection, starting nothing', async () => {
       const fakeAppServer = String.raw`
         const readline = require('node:readline')
         const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
@@ -138,14 +239,21 @@ describe('openCodexThread', () => {
         command: process.execPath,
         args: ['-e', fakeAppServer]
       })
+      const methods: string[] = []
       try {
         await expect(
           openCodexThread(
-            connection,
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            {
+              request: (...args) => {
+                methods.push(args[0])
+                return connection.request(...args)
+              }
+            },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
             5_000
           )
-        ).resolves.toMatchObject({ threadId: 'thread-new', supersededThreadId: 'thread-unsaved' })
+        ).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+        expect(methods).toEqual(['thread/resume'])
       } finally {
         await connection.close()
       }

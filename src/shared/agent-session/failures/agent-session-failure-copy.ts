@@ -22,7 +22,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
-  savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
+  savedConversationMissing:
+    "{{agent}} couldn't find this chat's saved conversation. You can hand this agent session off to a new session.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
