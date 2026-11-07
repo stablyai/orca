@@ -6753,6 +6753,8 @@
           "36223200ac": "OpenCode Go 会话 Cookie",
           "ea631977b5": "配置 OpenCode Go 提供商设置。",
           "4ac10b4d08": "OpenCode Go",
+          "73f26694ad": "用登录信息获取 Claude 用量",
+          "688fd1f924": "允许 Orca 读取你的 Claude Code 登录信息，并调用 Anthropic 的用量接口供状态栏显示。关闭后，用量只来自运行中的 Claude Code 会话，Orca 不读取你的登录信息。",
           "c2aee76420": "从本地 Gemini CLI 安装中提取 OAuth 凭据，用于在 {{value0}} 通过 Google 进行身份验证。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
           "96f3649526": "使用 Gemini CLI 凭据（实验）",
           "d676c41fc6": "从本地 Gemini CLI 安装中提取 OAuth 凭据以通过 Google 认证。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
