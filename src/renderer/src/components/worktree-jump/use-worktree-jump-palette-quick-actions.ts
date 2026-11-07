@@ -24,6 +24,7 @@ import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-pale
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 
+/** Prefetch the repo New workspace will seed, mapping a per-workspace VM repo to its visible checkout. */
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
@@ -34,7 +35,8 @@ function getComposerPrefetchRepoId(
     activeRepoId: resolveComposerActiveRepoId(
       state.repos,
       getComposerEligibleRepos(state.repos),
-      state.activeRepoId
+      state.activeRepoId,
+      state.runtimeEnvironments
     ),
     focusedHostScope: state.workspaceHostScope
   })
