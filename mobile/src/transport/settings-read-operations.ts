@@ -144,6 +144,7 @@ export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
 type HostListSettings = {
   showPinnedWorktreesInGroups: boolean
   compactWorktreeCards: boolean
+  compactWorktreeHeader: boolean
   newCardStyle: boolean
 }
 
@@ -161,6 +162,7 @@ const hostListSettingsReader: RpcCompatibleReader<
     value: {
       showPinnedWorktreesInGroups: isOn('showPinnedWorktreesInGroups'),
       compactWorktreeCards: isOn('compactWorktreeCards'),
+      compactWorktreeHeader: isOn('compactWorktreeHeader'),
       newCardStyle: isOn('experimentalNewWorktreeCardStyle')
     },
     salvage: { droppedPaths: [], droppedCount: 0 }

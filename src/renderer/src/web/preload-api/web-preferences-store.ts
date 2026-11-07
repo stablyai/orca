@@ -135,9 +135,10 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
+    // Older hosts must clear a compact-header preference carried from another host.
     for (const key of CARD_LAYOUT_SETTING_KEYS) {
-      if (typeof result.settings[key] === 'boolean') {
-        runtimeSettings[key] = result.settings[key]
+      if (typeof result.settings[key] === 'boolean' || key === 'compactWorktreeHeader') {
+        runtimeSettings[key] = result.settings[key] === true
       }
     }
     if (typeof result.settings.minimaxGroupId === 'string') {

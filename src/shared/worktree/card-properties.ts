@@ -81,14 +81,20 @@ export function getWorktreeCardModeProperties(mode: WorktreeCardMode): WorktreeC
     : [...DEFAULT_WORKTREE_CARD_PROPERTIES]
 }
 
-export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
+/** Leave the new flag out of legacy presets unless clearing an active compact header. */
+export function getWorktreeCardModeUpdates(
+  mode: WorktreeCardMode,
+  currentSettings?: Pick<GlobalSettings, 'compactWorktreeHeader'>
+): {
   settings: Pick<GlobalSettings, 'compactWorktreeCards' | 'compactWorktreeHeader'>
   ui: Pick<PersistedUIState, 'worktreeCardProperties' | '_worktreeCardModeDefaulted'>
 } {
   return {
     settings: {
       compactWorktreeCards: mode === 'Compact',
-      compactWorktreeHeader: mode === 'CompactHeader'
+      ...(mode === 'CompactHeader' || currentSettings?.compactWorktreeHeader === true
+        ? { compactWorktreeHeader: mode === 'CompactHeader' }
+        : {})
     },
     ui: {
       worktreeCardProperties: getWorktreeCardModeProperties(mode),

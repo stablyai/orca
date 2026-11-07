@@ -90,6 +90,7 @@ export class RuntimeClientSettingsController {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      compactWorktreeHeader: settings.compactWorktreeHeader === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
