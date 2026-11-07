@@ -122,6 +122,20 @@ describe('updateIssueBySlug', () => {
     ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
   })
 
+  it('keeps an accepted PR body save successful without an optional representation', async () => {
+    runRestMock.mockResolvedValueOnce({ ok: true, data: null })
+    await expect(
+      updatePullRequestBySlug({
+        owner: 'acme',
+        repo: 'widgets',
+        number: 12,
+        updates: {
+          body: '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+        }
+      })
+    ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
+  })
+
   it.each([null, true])(
     'finishes a Project compound save with unusable optional HTML (%s)',
     async (html) => {

@@ -1,12 +1,15 @@
 import type * as HtmlParser from 'hast-util-from-html-isomorphic'
 import type { Root, RootContent } from 'hast'
 import { describe, expect, it, vi } from 'vitest'
-const traversal = vi.hoisted(() => ({ enabled: false, parses: 0, children: 0 }))
+const traversal = vi.hoisted(() => ({ enabled: false, parses: 0, children: 0, fail: false }))
 vi.mock('hast-util-from-html-isomorphic', async (load) => {
   const actual = await load<typeof HtmlParser>()
   return {
     ...actual,
     fromHtmlIsomorphic: (...args: Parameters<typeof actual.fromHtmlIsomorphic>) => {
+      if (traversal.fail) {
+        throw new Error('Optional image HTML could not be parsed')
+      }
       const tree = actual.fromHtmlIsomorphic(...args)
       if (!traversal.enabled) {
         return tree
@@ -38,6 +41,22 @@ const signed =
   'https://private-user-images.githubusercontent.com/1/2-ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST&download=1'
 
 describe('GitHub body image sources', () => {
+  it.each([
+    { body: `![shot](${original})`, html: true },
+    { body: true, html: `<img src="${signed}">` }
+  ])('ignores unusable optional representations ($body, $html)', ({ body, html }) => {
+    expect(githubBodyImageUrls(body, html)).toBeUndefined()
+  })
+
+  it('leaves the optional map absent if HTML extraction fails', () => {
+    traversal.fail = true
+    try {
+      expect(githubBodyImageUrls(`![shot](${original})`, `<img src="${signed}">`)).toBeUndefined()
+    } finally {
+      traversal.fail = false
+    }
+  })
+
   it('matches rendered images to canonical assets without changing editable Markdown', () => {
     const body = `![shot](${original})\n<img src="https://github.enterprise/team/repo/assets/42/ab11040a-fb66-4289-927f-547b16dfc488">\n![missing](https://github.com/user-attachments/assets/cc11040a-fb66-4289-927f-547b16dfc488)\n\`https://github.com/user-attachments/assets/dd11040a-fb66-4289-927f-547b16dfc488\``
     const html = `<img src="https://private-user-images.githubusercontent.com/1/2-ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST&amp;download=1"><img src="https://github.enterprise/storage/ab11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST"><code>https://private-user-images.githubusercontent.com/1/dd11040a-fb66-4289-927f-547b16dfc488.png</code>`

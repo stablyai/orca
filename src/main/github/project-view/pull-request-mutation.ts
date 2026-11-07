@@ -56,7 +56,7 @@ export async function updatePullRequestBySlug(
         ok: true,
         bodyImageUrls:
           args.updates.body !== undefined
-            ? githubBodyImageUrls(result.data.body ?? args.updates.body, result.data.body_html)
+            ? githubBodyImageUrls(result.data?.body ?? args.updates.body, result.data?.body_html)
             : undefined
       }
     : { ok: false, error: result.error }

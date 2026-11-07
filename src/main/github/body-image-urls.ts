@@ -31,53 +31,57 @@ export function githubBodyMediaHeaders(body: string): string[] {
 
 /** Keep short-lived display URLs separate from editable Markdown and persisted item metadata. */
 export function githubBodyImageUrls(
-  body: string,
-  html: string | null | undefined
+  body: unknown,
+  html: unknown
 ): Record<string, string> | undefined {
-  if (!html) {
+  if (typeof body !== 'string' || typeof html !== 'string' || !html) {
     return undefined
   }
-  const originals = githubBodyImageCandidates(body)
-  if (!originals.size) {
-    return undefined
-  }
+  try {
+    const originals = githubBodyImageCandidates(body)
+    if (!originals.size) {
+      return undefined
+    }
 
-  const signed = new Map<string, URL>()
-  const pending: (Root | RootContent)[] = [fromHtmlIsomorphic(html, { fragment: true })]
-  while (pending.length) {
-    const node = pending.pop()!
-    if ('children' in node) {
-      pending.push(...node.children)
-    }
-    if (node.type !== 'element' || node.tagName !== 'img') {
-      continue
-    }
-    const src = node.properties.src
-    if (typeof src !== 'string') {
-      continue
-    }
-    try {
-      const url = new URL(src)
-      const id = url.pathname.match(imageId)?.[0].toLowerCase()
-      if (id && url.protocol === 'https:') {
-        signed.set(id, url)
+    const signed = new Map<string, URL>()
+    const pending: (Root | RootContent)[] = [fromHtmlIsomorphic(html, { fragment: true })]
+    while (pending.length) {
+      const node = pending.pop()!
+      if ('children' in node) {
+        pending.push(...node.children)
       }
-    } catch {
-      // Relative or malformed HTML sources do not supply a signed attachment URL.
+      if (node.type !== 'element' || node.tagName !== 'img') {
+        continue
+      }
+      const src = node.properties.src
+      if (typeof src !== 'string') {
+        continue
+      }
+      try {
+        const url = new URL(src)
+        const id = url.pathname.match(imageId)?.[0].toLowerCase()
+        if (id && url.protocol === 'https:') {
+          signed.set(id, url)
+        }
+      } catch {
+        // Relative or malformed HTML sources do not supply a signed attachment URL.
+      }
     }
-  }
 
-  const result: Record<string, string> = {}
-  for (const [original, url] of originals) {
-    const id = url.pathname.match(githubBodyAssetPath)![1].toLowerCase()
-    const display = signed.get(id)
-    if (
-      display &&
-      display.href !== original &&
-      (display.hostname.endsWith('.githubusercontent.com') || display.host === url.host)
-    ) {
-      result[original] = display.href
+    const result: Record<string, string> = {}
+    for (const [original, url] of originals) {
+      const id = url.pathname.match(githubBodyAssetPath)![1].toLowerCase()
+      const display = signed.get(id)
+      if (
+        display &&
+        display.href !== original &&
+        (display.hostname.endsWith('.githubusercontent.com') || display.host === url.host)
+      ) {
+        result[original] = display.href
+      }
     }
+    return Object.keys(result).length ? result : undefined
+  } catch {
+    return undefined
   }
-  return Object.keys(result).length ? result : undefined
 }
