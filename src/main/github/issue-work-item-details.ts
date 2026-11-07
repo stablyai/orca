@@ -1,3 +1,8 @@
+import {
+  collectGitHubImageBody,
+  enrichGitHubBodyImages,
+  type GitHubBodyImageTarget
+} from './body-image-enrichment'
 import type { GitHubIssueTimelineItem, PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
 import {
@@ -17,6 +22,7 @@ import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-l
 export type CollapsedIssueDetails = {
   item?: MainWorkItem
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   assignees: string[]
   assigneeUsers: GitHubAssignableUser[]
@@ -82,17 +88,20 @@ export async function getIssueDetailsViaGraphQL(
     if (itemData?.success && itemData.data.number !== issueNumber) {
       return null
     }
+    const imageTargets: GitHubBodyImageTarget[] = []
     const comments: PRComment[] = (issue.comments?.nodes ?? [])
       .filter((comment) => typeof comment.databaseId === 'number')
-      .map((comment) => ({
-        id: comment.databaseId as number,
-        author: comment.author?.login ?? 'ghost',
-        authorAvatarUrl: comment.author?.avatarUrl ?? '',
-        body: comment.body ?? '',
-        createdAt: comment.createdAt ?? '',
-        url: comment.url ?? '',
-        isBot: comment.author?.__typename === 'Bot'
-      }))
+      .map((comment) =>
+        collectGitHubImageBody(imageTargets, comment.id, {
+          id: comment.databaseId as number,
+          author: comment.author?.login ?? 'ghost',
+          authorAvatarUrl: comment.author?.avatarUrl ?? '',
+          body: comment.body ?? '',
+          createdAt: comment.createdAt ?? '',
+          url: comment.url ?? '',
+          isBot: comment.author?.__typename === 'Bot'
+        })
+      )
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
         Boolean(assignee?.login)
@@ -109,7 +118,7 @@ export async function getIssueDetailsViaGraphQL(
         name: user.name ?? null,
         avatarUrl: user.avatarUrl ?? ''
       }))
-    return {
+    const details: CollapsedIssueDetails = {
       ...(itemData?.success
         ? {
             item: mapIssueWorkItem({
@@ -128,6 +137,9 @@ export async function getIssueDetailsViaGraphQL(
       participants,
       timelineItems: await getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
     }
+    collectGitHubImageBody(imageTargets, issue.id, details)
+    await enrichGitHubBodyImages(imageTargets, repository, ghOptions)
+    return details
   } catch {
     return null
   }
@@ -140,7 +152,9 @@ export async function getIssueBodyAndComments(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   fresh = false
-): Promise<Pick<CollapsedIssueDetails, 'body' | 'comments' | 'assignees' | 'timelineItems'>> {
+): Promise<
+  Pick<CollapsedIssueDetails, 'body' | 'bodyImageUrls' | 'comments' | 'assignees' | 'timelineItems'>
+> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
@@ -175,10 +189,12 @@ export async function getIssueBodyAndComments(
         getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
       ])
       const issue = JSON.parse(issueResult.stdout) as {
+        node_id?: string
         body?: string | null
         assignees?: { login: string }[]
       }
       type RESTComment = {
+        node_id?: string
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
         body: string
@@ -190,21 +206,27 @@ export async function getIssueBodyAndComments(
       }
       // A slurped (paginated) read nests one array per page; an ordinary read is one page.
       const parsedComments: RESTComment[][] | RESTComment[] = JSON.parse(commentsResult.stdout)
-      const comments = parsedComments.flat().map((comment): PRComment => ({
-        id: comment.id,
-        author: comment.user?.login ?? 'ghost',
-        authorAvatarUrl: comment.user?.avatar_url ?? '',
-        body: comment.body ?? '',
-        createdAt: comment.created_at,
-        url: comment.html_url,
-        isBot: comment.user?.type === 'Bot'
-      }))
-      return {
+      const imageTargets: GitHubBodyImageTarget[] = []
+      const comments = parsedComments.flat().map((comment): PRComment =>
+        collectGitHubImageBody(imageTargets, comment.node_id, {
+          id: comment.id,
+          author: comment.user?.login ?? 'ghost',
+          authorAvatarUrl: comment.user?.avatar_url ?? '',
+          body: comment.body ?? '',
+          createdAt: comment.created_at,
+          url: comment.html_url,
+          isBot: comment.user?.type === 'Bot'
+        })
+      )
+      const details = {
         body: issue.body ?? '',
         comments,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
         timelineItems
       }
+      collectGitHubImageBody(imageTargets, issue.node_id, details)
+      await enrichGitHubBodyImages(imageTargets, repository, ghOptions)
+      return details
     }
     if (connectionId) {
       // A connection-backed lookup must not use ambient local GH_REPO/GH_HOST.

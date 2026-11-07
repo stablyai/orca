@@ -1,3 +1,4 @@
+import { enrichGitHubBodyImages, type GitHubBodyImageTarget } from '../../body-image-enrichment'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../../git/exec-error'
@@ -30,8 +31,8 @@ async function readPRComments(
   let restBudgetFailed = false
   try {
     if (ownerRepo) {
-      // Explicit refresh bypasses the polling cache.
       const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+      const imageTargets: GitHubBodyImageTarget[] = []
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
       // Retain successful comment sources when another endpoint fails.
@@ -68,7 +69,7 @@ async function readPRComments(
       let conversation: ReturnType<typeof parsePRConversationResponse> = { reviewComments: [] }
       if (threadsResult) {
         try {
-          conversation = parsePRConversationResponse(threadsResult.stdout)
+          conversation = parsePRConversationResponse(threadsResult.stdout, imageTargets)
         } catch {
           console.warn('Invalid review threads response; falling back to REST')
         }
@@ -83,7 +84,7 @@ async function readPRComments(
         try {
           noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
           const { stdout } = await ghExecFileAsync(['api', ...cacheArgs, endpoint], ghOptions)
-          return parseRestPRComments(stdout, endpoint.includes('/reviews?'))
+          return parseRestPRComments(stdout, endpoint.includes('/reviews?'), imageTargets)
         } catch (error) {
           console.warn('Failed to fetch PR conversation fallback:', error)
           return []
@@ -102,6 +103,7 @@ async function readPRComments(
         ...reviewComments,
         ...(reviewSummaries ?? reviewsResult ?? [])
       ]
+      await enrichGitHubBodyImages(imageTargets, ownerRepo, ghOptions)
       all.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       return all
     }

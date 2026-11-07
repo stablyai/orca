@@ -1,3 +1,4 @@
+import type { GitHubBodyImageTarget } from '../../body-image-enrichment'
 import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
@@ -78,9 +79,10 @@ function hasDatabaseId<T extends { databaseId: number | null }>(
 }
 
 function mapGraphQLComment(
-  comment: z.infer<typeof commentSchema> & { databaseId: number }
+  comment: z.infer<typeof commentSchema> & { databaseId: number },
+  targets?: GitHubBodyImageTarget[]
 ): PRComment {
-  return {
+  const mapped: PRComment = {
     id: comment.databaseId,
     author: comment.author?.login ?? 'ghost',
     authorAvatarUrl: comment.author?.avatarUrl ?? '',
@@ -91,6 +93,8 @@ function mapGraphQLComment(
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
+  targets?.push({ nodeId: comment.id, target: mapped })
+  return mapped
 }
 
 const reviewMarkdown = unified().use(remarkParse)
@@ -114,7 +118,10 @@ function hasVisibleReviewBody(body: string | null | undefined): boolean {
   return reviewMarkdown.parse(body).children.some(hasVisibleNode)
 }
 
-export function parsePRConversationResponse(stdout: string): {
+export function parsePRConversationResponse(
+  stdout: string,
+  targets?: GitHubBodyImageTarget[]
+): {
   issueComments?: PRComment[]
   reviewSummaries?: PRComment[]
   reviewComments: PRComment[]
@@ -134,31 +141,32 @@ export function parsePRConversationResponse(stdout: string): {
   return {
     issueComments:
       comments.success && !failed('comments')
-        ? comments.data.nodes.filter(hasDatabaseId).map(mapGraphQLComment)
+        ? comments.data.nodes.filter(hasDatabaseId).map((c) => mapGraphQLComment(c, targets))
         : undefined,
     reviewSummaries:
       reviews.success && !failed('reviews')
         ? reviews.data.nodes
             .filter(hasDatabaseId)
             .filter((c) => hasVisibleReviewBody(c.body))
-            .map(mapGraphQLComment)
+            .map((c) => mapGraphQLComment(c, targets))
         : undefined,
     reviewComments: threads.success
       ? threads.data.nodes.flatMap((thread) =>
           thread
-            ? thread.comments.nodes.filter(hasDatabaseId).map((c) => ({
-                ...mapGraphQLComment(c),
-                // Left-side threads count old-file lines, which the shared tail numbering cannot place.
-                ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
-                  ? rootDiffHunk(thread.rootHunk)
-                  : {}),
-                path: c.path,
-                threadId: thread.id,
-                isResolved: thread.isResolved,
-                isOutdated: thread.line == null,
-                line: thread.line ?? thread.originalLine ?? undefined,
-                startLine: thread.startLine ?? thread.originalStartLine ?? undefined
-              }))
+            ? thread.comments.nodes.filter(hasDatabaseId).map((c) =>
+                Object.assign(mapGraphQLComment(c, targets), {
+                  // Left-side threads count old-file lines, which the shared tail numbering cannot place.
+                  ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
+                    ? rootDiffHunk(thread.rootHunk)
+                    : {}),
+                  path: c.path,
+                  threadId: thread.id,
+                  isResolved: thread.isResolved,
+                  isOutdated: thread.line == null,
+                  line: thread.line ?? thread.originalLine ?? undefined,
+                  startLine: thread.startLine ?? thread.originalStartLine ?? undefined
+                })
+              )
             : []
         )
       : []
@@ -174,6 +182,7 @@ function rootDiffHunk(
 
 const restCommentSchema = z.object({
   id: z.number(),
+  node_id: z.string().nullish(),
   user: z
     .object({ login: z.string(), avatar_url: z.string(), type: z.string().optional() })
     .nullable(),
@@ -183,18 +192,26 @@ const restCommentSchema = z.object({
   html_url: z.string()
 })
 
-export function parseRestPRComments(stdout: string, reviews: boolean): PRComment[] {
+export function parseRestPRComments(
+  stdout: string,
+  reviews: boolean,
+  targets?: GitHubBodyImageTarget[]
+): PRComment[] {
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
     .filter((c) => !reviews || hasVisibleReviewBody(c.body))
-    .map((c) => ({
-      id: c.id,
-      author: c.user?.login ?? 'ghost',
-      authorAvatarUrl: c.user?.avatar_url ?? '',
-      body: c.body ?? '',
-      createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
-      url: c.html_url,
-      isBot: c.user?.type === 'Bot'
-    }))
+    .map((c) => {
+      const mapped: PRComment = {
+        id: c.id,
+        author: c.user?.login ?? 'ghost',
+        authorAvatarUrl: c.user?.avatar_url ?? '',
+        body: c.body ?? '',
+        createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
+        url: c.html_url,
+        isBot: c.user?.type === 'Bot'
+      }
+      targets?.push({ nodeId: c.node_id, target: mapped })
+      return mapped
+    })
 }

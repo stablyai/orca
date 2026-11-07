@@ -120,6 +120,7 @@ export function GitHubItemDialogPRTabs({
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             timelineItems={timelineItems}
             files={files}
@@ -137,9 +138,9 @@ export function GitHubItemDialogPRTabs({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={onCommentAdded}

@@ -47,7 +47,11 @@ describe('issue edits retain the displayed repository', () => {
     vi.mocked(callRuntimeRpc).mockResolvedValue({ ok: true })
     vi.stubGlobal('window', {
       api: {
-        gh: { updateIssue: vi.fn().mockResolvedValue({ ok: true }), updateIssueBySlug: vi.fn() }
+        gh: {
+          updateIssue: vi.fn().mockResolvedValue({ ok: true }),
+          updateIssueBySlug: vi.fn(),
+          updatePullRequestBySlug: vi.fn()
+        }
       }
     })
   })
@@ -124,4 +128,46 @@ describe('issue edits retain the displayed repository', () => {
     )
     expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
   })
+  it.each([true, false])(
+    'forwards local PR body PATCH maps without adding a reread (%s)',
+    async (hasMap) => {
+      const body =
+        '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      vi.mocked(window.api.gh.updatePullRequestBySlug).mockResolvedValue(
+        hasMap
+          ? {
+              ok: true,
+              bodyImageUrls: {
+                'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+                  'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+              }
+            }
+          : { ok: true }
+      )
+      const result = await runWorkItemBodyUpdate({
+        item: { ...item, type: 'pr' },
+        repoPath: '/repo',
+        sourceContext: localSource,
+        projectOrigin: undefined,
+        body,
+        parsedSlug: ORIGIN
+      })
+      expect(result).toEqual({
+        bodyImageUrls: hasMap
+          ? {
+              'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+                'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+            }
+          : undefined
+      })
+      expect(window.api.gh.updatePullRequestBySlug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          updates: {
+            body: '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+          }
+        })
+      )
+      expect(notifyWorkItemDetailsMutation).not.toHaveBeenCalled()
+    }
+  )
 })

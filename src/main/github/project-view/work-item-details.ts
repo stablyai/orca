@@ -1,4 +1,17 @@
-import { assertPositiveInt, projectGhExecOptions, runGraphql, validateSlugArgs } from './internals'
+import {
+  collectGitHubImageBody,
+  enrichGitHubBodyImages,
+  type GitHubBodyImageTarget
+} from '../body-image-enrichment'
+import { githubBodyImageCandidates } from '../body-image-urls'
+import {
+  acquire,
+  release,
+  assertPositiveInt,
+  projectGhExecOptions,
+  runGraphql,
+  validateSlugArgs
+} from './internals'
 import type { PRComment } from '../../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
@@ -8,6 +21,7 @@ import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/pr
 type RawUser = { login?: string; name?: string | null; avatarUrl?: string | null }
 type RawLabel = { name?: string; color?: string }
 type RawComment = {
+  id?: string
   databaseId?: number
   author?: { login?: string; avatarUrl?: string; __typename?: string } | null
   body?: string
@@ -74,7 +88,20 @@ export async function getWorkItemDetailsBySlug(
       error: { type: 'not_found', message: 'Item not found.', reason: 'item_not_found' }
     }
   }
-  return { ok: true, details: mapWorkItemDetails(raw, args) }
+  const imageTargets: GitHubBodyImageTarget[] = []
+  const details = mapWorkItemDetails(raw, args, imageTargets)
+  collectGitHubImageBody(imageTargets, raw.id, details)
+  if (
+    imageTargets.some(({ nodeId, target }) => nodeId && githubBodyImageCandidates(target.body).size)
+  ) {
+    await acquire()
+    try {
+      await enrichGitHubBodyImages(imageTargets, args, projectGhExecOptions(args.host))
+    } finally {
+      release()
+    }
+  }
+  return { ok: true, details }
 }
 
 const ISSUE_FRAGMENT = `issue(number:$num) {
@@ -83,7 +110,7 @@ const ISSUE_FRAGMENT = `issue(number:$num) {
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
   comments(first:100) {
-    nodes { databaseId author { login avatarUrl __typename } body createdAt url }
+    nodes { id databaseId author { login avatarUrl __typename } body createdAt url }
   }
 }`
 
@@ -93,13 +120,14 @@ const PULL_REQUEST_FRAGMENT = `pullRequest(number:$num) {
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
   comments(first:100) {
-    nodes { databaseId author { login avatarUrl __typename } body createdAt url }
+    nodes { id databaseId author { login avatarUrl __typename } body createdAt url }
   }
 }`
 
 function mapWorkItemDetails(
   raw: RawWorkItemContent,
-  args: ProjectWorkItemDetailsBySlugArgs
+  args: ProjectWorkItemDetailsBySlugArgs,
+  imageTargets: GitHubBodyImageTarget[]
 ): GitHubWorkItemDetails {
   const labels = (raw.labels?.nodes ?? [])
     .map((label) => label?.name)
@@ -112,15 +140,17 @@ function mapWorkItemDetails(
     if (!comment || typeof comment.body !== 'string') {
       continue
     }
-    comments.push({
-      id: typeof comment.databaseId === 'number' ? comment.databaseId : Date.now(),
-      author: comment.author?.login ?? '',
-      authorAvatarUrl: comment.author?.avatarUrl ?? '',
-      body: comment.body,
-      createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
-      url: typeof comment.url === 'string' ? comment.url : '',
-      isBot: comment.author?.__typename === 'Bot'
-    })
+    comments.push(
+      collectGitHubImageBody(imageTargets, comment.id, {
+        id: typeof comment.databaseId === 'number' ? comment.databaseId : Date.now(),
+        author: comment.author?.login ?? '',
+        authorAvatarUrl: comment.author?.avatarUrl ?? '',
+        body: comment.body,
+        createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
+        url: typeof comment.url === 'string' ? comment.url : '',
+        isBot: comment.author?.__typename === 'Bot'
+      })
+    )
   }
   const participants: GitHubAssignableUser[] = []
   for (const participant of raw.participants?.nodes ?? []) {

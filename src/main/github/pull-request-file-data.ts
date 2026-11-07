@@ -1,3 +1,4 @@
+import { enrichGitHubBodyImages } from './body-image-enrichment'
 import type { GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { PRFileViewedStatesResult } from './pull-request-detail-context'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
@@ -49,7 +50,12 @@ export async function getPRMetadata(
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{ body: string; headSha?: string; baseSha?: string }> {
+): Promise<{
+  body: string
+  bodyImageUrls?: Record<string, string>
+  headSha?: string
+  baseSha?: string
+}> {
   if (!repository) {
     return { body: '' }
   }
@@ -67,15 +73,22 @@ export async function getPRMetadata(
       ghOptions
     )
     const data = JSON.parse(stdout) as {
+      node_id?: string
       body?: string | null
       head?: { sha?: string }
       base?: { sha?: string }
     }
-    return {
+    const metadata = {
       body: data.body ?? '',
       ...(data.head?.sha ? { headSha: data.head.sha } : {}),
       ...(data.base?.sha ? { baseSha: data.base.sha } : {})
     }
+    await enrichGitHubBodyImages(
+      [{ nodeId: data.node_id, target: metadata }],
+      repository,
+      ghOptions
+    )
+    return metadata
   } catch {
     return { body: '' }
   }

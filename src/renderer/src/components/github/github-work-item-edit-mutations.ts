@@ -115,7 +115,7 @@ export async function runWorkItemBodyUpdate(args: {
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
-}): Promise<void> {
+}): Promise<{ bodyImageUrls?: Record<string, string> } | undefined> {
   if (args.item.type === 'pr') {
     const targetSlug = resolvePullRequestRepo(args.item, args.projectOrigin) ?? args.parsedSlug
     if (!targetSlug) {
@@ -151,7 +151,7 @@ export async function runWorkItemBodyUpdate(args: {
         { local: false }
       )
     }
-    return
+    return { bodyImageUrls: res.bodyImageUrls }
   }
 
   await runIssueUpdate({

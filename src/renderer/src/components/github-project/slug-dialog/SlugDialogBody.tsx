@@ -135,7 +135,9 @@ export function SlugDialogBody({
       toast.error(projectViewErrorMessage(res.error))
       return
     }
-    setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
+    setDetails((prev) =>
+      prev ? { ...prev, body: bodyDraft, bodyImageUrls: res.bodyImageUrls } : prev
+    )
   }, [bodyDraft, body, patchProjectIssueOrPr, cacheKey, row])
 
   const labels = row?.content.labels.map((l) => l.name) ?? []
@@ -307,7 +309,11 @@ export function SlugDialogBody({
                     setEditingBody(true)
                   }}
                 >
-                  <CommentMarkdown content={body} variant="document" />
+                  <CommentMarkdown
+                    content={body}
+                    bodyImageUrls={details?.bodyImageUrls}
+                    variant="document"
+                  />
                 </button>
               ) : (
                 <button
