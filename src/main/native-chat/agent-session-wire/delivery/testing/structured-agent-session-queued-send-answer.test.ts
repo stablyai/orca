@@ -4,7 +4,7 @@ import {
   createJournalReducerState
 } from '../../../agent-session-journal/projection/journal-reducer'
 import type { JournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
-import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
+import { readJournalInput } from '../../../agent-session-journal/journal-input-reads'
 import type { CommandReceiptRead } from '../../../agent-session-journal/writing/command-receipt-table'
 
 import { parseJournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
@@ -85,9 +85,9 @@ async function answer(
   const reads: Parameters<typeof structuredSendAnswer>[0] = {
     reads: {
       submission: async (id) => state.submissions.get(id),
-      item: async (id) => state.items.get(id) ?? null
+      item: async (id) => state.items.get(id) ?? null,
+      input: async (operation) => readJournalInput(state, operation)
     },
-    inputOrder: journalInputOrder(state),
     queuedMessages: {
       get: (id) => state.queue.cards.get(id) ?? null,
       inputState: () => state

@@ -61,7 +61,7 @@ export type MutationPlan<TValue> = {
     ctx: AgentSessionReplayContext,
     outcome: AgentSessionOperationOutcome,
     receipt?: CommandReceiptResult
-  ) => TValue | null
+  ) => TValue | null | Promise<TValue | null>
   rerunWhenReplayMissing?: (ctx: AgentSessionReplayContext) => boolean
   recoverUnknownFromDurableState?: boolean
 } & (
@@ -156,12 +156,12 @@ export function sendPlan(
         body: params.body
       })
     },
-    replay: (ctx, outcome) => {
-      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
+    replay: async (ctx, outcome) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return queued
       }
-      const submission = ctx.journal.submission(clientMessageId)
+      const submission = await ctx.journal.reads.submission(clientMessageId)
       if (submission) {
         return { clientMessageId, submission: { ...submission } }
       }
@@ -219,14 +219,14 @@ export function conversationCommandPlan(params: {
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
-    replay: (ctx) => {
-      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
+    replay: async (ctx) => {
+      const queued = await queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return 'queued' in queued
           ? { queued: queued.queued }
           : { clientMessageId: queued.submission.clientMessageId }
       }
-      if (ctx.journal.submission(clientMessageId) !== undefined) {
+      if ((await ctx.journal.reads.submission(clientMessageId)) !== undefined) {
         return { clientMessageId }
       }
       const prior = params.priorRecord()

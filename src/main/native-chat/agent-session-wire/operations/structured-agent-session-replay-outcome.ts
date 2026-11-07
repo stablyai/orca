@@ -71,6 +71,22 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
     : { decision: 'rerun' }
 }
 
+/** Await durable readers only when the recorded outcome actually asks for reconstruction. */
+export async function resolveAsyncAgentSessionReplayOutcome<TValue>(input: {
+  operationId: string
+  outcome: AgentSessionOperationOutcome
+  reconstruct: () => TValue | null | Promise<TValue | null>
+  rerunWhenReplayMissing?: boolean
+  recoverUnknownFromDurableState?: boolean
+}): Promise<AgentSessionReplayOutcomeDecision<TValue>> {
+  const recorded =
+    input.outcome.status === 'failed' ||
+    (input.outcome.status === 'unknown' && !input.recoverUnknownFromDurableState)
+      ? null
+      : await input.reconstruct()
+  return resolveAgentSessionReplayOutcome({ ...input, reconstruct: () => recorded })
+}
+
 /** Preserve recorded refusal; unknown codes have no reason this build can name. */
 function recordedRefusal(code: string, details: unknown): AgentSessionRefusalReference {
   return (

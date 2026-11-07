@@ -10,7 +10,9 @@ import { isStructuredAgentSessionCommandTurnId } from '../operations/structured-
 export type SendSettlementJournal = Pick<AgentSessionJournal['reads'], 'submission' | 'cursor'> & {
   attemptEnded?: (clientMessageId: string) => boolean
   activeTurnId: () => string | null
-  queuedSend?: (clientMessageId: string) => AgentSessionSendResult | null
+  queuedSend?: (
+    clientMessageId: string
+  ) => AgentSessionSendResult | null | Promise<AgentSessionSendResult | null>
 }
 
 type SettledSend = {
@@ -50,7 +52,7 @@ async function settledSend(
   clientMessageId: string,
   until: SendSettlementPoint
 ): Promise<SendSettlement> {
-  const row = journal.queuedSend?.(clientMessageId)
+  const row = await journal.queuedSend?.(clientMessageId)
   if (row && 'queued' in row) {
     return row.queued.state === 'withdrawn' ||
       row.queued.state === 'returned' ||

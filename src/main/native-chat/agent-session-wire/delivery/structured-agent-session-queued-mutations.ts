@@ -178,10 +178,11 @@ export function sendQueuedStructuredAgentMessage(
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
     // Replay the receipt’s original handoff, never the card’s newer handoff.
-    replay: (ctx, _outcome, receipt) => {
+    replay: async (ctx, _outcome, receipt) => {
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
-          ? ctx.journal.inputOrder.submissionAt(receipt.sequence)
+          ? (await ctx.journal.reads.input({ kind: 'submission-at', sequence: receipt.sequence }))
+              .submission
           : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }

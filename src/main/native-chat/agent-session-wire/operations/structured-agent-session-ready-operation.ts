@@ -158,7 +158,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
             return { result: await run({ ok: true, child: null, replay: true }) }
           }
           const turn = mutationReplayContext(request, journal, current.record)
-          const answer = replayRecordedOperation(
+          const answer = await replayRecordedOperation(
             { envelope, plan: { ...plan, replay: plan.replay } },
             turn,
             current.decision.row

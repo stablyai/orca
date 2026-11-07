@@ -70,7 +70,7 @@ export async function maybeQueueStructuredAgentSessionSend(
 > {
   const clientMessageId = params.envelope.clientOperationId
   // Reconstruct queued replay by card linkage; its fresh handoff ID cannot guard this original ID.
-  const queuedBefore = queuedSendAnswer(ctx.journal, clientMessageId)
+  const queuedBefore = await queuedSendAnswer(ctx.journal, clientMessageId)
   if (queuedBefore) {
     return { ok: true, value: queuedBefore }
   }

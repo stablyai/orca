@@ -28,7 +28,7 @@ import {
 import { runCommandReceiptMutation } from './structured-agent-session-command-receipt'
 import {
   agentSessionOperationOutcomeUnknown,
-  resolveAgentSessionReplayOutcome
+  resolveAsyncAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 
 /** Commit command acceptance with its effect, without a separate ledger reservation. */
@@ -166,7 +166,7 @@ async function answerCommandReceipt<TValue>(
   }
   const context = mutationReplayContext(request, journal, current)
   const outcome = commandReceiptOutcome(receipt)
-  const replay = resolveAgentSessionReplayOutcome({
+  const replay = await resolveAsyncAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome,
     reconstruct: () => plan.replay(context, outcome, receipt.result),

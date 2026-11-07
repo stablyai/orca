@@ -36,7 +36,8 @@ import type { StructuredAgentSessionCurrentWork } from '../observations/structur
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import {
   agentSessionOperationOutcomeUnknown,
-  resolveAgentSessionReplayOutcome
+  resolveAgentSessionReplayOutcome,
+  resolveAsyncAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 import type { AgentSessionReplayContext } from './structured-agent-session-turns'
 import {
@@ -180,7 +181,7 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
   }
 
   if (admission.decision === 'replay') {
-    const replayed = replayRecordedOperation(
+    const replayed = await replayRecordedOperation(
       request,
       mutationReplayContext(request, journal, record),
       admission.row
@@ -267,14 +268,14 @@ async function answerRecordedOperation<TValue>(
     return 'rerun'
   }
   const context = mutationReplayContext(request, journal, current.record)
-  const replayed = replayRecordedOperation(request, context, current.decision.row)
+  const replayed = await replayRecordedOperation(request, context, current.decision.row)
   return replayed !== 'rerun' && replayed.ok
     ? { ...replayed, cursor: await journal.reads.cursor() }
     : replayed
 }
 
 /** Reconstruct the recorded answer; rerun only when no durable effect landed. */
-export function replayRecordedOperation<TValue>(
+export async function replayRecordedOperation<TValue>(
   {
     plan,
     envelope
@@ -287,8 +288,8 @@ export function replayRecordedOperation<TValue>(
   },
   context: AgentSessionReplayContext,
   row: AgentSessionOperationRow
-): RecordedOperationReplay<TValue> {
-  const replay = resolveAgentSessionReplayOutcome({
+): Promise<RecordedOperationReplay<TValue>> {
+  const replay = await resolveAsyncAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome: row.outcome,
     reconstruct: () => plan.replay(context, row.outcome),
