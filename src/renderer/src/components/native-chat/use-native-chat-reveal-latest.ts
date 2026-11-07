@@ -2,7 +2,7 @@ import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
 import { hasAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
-import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import type { NativeChatInteractiveSend } from './session/terminal/send/use-native-chat-interactive-send'
 
 /** Answers and approval choices reveal at the press; Stop and dismissing a prompt do not. */
 export function useNativeChatInteractiveSendReveal(

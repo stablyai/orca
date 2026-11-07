@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { NativeChatPaneHeader } from '@/components/native-chat/NativeChatPaneHeader'
+import { NativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { NativeChatFindBar } from '@/components/native-chat/NativeChatFindBar'
 import { NativeChatContextClearFade } from '@/components/native-chat/NativeChatContextClearFade'
 import { nativeChatAppearanceStyle } from '@/components/native-chat/appearance/native-chat-appearance-style'

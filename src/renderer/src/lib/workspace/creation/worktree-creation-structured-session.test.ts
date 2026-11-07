@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 type PendingCreationState = { pendingWorktreeCreations: Record<string, unknown> }
 type PendingCreationListener = (state: PendingCreationState) => void
@@ -85,7 +85,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
-vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: mocks.waitForComposerMount
 }))

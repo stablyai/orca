@@ -15,7 +15,7 @@ const ptyInput = vi.hoisted(() => ({ verified: vi.fn<() => Promise<boolean>>() }
 vi.mock('../session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
-vi.mock('../NativeChatComposer', async () => {
+vi.mock('../composer/NativeChatComposer', async () => {
   const { useEffect } = await import('react')
   return {
     NativeChatComposer: () => {

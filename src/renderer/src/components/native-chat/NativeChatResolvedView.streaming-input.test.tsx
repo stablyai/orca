@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
-import type { NativeChatComposerProps } from './native-chat-composer-types'
+import type { NativeChatComposerProps } from './composer/native-chat-composer-types'
 import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type * as StreamingModule from '../../../../shared/native-chat/native-chat-streaming'
 import { clearPendingSendCacheForTests } from './session/terminal/delivery/native-chat-pending'
@@ -23,7 +23,7 @@ vi.mock('./NativeChatMessageList', () => ({
     return null
   }
 }))
-vi.mock('./NativeChatComposer', () => ({
+vi.mock('./composer/NativeChatComposer', () => ({
   NativeChatComposer: ({ onOptimisticSend }: NativeChatComposerProps) => (
     <button onClick={() => onOptimisticSend?.('Follow up')}>send</button>
   )

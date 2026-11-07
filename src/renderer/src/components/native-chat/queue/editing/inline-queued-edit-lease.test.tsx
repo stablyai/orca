@@ -17,7 +17,10 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { QueuedEditHostFixtureModule } from '../../../../../../shared/queued-edit-host.test-fixture'
 import type { AgentSessionQueuedMessageEditHoldResult } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { readNativeChatDraftCache, writeNativeChatDraftCache } from '../../native-chat-draft-cache'
+import {
+  readNativeChatDraftCache,
+  writeNativeChatDraftCache
+} from '../../drafts/native-chat-draft-views'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
@@ -85,7 +88,7 @@ describe('current desktop reacquisition and Save share the outcome owner', () =>
     host.update({ messageId: 'card', expectedBodyFingerprint: host.row!.fingerprint, text: 'A' })
     const scope = hook.result.current.editor!.draftScopeKey
     const { insertNativeChatComposerDraftText } =
-      await import('../../native-chat-composer-draft-insertion')
+      await import('../../drafts/native-chat-composer-draft-insertion')
     act(() => insertNativeChatComposerDraftText(scope, 'B'))
     await act(async () =>
       first.resolve({
@@ -214,7 +217,7 @@ it.each(['unknown-changed', 'unknown-gone', 'pending-proof', 'rebase-loss'] as c
     expect(decision.status).toBe('updated')
     if (mode === 'rebase-loss') {
       const { insertNativeChatComposerDraftText } =
-        await import('../../native-chat-composer-draft-insertion')
+        await import('../../drafts/native-chat-composer-draft-insertion')
       act(() => insertNativeChatComposerDraftText(hook.result.current.editor!.draftScopeKey, 'C'))
     }
     if (mode !== 'pending-proof') {

@@ -26,7 +26,7 @@ import { useNativeChatHookStatus } from '../../status/use-native-chat-hook-statu
 import { useNativeChatAssembledMessages } from '../assembly/use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
-import { takeNativeChatOpenWake } from '../../../native-chat-open-wake'
+import { takeNativeChatOpenWake } from '../../../pane/routing/native-chat-open-wake'
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []

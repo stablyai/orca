@@ -3,14 +3,14 @@ import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { useNativeChatProvisionalLaunch } from '../../host-access/use-native-chat-provisional-launch'
-import type { useStructuredNativeChatSubmitReveal } from '../../use-structured-native-chat-submit-reveal'
+import type { useStructuredNativeChatSubmitReveal } from '../../pane/actions/use-structured-native-chat-submit-reveal'
 import type { useStructuredAgentSession } from '../../session/structured/use-structured-agent-session'
 import type { NativeChatInterruptedContinuation } from '../../usage/NativeChatInterruptedContinue'
 import type { NativeChatViewState } from '../../session/status/native-chat-view-state'
 import type { StructuredAgentSessionReadFailureNotice } from '../../structured-agent-session-read-failure-notice'
 import type { useNativeChatInstallSlot } from '../../host-access/NativeChatInstallSlot'
 import type { useNativeChatHostSendGate } from '../../host-access/use-native-chat-host-send-gate'
-import type { NativeChatComposerNotice } from '../../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 
 export function useNativeChatStructuredPaneNotices({

@@ -160,7 +160,8 @@ describe('NativeChatContextUsageRing', () => {
 
   it('spends an Escape typed in the composer on closing the card, not on stopping the agent', async () => {
     const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
-    const { useNativeChatComposerKeyDown } = await import('../use-native-chat-composer-keydown')
+    const { useNativeChatComposerKeyDown } =
+      await import('../composer/editor/use-native-chat-composer-keydown')
     const interrupt = vi.fn()
     function ComposerWithRing(): React.JSX.Element {
       const onKeyDown = useNativeChatComposerKeyDown({

@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatComposerProps } from '../../native-chat-composer-types'
+import type { NativeChatComposerProps } from '../../composer/native-chat-composer-types'
 import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -20,7 +20,7 @@ vi.mock('../../../../store/index', () => {
   return { useAppStore }
 })
 
-vi.mock('../../NativeChatComposer', async () => {
+vi.mock('../../composer/NativeChatComposer', async () => {
   const React = await import('react')
   return {
     NativeChatComposer: React.forwardRef<HTMLTextAreaElement, NativeChatComposerProps>(

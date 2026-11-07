@@ -59,7 +59,7 @@ vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativ
 vi.mock('./links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
 )
-vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
+vi.mock('./pane/ownership/use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./links/actions/use-native-chat-file-link-click', () =>
   moduleFactories.useNativeChatFileLinkClick()
 )
@@ -72,21 +72,21 @@ vi.mock('@/runtime/hosts/installation/use-managed-runtime-install', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { clearNativeChatComposerDraftsForTests } from './drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from './drafts/native-chat-composer-draft-load'
 import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from './native-chat-composer-draft-store'
+} from './drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from './drafts/native-chat-draft-scope'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { promptEditor } from './native-chat-prompt-editor.test-support'
-import { promptTextContent } from './native-chat-prompt-document-text'
+import { promptEditor } from './composer/editor/native-chat-prompt-editor.test-support'
+import { promptTextContent } from './composer/editor/native-chat-prompt-document-text'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from './native-chat-composer-draft-storage'
+} from './drafts/native-chat-composer-draft-storage'
 
 afterEach(() => {
   cleanup()

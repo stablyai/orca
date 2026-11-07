@@ -6,7 +6,7 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft
-} from '../../native-chat-composer-draft-store'
+} from '../../drafts/native-chat-composer-draft-store'
 import { queuedMessageWithEdit } from '../../../../../../shared/queued-message-edit'
 import {
   nativeChatQueuedEditInput,
@@ -14,13 +14,13 @@ import {
   handBackNativeChatQueuedEdit,
   type NativeChatQueuedEditDraft
 } from './native-chat-queued-edit-draft'
-import type { NativeChatComposerDraft } from '../../native-chat-composer-draft-storage'
+import type { NativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-storage'
 import { promptMarkersToImageReferences } from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { nativeChatImageRowIds } from '../../native-chat-composer-image-references'
+import { nativeChatImageRowIds } from '../../composer/editor/native-chat-composer-image-references'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { subscribeToNativeChatPendingAttachments } from '../../native-chat-pending-attachment-cache'
+import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type {

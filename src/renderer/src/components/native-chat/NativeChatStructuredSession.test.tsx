@@ -20,12 +20,12 @@ vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativ
 vi.mock('./links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
 )
-vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
+vi.mock('./pane/ownership/use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./links/actions/use-native-chat-file-link-click', () =>
   moduleFactories.useNativeChatFileLinkClick()
 )
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
-vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
+vi.mock('./composer/NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./host-access/NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./prompts/NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())

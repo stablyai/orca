@@ -13,7 +13,10 @@ import { useNativeChatRewind } from './use-native-chat-rewind'
 
 import { nativeChatRewindReasonCopy, sayNativeChatRewind } from './native-chat-rewind-copy'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
-import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  readNativeChatDraftCache,
+  writeNativeChatDraftCache
+} from './drafts/native-chat-draft-views'
 
 type Input = Parameters<typeof useNativeChatRewind>[0]
 

@@ -6,7 +6,7 @@ import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './appearance/native-chat-appe
 import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
+import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -15,7 +15,8 @@ import {
   useNativeChatRevealLatest
 } from './use-native-chat-reveal-latest'
 import { useNativeChatLaunchPromptDeliveryNotice } from './session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice'
-import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
+import { NativeChatComposer } from './composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
@@ -25,7 +26,7 @@ import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/na
 import { useNativeChatTerminalPromptCard } from './prompts/use-native-chat-interactive-prompt-card'
 import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
-import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import { useNativeChatInteractiveSend } from './session/terminal/send/use-native-chat-interactive-send'
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
@@ -45,13 +46,13 @@ import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat/native-chat-streaming'
-import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
+import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
-} from './use-native-chat-context-menu'
-import { createNativeChatRuntimeSelector } from './native-chat-runtime-owner'
-import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
+} from './pane/actions/use-native-chat-context-menu'
+import { createNativeChatRuntimeSelector } from './pane/ownership/native-chat-runtime-owner'
+import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
 import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
@@ -60,7 +61,7 @@ import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-fi
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
-import { handleNativeChatPaneShortcut } from './native-chat-pane-shortcut'
+import { handleNativeChatPaneShortcut } from './pane/routing/native-chat-pane-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function NativeChatResolvedView({

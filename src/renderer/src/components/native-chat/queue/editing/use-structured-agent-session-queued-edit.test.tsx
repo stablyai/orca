@@ -23,11 +23,11 @@ import { toast } from 'sonner'
 import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionQueuedMessageEditHoldResult } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
+import { appendNativeChatAttachmentCache } from '../../attachments/chips/native-chat-attachment-draft'
 import {
-  appendNativeChatAttachmentCache,
   readNativeChatDraftCache,
   writeNativeChatDraftCache
-} from '../../native-chat-draft-cache'
+} from '../../drafts/native-chat-draft-views'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 describe('inline queued editor', () => {
   it('Cancel during a slow acquire closes at once and releases that edit after it lands', async () => {

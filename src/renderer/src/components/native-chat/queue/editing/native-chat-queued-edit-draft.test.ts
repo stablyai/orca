@@ -1,4 +1,4 @@
-import { promptTextContent } from '../../native-chat-prompt-document-text'
+import { promptTextContent } from '../../composer/editor/native-chat-prompt-document-text'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -6,24 +6,24 @@ import { imageReferenceToken } from '../../../../../../shared/native-chat/native
 import {
   nativeChatPastedTextOperations,
   nativeChatPastedTextToken
-} from '../../native-chat-pasted-text-reference'
-import { settleNativeChatPastedText } from '../../native-chat-composer-pasted-text-references'
-import { promptSkillRefs } from '../../native-chat-prompt-document'
+} from '../../paste/native-chat-pasted-text-reference'
+import { settleNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
+import { promptSkillRefs } from '../../composer/editor/native-chat-prompt-document'
+import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '../../native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '../../native-chat-composer-draft-load'
+} from '../../drafts/native-chat-composer-draft-store'
+import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '../../native-chat-composer-draft-storage'
+} from '../../drafts/native-chat-composer-draft-storage'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   settleNativeChatPendingAttachment
-} from '../../native-chat-pending-attachment-cache'
+} from '../../attachments/chips/native-chat-pending-attachment-cache'
 import {
   createNativeChatQueuedEditDraft,
   discardNativeChatQueuedEdit,

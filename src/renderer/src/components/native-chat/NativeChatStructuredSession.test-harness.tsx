@@ -13,13 +13,11 @@ import type { AgentSessionRefusalReference } from '../../../../shared/agent-sess
 import type { NativeChatApprovalCardProps } from './prompts/NativeChatApprovalCard'
 
 import type { NativeChatQuestionCardProps } from './prompts/NativeChatQuestionCard'
-import type {
-  NativeChatLaunchSeed,
-  NativeChatStructuredComposerTransport
-} from './native-chat-composer-types'
+import type { NativeChatLaunchSeed } from './drafts/native-chat-launch-seed'
+import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
 
 import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
-import type { NativeChatComposerNotice } from './native-chat-composer-notice'
+import type { NativeChatComposerNotice } from './composer/controls/native-chat-composer-notice'
 import { createStructuredSessionComposerMock } from './NativeChatStructuredSession.test-composer'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { StructuredAgentSessionThreadGoal } from './session/goals/use-structured-agent-session-thread-goal'

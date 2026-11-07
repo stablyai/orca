@@ -19,7 +19,7 @@ import {
   notSignedInSentence
 } from '../../../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
-import type { NativeChatComposerNotice } from '../../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
 function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined): string | null {

@@ -1,4 +1,4 @@
-import { NativeChatActionButton } from '../NativeChatActionButton'
+import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
 import {
   isNativeChatSignInFailureKind,
   nativeChatSignInLabel,

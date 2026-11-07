@@ -2,19 +2,19 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { useStructuredAgentSessionSends } from '../session/structured/delivery/use-structured-agent-session-sends'
 import {
   getStructuredAgentSessionSendNotice,
   setStructuredAgentSessionSendNotice
 } from '../session/structured/delivery/structured-agent-session-pending-sends'
 import { resetStructuredAgentSessionSendsForTests } from '../session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests } from '../drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '../native-chat-composer-draft-store'
+  updateNativeChatComposerDraft
+} from '../drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'
 import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -66,7 +66,7 @@ vi.mock('../../native-chat-restart-runtimes', () => ({
 vi.mock('../../native-chat-launch-resume-decision', () => ({
   useNativeChatLaunchResumePending: () => mocks.launchPending
 }))
-vi.mock('../use-structured-agent-session-host-label', () => ({
+vi.mock('../pane/ownership/use-structured-agent-session-host-label', () => ({
   useStructuredAgentSessionHostLabel: () => mocks.hostLabel
 }))
 

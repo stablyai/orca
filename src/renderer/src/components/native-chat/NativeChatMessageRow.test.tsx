@@ -27,7 +27,7 @@ afterEach(() => {
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
+import { readNativeChatQuotableSelection } from './selection-quotes/native-chat-quote-selection'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { useStructuredAgentSessionDeliveryNotices } from './session/structured/delivery/use-structured-agent-session-delivery-notices'

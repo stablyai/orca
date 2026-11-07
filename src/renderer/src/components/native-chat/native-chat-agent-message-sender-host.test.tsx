@@ -48,11 +48,11 @@ vi.mock('./media/images/native-chat-image-runtime-context', () => ({
     worktreePath: '/repo'
   })
 }))
-vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
+vi.mock('./composer/NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./host-access/NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./prompts/NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
-vi.mock('./NativeChatPaneFileDropSurface', () => ({
+vi.mock('./attachments/intake/NativeChatPaneFileDropSurface', () => ({
   NativeChatPaneFileDropSurface: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../tab-group/RetainedPaneHost', () => ({
@@ -63,7 +63,7 @@ vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async 
   focusRendererTerminalHandle: transport.focusRenderer
 }))
 
-import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
+import StructuredAgentSessionPaneOverlayLayer from './pane/routing/StructuredAgentSessionPaneOverlayLayer'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   getStructuredAgentSessionStatusFeed,

@@ -1,4 +1,4 @@
-import type { NativeChatComposerHandle } from '../../../native-chat-composer-types'
+import type { NativeChatComposerHandle } from '../../../composer/native-chat-composer-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { returnMessageToComposer } from '../../structured/delivery/structured-agent-session-message-hand-back'
 import { translate } from '@/i18n/i18n'

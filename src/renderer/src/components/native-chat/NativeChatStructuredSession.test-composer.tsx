@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react'
-import type { NativeChatComposerNotice } from './native-chat-composer-notice'
-import { NativeChatComposerNotices } from './NativeChatComposerNotices'
+import type { NativeChatComposerNotice } from './composer/controls/native-chat-composer-notice'
+import { NativeChatComposerNotices } from './composer/controls/NativeChatComposerNotices'
 
 /** Record composer props and render notices with a real focus target for the reveal-focus loop. */
 export function createStructuredSessionComposerMock(mocks: {

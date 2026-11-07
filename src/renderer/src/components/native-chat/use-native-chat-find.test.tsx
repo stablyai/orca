@@ -4,15 +4,15 @@ import { useRef, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
-import { isMacPlatform } from './native-chat-shortcut'
+import { isMacPlatform } from './pane/routing/native-chat-shortcut'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatFind } from './use-native-chat-find'
-import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
-import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
-import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
+import { routeNativeChatRootKeyToInput } from './composer/focus/native-chat-root-key-routing'
+import { shouldFocusNativeChatPaneFromPointerTarget } from './composer/focus/native-chat-typing-redirect'
+import { useNativeChatComposerKeyDown } from './composer/editor/use-native-chat-composer-keydown'
 import { useNativeChatPromptCardFocus } from './prompts/use-native-chat-prompt-card-focus'
-import type { NativeChatComposerHandle } from './NativeChatComposer'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 
 const mocks = vi.hoisted(() => {
   const bindings: { current?: KeybindingOverrides } = {}

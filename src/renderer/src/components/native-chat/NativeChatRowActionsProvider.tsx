@@ -12,7 +12,7 @@ import {
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { useNativeChatFork } from './use-native-chat-fork'
-import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
+import { useNativeChatTabOwnerWorktreeId } from './pane/ownership/use-native-chat-tab-owner'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
  *  "Forked from" divider opens. */

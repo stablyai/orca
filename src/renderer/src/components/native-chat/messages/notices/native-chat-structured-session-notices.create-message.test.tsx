@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { NativeChatComposerNotices } from '../../NativeChatComposerNotices'
+import { NativeChatComposerNotices } from '../../composer/controls/NativeChatComposerNotices'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 
 afterEach(cleanup)

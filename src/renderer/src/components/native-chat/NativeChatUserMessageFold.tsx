@@ -4,7 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatUserMessageFolds } from '../../../../shared/native-chat/transcript/native-chat-user-message-fold'
-import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'
+import {
+  NATIVE_CHAT_UNKERNED_CSS,
+  nativeChatTextHasUnkernedRun
+} from './composer/editor/native-chat-unkerned-runs'
 
 export function NativeChatUserMessageFold({
   messageId,

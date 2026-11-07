@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
+import { routeNativeChatRootKeyToInput } from './composer/focus/native-chat-root-key-routing'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import {

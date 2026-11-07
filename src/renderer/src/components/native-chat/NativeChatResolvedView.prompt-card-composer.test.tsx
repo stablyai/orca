@@ -12,7 +12,7 @@ import type { NativeChatLiveSession } from './session/terminal/read/native-chat-
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
-} from './native-chat-composer-types'
+} from './composer/native-chat-composer-types'
 
 import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import { clearPendingSendCacheForTests } from './session/terminal/delivery/native-chat-pending'
@@ -35,10 +35,11 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
   sendRuntimePtyInputVerified: pty.verified
 }))
 // Stub only the field; retain the production send lifecycle, queue and observed writes.
-vi.mock('./NativeChatComposer', async () => {
+vi.mock('./composer/NativeChatComposer', async () => {
   const { forwardRef, useEffect, useImperativeHandle, useRef } = await import('react')
-  const { useNativeChatSendLifecycle } = await import('./use-native-chat-send-lifecycle')
-  const { sendNativeChatMessage } = await import('./native-chat-runtime-send')
+  const { useNativeChatSendLifecycle } =
+    await import('./session/terminal/send/use-native-chat-send-lifecycle')
+  const { sendNativeChatMessage } = await import('./session/terminal/send/native-chat-runtime-send')
   return {
     NativeChatComposer: forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
       function StandInComposer(props, ref) {
@@ -98,7 +99,8 @@ const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
-const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
+const { resetNativeChatPtySendQueuesForTests } =
+  await import('./session/terminal/send/native-chat-pty-send-queue')
 const { nativeChatPromptDismissals } = await import('./prompts/native-chat-prompt-dismissals')
 
 const paneKey = 'tab-hidden:leaf-hidden'

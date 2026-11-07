@@ -14,7 +14,7 @@ import {
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
-} from '../../native-chat-composer-notice'
+} from '../../composer/controls/native-chat-composer-notice'
 
 function nativeChatLaunchNotice({
   lifecycle,

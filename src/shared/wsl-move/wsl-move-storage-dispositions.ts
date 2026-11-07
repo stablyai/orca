@@ -24,9 +24,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
   },
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-journal.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-journal.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-storage.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-storage.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),

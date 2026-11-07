@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { useNativeChatTabOwnerWorktreeId } from '../../use-native-chat-tab-owner'
+import { useNativeChatTabOwnerWorktreeId } from '../../pane/ownership/use-native-chat-tab-owner'
 
 export type NativeChatVisualOwner = {
   target: RuntimeClientTarget

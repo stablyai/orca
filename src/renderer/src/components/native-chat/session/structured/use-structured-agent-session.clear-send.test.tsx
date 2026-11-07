@@ -44,10 +44,8 @@ import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../..
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { resetStructuredAgentSessionSendsForTests } from './delivery/structured-agent-session-message-sender'
 import { structuredAgentSessionSendOut } from './delivery/structured-agent-session-pending-sends'
-import {
-  clearNativeChatComposerDraftsForTests,
-  structuredAgentSessionDraftScopeKey
-} from '../../native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
+import { structuredAgentSessionDraftScopeKey } from '../../drafts/native-chat-draft-scope'
 
 const CONVERSATION_IN_FLIGHT = {
   ok: false,

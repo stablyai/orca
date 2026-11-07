@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
-import type { NativeChatInteractiveSend } from '../use-native-chat-interactive-send'
+import type { NativeChatInteractiveSend } from '../session/terminal/send/use-native-chat-interactive-send'
 
 const INITIAL_PROMPT = JSON.stringify({
   questions: [
