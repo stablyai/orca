@@ -12,7 +12,7 @@ vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importO
   }
 })
 // Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -43,7 +43,7 @@ import { withLoadedBaselines } from '@/components/editor/autosave/editor-autosav
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 let main: TabsDrawnFromMain
 

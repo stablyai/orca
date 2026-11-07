@@ -12,7 +12,7 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import { createGitHubSlice } from '@/store/github/github'
 import { createRepoUpdateActions } from '@/store/repos/repo-update'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import { useTaskPageGitHubDetail } from '@/components/task-page/github/use-task-page-github-detail'
 import { useTaskPageGitHubIssueCreation } from '@/components/task-page/github/use-task-page-github-issue-creation'
 import { useTaskPageWorkspaceActions } from '@/components/task-page/use-task-page-workspace-actions'
@@ -33,7 +33,9 @@ vi.mock('@/store/index', async () => {
     )
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/components/github/GitHubMarkdownComposer', () => ({
   GitHubMarkdownComposer: () => null
 }))

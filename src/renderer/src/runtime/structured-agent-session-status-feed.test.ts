@@ -15,7 +15,7 @@ vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
-vi.mock('./runtime-rpc-client', () => ({
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 

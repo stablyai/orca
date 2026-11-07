@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '../lib/agent-status'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
-import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Main answers the window's layout commands; its frames draw the browser tabs and conversions.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -7,7 +7,7 @@ import {
   waitFor
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/remote-runtime-terminal-multiplexer-types'
+import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
@@ -22,7 +22,7 @@ import { runtimeStatuses } from '@/store/slices/browser/browser-slice-test-harne
 import type { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 
 import { getDefaultSettings } from '../../../../shared/constants'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,
@@ -47,32 +47,35 @@ const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
   remote: new Map<string, RemoteRuntimeMultiplexedTerminalCallbacks>()
 }))
-vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => ({
-    subscribeTerminal: async ({
-      terminal,
-      callbacks
-    }: {
-      terminal: string
-      callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
-    }) => {
-      const ptyId = `remote:${environmentId}@@${terminal}`
-      mocks.remote.set(ptyId, callbacks)
-      queueMicrotask(() => callbacks.onSnapshot('', { cols: 80, rows: 8, seq: 1 }))
-      return {
-        sendInput: (data: string) => input(ptyId, data),
-        claimViewport: () => true,
-        serializeBufferOutcome: async () => ({
-          availability: { kind: 'snapshot' },
-          snapshot: { data: '', cols: 80, rows: 8, seq: 1 }
-        }),
-        close: () => {
-          mocks.remote.delete(ptyId)
+vi.mock(
+  '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => ({
+      subscribeTerminal: async ({
+        terminal,
+        callbacks
+      }: {
+        terminal: string
+        callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
+      }) => {
+        const ptyId = `remote:${environmentId}@@${terminal}`
+        mocks.remote.set(ptyId, callbacks)
+        queueMicrotask(() => callbacks.onSnapshot('', { cols: 80, rows: 8, seq: 1 }))
+        return {
+          sendInput: (data: string) => input(ptyId, data),
+          claimViewport: () => true,
+          serializeBufferOutcome: async () => ({
+            availability: { kind: 'snapshot' },
+            snapshot: { data: '', cols: 80, rows: 8, seq: 1 }
+          }),
+          close: () => {
+            mocks.remote.delete(ptyId)
+          }
         }
       }
-    }
+    })
   })
-}))
+)
 function render(ui: React.ReactElement) {
   return renderWithoutApp(ui, { wrapper: TooltipProvider })
 }

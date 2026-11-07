@@ -1,11 +1,14 @@
 import {
   selectCrossStoreFolderChildrenById,
   selectSidebarLineageParentIdentities
-} from '@/store/cross-store-lineage-parents'
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
@@ -23,7 +26,7 @@ import {
   SourceControlScopeProvider,
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
-import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
+import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './source-control/sync/worktree-git-owner-target'

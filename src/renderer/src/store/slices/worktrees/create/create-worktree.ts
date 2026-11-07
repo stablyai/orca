@@ -1,14 +1,14 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
 import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
   isUnresolvedOwnerHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   pickClientWorktreeCreateSettings,
@@ -23,7 +23,7 @@ import {
 import {
   assertRuntimeEnvironmentCapability,
   runtimeEnvironmentSupportsCapability
-} from '../../../../runtime/runtime-rpc-client'
+} from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
@@ -32,7 +32,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
-import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '../../../../runtime/hosts/capabilities/local-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'

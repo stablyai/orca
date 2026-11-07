@@ -11,20 +11,18 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
-import {
-  readCachedRuntimeEnvironmentCapability,
-  runtimeEnvironmentSupportsCapability
-} from '@/runtime/runtime-rpc-client'
+import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId

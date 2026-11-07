@@ -12,7 +12,7 @@ import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
-} from '../runtime-environment-revision'
+} from '../rpc/environment-revisions/runtime-environment-revision'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 

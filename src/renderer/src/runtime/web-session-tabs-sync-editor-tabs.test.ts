@@ -15,7 +15,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 // Why: a server's file is named by its owned id from the first open, as restore names it.
 const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)

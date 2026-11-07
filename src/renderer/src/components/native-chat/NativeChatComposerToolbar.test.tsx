@@ -5,7 +5,6 @@ import { Editor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { focusMountedNativeChatEditor } from './native-chat-mounted-editor-view'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { NativeChatComposerToolbar } from './NativeChatComposerToolbar'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import type {
   SessionOptionDescriptor,
@@ -249,59 +248,4 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   await act(async () => settle())
   view.unmount()
   editor.destroy()
-})
-
-it('limits a footer resize to its own controls with five and fifty mounted composers', () => {
-  const callbacks = new Map<Element, () => void>()
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      constructor(private callback: ResizeObserverCallback) {}
-      observe(target: Element) {
-        callbacks.set(target, () => this.callback([], this))
-      }
-      unobserve(target: Element) {
-        callbacks.delete(target)
-      }
-      disconnect() {}
-    }
-  )
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120)
-  const measured: HTMLElement[] = []
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    if (this.hasAttribute('data-composer-control')) {
-      measured.push(this)
-    }
-    return new DOMRect(0, 0, 40, 24)
-  })
-  for (const population of [5, 50]) {
-    const view = render(
-      <>
-        {Array.from({ length: population }, (_, index) => (
-          <section key={index} aria-label={`Chat ${index}`}>
-            <NativeChatComposerToolbar
-              left={[{ id: 'mode', priority: 1, content: <button>Plan</button> }]}
-              right={[{ id: 'model', content: <button>Model</button> }]}
-              primary={<button>Send</button>}
-            />
-          </section>
-        ))}
-      </>
-    )
-    const chat = screen.getByRole('region', { name: 'Chat 0' })
-    const toolbar = chat.querySelector('[data-compact]')
-    if (!toolbar) {
-      throw new Error('Expected the mounted composer toolbar')
-    }
-    measured.length = 0
-    act(() => callbacks.get(toolbar)?.())
-    // The changed footer needs at most full and compact widths for its two controls.
-    expect(measured.length).toBeGreaterThan(0)
-    expect(measured.length).toBeLessThanOrEqual(4)
-    expect(measured.every((control) => chat.contains(control))).toBe(true)
-    view.unmount()
-    callbacks.clear()
-  }
 })

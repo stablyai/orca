@@ -25,7 +25,7 @@ import {
   createNativeChatQueuedEditDraft,
   handBackNativeChatQueuedEdit,
   discardNativeChatQueuedEdit
-} from './native-chat-queued-edit-draft'
+} from './queue/editing/native-chat-queued-edit-draft'
 import {
   createMemoryNativeChatComposerDraftStorage,
   nativeChatComposerDraftStorage,

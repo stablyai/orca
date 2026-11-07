@@ -16,7 +16,7 @@ const rig = vi.hoisted(() => ({
   success: vi.fn(),
   mention: vi.fn()
 }))
-vi.mock('../native-chat/use-orchestration-crew', () => ({
+vi.mock('../native-chat/worker-lifetime/use-orchestration-crew', () => ({
   useOrchestrationCrew: () => rig.snapshot
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openOrchestrationCrewAgent: rig.open }))

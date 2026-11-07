@@ -2,11 +2,11 @@ import type { AppState } from '@/store/types'
 import {
   buildTerminalTabRetirementPlan,
   getTerminalPtyOwnershipIdentity
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
 import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
 
 export function capturePendingTerminalPaneClose(

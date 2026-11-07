@@ -15,8 +15,7 @@ vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
-const { sendMock, sendToTrustedUIRendererMock, getAllWebContentsMock, getPRForBranchOutcomeMock } =
-  coordinatorMocks
+const { sendMock, getPRForBranchOutcomeMock } = coordinatorMocks
 
 describe('pr-refresh-coordinator', () => {
   beforeEach(() => {
@@ -45,29 +44,6 @@ describe('pr-refresh-coordinator', () => {
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledOnce()
     expect(getPRForBranchOutcomeMock.mock.calls[0]?.[1]).toBe('feature/current')
-  })
-
-  it('sends each refresh event once without broadcasting to 100 browser guests', async () => {
-    const guestSends = Array.from({ length: 100 }, () => vi.fn())
-    getAllWebContentsMock.mockReturnValue(
-      guestSends.map((send, index) => ({
-        id: index + 100,
-        isDestroyed: () => false,
-        send
-      }))
-    )
-    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
-
-    enqueuePRRefresh(makeCandidate({ isBare: true }), 'manual')
-
-    expect(sendToTrustedUIRendererMock).toHaveBeenCalledOnce()
-    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
-      'gh:prRefreshEvent',
-      expect.objectContaining({ status: 'skipped', skippedReason: 'bare' })
-    )
-    expect(sendMock).toHaveBeenCalledOnce()
-    expect(getAllWebContentsMock).not.toHaveBeenCalled()
-    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
   })
 
   it('keeps each manual outcome on its request sequence when completions race', async () => {

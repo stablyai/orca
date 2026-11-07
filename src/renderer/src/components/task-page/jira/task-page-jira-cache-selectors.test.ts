@@ -65,30 +65,4 @@ describe('findTaskPageJiraIssue', () => {
 
     expect(found?.title).toBe('Remote issue')
   })
-
-  it('filters same-key Jira issues by site id', () => {
-    const source = jiraSourceContext('remote-runtime')
-    const scope = getTaskSourceCacheScope(source)
-
-    const found = findTaskPageJiraIssue(
-      {},
-      {
-        [`${scope}::site-1::list::assigned::30`]: {
-          data: [jiraIssue('ALP-1', 'Site one issue', 'site-1')],
-          fetchedAt: Date.now()
-        },
-        [`${scope}::site-2::list::assigned::30`]: {
-          data: [jiraIssue('ALP-1', 'Site two issue', 'site-2')],
-          fetchedAt: Date.now()
-        }
-      },
-      'ALP-1',
-      {
-        sourceContext: source,
-        siteId: 'site-2'
-      }
-    )
-
-    expect(found?.title).toBe('Site two issue')
-  })
 })

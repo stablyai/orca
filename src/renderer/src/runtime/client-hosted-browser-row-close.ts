@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const CLIENT_HOSTED_ROW_CLOSE_TIMEOUT_MS = 15_000

@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
-import { executeBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { executeBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import {
   getSkillFreshnessUpdateDialogRequest,
   subscribeSkillFreshnessUpdateDialog

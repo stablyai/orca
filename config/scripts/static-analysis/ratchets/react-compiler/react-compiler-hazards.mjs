@@ -12,8 +12,8 @@ const OPT_OUT_DIRECTIVES = new Set(['use no memo', 'use no forget'])
 export const HAZARD_FIXES = {
   'void-read': [
     'React Compiler drops a bare `void x;` read, so it neither invalidates a memo nor forces layout.',
-    'Make the value a real input instead (pass it to the code that needs it, or wrap the read in a',
-    'helper call), and flush layout with a function call that returns the measured value.'
+    'Memo invalidator: `useMemo(() => recomputeOn([tick], () => compute()), [tick])` from',
+    '@/lib/recompute-on. Layout flush: `forceLayoutReflow(el)` from @/lib/force-layout-reflow.'
   ],
   'member-postfix-value': [
     'oxc React Compiler 0.152 compiles a member postfix update used as a value (`a[q.head++]`) as',

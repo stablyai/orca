@@ -1,4 +1,4 @@
-import { openNativeChatAccountUsageModal } from './native-chat-account-usage-modal'
+import { openNativeChatAccountUsageModal } from './usage/native-chat-account-usage-modal'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
@@ -8,7 +8,7 @@ import type {
   NativeChatStructuredComposerTransport
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import type { useStructuredAgentSession } from './use-structured-agent-session'
+import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'

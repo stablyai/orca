@@ -11,7 +11,7 @@ import {
   type BindingIncarnation,
   type TaskBinding
 } from '../task-records/task-record-model'
-import { isHostIdentityContinued } from '../../host-catalog-fencing'
+import { isHostIdentityContinued } from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import { createSourceWrite, waitForWriteEnd, type SourceWrite } from './source-write'
 

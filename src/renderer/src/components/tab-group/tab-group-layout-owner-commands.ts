@@ -1,7 +1,7 @@
 // Main frames/reconnect snapshots draw moves and select them unless selection changed; divider ratios persist on release.
 
 import { useAppStore } from '@/store'
-import type { TabSplitDirection } from '@/store/slices/tabs'
+import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import type { WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/pane-column-split-drop-no-op'

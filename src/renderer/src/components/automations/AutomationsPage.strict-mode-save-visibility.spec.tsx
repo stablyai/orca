@@ -16,11 +16,10 @@ import {
   rows,
   runtimeHost,
   RUNTIME_ID,
-  RUNTIME_REPO_ID,
-  RUNTIME_WORKSPACE_ID,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 import { makeAutomation, REPO_ID, WORKSPACE_ID } from './automations-page-fixtures'
 
 const CREATED = makeAutomation({ id: 'a-new', name: 'Sweep' })

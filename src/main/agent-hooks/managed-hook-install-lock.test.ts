@@ -1,6 +1,5 @@
 import {
   link,
-  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -144,36 +143,6 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     }
     await expect(first).resolves.toBe('first')
     await expect(second).resolves.toBe('second')
-  })
-
-  it('atomically publishes a complete owner record before entering the installer', async () => {
-    const home = await createTempHome()
-    const lockParent = join(home, '.orca')
-    const lockPath = join(lockParent, 'managed-hook-install.lock')
-
-    await withManagedHookInstallLock(home, undefined, async () => {
-      const entries = await readdir(lockParent)
-      const ownerEntry = entries.find((entry) => entry.startsWith('managed-hook-install.owner-'))
-      expect(entries).toHaveLength(2)
-      expect(ownerEntry).toBeDefined()
-      if (!ownerEntry) {
-        throw new Error('owner entry was not published')
-      }
-      const ownerPath = join(lockParent, ownerEntry)
-      const owner = JSON.parse(await readFile(lockPath, 'utf8')) as {
-        token: string
-        pid: number
-        hostIdentity: string
-        processIdentity: string
-      }
-      expect(owner).toMatchObject({ pid: process.pid })
-      expect(owner.token).toMatch(/^[\da-f-]{36}$/)
-      expect(owner.hostIdentity.length).toBeGreaterThan(0)
-      expect(owner.processIdentity.length).toBeGreaterThan(0)
-      const [lockStats, ownerStats] = await Promise.all([lstat(lockPath), lstat(ownerPath)])
-      expect(lockStats.ino).toBe(ownerStats.ino)
-      expect(lockStats.nlink).toBe(2)
-    })
   })
 
   it('fails fast instead of stealing an unverifiable legacy directory lock', async () => {

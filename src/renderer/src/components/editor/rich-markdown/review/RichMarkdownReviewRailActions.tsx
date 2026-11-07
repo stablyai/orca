@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { Check, Copy, MessageSquare } from 'lucide-react'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'

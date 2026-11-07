@@ -9,7 +9,7 @@ import * as structuredTabs from '../../../shared/agent-session/view/structured-a
 import '../../../shared/ephemeral-setup-terminal-worktree-id'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type * as LayoutRouting from '@/store/terminals/tab-change-through-layout-owner'
-import type * as LocalRuntimeCapabilities from './local-runtime-capabilities'
+import type * as LocalRuntimeCapabilities from './hosts/capabilities/local-runtime-capabilities'
 import {
   addWorkspace,
   emptySession
@@ -18,14 +18,16 @@ import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layo
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { renameTab } from '../../../shared/workspace-layout/workspace-layout-tab-commands'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { makeWorktree, makeUnifiedTab, TEST_REPO } from '@/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { WorkspaceAttachmentOrigins } from '@/components/sidebar/workspace-card/review/WorkspaceAttachmentOrigins'
 import { useAppStore } from '@/store'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'
 import { readStructuredChatTabName } from './structured-chat-tab-name'
-import '@/store/pinned-tab-close-guard'
+import '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
@@ -56,13 +58,18 @@ const mock = vi.hoisted(() => ({
   deactivates: vi.fn(),
   send: vi.fn()
 }))
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mock.send
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mock.send
+  })
+)
 vi.mock('@/store', async () => ({
-  useAppStore: (await import('@/store/slices/store-test-helpers')).createTestStore()
+  useAppStore: (await import('@/store/testing/app-store-test-fixture')).createTestStore()
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: mock.rpc }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mock.rpc
+}))
 vi.mock('./structured-agent-session-client', () => ({
   supportsStructuredAgentSessionRename: async () => true
 }))
@@ -70,11 +77,11 @@ vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAI
 vi.mock('@/store/terminals/tab-change-through-layout-owner', () => ({
   sendTabChangeToLayoutOwner: mock.layout
 }))
-vi.mock('./local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalRuntimeCapabilities>()),
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {}
 }))
-vi.mock('./runtime-host-contact-regained', () => ({
+vi.mock('./hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_id: string, listener: () => void) => {
     mock.contacts.add(listener)
     return () => mock.contacts.delete(listener)

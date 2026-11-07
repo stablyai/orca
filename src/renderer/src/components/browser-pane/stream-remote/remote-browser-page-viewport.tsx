@@ -22,7 +22,7 @@ import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
 
 export function RemoteBrowserPageViewport({

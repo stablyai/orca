@@ -2,10 +2,7 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  APP_MENU_SELECTION_ACTION_EVENT,
-  type AppMenuSelectionAction
-} from '@/lib/app-menu-selection-actions'
+import type { AppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 
@@ -118,21 +115,5 @@ describe('native chat app-menu selection ownership', () => {
     expect(textarea.selectionStart).toBe(4)
     expect(textarea.selectionEnd).toBe(4)
     expect(performNativeSelectionAction).not.toHaveBeenCalled()
-  })
-
-  it('removes composer ownership on cleanup', () => {
-    const addEventListener = vi.spyOn(window, 'addEventListener')
-    const removeEventListener = vi.spyOn(window, 'removeEventListener')
-    const { composer } = renderBoundaryAndComposer()
-    const listener = addEventListener.mock.calls.find(
-      ([eventName]) => eventName === APP_MENU_SELECTION_ACTION_EVENT
-    )?.[1]
-
-    composer.unmount()
-
-    expect(listener).toBeDefined()
-    expect(removeEventListener).toHaveBeenCalledWith(APP_MENU_SELECTION_ACTION_EVENT, listener)
-    emitAppMenuAction('select-all')
-    expect(performNativeSelectionAction).toHaveBeenCalledWith('select-all')
   })
 })

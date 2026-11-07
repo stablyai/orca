@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from '../editor-slice-test-harness'
 
 import type { Tab } from '../../../../../../shared/tab-types'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()

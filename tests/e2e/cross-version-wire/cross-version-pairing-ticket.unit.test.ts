@@ -1,9 +1,12 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+import { usesOlderPairingMethod } from '../../../src/main/runtime/rpc/server/pairing/pairing-ticket-exchange'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
+import { encodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { exchangeRemotePairingTicket } from '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -46,6 +49,26 @@ describe('cross-version: single-use pairing tickets', () => {
     expect(releasedCapabilities).not.toContain(PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY)
   })
 
+  it('Add server and the CLI save the link unchanged for a released host, without calling it', async () => {
+    const offer = {
+      v: 2 as const,
+      endpoint: 'ws://192.168.1.10:6768',
+      deviceToken: 'link-token',
+      publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+    }
+    const pairingCode = encodePairingOffer(offer)
+    const send = vi.fn()
+    await expect(
+      exchangeRemotePairingTicket({
+        pairingCode,
+        offer,
+        hostCapabilities: releasedCapabilities,
+        send
+      })
+    ).resolves.toBe(pairingCode)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('after a downgrade, exchanged phones keep their own token and older phones their code', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-ticket-'))
     const current = new DeviceRegistry(userDataPath)
@@ -78,5 +101,9 @@ describe('cross-version: single-use pairing tickets', () => {
       'not_a_ticket'
     )
     expect(current.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
+    // The desktop can't tell which app made it, so it never asks anyone to update.
+    expect(usesOlderPairingMethod(current.getDevice(phone.deviceId)!, current.listDevices())).toBe(
+      false
+    )
   })
 })

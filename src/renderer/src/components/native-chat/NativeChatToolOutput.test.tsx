@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   owner: { target: { kind: 'local' }, sessionId: 'session', worktreeId: 'workspace' }
 }))
-vi.mock('./native-chat-visual-owner', () => ({ useNativeChatVisualOwner: () => mocks.owner }))
+vi.mock('./media/visuals/native-chat-visual-owner', () => ({
+  useNativeChatVisualOwner: () => mocks.owner
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionItemDetail: async () => true,
   readStructuredAgentSessionItem: mocks.read

@@ -28,7 +28,6 @@ vi.mock('@/store', () => ({
     subscribe: (listener: (state: State, previous: State) => void) => store.subscribe(listener)
   }
 }))
-vi.mock('@/store/slices/tabs', () => ({ findSiblingGroupId: () => 'g-right' }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-surface', () => ({
   findStructuredLaunchTab: (args: { worktreeId: string; sessionId: string }) => {
     mocks.lookups++
@@ -83,7 +82,14 @@ beforeEach(() => {
       'wt-2': [group('g-other', null, [])]
     },
     unifiedTabsByWorktree: { 'wt-1': [source], 'wt-2': [] },
-    layoutByWorktree: { 'wt-1': {} },
+    layoutByWorktree: {
+      'wt-1': {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'g-left' },
+        second: { type: 'leaf', groupId: 'g-right' }
+      }
+    },
     activateTab: mocks.activateTab
   }))
 })

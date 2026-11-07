@@ -13,7 +13,7 @@ import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
-import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { ProviderFrameRow } from './messages/diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   NativeChatSubagentDisclosure,

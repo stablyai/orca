@@ -21,7 +21,7 @@ import { StructuredAgentSessionCreateRefusalError } from '../../agent-session/la
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -42,8 +42,8 @@ import {
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import '../../agent-session/launch/structured-agent-session-launch-prompt'
 import { hasStagedStructuredLaunchPrompt } from '../../agent-session/launch/structured-agent-session-staged-prompt'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
@@ -75,7 +75,7 @@ vi.mock(
     launchStructuredAgentSession: mocks.createSession
   })
 )
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

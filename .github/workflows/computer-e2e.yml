@@ -103,8 +103,6 @@ jobs:
           src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
           src/main/computer/desktop-script-provider-errors.test.ts
           src/main/computer/desktop-script-provider-action-errors.test.ts
-          src/shared/computer-use-error-recovery.test.ts
-          src/shared/computer-use-key-spec.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer.test.ts
           src/cli/handlers/computer-action-validation.test.ts

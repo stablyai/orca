@@ -26,7 +26,7 @@ import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
   RemoteRuntimeSnapshotOutcome,
   RemoteRuntimeSnapshotRequestOptions
-} from '../../../runtime/remote-runtime-terminal-multiplexer-types'
+} from '../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import type {
   AcceptedInputOptions,
   PtyPreconnectInputEntry

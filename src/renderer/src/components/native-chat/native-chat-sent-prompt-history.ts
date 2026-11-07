@@ -4,8 +4,11 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat/trans
 import { stripSentImagePromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatCommandMarker } from './native-chat-command-marker'
-import { compareMessages, orderMessages } from './native-chat-session-assembler'
+import type { NativeChatCommandMarker } from './session/terminal/delivery/native-chat-command-marker'
+import {
+  compareNativeChatDisplayMessages as compareMessages,
+  orderNativeChatDisplayMessages as orderMessages
+} from '../../../../shared/native-chat/transcript/native-chat-message-order'
 
 export type NativeChatRecallSource = {
   messages: readonly NativeChatMessage[]

@@ -35,7 +35,7 @@ import {
   observeLayoutFrameApply
 } from './workspace-layout-frame-apply-observer'
 import type * as LayoutClient from './runtime-layout-client'
-import type * as RpcClient from './runtime-rpc-client'
+import type * as RpcClient from './rpc/calls/runtime-rpc-call'
 
 type Refusal = Extract<LayoutApplyReply, { ok: false }>['code']
 

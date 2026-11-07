@@ -1,6 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -16,9 +16,9 @@ import { normalizeContextualTourIds } from '../../../../../shared/contextual-tou
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeWorktreeCardProperties,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
@@ -43,7 +43,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../../lib/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -53,7 +53,7 @@ import {
   type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../persisted-ui-write-baseline'
+} from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,

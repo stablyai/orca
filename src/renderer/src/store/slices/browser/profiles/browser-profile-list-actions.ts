@@ -1,4 +1,4 @@
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
 import type {
@@ -7,7 +7,7 @@ import type {
   BrowserProfileListResult
 } from '../../../../../../shared/runtime-browser-contracts'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getBrowserProfilesForHost,
   getBrowserSettingsHostId,

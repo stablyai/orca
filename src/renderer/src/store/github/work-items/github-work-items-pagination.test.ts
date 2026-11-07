@@ -6,7 +6,7 @@ import {
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from '../github-slice-test-harness'
-import '../../slices/store-test-helpers'
+import '../../testing/app-store-test-fixture'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {

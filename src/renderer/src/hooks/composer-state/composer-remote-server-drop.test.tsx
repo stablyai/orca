@@ -3,15 +3,15 @@
 import { act, renderHook } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
-  clearRuntimeCompatibilityCacheForTests,
+  clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,

@@ -21,7 +21,7 @@ import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-ef
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 type UseFileExplorerTreePaneStateParams = {

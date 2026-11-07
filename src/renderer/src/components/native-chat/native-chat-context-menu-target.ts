@@ -1,7 +1,7 @@
 import type { FileLinkActions } from '@/components/terminal-pane/links/files/terminal-file-link-actions'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatLinkActions } from './native-chat-link-target-actions'
+import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
+import { nativeChatLinkActions } from './links/actions/native-chat-link-target-actions'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 

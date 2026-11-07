@@ -28,7 +28,7 @@ import {
 import type {
   ActivePluginCustomEditor,
   CustomEditorViewChoice
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 

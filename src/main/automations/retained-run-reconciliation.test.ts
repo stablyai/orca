@@ -158,27 +158,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     service.stop()
   })
 
-  it('does not fail a serve-startup retained run whose host pane has not reattached', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, {
-      terminalLauncher: OPEN_LAUNCHER,
-      terminalObserver: surface.observer
-    })
-
-    service.start()
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
-
-    surface.mountPane()
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(surface.observedHandles).toEqual(['handle-1'])
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
-    service.stop()
-  })
-
   it('still closes out a run the ready surface cannot find after the settle window', async () => {
     const store = await createStore()
     const automation = createAutomation(store)

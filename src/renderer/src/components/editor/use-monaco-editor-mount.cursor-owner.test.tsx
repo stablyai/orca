@@ -5,14 +5,16 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { editor, IRange } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import type { StoreApi } from 'zustand'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({

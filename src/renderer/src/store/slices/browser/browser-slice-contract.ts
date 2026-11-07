@@ -23,7 +23,7 @@ import type {
   BrowserPageConversionLeg,
   BrowserPageConversionTarget
 } from './pages/browser-page-conversion'
-import type { RecentlyClosedTabPosition } from '../recently-closed-tab-position'
+import type { RecentlyClosedTabPosition } from '../tabs/recently-closed-tab-position'
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose

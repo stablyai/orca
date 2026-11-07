@@ -32,7 +32,7 @@ import {
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'

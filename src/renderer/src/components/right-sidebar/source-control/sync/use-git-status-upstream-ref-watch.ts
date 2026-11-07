@@ -3,7 +3,7 @@ import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function useGitStatusUpstreamRefWatch(args: {
   enabled: boolean

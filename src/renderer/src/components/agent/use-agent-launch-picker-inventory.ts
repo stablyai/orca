@@ -1,11 +1,11 @@
-import { useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
+import { useAppStateView, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import {
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'

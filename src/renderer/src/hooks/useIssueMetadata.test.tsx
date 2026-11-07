@@ -21,7 +21,9 @@ vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearTeamMembers: linearMocks.linearTeamMembers
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeMocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtimeMocks.callRuntimeRpc
+}))
 
 const roots: Root[] = []
 

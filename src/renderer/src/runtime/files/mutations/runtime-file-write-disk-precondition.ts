@@ -28,7 +28,7 @@ import { readRuntimeFileContent } from '../reads/runtime-file-read-client'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
-} from '../../runtime-environment-revision'
+} from '../../rpc/environment-revisions/runtime-environment-revision'
 import { getRelativePathInsideWorktree } from '../runtime-file-routing'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 

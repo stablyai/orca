@@ -1,4 +1,4 @@
-import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { parseAppSshPtyId } from '../../../../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../../../../shared/remote-foreground-evidence-admission'
 import {

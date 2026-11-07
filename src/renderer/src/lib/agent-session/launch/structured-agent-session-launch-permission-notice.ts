@@ -6,7 +6,7 @@ import {
   newChatPermissionModeForSettings
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { nativeChatPermissionModeLabel } from '@/components/native-chat/native-chat-permission-mode-labels'
+import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
 /** Why a paired host may not run this chat: it would not apply the permission mode asked for. */

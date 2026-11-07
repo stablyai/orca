@@ -6,7 +6,7 @@ import type * as I18n from '@/i18n/i18n'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 

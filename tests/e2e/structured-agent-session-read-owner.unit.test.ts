@@ -28,10 +28,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-import {
-  getStructuredAgentSessionReadOwner,
-  resetStructuredAgentSessionReadOwnersForTests
-} from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
+import { getStructuredAgentSessionReadOwner } from '../../src/renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { resetStructuredAgentSessionReadOwnersForTests } from '../../src/renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
