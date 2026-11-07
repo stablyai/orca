@@ -9,7 +9,7 @@ import { RPC_PARAMS_BY_METHOD } from '../../src/shared/rpc-contract/rpc-params-c
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
+import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-party-snapshot'
 import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,

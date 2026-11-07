@@ -5,7 +5,7 @@ import { createCrewFollowUpAuthorityInputs } from './crew-follow-up-authority-in
 import { createHelperStartScope } from '../../rpc/methods/orchestration/worker/helper-start-scope'
 import { assertHelperStartScope } from '../../rpc/methods/orchestration/worker/worker-start-authority'
 import { OrchestrationError } from '../orchestration-error'
-import { AmbiguousDispatchParentError } from '../db/dispatch-depth'
+import { AmbiguousDispatchParentError } from '../db/dispatch-creator-evaluation'
 import { meterCrewSql, crewQueryPlans } from './crew-recipient-sql.test-fixture'
 import { CrewReadModel } from './crew-read-model'
 import { watchCrewRuntimeSources } from './crew-runtime-watch'

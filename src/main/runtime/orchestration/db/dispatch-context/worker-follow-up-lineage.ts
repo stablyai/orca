@@ -1,5 +1,5 @@
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
-export { FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
+
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
