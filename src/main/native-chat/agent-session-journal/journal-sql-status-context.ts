@@ -95,6 +95,14 @@ export class JournalSqlStatusContext {
     return id === undefined ? undefined : this.submission(id)
   }
 
+  contextFloor = (): number => {
+    const row = this.scope.db
+      .prepare(`SELECT sequence FROM journal_proj_items
+      WHERE session_id=? AND epoch=? AND context_clear=1 ORDER BY sequence DESC LIMIT 1`)
+      .get(...this.scope.prefix)
+    return row ? Number(this.scope.examined(row).sequence) : 0
+  }
+
   itemFence = (id: string) =>
     this.values.get<number>('itemExecutionOwners', id) ?? this.values.get<number>('itemFences', id)
 

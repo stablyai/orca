@@ -1,3 +1,5 @@
+import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
+import type { JournalWorkAuthority } from './journal-observer-read'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -244,4 +246,59 @@ it('preserves a corrupt database on worker startup refusal', async () => {
     refusal: { details: { reason: 'journalCorrupt' } }
   })
   expect(await readFile(path)).toEqual(bytes)
+})
+
+it('discards row-free authority changes before publishing an asynchronous observer answer', async () => {
+  const { journal } = await fixture()
+  const projections = new StructuredAgentSessionJournalProjections()
+  let revision = 0
+  const held: string[] = []
+  const capture = () => {
+    const authority: JournalWorkAuthority = {
+      handle: journal.observationHandle(),
+      record: {
+        currentFence: 1,
+        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+      },
+      child: { fence: 1, heldSends: held },
+      handingOver: [],
+      continuingUnadmitted: [],
+      finalizing: [],
+      openedThrough: journal.openingCursor(),
+      reopenFloor: null,
+      operationalRevision: revision,
+      stopRevision: 0,
+      stop: null
+    }
+    return { authority, contextId: null }
+  }
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const read = journal.reads.observer.bind(journal.reads)
+  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(async (input) => {
+    const result = await read(input)
+    reached.resolve()
+    await release.promise
+    return result
+  })
+  let invalidated = false
+  const pending = projections.readSql(journal, capture, () => {
+    invalidated = true
+  })
+  await reached.promise
+  revision = 1
+  held.push('new-live-owner')
+  release.resolve()
+  expect(await pending).toBeNull()
+  expect(invalidated).toBe(true)
+  const current = await projections.readSql(journal, capture, () => {})
+  expect(current).toMatchObject({
+    workRevision: 1,
+    authority: { child: { heldSends: ['new-live-owner'] } }
+  })
+  held.push('later-owner')
+  expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
+    authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
+  })
 })

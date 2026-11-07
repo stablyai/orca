@@ -40,7 +40,7 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
       })
       return ids
     }
-    const answers = (reads: typeof sql) =>
+    const answers = (reads: AgentSessionJournalReads) =>
       Promise.all([
         reads.cursor(),
         reads.physicalCursor(),

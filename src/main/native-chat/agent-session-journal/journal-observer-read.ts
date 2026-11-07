@@ -31,7 +31,7 @@ export type JournalWorkAuthority = {
 export type JournalObserverRead = {
   authority: JournalWorkAuthority
   start: number
-  floor: number
+  floor?: number
   firstInputSubmissionKey: string | null
 }
 
@@ -54,5 +54,41 @@ export type JournalObserverResult = {
     restatedSubmissions: AgentJournalSubmission[]
     viewKey: string
     workViewKey: string
+  }
+}
+
+/** Copy the finite authority contract; compare live sets independently of insertion order. */
+export function copyJournalWorkAuthority(authority: JournalWorkAuthority): JournalWorkAuthority {
+  const { record, ended, replaced, child, openedThrough, reopenFloor } = authority
+  return {
+    handle: authority.handle,
+    record:
+      record === null
+        ? null
+        : {
+            currentFence: record.currentFence,
+            ownerObservation: {
+              claimStatus: record.ownerObservation.claimStatus,
+              unreconciled: record.ownerObservation.unreconciled,
+              handoffStage: record.ownerObservation.handoffStage
+            }
+          },
+    ended: ended && { fence: ended.fence, rootGone: ended.rootGone, cause: ended.cause },
+    replaced: replaced && { fence: replaced.fence },
+    child:
+      child === null || child === undefined
+        ? child
+        : {
+            fence: child.fence,
+            heldSends: child.heldSends === undefined ? undefined : [...child.heldSends].sort()
+          },
+    handingOver: [...authority.handingOver].sort(),
+    continuingUnadmitted: [...authority.continuingUnadmitted].sort(),
+    finalizing: [...authority.finalizing].sort(),
+    openedThrough: { epoch: openedThrough.epoch, sequence: openedThrough.sequence },
+    reopenFloor: reopenFloor && { epoch: reopenFloor.epoch, sequence: reopenFloor.sequence },
+    operationalRevision: authority.operationalRevision,
+    stopRevision: authority.stopRevision,
+    stop: structuredClone(authority.stop)
   }
 }

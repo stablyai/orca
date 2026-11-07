@@ -82,7 +82,7 @@ export function readJournalSqlObserver(
       context,
       {
         start: input.start,
-        floor: input.floor,
+        floor: input.floor ?? context.contextFloor(),
         stop: authority.stop
       },
       work.scope,
