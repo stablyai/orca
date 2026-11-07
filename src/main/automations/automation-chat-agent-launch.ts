@@ -85,6 +85,9 @@ async function launchChat(
                   name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
                   ...(automation.baseBranch ? { baseBranch: automation.baseBranch } : {}),
                   setupDecision: automation.setupDecision ?? 'skip',
+                  ...(automation.setupTrustHash
+                    ? { approvedSetupHash: automation.setupTrustHash }
+                    : {}),
                   activate: false,
                   automationProvenanceRequest: {
                     automationId: automation.id,

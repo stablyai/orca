@@ -1,6 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection-deps'
 import type { PanePtyBinding } from '../pane-pty-binding'
 import type { PaneConnectionDeps } from './pty-connection-test-deps'
 import type { MockPane, MockPaneManager } from './pty-connection-test-pane-fixtures'

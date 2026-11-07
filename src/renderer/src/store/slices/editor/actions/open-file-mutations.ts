@@ -88,8 +88,8 @@ export function createOpenFileMutations(
         const scopeWorktreeId = targetWorktreeId ?? worktreeId ?? s.activeWorktreeId
         return {
           ...(scopeWorktreeId === s.activeWorktreeId ? { activeFileId: fileId } : {}),
-          activeFileIdByWorktree: worktreeId
-            ? { ...s.activeFileIdByWorktree, [worktreeId]: fileId }
+          activeFileIdByWorktree: scopeWorktreeId
+            ? { ...s.activeFileIdByWorktree, [scopeWorktreeId]: fileId }
             : s.activeFileIdByWorktree
         }
       })

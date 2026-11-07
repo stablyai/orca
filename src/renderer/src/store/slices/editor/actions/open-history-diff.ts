@@ -1,11 +1,15 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
 import { withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
-import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
+import { editorOpenOwner, qualifyEditorContentId } from '../git/editor-open-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from '../git/git-status-reconciliation'
-import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
@@ -19,19 +23,23 @@ export function createOpenHistoryDiff(
 ): Pick<EditorSlice, 'openBranchDiff' | 'openCommitDiff'> {
   return {
     openBranchDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
       const branchCompare = toBranchCompareSnapshot(compare)
-      const id = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
+      const id = qualifyEditorContentId(
+        `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       set((s) => {
+        intent.register(id)
         const targetGroupId =
-          resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+          resolveEditorOpenTargetGroupId(s, placementId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-          s,
-          worktreeId,
-          options?.runtimeEnvironmentId
-        )
+
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -45,14 +53,11 @@ export function createOpenHistoryDiff(
             skippedConflicts: undefined,
             conflictReview: undefined,
             isPreview: updatedPreview,
-            runtimeEnvironmentId
+            ...contentOwner
           })
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
         const newFile: OpenFile = {
@@ -70,10 +75,10 @@ export function createOpenHistoryDiff(
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: isPreview || undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
@@ -83,46 +88,46 @@ export function createOpenHistoryDiff(
                 index === replaceablePreviewIndex ? newFile : file
               ),
               ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              activeFileId: id,
-              activeTabType: 'editor',
-              activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-              activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+              ...buildEditorActiveResult(s, placementId, id)
             }
           }
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        id,
-        worktreeId,
-        entry.path,
-        'diff',
-        isPreview,
-        editorItemTargetGroupId
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          id,
+          placementId,
+          entry.path,
+          'diff',
+          isPreview,
+          editorItemTargetGroupId
+        )
       )
     },
 
     openCommitDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
       const commitCompare = toCommitCompareSnapshot(compare)
-      const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
+      const id = qualifyEditorContentId(
+        `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       set((s) => {
+        intent.register(id)
         const targetGroupId =
-          resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+          resolveEditorOpenTargetGroupId(s, placementId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-          s,
-          worktreeId,
-          options?.runtimeEnvironmentId
-        )
+
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -136,14 +141,11 @@ export function createOpenHistoryDiff(
             skippedConflicts: undefined,
             conflictReview: undefined,
             isPreview: updatedPreview,
-            runtimeEnvironmentId
+            ...contentOwner
           })
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
         const newFile: OpenFile = {
@@ -161,10 +163,10 @@ export function createOpenHistoryDiff(
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: isPreview || undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
@@ -174,29 +176,25 @@ export function createOpenHistoryDiff(
                 index === replaceablePreviewIndex ? newFile : file
               ),
               ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              activeFileId: id,
-              activeTabType: 'editor',
-              activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-              activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+              ...buildEditorActiveResult(s, placementId, id)
             }
           }
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        id,
-        worktreeId,
-        entry.path,
-        'diff',
-        isPreview,
-        editorItemTargetGroupId
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          id,
+          placementId,
+          entry.path,
+          'diff',
+          isPreview,
+          editorItemTargetGroupId
+        )
       )
     }
   }

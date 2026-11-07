@@ -146,6 +146,7 @@ function createFakeStore(): {
   settleStage: () => void
   staged: () => number
   committed: () => number
+  deferred: () => number
   aborted: () => number
   deleted: () => number
 } {
@@ -154,6 +155,7 @@ function createFakeStore(): {
   let heldStage = false
   let staged = 0
   let committed = 0
+  let deferred = 0
   let aborted = 0
   let deleted = 0
   const store: GenerationStore = {
@@ -174,6 +176,11 @@ function createFakeStore(): {
       committed += 1
       return activeGeneration()
     },
+    deferCommit: () => {
+      deferred += 1
+    },
+    holdGeneration: () => () => {},
+    hasDeferredCommit: () => false,
     abortStagedGeneration: async () => {
       aborted += 1
     },
@@ -195,6 +202,7 @@ function createFakeStore(): {
     settleStage: () => releaseStage(),
     staged: () => staged,
     committed: () => committed,
+    deferred: () => deferred,
     aborted: () => aborted,
     deleted: () => deleted
   }

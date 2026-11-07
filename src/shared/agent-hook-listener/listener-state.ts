@@ -37,6 +37,8 @@ export type HookListenerState = {
   warnedEnvs: Set<string>
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
+  /** Reply text the event being normalized carried; normalizeProviderEvent takes and clears it, so it never outlives that event. */
+  eventReplyCandidate: string | undefined
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
   lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
@@ -102,6 +104,10 @@ export type HermesPaneTurn = {
 export type MusePaneState = {
   /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
   childSessionIds: Set<string>
+  /** Spawned subagents between SubagentStart and SubagentStop, by child session id, with their last hook time. */
+  runningChildren: Map<string, number>
+  /** Main-agent status as last derived, so restatements keep its clock. */
+  mainAgent?: AgentMainAgentStatus
   log?: MuseSessionLogState
   /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
   pendingApproval?: { toolName?: string; toolInput?: unknown }
@@ -131,6 +137,7 @@ export function createHookListenerState(
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
+    eventReplyCandidate: undefined,
     lastStatusByPaneKey: adapter.view,
     antigravityCompletedTranscriptByPaneKey: new Map(),
     antigravitySubagentParentByPaneKey: new Map(),

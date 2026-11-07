@@ -1,3 +1,4 @@
+import { createAgentSessionTrustWorktreeOptions } from '@/runtime/agent-session-create-request'
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -21,8 +22,8 @@ import {
 } from './input/remote-runtime-input-journal'
 import type { AcceptedInputOptions } from '../input/pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
-import { isSshSignInPendingTerminalError } from '../../terminal-ssh-sign-in-error'
-import { terminalCreateThemeParams } from '../../terminal-view-attributes-publisher'
+import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
@@ -74,7 +75,7 @@ import {
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRemoteRuntimeTerminalMultiplexer } from '../../../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/remote-runtime-terminal-snapshot-state'
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import {
   hostRecordedExitCode,
   hostRecordsTerminalExit,
@@ -224,6 +225,7 @@ export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
 ): PtyTransport {
+  const trustOptions = createAgentSessionTrustWorktreeOptions(opts.trustWorktreeId)
   const {
     command,
     startupCommandDelivery,
@@ -3628,7 +3630,11 @@ export function createRemoteRuntimePtyTransport(
               }
             })())
           : {}
+      const sectionTrustOptions = opts.trustWorktreeId
+        ? await trustOptions(createEnvironmentId)
+        : {}
       const legacyCreateParams = {
+        ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
@@ -3719,6 +3725,8 @@ export function createRemoteRuntimePtyTransport(
                   withAgentSessionCreateOperationId(
                     {
                       ...keyboardOptions,
+                      ...sectionTrustOptions,
+                      ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       ...(agentPrompt ? { prompt: agentPrompt } : {}),

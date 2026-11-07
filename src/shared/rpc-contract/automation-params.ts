@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { ChoicePatch, OptionKey } from './agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../agent-launch/permissions/tui-agent-permission-choice'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -267,6 +267,7 @@ export const AutomationCreate = z.object({
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -291,6 +292,7 @@ export const AutomationUpdateFields = z.object({
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),

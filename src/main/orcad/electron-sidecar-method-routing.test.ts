@@ -14,7 +14,10 @@ const BROWSER_RPC_METHODS = [
 // Known Log-suffix mismatches: remove entries when fixed; never add entries to hide new failures.
 const UNROUTABLE_RUNTIME_COMMANDS = new Set(['browserConsoleLog', 'browserNetworkLog'])
 
-const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set(['browser.screencast.unsubscribe'])
+const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set([
+  'browser.screencast.unsubscribe',
+  'browser.screencast.ack'
+])
 
 async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]

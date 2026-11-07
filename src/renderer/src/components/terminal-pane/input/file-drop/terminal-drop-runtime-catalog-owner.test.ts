@@ -48,7 +48,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.state } }
 vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
-vi.mock('../../terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+vi.mock('../terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('sonner', () => ({
   toast: { loading: vi.fn(), dismiss: vi.fn(), error: mocks.toastError, message: vi.fn() }
 }))

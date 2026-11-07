@@ -5,7 +5,7 @@ import {
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { useAppStore } from '@/store'
 import { requestTerminalWritePipelineProbe } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { subscribeToTerminalUserInput } from '../../terminal-user-input-signal'
+import { subscribeToTerminalUserInput } from '../../input/terminal-user-input-signal'
 
 export function initializeTerminalInputActivityState(session: ConnectPanePtySession): void {
   session.lastTerminalInputAt = Number.NEGATIVE_INFINITY

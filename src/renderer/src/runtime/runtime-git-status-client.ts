@@ -1,4 +1,5 @@
 import type {
+  GitHistoryItemRef,
   GitHistoryOptions,
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
@@ -168,6 +169,25 @@ export async function getRuntimeGitIgnoredPaths(
     target,
     'git.checkIgnored',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), paths },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRefs(
+  context: RuntimeGitContext,
+  query?: string
+): Promise<GitHistoryItemRef[]> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.refs({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId,
+      query
+    })
+  }
+  return callRuntimeRpc(
+    context.target,
+    'git.refs',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), query },
     { timeoutMs: 15_000 }
   )
 }

@@ -93,7 +93,8 @@ describe('AutomationService', () => {
       workspaceDisplayName: 'Morning check',
       terminalSessionId: 'tab-1',
       terminalPaneKey: 'pane-1',
-      terminalPtyId: 'pty-1'
+      terminalPtyId: 'pty-1',
+      setupSkippedReason: 'setup-changed'
     })
     const service = new AutomationService(store, {
       tickMs: 60_000,
@@ -108,6 +109,8 @@ describe('AutomationService', () => {
       const run = store.listAutomationRuns(automation.id)[0]
       expect(run?.status).toBe('dispatched')
       expect(run?.scheduledFor).toBe(scheduledRunAt)
+      // A run whose branch changed the approved setup says so on the run.
+      expect(run?.setupSkippedReason).toBe('setup-changed')
       expect(headlessDispatcher).toHaveBeenCalledWith(
         expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })
       )

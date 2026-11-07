@@ -246,7 +246,8 @@
       "pastePairingCode": "Or paste pairing code",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "tryAgain": "Try Again"
+      "tryAgain": "Try Again",
+      "codeExpiredOrReplaced": "This pairing code expired or was replaced. Show a new code on your desktop and scan again."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -1809,7 +1810,6 @@
       "connecting": "Connecting to desktop...",
       "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load files",
-      "loadInterrupted": "Folder load interrupted",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
       "title": "Files",
@@ -2250,8 +2250,6 @@
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
       "desktopUpdateRequired": "Update Orca desktop to review changes on mobile.",
-      "changesLoadFailed": "Unable to load changes",
-      "invalidSourceControlResponse": "Source control response was invalid",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",
@@ -2809,6 +2807,7 @@
       "sendMessage": "Send message",
       "sendQueue": "Queue",
       "sendSteer": "Steer",
+      "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
     },

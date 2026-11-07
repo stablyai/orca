@@ -10,7 +10,7 @@ import {
   findWslDistroHoldInText,
   wslDistroHoldUserMessage
 } from '../../../../../../shared/wsl-distro-stopped-hold'
-import { holdPaneForStoppedWslDistro } from '../../wsl-distro-stopped-hold-state'
+import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 type PaneStartWait = { connects: Set<() => void>; failed: Set<() => void> }

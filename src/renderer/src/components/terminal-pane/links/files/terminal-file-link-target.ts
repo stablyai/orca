@@ -15,14 +15,14 @@ import {
   terminalPathWslDistro,
   type TerminalFileContext
 } from '../../host-files/terminal-file-path-mapping'
-import type { createTerminalPathExistenceBatch } from '../../terminal-path-existence-batch'
+import type { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import {
   getTerminalPathExistsCacheKey,
   readTerminalPathExistence,
   writeTerminalPathExistence,
   startTerminalPathExistsProbe,
   type TerminalPathExistsCache
-} from '../../terminal-path-exists-cache'
+} from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   hostFileLinkTargetExists,

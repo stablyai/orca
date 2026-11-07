@@ -74,10 +74,6 @@ export function hostStatusGatesFromStatus(
 
 // Keyed by the cached answer so a connection's proven gates keep one identity across renders.
 const gatesByProbedStatus = new WeakMap<HostStatusReply, HostStatusGates>()
-const PROBED_UNREADABLE_GATES: HostStatusGates = {
-  ...UNREADABLE_STATUS_GATES,
-  statusPending: false
-}
 
 // Draw at once from the status this connection already proved; the gate's own read still refreshes live capabilities.
 function readProbedGates(
@@ -85,11 +81,8 @@ function readProbedGates(
   connState: ConnectionState
 ): HostStatusGates | null {
   const status = client && connState === 'connected' ? readConnectionStatusProbe(client) : undefined
-  if (status === undefined) {
+  if (!status) {
     return null
-  }
-  if (status === null) {
-    return PROBED_UNREADABLE_GATES
   }
   let gates = gatesByProbedStatus.get(status)
   if (!gates) {

@@ -94,6 +94,7 @@ function scenario(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the logical client reaches these transport methods; each mutation uses the production dispatcher.
     return {
       getState: () => 'connected',
+      getLastConnectedAt: () => null,
       onStateChange: () => () => {},
       close: () => rejectFirst?.(markRpcDeliveryUnknown(new Error('Connection lost'))),
       sendRequest: async (method: string, params: unknown) => {

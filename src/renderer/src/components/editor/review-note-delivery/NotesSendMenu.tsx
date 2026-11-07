@@ -1,7 +1,8 @@
+import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/app-state-view'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
-import { useAppStore } from '@/store/index'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
 import {
   DropdownMenu,
@@ -94,11 +95,9 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   onOpenRequestHandled,
   onDelivered
 }: NotesSendMenuProps<TNote>): React.JSX.Element {
-  const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
-  const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
-  const activeTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
   const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
+  const ownsTargetMode = useAppStateValue((s) => s.agentSendPopoverTargetMode?.id === targetModeId)
   const inFlightVersion = useNotesInFlightVersion()
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(() => {
     void inFlightVersion
@@ -147,7 +146,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
       if (scope.notes.length === 0) {
         return
       }
-      openAgentSendPopoverTargetMode({
+      useAppStore.getState().openAgentSendPopoverTargetMode({
         id: targetModeId,
         worktreeId,
         source,
@@ -158,15 +157,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
         onPromptHandedOff: holdInFlight(scope.notes)
       })
     },
-    [
-      holdInFlight,
-      markDelivered,
-      openAgentSendPopoverTargetMode,
-      source,
-      targetModeId,
-      targetModeLabel,
-      worktreeId
-    ]
+    [holdInFlight, markDelivered, source, targetModeId, targetModeLabel, worktreeId]
   )
 
   const handleOpenChange = useCallback(
@@ -177,23 +168,23 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
           openTargetMode(defaultScope)
         }
       } else {
-        closeAgentSendPopoverTargetMode(targetModeId)
+        useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
       }
     },
-    [closeAgentSendPopoverTargetMode, defaultScope, openTargetMode, targetModeId]
+    [defaultScope, openTargetMode, targetModeId]
   )
 
-  const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
-  if (sendMenuOpen && activeTargetModeId !== targetModeId) {
+  const effectiveSendMenuOpen = sendMenuOpen && ownsTargetMode
+  if (sendMenuOpen && !ownsTargetMode) {
     // Clear stale local open state before painting another target’s menu.
     setSendMenuOpen(false)
   }
 
   useEffect(
     () => () => {
-      closeAgentSendPopoverTargetMode(targetModeId)
+      useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
     },
-    [closeAgentSendPopoverTargetMode, targetModeId]
+    [targetModeId]
   )
 
   useEffect(() => {

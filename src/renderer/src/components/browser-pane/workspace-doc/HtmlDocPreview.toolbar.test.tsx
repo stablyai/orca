@@ -89,7 +89,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
+vi.mock('@/components/terminal-pane/links/files/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: (_context: unknown, filePath: string) => {
     store.downloads.push(filePath)
     return Promise.resolve()

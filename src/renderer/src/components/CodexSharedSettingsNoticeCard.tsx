@@ -2,7 +2,7 @@ import { Info, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
-import { useCodexSharedSettingsNotice } from './terminal-pane/codex-shared-settings-notice'
+import { useCodexSharedSettingsNotice } from './terminal-pane/provider-notices/codex-settings/codex-shared-settings-notice'
 
 /** A persistent one-time notice, so it sits with the other cards rather than as a sticky toast. */
 export function CodexSharedSettingsNoticeCard(): React.JSX.Element | null {

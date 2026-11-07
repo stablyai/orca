@@ -5,7 +5,7 @@ import {
   restorePtySpecWindow,
   type PtyExitPayload,
   type PtyStreamPayload
-} from '../../pty-transport-test-harness'
+} from './pty-transport-test-harness'
 
 const RECYCLED_PTY_ID = 'ssh:target@@pty-1'
 const PRIOR_INCARNATION_ID = 'incarnation-before-the-relay-restarted'

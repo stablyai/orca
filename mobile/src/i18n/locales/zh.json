@@ -110,7 +110,8 @@
       "pastePairingCode": "或粘贴配对码",
       "scanCodeStep": "扫描二维码",
       "title": "与桌面配对",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "codeExpiredOrReplaced": "此配对码已过期或已被替换。请在电脑上显示新的配对码后重新扫描。"
     },
     "terminalSettings": {
       "defaultText": "默认（100%）",
@@ -186,6 +187,7 @@
       "sendMessage": "发送消息",
       "sendQueue": "加入队列",
       "sendSteer": "立即发送",
+      "sendSteerQueued": "立即发送下一条",
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
@@ -219,7 +221,9 @@
       "historyRepaired": "此聊天的部分历史记录无法加载。"
     },
     "message": {
-      "copyMessage": "复制消息"
+      "copyMessage": "复制消息",
+      "forkFromResponse": "从此回复创建分支",
+      "forkFromResponseHint": "新聊天将包含本轮结束前的完整回复"
     },
     "messageActionsSheet": {
       "clipboardRejected": "剪贴板拒绝接收该文本。",
@@ -301,7 +305,8 @@
       "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
       "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
       "signIn": "登录",
-      "signInHint": "在运行此聊天的电脑上打开终端"
+      "signInHint": "在运行此聊天的电脑上打开终端",
+      "forkedFrom": "分支来源"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -621,6 +626,12 @@
       "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话。",
       "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容。",
       "pending": "请等待对话回溯到更早的消息。"
+    },
+    "fork": {
+      "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支。",
+      "unconfirmed": "{{agent}} 无法确认是否已创建分支。它可能已经打开；请先检查会话历史，再重试。",
+      "failed": "{{agent}} 无法从此聊天创建分支。{{detail}}",
+      "unsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。"
     }
   },
   "common": {
@@ -1068,6 +1079,12 @@
     "mermaidDiagram": {
       "expand": "展开图表",
       "label": "Mermaid 图表"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "计划",
+        "exitPlanMode": "退出计划模式"
+      }
     }
   },
   "connection": {
@@ -1277,7 +1294,6 @@
       "connecting": "正在连接桌面…",
       "emptyState": "未找到文件",
       "loadFailed": "无法加载文件",
-      "loadInterrupted": "文件夹加载中断",
       "title": "文件",
       "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
       "waiting": "等待桌面…"
@@ -1497,7 +1513,8 @@
       "removeHost": "移除主机",
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "sleep": "休眠",
-      "unpin": "取消固定"
+      "unpin": "取消固定",
+      "rename": "重命名"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",
@@ -1579,6 +1596,12 @@
       "thisComputer": "本机",
       "waitingForDesktop": "仍在等待桌面响应",
       "workspaceOptions": "工作区选项"
+    },
+    "workspaceRenameSheet": {
+      "title": "重命名工作区",
+      "emptyUsesBranch": "留空以使用分支名称。",
+      "emptyUsesFolder": "留空以使用文件夹名称。",
+      "failed": "无法重命名工作区。{{reason}}"
     }
   },
   "navigation": {
@@ -1953,13 +1976,11 @@
       "saveNote": "保存注释"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "无法加载更改",
       "committedChangesFailed": "加载已提交的更改失败",
       "committedChangesUnavailable": "已提交的更改不可用",
       "committedDiffUnavailable": "已提交的差异不可用",
       "desktopUpdateRequired": "请更新 Orca 桌面端，以便在手机上评审更改。",
       "diffLoadFailed": "无法加载差异",
-      "invalidSourceControlResponse": "源代码控制响应无效",
       "reviewNotesLoadFailed": "无法加载评审笔记"
     },
     "diffReviewQueue": {
@@ -2094,7 +2115,8 @@
       "usageLimitWindowWeeklyModel": "模型每周",
       "waitForBackgroundTasks": "请等待后台任务完成。",
       "waitForStart": "请等待智能体完成启动。",
-      "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送。"
+      "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送。",
+      "pluginInputRequired": "{{agent}} 已停止，因为“{{plugin}}”插件正在终端窗格中等待输入。请为聊天会话禁用该插件，或在 {{agent}} 终端中运行任务。"
     },
     "fileReader": {
       "copyReviewNotes": "复制评审备注",
@@ -2325,7 +2347,8 @@
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
       "urlPrompt": "输入 URL，或留空以新建标签页。",
-      "allowAutoClose": "允许自动关闭"
+      "allowAutoClose": "允许自动关闭",
+      "renameTerminalFailed": "无法重命名终端。{{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",
@@ -4024,7 +4047,11 @@
       "notReported": "未报告",
       "searchOptions": "搜索选项",
       "task": "任务",
-      "review": "检查"
+      "review": "检查",
+      "discardChangesTitle": "放弃更改？",
+      "discardChangesMessage": "对此自动化所做的未保存编辑将会丢失。",
+      "discard": "放弃",
+      "keepEditing": "继续编辑"
     },
     "orphanIssues": {
       "hostReselection": "运行此自动化之前，请先编辑它并重新选择主机。",

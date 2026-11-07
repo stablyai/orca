@@ -14,6 +14,7 @@ import { useFullAutomationRun } from './use-full-automation-run'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import {
   AutomationRunErrorNotice,
+  AutomationRunSetupSkippedNotice,
   formatAutomationDateTimeWithRelative,
   getAutomationRunStatusLabel,
   getAutomationRunStatusVariant
@@ -94,6 +95,9 @@ export function AutomationRunDetailsPage({
         }
         onBack={onBack}
       >
+        {run.setupSkippedReason === 'setup-changed' ? (
+          <AutomationRunSetupSkippedNotice className="mb-4" />
+        ) : null}
         {/* Why: saved terminal output otherwise hides why the run failed. */}
         {run.status === 'dispatch_failed' && errorText && content !== errorText ? (
           <AutomationRunErrorNotice

@@ -1,3 +1,4 @@
+import { useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -8,7 +9,6 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
-import { useAppStore } from '@/store'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
@@ -56,15 +56,17 @@ export function useAgentLaunchPickerInventorySource(
   open: boolean,
   selected?: AgentPickerEntry['agent']
 ): AgentPickerInventorySource {
+  const store = useAppStateView()
+  const viewActive = useAppStateViewActive()
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
     selectedRef.current = selected
   }, [selected])
   const context = model.state === 'settled' ? model.pickerContext : undefined
-  const settings = context ? context.settings : useAppStore.getState().settings
+  const settings = context ? context.settings : store.getState().settings
   const executionHostId =
     context?.executionHostId ??
-    buildAgentLaunchRouteInput(useAppStore.getState(), {
+    buildAgentLaunchRouteInput(store.getState(), {
       agent: 'claude',
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
@@ -77,11 +79,11 @@ export function useAgentLaunchPickerInventorySource(
     target?.kind === 'local' ? null : context?.runtimeId
   )
   const repo = context?.workspace.repoId
-    ? useAppStore.getState().repos.find((candidate) => candidate.id === context.workspace.repoId)
+    ? store.getState().repos.find((candidate) => candidate.id === context.workspace.repoId)
     : undefined
   const workspaceId = worktreeId ?? context?.workspace.worktreeId
   const selector = workspaceId ? `id:${workspaceId}` : repo ? `path:${repo.path}` : undefined
-  const state = useAppStore.getState()
+  const state = store.getState()
   const hostId = parseExecutionHostId(executionHostId)?.id
   const worktrees = selectWorktreesByRepo(state)
   const folders = selectFolderWorkspaces(state)
@@ -194,7 +196,7 @@ export function useAgentLaunchPickerInventorySource(
     [key, open, fallback]
   )
   useEffect(() => {
-    if (!open || !target || model.state !== 'settled') {
+    if (!viewActive || !open || !target || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
@@ -264,6 +266,6 @@ export function useAgentLaunchPickerInventorySource(
       }
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only semantic inputs and visibility own observation; selected priority publishes independently after commit.
-  }, [key, open, source])
+  }, [key, open, source, viewActive])
   return source
 }

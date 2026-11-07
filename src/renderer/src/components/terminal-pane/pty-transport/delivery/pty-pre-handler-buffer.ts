@@ -1,7 +1,7 @@
 import { isPtyIncarnationId } from '../../../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
-import { keptSuffixMeta, markedAfterEviction } from '../../terminal-stream-position'
+import { keptSuffixMeta, markedAfterEviction } from './terminal-stream-position'
 
 type BufferedPreHandlerPtyData = {
   data: string

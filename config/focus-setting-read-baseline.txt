@@ -3,7 +3,7 @@
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
-1 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx
+3 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx # existing watch selector now visible through useCallback; includes its import-path occurrence
 2 src/renderer/src/app-shell/use-app-shell-services.ts
 2 src/renderer/src/App.tsx
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
@@ -171,17 +171,17 @@
 3 src/renderer/src/components/task-page/use-task-page-detail-routing.ts
 2 src/renderer/src/components/task-page/use-task-page-source-availability.ts
 1 src/renderer/src/components/terminal-pane/pty-connection/pane-connection-context.ts
-1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
+1 src/renderer/src/components/terminal-pane/layout/close/retire-unbound-runtime-terminal-pane.ts
 1 src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.ts
 1 src/renderer/src/components/terminal-pane/links/terminal-link-open-hints.ts
-2 src/renderer/src/components/terminal-pane/terminal-pane-close-admission.ts
-1 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
-2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-controller.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-mount-lifecycle.ts
+2 src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-admission.ts
+1 src/renderer/src/components/terminal-pane/mounting/terminal-pane-mount-preparation.ts
+2 src/renderer/src/components/terminal-pane/layout/close/use-terminal-pane-close-actions.ts
+1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-controller.ts
+1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-lifecycle.ts
+1 src/renderer/src/components/terminal-pane/mounting/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal/terminal-tab-actions.ts
-4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
+2 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
 2 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts

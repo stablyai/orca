@@ -4,7 +4,7 @@ import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-la
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
-import { resolvePaneWslDistro } from '@/components/terminal-pane/terminal-pane-wsl-distro'
+import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
 import type { Repo } from '../../../../shared/repo-types'
 import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'

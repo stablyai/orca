@@ -24,7 +24,7 @@ import {
   normalizeAgentProviderSession
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
-import type { HeldPaneReopenOutcome } from '../../newer-daemon-hold-state'
+import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

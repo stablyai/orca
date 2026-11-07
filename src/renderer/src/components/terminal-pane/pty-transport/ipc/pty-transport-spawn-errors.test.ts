@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../../../shared/workspace-session/terminal-session-state-save-failure'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

@@ -15,7 +15,7 @@ import {
   extractOrchestrationTaskLinks,
   focusRuntimeOrchestrationTask,
   ORCHESTRATION_TASK_PREFIX
-} from '../../terminal-orchestration-task-links'
+} from './terminal-orchestration-task-links'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation

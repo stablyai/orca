@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { collectLeafIdsInOrder } from '../../terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from '../../layout/terminal-layout-leaf-traversal'
 import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
 
 // Main can give a remounted pane the same PTY, so disposal alone does not make it ownerless.

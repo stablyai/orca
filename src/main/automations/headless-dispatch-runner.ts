@@ -14,7 +14,6 @@ import type {
 } from './headless-dispatch'
 import { AutomationRunLaunchError } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
-import type { AutomationRunWriter } from './automation-run-writer'
 import {
   automationRunFailure,
   type AutomationRunFailure
@@ -26,7 +25,11 @@ export type HeadlessAutomationDispatchContext = {
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
   dispatcher: HeadlessAutomationDispatcher
-  runs: AutomationRunWriter
+  /** Write only while this dispatch still owns a dispatching run; throws AutomationDispatchCancelledError once the service or automation is gone. */
+  transition: (result: Omit<AutomationDispatchResult, 'runId'>) => {
+    applied: boolean
+    run: Promise<AutomationRun>
+  }
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
   watchRun: (run: AutomationRun) => void
@@ -52,17 +55,16 @@ function heldForStoppedWslDistro(error: unknown): AutomationRunFailure | null {
 export async function runHeadlessAutomationDispatch(
   ctx: HeadlessAutomationDispatchContext
 ): Promise<AutomationRun> {
-  const { automation, run, target, runs } = ctx
+  const { automation, run, target } = ctx
   const precheckResult =
     run.trigger === 'scheduled' && automation.precheck ? await ctx.runPrecheck() : null
   if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
-    return runs.updateRun({
-      runId: run.id,
+    return ctx.transition({
       status: 'skipped_precheck',
       workspaceId: automation.workspaceId,
       precheckResult,
       error: formatAutomationPrecheckFailure(precheckResult)
-    })
+    }).run
   }
   let launch: HeadlessAutomationDispatchLaunch
   // The agent can finish before launch returns.
@@ -74,33 +76,41 @@ export async function runHeadlessAutomationDispatch(
       error instanceof AutomationDispatchRefusedError
         ? error.failure
         : heldForStoppedWslDistro(error)
-    return runs.updateRun({
-      runId: run.id,
+    return ctx.transition({
       status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
       ...(error instanceof AutomationRunLaunchError ? error.target : {}),
       ...(automation.surface === 'chat' ? { dispatchedAt, precheckResult } : {}),
       ...(refusal ?? { error: describeDispatchError(error) })
+    }).run
+  }
+  const launchRunTarget = launchRunTargetOf(launch)
+  if (launch.delivery) {
+    // A startup dialog can hold delivery, so link the terminal while the run is still dispatching.
+    const linked = ctx.transition({ status: 'dispatching', ...launchRunTarget })
+    if (!linked.applied) {
+      return linked.run
+    }
+    linked.run.catch((error: unknown) => {
+      console.warn('[automations] failed to record the opened run terminal:', error)
     })
+    const { error } = await launch.delivery
+    if (error !== null) {
+      return ctx.transition({ status: 'dispatch_failed', ...launchRunTarget, error }).run
+    }
   }
-  const launchRunTarget = {
-    sessionKind: launch.sessionKind ?? 'terminal',
-    chatSessionId: launch.chatSessionId ?? null,
-    workspaceId: launch.workspaceId,
-    workspaceDisplayName: launch.workspaceDisplayName ?? null,
-    terminalSessionId: launch.terminalSessionId,
-    terminalPaneKey: launch.terminalPaneKey ?? null,
-    terminalPtyId: launch.terminalPtyId ?? null
-  }
-  const updated = runs.updateRun({
-    runId: run.id,
+  const updated = ctx.transition({
     status: 'dispatched',
     dispatchedAt,
     ...launchRunTarget,
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
+    ...(launch.setupSkippedReason ? { setupSkippedReason: launch.setupSkippedReason } : {}),
     error: null
   })
+  if (!updated.applied) {
+    return updated.run
+  }
   // Start observation without waiting for persistence acknowledgement.
   if (!launch.completion) {
     ctx.watchRun({
@@ -134,5 +144,17 @@ export async function runHeadlessAutomationDispatch(
       )
       .catch((error) => console.error('[automations] Failed to persist run completion:', error))
   }
-  return updated
+  return updated.run
+}
+
+function launchRunTargetOf(launch: HeadlessAutomationDispatchLaunch) {
+  return {
+    sessionKind: launch.sessionKind ?? 'terminal',
+    chatSessionId: launch.chatSessionId ?? null,
+    workspaceId: launch.workspaceId,
+    workspaceDisplayName: launch.workspaceDisplayName ?? null,
+    terminalSessionId: launch.terminalSessionId,
+    terminalPaneKey: launch.terminalPaneKey ?? null,
+    terminalPtyId: launch.terminalPtyId ?? null
+  }
 }

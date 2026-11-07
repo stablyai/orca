@@ -1,7 +1,5 @@
-import {
-  collectLeafIdsInOrder,
-  serializePaneTree
-} from '@/components/terminal-pane/layout-serialization'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import type { AppState } from '@/store/types'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'

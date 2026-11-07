@@ -17,6 +17,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
+import {
+  useMobileNativeChatComposerTray,
+  type MobileNativeChatComposerTray
+} from '../composer/use-mobile-native-chat-composer-tray'
 import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
 import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
 import type {
@@ -86,6 +90,12 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+  MobileNativeChatBackgroundTasks: 'BackgroundTasks'
+}))
+vi.mock('./MobileNativeChatDockedTaskList', () => ({
+  MobileNativeChatDockedTaskList: 'DockedTaskList'
+}))
 
 vi.mock('../../MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
@@ -218,6 +228,82 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(sender.props.accessibilityRole).toBe('button')
     await act(async () => sender.props.onPress())
     expect(open).toHaveBeenCalledWith(from, from.senders[0])
+  })
+
+  it('the empty chord presses only the head card where its own button would, and offers it only while that press would act, across chat switches', async () => {
+    let tray!: MobileNativeChatComposerTray
+    function Tray(props: Parameters<typeof useMobileNativeChatComposerTray>[0]['queued']) {
+      tray = useMobileNativeChatComposerTray({
+        queued: props,
+        taskList: null,
+        backgroundTasks: null
+      })
+      return createElement('View', null, tray.content)
+    }
+    const settles: ((accepted: boolean) => void)[] = []
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => settles.push(resolve)))
+    const chatA = { sessionKey: 'a', cards: [card({ messageId: 'a1' }), card({ messageId: 'a2' })] }
+    const chatB = { sessionKey: 'b', cards: [card({ messageId: 'b1' })] }
+    const show = async (
+      chat: typeof chatA,
+      props: Partial<Parameters<typeof Tray>[0]> = {}
+    ): Promise<void> => {
+      await act(async () => {
+        renderer ??= create(createElement('View'))
+        renderer.update(createElement(Tray, { ...chat, agentWorking: true, onSend, ...props }))
+      })
+    }
+    const press = (alternateSteers = true) => {
+      let pressed = false
+      act(() => {
+        pressed = tray.steerHead!.run(alternateSteers)
+      })
+      return pressed
+    }
+
+    await show(chatA)
+    expect(tray.steerHead!.steers(true)).toBe(true)
+    expect(press()).toBe(true)
+    expect(onSend).toHaveBeenLastCalledWith('a1')
+    // On its way: neither offered nor admitted again, like a second tap.
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+
+    // Another chat's head is its own; A settling later must not clear B's hold.
+    await show(chatB)
+    expect(tray.steerHead!.steers(true)).toBe(true)
+    expect(press()).toBe(true)
+    await act(async () => settles[0]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+    await act(async () => settles[1]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(true)
+
+    // Back to A, whose list remounts: an action started there still holds until it settles.
+    await show(chatA)
+    expect(press()).toBe(true)
+    await show(chatB)
+    await show(chatA)
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+    await act(async () => settles[2]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(true)
+
+    // No turn running (the paused queue after Stop): the head card's own Send.
+    await show(chatA, { agentWorking: false })
+    expect(tray.steerHead!.steers(false)).toBe(true)
+    const refusals: [Partial<Parameters<typeof Tray>[0]>, boolean][] = [
+      [{}, false],
+      [{ steerHeld: true }, true],
+      [{ cards: [card({ messageId: 'a1', command: true }), card({ messageId: 'a2' })] }, true]
+    ]
+    for (const [props, alternateSteers] of refusals) {
+      await show(chatA, props)
+      expect(tray.steerHead!.steers(alternateSteers)).toBe(false)
+      const sends = onSend.mock.calls.length
+      expect(press(alternateSteers)).toBe(false)
+      expect(onSend).toHaveBeenCalledTimes(sends)
+    }
   })
 
   it('runs one action per card at a time, however fast its controls are tapped', async () => {
