@@ -9,6 +9,7 @@ import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screen
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 import { runStackMotion } from './host-stack-motion.web'
 import { useShellOpenTarget } from './use-shell-open-target.web'
+import { useReportedPageLocation } from './use-reported-page-location.web'
 import {
   RouteScreenPaintProvider,
   reportAfterFirstPaint,
@@ -20,6 +21,7 @@ import {
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
   useMobileTranslation()
   const router = useShellOpenTarget()
+  useReportedPageLocation()
   return (
     <Navigator router={router}>
       {HOST_STACK_SCREENS.map(({ name, title }) => (

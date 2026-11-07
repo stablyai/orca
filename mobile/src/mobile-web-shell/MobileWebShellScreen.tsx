@@ -64,6 +64,8 @@ export type MobileWebShellScreenProps = {
   appNamesRoute?: boolean
   // The caller compares the consumed one-shot value before clearing it; a newer tap may already have replaced it (ruling 34).
   onRouteParamClear?: (param: BridgeClearableRouteParam, value: string) => void
+  // Where the page has navigated inside its own document.
+  onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
 }
 
@@ -73,6 +75,7 @@ export function MobileWebShellScreen({
   route,
   appNamesRoute,
   onRouteParamClear,
+  onPageLocation,
   onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
@@ -226,7 +229,10 @@ export function MobileWebShellScreen({
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
-    onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
+    onPageLocation: (href) => {
+      holdPageLocation(href, ownsHostArea)
+      onPageLocation?.(href)
+    },
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
