@@ -1383,12 +1383,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 个活跃",
-      "heading": "智能体",
-      "showAll": "显示全部 {{count}} 个",
-      "showFewer": "收起"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
