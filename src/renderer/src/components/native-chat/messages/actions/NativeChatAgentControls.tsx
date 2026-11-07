@@ -1,8 +1,8 @@
 import { ArrowUp } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
 import { translate } from '../../../../i18n/i18n'
-import { NativeChatCopyButton } from '../../NativeChatCopyButton'
-import { NativeChatMessageTimestamp } from '../../NativeChatMessageTimestamp'
+import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatMessageTimestamp } from '../rows/NativeChatMessageTimestamp'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/native-chat-visual-directive'
 
 export function NativeChatAgentControls({

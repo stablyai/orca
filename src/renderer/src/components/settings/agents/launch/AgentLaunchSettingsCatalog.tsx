@@ -336,33 +336,36 @@ export function AgentLaunchSettingsCatalog({
         )}
         onSetDefault={(agent) => save({ type: 'default', agent })}
         defaultOpensAsChat={defaultOpensAsChat}
+        permissions={
+          permissionSettings ? (
+            <AllAgentsPermissionSetting
+              chatOwnSupported={chatOwnSupported}
+              choice={permissionSettings.agentPermissionDefault ?? 'own'}
+              withoutAutoChoice={sharedChoice(
+                PERMISSION_CHOICE_AGENTS.filter(
+                  (agent) => !agentPermissionChoices(agent).includes('auto')
+                ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
+              )}
+              onChange={(choice) => save({ type: 'permission', choice })}
+              onChangeWithoutAuto={(choice) =>
+                save({ type: 'permission', choice, withoutAuto: true })
+              }
+            />
+          ) : (
+            renderPermissions({
+              mode: permissions.globalMode,
+              nonAutoMode: settings.nonAutoPermissionMode,
+              majorityMode: permissions.majorityMode,
+              autoAgentLabels: catalog
+                .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
+                .map((agent) => agent.label),
+              onChange: (mode) => save({ type: 'permissions', mode }),
+              onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
+              autoSupported
+            })
+          )
+        }
       />
-      {permissionSettings ? (
-        <AllAgentsPermissionSetting
-          chatOwnSupported={chatOwnSupported}
-          choice={permissionSettings.agentPermissionDefault ?? 'own'}
-          withoutAutoChoice={sharedChoice(
-            PERMISSION_CHOICE_AGENTS.filter(
-              (agent) => !agentPermissionChoices(agent).includes('auto')
-            ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
-          )}
-          onChange={(choice) => save({ type: 'permission', choice })}
-          onChangeWithoutAuto={(choice) => save({ type: 'permission', choice, withoutAuto: true })}
-        />
-      ) : null}
-      {permissionSettings
-        ? null
-        : renderPermissions({
-            mode: permissions.globalMode,
-            nonAutoMode: settings.nonAutoPermissionMode,
-            majorityMode: permissions.majorityMode,
-            autoAgentLabels: catalog
-              .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
-              .map((agent) => agent.label),
-            onChange: (mode) => save({ type: 'permissions', mode }),
-            onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
-            autoSupported
-          })}
       <AgentDetectionCatalog
         detectedAgents={installedAgents}
         undetectedAgents={undetectedAgents}

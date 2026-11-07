@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { InteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
-import type { NativeChatInteractiveSend } from '../use-native-chat-interactive-send'
+import type { NativeChatInteractiveSend } from '../session/terminal/send/use-native-chat-interactive-send'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 

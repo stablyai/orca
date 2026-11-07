@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
-import { createNativeChatMessageListProjection } from '../../../native-chat-message-list-projection'
+import { createNativeChatMessageListProjection } from '../../../conversation/projection/native-chat-message-list-projection'
 
 const row = (id: string, text: string, source: NativeChatMessage['source'] = 'transcript') => ({
   id,

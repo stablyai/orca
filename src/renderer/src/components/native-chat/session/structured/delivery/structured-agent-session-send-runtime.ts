@@ -8,9 +8,9 @@ import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/ag
 import type { AgentSessionWriteFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { agentSessionWriteNoticeText } from '../../../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { getStructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner'
-import { nativeChatRewindReasonCopy } from '../../../native-chat-rewind-copy'
+import { nativeChatRewindReasonCopy } from '../../../messages/actions/native-chat-rewind-copy'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
 import {
   findStructuredAgentSessionPendingSend,

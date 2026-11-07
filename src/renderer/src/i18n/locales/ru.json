@@ -564,10 +564,7 @@
         "searchAgents": "агенты",
         "searchCli": "командная строка",
         "searchTerminal": "терминал",
-        "antigravityDescription": "Для чатов Antigravity Orca загружает на этот сервер отдельный серверный компонент, независимый от agy CLI.",
-        "antigravityNotSignedIn": "Вход не выполнен. Для чатов нужен отдельный вход в Antigravity, независимо от учётной записи agy в терминале.",
-        "antigravityAccount": "Учётная запись",
-        "antigravitySignInNeeded": "Для чатов нужен отдельный вход в Antigravity, независимо от учётной записи agy в терминале."
+        "antigravityAccount": "Учётная запись"
       },
       "permissionsDescriptionOwnAgents": "Новые чаты используют разрешения каждого агента из раздела «Настройки → Агенты».",
       "launch": {
@@ -20624,7 +20621,6 @@
       "visualLoading": "Загрузка визуализации",
       "visualOpenInNewTab": "Открыть в новой вкладке",
       "queuedMessages": {
-        "behindReturnedHold": "Ожидает: предыдущее сообщение требует внимания",
         "steer": "Сейчас",
         "send": "Отправить",
         "steerHint": "Отправить сообщение, не прерывая работу модели",
@@ -22367,7 +22363,6 @@
     },
     "antigravity": {
       "chatTitle": "Чаты Antigravity",
-      "chatDescription": "У чатов отдельный вход в Antigravity, независимо от учётной записи agy выше. Войдите один раз на этом устройстве.",
       "chatSignIn": "Войти",
       "chatChangeAccount": "Сменить учётную запись",
       "chatRetry": "Повторить вход",
@@ -22380,14 +22375,11 @@
       "chatVerifying": "Завершение входа…",
       "chatPasteHelp": "Если последняя страница после входа не загружается, скопируйте её полный адрес из браузера и вставьте здесь.",
       "chatContinue": "Продолжить",
-      "chatSignedInOn": "Вход выполнен на {{host}}.",
       "chatCancelled": "Вход отменён.",
       "chatExpired": "Время входа истекло. Повторите попытку.",
       "chatFailed": "Не удалось войти. Повторите попытку.",
-      "chatNotSignedIn": "Вход на {{host}} не выполнен.",
       "chatOtherClient": "В другом клиенте уже выполняется вход.",
       "chatReadFailed": "Не удалось проверить вход на {{host}}.",
-      "scope": "Управляйте учётной записью agy на {{host}}.",
       "signIn": "Запустите agy на этом сервере и завершите вход через браузер, затем сохраните текущую учётную запись. Для добавления другой используйте /logout в agy и войдите снова.",
       "docs": "Инструкция по входу",
       "retry": "Повторить",
@@ -22418,11 +22410,9 @@
       "personal": "Аккаунт Google",
       "gcpProject": "Проект Google Cloud",
       "gcpLocation": "Регион Google Cloud",
-      "signInAgainWith": "Войдите снова, чтобы использовать {{method}}.",
       "settingsIncomplete": "Выберите тип аккаунта Antigravity и укажите проект и регион Google Cloud.",
       "settingsLoadFailed": "Orca не удалось загрузить настройки входа в Antigravity. Попробуйте ещё раз.",
       "settingsSaveFailed": "Orca не удалось сохранить настройки входа в Antigravity. Попробуйте ещё раз.",
-      "signInWith": "Вход через {{method}} на {{host}}.",
       "lastReading": "{{reading}} · Считано {{time}}",
       "noReading": "Использование неизвестно: данные ещё не считаны"
     },

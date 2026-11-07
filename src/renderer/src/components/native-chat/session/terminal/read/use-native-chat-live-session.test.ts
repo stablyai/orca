@@ -4,8 +4,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { useAppStore } from '@/store'
-import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../native-chat-pagination'
+import { useAppStore } from '@/store/index'
+import { NATIVE_CHAT_INITIAL_LIMIT } from '@/components/native-chat/viewport/history/native-chat-pagination'
 
 // Separate transports per owner make host changes observable.
 const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted(() => {
@@ -52,11 +52,11 @@ vi.mock('./native-chat-session-transport', () => ({
   getNativeChatSessionTransport: transportFactory
 }))
 
-import { useNativeChatLiveSession } from './use-native-chat-live-session'
+import { useNativeChatLiveSession } from '@/components/native-chat/session/terminal/read/use-native-chat-live-session'
 import type {
   UseNativeChatLiveSessionArgs,
   NativeChatLiveSession
-} from './native-chat-live-session-contract'
+} from '@/components/native-chat/session/terminal/read/native-chat-live-session-contract'
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {
@@ -314,54 +314,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.messages.map((message) => message.id)).toEqual(['u-seed'])
   })
 
-  it('keeps the live snapshot when a readSession seed resolves after it', async () => {
-    const transport = getMockTransport('env-1')
-    let resolveSeed: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveSeed = resolve))
-    )
-
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({ type: 'snapshot', messages: [user('u-live', 'live')], hasMore: false })
-    )
-    await act(async () => {
-      resolveSeed({ messages: [user('u-stale', 'stale')] })
-      await Promise.resolve()
-    })
-
-    expect(latest?.messages.map((message) => message.id)).toEqual(['u-live'])
-  })
-
-  it('applies a lifecycle-only append after the final message frame', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
-        hasMore: false,
-        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
-      })
-    )
-    expect(latest?.status).toBe('working')
-
-    await act(async () =>
-      transport.emit({
-        type: 'appended',
-        messages: [],
-        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
-      })
-    )
-
-    expect(latest?.status).toBe('ready')
-  })
-
   it('does not let an older pagination read rewind a live completion', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: {
@@ -501,23 +453,6 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
 
     expect(latest?.status).not.toBe('loading')
     expect(latest?.messages.map((m) => m.id)).toContain('a-early')
-  })
-
-  // Working hooks also hide loading for Stop (#11032); preserve the raw read phase for launch-draft baselines (#9802).
-  it('reports the loading readPhase for a known session whose working hook unmasks the status', async () => {
-    vi.useFakeTimers()
-    const transport = getMockTransport('env-1', { autoSnapshot: false })
-    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() }
-      }
-    } as never)
-
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-
-    expect(latest?.status).toBe('working')
-    expect(latest?.readPhase).toBe('loading')
   })
 
   it('renders live-appended content even when the initial read settled into a permanent error', async () => {

@@ -93,7 +93,7 @@ import {
 } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { retirePurgedTabLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
 import { useAppStore } from '@/store'
-import { agentSessionTabFixture } from '@/components/native-chat/native-chat-workspace-test-fixtures'
+import { agentSessionTabFixture } from '@/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 
 const layoutOwner: StructuredLaunchSlotOwner = {
   unifiedTabsByWorktree: {},

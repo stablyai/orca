@@ -2,10 +2,16 @@ import { it, vi, expect, afterEach } from 'vitest'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
-import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
+import * as drafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as draftsOwner1 from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import * as draftsOwner2 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as draftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as draftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import * as draftsOwner5 from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import * as draftsOwner6 from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import * as pending from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -52,29 +58,37 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
     update,
     remove
   })
-  const loading = drafts.hydrateNativeChatComposerDrafts()
+  const loading = draftsOwner1.hydrateNativeChatComposerDrafts()
   const store = createTestStore()
-  const control = drafts.nativeChatLaunchPromptDraftScopeKey(
+  const control = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(
     'unrelated::/live',
     'claude',
     'ssh:other'
   )
-  drafts.updateNativeChatComposerDraft(control, { text: 'unrelated input' }, 'immediate')
+  draftsOwner3.updateNativeChatComposerDraft(control, { text: 'unrelated input' }, 'immediate')
   const untouched = vi.fn(),
-    releaseControl = drafts.subscribeToNativeChatComposerDraft(control, untouched)
+    releaseControl = draftsOwner3.subscribeToNativeChatComposerDraft(control, untouched)
   const releases: (() => void)[] = []
   const notifications = vi.fn()
   const rows = Array.from({ length: count }, (_, i) => {
-    const from = drafts.nativeChatLaunchPromptDraftScopeKey(`repo::/held${i}`, 'codex', 'ssh:old')
-    const to = drafts.nativeChatLaunchPromptDraftScopeKey(`repo::/held${i}`, 'codex', 'ssh:new')
-    drafts.updateNativeChatComposerDraft(from, rich(`source${i}`), 'immediate')
-    drafts.updateNativeChatComposerDraft(to, rich(`target${i}`), 'immediate')
-    const attempt = drafts.captureNativeChatComposerSubmission(from)
+    const from = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(
+      `repo::/held${i}`,
+      'codex',
+      'ssh:old'
+    )
+    const to = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(
+      `repo::/held${i}`,
+      'codex',
+      'ssh:new'
+    )
+    draftsOwner3.updateNativeChatComposerDraft(from, rich(`source${i}`), 'immediate')
+    draftsOwner3.updateNativeChatComposerDraft(to, rich(`target${i}`), 'immediate')
+    const attempt = draftsOwner4.captureNativeChatComposerSubmission(from)
     if (i % 2 === 0) {
-      drafts.updateNativeChatComposerDraft(from, { text: '', images: [] }, 'immediate')
+      draftsOwner3.updateNativeChatComposerDraft(from, { text: '', images: [] }, 'immediate')
     }
-    releases.push(drafts.subscribeToNativeChatComposerDraft(from, notifications))
-    releases.push(drafts.subscribeToNativeChatComposerDraftAppend(from, notifications))
+    releases.push(draftsOwner3.subscribeToNativeChatComposerDraft(from, notifications))
+    releases.push(draftsOwner4.subscribeToNativeChatComposerDraftAppend(from, notifications))
     releases.push(pending.subscribeToNativeChatPendingAttachments(from, notifications))
     pending.addNativeChatPendingAttachment(from, { id: `pending${i}`, path: '', pending: true })
     return { from, to, attempt }
@@ -88,19 +102,23 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
     .getState()
     .recordSshRepoReadoptions([{ oldTargetId: 'new', newTargetId: 'last', repoIds: ['repo'] }])
   store.getState().recordSshRepoReadoptions([{ ...event }])
-  drafts.deleteNativeChatComposerDraft(rows[0].from)
-  drafts.updateNativeChatComposerDraft(rows[0].from, { text: 'new explicit input' }, 'immediate')
+  draftsOwner5.deleteNativeChatComposerDraft(rows[0].from)
+  draftsOwner3.updateNativeChatComposerDraft(
+    rows[0].from,
+    { text: 'new explicit input' },
+    'immediate'
+  )
   for (let i = 0; i < rows.length; i++) {
-    drafts.finishNativeChatComposerSubmission(rows[i].from, rows[i].attempt, i % 2 === 0)
+    draftsOwner3.finishNativeChatComposerSubmission(rows[i].from, rows[i].attempt, i % 2 === 0)
   }
   gate.resolve(snapshot)
   await loading
-  await drafts.nativeChatComposerDraftWritesSettled()
+  await draftsOwner6.nativeChatComposerDraftWritesSettled()
   expect(write).not.toHaveBeenCalled()
   expect(update).not.toHaveBeenCalled()
   expect(remove).toHaveBeenCalled()
   for (let i = 0; i < count; i++) {
-    const current = drafts.readNativeChatComposerDraft(rows[i].from)
+    const current = draftsOwner3.readNativeChatComposerDraft(rows[i].from)
     expect(current.text).toBe(i === 0 ? 'new explicit input' : `target${i}\n\nsource${i}`)
     expect(current.images.map(({ id }) => id)).toEqual(
       i === 0 ? [] : ['shared', `target${i}`, `source${i}`]
@@ -113,7 +131,7 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
     expect(current.owner?.executionHostId).toBe('ssh:last')
     expect(rows[i].attempt.draft).toBeUndefined()
     expect(rows[i].attempt.scopeKey).toBe(scope('last', i))
-    expect(drafts.readNativeChatComposerDraft(`agent-session:ordinary${i}`).text).toBe(
+    expect(draftsOwner3.readNativeChatComposerDraft(`agent-session:ordinary${i}`).text).toBe(
       `ordinary${i}`
     )
     expect(pending.nativeChatPendingAttachmentSnapshot(rows[i].from)).toHaveLength(1)
@@ -121,10 +139,14 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
     expect(storage.drafts.has(scope('last', i))).toBe(false)
   }
   expect(untouched).not.toHaveBeenCalled()
-  expect(drafts.readNativeChatComposerDraft(control).text).toBe('unrelated input')
+  expect(draftsOwner3.readNativeChatComposerDraft(control).text).toBe('unrelated input')
   releases.forEach((release) => release())
   notifications.mockClear()
-  drafts.updateNativeChatComposerDraft(rows[1].from, { text: 'later ordinary edit' }, 'immediate')
+  draftsOwner3.updateNativeChatComposerDraft(
+    rows[1].from,
+    { text: 'later ordinary edit' },
+    'immediate'
+  )
   expect(notifications).not.toHaveBeenCalled()
   releaseControl()
   vi.restoreAllMocks()

@@ -5,7 +5,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup } from '@testing-library/react'
-import { render } from '../../../native-chat-tooltip-test-harness'
+import { render } from '../../../messages/actions/native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -38,8 +38,8 @@ import type { NativeChatSettledTurns } from '../../../../../../../shared/native-
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { NativeChatMessageList } from '../../../NativeChatMessageList'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
-import { installNativeChatMessageListTestViewport } from '../../../native-chat-message-list-test-viewport'
-import { projectStructuredAgentSessionMessages } from '../../../structured-agent-session-message-projection'
+import { installNativeChatMessageListTestViewport } from '../../../viewport/virtualization/native-chat-message-list-test-viewport'
+import { projectStructuredAgentSessionMessages } from '../../../conversation/projection/structured-agent-session-message-projection'
 
 let restoreViewport = (): void => {}
 beforeAll(() => {

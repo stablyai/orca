@@ -76,7 +76,7 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-vi.mock('../native-chat-agent-message-sender-view', () => ({
+vi.mock('../messages/agent-senders/native-chat-agent-message-sender-view', () => ({
   useAgentMessageSenderViews: () => []
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openOrchestrationCrewAgent: vi.fn() }))

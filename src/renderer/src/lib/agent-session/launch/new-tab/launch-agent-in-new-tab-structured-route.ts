@@ -11,7 +11,7 @@ import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch
 import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/native-chat-composer-focus-intent'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 type StructuredFromNewTab = {
   surface: AgentLaunchSurface

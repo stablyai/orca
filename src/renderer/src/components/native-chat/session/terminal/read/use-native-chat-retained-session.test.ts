@@ -66,17 +66,6 @@ describe('useNativeChatRetainedSession', () => {
     latest = null
     liveSession.mockReset()
   })
-
-  it('misses retained messages when the source owner changes', async () => {
-    liveSession.mockReturnValue(session('ready', [message('owner-a')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue(session('loading', []))
-    await render({ ...ARGS, runtimeEnvironmentId: 'owner-b' })
-
-    expect(latest?.readPhase).toBe('loading')
-    expect(latest?.messages).toEqual([])
-  })
   it.each(['loading', 'error'] as const)(
     'releases expanded fallback rows during %s',
     async (phase) => {

@@ -20,10 +20,10 @@ import {
   nativeChatSessionOptionDisabledReason
 } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
-import type { NativeChatOptionPickerRequest } from '../../../native-chat-composer-types'
+import type { NativeChatOptionPickerRequest } from './native-chat-option-picker-request'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
-import { useNativeChatPickerFocusReturn } from '../../../native-chat-picker-focus-return'
+import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 

@@ -28,7 +28,7 @@ import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/wo
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 /** A chat the resumed one takes the place of: it opens right after that tab. */
 export type AiVaultChatReplacement = {

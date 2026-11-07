@@ -25,6 +25,7 @@ export class JournalWriteProjection {
     private readonly deps: {
       database: JournalHostDatabase
       state: () => JournalReducerState
+      convertingLegacyQueue?: () => boolean
       adopt: (state: JournalReducerState) => void
       withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
       captureCommittedRows?: JournalCommittedRowsCapture
@@ -39,7 +40,14 @@ export class JournalWriteProjection {
     finishFold?: (draft: JournalReducerState) => void
   ): () => void {
     const before = this.deps.state()
-    const transition = prepareJournalOutcomeWrite(db, before, rows, savedAt, finishFold)
+    const transition = prepareJournalOutcomeWrite(
+      db,
+      before,
+      rows,
+      savedAt,
+      finishFold,
+      this.deps.convertingLegacyQueue?.()
+    )
     this.deps.captureCommittedRows?.(
       db,
       before.sessionId,

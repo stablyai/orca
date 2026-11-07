@@ -11,7 +11,7 @@ import {
   agentSessionTabFixture,
   repoFixture,
   worktreeFixture
-} from '../../native-chat-workspace-test-fixtures'
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 const mocks = vi.hoisted(() => ({ subscribeStatus: vi.fn(), supportsCapability: vi.fn() }))
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/testing/app-store-test-fixture')

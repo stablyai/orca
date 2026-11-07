@@ -10,7 +10,7 @@ import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../settings/chat
 import {
   NativeChatCardHideButton,
   NATIVE_CHAT_HIDEABLE_CARD_CLASS
-} from './NativeChatCardHideButton'
+} from './messages/disclosure/NativeChatCardHideButton'
 import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 
 function LineLink({ href, children }: { href: string; children: string }): React.JSX.Element {

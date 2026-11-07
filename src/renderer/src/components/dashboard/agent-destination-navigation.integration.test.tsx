@@ -34,7 +34,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: effects.rpc
 }))
-vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   requestNativeChatComposerFocus: effects.composerFocus
 }))
 vi.mock('../dashboard-popout/AgentTerminalPreview', () => ({ AgentTerminalPreview: () => null }))

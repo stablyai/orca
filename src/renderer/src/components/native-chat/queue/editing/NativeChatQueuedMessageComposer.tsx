@@ -1,10 +1,8 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Pencil } from 'lucide-react'
-import { NativeChatComposer } from '../../NativeChatComposer'
-import type {
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from '../../native-chat-composer-types'
+import { NativeChatComposer } from '../../composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { QueuedMessageInlineEditor } from './native-chat-queued-edit-session'
 import { translate } from '@/i18n/i18n'

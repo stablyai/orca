@@ -1,12 +1,15 @@
-import { setPendingLaunchReadoptions } from '@/components/native-chat/native-chat-launch-draft-source'
-import { continueReadoptedLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-continuity'
+import { setPendingLaunchReadoptions } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { continueReadoptedLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import { reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
-import type { SshRepoReconciliation } from './superseded-ssh-repo-rows'
+import {
+  reconcileReadoptedSshRepoRows,
+  type SshRepoReconciliation
+} from './superseded-ssh-repo-rows'
+
 import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

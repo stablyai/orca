@@ -15,7 +15,7 @@ import {
 import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
-import { agentSessionWriteFailureText } from '../../../agent-session-write-notice-text'
+import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
   holdStructuredAgentSessionLaunchOption

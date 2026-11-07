@@ -18,7 +18,7 @@ import {
 } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { registerNativeChatPane } from '@/components/native-chat/native-chat-composer-mount'
+import { registerNativeChatPane } from '@/components/native-chat/composer/focus/native-chat-composer-mount'
 import { AppWorkspaceShell } from './AppWorkspaceShell'
 import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
@@ -50,7 +50,7 @@ vi.mock('./TitlebarMainStrip', () => ({
   TitlebarMainStrip: () => null,
   RightSidebarToggle: () => null
 }))
-vi.mock('@/components/native-chat/NativeChatComposer', () => ({
+vi.mock('@/components/native-chat/composer/NativeChatComposer', () => ({
   NativeChatComposer: () => <textarea aria-label="Pending chat message" />
 }))
 vi.mock('../components/Terminal', () => ({

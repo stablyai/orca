@@ -1,4 +1,4 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'

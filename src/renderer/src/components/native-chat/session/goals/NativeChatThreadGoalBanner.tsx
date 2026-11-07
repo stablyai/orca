@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { NativeChatComposerTabStrip } from '../../NativeChatComposerTabStrip'
+import { NativeChatComposerTabStrip } from '../../composer/controls/NativeChatComposerTabStrip'
 import type { AgentJournalThreadGoal } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,

@@ -9,7 +9,7 @@ import {
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import type { NativeChatOlderPageResult } from '../../../native-chat-pagination'
+import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 
 /** Bounded so a busy stream cannot turn one scroll-to-top into an endless read chain. */
 export const OLDER_PAGE_ANCHOR_ATTEMPTS = 3

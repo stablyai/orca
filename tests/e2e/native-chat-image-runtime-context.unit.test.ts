@@ -23,7 +23,7 @@ import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/compone
 import {
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs
-} from '../../src/renderer/src/components/native-chat/native-chat-skill-discovery-context'
+} from '../../src/renderer/src/components/native-chat/composer/pickers/native-chat-skill-discovery-context'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
@@ -39,7 +39,7 @@ import {
   repoFixture,
   terminalTabFixture,
   worktreeFixture
-} from '../../src/renderer/src/components/native-chat/native-chat-workspace-test-fixtures'
+} from '../../src/renderer/src/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 
 const originalState = useAppStore.getState()
 afterEach(() => {

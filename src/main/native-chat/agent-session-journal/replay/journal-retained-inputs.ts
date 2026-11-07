@@ -1,8 +1,13 @@
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readHistoricalAdmissionSources } from './journal-historical-inputs'
+import {
+  readHistoricalAdmissionSources,
+  restoredJournalPersonAcceptance
+} from './journal-historical-inputs'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { decodeJournalOutcome } from '../outcomes/journal-outcome-codec'
-import { outcomeFormat1EntryParsers } from '../outcomes/journal-outcome-format-1'
+import { outcomeFormat3Card } from '../outcomes/journal-outcome-format-3'
+import { z } from 'zod'
 import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { refreshJournalInputCandidate } from '../input-order/journal-input-obligations'
@@ -19,7 +24,8 @@ export function restoreRetainedJournalInputs(
   db: Database.Database,
   state: JournalReducerState,
   source: JournalOutcomeSource,
-  prefixRevisions?: ReadonlyMap<string, number>
+  prefixRevisions?: ReadonlyMap<string, number>,
+  acceptedPrefix?: ReadonlyMap<string, AgentJournalSubmission>
 ): void {
   const admissions = readHistoricalAdmissionSources(db, state.sessionId, state.epoch, source, state)
   for (const [id, admission] of admissions) {
@@ -29,6 +35,8 @@ export function restoreRetainedJournalInputs(
     ([, a], [, b]) => (journalInputSourceSequence(a) ?? 0) - (journalInputSourceSequence(b) ?? 0)
   )
   const families = new Map<string, typeof ordered>()
+  const owner = journalInputOrder(state)
+  const personal = restoredJournalPersonAcceptance(db, state, source)
   for (const [id, admission] of ordered) {
     const family = journalInputSourceFamily(admission)
     if (family) {
@@ -38,6 +46,15 @@ export function restoreRetainedJournalInputs(
     }
     journalInputOrder(state).refreshLink(id)
     const send = state.submissions.get(id)
+    for (const accepted of [send, acceptedPrefix?.get(id)]) {
+      if (
+        accepted?.dispatchState === 'accepted' &&
+        (accepted.acceptedSequence ?? 0) > owner.latestPersonAcceptedSequence() &&
+        personal(accepted)
+      ) {
+        owner.seedPersonAcceptance(accepted.acceptedSequence ?? 0)
+      }
+    }
     if (
       family &&
       send?.dispatchState === 'unknown' &&
@@ -68,7 +85,7 @@ export function restoreRetainedJournalInputs(
       continue
     }
     const value = decodeJournalOutcome(record)
-    const [id, card] = outcomeFormat1EntryParsers['queue.cards'].parse(JSON.parse(value.json))
+    const [id, card] = z.tuple([z.string(), outcomeFormat3Card]).parse(JSON.parse(value.json))
     // A raw-prefix card already has its actual selection; a tail's first update is not its birth.
     if (value.ordinal === 'b') {
       continue
