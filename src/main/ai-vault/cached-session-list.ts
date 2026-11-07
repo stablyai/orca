@@ -1,6 +1,7 @@
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { join } from 'node:path'
 import { BoundedMap } from '../../shared/bounded-map'
+import { scopeOnlyScan } from './session-scope-cwd'
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
@@ -68,6 +69,7 @@ export type AiVaultSessionSources = {
 }
 
 type CachedAiVaultList = {
+  scopeOnly: boolean
   depth: AiVaultSessionDepth
   result: AiVaultListResult
   expiresAt: number
@@ -220,7 +222,22 @@ export async function listAiVaultSessions(
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
-          cachedLists.set(key, { depth, result, expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS })
+          const scopeOnly = scopeOnlyScan({
+            scopePaths: args?.scopePaths,
+            scopeOnly: args?.scopeOnly
+          })
+          // Keep one global list, as before per-scope entries; scope-only lists are bounded by their scope.
+          for (const [cachedKey, entry] of cachedLists.entries()) {
+            if (!scopeOnly && !entry.scopeOnly && cachedKey !== key) {
+              cachedLists.delete(cachedKey)
+            }
+          }
+          cachedLists.set(key, {
+            scopeOnly,
+            depth,
+            result,
+            expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
+          })
         }
       }
       return result

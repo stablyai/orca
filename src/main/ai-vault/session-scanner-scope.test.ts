@@ -222,7 +222,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
     ])
   })
 
-  it('finds scope-only Claude buckets for a root, another-case Windows path, a hashed long path and either WSL share', async () => {
+  it('finds scope-only Claude buckets for a root, another-case Windows path, hashed and full-length long paths and either WSL share', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -255,6 +255,14 @@ describe('scanAiVaultSessions scope inclusion', () => {
       cwd: longPath,
       iso: '2026-06-25T00:00:00.000Z'
     })
+    // Older Claude Code kept the full encoded name for paths under the filesystem's name limit.
+    await writeClaudeSession({
+      claudeRoot: roots.claudeProjectsDir,
+      dirName: longPath.replace(/[^a-zA-Z0-9]/g, '-'),
+      sessionId: 'legacy-long-session',
+      cwd: longPath,
+      iso: '2026-06-25T00:00:00.000Z'
+    })
     const scan = (scopePaths: string[]) =>
       scanAiVaultSessions({ ...roots, limit: 5, scopePaths, scopeOnly: true }).then((result) =>
         result.sessions.map((session) => session.sessionId)
@@ -262,7 +270,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
 
     expect(await scan(['/'])).toContain('posix-session')
     expect(await scan(['c:\\users\\ada\\repo'])).toEqual(['win-session'])
-    expect(await scan([longPath])).toEqual(['long-session'])
+    expect((await scan([longPath])).sort()).toEqual(['legacy-long-session', 'long-session'])
     expect(await scan(['\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo'])).toEqual(['wsl-session'])
   })
 

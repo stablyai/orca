@@ -13,14 +13,16 @@ export type CwdBucketLayout = {
   bucketDirs?: (rootDir: string) => string[]
 }
 
-// Claude Code names a longer encoded path's bucket `<first 200 characters>-<hash>`.
+// Claude Code names a longer encoded path's bucket `<first 200 characters>-<hash>`; older versions kept the full name.
 const CLAUDE_BUCKET_NAME_MAX_LENGTH = 200
 
 export const CLAUDE_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   agent: 'claude',
   encodeScopePrefixes: (scopePath) =>
-    encodeClaudeProjectPaths(scopePath).map((encoded) =>
-      encoded.slice(0, CLAUDE_BUCKET_NAME_MAX_LENGTH)
+    encodeClaudeProjectPaths(scopePath).flatMap((encoded) =>
+      encoded.length > CLAUDE_BUCKET_NAME_MAX_LENGTH
+        ? [encoded, encoded.slice(0, CLAUDE_BUCKET_NAME_MAX_LENGTH)]
+        : [encoded]
     ),
   // A root (`-`, `c--`) already ends at a separator, so every bucket below it starts with it.
   isDirInScope: (dirName, prefixes) => {
