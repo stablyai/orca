@@ -66,7 +66,7 @@ it('runs real source-worker commands in order, preserves typed receipt failures 
         kind: 'receipt' as const,
         scope: { kind: 'global' as const },
         receipt,
-        row: 'last' as const
+        row: { at: 'last' as const, answer: 'journal-row' as const }
       }
     ]
   }

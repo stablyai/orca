@@ -7,8 +7,8 @@ import {
 function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlementJournal {
   return {
     activeTurnId: () => null,
-    cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
-    submission: () => ({
+    cursor: async () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
+    submission: async () => ({
       clientMessageId: 'client-1',
       fence: 1,
       payloadFingerprint: 'fingerprint',
@@ -24,16 +24,16 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlem
 function emptyJournal(): SendSettlementJournal {
   return {
     activeTurnId: () => null,
-    cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
-    submission: () => undefined
+    cursor: async () => ({ epoch: 'epoch-1', sequence: 2 }),
+    submission: async () => undefined
   }
 }
 
 function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
-    cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
+    cursor: async () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,
-    submission: () => ({
+    submission: async () => ({
       clientMessageId: 'client-1',
       fence: 1,
       payloadFingerprint: 'fingerprint',

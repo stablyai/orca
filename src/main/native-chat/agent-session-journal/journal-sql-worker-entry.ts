@@ -10,6 +10,11 @@ import { applyJournalWriterEffect } from './journal-writer-effects'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
+import {
+  applyJournalSqlMaintenance,
+  journalSqlMaintenanceIsNormal
+} from './journal-sql-maintenance'
+import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 
 if (
   !parentPort ||
@@ -39,6 +44,7 @@ try {
   batch = new JournalSqlBatch(db)
   commands = new JournalSqlCommand(db, stateDirectory)
   if (!readOnly) {
+    db.exec(journalSqlProjectionSchema())
     checkpoint = new JournalCheckpointOwner(db, workerData.filename)
   }
   reply({ type: 'ready', readOnly })
@@ -79,7 +85,7 @@ type WriteRequest = {
   id: number
   command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
 }
-type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' }>
+type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
 
 /** Capture once, then yield: a continuing stream cannot extend this transaction past its drain. */
 async function drain(): Promise<void> {
@@ -101,10 +107,20 @@ async function drain(): Promise<void> {
       const result = await batch.run<WriteRequest, CommitResponse>(
         writes.map((request) => ({
           command: request,
-          normal: request.command.type === 'write' && executor.streamed(request.command.command)
+          normal:
+            request.command.type === 'maintenance'
+              ? journalSqlMaintenanceIsNormal(request.command.operation)
+              : request.command.type === 'write' && executor.streamed(request.command.command)
         })),
         async (request) => {
           const { command, id } = request
+          if (command.type === 'maintenance') {
+            return {
+              type: 'maintenance',
+              id,
+              result: applyJournalSqlMaintenance(database, command.operation)
+            }
+          }
           return command.type === 'write'
             ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
             : {

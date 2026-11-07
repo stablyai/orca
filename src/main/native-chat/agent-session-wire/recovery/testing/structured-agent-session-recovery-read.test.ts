@@ -21,7 +21,9 @@ it('does no discovery on ordinary reads and drops preparation superseded by a se
     items: [],
     submissions: []
   }
-  const session = { journal: { statusRead: () => snapshot, cursor: () => snapshot.cursor } }
+  const session = {
+    journal: { statusRead: () => snapshot, reads: { cursor: async () => snapshot.cursor } }
+  }
   const deps = {
     store: { getRecord: () => record },
     journalDatabase: { stateDirectory: '/state' },
@@ -113,7 +115,9 @@ it('recovers an unpinned OMP native file using the owning host directory and flo
       })),
       submissions: []
     }
-    const session = { journal: { statusRead: () => snapshot, cursor: () => snapshot.cursor } }
+    const session = {
+      journal: { statusRead: () => snapshot, reads: { cursor: async () => snapshot.cursor } }
+    }
     const resolveWorkspacePath = vi.fn(async () => cwd)
     const deps = {
       store: { getRecord: () => record },

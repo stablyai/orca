@@ -16,16 +16,18 @@ import {
   type HistoryReader
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
-import { currentJournalSqlEpoch, JournalProjectionStaleError } from './journal-sql-meta'
+import { readJournalSqlProjection } from './journal-sql-read-transaction'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import { JournalSqlHistoryValues } from './journal-sql-history-values'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { readJournalSqlForwardHistory } from './journal-sql-history-after'
 
 export type JournalSqlHistoryRequest = Omit<AgentSessionHistoryRequest, 'direction'> & {
-  direction: 'tail' | 'before' | 'hydrate'
+  direction: AgentSessionHistoryRequest['direction'] | 'hydrate'
   fence?: number
   scope?: 'every-agent' | 'own-agent'
+  rowReplay?: boolean
 }
 
 export type JournalSqlHistoryWork = { bodies: number }
@@ -37,19 +39,9 @@ export function readJournalSqlHistoryPage(
   reader: Pick<HistoryReader, 'form' | 'budgetBytes'> = CLIENT_HISTORY_READER,
   work: JournalSqlHistoryWork = { bodies: 0 }
 ): AgentSessionHistoryResult {
-  db.exec('BEGIN')
-  try {
-    const epoch = currentJournalSqlEpoch(db, request.sessionId)
-    if (epoch === null) {
-      throw new JournalProjectionStaleError('chat needs conversion before reading history')
-    }
-    const page = new HistoryPage(db, request.sessionId, epoch, reader, work).read(request)
-    db.exec('COMMIT')
-    return page
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  return readJournalSqlProjection(db, request.sessionId, (scope) =>
+    new HistoryPage(db, request.sessionId, scope.epoch, reader, work).read(request)
+  )
 }
 
 class HistoryPage {
@@ -63,7 +55,7 @@ class HistoryPage {
     sessionId: string,
     epoch: string,
     private readonly reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
-    work: JournalSqlHistoryWork
+    private readonly work: JournalSqlHistoryWork
   ) {
     this.scope = new JournalSqlScope(db, sessionId, epoch)
     this.values = new JournalSqlHistoryValues(db, this.scope, work)
@@ -74,6 +66,25 @@ class HistoryPage {
   }
 
   read(request: JournalSqlHistoryRequest): AgentSessionHistoryResult {
+    if (request.direction === 'after') {
+      return readJournalSqlForwardHistory(
+        this.scope,
+        request,
+        this.reader,
+        this.work,
+        this.latestTurnItem(),
+        (reset) => ({
+          ok: false,
+          reset,
+          page: this.page({
+            ...request,
+            direction: 'hydrate',
+            fence: undefined,
+            scope: 'every-agent'
+          })
+        })
+      )
+    }
     const cursor = request.direction === 'before' ? request.cursor : undefined
     if (cursor && (cursor.epoch !== this.epoch || cursor.sequence > this.sequence)) {
       return {
@@ -136,14 +147,7 @@ class HistoryPage {
       .prepare(`SELECT 1 FROM journal_proj_items WHERE ${where}
       AND sequence>=? LIMIT 1`)
       .get(...prefix, end)
-    const turn = this.db
-      .prepare(`SELECT entry_key, incarnation FROM journal_proj_items INDEXED BY journal_proj_items_position
-      WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
-      AND sequence=(SELECT sequence FROM journal_proj_items INDEXED BY journal_proj_items_turn
-        WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
-        ORDER BY sequence DESC, ordinal DESC LIMIT 1)
-      ORDER BY sequence_index DESC, ordinal DESC LIMIT 1`)
-      .get(...prefix, ...prefix)
+    const turn = this.latestTurnItem()
     const roster = this.values.roster(where, kept)
     const epoch = this.epoch
     const pageIds = new Set(kept.map((item) => item.itemId))
@@ -173,8 +177,20 @@ class HistoryPage {
       hasOlder,
       hasNewer,
       ...(roster === undefined ? {} : { subagentRoster: roster }),
-      latestTurn: latestStructuredAgentSessionTurn(turn ? [this.values.item(turn)] : [])
+      latestTurn: latestStructuredAgentSessionTurn(turn ? [turn] : [])
     }
+  }
+
+  private latestTurnItem(): AgentJournalRenderItem | null {
+    const turn = this.db
+      .prepare(`SELECT entry_key, incarnation FROM journal_proj_items INDEXED BY journal_proj_items_position
+      WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
+      AND sequence=(SELECT sequence FROM journal_proj_items INDEXED BY journal_proj_items_turn
+        WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
+        ORDER BY sequence DESC, ordinal DESC LIMIT 1)
+      ORDER BY sequence_index DESC, ordinal DESC LIMIT 1`)
+      .get(...this.scope.prefix, ...this.scope.prefix)
+    return turn ? this.values.item(turn) : null
   }
 
   private windowStart(where: string, end: number, limit: number): number {

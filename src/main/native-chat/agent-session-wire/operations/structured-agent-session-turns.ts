@@ -152,16 +152,16 @@ export async function performSend(
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
-      submission: { ...requireSubmission(ctx, input.clientMessageId) }
+      submission: await requireSubmission(ctx, input.clientMessageId)
     }
   }
 }
 
-function requireSubmission(
+async function requireSubmission(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
-): AgentJournalSubmission {
-  const submission = ctx.journal.submission(clientMessageId)
+): Promise<AgentJournalSubmission> {
+  const submission = await ctx.journal.reads.submission(clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }

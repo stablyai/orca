@@ -33,6 +33,7 @@ import {
 import { createJournalReducerState, type JournalReducerState } from './projection/journal-reducer'
 
 import { resolveJournalItemId } from './projection/journal-item-echo'
+import { foldedJournalReads, type AgentSessionJournalReads } from './journal-reads'
 
 import { journalTombstoneRowBuilder } from './writing/journal-row-builders'
 import type * as contracts from './journal-store-contracts'
@@ -278,16 +279,15 @@ export class AgentSessionJournal {
     journalInput.journalInputPresentationRemoved(this.state, itemId)
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
+  readonly reads: AgentSessionJournalReads = foldedJournalReads(this)
 
   /** Read after all preceding writes and before later ones. */
   readInOrder<T>(read: () => T): Promise<T> {
     return this.queue.readInOrder(read)
   }
 
-  readSince(cursor: AgentJournalCursor, limit?: number) {
-    const { database, state } = this
-    return journalContext.readStoredJournalContextSince(database.db, state, cursor, limit)
-  }
+  readSince = (cursor: AgentJournalCursor, limit?: number) =>
+    journalContext.readStoredJournalContextSince(this.database.db, this.state, cursor, limit)
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
   appendItem(...args: Parameters<typeof this.itemAppender.append>) {

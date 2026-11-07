@@ -151,7 +151,7 @@ export class StructuredAgentSessionConversations extends Map<
     const registration = { observer }
     listeners.add(registration)
     const release = () => this.removeObserver(sessionId, registration)
-    this.deliverHint(observer, this.hint(sessionId, 'reset'), release)
+    this.deliverPublication(sessionId, registration, this.hint(sessionId, 'reset'))
     return release
   }
 
@@ -159,15 +159,15 @@ export class StructuredAgentSessionConversations extends Map<
     sessionId: string,
     kind: JournalPublication['kind'],
     rows?: readonly JournalRow[]
-  ): JournalPublication {
+  ): JournalPublication | Promise<JournalPublication> {
     const source = kind === 'detach' || kind === 'end' ? undefined : this.attachments.get(sessionId)
-    return {
+    const hint: JournalPublication = {
       kind,
       source: source ?? null,
       journal: source?.journal ?? null,
-      cursor: source?.journal.cursor(),
       rows
     }
+    return source ? source.journal.reads.cursor().then((cursor) => ({ ...hint, cursor })) : hint
   }
 
   publish(sessionId: string, kind: JournalPublication['kind'], rows?: readonly JournalRow[]): void {
@@ -177,10 +177,40 @@ export class StructuredAgentSessionConversations extends Map<
     }
     const hint = this.hint(sessionId, kind, rows)
     for (const registration of observers) {
-      this.deliverHint(registration.observer, hint, () =>
-        this.removeObserver(sessionId, registration)
-      )
+      this.deliverPublication(sessionId, registration, hint)
     }
+  }
+
+  private deliverPublication(
+    sessionId: string,
+    registration: { observer: PublicationObserver },
+    hint: JournalPublication | Promise<JournalPublication>
+  ): void {
+    const release = () => this.removeObserver(sessionId, registration)
+    if (!(hint instanceof Promise)) {
+      this.deliverHint(registration.observer, hint, release)
+      return
+    }
+    void hint.then(
+      (value) => {
+        if (
+          this.observers.get(sessionId)?.has(registration) &&
+          this.attachments.get(sessionId) === value.source
+        ) {
+          this.deliverHint(registration.observer, value, release)
+        }
+      },
+      (error: unknown) => {
+        if (this.observers.get(sessionId)?.has(registration)) {
+          release()
+          try {
+            registration.observer.error(error)
+          } catch {
+            // A consumer cannot fail another consumer or the durable writer.
+          }
+        }
+      }
+    )
   }
 
   private removeObserver(sessionId: string, registration: { observer: PublicationObserver }): void {

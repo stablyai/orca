@@ -46,6 +46,7 @@ export async function observeAutomationChatRun(
     let reading = false
     let dirty = false
     let fingerprint = ''
+    let observed = Promise.resolve()
     let source: JournalPublication['source'] = null
     let currentJournal: JournalPublication['journal'] = null
     let cursor: JournalPublication['cursor']
@@ -79,11 +80,17 @@ export async function observeAutomationChatRun(
         }),
       Math.max(1, (run.dispatchedAt ?? run.createdAt) + 6 * 60 * 60 * 1000 - Date.now())
     )
-    const interest = (): string => {
+    // Keys and reads start when called, so a later turn id cannot change an earlier hint's answer.
+    const interest = async (): Promise<string> => {
       const journal = currentJournal
       const card = journal?.queuedMessages.get(messageId)
-      const entry = journal?.submission(card?.consumedAs ?? submissionId)
-      const root = turnItemId ? journal?.item(journal.canonicalItemId(turnItemId)) : null
+      const turnId = turnItemId
+      const [entry, root] = await Promise.all([
+        journal?.reads.submission(card?.consumedAs ?? submissionId),
+        journal && turnId
+          ? journal.reads.canonicalItemId(turnId).then((id) => journal.reads.item(id))
+          : null
+      ])
       const turn = root ? readAgentJournalTurn(root.body) : null
       return JSON.stringify([
         card?.state,
@@ -130,7 +137,14 @@ export async function observeAutomationChatRun(
             providerItemId = submission.providerItemId
             turnItemId = turnItem?.itemId ?? null
           }
-          fingerprint = interest()
+          const semantic = interest()
+          const recorded = observed
+            .then(() => semantic)
+            .then((value) => {
+              fingerprint = value
+            })
+          observed = recorded.catch(() => {})
+          await recorded
           if (observation) {
             finish(observation)
             return
@@ -162,7 +176,6 @@ export async function observeAutomationChatRun(
           return
         }
         currentJournal = hint.journal
-        const semantic = interest()
         const rows = hint.rows
         const currentCursor = cursor
         const contiguous =
@@ -193,20 +206,29 @@ export async function observeAutomationChatRun(
             )
           })
         })
-        const changed =
-          source !== hint.source ||
-          hint.kind !== 'commit' ||
-          !contiguous ||
-          semantic !== fingerprint ||
-          linked
+        const structural = source !== hint.source || hint.kind !== 'commit' || !contiguous || linked
         source = hint.source
         cursor = hint.cursor
-        fingerprint = semantic
-        if (changed) {
+        const reread = (): void => {
           revision++
           dirty = true
           queueMicrotask(() => void read())
         }
+        if (structural) {
+          reread()
+        }
+        // Chained so each hint compares against the fingerprint recorded before it.
+        const semantic = interest()
+        observed = observed
+          .then(() => semantic)
+          .then((value) => {
+            const changed = value !== fingerprint
+            fingerprint = value
+            if (changed && !structural && !settled) {
+              reread()
+            }
+          })
+          .catch((error: unknown) => finish(undefined, error))
       },
       error: (error) => finish(undefined, error)
     })

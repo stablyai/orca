@@ -109,7 +109,7 @@ export async function admitCommandReceiptMutation<TValue>(
           ok: true,
           replayed: false,
           fence: context.fence,
-          cursor: journal.cursor(),
+          cursor: await journal.reads.cursor(),
           value: outcome.value
         }
       : refuseAgentSessionMutation(outcome.refusal)
@@ -183,7 +183,7 @@ async function answerCommandReceipt<TValue>(
     ok: true,
     replayed: true,
     fence: context.fence,
-    cursor: journal.cursor(),
+    cursor: await journal.reads.cursor(),
     value: replay.value
   }
 }

@@ -171,7 +171,7 @@ export function sendQueuedStructuredAgentMessage(
         }
         throw error
       }
-      const submission = submissionFor(ctx, submissionId)
+      const submission = await ctx.journal.reads.submission(submissionId)
       if (!submission) {
         throw new Error('agent_session_submission_lost')
       }

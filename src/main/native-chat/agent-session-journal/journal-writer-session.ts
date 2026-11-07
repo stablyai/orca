@@ -116,6 +116,11 @@ export class JournalWriterSession {
   /** The command-local journal recovery procedures read and write through. */
   readonly journal: JournalRecoveryJournal = recoveryJournal(this)
 
+  /** The host's staged view of what a rewind leaves; the writer proves it in the command. */
+  get rewound() {
+    return this.facts.rewound
+  }
+
   /** Asked by a consume after the writer has validated the card it hands over. */
   owed = (): QueuedMessageOwed => {
     if (this.facts.owed === undefined) {

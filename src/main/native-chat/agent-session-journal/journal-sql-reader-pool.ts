@@ -6,13 +6,20 @@ import {
 } from '../../worker-threads/worker-thread-entry-path'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import type { JournalSqlHistoryRequest } from './journal-sql-history-page'
-import { restoreJournalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
-
-export type JournalSqlReaderRequest = { id: number; request: JournalSqlHistoryRequest }
-export type JournalSqlReaderReply =
-  | { type: 'ready' }
-  | { type: 'page'; id: number; result: AgentSessionHistoryResult }
-  | { type: 'failed'; id?: number; error: JournalSqlFailure }
+import { restoreJournalSqlFailure } from './journal-sql-failure'
+import type {
+  JournalSqlConversionHeader,
+  JournalSqlReaderOperation,
+  JournalSqlReaderReply,
+  JournalSqlReaderRequest,
+  JournalSqlReaderResult
+} from './journal-sql-reader-protocol'
+import type { JournalSqlConversionTable } from './journal-sql-conversion'
+import type {
+  JournalSqlDatabaseRead,
+  JournalSqlDatabaseReadResult
+} from './journal-sql-database-read'
+import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -29,9 +36,37 @@ export class JournalSqlReaderPool {
     )
   ) {}
 
-  read(request: JournalSqlHistoryRequest): Promise<AgentSessionHistoryResult> {
+  async read(request: JournalSqlHistoryRequest): Promise<AgentSessionHistoryResult> {
+    const response = await this.slot().request({ kind: 'history', request })
+    if (response.type !== 'page') {
+      throw new Error('journal reader returned no history page')
+    }
+    return response.result
+  }
+
+  async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
+    return this.slot().prepareConversion(sessionId)
+  }
+
+  async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
+    const response = await this.slot().request({ kind: 'database', operation })
+    if (response.type !== 'database') {
+      throw new Error('journal reader returned no database result')
+    }
+    return response.result
+  }
+
+  async point(request: JournalSqlPointRead): Promise<JournalSqlPointReadResult> {
+    const response = await this.slot().request({ kind: 'point', request })
+    if (response.type !== 'point') {
+      throw new Error('journal reader returned no point result')
+    }
+    return response.result
+  }
+
+  private slot(): ReaderSlot {
     if (this.closed) {
-      return Promise.reject(new Error('journal SQL reader pool is closed'))
+      throw new Error('journal SQL reader pool is closed')
     }
     for (let index = this.slots.length - 1; index >= 0; index--) {
       if (this.slots[index]!.failed) {
@@ -45,7 +80,7 @@ export class JournalSqlReaderPool {
       slot = new ReaderSlot(this.filename, this.workerPath)
       this.slots.push(slot)
     }
-    return slot!.read(request)
+    return slot!
   }
 
   close(): Promise<void> {
@@ -57,23 +92,55 @@ export class JournalSqlReaderPool {
   }
 }
 
+/** The reservation keeps pages on the worker holding this chat's restored rows. */
+export class JournalSqlConversionReader {
+  private closing?: Promise<void>
+
+  constructor(
+    readonly header: JournalSqlConversionHeader,
+    private readonly slot: ReaderSlot,
+    private readonly conversionId: number,
+    private readonly release: () => void
+  ) {}
+
+  async next(): Promise<JournalSqlConversionTable | null> {
+    const response = await this.slot.request({
+      kind: 'conversion-page',
+      conversionId: this.conversionId
+    })
+    if (response.type !== 'rows') {
+      throw new Error('journal reader returned no conversion page')
+    }
+    return response.page
+  }
+
+  close(): Promise<void> {
+    return (this.closing ??= this.slot
+      .request({ kind: 'conversion-release', conversionId: this.conversionId })
+      .then(() => {})
+      .finally(this.release))
+  }
+}
+
 class ReaderSlot {
   private readonly worker: Worker
   private nextId = 0
   private readonly pending = new Map<
     number,
     {
-      resolve: (page: AgentSessionHistoryResult) => void
+      resolve: (response: JournalSqlReaderResult) => void
       reject: (error: Error) => void
     }
   >()
   failed = false
+  private failure?: Error
+  private conversions = 0
   private readonly ready = Promise.withResolvers<void>()
   private readonly exited = Promise.withResolvers<void>()
   private closing?: Promise<void>
 
   get pendingCount(): number {
-    return this.pending.size
+    return this.pending.size + this.conversions
   }
 
   constructor(filename: string, workerPath: string) {
@@ -98,14 +165,14 @@ class ReaderSlot {
       if (this.pending.size === 0) {
         this.worker.unref()
       }
-      if (reply.type === 'page') {
-        pending?.resolve(reply.result)
-      } else {
+      if (reply.type === 'failed') {
         const error = restoreJournalSqlFailure(reply.error)
         pending?.reject(error)
         if (reply.id === undefined) {
           this.fail(error)
         }
+      } else {
+        pending?.resolve(reply)
       }
     })
     this.worker.on('error', (error) => this.fail(error))
@@ -117,14 +184,45 @@ class ReaderSlot {
     void this.ready.promise.catch(() => {})
   }
 
-  read(request: JournalSqlHistoryRequest): Promise<AgentSessionHistoryResult> {
+  async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
+    this.conversions++
+    const request = this.send({ kind: 'conversion-prepare', sessionId })
+    try {
+      const response = await request.result
+      if (response.type !== 'prepared') {
+        throw new Error('journal reader returned no prepared conversion')
+      }
+      if (!response.conversion) {
+        this.conversions--
+        return null
+      }
+      return new JournalSqlConversionReader(response.conversion, this, request.id, () => {
+        this.conversions--
+      })
+    } catch (error) {
+      this.conversions--
+      throw error
+    }
+  }
+
+  request(operation: JournalSqlReaderOperation): Promise<JournalSqlReaderResult> {
+    return this.send(operation).result
+  }
+
+  private send(operation: JournalSqlReaderOperation): {
+    id: number
+    result: Promise<JournalSqlReaderResult>
+  } {
     const id = ++this.nextId
+    if (this.failed) {
+      return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
+    }
     this.worker.ref()
-    return new Promise((resolve, reject) => {
+    const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
       void this.ready.promise
         .then(() => {
-          this.worker.postMessage({ id, request } satisfies JournalSqlReaderRequest)
+          this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)
         })
         .catch((error: unknown) => {
           this.pending.delete(id)
@@ -134,6 +232,7 @@ class ReaderSlot {
           reject(error)
         })
     })
+    return { id, result }
   }
 
   close(): Promise<void> {
@@ -142,6 +241,7 @@ class ReaderSlot {
 
   private fail(error: Error): void {
     this.failed = true
+    this.failure ??= error
     this.ready.reject(error)
     for (const pending of this.pending.values()) {
       pending.reject(error)

@@ -259,18 +259,19 @@ async function foundConversation(
     }
     context.publishStatus(sessionId)
     const tabId = store.getSessionTabId(sessionId)
-    const firstMessage = options.firstMessage
-      ? session.journal.submission(options.firstMessage.clientMessageId)
-      : undefined
+    const [cursor, firstMessage] = await Promise.all([
+      session.journal.reads.cursor(),
+      options.firstMessage && session.journal.reads.submission(options.firstMessage.clientMessageId)
+    ])
     const result = {
       ok: true as const,
       replayed,
       fence,
-      cursor: session.journal.cursor(),
+      cursor,
       value: {
         sessionId,
         fence,
-        page: readForkHydration(session.journal, fence, store),
+        page: readForkHydration(session.journal, fence, store, sessionId),
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})

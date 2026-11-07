@@ -2,35 +2,23 @@ import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type {
   AgentJournalRenderItem,
+  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemSubagentId } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { offPageSubagentRoster } from '../agent-session-wire/publication/history/agent-session-history-subagent-roster'
 import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { JournalSqlScope } from './journal-sql-scope'
-import { JournalSqlItemValues } from './journal-sql-item-values'
-import { JournalSqlValueReader } from './journal-sql-value-reader'
-import { JournalSqlValueObjects } from './journal-sql-value-objects'
-import { parseJournalSqlValue, type JournalSqlValueLocation } from './journal-sql-value-codec'
+import { JournalSqlReadValues } from './journal-sql-read-values'
+import { parseJournalSqlValue } from './journal-sql-value-codec'
 import { projectJournalStopNote } from './context-epochs/journal-stop-note-projection'
 import type { JournalSqlHistoryWork } from './journal-sql-history-page'
-
-// A reader never edits loaded values; keeping them plain also permits worker structured cloning.
-class ReadObjects extends JournalSqlValueObjects {
-  constructor(private readonly work: JournalSqlHistoryWork) {
-    super(() => {})
-  }
-  override track(value: unknown, location: JournalSqlValueLocation): unknown {
-    if (location.collection === 'items') {
-      this.work.bodies++
-    }
-    return value
-  }
-}
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 /** A page owns the decoded bodies and their transitive references only for its read transaction. */
 export class JournalSqlHistoryValues {
-  private readonly values: JournalSqlValueReader
+  private readonly values: JournalSqlReadValues
   private readonly loaded = new Map<string, AgentJournalRenderItem>()
   readonly submissions = new Map<string, AgentJournalSubmission>()
   readonly submissionOrder = new Map<string, number>()
@@ -39,11 +27,11 @@ export class JournalSqlHistoryValues {
     private readonly scope: JournalSqlScope,
     work: JournalSqlHistoryWork
   ) {
-    this.values = new JournalSqlValueReader(
-      scope,
-      new ReadObjects(work),
-      new JournalSqlItemValues(scope)
-    )
+    this.values = new JournalSqlReadValues(scope, (location) => {
+      if (location.collection === 'items') {
+        work.bodies++
+      }
+    })
   }
   item(row: SqliteRow): AgentJournalRenderItem {
     const key = String(row.entry_key)
@@ -99,6 +87,30 @@ export class JournalSqlHistoryValues {
           ) as AgentJournalSubmission
         )
       }
+    }
+  }
+
+  snapshot(cursor: AgentJournalCursor, ids: ReadonlySet<string>): AgentJournalSnapshot {
+    const keys = [...ids].map((id) => JSON.stringify(id))
+    const rows = this.db
+      .prepare(`SELECT item.entry_key, item.incarnation FROM json_each(?) wanted
+      CROSS JOIN journal_proj_items item
+      WHERE item.session_id=? AND item.epoch=? AND item.entry_key=wanted.value AND item.hidden=0
+      ORDER BY item.sequence, item.sequence_index, item.ordinal`)
+      .all(JSON.stringify(keys), ...this.scope.prefix)
+    this.loadSubmissions(keys)
+    return {
+      sessionId: this.scope.sessionId,
+      cursor,
+      items: rows.map((row) => this.item(row)),
+      submissions: [...this.submissions.values()]
+        .filter((submission) => ids.has(agentJournalSubmissionKey(submission.clientMessageId)))
+        .sort(
+          (a, b) =>
+            a.submittedAt - b.submittedAt ||
+            this.submissionOrder.get(JSON.stringify(a.clientMessageId))! -
+              this.submissionOrder.get(JSON.stringify(b.clientMessageId))!
+        )
     }
   }
 

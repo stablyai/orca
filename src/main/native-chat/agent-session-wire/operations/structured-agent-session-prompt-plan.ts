@@ -3,10 +3,12 @@ import type { AgentSessionPromptResult } from '../../../../shared/agent-session/
 import { refusingNewerOrcaJournal } from '../../agent-session-journal/replay/journal-open-failure'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import {
+  promptAnswerReceipt,
+  promptRowAnswer
+} from '../../agent-session-journal/writing/command-receipt-prompt-answer'
+import {
   performPrompt,
   acceptedPromptAnswer,
-  promptAnswerReceipt,
-  promptRowAnswer,
   type AgentSessionPromptRequest
 } from './structured-agent-session-turns-prompt'
 

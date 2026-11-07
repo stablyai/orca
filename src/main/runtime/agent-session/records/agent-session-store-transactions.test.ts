@@ -199,4 +199,26 @@ describe('a receipt', () => {
       (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
     ).not.toBe('lost')
   })
+  it('stages for the writer, holds later store writes until it settles, and adopts only a committed draft', async () => {
+    const store = await pendingOperation()
+    const args = { callerKey: 'client-1', operationId, outcome, record: change }
+    const rolledBack = await store.operationOutcomeReceipt(args).stage!({ savedAt: NOW })
+    expect(rolledBack.effects).toEqual([expect.objectContaining({ kind: 'store' })])
+    const rename = store.setConversationName('chat-a-0001', 'after')
+    await new Promise(setImmediate)
+    expect(store.getRecord('chat-a-0001')?.conversationName).not.toBe('after')
+
+    rolledBack.settle(undefined)
+    await rename
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+
+    const committed = await store.operationOutcomeReceipt(args).stage!({ savedAt: NOW })
+    committed.settle([null])
+    expect(store.getRecord('chat-a-0001')).toMatchObject({
+      conversationName: 'after',
+      usageLimitContinueCancel: cancel
+    })
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('succeeded')
+  })
 })

@@ -1,4 +1,5 @@
 import { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { journalOpenRefusalError } from '../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { recordStructuredAgentSessionHostInstallRefusal } from './structured-agent-session-host-refusal'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -34,6 +35,38 @@ export function openStructuredAgentSessionJournalDatabase(args: {
   } catch (error) {
     logOpenFailureOnce(args.logger, error)
     // Refusal must leave the database file intact.
+    const refusal = journalOpenRefusalError(error)
+    recordStructuredAgentSessionHostInstallRefusal(refusal)
+    throw refusal
+  }
+}
+
+/** The worker-owned startup path; installation attaches activity before starting maintenance. */
+export async function openStructuredAgentSessionSqlJournalDatabase(
+  args: {
+    stateDirectory: string
+    logger: StructuredAgentSessionLogger
+  } & Pick<Parameters<typeof JournalSqlDatabase.open>[1], 'writerPath' | 'readerPath'>
+) {
+  let journalDatabase: JournalSqlDatabase | undefined
+  try {
+    journalDatabase = await JournalSqlDatabase.open(args.stateDirectory, {
+      writerPath: args.writerPath,
+      readerPath: args.readerPath,
+      onMaintenanceError: (error, sessionId) =>
+        args.logger.error('maintaining the chat journal database failed', {
+          scope: 'journal-database-maintenance',
+          sessionId,
+          error
+        })
+    })
+    const records = await journalDatabase.loadRecords()
+    recordStructuredAgentSessionHostInstallRefusal(null)
+    lastLoggedOpenFailure = null
+    return { journalDatabase, records }
+  } catch (error) {
+    await journalDatabase?.close()
+    logOpenFailureOnce(args.logger, error)
     const refusal = journalOpenRefusalError(error)
     recordStructuredAgentSessionHostInstallRefusal(refusal)
     throw refusal

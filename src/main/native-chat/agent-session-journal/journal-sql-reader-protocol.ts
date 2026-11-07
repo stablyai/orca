@@ -1,0 +1,32 @@
+import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
+import type { JournalSqlHistoryRequest } from './journal-sql-history-page'
+import type { JournalSqlFailure } from './journal-sql-failure'
+import type { JournalSqlConversion, JournalSqlConversionTable } from './journal-sql-conversion'
+import type {
+  JournalSqlDatabaseRead,
+  JournalSqlDatabaseReadResult
+} from './journal-sql-database-read'
+import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
+
+export type JournalSqlConversionHeader = Omit<JournalSqlConversion, 'tables'>
+
+export type JournalSqlReaderOperation =
+  | { kind: 'history'; request: JournalSqlHistoryRequest }
+  | { kind: 'database'; operation: JournalSqlDatabaseRead }
+  | { kind: 'point'; request: JournalSqlPointRead }
+  | { kind: 'conversion-prepare'; sessionId: string }
+  | { kind: 'conversion-page'; conversionId: number }
+  | { kind: 'conversion-release'; conversionId: number }
+
+export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
+export type JournalSqlReaderReply =
+  | { type: 'ready' }
+  | { type: 'page'; id: number; result: AgentSessionHistoryResult }
+  | { type: 'database'; id: number; result: JournalSqlDatabaseReadResult }
+  | { type: 'point'; id: number; result: JournalSqlPointReadResult }
+  | { type: 'prepared'; id: number; conversion: JournalSqlConversionHeader | null }
+  | { type: 'rows'; id: number; page: JournalSqlConversionTable | null }
+  | { type: 'released'; id: number }
+  | { type: 'failed'; id?: number; error: JournalSqlFailure }
+
+export type JournalSqlReaderResult = Exclude<JournalSqlReaderReply, { type: 'ready' | 'failed' }>
