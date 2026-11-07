@@ -10,6 +10,7 @@ const DIFF_VIEW_FIELDS = [
   'branchCompare',
   'commitCompare',
   'branchOldPath',
+  'gitWorktreeId',
   'combinedAlternate',
   'combinedAreaFilter',
   'branchEntriesSnapshot',

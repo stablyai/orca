@@ -18,6 +18,7 @@ import type { WorktreeDeletionPreferences } from './worktree-deletion-preference
 import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
+import type { LinkedRepositoriesSettings } from './linked-repositories-settings-types'
 import type { EditorSaveSettings } from './editor-save-settings'
 import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
@@ -49,4 +50,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
-  KeybindingGlobalSettings
+  KeybindingGlobalSettings &
+  LinkedRepositoriesSettings

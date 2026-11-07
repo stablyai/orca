@@ -22,6 +22,10 @@ import {
   CompareAgainstUpstreamSetting,
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
+import {
+  LinkedRepositoriesSetting,
+  linkedRepositoriesMatchesSearch
+} from './LinkedRepositoriesSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
@@ -299,6 +303,13 @@ export function GitPane({
     }) ? (
       <SourceControlGroupOrderSetting
         key="source-control-group-order"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    linkedRepositoriesMatchesSearch(searchQuery) ? (
+      <LinkedRepositoriesSetting
+        key="linked-repositories"
         settings={settings}
         updateSettings={updateSettings}
       />

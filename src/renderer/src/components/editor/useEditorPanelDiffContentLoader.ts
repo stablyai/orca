@@ -70,9 +70,14 @@ export function useEditorPanelDiffContentLoader({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
+        // Linked-repo diffs sit in this workspace's tabs but read Git from the linked workspace.
+        const gitWorktreeId = file.gitWorktreeId ?? file.worktreeId
         const { connectionId, target: fileTarget } = getEditorFileReadContext(
           useAppStore.getState(),
-          file,
+          gitWorktreeId === file.worktreeId
+            ? file
+            : // The tab's provenance belongs to the host workspace; recapture for the linked one.
+              { ...file, worktreeId: gitWorktreeId, operationProvenance: undefined },
           worktreePath
         )
         const gitScope = getRuntimeGitScope(fileTarget, connectionId)
@@ -103,7 +108,7 @@ export function useEditorPanelDiffContentLoader({
                 ? getRuntimeGitCommitDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },
@@ -120,7 +125,7 @@ export function useEditorPanelDiffContentLoader({
                 ? getRuntimeGitBranchDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },
@@ -139,7 +144,7 @@ export function useEditorPanelDiffContentLoader({
                 : getRuntimeGitDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },

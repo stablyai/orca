@@ -89,6 +89,27 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.linkedRepositoriesTitle',
+      'Linked Repositories'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.linkedRepositoriesDescription',
+      "Show other projects in a workspace's Source Control so you can review and commit them there. Link a project with +, or put projects in the same project group to link them automatically."
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.linkedRepos',
+        'linked repositories'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.multiRepo', 'multi repo'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.otherProjects',
+        'other projects'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.compareAgainstUpstreamTitle',
       'Default Compare Base'
     ),
