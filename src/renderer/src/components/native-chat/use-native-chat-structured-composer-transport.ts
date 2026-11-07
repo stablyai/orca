@@ -9,7 +9,7 @@ import type {
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
-import type { NativeChatForkSurface } from './use-native-chat-fork'
+import type { NativeChatPaneFork } from './use-native-chat-fork'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
@@ -31,7 +31,7 @@ function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: b
 }
 
 function nativeChatForkCommand(
-  fork: NativeChatForkSurface | undefined,
+  fork: NativeChatPaneFork | undefined,
   isWorking: boolean
 ): NativeChatStructuredComposerTransport['fork'] {
   // Offered once the host and agent confirm they can fork, as the response action is enabled.
@@ -63,7 +63,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
   /** The session's fork, run by `/fork`. */
-  fork: NativeChatForkSurface | undefined
+  fork: NativeChatPaneFork | undefined
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,

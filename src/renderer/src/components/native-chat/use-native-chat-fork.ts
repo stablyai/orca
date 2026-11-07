@@ -37,7 +37,10 @@ export type NativeChatForkSurface = NativeChatForkRowAction & {
   forkableItemIds: ReadonlySet<string>
   /** Handed to offered rows, so a change in which rows offer it re-renders only those rows. */
   rowAction: NativeChatForkRowAction
-  /** `/fork`: the same request, through the newest response still in context. */
+}
+
+/** The rows' surface plus `/fork`: the same request, through the newest response still in context. */
+export type NativeChatPaneFork = NativeChatForkSurface & {
   forkLatest: () => NativeChatForkLatestOutcome
 }
 
@@ -53,7 +56,7 @@ export function useNativeChatFork(input: {
   contextFloor: AgentJournalCursor | undefined
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
-}): NativeChatForkSurface | undefined {
+}): NativeChatPaneFork | undefined {
   const host = useStructuredAgentSessionHostCapabilityState(
     input.target,
     AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
@@ -155,7 +158,7 @@ export function useNativeChatPaneFork(
     forkSupport: AgentSessionOptionsResult['forkSupport']
   },
   worktreeId: string | null
-): NativeChatForkSurface | undefined {
+): NativeChatPaneFork | undefined {
   return useNativeChatFork({
     sessionId: pane.sessionId,
     tabId: pane.tabId,
