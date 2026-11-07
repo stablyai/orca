@@ -109,11 +109,15 @@ export function createPluginAgentStatusForwarder(
           }
           const terminals = lookup ? await lookup : []
           const terminal = terminalForPane(terminals, { paneKey: payload.paneKey, terminalHandle })
-          events.emitEvent('agent.status.changed', {
-            ...payload,
-            ...(terminal ? { terminalId: terminal.id } : {}),
-            ...(terminal?.title ? { title: terminal.title } : {})
-          })
+          try {
+            events.emitEvent('agent.status.changed', {
+              ...payload,
+              ...(terminal ? { terminalId: terminal.id } : {}),
+              ...(terminal?.title ? { title: terminal.title } : {})
+            })
+          } catch {
+            // Why: one failed delivery must not drop the rest of the batch or strand the queue.
+          }
         }
       }
     } finally {
