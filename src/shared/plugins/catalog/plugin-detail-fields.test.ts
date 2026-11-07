@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
+
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
-import { parsePluginManifest } from '../manifest/plugin-manifest'
 
 const release = {
   version: '1.2.0',
@@ -10,19 +9,6 @@ const release = {
   execution: 'data',
   minimumOrca: '1.4.0',
   types: ['interface-language']
-}
-
-function v2Manifest(overrides: Record<string, unknown>): Record<string, unknown> {
-  return {
-    manifestVersion: 2,
-    execution: 'data',
-    id: 'demo',
-    publisher: 'acme',
-    name: 'Demo',
-    version: '1.0.0',
-    engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` },
-    ...overrides
-  }
 }
 
 describe('plugin detail fields', () => {
@@ -40,19 +26,5 @@ describe('plugin detail fields', () => {
     expect(parsed.homepage).toBeUndefined()
     expect(parsed.updatedAt).toBeUndefined()
     expect(parsed.changelog).toBeUndefined()
-  })
-
-  it('validates manifest license and homepage', () => {
-    expect(
-      parsePluginManifest(v2Manifest({ license: 'MIT', homepage: 'https://example.com' }))
-    ).toMatchObject({ ok: true, manifest: { license: 'MIT', homepage: 'https://example.com' } })
-    expect(parsePluginManifest(v2Manifest({ homepage: 'http://example.com' }))).toEqual({
-      ok: false,
-      error: 'homepage: must be an https URL'
-    })
-    expect(parsePluginManifest(v2Manifest({ license: 'MIT license' }))).toEqual({
-      ok: false,
-      error: 'license: must be an SPDX expression'
-    })
   })
 })

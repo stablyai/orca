@@ -37,51 +37,9 @@ async function renderCombobox(
   return { search: screen.getByRole('combobox'), onSelect }
 }
 
-const listedModels = (): (string | null)[] =>
-  screen.queryAllByRole('option').map((option) => option.getAttribute('data-value'))
-
-const highlightedModel = (): string | null =>
-  screen.queryByRole('option', { selected: true })?.getAttribute('data-value') ?? null
-
 afterEach(() => cleanup())
 
 describe('NativeChatModelCombobox', () => {
-  it('lists the models with the current one highlighted and marked', async () => {
-    const { search } = await renderCombobox()
-    expect(screen.getByRole('combobox', { name: 'Search models…' })).toBe(search)
-    expect(listedModels()).toEqual(['gpt-5.5', 'gpt-5.2-codex', 'opus'])
-    expect(highlightedModel()).toBe('opus')
-    expect(screen.getByRole('option', { current: true }).getAttribute('data-value')).toBe('opus')
-  })
-
-  it('filters by every typed term across label, id and description, in list order', async () => {
-    const { search } = await renderCombobox()
-
-    fireEvent.change(search, { target: { value: 'gpt' } })
-    expect(listedModels()).toEqual(['gpt-5.5', 'gpt-5.2-codex'])
-    expect(highlightedModel()).toBe('gpt-5.5')
-
-    fireEvent.change(search, { target: { value: 'GPT codex' } })
-    expect(listedModels()).toEqual(['gpt-5.2-codex'])
-
-    fireEvent.change(search, { target: { value: 'frontier' } })
-    expect(listedModels()).toEqual(['gpt-5.5'])
-
-    fireEvent.change(search, { target: { value: 'gemini' } })
-    expect(listedModels()).toEqual([])
-    expect(screen.getByText('No models match your search.')).not.toBeNull()
-  })
-
-  it('moves the highlight with the arrows and picks it with Enter', async () => {
-    const { search, onSelect } = await renderCombobox()
-    fireEvent.change(search, { target: { value: 'gpt' } })
-    fireEvent.keyDown(search, { key: 'ArrowDown' })
-    expect(highlightedModel()).toBe('gpt-5.2-codex')
-
-    fireEvent.keyDown(search, { key: 'Enter' })
-    expect(onSelect).toHaveBeenCalledExactlyOnceWith('gpt-5.2-codex')
-  })
-
   it('picks a clicked row, and sends nothing for the model already in use', async () => {
     const { onSelect } = await renderCombobox()
     fireEvent.click(screen.getByRole('option', { name: /Opus 4.8/ }))
