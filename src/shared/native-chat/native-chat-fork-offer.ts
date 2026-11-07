@@ -10,6 +10,7 @@ import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from './transcript/native-chat-turn-membership'
+import { nativeChatRowsInDrawOrder } from './transcript/native-chat-turn-grouping'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */
 export type NativeChatForkSupport =
@@ -104,8 +105,12 @@ export function nativeChatLatestForkPoint(
   },
   chat: Parameters<typeof nativeChatRowOffersFork>[1]
 ): NativeChatLatestForkPoint {
-  const { messages, journal, agentWorking } = conversation
-  const { turnKeys, liveTurnKey } = nativeChatTurnMembership(messages, journal)
+  const { journal, agentWorking } = conversation
+  // Newest as drawn, where the response actions sit.
+  const membership = nativeChatTurnMembership(conversation.messages, journal)
+  const { liveTurnKey, drawOrder } = membership
+  const messages = nativeChatRowsInDrawOrder(conversation.messages, drawOrder)
+  const turnKeys = nativeChatRowsInDrawOrder(membership.turnKeys, drawOrder)
   const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   for (let index = messages.length - 1; index >= 0; index--) {
     const turnKey = turnKeys[index]

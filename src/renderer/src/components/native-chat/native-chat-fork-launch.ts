@@ -8,7 +8,6 @@ import type { StructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/
 import { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from '@/lib/agent-session/launch/structured-agent-session-launch-create-call'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
-import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import {
@@ -59,10 +58,13 @@ function executionHostIdFor(target: RuntimeClientTarget): ExecutionHostId {
 /** A side chat (`/btw`) opens beside its source; its question, if any, is the fork's first message. */
 export type NativeChatSideChatRequest = { question?: string }
 
-/** The chat a fork opened (or may have opened), and whether a side question went out with it. */
+/** Whether a side question reached the fork; `unconfirmed` may have. */
+export type NativeChatSideQuestionDelivery = 'sent' | 'failed' | 'unconfirmed'
+
+/** The chat a fork opened (or may have opened), and, for a side question, whether it went out. */
 export type NativeChatForkOutcome = {
   chat?: { sessionId: string; executionHostId: ExecutionHostId }
-  questionSent: boolean
+  question?: NativeChatSideQuestionDelivery
 }
 
 /** Opens the fork in a new chat tab and says, once, why it didn't; the source chat is never touched.
@@ -71,7 +73,7 @@ export async function launchNativeChatFork(
   request: NativeChatForkRequest & { side?: NativeChatSideChatRequest }
 ): Promise<NativeChatForkOutcome> {
   const question = request.side?.question
-  let launch: ReturnType<typeof startStructuredAgentLaunch> | undefined
+  let launch: ReturnType<typeof startStructuredAgentLaunch>
   try {
     launch = startStructuredAgentLaunch(request.worktreeId, request.agent, {
       requestId: newAgentLaunchRequestId(),
@@ -82,50 +84,86 @@ export async function launchNativeChatFork(
       surfaceAddress: request.surfaceAddress,
       ...(question ? { prompt: question, promptKeptByCaller: true as const } : {})
     })
-    await launch.launchResult
   } catch (error) {
-    const unconfirmed = launch?.isVisibilityUnknown() === true
-    if (!(error instanceof StructuredAgentSessionCreateAbandonedError)) {
-      reportNativeChatForkFailure(request.agent, error, unconfirmed)
-    } else if (launch?.promptDeliveryResult) {
-      await reportUnsentQuestion(request.agent, launch.promptDeliveryResult)
-    }
-    return { ...(unconfirmed && launch ? { chat: forkChat(launch) } : {}), questionSent: false }
+    reportNativeChatForkFailure(request.agent, error, false)
+    return question ? { question: 'failed' } : {}
   }
+  const failure = await launch.launchResult.then(
+    () => null,
+    (error: unknown) => ({ error })
+  )
   // A question sent after create can still be refused once the chat exists.
-  const questionSent = launch.promptDeliveryResult
-    ? await reportUnsentQuestion(request.agent, launch.promptDeliveryResult)
-    : true
-  return { chat: forkChat(launch), questionSent }
+  const sent = launch.promptDeliveryResult
+    ? await sideQuestionDelivery(launch.promptDeliveryResult)
+    : undefined
+  const delivery = sent?.delivery
+  const chat = forkChat(launch)
+  if (delivery === 'unconfirmed') {
+    reportSideQuestion(request.agent, delivery)
+    return { chat, question: delivery }
+  }
+  if (failure && !(failure.error instanceof StructuredAgentSessionCreateAbandonedError)) {
+    const unconfirmed = launch.isVisibilityUnknown()
+    reportNativeChatForkFailure(request.agent, failure.error, unconfirmed)
+    return { ...(unconfirmed ? { chat } : {}), ...(delivery ? { question: delivery } : {}) }
+  }
+  if (delivery === 'failed' && !sent?.notified) {
+    reportSideQuestion(request.agent, delivery)
+  }
+  return { ...(failure ? {} : { chat }), ...(delivery ? { question: delivery } : {}) }
 }
 
 function forkChat(launch: ReturnType<typeof startStructuredAgentLaunch>) {
   return { sessionId: launch.sessionId, executionHostId: launch.executionHostId }
 }
 
-async function reportUnsentQuestion(
-  agent: TuiAgent,
-  delivery: Promise<StructuredPromptDeliveryResult>
-): Promise<boolean> {
-  const outcome = await newAgentPromptOutcome({ delivery })
-  if (outcome.failure) {
+/** `notified`: the new chat already said why it never went. */
+function sideQuestionDelivery(
+  result: Promise<StructuredPromptDeliveryResult>
+): Promise<{ delivery: NativeChatSideQuestionDelivery; notified?: boolean }> {
+  return result.then(
+    (outcome) =>
+      outcome.delivered || outcome.inComposer || outcome.recipientOwned
+        ? { delivery: 'sent' }
+        : outcome.unconfirmed
+          ? { delivery: 'unconfirmed' }
+          : { delivery: 'failed', notified: outcome.failureNotified },
+    () => ({ delivery: 'failed' })
+  )
+}
+
+/** The source keeps the question either way; the fork it may be in waits in the background. */
+function reportSideQuestion(agent: TuiAgent, delivery: 'failed' | 'unconfirmed'): void {
+  const values = { agent: structuredAgentLabel(agent) }
+  if (delivery === 'unconfirmed') {
     toast.error(
       translate(
-        'components.native-chat.sideChat.questionNotSent',
-        "{{agent}} didn't get your question",
-        {
-          agent: structuredAgentLabel(agent)
-        }
+        'components.native-chat.sideChat.questionUnconfirmed',
+        "{{agent}} couldn't confirm the side chat got your question",
+        values
       ),
       {
         description: translate(
-          'components.native-chat.sideChat.questionNotSentDetail',
-          'Your question is still in this chat. Send /btw again to retry.'
+          'components.native-chat.sideChat.questionUnconfirmedDetail',
+          'Check the side chat before asking again. Your question is still in this chat.'
         )
       }
     )
+    return
   }
-  return outcome.delivered
+  toast.error(
+    translate(
+      'components.native-chat.sideChat.questionNotSent',
+      "{{agent}} didn't get your question",
+      values
+    ),
+    {
+      description: translate(
+        'components.native-chat.sideChat.questionNotSentDetail',
+        'Your question is still in this chat. Send /btw again to retry.'
+      )
+    }
+  )
 }
 
 function reportNativeChatForkFailure(agent: TuiAgent, error: unknown, unconfirmed: boolean): void {

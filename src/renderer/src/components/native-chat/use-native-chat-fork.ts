@@ -23,10 +23,7 @@ import {
   type NativeChatForkOutcome,
   type NativeChatSideChatRequest
 } from './native-chat-fork-launch'
-import {
-  captureNativeChatSideChatSelection,
-  placeNativeChatSideChat
-} from './native-chat-side-chat-placement'
+import { beginNativeChatSideChatPlacement } from './native-chat-side-chat-placement'
 
 /** What an offered row's button needs; the same object while support and pending hold. */
 export type NativeChatForkRowAction = {
@@ -84,9 +81,10 @@ export function useNativeChatFork(input: {
       }
       inFlight.current = true
       setPending(true)
-      const selection = side ? captureNativeChatSideChatSelection(worktreeId) : undefined
+      const placement = side ? beginNativeChatSideChatPlacement(worktreeId, tabId) : undefined
+      let outcome: NativeChatForkOutcome = {}
       try {
-        const outcome = await launchNativeChatFork({
+        outcome = await launchNativeChatFork({
           agent,
           worktreeId,
           target,
@@ -94,11 +92,10 @@ export function useNativeChatFork(input: {
           surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId),
           ...(side ? { side } : {})
         })
-        if (selection !== undefined && outcome.chat) {
-          placeNativeChatSideChat({ worktreeId, sourceTabId: tabId, selection, chat: outcome.chat })
-        }
         return outcome
       } finally {
+        // A question that never went out leaves its fork in the background.
+        placement?.settle(outcome.question === 'failed' ? undefined : outcome.chat)
         inFlight.current = false
         setPending(false)
       }

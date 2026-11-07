@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
@@ -17,10 +17,7 @@ import {
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey
 } from './native-chat-composer-draft-store'
-import {
-  writeNativeChatComposerText,
-  type NativeChatComposerInput
-} from './native-chat-composer-input'
+import { promptHasAttachmentReferences } from './native-chat-prompt-document'
 
 export function withNativeChatSideChatRows(
   commands: readonly SlashCommandSuggestion[],
@@ -42,7 +39,7 @@ export type NativeChatSideChatCommand = {
   matchesDraft: (draft: string) => boolean
   /** Starts a side chat for a `/side` or `/btw` draft; false means the draft is not Orca's. */
   consume: (draft: string) => boolean
-  /** Choosing the row puts `/btw ` in the composer for the question; only Send runs it. */
+  /** Choosing the row completes `/btw ` for the question; only Send runs it. */
   interceptPick: <TItem extends NativeChatPickerItem>(
     pick: (item: TItem) => void
   ) => (item: TItem) => void
@@ -52,16 +49,12 @@ export type NativeChatSideChatCommand = {
  *  reaches the agent. The draft stays until the question went out. */
 export function useNativeChatSideChatCommand(args: {
   structuredTransport: NativeChatStructuredComposerTransport | undefined
-  picker: Pick<NativeChatPickerState, 'autocomplete' | 'isPickedSkill'>
-  editor: {
-    textareaRef: RefObject<NativeChatComposerInput | null>
-    setDraft: (value: string) => void
-    setCaret: Dispatch<SetStateAction<number>>
-  }
+  picker: Pick<NativeChatPickerState, 'autocomplete' | 'isPickedSkill' | 'completeItem'>
+  editor: { setCaret: Dispatch<SetStateAction<number>> }
 }): NativeChatSideChatCommand {
   const { structuredTransport } = args
-  const { autocomplete, isPickedSkill } = args.picker
-  const { textareaRef, setDraft, setCaret } = args.editor
+  const { autocomplete, isPickedSkill, completeItem } = args.picker
+  const { setCaret } = args.editor
   const sideChat = structuredTransport?.sideChat
   const matchesDraft = useCallback(
     (draft: string) =>
@@ -82,6 +75,7 @@ export function useNativeChatSideChatCommand(args: {
       if (
         submitted.images.length > 0 ||
         nativeChatPendingAttachmentSnapshot(draftScopeKey).length > 0 ||
+        promptHasAttachmentReferences(submitted.document) ||
         NATIVE_CHAT_PASTED_TEXT_TOKEN.test(draft) ||
         mayHoldAgentReferences(draft)
       ) {
@@ -112,24 +106,19 @@ export function useNativeChatSideChatCommand(args: {
     },
     [isPickedSkill, setCaret, sideChat, structuredTransport]
   )
+  // Completing the row keeps the rest of the draft and ends a same-named skill's claim on it.
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         const name = item.kind === 'command' && item.orcaOwned ? item.name : null
-        if (!leading || !sideChat || !isNativeChatSideChatCommand(name)) {
+        if (leading && sideChat && isNativeChatSideChatCommand(name)) {
+          completeItem(item)
+        } else {
           pick(item)
-          return
-        }
-        const text = `/${name} `
-        setDraft(text)
-        setCaret(text.length)
-        const input = textareaRef.current
-        if (input) {
-          writeNativeChatComposerText(input, text, text.length)
         }
       },
-    [autocomplete, setCaret, setDraft, sideChat, textareaRef]
+    [autocomplete, completeItem, sideChat]
   )
   return { matchesDraft, consume, interceptPick }
 }

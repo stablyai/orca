@@ -76,7 +76,8 @@ export function useNativeChatStructuredComposerTransport(args: {
       submissions: controller.submissions,
       latestTurn: controller.latestTurn
     },
-    agentWorking: controller.isWorking
+    agentWorking: controller.isWorking,
+    menuOpen: controller.commandsMenuOpen
   })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal

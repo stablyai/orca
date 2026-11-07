@@ -314,6 +314,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
     refreshCommands: commandMenu.refresh,
+    commandsMenuOpen: commandMenu.open,
     setCommandsMenuOpen: commandMenu.setOpen,
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */

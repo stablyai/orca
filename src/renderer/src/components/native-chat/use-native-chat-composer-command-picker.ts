@@ -69,10 +69,19 @@ export function useNativeChatComposerCommandPicker(
   })
   const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
   // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
-  const orcaCommands: NativeChatResumeCommand = {
-    matchesDraft: (draft) => side.matchesDraft(draft) || resume.matchesDraft(draft),
-    consume: (draft) => side.consume(draft) || resume.consume(draft),
-    interceptPick: (pick) => side.interceptPick(resume.interceptPick(pick))
-  }
+  const { consume: sideConsume, matchesDraft: sideMatches, interceptPick: sideIntercept } = side
+  const {
+    consume: resumeConsume,
+    matchesDraft: resumeMatches,
+    interceptPick: resumeIntercept
+  } = resume
+  const orcaCommands = useMemo(
+    (): NativeChatResumeCommand => ({
+      matchesDraft: (draft) => sideMatches(draft) || resumeMatches(draft),
+      consume: (draft) => sideConsume(draft) || resumeConsume(draft),
+      interceptPick: (pick) => sideIntercept(resumeIntercept(pick))
+    }),
+    [resumeConsume, resumeIntercept, resumeMatches, sideConsume, sideIntercept, sideMatches]
+  )
   return { picker, orcaCommands }
 }

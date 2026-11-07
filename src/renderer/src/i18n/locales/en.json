@@ -20764,7 +20764,9 @@
         "noReply": "Available after the first reply.",
         "textOnly": "Side chats take text only. Remove attachments, then send it again.",
         "questionNotSent": "{{agent}} didn't get your question",
-        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry."
+        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
+        "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
+        "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
       }
     },
     "tab": {

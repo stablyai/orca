@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
@@ -14,30 +15,43 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 const SIDE_CHAT_MOVE_MS = 5_000
 const SIDE_CHAT_WATCH_MS = 60_000
 
-/** What the user was looking at when they sent `/btw`; the side chat may take focus only while it holds. */
-export function captureNativeChatSideChatSelection(worktreeId: string): string {
-  return tabSelectionKey(useAppStore.getState(), worktreeId)
+type SideChat = { sessionId: string; executionHostId: ExecutionHostId }
+
+/** One `/btw` request's claim on the screen, from Send until its side chat is placed. */
+export type NativeChatSideChatPlacement = {
+  /** The side chat to place once its tab is drawn; undefined when there is nothing to place. */
+  settle: (chat: SideChat | undefined) => void
 }
 
-/** Once the side chat's tab is drawn, select it and move it beside its source, as the user would by
- *  dragging it there. A refused move leaves it selected where Fork puts it. */
-export function placeNativeChatSideChat(args: {
-  worktreeId: string
+/** Starts at Send: any other selection in the workspace, or leaving it, retires the claim for good,
+ *  and the side chat then stays in the background. Once drawn, it is selected and moved beside its
+ *  source as dragging it there would; a refused move leaves it selected where Fork puts it. */
+export function beginNativeChatSideChatPlacement(
+  worktreeId: string,
   sourceTabId: string
-  selection: string
-  chat: { sessionId: string; executionHostId: ExecutionHostId }
-}): void {
-  const { worktreeId, sourceTabId, selection } = args
-  const startedAt = Date.now()
+): NativeChatSideChatPlacement {
+  const initial = useAppStore.getState()
+  const selection = tabSelectionKey(initial, worktreeId)
+  const activeWorktreeId = initial.activeWorktreeId
+  let chat: SideChat | undefined
+  let settledAt = 0
+  let lookingUp = false
+  let retired = false
+
+  const retire = (): void => {
+    if (!retired) {
+      retired = true
+      unsubscribe()
+      clearTimeout(expiry)
+    }
+  }
   const place = (tabId: string): void => {
-    const state = useAppStore.getState()
-    // The user selected another tab or pane meanwhile: leave the side chat in the background.
-    if (
-      Date.now() - startedAt > SIDE_CHAT_WATCH_MS ||
-      tabSelectionKey(state, worktreeId) !== selection
-    ) {
+    if (retired) {
       return
     }
+    // Our own selection and move below are not the user's.
+    retire()
+    const state = useAppStore.getState()
     state.activateTab(tabId, { worktreeId })
     const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
     const fork = tabs.find((tab) => tab.id === tabId)
@@ -47,7 +61,7 @@ export function placeNativeChatSideChat(args: {
       !fork ||
       !sourceGroupId ||
       fork.groupId !== sourceGroupId ||
-      Date.now() - startedAt > SIDE_CHAT_MOVE_MS
+      Date.now() - settledAt > SIDE_CHAT_MOVE_MS
     ) {
       return
     }
@@ -59,39 +73,43 @@ export function placeNativeChatSideChat(args: {
       moveTabToNewPaneColumn({ unifiedTabId: tabId, groupId: sourceGroupId, direction: 'right' })
     }
   }
-  let watching = true
-  const stop = (): void => {
-    watching = false
-    unsubscribe()
-    clearTimeout(expiry)
-  }
-  const check = (): void => {
-    if (!watching) {
-      return
-    }
-    const tab = findStructuredLaunchTab({ worktreeId, ...args.chat })
+  const lookUp = (): void => {
+    const tab = chat && findStructuredLaunchTab({ worktreeId, ...chat })
     if (tab) {
-      stop()
-      // Main may still be drawing it; select and move the tab its frame shows.
-      afterPendingTab(tab.id, (drawn) => {
-        if (drawn) {
-          place(drawn)
-        }
-      })
-    } else if (tabSelectionKey(useAppStore.getState(), worktreeId) !== selection) {
-      stop()
+      lookingUp = false
+      // Main may still be drawing it; place the tab its frame shows.
+      afterPendingTab(tab.id, (drawn) => (drawn ? place(drawn) : retire()))
     }
   }
-  // Only tab and selection changes can draw the side chat or end the watch.
-  const unsubscribe = useAppStore.subscribe((state, previous) => {
+  const onChange = (state: AppState, previous: AppState): void => {
     if (
-      state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-      state.groupsByWorktree !== previous.groupsByWorktree ||
-      state.activeGroupIdByWorktree !== previous.activeGroupIdByWorktree
+      state.activeWorktreeId !== activeWorktreeId ||
+      !state.groupsByWorktree[worktreeId] ||
+      ((state.groupsByWorktree[worktreeId] !== previous.groupsByWorktree[worktreeId] ||
+        state.activeGroupIdByWorktree[worktreeId] !==
+          previous.activeGroupIdByWorktree[worktreeId]) &&
+        tabSelectionKey(state, worktreeId) !== selection)
     ) {
-      check()
+      retire()
+    } else if (
+      lookingUp &&
+      state.unifiedTabsByWorktree[worktreeId] !== previous.unifiedTabsByWorktree[worktreeId]
+    ) {
+      lookUp()
     }
-  })
-  const expiry = setTimeout(stop, SIDE_CHAT_WATCH_MS)
-  check()
+  }
+  const unsubscribe = useAppStore.subscribe(onChange)
+  const expiry = setTimeout(retire, SIDE_CHAT_WATCH_MS)
+  return {
+    settle: (next) => {
+      if (retired || chat || !next) {
+        retire()
+        return
+      }
+      chat = next
+      settledAt = Date.now()
+      lookingUp = true
+      lookUp()
+    }
+  }
 }
