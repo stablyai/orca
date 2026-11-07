@@ -59,7 +59,11 @@ describe('codex model catalog probe', () => {
         '/orca-probe',
         '/orca-probe'
       ])
-      expect(invocations[0]?.args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+      expect(invocations[0]?.args.slice(0, prefixArgs.length + 2)).toEqual([
+        ...prefixArgs,
+        '-c',
+        'project_root_markers=[]'
+      ])
       expect(identities[0]).toMatchObject({ cwd: '/orca-probe' })
       expect(identities[1]).toEqual(identities[0])
       // The account's configured default is read for Orca's folder, never the project's.
