@@ -8,7 +8,7 @@ import {
 const { activateAndRevealWorktree } = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorktree }))
 
 const initialState = useAppStore.getState()
 afterEach(() => {

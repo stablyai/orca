@@ -545,4 +545,33 @@ describe('nested command group help', () => {
       serveOrcaAppMock.mockReset()
     }
   })
+
+  it('passes --bind to serve only when given, and refuses it with --mobile-pairing before launching', async () => {
+    const previousExitCode = process.exitCode
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    serveOrcaAppMock.mockClear().mockResolvedValue(0)
+
+    try {
+      process.exitCode = 0
+      await main(['serve'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(expect.objectContaining({ bind: null }))
+
+      await main(['serve', '--bind', 'localhost'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ bind: '127.0.0.1' })
+      )
+      expect(serveOrcaAppMock).toHaveBeenCalledTimes(2)
+
+      await main(['serve', '--bind', '127.0.0.1', '--mobile-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenCalledTimes(2)
+      expect(process.exitCode).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        '--mobile-pairing needs --bind 0.0.0.0'
+      )
+    } finally {
+      process.exitCode = previousExitCode
+      errorSpy.mockRestore()
+      serveOrcaAppMock.mockReset()
+    }
+  })
 })

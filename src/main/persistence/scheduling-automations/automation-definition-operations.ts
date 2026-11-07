@@ -38,9 +38,11 @@ import {
   getAutomationContextsForRepo,
   automationContextAfterUpdate,
   getAutomationSchedulerOwner,
+  applyAutomationSetupTrust,
   normalizeAutomationSessionReuse,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
+import { refuseManagedOrcadHost } from '../../automations/orcad-fenced-automation'
 import {
   automationProjectionContext,
   automationWorkspaceSshPin,
@@ -92,6 +94,7 @@ export function createAutomation(
     ),
     workspaceSshPin
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin)
   if (options?.destination) {
     const context = automationProjectionContext(
       operations.state,
@@ -142,6 +145,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  applyAutomationSetupTrust(automation, input)
   assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
@@ -246,15 +250,12 @@ export function updateAutomation(
           ? (definedUpdates.baseBranch ?? null)
           : (current.baseBranch ?? null)
         : null,
-    setupDecision:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'setupDecision')
-          ? normalizeAutomationSetupDecisionForWorkspaceMode(
-              workspaceMode,
-              definedUpdates.setupDecision
-            )
-          : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
-        : undefined,
+    setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+      workspaceMode,
+      Object.hasOwn(definedUpdates, 'setupDecision')
+        ? definedUpdates.setupDecision
+        : current.setupDecision
+    ),
     reuseSession:
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -269,6 +270,7 @@ export function updateAutomation(
   if (retainContexts && !Object.hasOwn(current, 'sourceContext')) {
     delete merged.sourceContext
   }
+  applyAutomationSetupTrust(merged, definedUpdates, current)
   delete merged.launchSetup
   for (const key of ['surface', 'launchPreferences', 'agentArgs', 'extraAgentArgs'] as const) {
     delete merged[key]
@@ -289,6 +291,7 @@ export function updateAutomation(
     workspaceSshPin,
     workspaceSshPinMoved
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin, current, previousPin)
   if (options?.destination) {
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }

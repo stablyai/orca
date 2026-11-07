@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
@@ -63,7 +64,7 @@ describe('mobile native command discovery', () => {
     }
     try {
       await act(async () => {
-        renderer = create(createElement(Probe, { client, sessionId: 'fresh-omp' }))
+        renderer = createWithQueryClient(createElement(Probe, { client, sessionId: 'fresh-omp' }))
       })
       await act(async () => {
         await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledOnce())
@@ -79,9 +80,11 @@ describe('mobile native command discovery', () => {
       expect(discovery.children[0]!.exited).toBe(false)
       await act(async () => menu.pick(selected))
       expect(`${onChangeText.mock.calls.at(-1)![0]}focus`).toBe('/skill:plan focus')
-      expect(sendRequest).toHaveBeenCalledExactlyOnceWith('agentSession.commands', {
-        sessionId: 'fresh-omp'
-      })
+      expect(sendRequest).toHaveBeenCalledExactlyOnceWith(
+        'agentSession.commands',
+        { sessionId: 'fresh-omp' },
+        { failWhenDisconnected: true }
+      )
       expect(discovery.children[0]!.agent.frames.map((frame) => frame.method)).toEqual([
         'initialize',
         'session/new'

@@ -28,6 +28,7 @@ import {
   waitForBeat
 } from '../src/pairing/pairing-visuals'
 import { triggerSuccess } from '../src/platform/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -154,15 +155,13 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairConfirm.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t('app.pairConfirm.pairingFailed', 'Pairing failed: {{error}}', {
-              error: err instanceof Error ? err.message : String(err)
-            })
+        getPairingFailureMessage({
+          screen: 'confirm',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t
+        })
       )
     }
   }

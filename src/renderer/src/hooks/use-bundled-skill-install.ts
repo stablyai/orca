@@ -19,7 +19,7 @@ import {
   executeBundledSkillsOnTarget,
   planBundledSkillsOnTarget,
   type BundledSkillUnsupportedReason
-} from '@/runtime/runtime-bundled-skills-client'
+} from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 import { useMountedRef } from './useMountedRef'

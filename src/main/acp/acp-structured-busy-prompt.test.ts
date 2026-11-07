@@ -4,11 +4,11 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { CancelParams } from '../../shared/rpc-contract/structured-agent-session-params'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'

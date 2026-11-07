@@ -10,7 +10,7 @@ import {
 } from '../../../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { CLIENT_UI_METHODS } from './client-ui'
+import { CLIENT_UI_METHODS } from './client-state/client-ui'
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-conversation-preferences-'))

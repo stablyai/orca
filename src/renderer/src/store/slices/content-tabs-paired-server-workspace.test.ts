@@ -1,7 +1,9 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
+import type * as RuntimeCompatibilityProbeModule from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 // Paired-owned browser/chat layouts bypass local main in both builds. SSH worktree layout remains local-main-owned but lacks a structured-chat host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
+
 import '../../../../shared/layout-owner-switch'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -14,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   hostCalls: ((): { target: RuntimeClientTarget; method: string }[] => [])()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   return {
     ...actual,
     callRuntimeRpc: (target: RuntimeClientTarget, method: string, params?: unknown) => {
@@ -24,7 +26,13 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
       }
       mocks.hostCalls.push({ target, method })
       return Promise.resolve({ ok: true })
-    },
+    }
+  }
+})
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeCompatibilityProbeModule>()
+  return {
+    ...actual,
     ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
   }
 })

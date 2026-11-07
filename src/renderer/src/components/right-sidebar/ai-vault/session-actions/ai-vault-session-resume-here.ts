@@ -7,7 +7,7 @@ import {
   openDesktopStructuredSession
 } from '@/lib/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus

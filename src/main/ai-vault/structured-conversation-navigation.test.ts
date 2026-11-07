@@ -8,7 +8,7 @@ import {
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { filterAiVaultSessions } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSessions
@@ -17,7 +17,7 @@ import { listResult } from './structured-session-ownership.test-support'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { restampAiVaultListResult } from './session-list-results'
 import { aiVaultOrchestrationChildSessionIds } from './structured-conversation-navigation'
-import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import {

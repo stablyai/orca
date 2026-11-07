@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
-import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
+import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver/mobile-driver-overlay-focus'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {

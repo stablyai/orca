@@ -44,7 +44,9 @@ vi.mock('@/components/native-chat/structured-agent-session-message-sender', () =
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntime }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntime
+}))
 vi.mock('./local-session-tab-close-owner', () => ({
   withLocalSessionTabCloseOwner: async (
     _worktreeId: string,
@@ -77,12 +79,12 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 
 import {
   structuredSessionSelectionController,
   forgetStructuredSessionSelection
-} from '@/lib/structured-agent-session-selection-controller'
+} from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { retirePurgedTabLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
 import { useAppStore } from '@/store'
 import { agentSessionTabFixture } from '@/components/native-chat/native-chat-workspace-test-fixtures'

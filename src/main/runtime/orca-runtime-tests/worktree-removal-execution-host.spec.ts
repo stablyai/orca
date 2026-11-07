@@ -163,12 +163,12 @@ class RemovalRuntime extends OrcaRuntimeService {
     return this.removeManagedWorktreeInFlight
   }
 
-  protected override purgeRemovedWorktree(
+  protected override async purgeRemovedWorktree(
     runtimeStore: RuntimeStore,
     worktreeId: string,
     repoId: string,
     hostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     this.purges.push({ store: runtimeStore, worktreeId, repoId, hostId })
   }
 

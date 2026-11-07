@@ -27,7 +27,18 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
   runWslTranscriptFsTask: mocks.gate
 }))
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
-  walkSessionFiles: mocks.walk
+  walkSessionFiles: mocks.walk,
+  forEachSessionFile: async (
+    dir: string,
+    agent: string,
+    issues: unknown[],
+    options: { readDirectory?: (dirPath: string) => Promise<unknown[]> },
+    onFile: (path: string) => void
+  ) => {
+    for (const path of await mocks.walk(dir, agent, issues, options)) {
+      onFile(path)
+    }
+  }
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))

@@ -6,7 +6,7 @@ import {
   conversationSessions
 } from './ProjectConversationList.test-fixture'
 import { getDefaultUIState } from '../../../../shared/constants'
-import { refreshLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { refreshLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type { ConversationPreferences } from '../../../../shared/conversation-navigation-preferences'
 import { updateConversationPreference } from '../../../../shared/conversation-navigation-preferences'
 

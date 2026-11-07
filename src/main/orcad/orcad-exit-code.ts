@@ -1,4 +1,4 @@
-import { OrcadBindAddressError } from './orcad-bind-address'
+import { OrcadBindAddressError } from '../../shared/orcad-bind-address'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'

@@ -9,12 +9,14 @@ const mocks = vi.hoisted(() => ({
 }))
 
 // The real target resolution is the thing under test; only the transport is stubbed.
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({
+vi.mock('./workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 

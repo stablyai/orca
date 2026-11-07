@@ -5,11 +5,9 @@ import {
   verdictDisplayLabel
 } from '../transport/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
-import { hostOs } from '../platform/host-os'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
@@ -33,13 +31,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creating,
     creatingBrowser,
     creatingMarkdown,
-    keyboardHeight,
-    terminalKeyboardMetrics,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameRef,
-    getTerminalPaneViewport,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
@@ -100,23 +94,6 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     !scope.activeFileTab &&
     !scope.activeBrowserTab
   const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
-  // Subtract only the space actually reserved below the input dock.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - dockBottomInset)
-        : keyboardHeight
-      : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight:
-      (activeHandle
-        ? getTerminalPaneViewport?.(activeHandle).terminalFrameRef.current?.height
-        : null) ??
-      terminalFrameRef.current?.height ??
-      0
-  })
   const reducedMotion = useReducedMotionEnabled()
   const toastRise = useMemo(
     () =>
@@ -128,10 +105,6 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         : 0,
     [reducedMotion, toastOpacityRef]
   )
-  const toastAnimatedStyle = {
-    opacity: toastOpacityRef.current,
-    transform: [{ translateY: -keyboardLift }, { translateY: toastRise }]
-  }
   return {
     presentedConnState,
     showLoadingState,
@@ -141,9 +114,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     showConnectionRetry,
     connectionEscalated,
     terminalSummary,
-    keyboardLift,
-    activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    dockBottomInset,
+    toastRise
   }
 }
 

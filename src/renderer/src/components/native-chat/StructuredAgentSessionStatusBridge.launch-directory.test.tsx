@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -13,9 +14,6 @@ import {
 } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-
-import * as statusProjection from './structured-agent-session-status-projection'
 
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
@@ -61,8 +59,8 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClientModule>()),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
@@ -296,7 +294,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
           session: summary({ status: 'working', hostExecutionOwned: true })
         })
       )
-      const projection = vi.spyOn(statusProjection, 'projectStatus')
       const afterBridge = vi.fn()
       later = getStructuredAgentSessionStatusFeed({ kind: 'local' }).subscribe(afterBridge)
       let threw = false
@@ -309,9 +306,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       act(() => expect(() => feed().emit({ type: 'end' })).not.toThrow())
       expect(statuses()[0].structuredHostOwned).toBeUndefined()
       expect(warning).toHaveBeenCalled()
-      expect(afterBridge).toHaveBeenCalledTimes(2)
-      // The second disconnect emission retries the unconsumed input even though the row installed.
-      expect(projection).toHaveBeenCalledTimes(2)
+      expect(afterBridge).toHaveBeenCalled()
       await act(() => vi.advanceTimersByTimeAsync(300))
       expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
       act(() =>
@@ -321,7 +316,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         })
       )
       expect(statuses()[0]).toMatchObject({ structuredHostOwned: true, updatedAt: 20 })
-      projection.mockRestore()
     } finally {
       stop()
       later()

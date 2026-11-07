@@ -1,3 +1,4 @@
+import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
 import {
   CONVERSATION_NAVIGATION_CAPABILITY,
   CONVERSATION_PROJECT_VISIBILITY_CAPABILITY
@@ -14,7 +15,11 @@ import {
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from './automation-runtime-capabilities'
 import { BROWSER_RUNTIME_CAPABILITIES } from './browser-runtime-capabilities'
-import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/device-key-capability'
+import {
+  DEVICE_KEY_RUNTIME_CAPABILITIES,
+  E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
+} from './remote-runtime/pairing/device-key-capability'
+import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/ticket-exchange-capability'
 import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
@@ -119,11 +124,14 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
 // Individual protocol exports must not retain the unused host capability aggregate.
 export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    ...EMULATOR_RUNTIME_CAPABILITIES,
     SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
     CONVERSATION_NAVIGATION_CAPABILITY,
     CONVERSATION_PROJECT_VISIBILITY_CAPABILITY,
     ...HOST_RUNTIME_CAPABILITIES,
     ...DEVICE_KEY_RUNTIME_CAPABILITIES,
+    E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY,
+    ...PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES,
     ...MOBILE_RUNTIME_CAPABILITIES,
     ...ORCAD_RUNTIME_CAPABILITIES,
     ...ORCHESTRATION_RUNTIME_CAPABILITIES,

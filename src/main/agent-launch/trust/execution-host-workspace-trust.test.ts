@@ -49,9 +49,12 @@ beforeEach(() => {
   state.home = join(root, 'home', 'me')
   mkdirSync(state.home, { recursive: true })
   writeFileSync(join(state.home, '.claude.json'), '{}')
+  // Trust grants record ownership under Orca's userData; keep it in the temp root.
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
 })
 

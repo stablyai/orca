@@ -74,8 +74,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const options = { context, terminalShortcutPolicy: state.settings?.terminalShortcutPolicy }
       if (
         matchesRecentTabSwitcherChord(input, platform, state.keybindings, options) ||
-        (context === 'app' &&
-          !input.isComposing &&
+        (!input.isComposing &&
           input.key !== 'Process' &&
           !globalShortcutTargetYields(input, platform, state.keybindings, options) &&
           findPluginCommandForKeybinding(
@@ -83,7 +82,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
             input,
             platform,
             state.keybindings,
-            Boolean(state.activeWorktreeId)
+            Boolean(state.activeWorktreeId),
+            options
           ))
       ) {
         return

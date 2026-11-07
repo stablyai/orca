@@ -1,11 +1,12 @@
+import { observeAcpForkSupport } from './acp-fork-support'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
@@ -196,6 +197,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               readAcpSessionCommands({
                 connection,
                 dialect: spec.dialect,
+                onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
                 cwd,
                 signal,
                 check: () => {

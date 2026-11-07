@@ -1,9 +1,9 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useAppViewExternalStore, useAppStateValue } from '@/store/app-state-view'
+import { useCallback } from 'react'
 import type { AgentSessionRegisteredAgent } from '../../../shared/agent-session/agent-session-registered-agents'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '@/store'
 import {
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
@@ -29,7 +29,7 @@ export function useHostStructuredAgent(
   agent: string
 ): AgentSessionRegisteredAgent | undefined {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const runtimeId = useAppStore((state) =>
+  const runtimeId = useAppStateValue((state) =>
     environmentId === null
       ? null
       : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))?.runtimeId
@@ -43,7 +43,7 @@ export function useHostStructuredAgent(
       ),
     [agent, executionHostId, runtimeId]
   )
-  return useSyncExternalStore(subscribeHostStructuredAgents, read, read)
+  return useAppViewExternalStore(subscribeHostStructuredAgents, read, read)
 }
 
 /** `reported` is the session's options answer: absent before it lands and from an older host. */

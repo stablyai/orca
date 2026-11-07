@@ -126,6 +126,7 @@ export function conversationListProps(): ProjectConversationListProps {
     onCopyPath: () => {},
     onOpenLog: () => {},
     onRevealLog: () => {},
+    onRevealArtifacts: () => {},
     onOpenCwd: () => {},
     onRequestDelete: () => {}
   }

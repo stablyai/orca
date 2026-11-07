@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { Identifier } from './structured-agent-session-identifiers'
+import * as z from 'zod'
+import { Identifier, SessionId } from './structured-agent-session-identifiers'
 
 /** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
 export const ResumeSource = z
@@ -14,6 +14,17 @@ export const ResumeSource = z
       .optional()
   })
   .strict()
+
+/** Native-history fork: the host resolves the provider cut from the source chat's own transcript. */
+export const ForkSource = z
+  .object({ sessionId: SessionId, throughItemId: Identifier('Invalid fork item id') })
+  .strict()
+
+/** A chat starts fresh, resumes a provider conversation, or forks a native chat. */
+export const SOURCE_FIELDS = {
+  resumeFrom: ResumeSource.optional(),
+  forkFrom: ForkSource.optional()
+}
 
 /** createSupport's resume question, sent only to hosts advertising
  *  agent-session.structured.resume-writer-admission.v1: does another terminal run the conversation,

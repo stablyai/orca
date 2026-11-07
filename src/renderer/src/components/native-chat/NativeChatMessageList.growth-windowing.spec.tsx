@@ -372,6 +372,123 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
   })
 
+  it('releases browsed history when passive wheel input arrives after the browser moved', () => {
+    const release = vi.fn()
+    const { container } = render(
+      <NativeChatMessageList
+        session={{ ...session(transcript), retainHistory: () => release }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    scrollTranscript(container, scroller.scrollHeight - scroller.clientHeight - 20)
+    paint(container)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 20 })
+    // ResizeObserver can notify before the pending native scroll, without changing the content.
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a pending wheel return through a no-op following pin after reveal', () => {
+    layout.belowTranscriptPx = 100
+    const release = vi.fn()
+    const retainedSession = { ...session(transcript), retainHistory: () => release }
+    const pane = (isVisible: boolean) => (
+      <NativeChatMessageList
+        session={retainedSession}
+        isVisible={isVisible}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const { container, rerender } = render(pane(true))
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    const readingAt = scroller.scrollHeight - scroller.clientHeight - 62
+    scrollTranscript(container, readingAt)
+    paint(container)
+    rerender(pane(false))
+    layout.belowTranscriptPx -= 60
+    rerender(pane(true))
+    fireEvent.scroll(scroller)
+    expect(scroller.scrollTop).toBe(readingAt)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 2 })
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, true])(
+    'keeps reader-return evidence current after compensation (tail clamps: %s)',
+    (clamps) => {
+      layout.belowTranscriptPx = 100
+      const release = vi.fn()
+      const retainHistory = () => release
+      const { container } = render(
+        <NativeChatMessageList
+          session={{ ...session(transcript), retainHistory }}
+          isWorking={false}
+          expandSignal={false}
+        />
+      )
+      paint(container)
+      const scroller = scrollRoot(container)
+      const end = scroller.scrollHeight - scroller.clientHeight
+      // One scrollbar press owns the entire drag, including movement after measurements.
+      fireEvent.pointerDown(scroller)
+      scroller.scrollTop = end - 20
+      fireEvent.scroll(scroller)
+      paint(container)
+      scroller.scrollTop += 1
+      fireEvent.scroll(scroller)
+      paint(container)
+      const before = scroller.scrollTop
+      const aboveIndex = windowState(container).indexes[0]!
+      expect((aboveIndex + 1) * ROW_PITCH_PX).toBeLessThan(before)
+      layout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+        index === aboveIndex ? ROW_PX + 200 : ROW_PX
+      )
+      paint(container)
+      expect(scroller.scrollTop).toBe(before + 200)
+      expect(release).not.toHaveBeenCalled()
+      if (clamps) {
+        layout.belowTranscriptPx -= 60
+        const beforeClamp = scroller.scrollTop
+        scroller.scrollTop = beforeClamp
+        fireEvent.scroll(scroller)
+        paint(container)
+        expect(distanceFromBottom(container)).toBe(0)
+        expect(release).not.toHaveBeenCalled()
+        // A subsequent genuine gesture still releases the same retained history.
+        fireEvent.pointerDown(scroller)
+        scroller.scrollTop -= 20
+        fireEvent.scroll(scroller)
+        paint(container)
+      }
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+      fireEvent.scroll(scroller)
+      paint(container)
+      expect(release).toHaveBeenCalledOnce()
+    }
+  )
+
   it('keeps following when a pin echo arrives after the document grows', () => {
     setMeasuredTail(0)
     const { container } = render(streamingList(0))

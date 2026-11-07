@@ -26,6 +26,8 @@ import {
 } from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { loadChatTabLayout } from '../../agent-session/agent-session-tab-layout'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
 
@@ -67,6 +69,7 @@ export class TerminalSurfaceIndex {
       hostIds: () => readonly ExecutionHostId[]
       /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
+      savedSession?: (hostId: ExecutionHostId) => WorkspaceSessionState | null
       generatedTitlesEnabled: () => boolean
       /** A layout operation ended, so main's surfaces may have changed. */
       onChanged: () => void
@@ -222,13 +225,19 @@ export class TerminalSurfaceIndex {
     }
   }
 
-  /** A workspace main owns as today's `session.tabs` rows, from its owning partition's layout. */
+  /** Saved rows from their owning partition, with or without a window or main surface graph. */
   sessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
-    this.surfaces()
-    return this.lastSessionTabsOf(worktreeId)
+    const hostId = this.homeOf(worktreeId)
+    const session = hostId ? this.deps.savedSession?.(hostId) : null
+    if (!hostId || !session) {
+      return null
+    }
+    const { layout, desktopView, facts } = loadChatTabLayout(hostId, session, worktreeId).loaded
+    const workspace = layout.workspaces[worktreeId]
+    return workspace ? projectSessionTabs(worktreeId, workspace, desktopView, facts, false) : null
   }
 
-  /** As sessionTabsOf, from the partitions last projected: reads no session. */
+  /** Main-owned rows from the partitions last projected: reads no session. */
   lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
     if (!this.current?.worktreeIds.has(worktreeId)) {
       return null

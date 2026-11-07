@@ -7,9 +7,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent.test-fixture'
+} from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
-import type * as AgentLaunchPlanModule from '@/lib/agent-session-launch-plan'
+import type * as AgentLaunchPlanModule from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { ProvisionalLaunchArgs } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { SidebarConversationStart } from './SidebarConversationStart'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -37,7 +37,7 @@ vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', () => ({
     }
   })
 }))
-vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => {
+vi.mock('@/lib/agent-session/launch/routing/agent-session-launch-plan', async (importOriginal) => {
   const original = await importOriginal<typeof AgentLaunchPlanModule>()
   return {
     ...original,

@@ -24,7 +24,7 @@ export type AutomationRunTerminalObserver = {
 
 export function describeStrandedAutomationRun(run: AutomationRun): string {
   if (run.status === 'pending') {
-    return 'Orca stopped before this manual run could launch.'
+    return 'Orca stopped before this run could launch.'
   }
   if (run.status === 'dispatching') {
     return 'Orca stopped before this run reported that its agent started.'
@@ -60,14 +60,16 @@ export class AutomationRunCompletionWatcher {
         const current = this.readRun(run.automationId, run.id)
         return Boolean(current && !isFinalAutomationRunStatus(current.status))
       },
-      strand: (run) => {
-        void this.finalize(run, {
-          status: 'dispatch_failed',
-          error: describeStrandedAutomationRun(run)
-        }).catch((error) => {
-          console.error('[automations] failed to reconcile stranded run:', error)
-        })
-      }
+      strand: (run) => this.strand(run)
+    })
+  }
+
+  private strand(run: AutomationRun): void {
+    void this.finalize(run, {
+      status: 'dispatch_failed',
+      error: describeStrandedAutomationRun(run)
+    }).catch((error) => {
+      console.error('[automations] failed to reconcile stranded run:', error)
     })
   }
 
@@ -136,15 +138,15 @@ export class AutomationRunCompletionWatcher {
     this.watching.delete(runId)
   }
 
-  /** Reattach surviving sessions; defer unresolved runs until the ready-surface grace expires. */
+  /** Fail unclaimed rows now (no lane survives startup); reattach launched ones within the ready-surface grace. */
   reconcileRetainedRuns(runs: readonly AutomationRun[]): void {
+    for (const run of runs) {
+      if (run.status === 'pending') {
+        this.strand(run)
+      }
+    }
     this.reconciler.reconcile(
-      runs.filter(
-        (run) =>
-          run.status === 'dispatched' ||
-          run.status === 'dispatching' ||
-          (run.status === 'pending' && run.trigger === 'manual')
-      )
+      runs.filter((run) => run.status === 'dispatched' || run.status === 'dispatching')
     )
   }
 
@@ -166,7 +168,7 @@ export class AutomationRunCompletionWatcher {
     run: AutomationRun,
     observation: AutomationRunCompletionObservation
   ): Promise<void> {
-    // Preserve a final result already reported by the renderer.
+    // Preserve a final result already recorded.
     const current = this.readRun(run.automationId, run.id)
     if (!current || isFinalAutomationRunStatus(current.status)) {
       return

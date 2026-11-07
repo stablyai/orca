@@ -12,17 +12,15 @@ import {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { chatAutomationRunObservation, observeAutomationChatRun } from './runtime-chat-run-observer'
-import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import type { JournalPublication } from '../native-chat/agent-session-wire/host/structured-agent-session-conversations'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { createQueuedMessageTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestMessage
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { automationRunOperationId } from './automation-run-operation'
 
@@ -37,7 +35,7 @@ const mocks = vi.hoisted(() => {
     }
   }
 })
-vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => mocks.actualHost ?? mocks.host
 }))
 const submission: AgentJournalSubmission = {

@@ -30,6 +30,7 @@ import {
   ChildAgentsWithIdleGroup,
   buildCollapsedChildAgentSignalStates
 } from './worktree-card-idle-child-agents'
+import { recomputeOn } from '@/lib/recompute-on'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -101,46 +102,48 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
-  const sendTargetsByPaneKey = useMemo(() => {
-    void agentStatusEpoch
-    void languageRevision
-    if (!isAgentSendTargetModeActive) {
-      return new Map<
-        string,
-        { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
-      >()
-    }
+  const sendTargetsByPaneKey = useMemo(
+    () =>
+      recomputeOn([agentStatusEpoch, languageRevision], () => {
+        if (!isAgentSendTargetModeActive) {
+          return new Map<
+            string,
+            { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
+          >()
+        }
 
-    return new Map(
-      deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
-        target.paneKey,
-        agentSendPopoverTargetMode?.status === 'sending' &&
-        agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
-          ? {
-              status: 'sending' as const,
-              disabledReason: translate(
-                'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
-                'Sending...'
-              )
-            }
-          : target.disabledReason
-            ? {
-                status: target.status,
-                disabledReason: agentSendDisabledReasonLabel(target.disabledReason)
-              }
-            : { status: target.status }
-      ])
-    )
-  }, [
-    // Freshness timers advance this epoch without replacing the status map.
-    agentStatusEpoch,
-    languageRevision,
-    agentSendPopoverTargetMode?.sendingPaneKey,
-    agentSendPopoverTargetMode?.status,
-    isAgentSendTargetModeActive,
-    sendTargetInputs,
-    worktreeId
-  ])
+        return new Map(
+          deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
+            target.paneKey,
+            agentSendPopoverTargetMode?.status === 'sending' &&
+            agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
+              ? {
+                  status: 'sending' as const,
+                  disabledReason: translate(
+                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
+                    'Sending...'
+                  )
+                }
+              : target.disabledReason
+                ? {
+                    status: target.status,
+                    disabledReason: agentSendDisabledReasonLabel(target.disabledReason)
+                  }
+                : { status: target.status }
+          ])
+        )
+      }),
+    [
+      // Freshness timers advance this epoch without replacing the status map.
+      agentStatusEpoch,
+      languageRevision,
+      agentSendPopoverTargetMode?.sendingPaneKey,
+      agentSendPopoverTargetMode?.status,
+      isAgentSendTargetModeActive,
+      sendTargetInputs,
+      worktreeId
+    ]
+  )
 
   const handleSendTargetClick = useCallback(
     (paneKey: string) => {

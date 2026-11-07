@@ -1,8 +1,6 @@
-import {
-  resolveTerminalShortcutAction,
-  type MacOptionAsAlt,
-  type TerminalShortcutAction
-} from '@/components/terminal-pane/terminal-shortcut-policy'
+import { resolveTerminalShortcutAction } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
+import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/terminal-option-shortcut-policy'
+import type { TerminalShortcutAction } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import type { OptionKeyLocationState } from '@/lib/keyboard-layout/option-key-location-state'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'

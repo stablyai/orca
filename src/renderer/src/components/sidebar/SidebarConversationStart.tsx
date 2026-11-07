@@ -16,11 +16,11 @@ import { translate } from '@/i18n/i18n'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export function SidebarConversationStart({
@@ -66,6 +66,7 @@ export function SidebarConversationStart({
       worktreeId,
       requestedSurface: 'chat',
       selectedExecutionHostId: row.executionHostId,
+      workspaceExecutionHostId: row.executionHostId,
       beforeSurfaceOpen: () =>
         activateAndRevealWorkspace(worktreeId, {
           executionHostId,

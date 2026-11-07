@@ -19,7 +19,7 @@ import {
 } from './ai-vault-session-list-request'
 import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import {
   useAiVaultConversationRefresh,
   useAiVaultProviderSessionRefresh

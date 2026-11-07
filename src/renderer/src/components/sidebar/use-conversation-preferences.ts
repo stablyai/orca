@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   CONVERSATION_NAVIGATION_CAPABILITY,
   CONVERSATION_PROJECT_VISIBILITY_CAPABILITY,

@@ -1,6 +1,7 @@
 import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
+import { createAgentSessionTextAppendReader } from './agent-session-text-append'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isFinalAgentSessionReadRefusal,
@@ -18,7 +19,7 @@ import { createReconnectScheduler } from './structured-agent-session-reconnect'
 
 /** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
 export type StructuredAgentSessionLiveSubscribe = (
-  params: { sessionId: string; cursor?: AgentJournalCursor },
+  params: { sessionId: string; cursor?: AgentJournalCursor; capabilities?: { textAppend: 1 } },
   onEvent: (event: AgentSessionSubscribeEvent) => void,
   onError: (error: unknown) => void,
   onClose: () => void
@@ -56,6 +57,10 @@ export function startStructuredAgentSessionLiveRead(args: {
   hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
+  /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
+  coalesceMs?: number
+  /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it. */
+  textAppend?: Promise<boolean>
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -76,12 +81,17 @@ export function startStructuredAgentSessionLiveRead(args: {
   let openingFrameGeneration = 0
   let stateGeneration = 0
   let unsubscribe = (): void => {}
+  let readTextAppends: ReturnType<typeof createAgentSessionTextAppendReader> | null = null
+  /** An open whose stream must not be applied further; the next open replaces it. */
+  let replacedOpenGeneration = 0
+  // A refused append means the two sides disagree; later streams take whole items so it cannot loop.
+  let appendsRefused = false
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
       args.applyEvent(event)
     }
-  })
+  }, args.coalesceMs)
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
@@ -136,8 +146,30 @@ export function startStructuredAgentSessionLiveRead(args: {
     replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
     error: reportReadFailure
   })
-  const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
-    if (!isCurrentOpenGeneration(eventOpenGeneration)) {
+  /** Resume from the last applied cursor on a new stream, which starts with whole items. */
+  const replaceStream = (eventOpenGeneration: number): void => {
+    replacedOpenGeneration = eventOpenGeneration
+    appendsRefused = true
+    if (!connected) {
+      // Still opening: retry later; the open drops its handle when it lands.
+      loseContact()
+      return
+    }
+    unsubscribe()
+    unsubscribe = (): void => {}
+    connected = false
+    void open()
+  }
+  const handleEvent = (received: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
+    if (
+      !isCurrentOpenGeneration(eventOpenGeneration) ||
+      eventOpenGeneration === replacedOpenGeneration
+    ) {
+      return
+    }
+    const event = readTextAppends ? readTextAppends(received) : received
+    if (!event) {
+      replaceStream(eventOpenGeneration)
       return
     }
     clearUnattachedReadGrace()
@@ -199,13 +231,20 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe()
     unsubscribe = (): void => {}
     try {
+      // Desktop passes none, so its subscribe still goes out in the same turn.
+      const textAppend = args.textAppend && !appendsRefused ? await args.textAppend : false
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
       let closedDuringOpen = false
       const cursor = args.getCursor()
+      readTextAppends = textAppend ? createAgentSessionTextAppendReader() : null
       const handle = await args.subscribe(
-        { sessionId: args.sessionId, ...(cursor ? { cursor } : {}) },
+        {
+          sessionId: args.sessionId,
+          ...(cursor ? { cursor } : {}),
+          ...(textAppend ? { capabilities: { textAppend: 1 as const } } : {})
+        },
         (event) => handleEvent(event, currentOpenGeneration),
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
@@ -223,7 +262,11 @@ export function startStructuredAgentSessionLiveRead(args: {
           loseContact()
         }
       )
-      if (!isCurrentOpenGeneration(currentOpenGeneration) || closedDuringOpen) {
+      if (
+        !isCurrentOpenGeneration(currentOpenGeneration) ||
+        closedDuringOpen ||
+        replacedOpenGeneration === currentOpenGeneration
+      ) {
         handle.unsubscribe()
         if (isCurrentOpenGeneration(currentOpenGeneration)) {
           reconnectScheduler.schedule()

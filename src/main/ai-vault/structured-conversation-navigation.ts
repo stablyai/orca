@@ -13,17 +13,17 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredChatOpener } from './structured-session-ownership'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { z } from 'zod'
 import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult
 } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { conditionalAiVaultListResult } from './session-list-fingerprint'
-import { clearedInto } from '../runtime/orchestration/structured-session-lineage'
+import { clearedInto } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { isGenericConversationTitle } from '../../shared/project-conversation-list'
 import { conversationNameSeed } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/database/journal-host-database'
 import { structuredConversationJournalPreview } from './structured-conversation-journal-preview'
 
 export function boundedAiVaultConversationList(

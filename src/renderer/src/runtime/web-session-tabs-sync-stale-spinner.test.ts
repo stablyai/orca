@@ -3,11 +3,11 @@ import type { RuntimeMobileSessionTerminalClientTab } from '../../../shared/runt
 
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
-import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
+import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
-import './mounted-terminal-tab-registry'
+import './hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   ENV,
@@ -19,7 +19,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 

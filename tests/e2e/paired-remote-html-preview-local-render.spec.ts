@@ -12,13 +12,12 @@ import {
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import { startClientHostedMarkerFixture } from './helpers/client-hosted-browser-fixture'
 import {
-  armPairedHtmlPreviewLinkRouting,
+  readClientBrowserPageUrls,
   readDocPreviewElementCenter,
   readDocPreviewGuestRects,
   readDocPreviewGuestUrl,
   readDocPreviewRenderedText,
   readPairedHtmlPreviewInventory,
-  readPairedHtmlPreviewLinkRouting,
   requireSingleDocWorkspace
 } from './helpers/paired-html-preview-inventory'
 import { focusPairedClientWindow } from './helpers/paired-client-window-reveal'
@@ -480,15 +479,18 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         message: 'the external link never settled at a clickable point in the preview guest'
       })
       .not.toBeNull()
-    // Record routing calls to distinguish swallowed guest clicks from refused tab creation.
-    await armPairedHtmlPreviewLinkRouting(page)
+    // Confirmed preview links honor the in-app preference; the default opens the system browser.
+    await page.evaluate(() => window.__store?.getState().updateSettings({ openLinksInApp: true }))
     // Trusted routing checks the reader’s front contents; preserve the fixture’s guarded activation policy.
     expect(await focusPairedClientWindow(client)).toMatchObject({
       isFocused: true,
       isVisible: true
     })
     // Take the baseline before the heading press so it cannot absorb an input-driven escape.
-    const linkBaseline = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+    const linkBaseline = {
+      ...(await readPairedHtmlPreviewInventory(page, inventoryArgs)),
+      clientPageUrls: await readClientBrowserPageUrls(page)
+    }
     // Focus the guest via its heading before the real link click.
     // Retry until guest hit testing registers; software compositing can initially deliver presses to the embedder webview.
     // Require the document’s real-input escape attempt before checking containment.
@@ -515,11 +517,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       clientBrowserWorkspaceCountAllWorktrees:
         afterGenuineInput.clientBrowserWorkspaceCountAllWorktrees,
       hostBrowserPages: afterGenuineInput.hostBrowserPages.length,
-      routedCalls: await readPairedHtmlPreviewLinkRouting(page)
+      clientPageUrls: await readClientBrowserPageUrls(page)
     }).toEqual({
       clientBrowserWorkspaceCountAllWorktrees: linkBaseline.clientBrowserWorkspaceCountAllWorktrees,
       hostBrowserPages: linkBaseline.hostBrowserPages.length,
-      routedCalls: []
+      clientPageUrls: linkBaseline.clientPageUrls
     })
     const guestFocus = await page.evaluate(() => {
       const active = document.activeElement
@@ -556,10 +558,10 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     await expect(confirmationTitle).not.toBeVisible()
     const afterCancel = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     expect({
-      routedCalls: await readPairedHtmlPreviewLinkRouting(page),
+      clientPageUrls: await readClientBrowserPageUrls(page),
       browserCount: afterCancel.clientBrowserWorkspaceCountAllWorktrees
     }).toEqual({
-      routedCalls: [],
+      clientPageUrls: linkBaseline.clientPageUrls,
       browserCount: linkBaseline.clientBrowserWorkspaceCountAllWorktrees
     })
 
@@ -576,7 +578,9 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           async () => {
             const opened = await readPairedHtmlPreviewInventory(page, inventoryArgs)
             return {
-              routedCalls: await readPairedHtmlPreviewLinkRouting(page),
+              openedExternalLink: (await readClientBrowserPageUrls(page)).includes(
+                EXTERNAL_LINK_URL
+              ),
               docWorkspaces: opened.docWorkspaces.length,
               linkClicks: await readDocPreviewRenderedText(page, '#link-clicks'),
               openedTab:
@@ -594,7 +598,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           openedTab: true,
           // Opening an external link must leave the preview document intact.
           docWorkspaces: 1,
-          routedCalls: [{ url: EXTERNAL_LINK_URL, opened: true }]
+          openedExternalLink: true
         })
     } catch (error) {
       throw new Error(

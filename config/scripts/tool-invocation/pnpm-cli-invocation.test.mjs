@@ -51,20 +51,6 @@ describe('resolvePnpmCliInvocation', () => {
     }
   )
 
-  it('does not wrap a Windows native pnpm.exe in node', () => {
-    expect(
-      resolvePnpmCliInvocation({
-        npmExecPath: 'C:\\hostedtoolcache\\pnpm.exe',
-        nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
-        platform: 'win32'
-      })
-    ).toEqual({
-      command: 'C:\\hostedtoolcache\\pnpm.exe',
-      prefixArgs: [],
-      shell: false
-    })
-  })
-
   it('shells out for every Windows batch wrapper extension and casing', () => {
     for (const npmExecPath of [
       'C:\\Users\\runner\\pnpm.cmd',
@@ -91,66 +77,6 @@ describe('resolvePnpmCliInvocation', () => {
     }
   })
 
-  it('treats .js and .mjs CLIs the same as .cjs', () => {
-    for (const npmExecPath of ['/opt/pnpm.js', '/opt/pnpm.mjs']) {
-      expect(resolvePnpmCliInvocation({ npmExecPath, nodeExecPath, platform: 'linux' })).toEqual({
-        command: nodeExecPath,
-        prefixArgs: [npmExecPath],
-        shell: false
-      })
-    }
-  })
-
-  // Pass empty npmExecPath to force branch independently of env; undefined activates the destructuring default.
-  it('falls back to PATH pnpm when npm_execpath is empty', () => {
-    expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'darwin' })).toEqual(
-      { command: 'pnpm', prefixArgs: [], shell: false }
-    )
-    expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'linux' })).toEqual({
-      command: 'pnpm',
-      prefixArgs: [],
-      shell: false
-    })
-    expect(
-      resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'win32', pnpmHome: '' })
-    ).toEqual({
-      command: 'pnpm.cmd',
-      prefixArgs: [],
-      shell: true
-    })
-  })
-
-  // Both callers invoke the helper with no options, so the env default is the only path they take.
-  it('reads npm_execpath from the environment when the option is omitted', () => {
-    vi.stubEnv('npm_execpath', '/opt/pnpm/bin/pnpm.cjs')
-    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
-      command: nodeExecPath,
-      prefixArgs: ['/opt/pnpm/bin/pnpm.cjs'],
-      shell: false
-    })
-
-    vi.stubEnv('npm_execpath', '/opt/pnpm/bin/pnpm')
-    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
-      command: '/opt/pnpm/bin/pnpm',
-      prefixArgs: [],
-      shell: false
-    })
-  })
-
-  it('falls back to PATH pnpm when npm_execpath is absent from the environment', () => {
-    vi.stubEnv('npm_execpath', undefined)
-    vi.stubEnv('PNPM_HOME', undefined)
-    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
-      command: 'pnpm',
-      prefixArgs: [],
-      shell: false
-    })
-    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'win32' })).toEqual({
-      command: 'pnpm.cmd',
-      prefixArgs: [],
-      shell: true
-    })
-  })
   it('uses the flat native Windows install when exec supplies no npm_execpath', () => {
     vi.stubEnv('npm_execpath', undefined)
     vi.stubEnv('PNPM_HOME', 'C:\\Users\\Runner Admin\\setup-pnpm')

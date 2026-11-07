@@ -13,7 +13,7 @@ import {
   getLocalImageCacheKey,
   useLocalImageSrc
 } from '@/components/editor/document-images/useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
@@ -252,18 +252,25 @@ export function NativeChatAgentControls({
   markdown,
   timestamp,
   onScrollToTop,
+  action,
   className
 }: {
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
+  /** A row action of its own, drawn beside Copy (Fork). */
+  action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
   return (
     // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
-      {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. */}
-      <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
+          response has nothing to copy, so it has no Copy. */}
+      {markdown.length > 0 ? (
+        <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      ) : null}
+      {action}
       <button
         type="button"
         onClick={onScrollToTop}

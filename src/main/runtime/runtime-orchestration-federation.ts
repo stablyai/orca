@@ -15,15 +15,15 @@ import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
-} from './orchestration/environment-transport'
+} from './orchestration/federation/environment-transport'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
-} from './orchestration/federation-ack-checkpoints'
-import { syncFederatedDispatch } from './orchestration/federation-sync'
-import type { OrchestrationDb } from './orchestration/db'
-import type { FederationRuntime } from './orchestration/federation-runtime'
+} from './orchestration/federation/synchronization/federation-ack-checkpoints'
+import { syncFederatedDispatch } from './orchestration/federation/synchronization/federation-sync'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
+import type { FederationRuntime } from './orchestration/federation/federation-runtime'
 
 export class RuntimeOrchestrationFederation {
   private readonly timers = new Map<string, ReturnType<typeof setInterval>>()

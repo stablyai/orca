@@ -1,7 +1,9 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import type { PendingAutomationSetupReview } from './automation-setup-review'
 import { translate } from '@/i18n/i18n'
 import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -154,6 +156,51 @@ export function AutomationRunErrorNotice({
       )}
     >
       <span className="font-medium">{label}</span> {error}
+    </div>
+  )
+}
+
+/** The run's new workspace skipped setup because its branch's setup differs from the approved one. */
+export function AutomationRunSetupSkippedNotice({
+  review,
+  onReview,
+  className
+}: {
+  /** Null once the automation approved setup again. */
+  review: PendingAutomationSetupReview | null
+  onReview?: () => void
+  className?: string
+}): React.JSX.Element {
+  const canReview = Boolean(review?.content && onReview)
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2 text-sm text-status-warning-text',
+        className
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        {!review
+          ? translate(
+              'automations.setupTrust.skippedSinceApproved',
+              "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them."
+            )
+          : canReview
+            ? translate(
+                'automations.setupTrust.skippedReview',
+                "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs."
+              )
+            : translate(
+                'auto.components.automations.AutomationsPage.setupSkippedChanged',
+                "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved when the automation was saved. Save the automation again to review the current commands."
+              )}
+      </span>
+      {canReview ? (
+        <Button type="button" variant="outline" size="xs" onClick={onReview}>
+          {translate('automations.setupTrust.reviewAction', 'Review and approve setup')}
+        </Button>
+      ) : null}
     </div>
   )
 }

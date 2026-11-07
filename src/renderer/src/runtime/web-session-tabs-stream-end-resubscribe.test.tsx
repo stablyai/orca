@@ -19,20 +19,20 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: async (_state: unknown, snapshot: unknown) =>
     snapshot
 }))
 
 import { useAppStore } from '@/store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
-import { WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS } from './window-visibility-subscription-parking'
+import { WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS } from './rpc/subscriptions/window-visibility-subscription-parking'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 /**
  * #21052/#19092: the host can end a tab stream while the connection stays up (an id-less

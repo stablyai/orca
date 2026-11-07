@@ -1,9 +1,11 @@
+import { useAppStore } from '@/store'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./file-explorer/panel/FileExplorer'))
+const FolderWorkspaceSourceControl = lazy(() => import('./FolderWorkspaceSourceControlPanel'))
 const SourceControl = lazy(() => import('./source-control/panel/SourceControl'))
 const ChecksPanel = lazy(() => import('./checks-panel/ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
@@ -23,6 +25,9 @@ export function RightSidebarPanelContent({
   effectiveTab,
   rightSidebarOpen
 }: RightSidebarPanelContentProps): React.JSX.Element {
+  const isFolderWorkspace = useAppStore(
+    (state) => state.activeWorkspaceKey?.startsWith('folder:') ?? false
+  )
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -31,7 +36,12 @@ export function RightSidebarPanelContent({
     >
       <Suspense fallback={null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
-        {effectiveTab === 'source-control' && <SourceControl />}
+        {effectiveTab === 'source-control' &&
+          (isFolderWorkspace ? (
+            rightSidebarOpen && <FolderWorkspaceSourceControl />
+          ) : (
+            <SourceControl />
+          ))}
         {effectiveTab === 'checks' && <ChecksPanel />}
         {/* SSH forwarding needs raw ports.detect data absent from the workspace-scoped status popover. */}
         {effectiveTab === 'ports' && (

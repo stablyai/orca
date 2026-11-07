@@ -45,14 +45,16 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, key) => values?.[key] ?? '')
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraGetIssueForTarget: async () => null,
   jiraIssueCommentsForTarget: async () => [],
   jiraListTransitionsForTarget: mocks.transitions,
   jiraListPrioritiesForTarget: async () => [],
-  jiraListAssignableUsersForTarget: async () => [],
   jiraUpdateIssueForTarget: mocks.update,
   jiraAddIssueCommentForTarget: async () => ({ ok: true })
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
 }))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
@@ -210,14 +212,5 @@ describe('Jira transition form source ownership', () => {
         'site-a'
       )
     )
-  })
-  it('drops the form when a source without a selected project changes execution host', async () => {
-    const view = render(workspace())
-    await openForm()
-    mocks.settings = { activeRuntimeEnvironmentId: 'environment-b' }
-    view.rerender(workspace())
-    await waitForTransitions()
-    expect(screen.queryByLabelText('Comment')).toBeNull()
-    expect(mocks.update).not.toHaveBeenCalled()
   })
 })

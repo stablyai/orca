@@ -6,15 +6,14 @@ import {
   renderPage,
   runtimeHost,
   RUNTIME_ID,
-  RUNTIME_REPO_ID,
   RUNTIME_SELF_FILTER,
-  RUNTIME_WORKSPACE_ID,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 import { act } from 'react'
 import { expect, vi } from 'vitest'
-import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/runtime-hooks-client'
+import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Automation } from '../../../../shared/automations-types'

@@ -25,16 +25,16 @@ export function closeFileTabsThroughLayoutOwner(
   }
   for (const tabId of tabIds) {
     if (!isTabClosePending(tabId)) {
-      get().closeUnifiedTab(tabId)
+      get().closeUnifiedTab(tabId, { editorRetirementHandled: true })
     }
   }
   tabIds.forEach(markPendingCloseCleansFile)
   afterPendingTabs(tabIds, (outcomes) => {
     const reopened =
-      hasPendingEntityTab(file.worktreeId, file.fileId) ||
-      (get().unifiedTabsByWorktree[file.worktreeId] ?? []).some(
-        (tab) => tab.entityId === file.fileId
-      )
+      hasPendingEntityTab(null, file.fileId) ||
+      Object.values(get().unifiedTabsByWorktree)
+        .flat()
+        .some((tab) => tab.entityId === file.fileId)
     if (outcomes.every((outcome) => outcome !== null) && !reopened) {
       cleanUp()
     }

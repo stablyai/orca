@@ -6,7 +6,9 @@ import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-wo
 const presence = vi.hoisted((): { remaining: number | null } => ({ remaining: 180_000 }))
 
 vi.mock('./agent-auto-ack-presence', () => ({ presenceRemainingMs: () => presence.remaining }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/store/slices/workspace-attention/workspace-unread-flag', () => ({
   onScreenHostId: () => null
 }))
