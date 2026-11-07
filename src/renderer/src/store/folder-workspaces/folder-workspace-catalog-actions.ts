@@ -18,7 +18,7 @@ import {
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
-import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
+import { reuseEqualRecordMap } from '../catalog-record-reconciliation'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 
 export function createFolderWorkspaceCatalogActions(

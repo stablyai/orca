@@ -11,7 +11,7 @@ import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreePurgeTarget } from '../../worktree-purge-target'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { getProjectGroupHostId } from '../../project-group-owner-routing'
+import { getProjectGroupHostId } from '../../../project-groups/project-group-owner-routing'
 import {
   collectRemovedHostTwinState,
   removedHostCanonicalizer,

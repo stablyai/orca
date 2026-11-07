@@ -13,11 +13,11 @@ import {
   type UIUpdateOperations
 } from '../../../main/persistence/applying-settings/ui-state-update'
 import type { AppState } from '../store/types'
-import { createUIStore } from '../store/slices/ui-slice-test-harness'
+import { createUIStore } from '../store/slices/ui/ui-slice-test-harness'
 import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../store/slices/persisted-ui-write-baseline'
+} from '../store/slices/ui/persisted-ui-write-baseline'
 import { usePersistedUIWriter } from './use-persisted-ui-writer'
 
 const storeRef = vi.hoisted(() => ({
