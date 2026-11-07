@@ -25,6 +25,7 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal/output/termi
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
+import { onRuntimeEnvironmentVerified } from '../ipc/runtime-environments/runtime-environment-verified-transitions'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import {
@@ -114,7 +115,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
+    orchestrationEnvironmentTransport: {
+      ...createOrchestrationEnvironmentTransport(),
+      onEnvironmentVerified: onRuntimeEnvironmentVerified
+    },
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(
