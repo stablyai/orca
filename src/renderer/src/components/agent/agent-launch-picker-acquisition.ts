@@ -150,7 +150,7 @@ class AgentPickerAcquisition {
   private async readCatalog(entry: AgentPickerEntry, index: number) {
     this.deferredCatalogs.delete(index)
     const saved = await this.reads.catalog(entry, false)
-    if (!saved) {
+    if (!saved?.listingInProgress) {
       return saved
     }
     if (saved.origin !== 'unknown') {

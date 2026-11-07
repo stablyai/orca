@@ -18,7 +18,7 @@ const codex: AgentPickerEntry = {
   catalog: { origin: 'unknown' }
 }
 
-it('reopens during an unflagged cached reply and publishes the refreshed listing', async () => {
+it('reopens during a refreshing cached reply and publishes the refreshed listing', async () => {
   const fresh = Promise.withResolvers<AgentPickerEntry['catalog']>()
   let published: AgentPickerEntry[] = []
   const observe = () =>
@@ -32,6 +32,7 @@ it('reopens during an unflagged cached reply and publishes the refreshed listing
             : {
                 origin: 'probe',
                 fetchedAt: 1,
+                listingInProgress: true,
                 models: [model('saved')]
               },
         support: async () => undefined
@@ -77,10 +78,11 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
   const stop = observeAgentPickerAcquisition('closed-catalog', entries, reads, observer)
   stop()
 
-  unknown.resolve({ origin: 'unknown' })
+  unknown.resolve({ origin: 'unknown', listingInProgress: true })
   refreshing.resolve({
     origin: 'probe',
     fetchedAt: 1,
+    listingInProgress: true,
     models: [model('saved')]
   })
   await expect
@@ -99,4 +101,27 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
     ])
   stopReopened()
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
+})
+
+it('keeps a completed listing usable when the host rejects the wait parameter', async () => {
+  let published: AgentPickerEntry[] = []
+  const stop = observeAgentPickerAcquisition(
+    'legacy-catalog',
+    [codex],
+    {
+      catalog: async (_entry, waitForListing) => {
+        if (waitForListing) {
+          throw { code: 'invalid_params' }
+        }
+        return { origin: 'probe', fetchedAt: 1, models: [model('saved')] }
+      },
+      support: async () => undefined
+    },
+    { selected: () => undefined, publish: (entries) => (published = entries) }
+  )
+  try {
+    await expect.poll(() => published[0].catalogRead).toBe('settled')
+  } finally {
+    stop()
+  }
 })
