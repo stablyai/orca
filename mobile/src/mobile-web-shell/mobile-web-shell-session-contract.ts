@@ -147,7 +147,12 @@ export type MobileWebShellSessionEvent =
       readonly flow: number
       readonly cause: MobileWebShellUpdateFailureCause
     }
-  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellReportedFailure }
+  | {
+      readonly type: 'shell-failed'
+      readonly reason: MobileWebShellReportedFailure
+      // The OS took the renderer while Orca was off screen or for memory; the page is not at fault.
+      readonly reclaimed?: boolean
+    }
   | { readonly type: 'retry-pressed' }
   | { readonly type: 'document-started' }
   | { readonly type: 'document-loaded' }

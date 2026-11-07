@@ -8,11 +8,18 @@ internal enum class MobileWebShellFailureReason(val wireName: String) {
   RENDER_PROCESS_GONE("render-process-gone")
 }
 
-internal data class MobileWebShellLoadEmission(val state: String, val reason: String?) {
-  fun toPayload(): Map<String, Any> = if (reason == null) {
-    mapOf("state" to state)
-  } else {
-    mapOf("state" to state, "reason" to reason)
+/** Renderer losses also say whether Orca was off screen and whether the renderer crashed or the OS reclaimed it. */
+internal data class MobileWebShellLoadEmission(
+  val state: String,
+  val reason: String?,
+  val background: Boolean? = null,
+  val crashed: Boolean? = null
+) {
+  fun toPayload(): Map<String, Any> = buildMap {
+    put("state", state)
+    reason?.let { put("reason", it) }
+    background?.let { put("background", it) }
+    crashed?.let { put("crashed", it) }
   }
 }
 
@@ -57,8 +64,12 @@ internal class MobileWebShellLoadStateMachine {
     return emit(MobileWebShellLoadEmission("ready", null))
   }
 
-  fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
-    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))
+  fun failed(
+    reason: MobileWebShellFailureReason,
+    background: Boolean? = null,
+    crashed: Boolean? = null
+  ): MobileWebShellLoadEmission? {
+    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName, background, crashed))
     terminal = true
     documentEnded()
     return emission

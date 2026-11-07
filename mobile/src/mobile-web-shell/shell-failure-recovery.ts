@@ -19,7 +19,8 @@ export type RefetchAfterDelete = (
 export function reduceShellFailed(
   session: MobileWebShellSession,
   reason: MobileWebShellReportedFailure,
-  refetch: RefetchAfterDelete
+  refetch: RefetchAfterDelete,
+  reclaimed = false
 ): MobileWebShellStep {
   if (reason === 'host-profile-unreadable') {
     // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
@@ -32,6 +33,10 @@ export function reduceShellFailed(
     case 'isolation-unavailable':
       return step(session, { state: failedState(session, reason), flow: session.flow + 1 })
     case 'render-process-gone':
+      // Only a loss the page could have caused spends the budget; background jetsam would otherwise wall on return.
+      if (reclaimed) {
+        return step(session, {}, [{ kind: 'remount' }])
+      }
       return session.remountedOnce
         ? step(session, { state: failedState(session, reason) })
         : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
