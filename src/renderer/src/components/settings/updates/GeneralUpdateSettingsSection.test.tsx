@@ -17,10 +17,10 @@ vi.mock('../runtime-environments/updates/GeneralRemoteServerUpdates', () => ({
 describe('GeneralUpdateSettingsSection release channel gesture', () => {
   beforeEach(() => {
     useAppStore.setState({ settingsSearchQuery: '', updateStatus: { state: 'idle' } })
-    window.api = {
-      ...window.api,
-      updater: { ...window.api?.updater, getVersion: vi.fn().mockResolvedValue('1.4.250') }
-    } as typeof window.api
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { updater: { getVersion: vi.fn().mockResolvedValue('1.4.250') } }
+    })
   })
 
   afterEach(() => {
