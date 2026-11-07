@@ -128,6 +128,7 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
             : queuedWrite.data,
           {
             forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+            throttleForcedRefresh: true,
             followupViewportRefresh: queuedWrite.followupForegroundRefresh,
             shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
             onParsed: composeParsedCallback(
