@@ -171,6 +171,9 @@ describe('agent launch caller prompt transport', () => {
       prompt: PROMPT,
       promptDelivery: row.promptDelivery
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.pasteDraftAfterLaunch).toBe(row.transport === 'paste')
     expect(commandCarries(PROMPT)).toBe(row.transport === 'argv')
@@ -205,6 +208,9 @@ describe('agent launch caller prompt transport', () => {
       promptDelivery: 'submit-after-ready',
       onPromptDelivered
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toMatchObject({ delivered: false })
     expect(onPromptDelivered).not.toHaveBeenCalled()

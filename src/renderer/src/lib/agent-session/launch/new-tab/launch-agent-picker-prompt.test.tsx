@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import {
   liveStore,
   mockCreateTab,
@@ -148,7 +149,10 @@ it.each(
     changePrompt(editor(), 'review this change')
     await act(async () => button('Launch terminal').click())
     expect(dispatch).toHaveBeenCalledOnce()
-    expect(dispatch.mock.results[0]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[0]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
     expect(document.querySelector('textarea[aria-label="Arguments"]')).not.toBeNull()
@@ -156,7 +160,10 @@ it.each(
     // The old Arguments Enter gesture reaches the same refusal without consuming its prompt.
     await act(async () => fireEvent.keyDown(argumentsInput, { key: 'Enter' }))
     expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(dispatch.mock.results[1]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[1]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
 
     fireEvent.change(argumentsInput, { target: { value: '--add-dir docs' } })
@@ -296,7 +303,7 @@ it.each([true, false])(
     )
     await act(async () => button('Launch chat').click())
     const call = dispatch.mock.results[0]
-    const result = call?.type === 'return' ? call.value : null
+    const result = nonRefusedAgentLaunch(call?.type === 'return' ? call.value : null)
     expect(result?.surface.kind).toBe('local-chat')
     expect(await result?.structuredSettlement).toMatchObject({ kind: 'failed' })
     expect(preparationErrors).toEqual([])

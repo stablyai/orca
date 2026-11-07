@@ -1,3 +1,4 @@
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
@@ -18,6 +19,7 @@ export type TabAgentLaunchOption = {
   aliases: readonly string[]
   label: string
   disabled?: boolean
+  terminalWaiting?: boolean
   id?: string
   row?: NewTabAgentMenuRow
   setup?: AgentPickerDraft
@@ -168,7 +170,8 @@ export function findMatchingTabAgentLaunchOptions(
       // Why: the first match takes Enter, so a row that can't launch never outranks one that can.
       .sort(
         (left, right) =>
-          Number(Boolean(left.option.disabled)) - Number(Boolean(right.option.disabled)) ||
+          Number(tabAgentLaunchOptionDisabled(left.option)) -
+            Number(tabAgentLaunchOptionDisabled(right.option)) ||
           right.score - left.score ||
           left.index - right.index
       )
@@ -201,15 +204,45 @@ export function matchingAgentPickerLaunchOptions(
 
 export function configuredAgentPickerLaunchOption(
   option: TabAgentLaunchOption,
-  draft: AgentPickerDraft
+  draft: AgentPickerDraft,
+  terminalPending?: boolean
 ): TabAgentLaunchOption {
-  return {
-    ...option,
-    row: {
-      agent: draft.agent,
-      kind: draft.surface === 'chat' ? 'chat' : 'cli',
-      executionHostId: option.row?.executionHostId
+  return terminalReadyOption(
+    {
+      ...option,
+      row: {
+        agent: draft.agent,
+        kind: draft.surface === 'chat' ? 'chat' : 'cli',
+        executionHostId: option.row?.executionHostId
+      },
+      setup: draft
     },
-    setup: draft
-  }
+    terminalPending
+  )
+}
+
+function terminalReadyOption(
+  option: TabAgentLaunchOption,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption {
+  return { ...option, terminalWaiting: Boolean(terminalPendingReason(terminalPending, option.row)) }
+}
+
+export function tabAgentLaunchOptionDisabled(option: TabAgentLaunchOption): boolean {
+  return Boolean(option.disabled || option.terminalWaiting)
+}
+
+/** The agent options a query lists; each one's surface waits the same way while the host connects. */
+export function matchingAgentLaunchOptions(
+  entries: readonly AgentPickerEntry[] | undefined,
+  options: readonly TabAgentLaunchOption[],
+  query: string,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption[] {
+  const ready = (option: TabAgentLaunchOption) => terminalReadyOption(option, terminalPending)
+  // Readiness applies before ranking, so a waiting terminal never outranks a usable chat.
+  return [
+    ...matchingAgentPickerLaunchOptions(entries ?? [], query).map(ready),
+    ...findMatchingTabAgentLaunchOptions(query, options.map(ready))
+  ]
 }

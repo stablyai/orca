@@ -52,6 +52,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
@@ -382,6 +383,7 @@ export function AgentLaunchSetupPanel({
         <AgentLaunchSetupFooter
           ref={footer}
           entry={entry}
+          terminalBlocked={terminalBlocked}
           disabled={disabled}
           onLaunch={(surface, prompt) => {
             const current = getDraft()

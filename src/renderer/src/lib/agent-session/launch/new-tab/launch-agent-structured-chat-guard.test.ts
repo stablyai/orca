@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 
 import {
   mockCreateTab,
@@ -131,7 +132,13 @@ describe('structured chat adoption guard on the launch path', () => {
       finish()
     }
     await Promise.allSettled(pending)
-    await Promise.all(owned.splice(0).map((result) => result?.structuredSettlement))
+    await Promise.all(
+      owned
+        .splice(0)
+        .map((result) =>
+          result && !('refused' in result) ? result.structuredSettlement : undefined
+        )
+    )
     await main.settle()
     expect(lateCreates).toEqual([])
     expect(layoutApplyTestTransport.pendingCount).toBe(0)
@@ -159,16 +166,20 @@ describe('structured chat adoption guard on the launch path', () => {
     )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const first = launchAgentInNewTab({
-      requestId: 'double-click',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
-    const second = launchAgentInNewTab({
-      requestId: 'double-click',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
+    const first = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'double-click',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+    )
+    const second = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'double-click',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+    )
 
     expect(first).toMatchObject({ surface: { kind: 'host-published' } })
     expect(second).toMatchObject({ surface: { kind: 'host-published' } })
@@ -214,11 +225,13 @@ describe('structured chat adoption guard on the launch path', () => {
       })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const unknown = launchAgentInNewTab({
-      requestId: 'request-14',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
+    const unknown = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-14',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+    )
     await expect(unknown?.structuredSettlement).resolves.toEqual({
       kind: 'visibility-unknown',
       sessionId: firstIntent.sessionId
@@ -250,11 +263,13 @@ describe('structured chat adoption guard on the launch path', () => {
       expect.objectContaining({ sessionId: firstIntent.sessionId })
     )
 
-    const next = launchAgentInNewTab({
-      requestId: 'request-15',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
+    const next = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-15',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+    )
     await expect(next?.structuredSettlement).resolves.toEqual({
       kind: 'structured',
       sessionId: secondIntent.sessionId
