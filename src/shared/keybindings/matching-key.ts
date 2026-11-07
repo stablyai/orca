@@ -156,6 +156,18 @@ export function keyMatches(
   }
 
   if (isPunctuationKeyToken(parsedKey)) {
+    // Why: AltGr holds Ctrl+Alt on Windows/Linux, so an AltGr-sourced bracket is text input,
+    // never a Mod+Alt chord. When AltGr sits on the physical bracket key itself the logical
+    // key is still the bracket and the AltGr guard below misses it; only getModifierState
+    // can tell AltGr apart from a deliberate Ctrl+Alt chord.
+    if (
+      getKeybindingPlatform(platform) !== 'darwin' &&
+      parsed.mod &&
+      parsed.alt &&
+      input.getModifierState?.('AltGraph') === true
+    ) {
+      return false
+    }
     // Why: shortcut labels name logical punctuation, but international layouts can report it from different physical codes.
     const semanticKey = semanticPunctuationKey(input)
     if (semanticKey !== null) {
