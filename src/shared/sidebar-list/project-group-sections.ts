@@ -111,6 +111,7 @@ export function appendProjectGroupSections(
     projectGroup: ProjectGroup,
     counts: Map<ExecutionHostId, number>
   ): void => {
+    /** Counts one more row on `hostId`. */
     const add = (hostId: ExecutionHostId): void => {
       counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
     }

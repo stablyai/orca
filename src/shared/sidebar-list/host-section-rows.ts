@@ -193,7 +193,7 @@ export function addHostSectionRows(args: {
     rowsByHostId.get(rowHostId)?.push(row)
   }
 
-  // Pending headers that do not enclose a header at `depth` end before it.
+  /** Ends pending headers that do not enclose a header at `depth`. */
   const retainPendingAncestors = (depth: number): void => {
     const kept =
       depth > 0

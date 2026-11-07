@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
+import {
+  addHostSectionRows,
+  type HostSectionRow
+} from '../../../../../../shared/sidebar-list/host-section-rows'
 import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { buildRows } from './build-rows.test-fixture'
@@ -69,6 +72,17 @@ function worktree(owner: Repo): Worktree {
   } as Worktree
 }
 
+/** A host or header row's label, with a group's count; other rows have none. */
+function headerLabels(row: HostSectionRow): string[] {
+  if (row.type === 'host-header') {
+    return [row.key]
+  }
+  if (row.type !== 'header') {
+    return []
+  }
+  return [row.projectGroup && !row.repo ? `${row.label}:${row.count}` : (row.label ?? row.key)]
+}
+
 /** The sidebar's host and header rows, top to bottom, with each group's count. */
 function sidebarOrder(
   repos: Repo[],
@@ -98,15 +112,7 @@ function sidebarOrder(
     defaultHostId: 'local',
     localHostLabel: 'Local Mac',
     preferProjectGrouping: true
-  }).flatMap((row) => {
-    if (row.type === 'host-header') {
-      return [row.key]
-    }
-    if (row.type !== 'header') {
-      return []
-    }
-    return [row.projectGroup && !row.repo ? `${row.label}:${row.count}` : (row.label ?? row.key)]
-  })
+  }).flatMap(headerLabels)
 }
 
 describe('collapsed project groups in host sections', () => {
