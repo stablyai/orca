@@ -15,6 +15,15 @@ import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairin
 import type * as AuthValidation from './rpc/mobile-e2ee-auth-validation'
 import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/device-key-capability'
 import { classifyOrcadTunnelIdentityFailure } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { PairedE2EEV2ClientSession } from '../../shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
+import {
+  limitRemoteRuntimeRequestDispatch,
+  observeRemoteRuntimeRequestDispatch
+} from '../../shared/remote-runtime/requests/remote-runtime-request-dispatch-observation'
+import { getRemoteRuntimeRequestAdmissionEvidence } from '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 
 // Hosts released between v2 and capability-carrying v2 token auth refused the extra field.
 const TOKEN_FOR_HOST_WITHOUT_V2_TOKEN_CAPABILITIES = 'device-token-v2-exact'
@@ -243,3 +252,95 @@ describe('remote runtime client E2EE framing', () => {
     expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
   })
 })
+
+// The end passes inside the request's own frame construction: just after its real final encoding,
+// before the seal returns. Every seal argument is forwarded, so the request's admission runs.
+function endDuringFinalEncoding(text: string, advance: () => void) {
+  let armed = false
+  let encoding = false
+  let injected = false
+  const sealText = PairedE2EEV2ClientSession.prototype.sealText
+  const seal = vi
+    .spyOn(PairedE2EEV2ClientSession.prototype, 'sealText')
+    .mockImplementation(function (this: PairedE2EEV2ClientSession, ...args) {
+      encoding = armed && args[0].includes(text)
+      try {
+        return sealText.apply(this, args)
+      } finally {
+        encoding = false
+      }
+    })
+  const encodeBase64 = NODE_PAIRED_E2EE_PRIMITIVES.encodeBase64
+  const encode = vi
+    .spyOn(NODE_PAIRED_E2EE_PRIMITIVES, 'encodeBase64')
+    .mockImplementation((bytes) => {
+      const encoded = encodeBase64(bytes)
+      if (encoding) {
+        armed = encoding = false
+        injected = true
+        advance()
+      }
+      return encoded
+    })
+  return {
+    arm: () => {
+      armed = true
+    },
+    injected: () => injected,
+    restore: () => {
+      seal.mockRestore()
+      encode.mockRestore()
+    }
+  }
+}
+
+// FI-C1: a v2 request refused at its end spends no counter, so the same authenticated socket
+// still carries the next request; the host never sees the refused one.
+it.each(['cached', 'shared'] as const)(
+  'refuses a %s v2 request whose end passes while its frame is built, keeping its socket',
+  async (route) => {
+    const host = await startHost('current')
+    await expect(ping(host)).resolves.toBe('pong') // authentically latches v2
+    const connection =
+      route === 'cached'
+        ? new RemoteRuntimeRequestConnection(host.connection)
+        : new RemoteRuntimeSharedControlConnection(host.connection)
+    let now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const ending = endDuringFinalEncoding('expired-exact-draft', () => {
+      now += 200
+    })
+    try {
+      expect((await connection.request('status.ping', {}, 2000)).ok).toBe(true)
+      const received = [...host.requests]
+      const params = { terminal: 'terminal', text: 'expired-exact-draft' }
+      const facts: string[] = []
+      limitRemoteRuntimeRequestDispatch(params, {
+        end: now + 100,
+        handedOff: () => facts.push('handed')
+      })
+      observeRemoteRuntimeRequestDispatch(params, () => facts.push('fact'))
+      ending.arm()
+      await expect(connection.request('terminal.send', params, 2000)).rejects.toMatchObject({
+        code: 'runtime_timeout'
+      })
+      expect(ending.injected()).toBe(true)
+      expect(facts).toEqual([])
+      expect(host.requests).toEqual(received)
+      expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+        pendingRequestCount: 0,
+        retainedBytes: 0
+      })
+      await expect(connection.request('status.ping', {}, 2000)).resolves.toMatchObject({
+        ok: true,
+        result: 'pong'
+      })
+      expect(host.requests).toEqual([...received, 'status.ping over v2'])
+      expect(host.authFramings).toEqual(['v2', 'v2'])
+    } finally {
+      ending.restore()
+      clock.mockRestore()
+      connection.close()
+    }
+  }
+)

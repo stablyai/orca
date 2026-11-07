@@ -294,8 +294,7 @@ export class RemoteRuntimeRequestConnection {
         this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
         return
       }
-      const frame = handshake.channel.sealText(serializedRequest)
-      pending.assertInTime?.()
+      const frame = handshake.channel.sealText(serializedRequest, pending.assertInTime)
       // Handed to the socket from here: an error past this point leaves it possibly sent.
       pending.onFrameSent?.()
       ws.send(frame)

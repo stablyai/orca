@@ -196,8 +196,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
               'Remote Orca runtime request was released before it could be sent.'
             )
           }
-          const frame = handshake.channel.sealText(request)
-          assertInTime?.()
+          const frame = handshake.channel.sealText(request, assertInTime)
           requestSelection?.onDispatch?.()
           if (ws) {
             // Handed to the socket from here: an error past this point leaves it possibly sent.

@@ -2,6 +2,7 @@ import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-hands
 import type WebSocket from 'ws'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { serializeRemoteRuntimePayload } from '../remote-runtime-memory-limits'
+import { sealRemoteRuntimeRequest } from '../requests/remote-runtime-request-dispatch-observation'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame
@@ -144,8 +145,8 @@ export function sendSharedControlEncryptedSerialized(args: {
   ws: WebSocket | null
   handshake: PairedE2EEClientHandshake | null
   serialized: string
-  /** Runs after sealing, before the handoff; a throw propagates and nothing is sent. Dropping the
-   *  sealed frame is safe: each legacy frame carries a fresh random nonce, spending no sequence. */
+  /** The seal's final admission, before the frame spends any sequence: its throw propagates and
+   *  nothing is sent. A failure of the seal itself still returns false. */
   beforeSend?: () => void
   /** Told just before the frame is handed to the socket: from here it may have been sent, even
    *  if the send then throws. Notification only; it never gates the send. */
@@ -159,13 +160,16 @@ export function sendSharedControlEncryptedSerialized(args: {
   ) {
     return false
   }
-  let frame: string
+  let sealed: ReturnType<typeof sealRemoteRuntimeRequest>
   try {
-    frame = args.handshake.channel.sealText(args.serialized)
+    sealed = sealRemoteRuntimeRequest(args.handshake.channel, args.serialized, args.beforeSend)
   } catch {
     return false
   }
-  args.beforeSend?.()
+  if ('expired' in sealed) {
+    throw sealed.expired
+  }
+  const { frame } = sealed
   args.onSendAttempt?.()
   try {
     args.ws.send(frame)

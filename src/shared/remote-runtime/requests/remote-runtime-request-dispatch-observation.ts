@@ -1,4 +1,5 @@
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import type { PairedE2EEChannel } from '../e2ee/paired-e2ee-client-handshake'
 
 // Local only, never part of a frame: who needs to know when a request's own frame actually leaves.
 const observers = new WeakMap<object, () => void>()
@@ -58,8 +59,8 @@ export function remoteRuntimeRequestDispatchObserver(params: unknown): (() => vo
   }
 }
 
-/** Read where a request is created, to call after its frame is sealed and just before it is handed
- *  to the socket: throws once the request's end passed, so the sealed frame is dropped unsent.
+/** Read where a request is created, for its channel to run as the seal's final admission: throws
+ *  once the request's end passed, before the frame spends any sequence or leaves the channel.
  *  Separate from the observer, which never gates a send. */
 export function remoteRuntimeRequestDispatchCutoff(params: unknown): (() => void) | undefined {
   const limit = typeof params === 'object' && params !== null ? limits.get(params) : undefined
@@ -86,6 +87,34 @@ export function remoteRuntimeRequestParamsAtHandoff(params: unknown): { params: 
     return null
   }
   return { params: limit.withRemaining ? limit.withRemaining(params, remainingMs) : params }
+}
+
+/** Seals with `assertInTime` as the channel's final admission. Its refusal comes back as
+ *  `expired`, apart from a failure of the seal itself, which propagates. */
+export function sealRemoteRuntimeRequest(
+  channel: PairedE2EEChannel,
+  text: string,
+  assertInTime: (() => void) | undefined
+): { frame: string } | { expired: unknown } {
+  let refusal: { error: unknown } | null = null
+  const admit =
+    assertInTime &&
+    (() => {
+      try {
+        assertInTime()
+      } catch (error) {
+        refusal = { error }
+        throw error
+      }
+    })
+  try {
+    return { frame: channel.sealText(text, admit) }
+  } catch (error) {
+    if (refusal) {
+      return { expired: refusal.error }
+    }
+    throw error
+  }
 }
 
 export function remoteRuntimeRequestDispatchExpiredError(): RemoteRuntimeClientError {

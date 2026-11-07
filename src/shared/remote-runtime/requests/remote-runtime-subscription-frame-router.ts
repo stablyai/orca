@@ -4,7 +4,10 @@ import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-hands
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
-import { remoteRuntimeRequestDispatchExpiredError } from './remote-runtime-request-dispatch-observation'
+import {
+  remoteRuntimeRequestDispatchExpiredError,
+  sealRemoteRuntimeRequest
+} from './remote-runtime-request-dispatch-observation'
 
 type SubscriptionFrameRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
@@ -120,15 +123,17 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       this.options.fail(remoteRuntimeRequestDispatchExpiredError())
       return
     }
-    const frame = this.options.handshake.channel.sealText(request)
-    try {
-      this.options.assertInTime?.()
-    } catch {
+    const sealed = sealRemoteRuntimeRequest(
+      this.options.handshake.channel,
+      request,
+      this.options.assertInTime
+    )
+    if ('expired' in sealed) {
       this.options.fail(remoteRuntimeRequestDispatchExpiredError())
       return
     }
     this.options.onRequestSent?.()
-    this.options.send(frame)
+    this.options.send(sealed.frame)
     this.options.onAuthenticated()
   }
 

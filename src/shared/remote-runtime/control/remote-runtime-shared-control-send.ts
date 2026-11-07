@@ -26,7 +26,7 @@ export function sendSharedControlRequest(args: {
       serializedRequest !== null &&
       args.send(serializedRequest, pending.assertInTime, pending.onFrameSent)
   } catch (error) {
-    // Its end passed once sealed: refused unsent, this request only.
+    // Its end passed while sealing: refused unsent, this request only.
     args.reject(args.requestId, toRemoteRuntimeRequestError(error))
     return
   }
