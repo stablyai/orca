@@ -11,6 +11,8 @@ import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
+import { readCachedAiVaultSessionList } from './ai-vault-session-list-request'
+import { aiVaultSessionResultCacheKey } from './ai-vault-session-result-cache'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
@@ -243,3 +245,80 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 })
 
 // Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).
+
+it('seeds the session list cache from localStorage so a restart shows the last list (#39308)', () => {
+  const session = {
+    id: 'persisted-1',
+    executionHostId: 'local',
+    agent: 'claude',
+    sessionId: 'session-persisted',
+    title: 'Persisted session',
+    cwd: null,
+    branch: null,
+    model: null,
+    filePath: '/home/.claude/session.jsonl',
+    codexHome: null,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    modifiedAt: '2026-01-01T00:00:00Z',
+    messageCount: 1,
+    totalTokens: 100
+  }
+  const result = {
+    sessions: [session],
+    scannedAt: '2026-01-01T00:00:00Z',
+    fingerprint: 'fp-1'
+  }
+  const key = aiVaultSessionResultCacheKey('local', ['/repo'])
+  localStorage.setItem(
+    'orca.aiVault.sessionListCache.v1',
+    JSON.stringify([[key, { executionHostScope: 'local', limit: 50, result }]])
+  )
+  resetAiVaultForcedRescanThrottleForTest()
+  // The reset above clears localStorage; re-seed after it.
+  localStorage.setItem(
+    'orca.aiVault.sessionListCache.v1',
+    JSON.stringify([[key, { executionHostScope: 'local', limit: 50, result }]])
+  )
+
+  const cached = readCachedAiVaultSessionList({
+    scopePaths: ['/repo'],
+    executionHostScope: 'local',
+    sessionLimit: 50
+  })
+
+  expect(cached).not.toBeNull()
+  expect(cached?.sessions[0]?.title).toBe('Persisted session')
+})
+
+it('returns null for corrupt or wrong-shape persisted cache payloads', () => {
+  localStorage.setItem('orca.aiVault.sessionListCache.v1', 'not json at all')
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+
+  localStorage.setItem('orca.aiVault.sessionListCache.v1', JSON.stringify({ wrong: 'shape' }))
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+
+  localStorage.setItem(
+    'orca.aiVault.sessionListCache.v1',
+    JSON.stringify([['key', { executionHostScope: 'local', limit: 50 }]])
+  )
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+})
