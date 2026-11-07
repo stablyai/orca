@@ -36,7 +36,6 @@ export function ChatBehaviorSetting({
 }: ChatBehaviorSettingProps): React.JSX.Element | null {
   const typedPermissions = useChatSettingsOwnPermissions()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  // A host without the capability ignores the preference; the choice would do nothing.
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages(STRUCTURED_CHAT_HOST)
   const hostContinuesUsageLimits =
     useStructuredAgentSessionHostCapabilityState(
@@ -129,22 +128,21 @@ export function ChatBehaviorSetting({
                 />
               </SearchableSetting>
             ) : null}
-            {hostQueuesMessages ? (
-              <SearchableSetting
-                {...entries.queueFollowUps}
-                id={entries.queueFollowUps.targetSectionId}
-                forceVisible={forceVisible}
-                className="max-w-none"
-              >
-                <SettingsSwitchRow
-                  label={entries.queueFollowUps.title}
-                  description={entries.queueFollowUps.description}
-                  checked={queueFollowUps}
-                  ariaLabel={entries.queueFollowUps.title}
-                  onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
-                />
-              </SearchableSetting>
-            ) : null}
+            <SearchableSetting
+              {...entries.queueFollowUps}
+              id={entries.queueFollowUps.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.queueFollowUps.title}
+                description={entries.queueFollowUps.description}
+                checked={queueFollowUps}
+                disabled={!hostQueuesMessages}
+                ariaLabel={entries.queueFollowUps.title}
+                onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
+              />
+            </SearchableSetting>
             <SearchableSetting
               {...entries.scrollToLatestOnSend}
               id={entries.scrollToLatestOnSend.targetSectionId}
