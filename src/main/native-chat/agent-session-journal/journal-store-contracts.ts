@@ -76,6 +76,8 @@ export type JournalLateDispatchInput =
   | (Extract<ResolveDispatchInput, { state: 'rejected' }> & { unrun?: true })
 
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
+  /** Resolve the provider's stopped turn at the write position, falling back to turnScope. */
+  stoppedTurnId?: string
   echoOf?: JournalItemEcho['echoOf']
   fence: number
   /** Provider execution provenance; host bookkeeping omits it to retain the item's owner. */

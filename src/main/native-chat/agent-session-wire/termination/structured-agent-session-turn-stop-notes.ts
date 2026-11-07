@@ -52,20 +52,6 @@ export function structuredAgentSessionNamedTurnScope(
   return turn ? { kind: 'turn', turnItemId: turn.itemId } : null
 }
 
-/** The turn the provider says the interrupt took, even one that opened while the cancel waited for
- *  it: the note is that turn's, never a conversation row read before the wait. */
-export function structuredAgentSessionStopNoteScope(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
-  stoppedTurn: string | undefined,
-  fallback: AgentJournalTurnScope
-): AgentJournalTurnScope {
-  return (
-    (stoppedTurn !== undefined
-      ? structuredAgentSessionNamedTurnScope(journal, stoppedTurn)
-      : null) ?? fallback
-  )
-}
-
 export function writeStructuredAgentSessionStopNote(
   ctx: {
     journal: AgentSessionJournal
@@ -83,11 +69,8 @@ export function writeStructuredAgentSessionStopNote(
   return ctx.journal
     .appendItem(input.identity, input.body, {
       fence: ctx.fence,
-      turnScope: structuredAgentSessionStopNoteScope(
-        ctx.journal,
-        input.stoppedTurn,
-        input.fallbackScope
-      )
+      stoppedTurnId: input.stoppedTurn,
+      turnScope: input.fallbackScope
     })
     .then(() => undefined)
     .catch((error: unknown) =>

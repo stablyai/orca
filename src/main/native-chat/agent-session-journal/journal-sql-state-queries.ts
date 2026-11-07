@@ -133,6 +133,19 @@ export function sqlJournalStateQueries(
         context.read<AgentJournalRenderItem>('items', String(row.entry_key))?.body
       )
     },
+    latestItemForTurn(_state, turnId) {
+      facts.flush()
+      const row = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0
+        ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
+        .get(...scope.prefix, turnId)
+      if (!row) {
+        return null
+      }
+      scope.examined(row)
+      return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
+    },
     oldestAppliedSettlementId: () =>
       journalSqlOrderedValues<string>(context, 'appliedSettlementIds', 1).next().value,
     nativeInputEntries: (state) => memoryJournalMap(state.inputEntries).entries(),

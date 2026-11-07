@@ -4,6 +4,9 @@ import { latestAgentSessionContextClearSequence } from '../../../shared/agent-se
 import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { memoryJournalEchoClaimant } from './projection/journal-item-echo'
 import { memoryLatestAcceptedSendUnopened } from './context-epochs/journal-stop-turn-end'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 
 export const memoryJournalStateQueries: JournalStateQueries = {
   latestContextClearSequence(state) {
@@ -45,6 +48,19 @@ export const memoryJournalStateQueries: JournalStateQueries = {
   latestAcceptedUnopened: memoryLatestAcceptedSendUnopened,
   newestTurnBySequence(state) {
     return newestStructuredAgentSessionTurnBySequence(memoryJournalMap(state.items).values())
+  },
+  latestItemForTurn(state, turnId) {
+    let latest: ReturnType<JournalStateQueries['latestItemForTurn']> = null
+    for (const item of memoryJournalMap(state.items).values()) {
+      if (
+        readAgentJournalTurn(item.body)?.turnId === turnId &&
+        journalInputPresentationMember(state, item.itemId) &&
+        (!latest || compareAgentJournalItems(item, latest) >= 0)
+      ) {
+        latest = item
+      }
+    }
+    return latest
   },
   oldestAppliedSettlementId(state) {
     return memoryJournalSet(state.appliedSettlementIds).values().next().value

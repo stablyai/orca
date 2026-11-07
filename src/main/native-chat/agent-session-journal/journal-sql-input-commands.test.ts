@@ -505,3 +505,44 @@ it('uses the preceding handover to distinguish linked from direct unrun late set
     'neverReachedAgent'
   )
 })
+
+it('binds Stop notes to the provider-named turn at their write position', async () => {
+  const side = await sides()
+  const turnIdentity = { provider: 'orca' as const, clientMessageId: 'stopped-turn' }
+  const body = { kind: 'turn' as const, turnId: 'provider-turn', state: 'running' as const }
+  const options = { fence: 1, turnScope: { kind: 'thread' as const } }
+  await both(side, (j) => j.itemAppender.append(turnIdentity, body, options), {
+    kind: 'item',
+    identity: turnIdentity,
+    body,
+    options
+  })
+  const identity = { provider: 'orca' as const, clientMessageId: 'stop-note' }
+  const note = { kind: 'status' as const, text: 'Cancellation requested.' }
+  const stopped = { ...options, stoppedTurnId: 'provider-turn' }
+  await both(side, (j) => j.itemAppender.append(identity, note, stopped), {
+    kind: 'item',
+    identity,
+    body: note,
+    options: stopped
+  })
+  expect(side.memory.state().items.get(agentJournalItemKey(identity))?.turnScope).toEqual({
+    kind: 'turn',
+    turnItemId: 'orca:stopped-turn'
+  })
+  await both(
+    side,
+    (j) => j.rowWriter.append(journalTombstoneRowBuilder(j.state, 'orca:stopped-turn', 1)),
+    { kind: 'tombstone', identity: turnIdentity, fence: 1 }
+  )
+  const afterRemoval = { provider: 'orca' as const, clientMessageId: 'stop-after-removal' }
+  await both(side, (j) => j.itemAppender.append(afterRemoval, note, stopped), {
+    kind: 'item',
+    identity: afterRemoval,
+    body: note,
+    options: stopped
+  })
+  expect(side.memory.state().items.get(agentJournalItemKey(afterRemoval))?.turnScope).toEqual({
+    kind: 'thread'
+  })
+})
