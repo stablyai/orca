@@ -23,7 +23,7 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
   }
 }
 
-/** The login reads with these options run as; callers hold the permit. gh keys --cache by token, so a switched account never gets the old login. */
+/** gh keys --cache by token, so a switched account never gets the old login. */
 export async function readViewerLogin(
   ghOptions: Parameters<typeof ghExecFileAsync>[1]
 ): Promise<string | null> {

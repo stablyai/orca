@@ -146,7 +146,16 @@ async function fetchMRDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussionComments(repoPath, projectRef, 'mr', iid, connectionId, localGitOptions)
+    // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
+    fetchDiscussionComments(
+      repoPath,
+      projectRef,
+      'mr',
+      iid,
+      connectionId,
+      localGitOptions,
+      options.includeReviewDetails !== false
+    )
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {

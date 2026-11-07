@@ -1,5 +1,6 @@
 import type { MRComment } from '../../shared/gitlab-types'
 import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
+import { readGlabViewer } from './gitlab-auth-and-rate-limit'
 import { encodedProject } from './project-path-encoding'
 import {
   glabHostnameArgs,
@@ -64,7 +65,8 @@ export async function fetchDiscussionComments(
   type: 'issue' | 'mr',
   iid: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  markViewer = true
 ): Promise<MRComment[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
   const hostArgs = glabHostnameArgs(projectRef, connectionId)
@@ -79,10 +81,13 @@ export async function fetchDiscussionComments(
       ],
       options
     ),
-    // Notes carry no authorship flag, so ask the same host and account who is reading. Uncached: glab can switch accounts.
-    glabExecFileAsync(['api', ...hostArgs, 'user'], options)
-      .then((user) => (JSON.parse(user.stdout) as { username?: string | null }).username ?? null)
-      .catch(() => null)
+    // Notes carry no authorship flag, so ask the reading account who it is.
+    markViewer
+      ? readGlabViewer(hostArgs, options).then(
+          ({ username }) => (typeof username === 'string' ? username : null),
+          () => null
+        )
+      : null
   ])
   return flattenDiscussions(JSON.parse(stdout) as GitLabRawDiscussion[], viewerUsername)
 }
