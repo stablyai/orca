@@ -1,65 +1,100 @@
 import { useState } from 'react'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { draftRenameSheetState } from '../components/draft-rename-sheet-state'
 import { TextInputSheetContent } from '../components/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { readHostMutationDraft, setHostMutationDraft } from '../query/host-mutation-drafts'
+import { isHostNotConnectedError } from '../query/host-query-errors'
+import { useHostDisplay } from '../transport/use-host-display'
+import { useHostProfile } from '../transport/use-host-profile'
 import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 // error null means the rename is still in flight.
 type RenameAttempt = { error: string | null }
 
+function renameDraftKey(hostId: string, terminal: Terminal): string {
+  return `terminal-rename:${hostId}:${terminal.handle}`
+}
+
 export function MobileTerminalRenameModal({
   controller
 }: {
   controller: Pick<
     MobileSessionController,
-    'renameTarget' | 'setRenameTarget' | 'handleRenameTerminal'
+    'hostId' | 'renameTarget' | 'setRenameTarget' | 'handleRenameTerminal' | 'terminalRenameWrite'
   >
 }) {
   const t = useMobileTranslation()
-  const { renameTarget, setRenameTarget, handleRenameTerminal } = controller
+  const { hostId, renameTarget, setRenameTarget, handleRenameTerminal, terminalRenameWrite } =
+    controller
+  const hostName = useHostDisplay(useHostProfile(hostId)).title
   const [shownTarget, setShownTarget] = useState<Terminal | null>(renameTarget)
   const [value, setValue] = useState(renameTarget?.title ?? '')
   const [attempt, setAttempt] = useState<RenameAttempt | null>(null)
 
-  // Each opening starts from the terminal's title; closing keeps the text for the exit animation.
+  // Each opening starts from the terminal's title, or the text the desktop never took; closing keeps the text for the exit animation.
   if (renameTarget !== shownTarget) {
     setShownTarget(renameTarget)
     if (renameTarget) {
-      setValue(renameTarget.title)
+      setValue(readHostMutationDraft(renameDraftKey(hostId, renameTarget)) ?? renameTarget.title)
       setAttempt(null)
     }
   }
 
   async function submit(title: string) {
+    if (!renameTarget) {
+      return
+    }
+    const draftKey = renameDraftKey(hostId, renameTarget)
     const mine: RenameAttempt = { error: null }
     setAttempt(mine)
     try {
       await handleRenameTerminal(title)
+      setHostMutationDraft(draftKey, null)
     } catch (failure) {
-      const reason = failure instanceof Error ? failure.message : ''
-      const error = t(
-        'session.sheets.renameTerminalFailed',
-        "Couldn't rename the terminal. {{reason}}",
-        { reason }
-      ).trim()
+      // Offline before it was sent: the sheet's offline notice says why, and the text waits.
+      const error = isHostNotConnectedError(failure)
+        ? null
+        : t('session.sheets.renameTerminalFailed', "Couldn't rename the terminal. {{reason}}", {
+            reason: failure instanceof Error ? failure.message : ''
+          }).trim()
       // A late reply must not mark a newer attempt or opening as failed.
-      setAttempt((latest) => (latest === mine ? { error } : latest))
+      setAttempt((latest) => (latest === mine ? (error ? { error } : null) : latest))
     }
   }
 
+  const busy = attempt != null && attempt.error === null
+  const sheet = draftRenameSheetState({
+    write: terminalRenameWrite,
+    busy,
+    error: attempt?.error ?? null,
+    hostName,
+    t
+  })
+
+  function close() {
+    if (shownTarget) {
+      // Text the desktop couldn't take yet comes back next time; a plain Cancel drops it.
+      const waiting = sheet.submitBlocked || sheet.notice !== null
+      const unsaved = waiting && value.trim() !== shownTarget.title
+      setHostMutationDraft(renameDraftKey(hostId, shownTarget), unsaved ? value : null)
+    }
+    setRenameTarget(null)
+  }
+
   return (
-    <BottomDrawer visible={renameTarget != null} onClose={() => setRenameTarget(null)}>
+    <BottomDrawer visible={renameTarget != null} onClose={close}>
       <TextInputSheetContent
         title={t('session.sheets.renameTerminal', 'Rename Terminal')}
         value={value}
         onChangeText={setValue}
         placeholder={t('session.sheets.terminalName', 'Terminal name')}
-        submitLabel={attempt?.error ? t('common.retry', 'Retry') : undefined}
         error={attempt?.error}
-        busy={attempt != null && attempt.error === null}
+        busy={busy}
+        {...sheet}
         onSubmit={(title) => void submit(title)}
-        onCancel={() => setRenameTarget(null)}
+        onCancel={close}
       />
     </BottomDrawer>
   )

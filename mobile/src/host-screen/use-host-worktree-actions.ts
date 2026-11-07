@@ -26,6 +26,26 @@ import {
 } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { defineHostMutation, useHostMutation } from '../query/host-mutation'
+
+async function sendWorkspaceRename(
+  client: RpcClient,
+  vars: { worktreeId: string; displayName: string }
+): Promise<void> {
+  worktreeDisplayNameWrite.interpret(
+    await worktreeDisplayNameWrite.request(client, {
+      worktree: `id:${vars.worktreeId}`,
+      displayName: vars.displayName
+    })
+  )
+}
+
+const workspaceRename = defineHostMutation({
+  offline: 'draft',
+  send: sendWorkspaceRename,
+  // Renaming is idempotent, so a lost reply is settled by sending the same name again.
+  confirm: sendWorkspaceRename
+})
 
 export function useHostWorktreeActions(args: {
   client: RpcClient | null
@@ -170,22 +190,18 @@ export function useHostWorktreeActions(args: {
     [client, setSleptIds]
   )
 
+  const workspaceRenameWrite = useHostMutation(workspaceRename, { hostId: hostId ?? '', client })
+  const { mutate: mutateWorkspaceName } = workspaceRenameWrite
   // Written at the row's owner, as desktop does; empty text returns the label to automatic.
   const renameWorktree = useCallback(
     async (item: Worktree, displayName: string) => {
-      const rowClient = clientForRow(item)
-      if (!rowClient) {
-        throw new Error('Not connected: worktree.set')
-      }
-      worktreeDisplayNameWrite.interpret(
-        await worktreeDisplayNameWrite.request(rowClient, {
-          worktree: `id:${item.worktreeId}`,
-          displayName
-        })
+      await mutateWorkspaceName(
+        { worktreeId: item.worktreeId, displayName },
+        clientForRow(item) ?? undefined
       )
       void fetchWorktrees()
     },
-    [clientForRow, fetchWorktrees]
+    [mutateWorkspaceName, clientForRow, fetchWorktrees]
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
@@ -297,6 +313,7 @@ export function useHostWorktreeActions(args: {
     openWorktreeSession,
     putWorktreeToSleep,
     renameWorktree,
+    workspaceRenameWrite,
     togglePin
   }
 }

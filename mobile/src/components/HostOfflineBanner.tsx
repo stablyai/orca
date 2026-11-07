@@ -1,0 +1,142 @@
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { CloudOff } from 'lucide-react-native'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+
+/** The banner's state for a screen that shows data, or null while it should stay hidden. */
+export function useHostOfflineBanner({
+  client,
+  connState,
+  lastConnectedAt,
+  hasData
+}: {
+  client: RpcClient | null
+  connState: ConnectionState
+  lastConnectedAt: number | null
+  hasData: boolean
+}): { state: ConnectionState; asOf: number | null } | null {
+  const state = useCalmConnectionState(connState, lastConnectedAt)
+  const show = hasData && state !== 'connected' && state !== 'auth-failed'
+  // Live data stopped at the last reply before the drop; held so reconnect attempts don't move it.
+  const [asOf, setAsOf] = useState<number | null>(null)
+  if (show && asOf === null) {
+    const lastLive = client?.getLastInboundAt?.() ?? lastConnectedAt
+    if (lastLive !== null) {
+      setAsOf(lastLive)
+    }
+  } else if (!show && asOf !== null) {
+    setAsOf(null)
+  }
+  return show ? { state, asOf } : null
+}
+
+/**
+ * Inset at the top of a screen that still shows data while its desktop is unreachable.
+ * `state` is the calm connection state; auth failures have their own banner. An empty screen says it in its body instead.
+ */
+export function HostOfflineBanner({
+  hostName,
+  state,
+  asOf,
+  onRetry
+}: {
+  hostName: string
+  state: ConnectionState
+  /** When the shown data was last live. */
+  asOf: number | null
+  onRetry: (() => void) | null
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  if (state === 'connected' || state === 'auth-failed') {
+    return null
+  }
+  const offline = state === 'disconnected'
+  return (
+    <View style={styles.banner} accessibilityLiveRegion="polite">
+      {offline ? (
+        <CloudOff size={18} color={colors.statusAmber} />
+      ) : (
+        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.spinner} />
+      )}
+      <View style={styles.text}>
+        <Text style={styles.title} numberOfLines={1}>
+          {offline
+            ? t('components.hostOfflineBanner.offline', '{{host}} is offline', { host: hostName })
+            : t('components.hostOfflineBanner.reconnecting', 'Reconnecting to {{host}}…', {
+                host: hostName
+              })}
+        </Text>
+        {asOf !== null ? (
+          <Text style={styles.detail} numberOfLines={1}>
+            {t('components.hostOfflineBanner.asOf', 'Showing what was here as of {{time}}', {
+              time: new Intl.DateTimeFormat(getUiIntlLocale(), {
+                hour: 'numeric',
+                minute: '2-digit'
+              }).format(asOf)
+            })}
+          </Text>
+        ) : null}
+      </View>
+      {offline && onRetry ? (
+        <Pressable
+          style={({ pressed }) => [styles.retry, pressed && pressedStyle]}
+          onPress={onRetry}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.surface,
+    backgroundColor: colors.bgRaised,
+    borderWidth: 0.5,
+    borderColor: colors.statusAmber
+  },
+  spinner: {
+    width: 18,
+    height: 18
+  },
+  text: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
+  detail: {
+    fontSize: typography.metaSize,
+    color: colors.textSecondary
+  },
+  retry: {
+    height: 32,
+    paddingHorizontal: 11,
+    borderRadius: radii.control,
+    backgroundColor: colors.translucentFill,
+    justifyContent: 'center'
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary
+  }
+}))
