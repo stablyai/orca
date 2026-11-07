@@ -4,6 +4,12 @@ import type { SlashCommandSuggestion } from './native-chat-slash-commands'
 
 export const NATIVE_CHAT_SIDE_CHAT_COMMANDS = ['side', 'btw'] as const
 
+export function isNativeChatSideChatCommand(
+  name: string | null
+): name is (typeof NATIVE_CHAT_SIDE_CHAT_COMMANDS)[number] {
+  return NATIVE_CHAT_SIDE_CHAT_COMMANDS.some((command) => command === name)
+}
+
 /** `/side [question]` or `/btw [question]` as the whole message; null for anything else. */
 export function parseNativeChatSideChatDraft(draft: string): { question: string } | null {
   const match = /^\/(?:side|btw)(?:\s+([\s\S]*))?$/i.exec(draft.trim())
@@ -21,10 +27,5 @@ export function withNativeChatSideChatCommands(
     argumentHint: copy.argumentHint,
     orcaOwned: true
   }))
-  return [
-    ...commands.filter(
-      ({ name }) => !(NATIVE_CHAT_SIDE_CHAT_COMMANDS as readonly string[]).includes(name)
-    ),
-    ...rows
-  ]
+  return [...commands.filter(({ name }) => !isNativeChatSideChatCommand(name)), ...rows]
 }

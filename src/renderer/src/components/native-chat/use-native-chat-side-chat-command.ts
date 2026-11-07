@@ -4,7 +4,7 @@ import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-r
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { SlashCommandSuggestion } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import {
-  NATIVE_CHAT_SIDE_CHAT_COMMANDS,
+  isNativeChatSideChatCommand,
   parseNativeChatSideChatDraft,
   withNativeChatSideChatCommands
 } from '../../../../shared/native-chat/input/native-chat-side-chat-command'
@@ -117,11 +117,7 @@ export function useNativeChatSideChatCommand(args: {
       (item: TItem) => {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         const name = item.kind === 'command' && item.orcaOwned ? item.name : null
-        if (
-          !leading ||
-          !sideChat ||
-          !(NATIVE_CHAT_SIDE_CHAT_COMMANDS as readonly (string | null)[]).includes(name)
-        ) {
+        if (!leading || !sideChat || !isNativeChatSideChatCommand(name)) {
           pick(item)
           return
         }
