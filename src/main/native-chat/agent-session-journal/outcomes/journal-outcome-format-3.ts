@@ -10,7 +10,10 @@ const storedCard = outcomeFormat1Stored['queue.cards']._def.items[1].extend({
   deliveryMode: z.enum(['queue', 'steer']).optional(),
   unattended: z.boolean().optional()
 })
-export const outcomeFormat3Card = storedCard.pipe(z.custom<QueuedMessageRow>())
+const strictCard = strictStorage(storedCard)
+export const outcomeFormat3Card = z.custom<QueuedMessageRow>(
+  (value) => strictCard.safeParse(value).success
+)
 const card = strictStorage(z.tuple([z.string(), storedCard]))
 
 /** Format 3 gives waiting input one row and preserves the delivery intent accepted with it. */
