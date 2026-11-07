@@ -88,10 +88,9 @@ function plan(
   folders: FolderWorkspace[] = [folder]
 ): Row[] {
   const rows = new Map(
-    [...worktrees, ...hidden, ...folders.map(getFolderWorkspaceWorktree)].map((entry) => [
-      getWorktreeHostIdentity(entry),
-      entry
-    ])
+    [...worktrees, ...hidden, ...folders.map((entry) => getFolderWorkspaceWorktree(entry))].map(
+      (entry) => [getWorktreeHostIdentity(entry), entry]
+    )
   )
   return planSidebarRows({
     groupBy,
