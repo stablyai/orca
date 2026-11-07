@@ -28,7 +28,6 @@ export class SessionSearchInstance {
   private live: LiveIndex | null = null
   private settings: AiVaultSearchSettings = { enabled: false, historyDays: null }
   private transition = Promise.resolve()
-  private cachedStatus = unavailableSessionSearchStatus()
   private readonly onError: (error: unknown) => void
   constructor(private readonly options: SessionSearchInstanceOptions) {
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
@@ -48,13 +47,6 @@ export class SessionSearchInstance {
   }
   private queue(settings: AiVaultSearchSettings, clear: boolean): Promise<void> {
     const old = this.live
-    if (old) {
-      this.cachedStatus = {
-        enabled: true,
-        ...old.indexer.status(),
-        generation: old.indexer.generation()
-      }
-    }
     this.live = null
     old?.indexer.close()
     const retired = old
@@ -107,16 +99,14 @@ export class SessionSearchInstance {
   }
   async status(): Promise<AiVaultSearchStatus> {
     const live = this.live
-    if (live) {
-      this.cachedStatus = {
-        enabled: true,
-        ...live.indexer.status(),
-        generation: live.indexer.generation()
-      }
+    if (!live) {
+      return { ...unavailableSessionSearchStatus(), enabled: this.settings.enabled }
     }
-    return this.settings.enabled
-      ? { ...this.cachedStatus, enabled: true }
-      : unavailableSessionSearchStatus()
+    return {
+      enabled: true,
+      ...live.indexer.status(),
+      generation: live.indexer.generation()
+    }
   }
   reconcile(signal?: AbortSignal): Promise<void> {
     return withinSessionSearchDeadline(

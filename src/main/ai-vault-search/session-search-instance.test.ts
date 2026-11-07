@@ -1,6 +1,6 @@
 import './session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
-import { utimes } from 'node:fs/promises'
+import { unlink, utimes } from 'node:fs/promises'
 import * as fileRemoval from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/sessio
 import * as searchSchema from './session-search-schema'
 import { SessionSearchReaders } from './session-search-readers'
 import { SessionSearchInstance } from './session-search-instance'
+import { SessionSearchIndexer } from './session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
@@ -124,6 +125,49 @@ it('removes the database on clear and rebuilds only while consent stands', async
   await subject.clear()
   expect(subject.running).toBe(false)
   expect(existsSync(harness.databasePath)).toBe(false)
+  expect(errors).toEqual([])
+})
+
+it('never reports the deleted index while re-enabling a cleared search', async () => {
+  for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(id), ['searchable conversation'], id)
+  }
+  const subject = newInstance()
+  await subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+  expect(await subject.status()).toMatchObject({ filesIndexed: 2, messagesIndexed: 4 })
+
+  await subject.apply({ enabled: false, historyDays: null })
+  await subject.clear()
+  expect(existsSync(harness.databasePath)).toBe(false)
+  await unlink(transcriptPath(ANCIENT_SESSION_ID))
+
+  let release!: () => void
+  let opening!: () => void
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    opening = resolve
+  })
+  const initialize = SessionSearchIndexer.prototype.initialize
+  vi.spyOn(SessionSearchIndexer.prototype, 'initialize').mockImplementationOnce(async function (
+    this: SessionSearchIndexer
+  ) {
+    opening()
+    await blocked
+    await initialize.call(this)
+  })
+  const enabling = subject.apply({ enabled: true, historyDays: null })
+  try {
+    await started
+    expect(await subject.status()).toMatchObject({ enabled: true, phase: 'idle', filesIndexed: 0 })
+  } finally {
+    release()
+    await enabling
+  }
+  await subject.settled()
+  expect(await subject.status()).toMatchObject({ filesIndexed: 1, messagesIndexed: 2 })
   expect(errors).toEqual([])
 })
 
