@@ -4,7 +4,12 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-export type ChatAccountAction = { target: RuntimeClientTarget; canSwitch: () => Promise<boolean> }
+export type ChatAccountAction = {
+  target: RuntimeClientTarget
+  canSwitch: () => Promise<boolean>
+  /** The chat's account changed; it continues there instead of waiting for the reset. */
+  onSwitched: () => void
+}
 
 export function ProviderAccountChatButton({
   provider,

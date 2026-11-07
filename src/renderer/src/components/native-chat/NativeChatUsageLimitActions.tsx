@@ -97,6 +97,15 @@ export function NativeChatUsageLimitActionsProvider({
     onStarted?: () => void
   } | null>(null)
   const request = prepared?.key === intentKey ? prepared.request : null
+  const continueUsageLimit = useCallback(
+    (hadFocus?: boolean): void => {
+      intent.current = { key: intentKey, pending: false }
+      setPreparing(null)
+      setPrepared(null)
+      view.continueUsageLimit(hadFocus)
+    },
+    [intentKey, view]
+  )
   const canHandOff =
     active &&
     pane.isVisible &&
@@ -128,7 +137,9 @@ export function NativeChatUsageLimitActionsProvider({
                 { sessionId: pane.sessionId }
               )
               return intent.current === current && result.canSwitchAccount === true
-            }
+            },
+            // Why focus: the row leaves with its send, so the keyboard lands in the composer.
+            onSwitched: () => continueUsageLimit(true)
           }}
         />
       )
@@ -213,18 +224,7 @@ export function NativeChatUsageLimitActionsProvider({
     }),
     [account, canHandOff, disabled, loading, openHandOff, pane.agent]
   )
-  const stopView = useMemo(
-    () => ({
-      ...view,
-      continueUsageLimit: (hadFocus?: boolean) => {
-        intent.current = { key: intentKey, pending: false }
-        setPreparing(null)
-        setPrepared(null)
-        view.continueUsageLimit(hadFocus)
-      }
-    }),
-    [intentKey, view]
-  )
+  const stopView = useMemo(() => ({ ...view, continueUsageLimit }), [view, continueUsageLimit])
   return (
     <UsageLimitActionsContext.Provider value={actions}>
       <NativeChatOrcaStopContext.Provider value={stopView}>
