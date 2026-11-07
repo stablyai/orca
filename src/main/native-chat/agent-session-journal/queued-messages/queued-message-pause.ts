@@ -4,27 +4,20 @@ import type * as journalTypes from '../../../../shared/agent-session/journal/age
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalStopEvent, JournalTombstoneRow } from '../durable-rows/journal-row-schema'
+import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
+import { journalUserStopInForce, type JournalQueuePauseMarks } from './queued-message-pause-marks'
+export {
+  createJournalQueuePauseMarks,
+  foldJournalQueuePauseMark,
+  journalManualStop,
+  journalQueueStopHolds,
+  journalUserStopInForce,
+  type JournalQueuePauseMarks,
+  type JournalStopSettle,
+  type JournalStopFailedOn
+} from './queued-message-pause-marks'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
-
-/** Memory-only unnamed Stop binding; failedOn affects display, never cancellation ownership. */
-export type JournalStopSettle = {
-  settling: boolean
-  turnId?: string
-  failedOn?: JournalStopFailedOn
-}
-
-export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
-
-export type JournalQueuePauseMarks = {
-  cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
-  latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
-  /** Zero means absent. */
-  resumedSequence: number
-  /** Zero means absent. */
-  reopenedSequence: number
-}
 
 export type DerivedQueuePause = {
   reason: QueuePauseReason
@@ -41,74 +34,6 @@ type QueueCard = {
   queuedAt: AgentJournalCursor | null
   unattended?: boolean
   body?: journalTypes.AgentJournalMessageItem
-}
-
-export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
-  return { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
-}
-
-function isReadableStopEvent(value: unknown): value is JournalStopEvent {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'reason' in value &&
-    typeof value.reason === 'string' &&
-    'at' in value &&
-    typeof value.at === 'number' &&
-    Number.isFinite(value.at)
-  )
-}
-
-export function foldJournalQueuePauseMark(
-  marks: JournalQueuePauseMarks,
-  row: JournalTombstoneRow
-): void {
-  if (isReadableStopEvent(row.stopEvent)) {
-    marks.latestStop = { sequence: row.seq, event: row.stopEvent }
-  } else if (row.queueResume === true) {
-    marks.resumedSequence = row.seq
-  } else if (row.queueReopen === true) {
-    // Late reopen marks must not narrow earlier boundaries.
-    const since = row.queueReopenSince
-    const start = typeof since === 'number' && since > 0 && since <= row.seq ? since : row.seq
-    marks.reopenedSequence = Math.max(marks.reopenedSequence, start)
-  } else if (isReadableQueueClear(row.queueClear)) {
-    marks.cleared = { ...row.queueClear, sequence: row.seq }
-  }
-}
-
-function isReadableQueueClear(
-  value: unknown
-): value is NonNullable<JournalTombstoneRow['queueClear']> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'operationId' in value &&
-    typeof value.operationId === 'string' &&
-    value.operationId.length > 0 &&
-    'messageIds' in value &&
-    Array.isArray(value.messageIds) &&
-    value.messageIds.every((id: unknown) => typeof id === 'string' && id.length > 0) &&
-    (!('lifted' in value) || value.lifted === true)
-  )
-}
-
-/** Any later Stop supersedes a personal pause; only personal Stops create one. */
-export function journalQueueStopHolds(
-  marks: JournalQueuePauseMarks,
-  latestAcceptedTurnSequence: number
-): boolean {
-  return (
-    marks.latestStop?.event.reason === 'user-stop' &&
-    marks.latestStop.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
-  )
-}
-
-export function journalUserStopInForce(
-  marks: JournalQueuePauseMarks,
-  latestAcceptedTurnSequence: number
-): JournalQueuePauseMarks['latestStop'] {
-  return journalQueueStopHolds(marks, latestAcceptedTurnSequence) ? marks.latestStop : null
 }
 
 /** Restate clear-lift first, then active Stop/reopen marks so the lift cannot erase them. */

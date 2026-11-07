@@ -262,7 +262,7 @@ type StoredIn<F> = F extends 'items'
       : never
 type Marks = State['queuePauseMarks']
 // Live Stop settlement is never stored (durableQueuePauseMarks).
-type StoredMarks = Omit<Marks, 'latestStop'> & {
+type StoredMarks = Omit<Marks, 'latestStop' | 'manualStop'> & {
   latestStop: { sequence: number; event: JournalStopEvent } | null
 }
 type Scalars = z.output<typeof outcomeFormat1StoredScalars>

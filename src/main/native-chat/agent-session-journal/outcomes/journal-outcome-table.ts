@@ -1,5 +1,6 @@
 import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import { isNativeOutcomeField } from './journal-outcome-format-2'
+import { journalManualStop } from '../queued-messages/queued-message-pause'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import {
   detachJournalNativePrefix,
@@ -74,6 +75,14 @@ export function persistJournalOutcomeRows(
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
   if (format === 3) {
+    const marks = transition.state.queuePauseMarks
+    if (marks.manualStop === undefined) {
+      const stop = journalManualStop(marks)
+      marks.manualStop = stop && {
+        sequence: stop.sequence,
+        event: { ...stop.event, reason: 'user-stop' }
+      }
+    }
     journalInputOrder(transition.state).completeQueueConversion(transition.state)
   }
   journalInputOrder(transition.state).introduceOverlays(transition.state)

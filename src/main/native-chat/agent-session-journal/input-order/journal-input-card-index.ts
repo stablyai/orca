@@ -4,6 +4,7 @@ import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { isLiveJournalQueueCard } from '../queued-messages/journal-queue-retention'
 import {
   createQueuePauseContext,
+  journalManualStop,
   queuePauseHoldingInContext,
   type QueuePauseContext
 } from '../queued-messages/queued-message-pause'
@@ -66,7 +67,7 @@ export class JournalInputCardIndex {
     const key = [
       state.latestAcceptedTurnSequence,
       journalInputOrder(state).latestPersonAcceptedSequence(),
-      marks.latestStop?.sequence,
+      journalManualStop(marks)?.sequence,
       marks.resumedSequence,
       marks.reopenedSequence,
       marks.cleared?.sequence,

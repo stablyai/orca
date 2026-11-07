@@ -1,4 +1,8 @@
-import { admitOutcomeFormat3, JOURNAL_OUTCOME_FORMAT_3 } from './journal-outcome-format-3'
+import {
+  admitOutcomeFormat3,
+  decodeOutcomeFormat3Onto,
+  JOURNAL_OUTCOME_FORMAT_3
+} from './journal-outcome-format-3'
 import {
   admitOutcomeFormat2,
   JOURNAL_OUTCOME_FORMAT_2,
@@ -34,8 +38,8 @@ export type JournalOutcome = {
 /** A key first written over a frozen input prefix keeps the place the prefix gave it. */
 export const JOURNAL_PREFIX_ORDINAL = 'b'
 
-const scalars = (state: JournalReducerState): Record<string, unknown> =>
-  z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
+const scalars = (state: JournalReducerState, format: 2 | 3 = 3): Record<string, unknown> =>
+  z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state, format)))
 
 /** Encoding freezes a sequence's contributions before the next input can mutate the draft;
  * `untracked` reads each changed value as it stands, not through the draft's tracking. */
@@ -46,7 +50,7 @@ export function encodeJournalOutcomes(
   untracked: (key: string, value: unknown) => unknown,
   format: 2 | 3 = JOURNAL_OUTCOME_FORMAT_2
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
-  const next = scalars(state)
+  const next = scalars(state, format)
   const values = changes.map((entry) => ({
     seq: state.lastSequence,
     field: entry.path,
@@ -207,7 +211,11 @@ export class JournalOutcomeFold {
       ]),
       ['lastSequence', through]
     ]
-    const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalars, baseline))
+    const decode = decodingOutcome(() =>
+      this.values.get('$')?.get(JSON.stringify('queuePauseMarks'))?.format === 3
+        ? decodeOutcomeFormat3Onto(scalars, baseline)
+        : decodeOutcomeFormat1Onto(scalars, baseline)
+    )
     for (const [field, entries] of this.values) {
       if (field === '$' || isNativeOutcomeField(field)) {
         continue
