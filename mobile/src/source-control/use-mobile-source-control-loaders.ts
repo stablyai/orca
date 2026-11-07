@@ -127,11 +127,16 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     lastResetIdentityRef.current = statusIdentityKey
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
-    // A quick switch back finds its status read still fresh, and its compare state was just cleared.
-    comparedReadRef.current = null
     setBranchCompareState({ kind: 'idle' })
     setRebaseBaseRef(null)
   }
+  // A quick switch back finds its status read still fresh, and the reset above just cleared its compare.
+  useEffect(
+    () => () => {
+      comparedReadRef.current = null
+    },
+    [statusIdentityKey]
+  )
 
   const setRootRef = useCallback(
     (node: View | null): void => {
