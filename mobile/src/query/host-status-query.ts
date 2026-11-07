@@ -14,8 +14,9 @@ type ConnectionStatus = { epoch: string; landed?: LandedStatus; pending?: Promis
 // Keyed by client, so each JS world (native heap, each page document) holds its own.
 const statuses = new WeakMap<object, ConnectionStatus>()
 
-export const hostConnectionEpoch = (client: HostStatusClient) =>
-  `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
+export const hostConnectionEpoch = (
+  client: Pick<HostStatusClient, 'getGeneration' | 'getLastConnectedAt'>
+) => `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
 
 // Why: a routed view answers status.get from a server behind the desktop, which can restart or reconnect while
 // this connection stays up, and a client with no connect time has no epoch to hold an answer to.

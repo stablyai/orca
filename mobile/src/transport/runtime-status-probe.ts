@@ -22,12 +22,11 @@ type SharedProbe = {
 type EpochStatus = { epoch: string; status: HostStatusReply | null }
 const observed = new WeakMap<object, EpochStatus>()
 const sharedProbes = new WeakMap<object, SharedProbe>()
-export const runtimeStatusProbeEpoch = hostConnectionEpoch
 export function readRuntimeStatusProbe(
   client: HostStatusClient
 ): HostStatusReply | null | undefined {
   const entry = observed.get(client)
-  return entry?.epoch === runtimeStatusProbeEpoch(client) ? entry.status : undefined
+  return entry?.epoch === hostConnectionEpoch(client) ? entry.status : undefined
 }
 
 /** The status this connection already received, or undefined when it may not stand in for a new read. */
@@ -39,7 +38,7 @@ export function recordRuntimeStatusProbe(
   client: HostStatusClient,
   status: HostStatusReply | null
 ): void {
-  observed.set(client, { epoch: runtimeStatusProbeEpoch(client), status })
+  observed.set(client, { epoch: hostConnectionEpoch(client), status })
 }
 
 // Cutover/timeouts may reject status.get without a connection-state edge; retry until one answer lands.
@@ -103,7 +102,7 @@ function runProbe(
   client: HostStatusClient,
   listener: ProbeListener
 ): { retryNow: () => void; stop: () => void } {
-  const epoch = runtimeStatusProbeEpoch(client)
+  const epoch = hostConnectionEpoch(client)
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let failureRetries = 0
@@ -120,7 +119,7 @@ function runProbe(
           scheduleRetry(false)
           return
         }
-        if (epoch === runtimeStatusProbeEpoch(client)) {
+        if (epoch === hostConnectionEpoch(client)) {
           observed.set(client, { epoch, status: landed.status })
         }
         listener.onStatus(landed.status)
