@@ -119,6 +119,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,
       repoId: worktree.repoId,
+      // The phone names a row's machine from hostId; without it an SSH folder reads as local.
+      hostId: worktree.hostId,
       repo: projectGroup.name,
       path: worktree.path,
       branch: worktree.branch,
