@@ -16,7 +16,7 @@ import {
   CommandGroup,
   CommandItem
 } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
@@ -55,6 +55,7 @@ export function AgentLaunchSetupPanel({
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
+  const t = useTranslate()
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
@@ -82,21 +83,24 @@ export function AgentLaunchSetupPanel({
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel)
+  const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel, t)
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
-  const optionRows = agentLaunchSetupOptionRows({
-    options,
-    models,
-    entry,
-    draft,
-    currentModel,
-    argumentsView,
-    defaultsPending,
-    disabled,
-    argumentsKnown
-  })
+  const optionRows = agentLaunchSetupOptionRows(
+    {
+      options,
+      models,
+      entry,
+      draft,
+      currentModel,
+      argumentsView,
+      defaultsPending,
+      disabled,
+      argumentsKnown
+    },
+    t
+  )
   const renderOptions = (rows: SessionOptionDescriptor[]) =>
     rows.length ? (
       <NativeChatSessionOptionRows
@@ -143,7 +147,7 @@ export function AgentLaunchSetupPanel({
     },
     argumentsView.context
   )
-  const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
+  const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length, t)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
@@ -201,8 +205,8 @@ export function AgentLaunchSetupPanel({
           aria-busy={catalogPending}
           value={modelQuery}
           onValueChange={setModelQuery}
-          aria-label={translate('agentPicker.searchModels', 'Search models')}
-          placeholder={translate('agentPicker.searchAgentModels', 'Search {{agent}} models…', {
+          aria-label={t('agentPicker.searchModels', 'Search models')}
+          placeholder={t('agentPicker.searchAgentModels', 'Search {{agent}} models…', {
             agent: entry.label
           })}
         />
@@ -219,9 +223,7 @@ export function AgentLaunchSetupPanel({
           entry.catalogRead !== 'pending' &&
           entry.catalogRead !== 'failed' &&
           entry.catalogRead !== 'unsupported' ? (
-            <CommandEmpty>
-              {translate('agentPicker.noModels', 'No models match your search.')}
-            </CommandEmpty>
+            <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>
             <AgentLaunchTextModelDefault
@@ -233,7 +235,7 @@ export function AgentLaunchSetupPanel({
             {legacy && !modelQuery ? (
               <CommandItem value="__back__" disabled={disabled} onSelect={() => setLegacy(false)}>
                 <ChevronLeft className="size-3.5 text-muted-foreground" />
-                {translate('agentPicker.legacyModels', 'Legacy models')}
+                {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
             {models
@@ -262,9 +264,9 @@ export function AgentLaunchSetupPanel({
             {!legacy && !modelQuery && legacyCount > 0 ? (
               <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
                 <span className="flex min-w-0 flex-col">
-                  <span>{translate('agentPicker.legacyModels', 'Legacy models')}</span>
+                  <span>{t('agentPicker.legacyModels', 'Legacy models')}</span>
                   <span className="text-muted-foreground">
-                    {translate('agentPicker.legacyModelCount', '{{total}} models', {
+                    {t('agentPicker.legacyModelCount', '{{total}} models', {
                       total: legacyCount
                     })}
                   </span>
@@ -329,7 +331,7 @@ export function AgentLaunchSetupPanel({
               <CollapsibleTrigger asChild>
                 <button
                   type="button"
-                  aria-label={translate('agentPicker.toggleArguments', 'Toggle Arguments')}
+                  aria-label={t('agentPicker.toggleArguments', 'Toggle Arguments')}
                   className="flex min-h-7 w-full items-center gap-1.5 text-left text-xs"
                 >
                   <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
@@ -340,10 +342,10 @@ export function AgentLaunchSetupPanel({
                     )}
                   </span>
                   <span className="text-muted-foreground">
-                    {translate('agentPicker.arguments', 'Arguments')}
+                    {t('agentPicker.arguments', 'Arguments')}
                   </span>
                   <span className="ml-auto truncate text-muted-foreground/70">
-                    {translate(
+                    {t(
                       'agentPicker.argumentsTerminalHint',
                       'Only applies to terminal (CLI) launches'
                     )}

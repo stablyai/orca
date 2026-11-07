@@ -5,7 +5,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import {
@@ -54,6 +54,7 @@ export function AgentLaunchPickerMenu({
   defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
   onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  const t = useTranslate()
   useEffect(() => {
     if (setupDisabled) {
       return
@@ -149,7 +150,7 @@ export function AgentLaunchPickerMenu({
               const end = event.currentTarget.value.length
               event.currentTarget.setSelectionRange(end, end)
             }}
-            placeholder={translate('agentPicker.search', 'Search agents and setups…')}
+            placeholder={t('agentPicker.search', 'Search agents and setups…')}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
@@ -221,10 +222,7 @@ export function AgentLaunchPickerMenu({
         })}
         {!visible.length && !setups.length ? (
           <DropdownMenuItem disabled>
-            {translate(
-              'auto.components.agent.AgentCombobox.579c768bde',
-              'No agents match your search.'
-            )}
+            {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
           </DropdownMenuItem>
         ) : null}
       </div>

@@ -13,6 +13,7 @@ import {
 } from '@/components/tab-bar/tab-agent-row-presentation'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { renderAgentComboboxItem } from './agent-combobox-items'
@@ -29,8 +30,8 @@ export type AgentComboboxSurfaceRows = {
 }
 
 // Nothing launches until the form is submitted, so the picker says "start", not "launch".
-function terminalPickTitle(label: string): string {
-  return translate('components.agentCombobox.startInTerminal', 'Start {{value0}} in a terminal', {
+function terminalPickTitle(label: string, t: Translate = translate): string {
+  return t('components.agentCombobox.startInTerminal', 'Start {{value0}} in a terminal', {
     value0: label
   })
 }
@@ -143,6 +144,7 @@ export function SurfaceAgentItems({
   defaultAgent?: TuiAgent | 'blank' | null
   onSetDefault?: (agent: TuiAgent) => void
 }): React.ReactNode {
+  const t = useTranslate()
   const { model, onPick } = surfaceRows
   if (model.state === 'loading') {
     // Why: rows fill in once every answer is known, instead of reshuffling under the pointer.
@@ -151,10 +153,7 @@ export function SurfaceAgentItems({
         key={width}
         value={`loading:${width}`}
         disabled
-        aria-label={translate(
-          'auto.components.tab.bar.QuickLaunchButton.agentsLoading',
-          'Loading agents'
-        )}
+        aria-label={t('auto.components.tab.bar.QuickLaunchButton.agentsLoading', 'Loading agents')}
       >
         <span aria-hidden="true" className="flex h-[1lh] flex-1 items-center">
           <span className={cn('h-2 rounded-full bg-muted', width)} />
@@ -166,11 +165,11 @@ export function SurfaceAgentItems({
   const terminalPicked = surfaceRows.selection.cli
   return rows.map((row, index) => {
     const id = rowId(row)
-    const label = rowLabel(row)
+    const label = rowLabel(row, t)
     const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
     const unavailable = row.kind === 'chat-unavailable'
     const pressed = row.kind === 'chat' && id === pickedValue && terminalPicked
-    const agentLabel = rowLabel({ ...row, kind: 'chat' })
+    const agentLabel = rowLabel({ ...row, kind: 'chat' }, t)
     return (
       <React.Fragment key={id}>
         {startsCliGroup ? <CommandSeparator /> : null}
@@ -187,16 +186,16 @@ export function SurfaceAgentItems({
           title: unavailable
             ? undefined
             : row.kind === 'chat'
-              ? rowTitle(row, agentLabel)
-              : terminalPickTitle(agentLabel),
+              ? rowTitle(row, agentLabel, t)
+              : terminalPickTitle(agentLabel, t),
           trailing: unavailable ? (
             <span className="shrink-0 text-muted-foreground">
-              {chatUnavailableLabel(row.reason)}
+              {chatUnavailableLabel(row.reason, t)}
             </span>
           ) : rowOffersTerminal(model, row) ? (
             <AgentSurfaceLaunchButton
               surface="terminal"
-              title={terminalPickTitle(agentLabel)}
+              title={terminalPickTitle(agentLabel, t)}
               aria-pressed={pressed}
               className={cn(
                 'hover:bg-background [[data-selected=true]_&]:opacity-100',

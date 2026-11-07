@@ -18,7 +18,7 @@ import {
   AgentIconLabel,
   renderAgentComboboxItem
 } from './agent-combobox-items'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from '@/components/tab-bar/tab-agent-row-presentation'
 import {
   SurfaceAgentItems,
@@ -75,8 +75,9 @@ export default function AgentCombobox({
   surfaceRows,
   ...selection
 }: AgentComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const blankText =
-    blankLabel ?? translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+    blankLabel ?? t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
   const allowBlankTerminal = selection.allowBlankTerminal === true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -278,17 +279,14 @@ export default function AgentCombobox({
               <span className={cn('inline-flex min-w-0 flex-1', canClear && 'pr-8')}>
                 {selectionCleared ? (
                   <span className="truncate text-muted-foreground">
-                    {translate(
-                      'components.agentSessionContinuation.selectAgent',
-                      'Select an Agent'
-                    )}
+                    {t('components.agentSessionContinuation.selectAgent', 'Select an Agent')}
                   </span>
                 ) : selectedAgent ? (
                   <AgentIconLabel
                     icon={<AgentIcon agent={selectedAgent.id} size={14} />}
                     label={
                       picksCli
-                        ? rowLabel({ kind: 'cli', agent: selectedAgent.id })
+                        ? rowLabel({ kind: 'cli', agent: selectedAgent.id }, t)
                         : selectedAgent.label
                     }
                   />
@@ -298,10 +296,7 @@ export default function AgentCombobox({
                     label={
                       allowBlankTerminal
                         ? blankText
-                        : translate(
-                            'components.agentSessionContinuation.selectAgent',
-                            'Select an Agent'
-                          )
+                        : t('components.agentSessionContinuation.selectAgent', 'Select an Agent')
                     }
                   />
                 )}
@@ -330,16 +325,13 @@ export default function AgentCombobox({
           >
             <CommandInput
               ref={setInputNode}
-              placeholder={translate(
-                'auto.components.agent.AgentCombobox.48c6a5a9b4',
-                'Search agents...'
-              )}
+              placeholder={t('auto.components.agent.AgentCombobox.48c6a5a9b4', 'Search agents...')}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
               <CommandEmpty>
-                {translate(
+                {t(
                   'auto.components.agent.AgentCombobox.579c768bde',
                   'No agents match your search.'
                 )}
@@ -389,7 +381,7 @@ export default function AgentCombobox({
                   onMouseEnter={() => setCommandValue('')}
                   className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal text-muted-foreground"
                 >
-                  {translate('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
+                  {t('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
                   <ArrowRight className="ml-auto size-3" />
                 </Button>
               </div>
@@ -406,10 +398,7 @@ export default function AgentCombobox({
               size="icon-xs"
               disabled={disabled}
               className="absolute right-8 top-1/2 -translate-y-1/2"
-              aria-label={translate(
-                'components.agentCombobox.clearSelection',
-                'Clear agent selection'
-              )}
+              aria-label={t('components.agentCombobox.clearSelection', 'Clear agent selection')}
               onClick={() => {
                 clearSelection.onClear()
                 closePicker()
@@ -420,7 +409,7 @@ export default function AgentCombobox({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('components.agentCombobox.clearSelection', 'Clear agent selection')}
+            {t('components.agentCombobox.clearSelection', 'Clear agent selection')}
           </TooltipContent>
         </Tooltip>
       )}
