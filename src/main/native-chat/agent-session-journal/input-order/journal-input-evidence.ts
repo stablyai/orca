@@ -11,12 +11,8 @@ import type {
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import { JournalInputObservations } from './journal-input-observations'
-import {
-  journalLegacySubmissionIsPersonal,
-  journalSubmissionIsPersonal
-} from '../submissions/journal-submission-fold'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
 import { JournalSubmissionLinks } from './journal-submission-links'
-import { getJournalInputOrder } from './journal-input-order-registry'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
 export class JournalInputEvidence extends JournalInputObservations {
@@ -188,9 +184,6 @@ export class JournalInputEvidence extends JournalInputObservations {
     }
     if (entry?.dispatchState === 'accepted') {
       this.notePersonAcceptance(entry)
-      if (getJournalInputOrder(state)?.legacy && journalLegacySubmissionIsPersonal(state, entry)) {
-        this.seedPersonAcceptance(entry.acceptedSequence ?? 0)
-      }
       this.acceptedByTime.setPosition(id, entry.submittedAt, ordinal)
     } else {
       this.acceptedByTime.delete(id)

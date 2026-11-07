@@ -6,7 +6,8 @@ import type { JournalOutcomeFold } from '../outcomes/journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../../sqlite/sync-database'
 import { journalInputAcceptance } from './journal-input-provenance'
-import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
+import { restoredJournalPersonAcceptance } from '../replay/journal-historical-inputs'
+import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
 
 export type JournalNativePrefix = {
   entries: Map<string, JournalInputEntry>
@@ -33,7 +34,8 @@ export function restoreJournalNativeState(
   state: JournalReducerState,
   format: number,
   fold: JournalOutcomeFold,
-  prefix: JournalNativePrefix
+  prefix: JournalNativePrefix,
+  source: JournalOutcomeSource
 ): void {
   if (format < 2) {
     for (const [id, own] of prefix.entries) {
@@ -91,13 +93,18 @@ export function restoreJournalNativeState(
   owner.restore(state)
   const legacyCards = readJournalLegacyCards(db, state)
   owner.overlay(state, legacyCards)
-  const queue = { cards: new Map(legacyCards.map((card) => [card.messageId, card])) }
+  const personal = restoredJournalPersonAcceptance(
+    db,
+    state,
+    source,
+    new Map(legacyCards.map((card) => [card.messageId, card]))
+  )
   for (const card of legacyCards) {
     if (state.queue.cards.has(card.messageId)) {
       continue
     }
     const send = card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-    if (send?.dispatchState === 'accepted' && journalSubmissionIsPersonal({ queue }, send)) {
+    if (send?.dispatchState === 'accepted' && personal(send)) {
       owner.seedPersonAcceptance(send.acceptedSequence ?? 0)
     }
   }

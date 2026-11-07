@@ -7,6 +7,8 @@ import { createJournalReducerState } from '../projection/journal-reducer'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { nextEligibleQueuedCard } from '../queued-messages/journal-queue-mail-eligibility'
 import { restoreHistoricalPersonAcceptance } from './journal-historical-inputs'
+import { restoreRetainedJournalInputs } from './journal-retained-inputs'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -217,4 +219,42 @@ it('late pre-Stop acceptance and explicit unattended handoffs cannot fabricate a
   })
   expect(claim(state)).toBeNull()
   expect(journalInputOrder(state).latestPersonAcceptedSequence()).toBe(10)
+})
+
+it('an old original admission survives new restatement and retirement, with canonical provenance first', () => {
+  const { db, save } = history()
+  const body = waiting('H').body
+  const handoff = {
+    ...accepted('H', 800, 'S'),
+    payloadFingerprint: agentSessionSendBodyFingerprint('session', body)
+  }
+  const insert = db.prepare(`INSERT INTO journal_outcomes
+    (generation,seq,field,entry_key,format,ordinal,value_json,deleted) VALUES (1,?,?,?,2,'s0000000000000800:0000000000000000',?,0)`)
+  const original = (field: string, key: string, value: unknown) =>
+    insert.run(800, field, JSON.stringify(key), JSON.stringify(value))
+  original('submissions', 'H', ['H', { ...handoff, dispatchState: 'pending', resolvedAt: null }])
+  original('items', 'orca:H', {
+    itemId: 'orca:H',
+    revision: 0,
+    body,
+    sequence: 800,
+    observedAt: 800,
+    turnScope: { kind: 'thread' }
+  })
+  original('itemFences', 'orca:H', ['orca:H', 0])
+  insert.run(801, 'submissions', JSON.stringify('H'), JSON.stringify(['H', handoff]))
+  save(900, 'submissions', 'H', handoff)
+  save(901, 'submissions', 'H', null, true)
+  const source = { generation: 1, through: 901, format: 3, prefix: 0, marker: 5 } as const
+  for (const unattended of [false, true]) {
+    const state = stopped()
+    if (unattended) {
+      state.queue.cards.set('S', waiting('S', true))
+    }
+    restoreRetainedJournalInputs(db, state, source)
+    restoreHistoricalPersonAcceptance(db, state, source)
+    expect(claim(state)?.messageId ?? null).toBe(unattended ? null : 'W')
+    expect(state.submissions.size).toBe(0)
+    expect(state.items.size).toBe(0)
+  }
 })

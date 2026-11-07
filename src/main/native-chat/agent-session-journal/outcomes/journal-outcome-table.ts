@@ -51,7 +51,7 @@ export function readJournalOutcomes(
           card.recovers = recovers
         }
       }
-      restoreJournalNativeState(db, state, source.format, fold, prefix)
+      restoreJournalNativeState(db, state, source.format, fold, prefix, source)
       return state
     }
     const value = fold.add(row)
