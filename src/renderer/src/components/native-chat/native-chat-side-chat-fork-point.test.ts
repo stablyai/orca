@@ -18,7 +18,7 @@ vi.mock('../../../../shared/native-chat/native-chat-fork-offer', async (importOr
 function reply(
   id: string,
   sequence: number,
-  turnKey: string,
+  turnKey: string | undefined,
   working = false
 ): NativeChatMessageSlot {
   return {
@@ -99,5 +99,16 @@ describe('nativeChatSideChatForkPoint', () => {
 
     expect(point).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
     expect(offers.calls).toBe(1)
+  })
+
+  it('looks past a response outside any turn at a tip-only agent', () => {
+    expect(
+      nativeChatSideChatForkPoint(
+        [...responses(false), [reply('unowned', 30, undefined)]],
+        'turn-2',
+        false,
+        chat('tip')
+      )
+    ).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
   })
 })

@@ -15,6 +15,9 @@ export function nativeChatSideChatForkPoint(
   working: boolean,
   chat: Parameters<typeof nativeChatRowOffersFork>[1]
 ): NativeChatSideChatForkPoint {
+  if (chat.forkableItemIds.size === 0) {
+    return working ? { kind: 'reply-running' } : { kind: 'no-reply' }
+  }
   const tipOnly = chat.support.kind === 'known' && chat.support.fork === 'tip'
   for (let turn = responseGroups.length - 1; turn >= 0; turn--) {
     const group = responseGroups[turn]
@@ -23,10 +26,11 @@ export function nativeChatSideChatForkPoint(
       continue
     }
     const sequence = newest.message.journalPosition?.sequence
-    // Older turns are above a /clear or, at a tip-only agent, not the newest turn: none can fork.
+    // Older turns are above a /clear or, at a tip-only agent, before the newest turn: none can fork.
+    // A response outside any turn says nothing about the rows before it.
     if (
       (sequence !== undefined && sequence <= chat.contextFloorSequence) ||
-      (tipOnly && newest.turnKey !== latestTurnKey)
+      (tipOnly && newest.turnKey !== undefined && newest.turnKey !== latestTurnKey)
     ) {
       break
     }
