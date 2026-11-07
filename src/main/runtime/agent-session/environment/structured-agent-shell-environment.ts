@@ -246,7 +246,11 @@ export function createStructuredAgentEnvironmentResolvers(
           const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv })
           return new Map(
             agents.map((agent) => {
-              const effective = { ...base, ...overlays.get(agent) }
+              const effective = overlayShellVariables(
+                base,
+                overlays.get(agent) ?? {},
+                process.platform
+              )
               return [agent, structuredAgentEnvironmentIdentity(effective)]
             })
           )
@@ -258,10 +262,12 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) => ({
-      ...(await resolveBase()),
-      ...sources.resolveAgentLaunchEnv?.(agent)
-    })
+    resolveAgentEnvironment: async (agent) =>
+      overlayShellVariables(
+        await resolveBase(),
+        sources.resolveAgentLaunchEnv?.(agent) ?? {},
+        process.platform
+      )
   }
 }
 
