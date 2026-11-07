@@ -84,4 +84,6 @@ export type VoiceSettings = {
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */
   microphoneDeviceLabel: string | null
+  /** Minutes an idle on-device model stays loaded; 0 unloads after each dictation, null never unloads. */
+  unloadModelAfterMinutes: number | null
 }

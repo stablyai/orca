@@ -10647,7 +10647,11 @@
               "micDefault": "システムのデフォルト",
               "dictationLanguageTitle": "音声入力の言語",
               "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
-              "dictationLanguageKeyword": "言語"
+              "dictationLanguageKeyword": "言語",
+              "modelUnloadTitle": "音声モデルの解放",
+              "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
+              "modelUnloadKeyword": "解放",
+              "modelMemoryKeyword": "メモリ"
             }
           }
         },
@@ -19950,6 +19954,13 @@
           "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
           "title": "音声入力の言語",
           "auto": "自動検出"
+        },
+        "modelUnload": {
+          "title": "音声モデルの解放",
+          "description": "音声入力がオンの間、Orca はローカルモデルを読み込んでおくため、すぐに音声入力を始められます。音声入力を終えてからメモリを解放するまでの時間を選びます。",
+          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
+          "never": "しない",
+          "immediately": "すぐに"
         }
       }
     },

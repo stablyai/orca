@@ -11302,7 +11302,11 @@
               "micDefault": "Systemstandard",
               "dictationLanguageTitle": "Diktiersprache",
               "dictationLanguageDescription": "Teile dem Sprachmodell mit, welche Sprache du sprichst.",
-              "dictationLanguageKeyword": "Sprache"
+              "dictationLanguageKeyword": "Sprache",
+              "modelUnloadTitle": "Sprachmodell entladen",
+              "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
+              "modelUnloadKeyword": "entladen",
+              "modelMemoryKeyword": "speicher"
             }
           }
         },
@@ -20651,6 +20655,13 @@
           "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
           "title": "Diktiersprache",
           "auto": "Automatisch erkennen"
+        },
+        "modelUnload": {
+          "title": "Sprachmodell entladen",
+          "description": "Orca lädt das lokale Modell, solange die Spracheingabe aktiv ist, damit das Diktieren sofort beginnt. Lege fest, wann sein Speicher nach dem Diktieren freigegeben wird.",
+          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
+          "never": "Nie",
+          "immediately": "Sofort"
         }
       }
     },

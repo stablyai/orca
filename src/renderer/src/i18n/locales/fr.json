@@ -11171,7 +11171,11 @@
               "micDefault": "système par défaut",
               "dictationLanguageTitle": "Langue de dictée",
               "dictationLanguageDescription": "Indiquez au modèle vocal la langue que vous parlez.",
-              "dictationLanguageKeyword": "langue"
+              "dictationLanguageKeyword": "langue",
+              "modelUnloadTitle": "Décharger le modèle vocal",
+              "modelUnloadDescription": "Choisissez quand le modèle vocal local est déchargé de la mémoire.",
+              "modelUnloadKeyword": "décharger",
+              "modelMemoryKeyword": "mémoire"
             }
           }
         },
@@ -20757,6 +20761,13 @@
           "description": "La langue que vous parlez. Avec la détection automatique, le modèle la devine à chaque fois.",
           "title": "Langue de dictée",
           "auto": "Détection automatique"
+        },
+        "modelUnload": {
+          "title": "Décharger le modèle vocal",
+          "description": "Orca charge le modèle local tant que la voix est activée, pour que la dictée démarre aussitôt. Choisissez quand libérer sa mémoire après la dictée.",
+          "cloud": "Les modèles cloud tournent sur les serveurs du fournisseur, donc rien ne reste chargé ici.",
+          "never": "Jamais",
+          "immediately": "Immédiatement"
         }
       }
     },

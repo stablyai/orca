@@ -10610,7 +10610,11 @@
               "micDefault": "系统默认",
               "dictationLanguageTitle": "听写语言",
               "dictationLanguageDescription": "告诉语音模型你说的是哪种语言。",
-              "dictationLanguageKeyword": "语言"
+              "dictationLanguageKeyword": "语言",
+              "modelUnloadTitle": "卸载语音模型",
+              "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
+              "modelUnloadKeyword": "卸载",
+              "modelMemoryKeyword": "内存"
             }
           }
         },
@@ -19950,6 +19954,13 @@
           "description": "你说的语言。选择自动检测时，模型每次都会自行判断语言。",
           "title": "听写语言",
           "auto": "自动检测"
+        },
+        "modelUnload": {
+          "title": "卸载语音模型",
+          "description": "开启语音时，Orca 会预先加载本地模型，让听写立即开始。选择停止听写后多久释放其内存。",
+          "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。",
+          "never": "从不",
+          "immediately": "立即"
         }
       }
     },

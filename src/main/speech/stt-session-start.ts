@@ -97,6 +97,7 @@ export async function startSttDictation(
     }
     throwIfCanceled(state, session)
     session.phase = 'active'
+    state.prewarmFailedModelId = null
     sink({ type: 'ready' })
   } catch (error) {
     session.cloud?.cancel()
@@ -160,7 +161,7 @@ async function acquireSttEngine(
   }
 }
 
-function spawnSttEngine(
+export function spawnSttEngine(
   state: SttSessionState,
   config: SttRecognizerConfig,
   manifest: SpeechModelManifest
@@ -189,6 +190,7 @@ function spawnSttEngine(
     ...config,
     worker,
     detach,
+    retired: false,
     ready: readyPromise.catch((error: unknown) => {
       failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
       throw error
