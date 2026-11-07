@@ -17,6 +17,11 @@ export type GrokUsageAuthOptions = {
   authReadResult?: GrokAuthReadResult
 }
 
+type GrokRefreshAttempt =
+  | { kind: 'attempted' }
+  | { kind: 'skipped' }
+  | { kind: 'debounced'; retryAfterMs: number }
+
 let inFlight: Promise<void> | null = null
 let lastStartedAt = Number.NEGATIVE_INFINITY
 
@@ -25,45 +30,53 @@ export function resetGrokSessionRefreshForTests(): void {
   lastStartedAt = Number.NEGATIVE_INFINITY
 }
 
-export async function refreshGrokAccessTokenViaSessionsList(signal?: AbortSignal): Promise<void> {
+export async function refreshGrokAccessTokenViaSessionsList(
+  signal?: AbortSignal
+): Promise<GrokRefreshAttempt> {
   if (signal?.aborted) {
-    return
+    return { kind: 'skipped' }
   }
   if (inFlight) {
-    return inFlight
+    await inFlight
+    return { kind: 'skipped' }
   }
   const now = Date.now()
-  if (now - lastStartedAt < MIN_REFRESH_INTERVAL_MS) {
-    return
+  const retryAfterMs = lastStartedAt + MIN_REFRESH_INTERVAL_MS - now
+  if (retryAfterMs > 0) {
+    return { kind: 'debounced', retryAfterMs }
   }
   lastStartedAt = now
   inFlight = runGrokSessionsList(signal).finally(() => {
     inFlight = null
   })
-  return inFlight
+  await inFlight
+  return { kind: 'attempted' }
 }
 
 export async function readGrokAuthForUsage(
   options: GrokUsageAuthOptions = {}
 ): Promise<GrokAuthReadResult> {
-  let readResult = options.authReadResult ?? readGrokAuthSession()
-  let attempted = false
+  const readResult = options.authReadResult ?? readGrokAuthSession()
   if (
-    readResult.status === 'ok' &&
-    grokAccessTokenNeedsCliRefresh(readResult.session.expiresAtMs) &&
-    !options.signal?.aborted
+    readResult.status !== 'ok' ||
+    !grokAccessTokenNeedsCliRefresh(readResult.session.expiresAtMs)
   ) {
-    attempted = true
-    await refreshGrokAccessTokenViaSessionsList(options.signal)
-    readResult = readGrokAuthSession()
+    noteGrokAuthForScheduledRefresh(readResult, false)
+    return readResult
   }
-  noteGrokAuthForScheduledRefresh(
-    readResult,
-    attempted &&
-      readResult.status === 'ok' &&
-      grokAccessTokenNeedsCliRefresh(readResult.session.expiresAtMs)
-  )
-  return readResult
+  if (options.signal?.aborted) {
+    return readResult
+  }
+  const attempt = await refreshGrokAccessTokenViaSessionsList(options.signal)
+  const refreshed = readGrokAuthSession()
+  if (attempt.kind !== 'skipped') {
+    noteGrokAuthForScheduledRefresh(
+      refreshed,
+      attempt.kind === 'attempted',
+      attempt.kind === 'debounced' ? attempt.retryAfterMs : 0
+    )
+  }
+  return refreshed
 }
 
 async function runGrokSessionsList(signal?: AbortSignal): Promise<void> {

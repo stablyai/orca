@@ -29,23 +29,31 @@ export function clearGrokTokenRefreshSchedule(): void {
 
 export function noteGrokAuthForScheduledRefresh(
   read: GrokAuthReadResult,
-  afterAttempt: boolean
+  afterAttempt: boolean,
+  retryAfterMs = 0
 ): void {
   if (!schedule) {
     return
   }
-  clearTimer()
-  if (read.status !== 'ok') {
-    return
-  }
-  const expiresAtMs = read.session.expiresAtMs
+  const expiresAtMs = read.status === 'ok' ? read.session.expiresAtMs : null
   const delay = grokAccessTokenRefreshDelayMs(expiresAtMs, Date.now())
   if (delay === null) {
+    clearTimer()
     return
   }
+  // A debounced read must leave an existing retry for this expiry in place.
+  if (
+    delay <= 0 &&
+    retryAfterMs > 0 &&
+    expiresAtMs === schedule.retriesFor &&
+    (schedule.timer || schedule.retries >= MAX_RETRIES)
+  ) {
+    return
+  }
+  clearTimer()
   if (delay <= 0) {
     if (!afterAttempt) {
-      arm(0, fire)
+      arm(retryAfterMs, fire)
       return
     }
     if (expiresAtMs !== schedule.retriesFor) {

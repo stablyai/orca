@@ -11,6 +11,10 @@ import {
   refreshGrokAccessTokenViaSessionsList,
   resetGrokSessionRefreshForTests
 } from './grok-session-refresh'
+import {
+  bindGrokTokenRefreshSchedule,
+  clearGrokTokenRefreshSchedule
+} from './grok-token-refresh-schedule'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 vi.mock('../ipc/command-path/command-path-resolver', () => ({ resolveCommandOnLocalPath: vi.fn() }))
@@ -50,6 +54,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  clearGrokTokenRefreshSchedule()
   resetGrokSessionRefreshForTests()
   vi.useRealTimers()
   vi.unstubAllEnvs()
@@ -257,6 +262,32 @@ describe('refreshGrokAccessTokenViaSessionsList', () => {
 })
 
 describe('readGrokAuthForUsage', () => {
+  it('preserves all scheduled retries after concurrent and debounced usage reads', async () => {
+    const stale = session(Date.now() + 60_000, 'stale')
+    const fresh = session(Date.now() + 60 * 60 * 1000, 'fresh')
+    vi.mocked(readGrokAuthSession).mockReturnValue(stale)
+    vi.mocked(runProcess)
+      .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
+      .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
+      .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
+      .mockImplementationOnce(async () => {
+        vi.mocked(readGrokAuthSession).mockReturnValue(fresh)
+        return PROCESS_RESULT
+      })
+    let scheduledAuth: Promise<GrokAuthReadResult> | undefined
+    bindGrokTokenRefreshSchedule(() => {
+      scheduledAuth = readGrokAuthForUsage()
+    })
+
+    await Promise.all([readGrokAuthForUsage(), readGrokAuthForUsage()])
+    await vi.advanceTimersByTimeAsync(10_000)
+    await readGrokAuthForUsage()
+    await readGrokAuthForUsage()
+
+    await vi.advanceTimersByTimeAsync(170_000)
+    expect(await scheduledAuth).toBe(fresh)
+  })
+
   it('re-reads auth.json after refreshing a near-expiry token', async () => {
     const stale = session(Date.now() + 60_000, 'stale')
     const fresh = session(Date.now() + 60 * 60 * 1000, 'fresh')

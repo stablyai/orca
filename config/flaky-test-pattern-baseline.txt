@@ -671,7 +671,6 @@
 17 test-no-wall-clock:src/main/rate-limits/service-account-target-selection.test.ts
 2 test-no-wall-clock:src/main/rate-limits/service-cursor-usage.test.ts
 3 test-no-wall-clock:src/main/rate-limits/service-minimax-usage.test.ts
-3 test-no-wall-clock:src/main/rate-limits/service-refresh-orchestration.test.ts
 4 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
 2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
 2 test-no-wall-clock:src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts
