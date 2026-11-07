@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import type * as BranchClient from '@/runtime/runtime-git-branch-client'
+import type * as BranchClient from '@/runtime/source-control/git/runtime-git-branch-client'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { fireEvent } from '@testing-library/react'
@@ -8,14 +8,14 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
 import { i18n } from '@/i18n/i18n'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   listRuntimeGitBranches,
   searchRuntimeRemoteBranches,
   switchRuntimeGitBranch
-} from '@/runtime/runtime-git-branch-client'
+} from '@/runtime/source-control/git/runtime-git-branch-client'
 
-vi.mock('@/runtime/runtime-git-branch-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-branch-client', async (importOriginal) => ({
   ...(await importOriginal<typeof BranchClient>()),
   listRuntimeGitBranches: vi.fn(),
   searchRuntimeRemoteBranches: vi.fn(),

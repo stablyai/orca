@@ -5,10 +5,10 @@ import { expect, it, vi } from 'vitest'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
 import type * as Rows from './branch-picker-rows'
 import type { BranchWorkspace } from './branch-picker-rows'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 const counts = vi.hoisted(() => ({ renders: 0, builds: 0, iterations: 0 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('./branch-picker-rows', async (original) => {
   const actual = await original<typeof Rows>()
   class ObservedIndex extends Map<string, BranchWorkspace> {

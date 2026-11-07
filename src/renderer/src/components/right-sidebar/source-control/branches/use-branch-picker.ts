@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   listRuntimeGitBranches,
   searchRuntimeRemoteBranches,
   switchRuntimeGitBranch,
   branchSwitchExistingBranch
-} from '@/runtime/runtime-git-branch-client'
+} from '@/runtime/source-control/git/runtime-git-branch-client'
 import type {
   RuntimeGitLocalBranches,
   RuntimeRepoSearchRefs
@@ -178,6 +178,8 @@ export function useBranchPicker(options: BranchPickerOptions) {
                     'sourceControl.branchPicker.switchFailed',
                     "Orca couldn't switch branches. Try again."
                   ),
+            // Matches the landed warning so the reason and its recovery stay readable.
+            duration: 15000,
             action: existingBranch
               ? {
                   label: translate('sourceControl.branchPicker.recover', 'Switch to {{branch}}', {
@@ -196,11 +198,10 @@ export function useBranchPicker(options: BranchPickerOptions) {
               : undefined
           }
         )
-      } finally {
-        inFlight.current = false
-        if (generation.current === ownGeneration) {
-          setPending(false)
-        }
+      }
+      inFlight.current = false
+      if (generation.current === ownGeneration) {
+        setPending(false)
       }
     },
     [route, hostLabel, workspaceLabel, onOpenWorkspace, onSwitched, setOpen]

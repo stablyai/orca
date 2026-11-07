@@ -1,14 +1,14 @@
 import { translate } from '@/i18n/i18n'
-import type { BranchSwitchTarget } from '../../../shared/git/branch-switch-target'
+import type { BranchSwitchTarget } from '../../../../../shared/git/branch-switch-target'
 import type {
   RuntimeGitLocalBranches,
   RuntimeGitSwitchResult,
   RuntimeRepoSearchRefs
-} from '../../../shared/runtime-worktree-contracts'
+} from '../../../../../shared/runtime-worktree-contracts'
 import type { RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc } from './runtime-rpc-client'
-import { RuntimeRpcCallError } from './runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
+import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
 
 export async function switchRuntimeGitBranch(
   context: RuntimeGitContext,

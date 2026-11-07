@@ -1,13 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import type { RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc } from './runtime-rpc-client'
-import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import {
   branchSwitchExistingBranch,
   searchRuntimeRemoteBranches,
   switchRuntimeGitBranch
 } from './runtime-git-branch-client'
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('../../rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn() }))
 const context: RuntimeGitContext = {
   target: { kind: 'environment', environmentId: 'owner' },
   worktreeId: 'repo::/repo',
