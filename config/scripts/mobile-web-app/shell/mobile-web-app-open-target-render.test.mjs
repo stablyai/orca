@@ -210,6 +210,11 @@ describeRender('a session document opened on a pane', () => {
       route: { pathname: SESSION_ROUTE, params: { paneKey: 'tab-1:leaf-1' } }
     })
     expect(await notifies(page, 'fault')).toEqual([])
+    // Spent, so a remount of the screen cannot replay it over a later tab pick.
+    await page.waitForFunction(() => location.search === '', undefined, {
+      timeout: 10_000,
+      polling: 100
+    })
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
