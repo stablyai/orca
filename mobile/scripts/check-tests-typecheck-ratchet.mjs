@@ -16,10 +16,6 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
-    'src/session/native-chat/transcript/mobile-native-chat-recorded-projection.test.ts',
-    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
-  ],
-  [
     'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],

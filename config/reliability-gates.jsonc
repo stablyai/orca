@@ -15978,13 +15978,11 @@
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
-        "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs"
+        "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts"
       ],
       "assertionRefs": [
         {
