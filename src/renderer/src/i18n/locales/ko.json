@@ -19392,7 +19392,9 @@
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "worktree": "작업 트리"
-      }
+      },
+      "splitRight": "오른쪽으로 분할",
+      "splitDown": "아래로 분할"
     },
     "tab": {
       "bar": {
@@ -19966,7 +19968,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "이 창에서 열 항목을 선택하세요."
+        "subtitle": "이 창에서 열 항목을 선택하세요.",
+        "newAgent": "새 에이전트"
       }
     },
     "contextualTours": {

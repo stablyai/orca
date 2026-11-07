@@ -28,8 +28,8 @@ function splitAction(
 }
 
 export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
-  const right = translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')
-  const down = translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')
+  const right = translate('components.native-chat.splitRight', 'Split Right')
+  const down = translate('components.native-chat.splitDown', 'Split Down')
   return [
     splitAction('right', {
       id: 'split-chat-right',
@@ -39,6 +39,7 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       verbKeywords: [
         right,
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right'),
+        translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneRight', 'chat pane right')
       ]
     }),
@@ -50,6 +51,7 @@ export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
       verbKeywords: [
         down,
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down'),
+        translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneBelow', 'chat pane below')
       ]
     })

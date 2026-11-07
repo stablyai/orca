@@ -20079,7 +20079,9 @@
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "worktree": "Worktree"
-      }
+      },
+      "splitRight": "Sağa Böl",
+      "splitDown": "Aşağı Böl"
     },
     "tab": {
       "bar": {
@@ -20644,7 +20646,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Bu bölmede ne açılacağını seçin."
+        "subtitle": "Bu bölmede ne açılacağını seçin.",
+        "newAgent": "Yeni Ajan"
       }
     },
     "contextualTours": {

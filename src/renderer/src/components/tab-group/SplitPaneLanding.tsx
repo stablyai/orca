@@ -10,6 +10,8 @@ import {
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
 import { resolveTerminalAgentTabShortcut } from '../terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   LANDING_ACTION_BUTTON_CLASS,
   LandingBrand,
@@ -27,10 +29,7 @@ export function SplitPaneLanding({
   groupId: string
   autoFocus: boolean
 }): React.JSX.Element {
-  const newAgentLabel = translate(
-    'auto.components.editor.ReviewNotesSendMenuContent.a49800405b',
-    'New agent'
-  )
+  const newAgentLabel = translate('components.tabGroup.splitPaneLanding.newAgent', 'New Agent')
   const newTerminalLabel = translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
   const newBrowserLabel = translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
   const newMarkdownLabel = translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
@@ -39,6 +38,11 @@ export function SplitPaneLanding({
     'Close split pane'
   )
 
+  // Why: paired web clients without browser streaming hide browser creation, as the tab menu does.
+  const browserEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state === 'enabled'
+  )
   const newAgentShortcut = useShortcutKeyDetails('tab.newAgent')
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -49,11 +53,16 @@ export function SplitPaneLanding({
       [
         { id: 'agent', shortcut: newAgentShortcut, action: newAgentLabel },
         { id: 'terminal', shortcut: newTerminalShortcut, action: newTerminalLabel },
-        { id: 'browser', shortcut: newBrowserShortcut, action: newBrowserLabel },
+        browserEnabled
+          ? { id: 'browser', shortcut: newBrowserShortcut, action: newBrowserLabel }
+          : null,
         { id: 'markdown', shortcut: newMarkdownShortcut, action: newMarkdownLabel },
         { id: 'close', shortcut: closeShortcut, action: closeLabel }
-      ].filter((item) => item.shortcut.keys.length > 0),
+      ].filter(
+        (item): item is LandingShortcutItem => item !== null && item.shortcut.keys.length > 0
+      ),
     [
+      browserEnabled,
       closeLabel,
       closeShortcut,
       newAgentLabel,
@@ -73,7 +82,19 @@ export function SplitPaneLanding({
       keybindings: useAppStore.getState().keybindings,
       matchShortcut: (actionId) => actionId === 'tab.newAgent'
     })
-    launchAgentTabShortcut(worktreeId, shortcut, () => groupStillEmpty(worktreeId, groupId))
+    const detectionTarget = getDetectionTargetIdentityForWorktree(
+      useAppStore.getState(),
+      worktreeId
+    )
+    // Why: same cancellation as the keyboard shortcut, plus the pane must still be waiting.
+    launchAgentTabShortcut(worktreeId, shortcut, () => {
+      const latest = useAppStore.getState()
+      return (
+        latest.activeWorktreeId === worktreeId &&
+        getDetectionTargetIdentityForWorktree(latest, worktreeId) === detectionTarget &&
+        groupStillEmpty(worktreeId, groupId)
+      )
+    })
   }
   const openTerminal = (): void => {
     void openNewTerminalTabInWorkspace(useAppStore.getState, worktreeId, groupId).catch(
@@ -115,10 +136,12 @@ export function SplitPaneLanding({
               <TerminalSquare className="size-3.5" />
               {newTerminalLabel}
             </button>
-            <button type="button" className={LANDING_ACTION_BUTTON_CLASS} onClick={openBrowser}>
-              <Globe className="size-3.5" />
-              {newBrowserLabel}
-            </button>
+            {browserEnabled ? (
+              <button type="button" className={LANDING_ACTION_BUTTON_CLASS} onClick={openBrowser}>
+                <Globe className="size-3.5" />
+                {newBrowserLabel}
+              </button>
+            ) : null}
           </div>
           <LandingShortcutList shortcuts={shortcuts} />
         </div>

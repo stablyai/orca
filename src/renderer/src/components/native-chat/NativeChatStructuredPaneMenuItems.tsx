@@ -39,12 +39,12 @@ export function NativeChatStructuredPaneMenuItems({
       {leadingSeparator ? <DropdownMenuSeparator /> : null}
       <DropdownMenuItem onSelect={actions.onSplitRight}>
         <PanelRightClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
+        {translate('components.native-chat.splitRight', 'Split Right')}
         <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={actions.onSplitDown}>
         <PanelBottomClose />
-        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
+        {translate('components.native-chat.splitDown', 'Split Down')}
         <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
       </DropdownMenuItem>
       {providerSessionId || resolveOrcaSessionId ? (

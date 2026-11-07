@@ -19392,7 +19392,9 @@
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "worktree": "ワークツリー"
-      }
+      },
+      "splitRight": "右に分割",
+      "splitDown": "下に分割"
     },
     "tab": {
       "bar": {
@@ -19966,7 +19968,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "このペインで開くものを選択してください。"
+        "subtitle": "このペインで開くものを選択してください。",
+        "newAgent": "新しいエージェント"
       }
     },
     "contextualTours": {

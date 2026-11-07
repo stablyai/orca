@@ -20095,7 +20095,9 @@
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
         "worktree": "Worktree"
-      }
+      },
+      "splitRight": "Rechts teilen",
+      "splitDown": "Unten teilen"
     },
     "tab": {
       "bar": {
@@ -20660,7 +20662,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Wähle aus, was in diesem Bereich geöffnet werden soll."
+        "subtitle": "Wähle aus, was in diesem Bereich geöffnet werden soll.",
+        "newAgent": "Neuer Agent"
       }
     },
     "contextualTours": {

@@ -91,8 +91,8 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       (!hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split') &&
         !hasFeatureInteraction(state.featureInteractions, 'tab-splits'))
   )
-  const focusesSplitLanding = useAppStore((state) =>
-    Boolean(findFocusedEmptySplitGroup(state, state.activeWorktreeId))
+  const focusesSplitLanding = Boolean(
+    findFocusedEmptySplitGroup({ groupsByWorktree, activeGroupIdByWorktree }, activeWorktreeId)
   )
   const hasSplitTab = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'tab-splits')

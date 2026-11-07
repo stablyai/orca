@@ -65,7 +65,7 @@ it('offers chat actions without a duplicate close button and targets Resume at t
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right',
+    'Split Right',
     'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]

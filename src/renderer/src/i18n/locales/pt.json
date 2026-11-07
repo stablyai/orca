@@ -21047,7 +21047,9 @@
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "splitRight": "Dividir à direita",
+      "splitDown": "Dividir para baixo"
     },
     "tab": {
       "bar": {
@@ -21627,7 +21629,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Escolha o que abrir neste painel."
+        "subtitle": "Escolha o que abrir neste painel.",
+        "newAgent": "Novo agente"
       }
     },
     "contextualTours": {

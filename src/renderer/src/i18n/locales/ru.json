@@ -20762,7 +20762,9 @@
         "folder": "Папка",
         "mainCheckout": "Основная рабочая копия",
         "worktree": "Рабочее дерево"
-      }
+      },
+      "splitRight": "Разделить вправо",
+      "splitDown": "Разделить вниз"
     },
     "tab": {
       "bar": {
@@ -21347,7 +21349,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Выберите, что открыть в этой панели."
+        "subtitle": "Выберите, что открыть в этой панели.",
+        "newAgent": "Новый агент"
       }
     },
     "contextualTours": {

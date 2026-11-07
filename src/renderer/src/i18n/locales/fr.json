@@ -20121,7 +20121,9 @@
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "worktree": "Worktree"
-      }
+      },
+      "splitRight": "Diviser à droite",
+      "splitDown": "Diviser vers le bas"
     },
     "tab": {
       "bar": {
@@ -20772,7 +20774,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Choisissez ce qu’il faut ouvrir dans ce volet."
+        "subtitle": "Choisissez ce qu’il faut ouvrir dans ce volet.",
+        "newAgent": "Nouvel agent"
       }
     },
     "contextualTours": {

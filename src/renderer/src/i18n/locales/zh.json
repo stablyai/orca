@@ -19335,7 +19335,9 @@
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "worktree": "工作树"
-      }
+      },
+      "splitRight": "向右拆分",
+      "splitDown": "向下拆分"
     },
     "tab": {
       "bar": {
@@ -19969,7 +19971,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "选择要在此窗格中打开的内容。"
+        "subtitle": "选择要在此窗格中打开的内容。",
+        "newAgent": "新建代理"
       }
     },
     "contextualTours": {

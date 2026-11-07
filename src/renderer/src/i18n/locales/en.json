@@ -20699,7 +20699,9 @@
         "hidden": "Orca won't show opened pull requests anymore",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
-      }
+      },
+      "splitRight": "Split Right",
+      "splitDown": "Split Down"
     },
     "tab": {
       "bar": {
@@ -21365,7 +21367,8 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Choose what to open in this pane."
+        "subtitle": "Choose what to open in this pane.",
+        "newAgent": "New Agent"
       }
     }
   },
