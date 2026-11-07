@@ -1,14 +1,16 @@
 import { CircleCheck, CircleX } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   parsePullRequestEventItemId,
   pullRequestEventShortSha
 } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../settings/chat/native-chat-ci-result-lines-setting-target'
-import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
+import {
+  NativeChatCardHideButton,
+  NATIVE_CHAT_HIDEABLE_CARD_CLASS
+} from './NativeChatCardHideButton'
 import { useNativeChatLinkClick } from './native-chat-link-click-context'
 
 function LineLink({ href, children }: { href: string; children: string }): React.JSX.Element {
@@ -36,7 +38,12 @@ export function NativeChatPullRequestEventLine({
   const failing = block.tone === 'failure'
   const Icon = failing ? CircleX : CircleCheck
   return (
-    <div className="group/ci-line flex h-6 min-w-0 items-center justify-center gap-1.5 text-xs text-chat-foreground-faint">
+    <div
+      className={cn(
+        NATIVE_CHAT_HIDEABLE_CARD_CLASS,
+        'relative flex h-6 min-w-0 items-center justify-center gap-1.5 text-xs text-chat-foreground-faint'
+      )}
+    >
       <Icon
         aria-hidden
         className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}
@@ -59,20 +66,21 @@ export function NativeChatPullRequestEventLine({
       ) : (
         <span className="min-w-0 truncate">{block.text}</span>
       )}
-      <EyeOffDismissButton
-        label={translate('components.native-chat.ciResultLine.hide', "Don't show CI result lines")}
-        onClick={() =>
-          void hideNativeChatCardKind(
-            { nativeChatCiResultLines: false },
-            NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID,
-            translate(
-              'components.native-chat.ciResultLine.hidden',
-              "Orca won't show CI result lines anymore"
-            )
-          )
-        }
-        className="opacity-0 focus-visible:opacity-100 group-focus-within/ci-line:opacity-100 group-hover/ci-line:opacity-100"
-      />
+      {/* Pinned to the row's end, so the centered line doesn't shift when it shows. */}
+      <span className="absolute inset-y-0 right-0 flex items-center">
+        <NativeChatCardHideButton
+          updates={{ nativeChatCiResultLines: false }}
+          settingSectionId={NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID}
+          hiddenMessage={translate(
+            'components.native-chat.ciResultLine.hidden',
+            "Orca won't show CI result lines anymore"
+          )}
+          ariaLabel={translate(
+            'components.native-chat.ciResultLine.hide',
+            "Don't show CI result lines"
+          )}
+        />
+      </span>
     </div>
   )
 }
