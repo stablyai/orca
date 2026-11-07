@@ -154,7 +154,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     this.updateState({
       ...previousState,
-      claude: this.withFetchingStatus(previousState.claude, 'claude'),
+      claude: this.claudeStateAtCycleStart(previousState.claude),
       // A gated slot makes no attempt and cannot settle a fetching chip.
       codex: codexFetchGated
         ? codexStateBeforeFetch
@@ -221,7 +221,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude)
+      !this.isClaudeOAuthUsageEnabled() ||
+      (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([

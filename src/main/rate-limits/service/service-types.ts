@@ -85,6 +85,7 @@ export type ZcodePlanResolvedConfig = {
 export type GeminiCliOAuthEnabledResolver = () => boolean
 
 export type AntigravityUsageEnabledResolver = () => boolean
+export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
