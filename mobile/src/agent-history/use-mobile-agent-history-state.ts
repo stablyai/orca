@@ -175,7 +175,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const input = useMemo(() => ({ scope }), [scope])
   const host = useMemo(() => ({ hostId, client }), [hostId, client])
   // Wait for worktree list before fetching to avoid unrelated history; once loaded, proceed even if workspace is missing.
-  const enabled = client !== null && connState === 'connected' && worktreesLoaded
+  // Not gated on the connection: the query keeps its connected-edge watcher, and a read while down fails fast.
+  const enabled = client !== null && worktreesLoaded
   const result = useHostQuery(historyQuery, host, target, input, { enabled })
   const { data: read, error, isFetching, isRefetching, refetch } = result
 
@@ -184,10 +185,11 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const cachedRevision = read?.kind === 'ready' ? read.associationRevision : undefined
   useEffect(() => {
     const started = startedRef.current.get(scope) ?? cachedRevision
-    if (enabled && !isFetching && started !== undefined && started !== associationRevision) {
+    const canRead = enabled && connState === 'connected'
+    if (canRead && !isFetching && started !== undefined && started !== associationRevision) {
       void refetch()
     }
-  }, [enabled, isFetching, scope, cachedRevision, associationRevision, refetch])
+  }, [enabled, connState, isFetching, scope, cachedRevision, associationRevision, refetch])
 
   const onSelectScope = useCallback((nextScope: AiVaultScope) => {
     setScope(nextScope)
