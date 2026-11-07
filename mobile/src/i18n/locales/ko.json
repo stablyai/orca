@@ -187,6 +187,7 @@
       "sendMessage": "메시지 보내기",
       "sendQueue": "대기열에 추가",
       "sendSteer": "지금 보내기",
+      "sendSteerQueued": "다음 항목 보내기",
       "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
       "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
@@ -1293,7 +1294,6 @@
       "connecting": "데스크톱에 연결 중…",
       "emptyState": "찾은 파일이 없습니다.",
       "loadFailed": "파일을 불러올 수 없습니다.",
-      "loadInterrupted": "폴더 로드가 중단되었습니다.",
       "title": "파일",
       "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
       "waiting": "데스크톱 대기 중…"
@@ -1976,13 +1976,11 @@
       "saveNote": "메모 저장"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "변경 사항을 불러올 수 없습니다.",
       "committedChangesFailed": "커밋된 변경 사항을 불러오지 못했습니다.",
       "committedChangesUnavailable": "커밋된 변경 사항을 사용할 수 없습니다.",
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
       "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 데스크톱의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
-      "invalidSourceControlResponse": "소스 제어 응답이 올바르지 않습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
     "diffReviewQueue": {

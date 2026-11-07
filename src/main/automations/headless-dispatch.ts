@@ -17,6 +17,8 @@ export type HeadlessAutomationDispatchLaunch = {
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  /** Settles once a newly opened terminal's prompt is handed over, or with why it was not; never rejects. */
+  delivery?: Promise<{ error: string | null }>
   setupSkippedReason?: AutomationRunSetupSkippedReason
   completion?: Promise<
     {

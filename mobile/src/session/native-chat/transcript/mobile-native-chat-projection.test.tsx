@@ -407,3 +407,32 @@ it('preserves current delivery facts and synthetic notices when upstream wrapper
   expect(state.rows[1]?.role).toBe('system')
   expect(state.rows[2]?.blocks).toEqual([{ type: 'text', text: 'Done' }])
 })
+
+it('projects each streamed tail replacement or append as a fresh projection would', () => {
+  const sibling = (id: string) =>
+    row(id, 'system', [{ type: 'subagent', id, groupId: 'g', label: 'Audit', state: 'working' }])
+  const tail = [
+    prose('tail', 'Reading'),
+    prose('tail', 'Reading the file'),
+    row('tail', 'assistant', [call('read')])
+  ]
+  const appended = [
+    prose('ask', 'Go on', 'user'),
+    row('tools', 'assistant', [call('x'), result('x'), result('missing')]),
+    prose('unpaired-tool-results:["tools",1]', 'Later', 'user'),
+    prose('image', '[Image: source: /tmp/a.png]', 'user'),
+    prose('prompt', '[Image #1] why', 'user'),
+    sibling('one'),
+    sibling('two')
+  ]
+  let input = [prose('unpaired-tool-results:["tools",0]', 'Reserved', 'user'), prose('lead', 'Hi')]
+  const stream = [
+    ...tail.map((message) => (input = [...input.slice(0, 2), message])),
+    ...appended.map((message) => (input = [...input, message]))
+  ]
+  let state = projectMobileNativeChatMessages([], 'claude')
+  for (const step of stream) {
+    state = projectMobileNativeChatMessages(step, 'claude', state)
+    expect(state.rows).toEqual(projectMobileNativeChatMessages(step, 'claude').rows)
+  }
+})

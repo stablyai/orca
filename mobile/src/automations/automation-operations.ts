@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'

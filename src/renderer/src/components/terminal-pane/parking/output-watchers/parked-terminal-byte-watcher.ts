@@ -11,7 +11,7 @@ import {
   AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
-} from '../../agent-task-complete-policy'
+} from '../../notifications/agent-task-complete-policy'
 import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/command-code-output-status'
 import { createOsc133CommandFinishedScanner } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
 import {
@@ -24,8 +24,8 @@ import { isRendererHiddenPtyDeliveryGateEnabled } from '../../pty-transport/deli
 import {
   isMainTerminalSideEffectAuthorityForPty,
   registerTerminalSideEffectFactConsumer
-} from '../../terminal-side-effect-facts-handler'
-import { dispatchTerminalNotification } from '../../use-notification-dispatch'
+} from '../../pty-transport/output/terminal-side-effect-facts-handler'
+import { dispatchTerminalNotification } from '../../notifications/dispatch-terminal-notification'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from '../../pty-transport/delivery/pty-renderer-delivery-claims'

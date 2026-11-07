@@ -55,10 +55,13 @@ vi.mock('react', async (importOriginal) => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('@/components/terminal-pane/terminal-pane-recovery', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requestTerminalPaneRecovery: vi.fn(async () => true)
-}))
+vi.mock(
+  '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    requestTerminalPaneRecovery: vi.fn(async () => true)
+  })
+)
 vi.mock('@/components/terminal-pane/pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: (options: IpcPtyTransportOptions) => {
     mountedOptions = options

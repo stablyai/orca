@@ -191,6 +191,7 @@
       "sendMessage": "Enviar mensagem",
       "sendQueue": "Colocar na fila",
       "sendSteer": "Orientar",
+      "sendSteerQueued": "Orientar o próximo",
       "sendQueueHint": "Executa depois do turno atual",
       "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
@@ -1336,7 +1337,6 @@
       "connecting": "Conectando ao desktop…",
       "emptyState": "Nenhum arquivo encontrado",
       "loadFailed": "Não foi possível carregar os arquivos",
-      "loadInterrupted": "Carregamento da pasta interrompido",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
       "waiting": "Aguardando o desktop…"
@@ -2046,13 +2046,11 @@
       "saveNote": "Salvar nota"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Não foi possível carregar as alterações",
       "committedChangesFailed": "Falha ao carregar alterações commitadas",
       "committedChangesUnavailable": "Alterações commitadas indisponíveis",
       "committedDiffUnavailable": "Diff de alterações commitadas indisponível",
       "desktopUpdateRequired": "Atualize o Orca no desktop para revisar alterações no celular.",
       "diffLoadFailed": "Não foi possível carregar o diff",
-      "invalidSourceControlResponse": "A resposta do controle de versão foi inválida",
       "reviewNotesLoadFailed": "Não foi possível carregar as notas de revisão"
     },
     "diffReviewQueue": {

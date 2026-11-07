@@ -8188,7 +8188,8 @@
           "diagnosticsCopied": "已複製診斷訊息",
           "diagnosticsCopyFailed": "無法複製診斷訊息",
           "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
-          "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。"
+          "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。",
+          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8600,7 +8601,8 @@
           "activeLinks": "有效連結",
           "noActiveLinks": "沒有有效連結。",
           "createdAt": "建立於 {{value0}}",
-          "revoke": "撤銷"
+          "revoke": "撤銷",
+          "legacyEncryption": "上次使用的是舊版加密。請在使用此連結的裝置上更新 Orca。"
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "取消",
@@ -11170,7 +11172,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca 啟動代理程式時信任該資料夾",
-          "description": "Orca 啟動的代理程式會略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。若關閉此項，每個代理程式在某個資料夾中首次執行時都會詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）會停在該提問處等待，直到你在它們的終端機中作答。已信任的資料夾仍保持信任。"
+          "description": "Orca 啟動的代理程式可以略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。Orca 會在每個存放庫中首次啟動代理程式時詢問一次，你可以在該存放庫的設定中變更回答。關閉此項可讓代理程式一律自行詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）若發出詢問，會一直等待，直到你在它的終端機中作答。已信任的資料夾仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自動產生分頁標題",
@@ -13376,7 +13378,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚無提交",
-            "781a8bcf7b": "正在載入圖表...",
             "d0fb0f4bf2": "重新整理提交記錄",
             "9f7535d22b": "引用是指向該確切提交的分支或標籤名稱。它們僅出現在 Git 具有該提交的命名引用的位置。",
             "9289ba0cb9": "什麼是引用？",
@@ -13744,7 +13745,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 則筆記？",
             "markResolved": "標記為已解決",
             "keepFile": "保留檔案",
-            "keepDeletion": "保留刪除"
+            "keepDeletion": "保留刪除",
+            "refreshAll": "全部重新整理"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -14577,7 +14579,6 @@
             "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "正在載入檔案…",
             "b2c3d4e5f6": "此提交沒有檔案變更",
             "c3d4e5f6a7": "一起開啟所有變更"
           },
@@ -14906,7 +14907,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "返回",
-          "111d3f8d92": "跳至專案設定"
+          "111d3f8d92": "稍後設定"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "啟動終端機..."
@@ -16731,7 +16732,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "語音錯誤：{{value0}}",
-          "7afff43472": "聽寫完成，但沒有聚焦文字欄位。",
           "55127a3706": "聽寫失敗：{{value0}}",
           "bb7f599ee7": "開啟設定",
           "2d5b9fabf9": "麥克風存取被拒絕。在系統設定中授予存取權限，然後重新啟動 Orca。",
@@ -16742,7 +16742,13 @@
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
-          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
+          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
+          "stoppedAfterSilence": "靜音一分鐘後已停止"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
+          "copiedWithoutTarget": "沒有聚焦的文字欄位，已將聽寫內容複製到剪貼簿。",
+          "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止聽寫",
@@ -18039,6 +18045,10 @@
           "actionsUnavailable": "此用戶端不支援外掛操作。",
           "messageTooLarge": "訊息超過大小限制。",
           "tooManyRequests": "請求過多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "開啟此工作樹",
+          "reconnect": "請重新連線以查看此工作樹的變更。"
         }
       },
       "link": {
@@ -18722,6 +18732,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "要為代理程式信任 {{repo}} 嗎？",
+        "prompt-description": "Claude Code 和 Codex 等代理程式在載入專案自帶的代理程式設定和鉤子（可以執行命令）之前，會詢問「是否信任此資料夾？」。Orca 可以在此存放庫的每個工作樹中替你回答「是」。",
+        "prompt-remembered": "Orca 會記住你對此存放庫的回答。你可以在存放庫設定中變更。",
+        "trust-repository": "信任存放庫",
+        "let-agents-ask": "讓代理程式詢問",
+        "setting-title": "代理程式資料夾信任",
+        "setting-description": "Orca 在此存放庫的工作樹中啟動的代理程式是否略過「是否信任此資料夾？」的詢問，並立即載入專案的代理程式設定和鉤子。",
+        "setting-undecided": "尚未決定。下次你在這裡啟動代理程式時，Orca 會詢問。",
+        "setting-global-off": "已在代理程式設定中關閉資料夾信任，因此代理程式一律會詢問。",
+        "keyword-trust": "信任",
+        "keyword-hooks": "鉤子"
       }
     },
     "i18n": {
@@ -18906,17 +18929,6 @@
           "reviewStatus": "查看每個工作樹的議題狀態、審查狀態與 CI 檢查",
           "managePullRequests": "不離開 Orca，即可閱讀、留言與合併 PR"
         }
-      },
-      "agyInstall": {
-        "open": "安裝",
-        "title": "安裝 Antigravity",
-        "description": "在終端機中按 Enter 執行官方安裝程式。關閉終端機會停止仍在執行的命令。",
-        "target": "安裝位置：{{location}}",
-        "thisDevice": "此裝置",
-        "terminal": "Antigravity 安裝程式",
-        "detected": "已在 PATH 中偵測到 Antigravity。安裝程式完成後請關閉終端機。",
-        "close": "關閉終端機",
-        "recheck": "重新偵測代理程式"
       }
     },
     "jiraIssueAssigneeField": {
@@ -20678,6 +20690,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中啟動",
     "actionSaveFailed": "無法儲存此動作。請在「設定」中再試著儲存。",
     "discard": {
       "deleteUntrackedFileDescription": "這將永久刪除此未追蹤的檔案。此操作無法復原。",
@@ -23098,5 +23111,32 @@
     "discussionAction": "加入討論",
     "checkAction": "檢查相容性",
     "settingsStatus": "Orca {{version}} 需要 macOS {{macos}} 或以上版本。這是適用於此 Mac 的最新版本。"
+  },
+  "gitGraph": {
+    "copyHash": "複製提交雜湊",
+    "parents": "父提交",
+    "files": "檔案",
+    "currentBranch": "目前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "選定分支",
+    "searchRefs": "搜尋分支和標籤",
+    "oldServer": "此伺服器的 Orca 版本僅顯示目前分支",
+    "copyBranch": "複製分支名稱",
+    "switchWorkspace": "切換至工作區",
+    "workspaceClosed": "此分支已不再於其他工作區中開啟。",
+    "workspaceCheckFailed": "無法檢查此工作區。請在連線後重試。",
+    "refresh": "重新整理提交",
+    "branchTag": "分支 / 標籤",
+    "graph": "圖",
+    "resizeColumn": "調整圖形欄寬",
+    "message": "訊息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "載入更多",
+    "noCommits": "尚無提交",
+    "historyChanged": "歷史記錄再次變更。請重新整理 Git 圖後重試。",
+    "loadFailed": "無法載入 Git 歷史記錄",
+    "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
+    "title": "Git 圖"
   }
 }

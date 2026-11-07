@@ -7,7 +7,7 @@ import type { NativeChatForkSurface } from './use-native-chat-fork'
 function forkThrough(ids: string[]): NativeChatForkSurface {
   const rowAction = {
     support: { kind: 'known', fork: 'checkpoint' },
-    pending: false,
+    pendingItemId: null,
     request: vi.fn()
   } as const
   return { ...rowAction, contextFloorSequence: 0, forkableItemIds: new Set(ids), rowAction }

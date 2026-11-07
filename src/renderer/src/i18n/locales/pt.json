@@ -19,6 +19,7 @@
     "scanTooLarge": "A varredura da Abertura rápida é grande demais ({{reason}})."
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado em {{value0}}",
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculado"
     },
@@ -2894,7 +2895,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Voltar",
-          "111d3f8d92": "Pular para a configuração do projeto"
+          "111d3f8d92": "Configurar mais tarde"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Iniciando terminal..."
@@ -6983,7 +6984,8 @@
           "diagnosticsCopied": "Diagnósticos copiados",
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
-          "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos."
+          "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -8109,7 +8111,8 @@
           "activeLinks": "Links ativos",
           "noActiveLinks": "Nenhum link ativo.",
           "createdAt": "Criado {{value0}}",
-          "revoke": "Revogar"
+          "revoke": "Revogar",
+          "legacyEncryption": "Usado pela última vez com uma criptografia mais antiga. Atualize o Orca onde este link é usado."
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -8749,7 +8752,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Confiar na pasta quando o Orca iniciar um agente",
-          "description": "Os agentes iniciados pelo Orca pulam a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. Sem isso, cada agente pergunta na primeira vez que é executado em uma pasta. Os agentes executados sem sua supervisão, como workers de orquestração, automações e agentes iniciados pelo celular, esperarão nessa pergunta até você respondê-la no terminal deles. As pastas já confiáveis continuam confiáveis."
+          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. O Orca pergunta uma vez por repositório, na primeira vez que você inicia um agente nele, e você pode alterar a resposta nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
         },
         "MachineNameField": {
           "label": "Nome da máquina",
@@ -9946,7 +9949,8 @@
             "clearNotesFromFile_many": "Limpar {{count}} notas de {{path}}?",
             "markResolved": "Marcar como resolvido",
             "keepFile": "Manter arquivo",
-            "keepDeletion": "Manter exclusão"
+            "keepDeletion": "Manter exclusão",
+            "refreshAll": "Atualizar tudo"
           },
           "checks": {
             "panel": {
@@ -10956,7 +10960,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Ainda sem commits",
-            "781a8bcf7b": "Carregando gráfico...",
             "d0fb0f4bf2": "Atualizar commits",
             "9f7535d22b": "Refs são nomes de branch ou tag que apontam para esse commit exato. Eles só aparecem onde o Git tem uma ref nomeada para o commit.",
             "9289ba0cb9": "O que são refs?",
@@ -11158,7 +11161,6 @@
             "f8a2c4d1e0": "Modo de busca do Explorador"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Carregando arquivos…",
             "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit",
             "c3d4e5f6a7": "Abrir todas as alterações juntas"
           },
@@ -18317,6 +18319,10 @@
           "actionsUnavailable": "As ações de plugin não estão disponíveis neste cliente.",
           "messageTooLarge": "A mensagem excede o limite de tamanho.",
           "tooManyRequests": "Muitas requisições."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Abrir este worktree",
+          "reconnect": "Reconecte para ver as alterações deste worktree."
         }
       },
       "cmd": {
@@ -19212,7 +19218,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Erro de fala: {{value0}}",
-          "7afff43472": "O ditado terminou, mas nenhum campo de texto estava em foco.",
           "55127a3706": "Falha no ditado: {{value0}}",
           "bb7f599ee7": "Abrir Configurações",
           "2d5b9fabf9": "Acesso ao microfone negado. Conceda acesso nas configurações do sistema e reinicie o Orca.",
@@ -19223,7 +19228,13 @@
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
-          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
+          "stoppedAfterSilence": "Parou após um minuto de silêncio"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
+          "copiedWithoutTarget": "Nenhum campo de texto estava em foco, então o ditado foi copiado para a área de transferência.",
+          "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Parar ditado",
@@ -20007,6 +20018,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "Confiar em {{repo}} para agentes?",
+        "prompt-description": "Agentes como Claude Code e Codex perguntam “Você confia nesta pasta?” antes de carregar as configurações e hooks de agentes do próprio projeto, que podem executar comandos. O Orca pode responder sim por você em todas as worktrees deste repositório.",
+        "prompt-remembered": "O Orca lembra sua resposta para este repositório. Você pode alterá-la nas configurações do repositório.",
+        "trust-repository": "Confiar no repositório",
+        "let-agents-ask": "Deixar os agentes perguntarem",
+        "setting-title": "Confiança de Pasta para Agentes",
+        "setting-description": "Define se os agentes que o Orca inicia nas worktrees deste repositório pulam a pergunta “Você confia nesta pasta?” e carregam imediatamente as configurações e hooks de agentes do projeto.",
+        "setting-undecided": "Ainda não decidido. O Orca vai perguntar na próxima vez que você iniciar um agente aqui.",
+        "setting-global-off": "A confiança de pasta está desativada nas configurações de Agentes, então os agentes sempre perguntam.",
+        "keyword-trust": "confiança",
+        "keyword-hooks": "hooks"
       }
     },
     "startup": {
@@ -20080,17 +20104,6 @@
           "reviewStatus": "Veja o estado da issue, o status de revisão e as verificações de CI em cada worktree",
           "managePullRequests": "Leia, comente e faça merge de pull requests sem sair do Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Instalar",
-        "thisDevice": "Este dispositivo",
-        "title": "Instalar Antigravity",
-        "description": "Pressione Enter no terminal para executar o instalador oficial. Fechar este terminal interrompe qualquer comando ainda em execução.",
-        "target": "Local de instalação: {{location}}",
-        "terminal": "Instalador do Antigravity",
-        "detected": "O Antigravity foi detectado no PATH. Feche o terminal quando o instalador terminar.",
-        "close": "Fechar terminal",
-        "recheck": "Verificar agentes novamente"
       }
     },
     "jiraUserPicker": {
@@ -23812,5 +23825,32 @@
     "discussionAction": "Participar da discussão",
     "checkAction": "Verificar compatibilidade",
     "settingsStatus": "O Orca {{version}} requer o macOS {{macos}} ou posterior. Esta é a versão mais recente para este Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Copiar hash do commit",
+    "parents": "Commits pais",
+    "files": "Arquivos",
+    "currentBranch": "Branch atual",
+    "allBranches": "Todas as branches",
+    "chosenBranches": "Branches escolhidas",
+    "searchRefs": "Buscar branches e tags",
+    "oldServer": "Esta versão do Orca no servidor mostra apenas a branch atual",
+    "copyBranch": "Copiar nome da branch",
+    "switchWorkspace": "Mudar para o espaço de trabalho",
+    "workspaceClosed": "Esta branch não está mais aberta em outro espaço de trabalho.",
+    "workspaceCheckFailed": "Não foi possível verificar este espaço de trabalho. Tente novamente quando estiver conectado.",
+    "refresh": "Atualizar commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Grafo",
+    "resizeColumn": "Redimensionar coluna do grafo",
+    "message": "Mensagem",
+    "author": "Autor",
+    "date": "Data",
+    "loadMore": "Carregar mais",
+    "noCommits": "Ainda não há commits",
+    "historyChanged": "O histórico mudou novamente. Atualize o grafo do Git para tentar de novo.",
+    "loadFailed": "Não foi possível carregar o histórico do Git",
+    "updateHost": "Atualize o Orca em {{host}} para abrir o grafo do Git",
+    "title": "Grafo do Git"
   }
 }

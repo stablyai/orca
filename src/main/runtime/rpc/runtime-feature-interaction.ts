@@ -13,7 +13,8 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileClearDefaultCookies') {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
-  if (method === 'browser.screencast.unsubscribe') {
+  // Stream control (unsubscribe, frame acks) is not a browser-use interaction.
+  if (method.startsWith('browser.screencast.')) {
     return null
   }
   if (method.startsWith('browser.') && isBrowserPaneUiRuntimeRpcParams(rawParams)) {

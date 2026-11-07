@@ -70,8 +70,11 @@ export function NativeChatAssistantMessageRow({
     !message.agentStart &&
     !inSubagentSection &&
     isRootAgentJournalItem(message)
+  // A row whose fork is opening keeps its controls up so the spinner stays visible.
   const revealOnHover =
-    'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+    fork?.pendingItemId === message.id
+      ? 'mt-1 w-fit select-none'
+      : 'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div

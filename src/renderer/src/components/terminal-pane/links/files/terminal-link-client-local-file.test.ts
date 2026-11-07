@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import './terminal-link-handlers'
 import { openDetectedFilePath } from './terminal-file-open-routing'
-import { downloadAndOpenRemoteTerminalFile } from '../../terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -43,7 +43,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('../../terminal-remote-file-download-open', () => ({
+vi.mock('./terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 

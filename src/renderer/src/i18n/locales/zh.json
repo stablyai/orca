@@ -7681,7 +7681,8 @@
           "diagnosticsCopied": "已复制诊断信息",
           "diagnosticsCopyFailed": "无法复制诊断信息",
           "5e2c7a1f84": "当您在手机上使用终端时，Orca 会将其缩小以适合您的手机屏幕。当您关闭应用程序或切换离开时，这可以控制它是保持手机大小（因此交互式 CLI 工具不会回流）还是将大小调整回桌面。您始终可以使用横幅上的“还原”或“全部还原”来手动调整大小。",
-          "codeRefreshesAutomatically": "配对码会自动刷新。复制的配对码最多可使用 10 分钟。"
+          "codeRefreshesAutomatically": "配对码会自动刷新。复制的配对码最多可使用 10 分钟。",
+          "legacyEncryption": "使用旧版加密。请在此设备上更新 Orca 应用。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "应用商店",
@@ -8087,7 +8088,8 @@
           "activeLinks": "有效链接",
           "noActiveLinks": "没有有效链接。",
           "createdAt": "创建于 {{value0}}",
-          "revoke": "撤销"
+          "revoke": "撤销",
+          "legacyEncryption": "上次使用的是旧版加密。请在使用此链接的设备上更新 Orca。"
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "取消",
@@ -10672,7 +10674,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca 启动智能体时信任该文件夹",
-          "description": "Orca 启动的智能体会跳过“Do you trust this folder?”提示，因此项目的智能体钩子和设置会立即运行。若关闭此项，每个智能体在某个文件夹中首次运行时都会询问。在你没有看着时运行的智能体（例如编排工作进程、自动化以及从手机启动的智能体）会停在该提问处等待，直到你在它们的终端中作答。已信任的文件夹仍保持信任。"
+          "description": "Orca 启动的智能体可以跳过“Do you trust this folder?”提示，因此项目的智能体钩子和设置会立即运行。Orca 会在每个仓库中首次启动智能体时询问一次，你可以在该仓库的设置中更改回答。关闭此项可让智能体始终自行询问。在你没有看着时运行的智能体（例如编排工作进程、自动化以及从手机启动的智能体）如果发出询问，会一直等待，直到你在它的终端中作答。已信任的文件夹仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自动生成标签页标题",
@@ -12927,7 +12929,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚无提交",
-            "781a8bcf7b": "正在加载图表...",
             "d0fb0f4bf2": "刷新提交记录",
             "9f7535d22b": "引用是指向该确切提交的分支或标签名称。它们仅出现在 Git 具有该提交的命名引用的位置。",
             "9289ba0cb9": "什么是参考文献？",
@@ -13295,7 +13296,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 条备注？",
             "markResolved": "标记为已解决",
             "keepFile": "保留文件",
-            "keepDeletion": "保留删除"
+            "keepDeletion": "保留删除",
+            "refreshAll": "全部刷新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -14128,7 +14130,6 @@
             "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "正在加载文件…",
             "b2c3d4e5f6": "此提交没有文件更改",
             "c3d4e5f6a7": "一起打开所有更改"
           },
@@ -14457,7 +14458,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "返回",
-          "111d3f8d92": "跳至项目设置"
+          "111d3f8d92": "稍后设置"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "启动终端..."
@@ -16282,7 +16283,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "语音错误：{{value0}}",
-          "7afff43472": "听写完成，但没有聚焦文本字段。",
           "55127a3706": "听写失败：{{value0}}",
           "bb7f599ee7": "打开设置",
           "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
@@ -16293,7 +16293,13 @@
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
-          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
+          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
+          "stoppedAfterSilence": "静音一分钟后已停止"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",
+          "copiedWithoutTarget": "没有聚焦的文本框，已将听写内容复制到剪贴板。",
+          "lost": "无法插入或复制听写内容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止听写",
@@ -17590,6 +17596,10 @@
           "actionsUnavailable": "此客户端不支持插件操作。",
           "messageTooLarge": "消息超过大小限制。",
           "tooManyRequests": "请求过多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "打开此工作树",
+          "reconnect": "请重新连接以查看此工作树的更改。"
         }
       },
       "link": {
@@ -18322,6 +18332,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "为智能体信任 {{repo}}？",
+        "prompt-description": "Claude Code 和 Codex 等智能体在加载项目自带的智能体设置和钩子（可以运行命令）之前，会询问“Do you trust this folder?”。Orca 可以在此仓库的每个工作树中替你回答“是”。",
+        "prompt-remembered": "Orca 会记住你对此仓库的回答。你可以在仓库设置中更改。",
+        "trust-repository": "信任仓库",
+        "let-agents-ask": "让智能体询问",
+        "setting-title": "智能体文件夹信任",
+        "setting-description": "Orca 在此仓库的工作树中启动的智能体是否跳过“Do you trust this folder?”提示，并立即加载项目的智能体设置和钩子。",
+        "setting-undecided": "尚未决定。下次你在这里启动智能体时，Orca 会询问。",
+        "setting-global-off": "已在智能体设置中关闭文件夹信任，因此智能体总会询问。",
+        "keyword-trust": "信任",
+        "keyword-hooks": "钩子"
       }
     },
     "i18n": {
@@ -19824,17 +19847,6 @@
           "reviewStatus": "查看每个工作树上的问题状态、审核状态和 CI 检查",
           "managePullRequests": "无需离开 Orca 即可阅读、评论和合并拉取请求"
         }
-      },
-      "agyInstall": {
-        "open": "安装",
-        "title": "安装 Antigravity",
-        "description": "在终端中按 Enter 运行官方安装程序。关闭终端会停止仍在运行的命令。",
-        "target": "安装位置：{{location}}",
-        "thisDevice": "此设备",
-        "terminal": "Antigravity 安装程序",
-        "detected": "已在 PATH 中检测到 Antigravity。安装程序完成后请关闭终端。",
-        "close": "关闭终端",
-        "recheck": "重新检测智能体"
       }
     },
     "jiraUserPicker": {
@@ -20709,6 +20721,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中启动",
     "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
@@ -23149,5 +23162,32 @@
     "discussionAction": "加入讨论",
     "checkAction": "检查兼容性",
     "settingsStatus": "Orca {{version}} 需要 macOS {{macos}} 或更高版本。这是适用于此 Mac 的最新版本。"
+  },
+  "gitGraph": {
+    "copyHash": "复制提交哈希",
+    "parents": "父提交",
+    "files": "文件",
+    "currentBranch": "当前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "选定分支",
+    "searchRefs": "搜索分支和标签",
+    "oldServer": "此服务器的 Orca 版本仅显示当前分支",
+    "copyBranch": "复制分支名称",
+    "switchWorkspace": "切换到工作区",
+    "workspaceClosed": "此分支已不再在其他工作区中打开。",
+    "workspaceCheckFailed": "无法检查此工作区。请在连接后重试。",
+    "refresh": "刷新提交",
+    "branchTag": "分支 / 标签",
+    "graph": "图",
+    "resizeColumn": "调整图形列宽",
+    "message": "消息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "加载更多",
+    "noCommits": "暂无提交",
+    "historyChanged": "历史记录再次发生变化。请刷新 Git 图后重试。",
+    "loadFailed": "无法加载 Git 历史记录",
+    "updateHost": "请更新 {{host}} 上的 Orca 以打开 Git 图",
+    "title": "Git 图"
   }
 }

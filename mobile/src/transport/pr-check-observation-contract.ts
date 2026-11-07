@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RpcOperationSender } from './rpc-operation-sender'
 import { captureGitHubInvocation, supportsExactGitHubOperations } from './github-target-invocation'

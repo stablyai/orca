@@ -1,18 +1,35 @@
-import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
+import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
+  mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
+import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
+import {
+  createMobileQueuedCardActionStore,
+  useMobileQueuedCardActions
+} from '../input/mobile-queued-card-actions'
+
+/** The head queued card as an empty Cmd/Ctrl+Enter reaches it. */
+export type MobileNativeChatSteerHead = {
+  /** Whether the chord would press it now, read from the rendered queue. */
+  steers: (alternateSteers: boolean) => boolean
+  /** Runs its own Steer or Send; false where that press is unavailable. */
+  run: (alternateSteers: boolean) => boolean
+  /** Lights it while the composer previews sending it. */
+  light: (lit: boolean) => void
+}
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInput | null>
+  steerHead?: MobileNativeChatSteerHead
 }
 
 export type ComposerTrayProps = {
@@ -35,6 +52,9 @@ export function useMobileNativeChatComposerTray({
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
+  // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
+  const [headLight] = useState(createMobileQueuedHeadLight)
+  const [actionStore] = useState(createMobileQueuedCardActionStore)
   const {
     cards,
     onSend,
@@ -48,6 +68,7 @@ export function useMobileNativeChatComposerTray({
     steerHeld,
     agentWorking
   } = queued
+  const actions = useMobileQueuedCardActions(actionStore, sessionKey)
   return useMemo(
     () => ({
       content: createElement(
@@ -69,6 +90,7 @@ export function useMobileNativeChatComposerTray({
           : null,
         createElement(MobileNativeChatQueuedMessages, {
           key: sessionKey,
+          actions,
           cards,
           onSend,
           onDelete,
@@ -79,10 +101,29 @@ export function useMobileNativeChatComposerTray({
           pause,
           onResume,
           steerHeld,
+          headLight,
           agentWorking
         })
       ),
-      composerInputRef
+      composerInputRef,
+      steerHead: {
+        steers: (alternateSteers: boolean) => {
+          const head = mobileNativeChatChordHeadId(
+            { cards, steerHeld, agentWorking, editor },
+            alternateSteers
+          )
+          // A card whose own action is on its way would refuse the press, as desktop hides it then.
+          return head !== null && !actions.busyIds.has(head)
+        },
+        run: (alternateSteers: boolean) => {
+          const head = mobileNativeChatChordHeadId(
+            { cards, steerHeld, agentWorking, editor },
+            alternateSteers
+          )
+          return head !== null && actions.run(head, onSend)
+        },
+        light: headLight.set
+      }
     }),
     [
       taskList,
@@ -99,6 +140,8 @@ export function useMobileNativeChatComposerTray({
       pause,
       sessionKey,
       steerHeld,
+      headLight,
+      actions,
       agentWorking
     ]
   )

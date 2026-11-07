@@ -28,8 +28,8 @@ import { beginNativeChatSideChatPlacement } from './native-chat-side-chat-placem
 /** What an offered row's button needs; the same object while support and pending hold. */
 export type NativeChatForkRowAction = {
   support: Exclude<NativeChatForkSupport, { kind: 'none' }>
-  /** A fork is opening; every fork action in the chat waits for it. */
-  pending: boolean
+  /** The row whose fork is opening; every fork action in the chat waits for it. */
+  pendingItemId: string | null
   /** Undefined when nothing started: a fork is already opening, or the chat has no workspace. */
   request: (
     throughItemId: string,
@@ -69,7 +69,7 @@ export function useNativeChatFork(input: {
   })
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
-  const [pending, setPending] = useState(false)
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
   const request = useCallback(
     async (
       throughItemId: string,
@@ -80,7 +80,7 @@ export function useNativeChatFork(input: {
         return undefined
       }
       inFlight.current = true
-      setPending(true)
+      setPendingItemId(throughItemId)
       const placement = side ? beginNativeChatSideChatPlacement(worktreeId, tabId) : undefined
       let outcome: NativeChatForkOutcome = {}
       try {
@@ -97,7 +97,7 @@ export function useNativeChatFork(input: {
         // A question that never went out leaves its fork in the background.
         placement?.settle(outcome.question === 'failed' ? undefined : outcome.chat)
         inFlight.current = false
-        setPending(false)
+        setPendingItemId(null)
       }
     },
     []
@@ -124,10 +124,10 @@ export function useNativeChatFork(input: {
   const rowAction = useMemo<NativeChatForkRowAction>(
     () => ({
       support: fork ? { kind: 'known', fork } : { kind: 'unknown' },
-      pending,
+      pendingItemId,
       request
     }),
-    [fork, pending, request]
+    [fork, pendingItemId, request]
   )
   return useMemo(
     () =>

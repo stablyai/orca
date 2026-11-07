@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { streamDeliveryOf } from '../../terminal-stream-position'
+import { streamDeliveryOf } from '../../pty-transport/delivery/terminal-stream-position'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'

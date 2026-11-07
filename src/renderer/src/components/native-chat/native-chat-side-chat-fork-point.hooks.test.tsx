@@ -110,7 +110,7 @@ function forkSurface(
 ): NativeChatForkSurface {
   const rowAction = {
     support: known ? ({ kind: 'known', fork: mode } as const) : ({ kind: 'unknown' } as const),
-    pending: false,
+    pendingItemId: null,
     request
   }
   return {
@@ -234,7 +234,7 @@ it('does no layout work when only the fork pending state changes', () => {
   const view = render(<Pane fork={fork} conversation={c} />)
   offers.checks = 0
 
-  view.rerender(<Pane fork={{ ...fork, pending: true }} conversation={c} />)
+  view.rerender(<Pane fork={{ ...fork, pendingItemId: 'reply-1' }} conversation={c} />)
 
   expect(offers.checks).toBe(0)
 })

@@ -7681,7 +7681,8 @@
           "diagnosticsCopied": "진단이 복사되었습니다.",
           "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
           "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다.",
-          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다."
+          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다.",
+          "legacyEncryption": "이전 암호화 방식을 사용합니다. 이 기기에서 Orca 앱을 업데이트하세요."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "앱스토어",
@@ -8087,7 +8088,8 @@
           "activeLinks": "활성 링크",
           "noActiveLinks": "활성 링크가 없습니다.",
           "createdAt": "생성 {{value0}}",
-          "revoke": "취소"
+          "revoke": "취소",
+          "legacyEncryption": "마지막으로 이전 암호화 방식으로 사용되었습니다. 이 링크를 사용하는 곳에서 Orca를 업데이트하세요."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "취소",
@@ -10672,7 +10674,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca가 에이전트를 시작할 때 폴더 신뢰",
-          "description": "Orca가 시작한 에이전트는 \"Do you trust this folder?\" 확인을 건너뛰므로, 프로젝트의 에이전트 훅과 설정이 바로 실행됩니다. 이 설정이 없으면 각 에이전트가 폴더에서 처음 실행될 때 확인을 요청합니다. 오케스트레이션 워커, 자동화, 휴대폰에서 시작한 에이전트처럼 사용자가 지켜보지 않는 동안 실행되는 에이전트는 해당 터미널에서 응답할 때까지 그 확인에서 기다립니다. 이미 신뢰한 폴더는 계속 신뢰됩니다."
+          "description": "Orca가 시작한 에이전트는 \"Do you trust this folder?\" 확인을 건너뛸 수 있으므로, 프로젝트의 에이전트 훅과 설정이 바로 실행됩니다. Orca는 저장소마다 처음 에이전트를 시작할 때 한 번 묻고, 답변은 해당 저장소 설정에서 변경할 수 있습니다. 이 설정을 끄면 에이전트가 항상 확인을 요청합니다. 오케스트레이션 워커, 자동화, 휴대폰에서 시작한 에이전트처럼 사용자가 지켜보지 않는 동안 실행되는 에이전트가 확인을 요청하면 해당 터미널에서 응답할 때까지 기다립니다. 이미 신뢰한 폴더는 계속 신뢰됩니다."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "탭 제목 자동 생성",
@@ -12927,7 +12929,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "아직 commits이 없습니다",
-            "781a8bcf7b": "그래프 로드 중...",
             "d0fb0f4bf2": "commits 새로 고침",
             "9f7535d22b": "Refs는 정확한 commit을 가리키는 브랜치 또는 태그 이름입니다. Git에 commit에 대한 명명된 참조가 있는 경우에만 나타납니다.",
             "9289ba0cb9": "refs란 무엇인가요?",
@@ -13295,7 +13296,8 @@
             "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?",
             "markResolved": "해결됨으로 표시",
             "keepFile": "파일 유지",
-            "keepDeletion": "삭제 유지"
+            "keepDeletion": "삭제 유지",
+            "refreshAll": "모두 새로 고침"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -14128,7 +14130,6 @@
             "f8a2c4d1e0": "탐색기 검색 모드"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "파일 로드 중…",
             "b2c3d4e5f6": "이 commit에는 파일 변경 사항이 없습니다",
             "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
           },
@@ -14457,7 +14458,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "뒤로",
-          "111d3f8d92": "프로젝트 설정으로 건너뛰기"
+          "111d3f8d92": "나중에 설정"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "terminal 시작 중..."
@@ -16282,7 +16283,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "음성 오류: {{value0}}",
-          "7afff43472": "받아쓰기가 완료되었지만 텍스트 필드에 초점이 맞춰지지 않았습니다.",
           "55127a3706": "받아쓰기 실패: {{value0}}",
           "bb7f599ee7": "설정 열기",
           "2d5b9fabf9": "마이크 액세스가 거부되었습니다. 시스템 설정에서 액세스 권한을 부여한 다음 Orca를 다시 시작하세요.",
@@ -16293,7 +16293,13 @@
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
-          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
+          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "받아쓰기를 삽입할 수 없어 클립보드에 복사했습니다.",
+          "copiedWithoutTarget": "포커스된 텍스트 필드가 없어 받아쓰기를 클립보드에 복사했습니다.",
+          "lost": "받아쓰기를 삽입하거나 복사할 수 없습니다."
         },
         "DictationIndicator": {
           "335e1bc6cb": "받아쓰기 중지",
@@ -17590,6 +17596,10 @@
           "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
           "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
           "tooManyRequests": "요청이 너무 많습니다."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "이 워크트리 열기",
+          "reconnect": "이 워크트리의 변경 사항을 보려면 다시 연결하세요."
         }
       },
       "link": {
@@ -18322,6 +18332,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "{{repo}}을(를) 에이전트용으로 신뢰할까요?",
+        "prompt-description": "Claude Code, Codex 같은 에이전트는 명령을 실행할 수 있는 프로젝트 자체의 에이전트 설정과 훅을 불러오기 전에 \"Do you trust this folder?\"라고 묻습니다. Orca가 이 저장소의 모든 작업 트리에서 대신 \"예\"라고 답할 수 있습니다.",
+        "prompt-remembered": "Orca는 이 저장소에 대한 답변을 기억합니다. 저장소 설정에서 변경할 수 있습니다.",
+        "trust-repository": "저장소 신뢰",
+        "let-agents-ask": "에이전트가 묻도록 하기",
+        "setting-title": "에이전트 폴더 신뢰",
+        "setting-description": "이 저장소의 작업 트리에서 Orca가 시작한 에이전트가 \"Do you trust this folder?\" 확인을 건너뛰고 프로젝트의 에이전트 설정과 훅을 바로 불러올지 정합니다.",
+        "setting-undecided": "아직 정하지 않았습니다. 다음에 여기서 에이전트를 시작하면 Orca가 묻습니다.",
+        "setting-global-off": "에이전트 설정에서 폴더 신뢰가 꺼져 있으므로 에이전트가 항상 확인을 요청합니다.",
+        "keyword-trust": "신뢰",
+        "keyword-hooks": "훅"
       }
     },
     "i18n": {
@@ -18506,18 +18529,6 @@
           "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
           "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
         }
-      },
-      "agyInstall": {
-        "open": "설치",
-        "title": "Antigravity 설치",
-        "description": "터미널에서 Enter를 눌러 공식 설치 프로그램을 실행하세요. 이 터미널을 닫으면 실행 중인 명령이 중지됩니다.",
-        "target": "설치 위치: {{location}}",
-        "thisDevice": "이 기기",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity 설치 프로그램",
-        "detected": "PATH에서 Antigravity가 감지되었습니다. 설치가 끝나면 터미널을 닫으세요.",
-        "close": "터미널 닫기",
-        "recheck": "Agent 다시 확인"
       }
     },
     "native-chat": {
@@ -20710,6 +20721,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}}에서 시작했습니다",
     "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
@@ -23150,5 +23162,32 @@
     "discussionAction": "토론에 참여",
     "checkAction": "호환성 확인",
     "settingsStatus": "Orca {{version}}에는 macOS {{macos}} 이상이 필요합니다. 이 버전이 이 Mac의 최신 버전입니다."
+  },
+  "gitGraph": {
+    "copyHash": "커밋 해시 복사",
+    "parents": "부모 커밋",
+    "files": "파일",
+    "currentBranch": "현재 브랜치",
+    "allBranches": "모든 브랜치",
+    "chosenBranches": "선택한 브랜치",
+    "searchRefs": "브랜치 및 태그 검색",
+    "oldServer": "이 서버의 Orca 버전은 현재 브랜치만 표시합니다",
+    "copyBranch": "브랜치 이름 복사",
+    "switchWorkspace": "워크스페이스로 전환",
+    "workspaceClosed": "이 브랜치는 더 이상 다른 작업 공간에 열려 있지 않습니다.",
+    "workspaceCheckFailed": "이 작업 공간을 확인할 수 없습니다. 연결된 후 다시 시도하세요.",
+    "refresh": "커밋 새로 고침",
+    "branchTag": "브랜치 / 태그",
+    "graph": "그래프",
+    "resizeColumn": "그래프 열 너비 조절",
+    "message": "메시지",
+    "author": "작성자",
+    "date": "날짜",
+    "loadMore": "더 불러오기",
+    "noCommits": "아직 커밋이 없습니다",
+    "historyChanged": "기록이 다시 변경되었습니다. Git 그래프를 새로 고친 후 다시 시도하세요.",
+    "loadFailed": "Git 기록을 불러오지 못했습니다",
+    "updateHost": "Git 그래프를 열려면 {{host}}의 Orca를 업데이트하세요",
+    "title": "Git 그래프"
   }
 }

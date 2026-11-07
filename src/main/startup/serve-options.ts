@@ -12,6 +12,8 @@ export type ServeOptions = {
   noPairing: boolean
   mobilePairing: boolean
   grantDesktopControl: boolean
+  allowPublic: boolean
+  refusePublic: boolean
   recipeJson: boolean
   projectRoot: string | null
 }
@@ -130,6 +132,8 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
       '--serve-grant-desktop-control',
       '--grant-desktop-control'
     ]),
+    allowPublic: lastBooleanValue(optionsArgv, ['--serve-allow-public', '--allow-public']),
+    refusePublic: lastBooleanValue(optionsArgv, ['--serve-refuse-public', '--refuse-public']),
     recipeJson: lastBooleanValue(optionsArgv, ['--serve-recipe-json', '--recipe-json']),
     projectRoot: valueAfter(
       optionsArgv,

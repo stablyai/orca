@@ -1,7 +1,12 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
-import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
+import { editorOpenOwner, qualifyEditorContentId } from '../git/editor-open-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from '../git/git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 
@@ -10,15 +15,24 @@ export function createOpenCombinedDiff(
   get: EditorGet
 ): Pick<EditorSlice, 'openAllDiffs' | 'openBranchAllDiffs' | 'openCommitAllDiffs'> {
   return {
-    openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
-      const id = areaFilter
+    openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot, options) => {
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
+      const baseId = areaFilter
         ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
         : `${worktreeId}::all-diffs::uncommitted`
+      const id = qualifyEditorContentId(
+        baseId,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
+      const groupId = resolveEditorOpenTargetGroupId(get(), placementId, options?.targetGroupId)
       set((s) => {
         const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
         const branchCompare =
@@ -42,15 +56,7 @@ export function createOpenCombinedDiff(
           .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
         // Why: snapshot entries at open time so a later commit can't yank them and force a rebuild that loses loaded content + scroll position.
         const uncommittedEntriesSnapshot = relevantEntries
-        const id = areaFilter
-          ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-          : `${worktreeId}::all-diffs::uncommitted`
-        const label = areaFilter
-          ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
-              areaFilter
-            ] ?? 'All Changes')
-          : 'All Changes'
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
+        intent.register(id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           return {
@@ -67,14 +73,11 @@ export function createOpenCombinedDiff(
                     skippedConflicts,
                     conflictReview: undefined,
                     conflict: undefined,
-                    runtimeEnvironmentId
+                    ...contentOwner
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
         const newFile: OpenFile = {
@@ -94,24 +97,31 @@ export function createOpenCombinedDiff(
           skippedConflicts,
           conflictReview: undefined,
           conflict: undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
+      intent.finish(() =>
+        openWorkspaceEditorItem(get(), id, placementId, label, 'diff', false, groupId)
+      )
     },
-    openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
+    openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate, options) => {
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
       const branchCompare = toBranchCompareSnapshot(compare)
-      const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
+      const id = qualifyEditorContentId(
+        `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
+      const groupId = resolveEditorOpenTargetGroupId(get(), placementId, options?.targetGroupId)
       set((s) => {
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
         const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
+        intent.register(id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           return {
@@ -125,14 +135,11 @@ export function createOpenCombinedDiff(
                     conflict: undefined,
                     skippedConflicts: undefined,
                     conflictReview: undefined,
-                    runtimeEnvironmentId
+                    ...contentOwner
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
         const newFile: OpenFile = {
@@ -150,33 +157,42 @@ export function createOpenCombinedDiff(
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        id,
-        worktreeId,
-        `Branch Changes (${compare.baseRef})`,
-        'diff'
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          id,
+          placementId,
+          `Branch Changes (${compare.baseRef})`,
+          'diff',
+          false,
+          groupId
+        )
       )
     },
 
-    openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject, message) => {
+    openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject, message, options) => {
+      const contentOwner = editorOpenOwner(get(), worktreeId, options)
       const commitCompare = toCommitCompareSnapshot(compare, subject, message)
-      const id = `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`
+      const id = qualifyEditorContentId(
+        `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`,
+        contentOwner.runtimeEnvironmentId,
+        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+      )
       const label = subject
         ? `Commit ${commitCompare.compareRef}: ${subject}`
         : `Commit ${commitCompare.compareRef}`
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
+      const groupId = resolveEditorOpenTargetGroupId(get(), placementId, options?.targetGroupId)
       set((s) => {
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
+        intent.register(id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           return {
@@ -190,14 +206,11 @@ export function createOpenCombinedDiff(
                     conflict: undefined,
                     skippedConflicts: undefined,
                     conflictReview: undefined,
-                    runtimeEnvironmentId
+                    ...contentOwner
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            ...buildEditorActiveResult(s, placementId, id)
           }
         }
 
@@ -215,17 +228,16 @@ export function createOpenCombinedDiff(
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...buildEditorActiveResult(s, placementId, id)
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
+      intent.finish(() =>
+        openWorkspaceEditorItem(get(), id, placementId, label, 'diff', false, groupId)
+      )
     }
   }
 }

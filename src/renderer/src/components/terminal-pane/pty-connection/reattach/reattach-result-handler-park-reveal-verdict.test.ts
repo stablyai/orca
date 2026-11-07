@@ -32,7 +32,9 @@ vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('../../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
+vi.mock('../../render-health/diagnostics/terminal-freeze-breadcrumbs', () => ({
+  recordTerminalFreezeBreadcrumb: vi.fn()
+}))
 // Main's resume banner has its own tests (main-pane-resume-banner.test.ts).
 vi.mock('../spawn/main-pane-resume-banner', () => ({ showMainPaneResumeOutcome: vi.fn() }))
 // Capture payload context without mounting xterm; these cases assert the handler’s decision.

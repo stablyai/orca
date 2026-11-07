@@ -187,6 +187,7 @@
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
       "sendSteer": "今すぐ送信",
+      "sendSteerQueued": "次を今すぐ送信",
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
@@ -1293,7 +1294,6 @@
       "connecting": "デスクトップに接続中…",
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
-      "loadInterrupted": "フォルダーの読み込みが中断されました。",
       "title": "ファイル",
       "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
       "waiting": "デスクトップへの接続を待っています…"
@@ -1976,13 +1976,11 @@
       "saveNote": "メモを保存"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "変更を読み込めません。",
       "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
       "committedChangesUnavailable": "コミット済みの変更は利用できません。",
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
       "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
-      "invalidSourceControlResponse": "ソース管理からの応答が無効でした。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
     "diffReviewQueue": {

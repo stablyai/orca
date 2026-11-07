@@ -5,7 +5,8 @@ import {
   mutationOk,
   ok
 } from './use-mobile-structured-agent-session-queued.test-fixture'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
@@ -266,7 +267,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('re-holds before resubscribing after a reconnect', async () => {
     act(() => {
-      renderer = create(createElement(Harness, { connected: true }))
+      renderer = createWithQueryClient(createElement(Harness, { connected: true }))
     })
     await vi.waitFor(() =>
       expect(
@@ -327,7 +328,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('rejects preview-only structured image URIs instead of sending them as host paths', async () => {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3)))
@@ -353,7 +354,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('answers the prompt captured by a structured card after a newer prompt lands', async () => {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() =>
@@ -415,7 +416,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('uses a fresh operation id when a prompt response delivery is unknown', async () => {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3, [approvalItem()])))
@@ -448,7 +449,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('keeps unknown intent until a current query, without accepted memory or resend', async () => {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3)))
@@ -499,7 +500,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('releases a landed hold when the structured tab unmounts', async () => {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() =>
       expect(sendRequest).toHaveBeenCalledWith(
@@ -525,7 +526,9 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('restores the correct cached transcript when switching tabs offline', async () => {
     await act(async () => {
-      renderer = create(createElement(Harness, { connected: true, sessionId: 'session-1' }))
+      renderer = createWithQueryClient(
+        createElement(Harness, { connected: true, sessionId: 'session-1' })
+      )
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotWithMessage()))
@@ -545,7 +548,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   it('isolates matching provider session ids across host and workspace sources', async () => {
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Harness, {
           connected: true,
           sessionId: 'session-1',

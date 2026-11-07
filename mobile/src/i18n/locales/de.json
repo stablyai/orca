@@ -187,6 +187,7 @@
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
       "sendSteer": "Steuern",
+      "sendSteerQueued": "Wartende steuern",
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
@@ -1297,7 +1298,6 @@
       "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
-      "loadInterrupted": "Laden des Ordners unterbrochen",
       "title": "Dateien",
       "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
       "waiting": "Warten auf den Desktop…"
@@ -1980,13 +1980,11 @@
       "saveNote": "Notiz speichern"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Änderungen konnten nicht geladen werden.",
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
       "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
-      "invalidSourceControlResponse": "Die Antwort der Quellcodeverwaltung war ungültig.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
     "diffReviewQueue": {
