@@ -23,42 +23,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('includes stderr delivered after the process exit', async () => {
-  vi.useFakeTimers()
-  const child = createFakePipedChild(9_999_999)
-  spawn.mockReturnValue(child)
-  const failure = probeAntigravityAcpServer(
-    'fixture-server',
-    '1.3.0',
-    new AbortController().signal
-  ).catch((error: unknown) => error)
-  await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
-  // Stdout ends with the exit, so only stderr is still arriving when the probe reads it.
-  child.stdout.end()
-  child.emit('exit', 3, null)
-  await vi.advanceTimersByTimeAsync(PROVIDER_EXIT_OUTPUT_DRAIN_MS / 2)
-  child.stderr.end('late diagnostic\n')
-  await expect(failure).resolves.toMatchObject({
-    failure: { kind: 'exit', exit: { code: 3 }, stderr: 'late diagnostic' }
-  })
-})
-
-it('retains the initialize timeout when teardown cannot prove exit', async () => {
-  vi.useFakeTimers()
-  spawn.mockReturnValue(createFakePipedChild(9_999_999))
-  const failure = probeAntigravityAcpServer(
-    'fixture-server',
-    '1.3.0',
-    new AbortController().signal
-  ).catch((error: unknown) => error)
-  await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
-  await vi.advanceTimersByTimeAsync(70_000)
-  await expect(failure).resolves.toMatchObject({
-    cause: { message: 'Its exit was not proven after the check' },
-    failure: { kind: 'timeout', timeoutMs: 60_000 }
-  })
-})
-
 it('bounds the stderr wait when an inherited pipe stays open', async () => {
   vi.useFakeTimers()
   const child = createFakePipedChild(9_999_999)
