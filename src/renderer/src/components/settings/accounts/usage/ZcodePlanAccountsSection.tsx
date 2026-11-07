@@ -3,6 +3,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   ZCODE_PLAN_SITE_CONSOLE_URLS,
   type ZcodePlanSite
@@ -41,14 +42,14 @@ const SEARCH_KEYWORDS = [
   'zcode'
 ]
 
-function siteLabel(site: ZcodePlanSite): string {
+function siteLabel(site: ZcodePlanSite, t: Translate = translate): string {
   if (site === 'bigmodel') {
-    return translate(
+    return t(
       'auto.components.settings.ZcodePlanAccountsSection.site.bigmodel',
       'Zhipu · BigModel (open.bigmodel.cn)'
     )
   }
-  return translate('auto.components.settings.ZcodePlanAccountsSection.site.zai', 'Z.AI (z.ai)')
+  return t('auto.components.settings.ZcodePlanAccountsSection.site.zai', 'Z.AI (z.ai)')
 }
 
 export function ZcodePlanAccountsSection({
@@ -58,6 +59,7 @@ export function ZcodePlanAccountsSection({
   host: UsageCredentialHost
   usageSettings: UsageHostSettingsModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const storeZcodeUsage = useAppStore((s) => s.rateLimits.zcode)
   const hostLabel = host.label
@@ -70,11 +72,11 @@ export function ZcodePlanAccountsSection({
 
   const webClient = isWebClientLocation()
   const credentialEditable = !webClient && access === 'ready'
-  const accessNotice = usageCredentialAccessNotice(host, access)
+  const accessNotice = usageCredentialAccessNotice(host, access, t)
   const site =
     usageSettings.settings?.zcodePlanSite ?? (!webClient && hostLabel === null ? 'zai' : undefined)
   const siteEditable = credentialEditable && usageSettings.settings !== null
-  const unreadableNotice = usageCredentialUnreadableNotice(host, status?.apiKeyUnreadable)
+  const unreadableNotice = usageCredentialUnreadableNotice(host, status?.apiKeyUnreadable, t)
   const keyEditable =
     credentialEditable && !usageCredentialSealedElsewhere(host, status?.apiKeyUnreadable)
   const detailsUnavailable = webClient || status?.detailsUnavailable === true
@@ -108,13 +110,10 @@ export function ZcodePlanAccountsSection({
         <div className="space-y-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <AgentIcon agent="zcode" size={16} />
-            {translate(
-              'auto.components.settings.ZcodePlanAccountsSection.title',
-              'GLM Coding Plan'
-            )}
+            {t('auto.components.settings.ZcodePlanAccountsSection.title', 'GLM Coding Plan')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ZcodePlanAccountsSection.subtitle',
               'Track Z.AI or Zhipu (BigModel) GLM Coding Plan usage in the status bar. Save the plan API key here — no ZCode CLI setup needed.'
             )}
@@ -127,10 +126,7 @@ export function ZcodePlanAccountsSection({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate(
-              'auto.components.settings.ZcodePlanAccountsSection.consoleLink',
-              'Get API key'
-            )}
+            {t('auto.components.settings.ZcodePlanAccountsSection.consoleLink', 'Get API key')}
             <ExternalLink className="size-3" />
           </a>
         ) : null}
@@ -153,7 +149,7 @@ export function ZcodePlanAccountsSection({
             <p className="text-xs font-medium">{accessNotice}</p>
           ) : detailsUnavailable ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable',
                 'Plan credential details are only readable on the computer running Orca.'
               )}
@@ -161,19 +157,19 @@ export function ZcodePlanAccountsSection({
           ) : apiKeyConfigured ? (
             <>
               <p className="text-xs font-medium">
-                {translate(
+                {t(
                   'auto.components.settings.ZcodePlanAccountsSection.keyStored',
                   'API key saved · {{value0}}',
-                  { value0: siteLabel(site ?? 'zai') }
+                  { value0: siteLabel(site ?? 'zai', t) }
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hostLabel === null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.ZcodePlanAccountsSection.keyStoredHelp',
                       'Stored locally and sent only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.ZcodePlanAccountsSection.keyStoredOnHostHelp',
                       'Stored on {{host}} and sent from there only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.',
                       { host: hostLabel }
@@ -183,18 +179,18 @@ export function ZcodePlanAccountsSection({
           ) : status?.zcodeCliConfigured ? (
             <>
               <p className="text-xs font-medium">
-                {translate(
+                {t(
                   'auto.components.settings.ZcodePlanAccountsSection.usingCli',
                   'Using the ZCode CLI sign-in'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hostLabel === null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.ZcodePlanAccountsSection.usingCliHelp',
                       'Orca reads the selected Coding Plan from the ZCode CLI credential store on this computer. Save an API key below to link the plan here instead.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.ZcodePlanAccountsSection.usingCliOnHostHelp',
                       'Orca reads the selected Coding Plan from the ZCode CLI credential store on {{host}}. Save an API key below to link the plan there instead.',
                       { host: hostLabel }
@@ -204,18 +200,18 @@ export function ZcodePlanAccountsSection({
           ) : (
             <>
               <p className="text-xs font-medium">
-                {translate(
+                {t(
                   'auto.components.settings.ZcodePlanAccountsSection.notConfigured',
                   'No GLM Coding Plan linked'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hostLabel === null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.ZcodePlanAccountsSection.notConfiguredHelp',
                       'Save the plan API key below, or sign in with the ZCode CLI on this computer.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.ZcodePlanAccountsSection.notConfiguredOnHostHelp',
                       'Save the plan API key below, or sign in with the ZCode CLI on {{host}}.',
                       { host: hostLabel }
@@ -238,17 +234,14 @@ export function ZcodePlanAccountsSection({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate(
-              'auto.components.settings.ZcodePlanAccountsSection.refreshUsage',
-              'Refresh usage'
-            )}
+            {t('auto.components.settings.ZcodePlanAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         ) : null}
       </div>
 
       {webClient ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.ZcodePlanAccountsSection.hostOnly',
             'Change the plan site and API key in the desktop app on the computer running Orca.'
           )}
@@ -256,11 +249,8 @@ export function ZcodePlanAccountsSection({
       ) : null}
 
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.ZcodePlanAccountsSection.siteTitle',
-          'Plan site'
-        )}
-        description={translate(
+        title={t('auto.components.settings.ZcodePlanAccountsSection.siteTitle', 'Plan site')}
+        description={t(
           'auto.components.settings.ZcodePlanAccountsSection.siteDescription',
           'Pick the console your Coding Plan belongs to: Z.AI for the international site, Zhipu BigModel for the mainland site.'
         )}
@@ -268,7 +258,7 @@ export function ZcodePlanAccountsSection({
         className="space-y-2"
       >
         <Label htmlFor="zcode-plan-site">
-          {translate('auto.components.settings.ZcodePlanAccountsSection.siteTitle', 'Plan site')}
+          {t('auto.components.settings.ZcodePlanAccountsSection.siteTitle', 'Plan site')}
         </Label>
         <Select
           value={site ?? ''}
@@ -277,7 +267,7 @@ export function ZcodePlanAccountsSection({
         >
           <SelectTrigger id="zcode-plan-site" size="sm" className="w-full">
             <SelectValue
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.ZcodePlanAccountsSection.siteUnavailable',
                 'Host plan site unavailable'
               )}
@@ -286,7 +276,7 @@ export function ZcodePlanAccountsSection({
           <SelectContent>
             {(['zai', 'bigmodel'] as const).map((option) => (
               <SelectItem key={option} value={option}>
-                {siteLabel(option)}
+                {siteLabel(option, t)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -294,32 +284,29 @@ export function ZcodePlanAccountsSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
-        description={zcodePlanKeyDescription(host)}
+        title={t('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
+        description={zcodePlanKeyDescription(host, t)}
         keywords={SEARCH_KEYWORDS}
         className="space-y-2"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="zcode-plan-api-key">
-              {translate('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
+              {t('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
             </Label>
             {!detailsUnavailable ? (
               <Badge variant={apiKeyConfigured ? 'secondary' : 'outline'}>
                 {apiKeyConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
                 {apiKeyConfigured
-                  ? translate('auto.components.settings.ZcodePlanAccountsSection.saved', 'Saved')
-                  : translate(
-                      'auto.components.settings.ZcodePlanAccountsSection.notSaved',
-                      'Not saved'
-                    )}
+                  ? t('auto.components.settings.ZcodePlanAccountsSection.saved', 'Saved')
+                  : t('auto.components.settings.ZcodePlanAccountsSection.notSaved', 'Not saved')}
               </Badge>
             ) : null}
           </div>
         </div>
         <UnsealedCredentialNotice
           protection={status?.apiKeyProtection ?? null}
-          credentialName={translate(
+          credentialName={t(
             'auto.components.settings.ZcodePlanAccountsSection.title',
             'GLM Coding Plan'
           )}
@@ -334,7 +321,7 @@ export function ZcodePlanAccountsSection({
             disabled={credentialBusy || !keyEditable}
             value={apiKeyDraft}
             onChange={(e) => setApiKeyDraft(e.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.ZcodePlanAccountsSection.keyPlaceholder',
               'Paste your GLM Coding Plan API key'
             )}
@@ -349,8 +336,8 @@ export function ZcodePlanAccountsSection({
           >
             {credentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
             {apiKeyConfigured
-              ? translate('auto.components.settings.ZcodePlanAccountsSection.replace', 'Replace')
-              : translate('auto.components.settings.ZcodePlanAccountsSection.save', 'Save')}
+              ? t('auto.components.settings.ZcodePlanAccountsSection.replace', 'Replace')
+              : t('auto.components.settings.ZcodePlanAccountsSection.save', 'Save')}
           </Button>
           {apiKeyConfigured ? (
             <Button
@@ -360,15 +347,12 @@ export function ZcodePlanAccountsSection({
               disabled={credentialBusy || !credentialEditable}
               className="shrink-0"
             >
-              {translate(
-                'auto.components.settings.ZcodePlanAccountsSection.forgetKey',
-                'Forget key'
-              )}
+              {t('auto.components.settings.ZcodePlanAccountsSection.forgetKey', 'Forget key')}
             </Button>
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.ZcodePlanAccountsSection.keyHelp',
             'The same key your coding tools use for the plan (for example Claude Code with ANTHROPIC_BASE_URL pointed at the site). Switching the site above changes which host receives it.'
           )}
@@ -379,11 +363,8 @@ export function ZcodePlanAccountsSection({
 
       {usageWindows.length > 0 ? (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.ZcodePlanAccountsSection.usageTitle',
-            'Plan usage'
-          )}
-          description={translate(
+          title={t('auto.components.settings.ZcodePlanAccountsSection.usageTitle', 'Plan usage')}
+          description={t(
             'auto.components.settings.ZcodePlanAccountsSection.usageDescription',
             'Live quota windows for the linked Coding Plan, refreshed with the status bar usage cycle.'
           )}
@@ -395,7 +376,7 @@ export function ZcodePlanAccountsSection({
             ))}
             {usage?.planType ? (
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.ZcodePlanAccountsSection.planLevel',
                   'Plan: {{value0}}',
                   { value0: usage.planType }

@@ -6,7 +6,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
   MAX_LEFT_SIDEBAR_TINT_OPACITY
 } from '../../../../../shared/left-sidebar-appearance'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   ColorField,
   NumberField,
@@ -23,15 +23,16 @@ export function LeftSidebarAppearanceSetting({
   settings,
   updateSettings
 }: LeftSidebarAppearanceSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2">
       <SettingsRow
         alignTop
-        label={translate(
+        label={t(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
           'Left Sidebar Appearance'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.tintDescription',
           'Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme.'
         )}
@@ -40,21 +41,21 @@ export function LeftSidebarAppearanceSetting({
             size="sm"
             value={settings.leftSidebarAppearanceMode === 'tinted' ? 'tinted' : 'default'}
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
-            ariaLabel={translate(
+            ariaLabel={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
               'Left Sidebar Appearance'
             )}
             options={[
               {
                 value: 'default',
-                label: translate(
+                label: t(
                   'auto.components.settings.AppearancePane.leftSidebarAppearance.default',
                   'Default'
                 )
               },
               {
                 value: 'tinted',
-                label: translate(
+                label: t(
                   'auto.components.settings.AppearancePane.leftSidebarAppearance.tinted',
                   'Tinted'
                 )
@@ -66,11 +67,11 @@ export function LeftSidebarAppearanceSetting({
       {settings.leftSidebarAppearanceMode === 'tinted' ? (
         <div className="space-y-2">
           <ColorField
-            label={translate(
+            label={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColor',
               'Sidebar Tint'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColorDescription',
               'The color mixed into the left sidebar surface.'
             )}
@@ -79,11 +80,11 @@ export function LeftSidebarAppearanceSetting({
             onChange={(leftSidebarTintColor) => updateSettings({ leftSidebarTintColor })}
           />
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacity',
               'Tint Strength'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacityDescription',
               'Controls how strongly the tint is mixed into the sidebar.'
             )}
