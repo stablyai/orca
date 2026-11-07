@@ -3,6 +3,7 @@ import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { draftRenameSheetState } from '../components/draft-rename-sheet-state'
 import { TextInputSheetContent } from '../components/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { HostMutationPhase } from '../query/host-mutation'
 import { readHostMutationDraft, setHostMutationDraft } from '../query/host-mutation-drafts'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import { useHostDisplay } from '../transport/use-host-display'
@@ -11,7 +12,7 @@ import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 // error null means the rename is still in flight.
-type RenameAttempt = { error: string | null }
+type RenameAttempt = { error: string | null; phase: HostMutationPhase }
 
 function renameDraftKey(hostId: string, terminal: Terminal): string {
   return `terminal-rename:${hostId}:${terminal.handle}`
@@ -47,10 +48,18 @@ export function MobileTerminalRenameModal({
       return
     }
     const draftKey = renameDraftKey(hostId, renameTarget)
-    const mine: RenameAttempt = { error: null }
+    let mine: RenameAttempt = { error: null, phase: 'pending' }
     setAttempt(mine)
+    const onPhase = (phase: HostMutationPhase) =>
+      setAttempt((latest) => {
+        if (latest !== mine || phase === 'idle') {
+          return latest
+        }
+        mine = { error: null, phase }
+        return mine
+      })
     try {
-      await handleRenameTerminal(title)
+      await handleRenameTerminal(title, onPhase)
       setHostMutationDraft(draftKey, null)
     } catch (failure) {
       // Offline before it was sent: the sheet's offline notice says why, and the text waits.
@@ -60,14 +69,14 @@ export function MobileTerminalRenameModal({
             reason: failure instanceof Error ? failure.message : ''
           }).trim()
       // A late reply must not mark a newer attempt or opening as failed.
-      setAttempt((latest) => (latest === mine ? (error ? { error } : null) : latest))
+      setAttempt((latest) => (latest === mine ? (error ? { error, phase: 'idle' } : null) : latest))
     }
   }
 
   const busy = attempt != null && attempt.error === null
   const sheet = draftRenameSheetState({
-    write: terminalRenameWrite,
-    busy,
+    blockedOffline: terminalRenameWrite.blockedOffline,
+    phase: attempt?.phase ?? 'idle',
     error: attempt?.error ?? null,
     hostName,
     t

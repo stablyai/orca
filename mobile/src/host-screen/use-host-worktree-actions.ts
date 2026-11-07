@@ -26,7 +26,7 @@ import {
 } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
-import { defineHostMutation, useHostMutation } from '../query/host-mutation'
+import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
 
 async function sendWorkspaceRename(
   client: RpcClient,
@@ -194,14 +194,19 @@ export function useHostWorktreeActions(args: {
   const { mutate: mutateWorkspaceName } = workspaceRenameWrite
   // Written at the row's owner, as desktop does; empty text returns the label to automatic.
   const renameWorktree = useCallback(
-    async (item: Worktree, displayName: string) => {
+    async (item: Worktree, displayName: string, onPhase?: (phase: HostMutationPhase) => void) => {
       await mutateWorkspaceName(
         { worktreeId: item.worktreeId, displayName },
-        clientForRow(item) ?? undefined
+        {
+          // Re-routed per attempt: a reconnect replaces the host client under a lost reply.
+          route: (hostClient) =>
+            rpcClientForExecutionHost(hostClient, hostCapabilities, item.hostId),
+          onPhase
+        }
       )
       void fetchWorktrees()
     },
-    [mutateWorkspaceName, clientForRow, fetchWorktrees]
+    [mutateWorkspaceName, hostCapabilities, fetchWorktrees]
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })

@@ -3,7 +3,7 @@ import { automaticWorktreeDisplayName } from '../../../src/shared/worktree/displ
 import { draftRenameSheetState } from '../components/draft-rename-sheet-state'
 import { TextInputSheetContent } from '../components/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { HostMutationHandle } from '../query/host-mutation'
+import type { HostMutationPhase } from '../query/host-mutation'
 import { readHostMutationDraft, setHostMutationDraft } from '../query/host-mutation-drafts'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -19,21 +19,26 @@ export function WorkspaceRenameSheet({
   hostName,
   row,
   rename,
-  write,
+  blockedOffline,
   onClose
 }: {
   hostId: string
   hostName: string
   row: Worktree
-  rename: (row: Worktree, displayName: string) => Promise<void>
-  write: Pick<HostMutationHandle<unknown, unknown>, 'phase' | 'blockedOffline'>
+  rename: (
+    row: Worktree,
+    displayName: string,
+    onPhase: (phase: HostMutationPhase) => void
+  ) => Promise<void>
+  blockedOffline: boolean
   onClose: () => void
 }) {
   const t = useMobileTranslation()
   const draftKey = workspaceRenameDraftKey(hostId, row)
   // Opens on the name the desktop never took, if there is one.
   const [value, setValue] = useState(() => readHostMutationDraft(draftKey) ?? row.displayName)
-  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<HostMutationPhase>('idle')
+  const busy = phase !== 'idle'
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useRef(true)
   useEffect(() => {
@@ -55,7 +60,7 @@ export function WorkspaceRenameSheet({
       ? undefined
       : t('hostScreen.workspaceRenameSheet.emptyUsesFolder', 'Leave empty to use the folder name.')
 
-  const sheet = draftRenameSheetState({ write, busy, error, hostName, t })
+  const sheet = draftRenameSheetState({ blockedOffline, phase, error, hostName, t })
   // Text the desktop couldn't take yet comes back next time, however the drawer closes; a plain Cancel drops it.
   const waiting = sheet.submitBlocked || sheet.notice !== null
   const unsaved = waiting && value.trim() !== row.displayName ? value : null
@@ -71,10 +76,14 @@ export function WorkspaceRenameSheet({
       onClose()
       return
     }
-    setBusy(true)
+    setPhase('pending')
     setError(null)
     try {
-      await rename(row, displayName)
+      await rename(row, displayName, (next) => {
+        if (mountedRef.current) {
+          setPhase(next)
+        }
+      })
       unsavedRef.current = null
       setHostMutationDraft(draftKey, null)
       // A late success must not close a menu reopened since.
@@ -94,7 +103,7 @@ export function WorkspaceRenameSheet({
           }).trim()
         )
       }
-      setBusy(false)
+      setPhase('idle')
     }
   }
 

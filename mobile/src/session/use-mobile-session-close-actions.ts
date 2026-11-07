@@ -12,7 +12,7 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
-import { defineHostMutation, useHostMutation } from '../query/host-mutation'
+import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 
 async function sendTerminalRename(
@@ -62,13 +62,16 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   } = scope
   const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
   // Throws on refusal so the sheet keeps the typed name and offers Retry.
-  async function handleRenameTerminal(value: string): Promise<void> {
+  async function handleRenameTerminal(
+    value: string,
+    onPhase?: (phase: HostMutationPhase) => void
+  ): Promise<void> {
     const target = renameTarget
     if (!target) {
       return
     }
     const title = value.trim()
-    await terminalRenameWrite.mutate({ terminal: target.handle, title })
+    await terminalRenameWrite.mutate({ terminal: target.handle, title }, { onPhase })
     setTerminals((prev) => {
       const next = prev.map((terminal) =>
         terminal.handle === target.handle ? { ...terminal, title: title || 'Terminal' } : terminal

@@ -1,22 +1,23 @@
 import { ClockFading, CloudOff } from 'lucide-react-native'
 import type { Translate } from '../i18n/mobile-i18n'
-import type { HostMutationHandle } from '../query/host-mutation'
+import type { HostMutationPhase } from '../query/host-mutation'
 
 // A rename sheet over a draft-mode write: never claims a name the desktop hasn't taken.
 export function draftRenameSheetState({
-  write,
-  busy,
+  blockedOffline,
+  phase,
   error,
   hostName,
   t
 }: {
-  write: Pick<HostMutationHandle<unknown, unknown>, 'phase' | 'blockedOffline'>
-  busy: boolean
+  blockedOffline: boolean
+  /** This sheet's own save. */
+  phase: HostMutationPhase
   error: string | null
   hostName: string
   t: Translate
 }) {
-  const unconfirmed = busy && write.phase === 'unconfirmed'
+  const unconfirmed = phase === 'unconfirmed'
   const notice = unconfirmed
     ? {
         icon: ClockFading,
@@ -26,7 +27,7 @@ export function draftRenameSheetState({
           { host: hostName }
         )
       }
-    : write.blockedOffline
+    : blockedOffline
       ? {
           icon: CloudOff,
           text: t(
@@ -38,7 +39,7 @@ export function draftRenameSheetState({
       : null
   return {
     notice,
-    submitBlocked: write.blockedOffline,
+    submitBlocked: blockedOffline,
     submitLabel: error
       ? t('common.retry', 'Retry')
       : unconfirmed

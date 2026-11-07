@@ -37,48 +37,41 @@ export function defineHostMutation<TVars, TResult>(
 /** `unconfirmed`: sent, but the reply was lost; settles once the host is back. */
 export type HostMutationPhase = 'idle' | 'pending' | 'unconfirmed'
 
-type RunContext = {
+export type HostMutationCallOptions = {
+  /** Routes the write elsewhere over the host's connection (e.g. a server row); null when that route is unreachable. */
+  route?: (client: RpcClient) => RpcClient | null
+  onPhase?: (phase: HostMutationPhase) => void
+}
+
+export type HostMutationContext = HostMutationCallOptions & {
   hostId: string
-  client: RpcClient
   queryClient: QueryClient
-  signal: AbortSignal
-  onPhase: (phase: HostMutationPhase) => void
+  /** The host's client now; a reconnect can replace it while a lost reply waits. */
+  client: () => RpcClient | null
+  /** Resolves once the host's current client is connected. */
+  connected: () => Promise<void>
 }
 
 function isUnconfirmed(error: unknown): boolean {
   return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
 }
 
-function waitForConnected(client: RpcClient, signal: AbortSignal, freshEdge: boolean) {
-  return new Promise<void>((resolve, reject) => {
-    if (!freshEdge && client.getState() === 'connected') {
-      resolve()
-      return
-    }
-    let left = !freshEdge
-    const stop = client.onStateChange((state) => {
-      left ||= state !== 'connected'
-      if (left && state === 'connected') {
-        settle(resolve)
-      }
-    })
-    const onAbort = () => settle(() => reject(signal.reason))
-    function settle(done: () => void) {
-      stop()
-      signal.removeEventListener('abort', onAbort)
-      done()
-    }
-    if (signal.aborted) {
-      onAbort()
-      return
-    }
-    signal.addEventListener('abort', onAbort)
-  })
+// block and draft refuse at once while the host is down, instead of waiting in the transport for it.
+function writeClient(context: HostMutationContext, failFast: boolean): RpcClient {
+  const client = context.client()
+  if (!client) {
+    throw new Error(`Not connected: ${context.hostId}`)
+  }
+  const routed = context.route ? context.route(client) : client
+  if (!routed) {
+    throw new Error('The workspace server is unreachable')
+  }
+  return failFast ? hostReadClient(routed) : routed
 }
 
 async function applyOptimistic<TVars>(
   optimistic: NonNullable<HostMutation<TVars, unknown>['optimistic']>,
-  { queryClient, hostId }: RunContext,
+  { queryClient, hostId }: HostMutationContext,
   vars: TVars
 ): Promise<() => void> {
   const keys = optimistic.keys(hostId, vars)
@@ -92,23 +85,32 @@ async function applyOptimistic<TVars>(
   }
 }
 
+function invalidate<TVars>(
+  mutation: HostMutation<TVars, unknown>,
+  context: HostMutationContext,
+  vars: TVars
+): void {
+  for (const queryKey of mutation.invalidates?.(context.hostId, vars) ?? []) {
+    void context.queryClient.invalidateQueries({ queryKey })
+  }
+}
+
 // A lost reply never rolls back: the host may have applied it, so the write is re-checked once connected.
 export async function runHostMutation<TVars, TResult>(
   mutation: HostMutation<TVars, TResult>,
-  context: RunContext,
+  context: HostMutationContext,
   vars: TVars
 ): Promise<TResult> {
-  const { client, onPhase } = context
-  // block and draft refuse at once while the host is down, instead of waiting in the transport for it.
-  const sendClient = mutation.offline === 'queue' ? client : hostReadClient(client)
+  const onPhase = context.onPhase ?? (() => {})
   onPhase('pending')
-  const rollback = mutation.optimistic
-    ? await applyOptimistic(mutation.optimistic, context, vars)
-    : null
   try {
+    const client = writeClient(context, mutation.offline !== 'queue')
+    const rollback = mutation.optimistic
+      ? await applyOptimistic(mutation.optimistic, context, vars)
+      : null
     let result: TResult
     try {
-      result = await mutation.send(sendClient, vars)
+      result = await mutation.send(client, vars)
     } catch (error) {
       if (!isUnconfirmed(error)) {
         rollback?.()
@@ -117,10 +119,7 @@ export async function runHostMutation<TVars, TResult>(
       onPhase('unconfirmed')
       result = await confirmOnceConnected(mutation, context, vars, rollback)
     }
-    const keys = mutation.invalidates?.(context.hostId, vars) ?? []
-    for (const queryKey of keys) {
-      void context.queryClient.invalidateQueries({ queryKey })
-    }
+    invalidate(mutation, context, vars)
     return result
   } finally {
     onPhase('idle')
@@ -129,18 +128,22 @@ export async function runHostMutation<TVars, TResult>(
 
 async function confirmOnceConnected<TVars, TResult>(
   mutation: HostMutation<TVars, TResult>,
-  { client, signal }: RunContext,
+  context: HostMutationContext,
   vars: TVars,
   rollback: (() => void) | null
 ): Promise<TResult> {
-  // After a failed check, wait for the next reconnect rather than retrying in a loop.
-  for (let attempt = 0; ; attempt += 1) {
-    await waitForConnected(client, signal, attempt > 0)
+  for (;;) {
+    await context.connected()
     try {
-      return await mutation.confirm(hostReadClient(client), vars)
+      return await mutation.confirm(writeClient(context, true), vars)
     } catch (error) {
       if (!isUnconfirmed(error) && !isHostNotConnectedError(error)) {
         rollback?.()
+        throw error
+      }
+      // Lost again with the host still up (e.g. it timed out): stop here and let the screen offer Retry.
+      if (context.client()?.getState() === 'connected') {
+        invalidate(mutation, context, vars)
         throw error
       }
     }
@@ -156,12 +159,12 @@ function useClientState(client: RpcClient | null): ConnectionState {
 }
 
 export type HostMutationHandle<TVars, TResult> = {
-  phase: HostMutationPhase
   /** The action is off: the host is unreachable and this family does not queue. */
   blockedOffline: boolean
-  /** `sendClient` routes one write elsewhere (e.g. a server row) while the host's connection gates it. */
-  mutate: (vars: TVars, sendClient?: RpcClient) => Promise<TResult>
+  mutate: (vars: TVars, options?: HostMutationCallOptions) => Promise<TResult>
 }
+
+type Waiter = { resolve: () => void; reject: (reason: Error) => void }
 
 // Lives as long as the screen that owns the write, so a lost reply is still settled after its sheet closes.
 export function useHostMutation<TVars, TResult>(
@@ -172,55 +175,73 @@ export function useHostMutation<TVars, TResult>(
   const queryClient = useQueryClient()
   const state = useClientState(client)
   const calmState = useCalmConnectionState(state, client?.getLastConnectedAt() ?? null)
-  const [phase, setPhase] = useState<HostMutationPhase>('idle')
   // A write refused for being offline while the calm state still hid the drop.
   const [refusedOffline, setRefusedOffline] = useState(false)
   if (refusedOffline && state === 'connected') {
     setRefusedOffline(false)
   }
-  const abortRef = useRef<AbortController | null>(null)
+  // A reconnect (Retry, re-pair) can swap the client under a write waiting for its answer.
+  const clientRef = useRef(client)
+  const waitersRef = useRef(new Set<Waiter>())
+  const mountedRef = useRef(true)
   useEffect(() => {
-    const controller = new AbortController()
-    abortRef.current = controller
-    return () => controller.abort()
-  }, [client])
+    clientRef.current = client
+    if (state === 'connected' && client) {
+      const waiters = [...waitersRef.current]
+      waitersRef.current.clear()
+      waiters.forEach((waiter) => waiter.resolve())
+    }
+  }, [client, state])
+  useEffect(() => {
+    mountedRef.current = true
+    const waiters = waitersRef.current
+    return () => {
+      mountedRef.current = false
+      waiters.forEach((waiter) => waiter.reject(new Error('Screen closed')))
+      waiters.clear()
+    }
+  }, [])
 
   const blockedOffline =
     mutation.offline !== 'queue' &&
     (client === null || calmState !== 'connected' || (refusedOffline && state !== 'connected'))
 
   const mutate = useCallback(
-    async (vars: TVars, sendClient?: RpcClient): Promise<TResult> => {
-      const controller = abortRef.current
-      if (!client || !controller) {
-        throw new Error(`Not connected: ${hostId}`)
-      }
-      const signal = controller.signal
+    async (vars: TVars, options?: HostMutationCallOptions): Promise<TResult> => {
+      const onPhase = options?.onPhase
       try {
         return await runHostMutation(
           mutation,
           {
             hostId,
-            client: sendClient ?? client,
             queryClient,
-            signal,
-            onPhase: (next) => {
-              if (!signal.aborted) {
-                setPhase(next)
-              }
-            }
+            client: () => clientRef.current,
+            connected: () =>
+              clientRef.current?.getState() === 'connected'
+                ? Promise.resolve()
+                : new Promise<void>((resolve, reject) =>
+                    waitersRef.current.add({ resolve, reject })
+                  ),
+            route: options?.route,
+            onPhase:
+              onPhase &&
+              ((phase) => {
+                if (mountedRef.current) {
+                  onPhase(phase)
+                }
+              })
           },
           vars
         )
       } catch (error) {
-        if (isHostNotConnectedError(error) && !signal.aborted) {
+        if (isHostNotConnectedError(error) && mountedRef.current) {
           setRefusedOffline(true)
         }
         throw error
       }
     },
-    [mutation, hostId, client, queryClient]
+    [mutation, hostId, queryClient]
   )
 
-  return { phase, blockedOffline, mutate }
+  return { blockedOffline, mutate }
 }

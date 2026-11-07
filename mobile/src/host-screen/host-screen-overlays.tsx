@@ -112,7 +112,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               hostName={hostDisplay.title}
               row={actionTarget}
               rename={actions.renameWorktree}
-              write={actions.workspaceRenameWrite}
+              blockedOffline={actions.workspaceRenameWrite.blockedOffline}
               onClose={closeActionSheet}
             />
           ) : (

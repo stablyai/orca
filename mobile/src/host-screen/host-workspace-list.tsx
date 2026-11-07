@@ -92,7 +92,8 @@ export function HostWorkspaceList({
     client,
     connState,
     lastConnectedAt,
-    hasData: hasRows
+    // Group headers can stand with no rows under them; that list says "unreachable" in its body.
+    hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0
   })
   const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset

@@ -61,16 +61,31 @@ const rename = defineHostMutation({
   }
 })
 
-function run(client: RpcClient, phases: HostMutationPhase[]) {
+// `current` is the host's client at each moment; a reconnect can replace it.
+function run(current: RpcClient | (() => RpcClient), phases: HostMutationPhase[]) {
+  const clientNow = typeof current === 'function' ? current : () => current
   const queryClient = createOrcaQueryClient()
   queryClient.setQueryData(NAME_KEY, 'old')
   const done = runHostMutation(
     rename,
     {
       hostId: 'host-1',
-      client,
       queryClient,
-      signal: new AbortController().signal,
+      client: clientNow,
+      connected: () =>
+        new Promise<void>((resolve) => {
+          const client = clientNow()
+          if (client.getState() === 'connected') {
+            resolve()
+            return
+          }
+          const stop = client.onStateChange((state) => {
+            if (state === 'connected') {
+              stop()
+              resolve()
+            }
+          })
+        }),
       onPhase: (phase) => phases.push(phase)
     },
     { name: 'new' }
@@ -117,4 +132,21 @@ it('refuses a draft write while the host is down instead of waiting for it', asy
   const failure = await done.catch((error: unknown) => error)
   expect(isHostNotConnectedError(failure)).toBe(true)
   expect(queryClient.getQueryData(NAME_KEY)).toBe('old')
+})
+
+it('settles a lost reply through the client a reconnect put in place', async () => {
+  const before = host('connected')
+  const after = host('connected')
+  let current = before.client
+  const { done } = run(() => current, [])
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  before.setState('reconnecting')
+  before.answer(markRpcDeliveryUnknown(new Error('Connection closed')))
+  current = after.client
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(after.sent).toHaveLength(1)
+  after.answer(ok)
+  await expect(done).resolves.toBe('new')
+  expect(before.sent).toHaveLength(1)
 })
