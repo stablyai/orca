@@ -230,3 +230,48 @@ it('revalidates active search without losing hits, accepting old pages, or touch
   await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
   expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
 })
+
+it('keeps the previous query on screen while the next one runs (#39298)', async () => {
+  const first = { ...searchResults(), hits: [{ ...searchHit(), sessionId: 'first-query' }] }
+  searchSessions.mockResolvedValueOnce(first)
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'first' } } }
+  )
+  await debounce()
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first-query'])
+  expect(result.current.inherited).toBe(false)
+
+  // The second query's promise is pending: the first query's hits must stay on screen.
+  searchSessions.mockImplementationOnce(
+    () => new Promise(() => {}) // never resolves in this test
+  )
+  rerender({ request: { query: 'second' } })
+  await debounce()
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first-query'])
+  expect(result.current.loading).toBe(true)
+  expect(result.current.inherited).toBe(true)
+  unmount()
+})
+
+it('keeps previous hits when the query fails or the service is unavailable (#39298)', async () => {
+  searchSessions.mockResolvedValueOnce(searchResults())
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'first' } } }
+  )
+  await debounce()
+  expect(result.current.hits.length).toBe(1)
+
+  searchSessions.mockRejectedValueOnce(new Error('network'))
+  rerender({ request: { query: 'second' } })
+  await debounce()
+  expect(result.current.hits.length).toBe(1)
+  expect(result.current.error).toBe(true)
+
+  searchSessions.mockResolvedValueOnce({ kind: 'unavailable', reason: 'disabled' })
+  rerender({ request: { query: 'third' } })
+  await debounce()
+  expect(result.current.hits.length).toBe(1)
+  unmount()
+})

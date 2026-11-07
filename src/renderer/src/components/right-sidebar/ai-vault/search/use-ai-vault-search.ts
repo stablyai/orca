@@ -36,6 +36,8 @@ type SearchPage = {
   response: AiVaultSearchResponse | null
   error: boolean
   loading: boolean
+  /** Set when the hits came from a query other than the page's current identity. */
+  inherited?: boolean
 }
 
 export function useAiVaultSearch(
@@ -71,10 +73,16 @@ export function useAiVaultSearch(
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
       setPage((previous) => ({
         identity,
-        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
+        // Keep the previous query's hits on screen while this query runs; replacing
+        // them with [] makes every keystroke blank the list (#39298).
+        hits:
+          (cursor || revalidate) && previous?.identity === identity
+            ? previous.hits
+            : (previous?.hits ?? []),
         response: null,
         error: false,
-        loading: true
+        loading: true,
+        inherited: true
       }))
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
@@ -97,14 +105,21 @@ export function useAiVaultSearch(
                   ...(append && previous?.identity === identity ? previous.hits : []),
                   ...response.hits
                 ]
-              : [],
+              : (previous?.hits ?? []),
           response,
           error: false,
           loading: false
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          // Keep whatever is on screen; a network hiccup should not blank the list (#39298).
+          setPage((previous) => ({
+            identity,
+            hits: previous?.hits ?? [],
+            response: null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false
@@ -141,6 +156,8 @@ export function useAiVaultSearch(
     response: current?.response ?? null,
     error: current?.error ?? false,
     loading: Boolean(request && scope && (!current || current.loading)),
+    /** True while the next query runs and the hits shown are from the previous query. */
+    inherited: current?.inherited === true,
     removeHit: (hit: AiVaultSearchHit) =>
       setPage((previous) =>
         previous?.identity === identity
