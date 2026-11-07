@@ -1383,12 +1383,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 件がアクティブ",
-      "heading": "Agent",
-      "showAll": "{{count}} 件をすべて表示",
-      "showFewer": "折りたたむ"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
