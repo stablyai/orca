@@ -847,6 +847,7 @@ it('delivers a live-cancellable request to an older host over the cancellable ro
     agent: 'claude',
     inputKind: 'driving',
     intent: 'running',
+    // ast-grep-ignore: test-no-wall-clock -- a real paired socket and main's real timers carry this request
     deadline: Date.now() + 20_000,
     signal: live.signal,
     operationId: 'op-live'

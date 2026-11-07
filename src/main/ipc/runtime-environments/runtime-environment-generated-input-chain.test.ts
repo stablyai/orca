@@ -166,6 +166,7 @@ it('frees a held preparation’s slot at its end, before the resolution finishes
   const ids = Array.from({ length: 8 }, (_, index) => `op-held-${index}`)
   let settled = 0
   const expiring = ids.map((id) =>
+    // ast-grep-ignore: test-no-wall-clock -- the dispatch end runs on main's real timer over real sockets
     call({ ...generated(id), generatedInputEnd: Date.now() + 300 }).finally(() => {
       settled += 1
     })
@@ -184,11 +185,13 @@ it('frees a held preparation’s slot at its end, before the resolution finishes
     release()
   }
   // The resolution's late finish sends nothing of them.
+  // ast-grep-ignore: test-no-real-time-wait -- a late frame's absence after release has no event to await
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(server.requests.filter(({ method }) => method === SEND)).toEqual([])
   expect(ids.map(certainty)).toEqual(Array(8).fill('not-sent'))
 
   await expect(
+    // ast-grep-ignore: test-no-wall-clock -- the dispatch end runs on main's real timer over real sockets
     call({ ...generated('op-in-time'), generatedInputEnd: Date.now() + 5000 })
   ).resolves.toMatchObject({ ok: true })
   expect(server.requests.filter(({ method }) => method === SEND)).toHaveLength(1)

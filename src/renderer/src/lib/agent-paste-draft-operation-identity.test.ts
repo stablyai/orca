@@ -52,6 +52,7 @@ beforeEach(() => {
         worktreeId: ''
       })
       if (!params.pending && h.answerAfterMs > 0) {
+        // ast-grep-ignore: test-no-real-time-wait -- emulates a host answering after the request's own end
         await new Promise((resolve) => setTimeout(resolve, h.answerAfterMs))
       }
       return kept

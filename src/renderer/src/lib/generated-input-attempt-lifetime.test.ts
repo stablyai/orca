@@ -239,6 +239,7 @@ it.each(['cancelled', 'expired', 'issued then lost'] as const)(
     const result = await sending
     await result.finished
     held.resolve({ ...answer(status('h1', [])), selectedPairing: { revision: 1 } })
+    // ast-grep-ignore: test-no-real-time-wait -- an absent write after the end has no event to await
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(result.outcome).toBe('not-sent')
     expect(hostCall.mock.calls.map(([args]) => args.method)).toEqual(['status.get'])

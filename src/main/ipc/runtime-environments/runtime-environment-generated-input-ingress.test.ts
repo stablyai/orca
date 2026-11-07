@@ -312,7 +312,9 @@ it('spends a generated request’s own end on main preparation, never on its ans
         generatedInputEnd
       })
     )
+  // ast-grep-ignore: test-no-wall-clock -- main's dispatch end is a real timer; the expiry is the behavior under test
   const expired = call('op-expired', Date.now() + 20)
+  // ast-grep-ignore: test-no-real-time-wait -- waits past main's real dispatch timer, the behavior under test
   await new Promise((resolve) => setTimeout(resolve, 40))
   preparation.resolve()
   await expect(expired).resolves.toMatchObject({ ok: false, error: { code: 'runtime_timeout' } })
@@ -323,6 +325,7 @@ it('spends a generated request’s own end on main preparation, never on its ans
   h.call.mockImplementation(async (...args: unknown[]) => {
     // The frame leaves, then the host answers only after the end.
     remoteRuntimeRequestDispatchObserver(args[3])?.()
+    // ast-grep-ignore: test-no-real-time-wait -- waits past main's real dispatch timer, the behavior under test
     await new Promise((resolve) => setTimeout(resolve, 40))
     return {
       id: SEND,
@@ -331,6 +334,7 @@ it('spends a generated request’s own end on main preparation, never on its ans
       _meta: { runtimeId: 'host-runtime' }
     }
   })
+  // ast-grep-ignore: test-no-wall-clock -- main's dispatch end is a real timer; the expiry is the behavior under test
   await expect(call('op-answered', Date.now() + 20)).resolves.toMatchObject({ ok: true })
   const { signal } = h.call.mock.calls[0][7] as { signal: AbortSignal }
   expect(signal.aborted).toBe(false)
