@@ -1,17 +1,18 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
-import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 import { buildRecognizerConfig, type RecognizerConfigInput } from './stt-worker-model-config'
 import { createStopTailPadding } from './stt-stop-tail-padding'
+import { connectSttWorkerParentPort } from './stt-worker-parent-port'
 
 type WorkerMessage =
-  | ({ type: 'init' } & RecognizerConfigInput)
+  | ({ type: 'init'; sherpaModulePath: string } & RecognizerConfigInput)
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
   | { type: 'discard' }
   | { type: 'teardown' }
 
+const parentPort = connectSttWorkerParentPort()
 // Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
 let sherpa: any = null
 let recognizer: any = null
@@ -24,17 +25,16 @@ let streamPrimed = false
 // Streaming models report the same hypothesis on most 100 ms feeds; only changes are posted.
 let lastPartialText = ''
 
-function loadSherpa(): any {
-  const modulePath = workerData?.sherpaModulePath
+function loadSherpa(modulePath: string | undefined): any {
   if (!modulePath) {
-    throw new Error('workerData.sherpaModulePath is required')
+    throw new Error('init.sherpaModulePath is required')
   }
   return require(modulePath)
 }
 
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
-    sherpa = loadSherpa()
+    sherpa = loadSherpa(msg.sherpaModulePath)
 
     const { streaming, sampleRate } = msg
     isStreaming = streaming
@@ -47,9 +47,9 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       : sherpa.createOfflineRecognizer(config)
     stream = online ? sherpa.createOnlineStream(recognizer) : sherpa.createOfflineStream(recognizer)
 
-    parentPort?.postMessage({ type: 'ready' })
+    parentPort.post({ type: 'ready' })
   } catch (err) {
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', error: String(err) })
   }
 }
 
@@ -117,13 +117,13 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       const text = result?.text?.trim()
       if (text && text !== lastPartialText) {
         lastPartialText = text
-        parentPort?.postMessage({ type: 'partial', text })
+        parentPort.post({ type: 'partial', text })
       }
 
       if (sherpa.isEndpoint(recognizer, stream)) {
         const finalText = result?.text?.trim()
         if (finalText) {
-          parentPort?.postMessage({ type: 'final', text: finalText })
+          parentPort.post({ type: 'final', text: finalText })
         }
         sherpa.reset(recognizer, stream)
         lastPartialText = ''
@@ -137,7 +137,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
         try {
           const text = decodeOfflineChunk(chunk)
           if (text) {
-            parentPort?.postMessage({ type: 'final', text })
+            parentPort.post({ type: 'final', text })
           }
         } catch (err) {
           firstError ??= err
@@ -148,13 +148,13 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       }
     }
   } catch (err) {
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', error: String(err) })
   }
 }
 
 function handleStop(): void {
   if (!recognizer || !stream) {
-    parentPort?.postMessage({ type: 'stopped' })
+    parentPort.post({ type: 'stopped' })
     return
   }
 
@@ -172,7 +172,7 @@ function handleStop(): void {
       const result = JSON.parse(resultJson)
       const text = result?.text?.trim()
       if (text) {
-        parentPort?.postMessage({ type: 'final', text })
+        parentPort.post({ type: 'final', text })
       }
     } else {
       // flush() leaves less than one bounded chunk.
@@ -180,23 +180,23 @@ function handleStop(): void {
       if (remaining && remaining.length > 0) {
         const text = decodeOfflineChunk(remaining)
         if (text) {
-          parentPort?.postMessage({ type: 'final', text })
+          parentPort.post({ type: 'final', text })
         }
       }
     }
   } catch (err) {
-    parentPort?.postMessage({ type: 'error', error: String(err) })
+    parentPort.post({ type: 'error', error: String(err) })
   } finally {
     resetSessionState()
     // Recovery must not suppress the stopped signal awaited by stopDictation.
-    parentPort?.postMessage({ type: 'stopped' })
+    parentPort.post({ type: 'stopped' })
   }
 }
 
 // A canceled dictation drops its audio undecoded so the warm worker is free at once.
 function handleDiscard(): void {
   resetSessionState()
-  parentPort?.postMessage({ type: 'stopped' })
+  parentPort.post({ type: 'stopped' })
 }
 
 function handleTeardown(): void {
@@ -207,7 +207,9 @@ function handleTeardown(): void {
   process.exit(0)
 }
 
-parentPort?.on('message', (msg: WorkerMessage) => {
+parentPort.onMessage((message) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends WorkerMessage.
+  const msg = message as WorkerMessage
   switch (msg.type) {
     case 'init':
       handleInit(msg)

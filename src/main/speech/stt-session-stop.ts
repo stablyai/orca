@@ -1,9 +1,11 @@
-import type { Worker } from 'node:worker_threads'
 import type { SttSessionState } from './stt-session-state'
+import type { SttWorkerProcess } from './stt-worker-process'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 import { IDLE_WORKER_TEARDOWN_MS } from './stt-session-timeouts'
 
 const STOP_DICTATION_TIMEOUT_MS = 60_000
+// A cancel waits only this long behind a busy decode, then kills the worker.
+const DISCARD_DICTATION_TIMEOUT_MS = 2_000
 
 export async function stopSttDictation(
   state: SttSessionState,
@@ -82,7 +84,8 @@ export async function stopSttDictation(
   stopPromise = waitForSttWorkerStop({
     worker,
     capturedSink,
-    timeoutMs: STOP_DICTATION_TIMEOUT_MS,
+    timeoutMs: options.discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    discard: options.discard === true,
     finish: (outcome) => finishSttWorkerStop(state, worker, outcome)
   }).finally(() => {
     if (state.stopInFlight?.worker === worker && state.stopInFlight.promise === stopPromise) {
@@ -101,7 +104,7 @@ export async function stopSttDictation(
 
 function finishSttWorkerStop(
   state: SttSessionState,
-  worker: Worker,
+  worker: SttWorkerProcess,
   outcome: SttWorkerStopOutcome
 ): void {
   if (outcome === 'stopped') {
@@ -165,7 +168,7 @@ async function teardownIdleSttWorker(
 
 export async function teardownSttWorker(
   state: SttSessionState,
-  worker: Worker,
+  worker: SttWorkerProcess,
   options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
 ): Promise<void> {
   clearSttIdleTeardownTimer(state)

@@ -1,7 +1,7 @@
-import type { Worker } from 'node:worker_threads'
 import type { SttEvent } from './stt-service'
+import type { SttWorkerProcess } from './stt-worker-process'
 
-export function waitForSttWorkerReady(worker: Worker, timeoutMs: number): Promise<void> {
+export function waitForSttWorkerReady(worker: SttWorkerProcess, timeoutMs: number): Promise<void> {
   const { promise, resolve, reject } = Promise.withResolvers<void>()
   let settled = false
   let startupTimeout: ReturnType<typeof setTimeout> | null = null
@@ -50,7 +50,7 @@ export function waitForSttWorkerReady(worker: Worker, timeoutMs: number): Promis
 }
 
 export function attachSttWorkerLifecycle(args: {
-  worker: Worker
+  worker: SttWorkerProcess
   isCurrent: () => boolean
   onMessage: (event: SttEvent) => void
   onError: (error: Error) => void
@@ -82,8 +82,9 @@ export function attachSttWorkerLifecycle(args: {
 }
 
 export function initializeSttWorker(
-  worker: Worker,
+  worker: SttWorkerProcess,
   input: {
+    sherpaModulePath: string
     modelDir: string
     modelType: string
     streaming: boolean

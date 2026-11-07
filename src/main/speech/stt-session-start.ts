@@ -1,4 +1,3 @@
-import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { engineDictationLanguage } from '../../shared/dictation-language'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
@@ -12,17 +11,14 @@ import {
   stopSttDictation,
   teardownSttWorker
 } from './stt-session-stop'
-import {
-  getSherpaModulePath,
-  getSttWorkerPath,
-  LOCAL_SPEECH_UNAVAILABLE_ERROR
-} from './stt-worker-paths'
+import { getSherpaModulePath, LOCAL_SPEECH_UNAVAILABLE_ERROR } from './stt-worker-paths'
 import {
   attachSttWorkerLifecycle,
   initializeSttWorker,
   waitForSttWorkerReady
 } from './stt-worker-startup'
 import { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+import { STT_WORKER_EXITED_ERROR } from './stt-worker-process'
 
 export async function startSttDictation(
   state: SttSessionState,
@@ -142,7 +138,7 @@ async function startSttSession(
   if (!sherpaModulePath) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
-  const worker = spawnWorkerThread(getSttWorkerPath(), { workerData: { sherpaModulePath } })
+  const worker = state.spawnWorker()
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath
@@ -158,10 +154,15 @@ async function startSttSession(
     onExit: () => {
       const stoppedSink = state.stopInFlight?.worker === worker ? null : state.eventSink
       handleSttWorkerFailure(state)
+      // Startup and stop report their own outcome; a live dictation must not end as "No speech detected".
+      if (!state.starting) {
+        stoppedSink?.({ type: 'error', error: STT_WORKER_EXITED_ERROR })
+      }
       stoppedSink?.({ type: 'stopped' })
     }
   })
   initializeSttWorker(worker, {
+    sherpaModulePath,
     modelDir: state.modelManager.getModelDir(modelId),
     modelType: manifest.type,
     streaming: manifest.streaming,
