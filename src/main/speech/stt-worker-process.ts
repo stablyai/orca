@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type { MessagePortMain } from 'electron'
 import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import type { RecognizerConfigInput } from './stt-worker-model-config'
 
@@ -10,8 +11,12 @@ export type SttWorkerRequest =
   | { type: 'feed'; streamId: string; samples: Float32Array; sampleRate: number }
   | { type: 'stop'; streamId: string }
   | { type: 'discard'; streamId: string }
+  | { type: 'attach-audio'; streamId: string }
 
-export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'>
+export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'> & {
+  /** False when the process can't take a port (orcad's forked child), so audio stays on IPC. */
+  attachAudioPort(streamId: string, port: MessagePortMain): boolean
+}
 export type SpawnSttWorkerProcess = () => SttWorkerProcess
 
 /** Session code drops its listeners with removeAllListeners; this keeps the child's own intact. */
@@ -23,6 +28,7 @@ export class SttWorkerChildProcess extends EventEmitter implements SttWorkerProc
     private readonly child: {
       send(message: SttWorkerRequest): void
       kill(): void
+      sendPort?(message: SttWorkerRequest, port: MessagePortMain): void
     }
   ) {
     super()
@@ -32,6 +38,14 @@ export class SttWorkerChildProcess extends EventEmitter implements SttWorkerProc
     if (!this.exited) {
       this.child.send(message)
     }
+  }
+
+  attachAudioPort(streamId: string, port: MessagePortMain): boolean {
+    if (this.exited || !this.child.sendPort) {
+      return false
+    }
+    this.child.sendPort({ type: 'attach-audio', streamId }, port)
+    return true
   }
 
   /** Kills even a decode stuck in native code; resolves once the process is gone. */

@@ -1155,7 +1155,7 @@
         "insecureOrigin": "Orca 拒絕從此頁面配對：它是另一臺機器上的純 http 頁面，因此網路路徑上的任何人都可以替換它並取走配對碼。請透過 https、本機的 localhost 或 SSH 隧道開啟網頁用戶端。如仍要允許，伺服器操作員可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新啟動 Orca。",
         "deviceDowngraded": "此 Orca 伺服器不再支援此瀏覽器的登入金鑰（可能已被降級）。請更新伺服器，或重新配對此瀏覽器。",
         "unauthorized": "未授權。請重新配對此網頁用戶端。",
-        "unauthorizedNewLink": "未授權。請索取新的配對連結。"
+        "unauthorizedLinkUsedOrExpired": "未授權。此配對連結可能已過期或已被使用。請在 Orca 中建立新的配對連結並開啟。"
       }
     },
     "store": {
@@ -1858,13 +1858,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "目標工作區不再可用。",
-        "16a21d6413": "SSH 重新連線需要互動式憑證。",
-        "386db94f3e": "目標專案不再可用。",
-        "3ad7d77f57": "目標工作區所在的主機與此自動化執行目標不同。",
-        "workspaceHostUnresolved": "目標工作區跨越多個主機，因此此執行沒有可使用的單一主機。"
-      },
       "useComposerState": {
         "b2ead86962": "無法解析 PR 的基礎參照。",
         "3db83fc58a": "此主機沒有可用於附件的專案路徑。",
@@ -11123,7 +11116,11 @@
               "micDefault": "系統預設",
               "dictationLanguageTitle": "聽寫語言",
               "dictationLanguageDescription": "告訴語音模型你說的是哪種語言。",
-              "dictationLanguageKeyword": "語言"
+              "dictationLanguageKeyword": "語言",
+              "modelUnloadTitle": "卸載語音模型",
+              "modelUnloadDescription": "選擇何時從記憶體中卸載本機語音模型。",
+              "modelUnloadKeyword": "卸載",
+              "modelMemoryKeyword": "記憶體"
             }
           }
         },
@@ -20335,6 +20332,13 @@
           "description": "你說的語言。選擇自動偵測時，模型每次都會自行判斷語言。",
           "title": "聽寫語言",
           "auto": "自動偵測"
+        },
+        "modelUnload": {
+          "title": "卸載語音模型",
+          "description": "停止聽寫後本機模型在記憶體中保留多久。模型已載入時，聽寫會立即開始；選擇「立即」會釋放記憶體，因此每次聽寫都要等待模型載入。",
+          "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
+          "never": "從不",
+          "immediately": "立即"
         }
       }
     },
@@ -22729,6 +22733,17 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要核准此自動化的新設定命令嗎？",
+      "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
+      "approve": "核准",
+      "approved": "已核准設定。此自動化之後的執行將執行它。",
+      "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
+      "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",
+      "reviewAction": "審查並核准設定",
+      "listSkipped": "已略過設定",
+      "listSkippedTitle": "由於分支的 orca.yaml 設定命令已變更，上次執行略過了設定。請從動作選單中審查。"
     }
   },
   "codeHost": {

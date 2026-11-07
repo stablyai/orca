@@ -38,6 +38,8 @@ const LAUNCH_TARGET = {
   terminalPtyId: 'pty-1'
 }
 
+const OPEN_LAUNCHER = { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
+
 const AFTER_SETTLE_MS = 10 * 60 * 1000
 
 function createAutomation(store: TestStore): Automation {
@@ -119,9 +121,11 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    const service = new AutomationService(store, {
+      terminalObserver: surface.observer,
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => false }
+    })
 
-    service.setWebContents({ isDestroyed: () => false } as never)
     service.start()
     await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
 
@@ -135,10 +139,12 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    const service = new AutomationService(store, {
+      terminalObserver: surface.observer,
+      terminalLauncher: OPEN_LAUNCHER
+    })
 
     service.start()
-    service.setRendererReady()
     await vi.advanceTimersByTimeAsync(5_000)
     expect(surface.observedHandles).toEqual([])
 
@@ -158,7 +164,7 @@ describe('reconciling retained runs against a graph that has not published yet',
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      terminalLauncher: OPEN_LAUNCHER,
       terminalObserver: surface.observer
     })
 
@@ -178,10 +184,12 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    const service = new AutomationService(store, {
+      terminalObserver: surface.observer,
+      terminalLauncher: OPEN_LAUNCHER
+    })
 
     service.start()
-    service.setRendererReady()
     await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
 
     expect(readRun(store, automation.id, retained.id).status).toBe('dispatch_failed')

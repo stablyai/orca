@@ -142,8 +142,6 @@ function renderSidebar(
           draft={draft}
           visibleAgents={AGENT_CATALOG}
           pickerTriggerClassName=""
-          segmentedGroupClassName=""
-          segmentedItemClassName=""
           onProjectChange={vi.fn()}
           onDraftChange={(updater) => {
             onDraftChange(updater)

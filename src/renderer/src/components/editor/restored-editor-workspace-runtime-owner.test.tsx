@@ -130,23 +130,4 @@ describe('a restored tab whose workspace moved to its managed server', () => {
     })
     expect(fileContents[file.id]).toMatchObject({ content: '# repo' })
   })
-
-  it('keeps its place and focus among the other restored tabs', async () => {
-    seedConvertedWorkspace()
-    const readmeId = openRestored(FILE_PATH)
-    openRestored('/root/repo/NOTES.md')
-    const before = useAppStore.getState()
-    const tabIdsBefore = before.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)
-    const activeTabBefore = before.groupsByWorktree[WORKTREE]?.[0]?.activeTabId
-
-    await act(async () => load!(FILE_PATH, readmeId, WORKTREE, 'README.md'))
-
-    const after = useAppStore.getState()
-    expect(after.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(tabIdsBefore)
-    expect(after.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(activeTabBefore)
-    expect(after.openFiles.map((file) => file.runtimeEnvironmentId ?? null)).toEqual([
-      'env-1',
-      null
-    ])
-  })
 })

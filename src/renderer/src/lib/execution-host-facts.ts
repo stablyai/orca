@@ -16,7 +16,6 @@ import {
 } from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
-import type { ResolvedAgentBackgroundTarget } from './agent-session/launch/background/agent-background-session-contract'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
@@ -149,17 +148,8 @@ export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
   workspacePath: string | null | undefined,
-  resolvedTarget?: ResolvedAgentBackgroundTarget,
   executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
-  if (resolvedTarget) {
-    return resolveRepoWorktreePlatformFact(
-      state,
-      resolvedTarget.repo,
-      resolvedTarget.worktree,
-      resolvedTarget
-    )
-  }
   // Why the routing default: an owner-less row launches where routing sends it, so read that host.
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
   return resolveHostPlatform(state, {
@@ -205,8 +195,7 @@ export function resolveRepoWorktreeLaunchPlatform(
 function resolveRepoWorktreePlatformFact(
   state: WorktreeHostFactsState,
   repo: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[1],
-  worktree: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[2],
-  resolvedTarget?: ResolvedAgentBackgroundTarget
+  worktree: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[2]
 ): ExecutionHostPlatformFact {
   const repoHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownHost = parseExecutionHostId(worktree.hostId)
@@ -222,14 +211,7 @@ function resolveRepoWorktreePlatformFact(
     // Why: a server-projected SSH worktree is reached through that server's own connection.
     sshOwnerEnvironmentId: host?.kind === 'ssh' ? serverOwner : null,
     workspacePath: worktree.path ?? repo.path,
-    projectRuntime: () =>
-      getLocalProjectExecutionRuntimeContext(
-        state,
-        worktree.id,
-        undefined,
-        undefined,
-        resolvedTarget
-      )
+    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktree.id)
   })
 }
 

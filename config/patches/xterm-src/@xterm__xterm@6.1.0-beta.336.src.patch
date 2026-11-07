@@ -1308,6 +1308,47 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    preedit.replaceChildren(...nodes);
    }
  }
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..7f0378f9bf37b5b5ff78d78556304f3dc417a499 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -15,7 +15,7 @@ import { JoinedCellData } from '../../services/CharacterJoinerService';
+ import { treatGlyphAsBackgroundColor } from '../shared/RendererUtils';
+ import { AttributeData } from '../../../common/buffer/AttributeData';
+ import { WidthCache } from './WidthCache';
+-import { IColorContrastCache } from '../../Types';
++import { IColorContrastCache, ReadonlyColorSet } from '../../Types';
+ 
+ 
+ export const enum RowCss {
+@@ -34,6 +34,13 @@ export const enum RowCss {
+   CURSOR_STYLE_UNDERLINE_CLASS = 'xterm-cursor-underline'
+ }
+ 
++function isTranslucentDefaultBackground(colorMode: number, color: number, colors: ReadonlyColorSet): boolean {
++  if (colorMode === Attributes.CM_DEFAULT || (colors.background.rgba & 0xFF) === 0xFF) {
++    return false;
++  }
++  const rgb = colorMode === Attributes.CM_RGB ? color : colors.ansi[color].rgba >>> 8;
++  return rgb === colors.background.rgba >>> 8;
++}
+ 
+ export class DomRendererRowFactory {
+   private _workCell: CellData = new CellData();
+@@ -354,6 +361,13 @@ export class DomRendererRowFactory {
+         bgColorMode = temp2;
+       }
+ 
++      // Orca: a translucent terminal paints its backdrop once; an explicit background equal to the
++      // default background is that backdrop, not an opaque fill. The buffer keeps the original color.
++      if (!isInverse && this._optionsService.rawOptions.allowTransparency && isTranslucentDefaultBackground(bgColorMode, bg, colors)) {
++        bg = 0;
++        bgColorMode = Attributes.CM_DEFAULT;
++      }
++
+       // Apply any decoration foreground/background overrides, this must happen after inverse has
+       // been applied
+       let bgOverride: IColor | undefined;
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts

@@ -111,7 +111,7 @@
       "scanCodeStep": "扫描二维码",
       "title": "与桌面配对",
       "tryAgain": "重试",
-      "codeExpiredOrReplaced": "此配对码已过期或已被替换。请在电脑上显示新的配对码后重新扫描。"
+      "codeNoLongerValid": "此配对码已过期、已被使用或已被替换。请在电脑上显示新的配对码后重新扫描。"
     },
     "terminalSettings": {
       "defaultText": "默认（100%）",

@@ -22,6 +22,7 @@ const {
     emitExitOnTerminate = true
     terminatePromise: Promise<number> | null = null
     messages: WorkerMessage[] = []
+    attachedPorts: { streamId: string; port: unknown }[] = []
     private listeners = new Map<string, Set<(...args: unknown[]) => void>>()
 
     constructor() {
@@ -68,6 +69,11 @@ const {
       ) {
         queueMicrotask(() => this.emit('message', { type: 'stopped', streamId: message.streamId }))
       }
+    }
+
+    attachAudioPort(streamId: string, port: unknown): boolean {
+      this.attachedPorts.push({ streamId, port })
+      return true
     }
 
     terminate(): Promise<number> {
@@ -184,12 +190,9 @@ vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
-import {
-  IDLE_WORKER_TEARDOWN_MS,
-  START_DICTATION_TIMEOUT_MS,
-  SttService,
-  type SttEventSink
-} from './stt-service'
+import { START_DICTATION_TIMEOUT_MS, SttService, type SttEventSink } from './stt-service'
+
+const DEFAULT_IDLE_UNLOAD_MS = 15 * 60 * 1000
 
 describe('SttService', () => {
   beforeEach(() => {
@@ -228,6 +231,19 @@ describe('SttService', () => {
       [{ type: 'partial', text: 'from the desk' }]
     ])
     expect(worker.messages.at(-1)).toMatchObject({ type: 'feed', streamId: desktopStream })
+  })
+
+  it("hands a renderer's audio port only to its own on-device stream", async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:phone-a:1')
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop:1:0:1')
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop:2:0:1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService hands the port to the mock worker untouched; only its identity is checked.
+    const port = { id: 'port' } as never
+
+    expect(service.attachAudioPort('desktop:2:0:1', port)).toBe(false)
+    expect(service.attachAudioPort('desktop:1:0:1', port)).toBe(true)
+    expect(getLastWorker()!.attachedPorts).toEqual([{ streamId: '1', port }])
   })
 
   it('refuses a fifth device, and another model while devices are dictating', async () => {
@@ -342,7 +358,7 @@ describe('SttService', () => {
     expect(getCreatedWorkerCount()).toBe(2)
   })
 
-  it('keeps an idle worker warm for an hour', async () => {
+  it('keeps an idle worker warm for 15 minutes by default', async () => {
     vi.useFakeTimers()
     try {
       const service = new SttService(readyModels(), spawnMockWorker)
@@ -355,7 +371,7 @@ describe('SttService', () => {
       await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 1)
       expect(worker!.terminated).toBe(false)
 
-      await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS - 5 * 60 * 1000 - 1)
+      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS - 5 * 60 * 1000 - 1)
       expect(worker!.terminated).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -372,14 +388,14 @@ describe('SttService', () => {
       expect(worker).toBeDefined()
 
       await service.stopDictation('desktop')
-      await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS / 2)
+      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS / 2)
       await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
       await service.stopDictation('desktop')
 
-      await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS / 2 + 1)
+      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS / 2 + 1)
       expect(worker!.terminated).toBe(false)
 
-      await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS / 2 - 1)
+      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS / 2 - 1)
       expect(worker!.terminated).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -843,7 +859,7 @@ describe('SttService', () => {
           [{ type: 'stopped' }]
         ])
         expect(vi.getTimerCount()).toBe(1)
-        await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS - 1)
+        await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS - 1)
         expect(successor.terminated).toBe(false)
         await vi.advanceTimersByTimeAsync(1)
         expect(successor.terminated).toBe(true)

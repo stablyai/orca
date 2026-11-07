@@ -1,3 +1,4 @@
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
 import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
 import React, { useRef } from 'react'
 import { cn } from '@/lib/utils'
@@ -99,6 +100,7 @@ export type AutomationsListPanelProps = {
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
+  reviewSkippedSetup?: (row: AutomationListRow, content: SetupTrustMismatch) => void
   requestDeleteAutomation: (row: AutomationListRow) => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
@@ -153,6 +155,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     runNow,
     openEditDialog,
     toggleAutomation,
+    reviewSkippedSetup,
     requestDeleteAutomation,
     requestExternalAction,
     openCreateDialog,
@@ -284,7 +287,8 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onRunNow: runNow,
     onEdit: openEditDialog,
     onToggle: toggleAutomation,
-    onDelete: requestDeleteAutomation
+    onDelete: requestDeleteAutomation,
+    onReviewSetup: reviewSkippedSetup
   }
 
   return (

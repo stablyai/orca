@@ -111,7 +111,7 @@
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
       "tryAgain": "Erneut versuchen",
-      "codeExpiredOrReplaced": "Dieser Kopplungscode ist abgelaufen oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
+      "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
       "defaultText": "Standard (100 %)",

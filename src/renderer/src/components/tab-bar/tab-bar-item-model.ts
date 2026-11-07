@@ -1,9 +1,7 @@
 import {
-  readStructuredChatTabSavedName,
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
 } from '@/runtime/structured-chat-tab-name'
-import type { AppState } from '@/store/types'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
@@ -74,15 +72,16 @@ export function resolveEditorTabGitStatus(
   return statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null
 }
 
+/** `conversationName` is the chat's reactive host name; null when unnamed or not a chat tab. */
 export function getTabDragLabel(
   item: TabBarItem,
   generatedTitlesEnabled: boolean,
-  state: AppState
+  conversationName: string | null
 ): string {
   return tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? readStructuredChatTabSavedName(item.data, state) : null
+    item.type === 'agent-session' ? item.data.customLabel?.trim() || conversationName : null
   )
 }
 

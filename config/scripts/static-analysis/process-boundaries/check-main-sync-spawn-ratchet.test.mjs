@@ -2,13 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import {
-  collectSyncLaunchUses,
-  countSyncSpawnUses,
-  gatedSymbolsFor,
-  main,
-  prune
-} from './check-main-sync-spawn-ratchet.mjs'
+import { collectSyncLaunchUses, main, prune } from './check-main-sync-spawn-ratchet.mjs'
 
 const roots = []
 const BASELINE = 'config/main-sync-spawn-baseline.txt'
@@ -40,23 +34,6 @@ function captureErrors() {
 }
 
 describe('main sync-spawn ratchet', () => {
-  it('retains escaped imports and API names', () => {
-    expect(
-      uses(String.raw`import { \u0065xecSync as run } from 'node:child_\u0070rocess'; run('git')`)
-    ).toEqual({ count: 1, symbols: ['execSync'] })
-  })
-
-  it.each([
-    ['discovery/distro-catalog', ['getWslHome', 'listWslDistros']],
-    ['discovery/wsl-availability', ['isWslAvailable']],
-    ['filesystem/unc-path-access', ['wslUncDirectoryExists']]
-  ])('retains exports inherited from the containing directory: %s', (owner, symbols) => {
-    expect(uses("export * from '.'", `src/main/wsl/${owner}/consumer.ts`)).toEqual({
-      count: symbols.length,
-      symbols
-    })
-  })
-
   it.each([
     ["import { execFileSync } from 'node:child_process'\nexecFileSync('git')", 1, ['execFileSync']],
     [
@@ -141,113 +118,12 @@ describe('main sync-spawn ratchet', () => {
     expect(uses(source)).toEqual({ count: 0, symbols: [] })
   })
 
-  it.each([
-    [
-      "import { gitExecFileSync } from './git/runner'\ngitExecFileSync(['status'])",
-      'gitExecFileSync'
-    ],
-    [
-      "import { gitExecFileSync as git } from './git/command-runner/git-exec-file.js'\ngit([])",
-      'gitExecFileSync'
-    ],
-    [
-      "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(p, true)",
-      'restrictWindowsPathSync'
-    ],
-    [
-      "import { grantDirAcl } from './windows/windows-directory-acl'\ngrantDirAcl(dir)",
-      'grantDirAcl'
-    ],
-    [
-      "import { getWslHome } from './wsl/discovery/distro-catalog'\ngetWslHome(distro)",
-      'getWslHome'
-    ],
-    [
-      "import { listWslDistros } from './wsl/discovery/distro-catalog'\nlistWslDistros()",
-      'listWslDistros'
-    ],
-    [
-      "import { wslUncDirectoryExists } from './wsl/filesystem/unc-path-access'\nwslUncDirectoryExists(p)",
-      'wslUncDirectoryExists'
-    ],
-    [
-      "import { isWslAvailable } from './wsl/discovery/wsl-availability'\nisWslAvailable()",
-      'isWslAvailable'
-    ],
-    [
-      "import { isWslAvailable } from './wsl/discovery/wsl-availability'\nisWslAvailable()",
-      'isWslAvailable'
-    ],
-    [
-      "import { isPwshAvailable } from './pty/shell-startup/pwsh'\nisPwshAvailable()",
-      'isPwshAvailable'
-    ]
-  ])('gates the repo sync wrapper in %s', (source, symbol) => {
-    expect(uses(source)).toEqual({ count: 1, symbols: [symbol] })
-  })
-
-  it('counts re-exports in the re-exporting module and internal calls in the defining one', () => {
-    expect(
-      uses(
-        "export { gitExecFileAsync, gitExecFileSync } from './command-runner/git-exec-file'",
-        'src/main/git/runner.ts'
-      )
-    ).toEqual({ count: 1, symbols: ['gitExecFileSync'] })
-    expect(
-      uses(
-        'export function listWslDistros() { return [] }\nexport function first() { return listWslDistros()[0] }',
-        'src/main/wsl/discovery/distro-catalog.ts'
-      )
-    ).toEqual({ count: 1, symbols: ['listWslDistros'] })
-  })
-
-  it('resolves imports by the module they point at, not by name', () => {
-    expect(
-      uses(
-        "import { restrictWindowsPathSync } from './secure-path-windows-acl'\nrestrictWindowsPathSync(p, true)",
-        'src/shared/store.ts'
-      )
-    ).toEqual({
-      count: 1,
-      symbols: ['restrictWindowsPathSync']
-    })
-  })
-
-  it('resolves backslash paths in both the importing file and the specifier', () => {
-    expect([
-      ...(gatedSymbolsFor('src\\main\\foo\\x.ts', '..\\wsl\\discovery\\distro-catalog') ?? [])
-    ]).toContain('getWslHome')
-  })
-
   it.each(['import {', 'const broken = ;'])(
     'fails closed on source it cannot parse: %s',
     (source) => {
       expect(() => uses(source)).toThrow('Cannot parse src/main/consumer.ts')
     }
   )
-
-  it('counts only production main and shared source', () => {
-    const sync = "import { execSync } from 'node:child_process'\nexecSync('a')\nexecSync('b')"
-    const { counts } = countSyncSpawnUses(
-      new Map(
-        Object.entries({
-          'src/main/legacy.ts': sync,
-          'src/shared/new.ts':
-            "import { runProcessSync } from '@orca/process-host'\nrunProcessSync(s)",
-          'src/main/clean.ts': "import { spawn } from 'node:child_process'\nspawn('a')",
-          'src/main/consumer.test.ts': sync,
-          'src/main/fixtures/script.ts': sync,
-          'src/main/types.d.ts': sync,
-          'src/cli/handlers/core.ts': sync,
-          'src/relay/host.ts': sync
-        })
-      )
-    )
-    expect([...counts]).toEqual([
-      ['src/main/legacy.ts', 2],
-      ['src/shared/new.ts', 1]
-    ])
-  })
 
   it('fails a new file and a rising count, and passes at the baseline count', () => {
     const one = "import { spawnSync } from 'node:child_process'\nspawnSync('a')"

@@ -1207,7 +1207,7 @@
         "insecureOrigin": "Orca hat die Kopplung von dieser Seite abgelehnt: Die Seite wird über unverschlüsseltes http auf einem anderen Computer bereitgestellt. Dadurch könnte jeder auf dem Netzwerkpfad die Seite ersetzen und den Kopplungscode abfangen. Den Web-Client über https, über localhost auf diesem Computer oder über einen SSH-Tunnel öffnen. Um dies dennoch zuzulassen, kann der Serverbetreiber Orca mit ORCA_ALLOW_INSECURE_WEB_PAIRING=1 neu starten.",
         "deviceDowngraded": "Dieser Orca-Server unterstützt den Anmeldeschlüssel dieses Browsers nicht mehr (möglicherweise wurde eine ältere Serverversion installiert). Den Server aktualisieren oder diesen Browser erneut koppeln.",
         "unauthorized": "Nicht autorisiert. Diesen Web-Client erneut koppeln.",
-        "unauthorizedNewLink": "Nicht autorisiert. Fordere einen neuen Kopplungslink an."
+        "unauthorizedLinkUsedOrExpired": "Nicht autorisiert. Dieser Kopplungslink ist möglicherweise abgelaufen oder wurde bereits verwendet. Erstelle in Orca einen neuen Kopplungslink und öffne ihn."
       }
     },
     "store": {
@@ -1910,13 +1910,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Der Zielarbeitsbereich ist nicht mehr verfügbar.",
-        "16a21d6413": "Die erneute SSH-Verbindung erfordert die interaktive Eingabe von Zugangsdaten.",
-        "386db94f3e": "Das Zielprojekt ist nicht mehr verfügbar.",
-        "3ad7d77f57": "Der Zielarbeitsbereich befindet sich auf einem anderen Host als das Ausführungsziel dieser Automatisierung.",
-        "workspaceHostUnresolved": "Der Zielarbeitsbereich erstreckt sich über mehrere Hosts, daher steht für diese Ausführung kein einzelner Host zur Verfügung."
-      },
       "useComposerState": {
         "b2ead86962": "Die PR-Basis konnte nicht ermittelt werden.",
         "3db83fc58a": "Auf diesem Host ist kein Projektpfad für Anhänge verfügbar.",
@@ -11302,7 +11295,11 @@
               "micDefault": "Systemstandard",
               "dictationLanguageTitle": "Diktiersprache",
               "dictationLanguageDescription": "Teile dem Sprachmodell mit, welche Sprache du sprichst.",
-              "dictationLanguageKeyword": "Sprache"
+              "dictationLanguageKeyword": "Sprache",
+              "modelUnloadTitle": "Sprachmodell entladen",
+              "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
+              "modelUnloadKeyword": "entladen",
+              "modelMemoryKeyword": "speicher"
             }
           }
         },
@@ -20651,6 +20648,13 @@
           "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
           "title": "Diktiersprache",
           "auto": "Automatisch erkennen"
+        },
+        "modelUnload": {
+          "title": "Sprachmodell entladen",
+          "description": "Wie lange das lokale Modell nach dem Diktieren im Speicher bleibt. Solange es geladen ist, beginnt das Diktieren sofort; „Sofort“ gibt den Speicher frei, sodass jedes Diktat auf das Laden des Modells wartet.",
+          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
+          "never": "Nie",
+          "immediately": "Sofort"
         }
       }
     },
@@ -23063,6 +23067,17 @@
         "effortRepeated": "Zusätzliche Argumente legen den Denkaufwand mehrfach fest."
       },
       "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um zusätzliche Argumente zu verwenden."
+    },
+    "setupTrust": {
+      "reviewTitle": "Neue Einrichtungsbefehle für diese Automatisierung genehmigen?",
+      "reviewBody": "Eine Ausführung hat die Einrichtung übersprungen, weil sich die Einrichtungsbefehle in der <code>orca.yaml</code> ihres Branches geändert haben. Nach der Genehmigung verwenden spätere Ausführungen diese Befehle. Genehmige nur, wenn du <repo/> vertraust.",
+      "approve": "Genehmigen",
+      "approved": "Einrichtung genehmigt. Spätere Ausführungen dieser Automatisierung führen sie aus.",
+      "skippedSinceApproved": "Die Einrichtung wurde bei dieser Ausführung nicht ausgeführt, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Sie wurden inzwischen genehmigt, daher führen spätere Ausführungen sie aus.",
+      "skippedReview": "Die Einrichtung wurde nicht ausgeführt: Der Branch dieser Ausführung enthält andere orca.yaml-Einrichtungsbefehle als die für diese Automatisierung genehmigten. Prüfe sie, damit spätere Ausführungen die Einrichtung ausführen.",
+      "reviewAction": "Einrichtung prüfen und genehmigen",
+      "listSkipped": "Einrichtung übersprungen",
+      "listSkippedTitle": "Die letzte Ausführung hat die Einrichtung übersprungen, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Prüfe sie über das Aktionsmenü."
     }
   },
   "codeHost": {
