@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { stripSshReconnectOwnedErrorLines } from '../TerminalErrorToast'
+import { stripSshReconnectOwnedErrorLines } from '../terminal-ssh-reconnect-error'
 import { mapPaneTerminalErrors } from '../terminal-error-accumulation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 

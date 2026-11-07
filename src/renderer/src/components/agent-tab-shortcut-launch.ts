@@ -11,29 +11,33 @@ import {
   type AgentTabLaunchContext
 } from './agent-tab-launch-context'
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import { launchWithClaudeAccountChoice } from './claude-account-prompt/choose-claude-launch-account'
 
 function launchAgentTab(
   worktreeId: string,
   agent: TuiAgent,
   { groupId, focusIntent }: AgentTabLaunchContext
 ): void {
-  const result = launchAgentInNewTab({
-    requestId: newAgentLaunchRequestId(),
-    focusIntent,
-    agent,
-    worktreeId,
-    groupId,
-    launchSource: 'shortcut'
-  })
-  if (!result) {
-    toast.error(
-      translate(
-        'auto.components.Terminal.e57db40c11',
-        'Could not build launch command for {{value0}}.',
-        { value0: agent }
+  launchWithClaudeAccountChoice(agent, { worktreeId }, (claudeAccountId) => {
+    const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
+      focusIntent,
+      agent,
+      worktreeId,
+      groupId,
+      launchSource: 'shortcut',
+      ...(claudeAccountId ? { claudeAccountId } : {})
+    })
+    if (!result) {
+      toast.error(
+        translate(
+          'auto.components.Terminal.e57db40c11',
+          'Could not build launch command for {{value0}}.',
+          { value0: agent }
+        )
       )
-    )
-  }
+    }
+  })
 }
 
 /** Launch a resolved new-agent-tab shortcut in the pane it was pressed in, waiting on detection if needed. */

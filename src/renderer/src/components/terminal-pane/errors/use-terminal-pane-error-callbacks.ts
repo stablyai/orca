@@ -2,8 +2,13 @@ import { useCallback, useRef } from 'react'
 import { isTerminalSessionStateSaveFailure } from '../../../../../shared/workspace-session/terminal-session-state-save-failure'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from '../terminal-error-accumulation'
-import { stripSshReconnectOwnedErrorLines } from '../TerminalErrorToast'
+import { stripSshReconnectOwnedErrorLines } from '../terminal-ssh-reconnect-error'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
+import type { PtyPaneStartup } from '../pty-connection-types'
+import {
+  recordRefusedClaudeLaunchStartup,
+  refusedClaudeLaunchStartupsFor
+} from '../refused-claude-launch-recovery'
 
 export function useTerminalPaneErrorCallbacks({
   managerRef,
@@ -21,7 +26,13 @@ export function useTerminalPaneErrorCallbacks({
   | 'setTerminalErrorsByPaneId'
   | 'sshReconnectOwnsTerminalErrorsRef'
 >) {
-  const onPtyErrorRef = useRef((paneId: number, message: string) => {
+  const onPtyErrorRef = useRef((paneId: number, message: string, startup?: PtyPaneStartup) => {
+    recordRefusedClaudeLaunchStartup(
+      refusedClaudeLaunchStartupsFor(paneTransportsRef),
+      paneId,
+      message,
+      startup
+    )
     if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
       // A launch pane's verdict reached the tab typed; its notice shows it, not an error.
       return

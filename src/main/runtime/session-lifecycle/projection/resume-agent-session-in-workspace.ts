@@ -46,6 +46,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
+      /** The Claude account the resumed conversation ran on, when it was pinned. */
+      claudeAccountId?: string
       signal?: AbortSignal
     }
   ): Promise<AgentSessionResumeResult> {
@@ -91,7 +93,12 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,
-    request: { captureHostId: ExecutionHostId; mutationId: string; signal?: AbortSignal },
+    request: {
+      captureHostId: ExecutionHostId
+      mutationId: string
+      claudeAccountId?: string
+      signal?: AbortSignal
+    },
     create: {
       identity: { tabId: string; leafId: string }
       onPtySpawnDispatched: () => void
@@ -180,6 +187,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
         startupCommandDelivery: resume.startupCommandDelivery,
         launchConfig: resume.launchConfig,
         launchAgent: resume.launchAgent,
+        ...(request.claudeAccountId && session.agent === 'claude'
+          ? { claudeAccountId: request.claudeAccountId }
+          : {}),
         launchRuntime: resume.launchRuntime,
         resumeProviderSession: resume.resumeProviderSession,
         spawnIntent: 'user-resume',

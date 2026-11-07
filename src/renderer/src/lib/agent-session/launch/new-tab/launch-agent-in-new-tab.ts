@@ -5,7 +5,7 @@ import {
 import type { LaunchAgentInNewTabArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store/index'
 import { validateActionTerminalArgs } from '../../../workspace/creation/work-item/launch-work-item-direct-messages'
-import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import { planNewTabStartup } from '@/lib/agent-session/launch/new-tab/launch-agent-new-tab-startup'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import '@/lib/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
@@ -15,16 +15,19 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
-import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   agentTabLaunchStore,
   resolveAgentLaunchExecutionContext
 } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
-import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
+import {
+  launchStructuredAgentFromNewTab,
+  reopenStructuredLaunchAsTerminal
+} from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { claudeLaunchAccountId, relaunchWithClaudeAccount } from '@/lib/claude-launch-account'
 import {
   notifyAgentTabLaunchFailure,
   launchOnceHostAnswered,
@@ -135,18 +138,9 @@ function openAgentInNewTab(
       ...(groupId ? { groupId } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
-      // The host's "no" opens this same launch as a terminal, with the caller's arguments.
-      openTerminal: (terminalPlan, terminalActivate) =>
-        launchAgentInNewTabWithOutcome(
-          {
-            ...args,
-            beforeSurfaceOpen: undefined,
-            ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
-            requestId: undefined,
-            agentSessionLaunchPlan: terminalPlan
-          },
-          notifyFailure
-        )
+      openTerminal: reopenStructuredLaunchAsTerminal(args, (terminalArgs) =>
+        launchAgentInNewTabWithOutcome(terminalArgs, notifyFailure)
+      )
     })
     if (!structured) {
       args.focusIntent?.cancel()
@@ -163,8 +157,10 @@ function openAgentInNewTab(
   const buildStartup = (
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
   ) =>
-    planLaunchAgentStartupPrompt({
-      base: resolveAgentStartupPlanInputs({
+    planNewTabStartup(
+      store,
+      args,
+      {
         agent,
         settings: { ...store.settings, agentLaunchChoices },
         agentArgs,
@@ -173,11 +169,9 @@ function openAgentInNewTab(
         platform: resolvedLaunchPlatform,
         shell: queuedShell,
         isRemote
-      }),
-      prompt: trimmedPrompt,
-      promptDelivery,
-      isFollowupPath
-    })
+      },
+      { prompt: trimmedPrompt, promptDelivery, isFollowupPath }
+    )
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -202,7 +196,9 @@ function openAgentInNewTab(
       launchShell: queuedShell,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
-      onPromptDelivered
+      onPromptDelivered,
+      claudeAccountId: claudeLaunchAccountId(store, args),
+      relaunch: relaunchWithClaudeAccount(launchAgentInNewTabWithOutcome, args)
     })
     return {
       surface: { kind: 'host-published' },
@@ -226,6 +222,8 @@ function openAgentInNewTab(
   }
   if (
     pasteDraftAfterLaunch !== null &&
+    // Why: the host's plan carries only the project's saved account, not a one-time choice.
+    !args.claudeAccountId &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({

@@ -3,6 +3,7 @@ import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -58,6 +59,8 @@ type RepositoryUpdates = Partial<
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  /** Only null clears. */
+  agentAccounts?: RepoAgentAccounts | null
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.

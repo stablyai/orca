@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { usePaneAccountRestartStartup } from '../account-restart/use-pane-account-restart-startup'
 import { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import { useExitedPaneActions } from '../process-exit/use-exited-pane-actions'
@@ -5,6 +6,7 @@ import { useSavedPanePtyBindings } from '../layout/ownership/use-saved-pane-pty-
 import { useReadyPaneAccountRestarts } from '../account-restart/use-ready-pane-account-restarts'
 
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import { startPaneOnActiveClaudeAccount } from '../start-pane-on-active-claude-account'
 
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
@@ -108,7 +110,23 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     panePtyLayoutBindings
   })
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  const startPaneOnActiveAccount = useCallback(
+    (paneId: number) =>
+      startPaneOnActiveClaudeAccount({
+        paneId,
+        paneHost: paneTransportsRef,
+        worktreeId,
+        restartPane: (refusedPaneId, startup) =>
+          handleRestartPane(refusedPaneId, startup, { focus: true })
+      }),
+    [handleRestartPane, paneTransportsRef, worktreeId]
+  )
+
+  return {
+    handleRestartExitedPane,
+    handleCloseExitedPane,
+    startPaneOnActiveAccount
+  }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

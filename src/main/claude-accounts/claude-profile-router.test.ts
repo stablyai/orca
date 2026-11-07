@@ -24,6 +24,7 @@ import {
 import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-profile-router'
+import { prepareClaudePinnedAccountLaunch } from './claude-pinned-account-launch'
 import {
   claudeProfileHistoryDirs,
   getClaudeObservedConfigDirs,
@@ -193,6 +194,48 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.routedHome()).toBe(f.home('a'))
     expect(f.router.routedHome('identity')).toBe(f.home('a'))
     await expect(claudeRoutedHomeAsync(f.router)).resolves.toBe(f.home('a'))
+  })
+
+  it('pins an --account launch to System default only while that holds the account’s login', async () => {
+    const f = fixture()
+    signIn(f.userHome, 'b@example.test')
+    await expect(prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')).resolves.toEqual({
+      configDir: join(f.userHome, '.claude'),
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: {},
+      pinnedAccountId: 'b',
+      provenance: 'profile:b:pinned'
+    })
+
+    signIn(f.home('b'), 'b@example.test')
+    const ownFolderLaunch = prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
+    f.setup.settle()
+    await expect(ownFolderLaunch).resolves.toMatchObject({
+      configDir: f.home('b'),
+      envPatch: {
+        CLAUDE_CONFIG_DIR: f.home('b'),
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: f.home('b')
+      },
+      pinnedAccountId: 'b'
+    })
+  })
+
+  it('rebuilds an --account folder whose marker outlived it', async () => {
+    const f = fixture()
+    signIn(f.home('b'), 'b@example.test')
+    const firstLaunch = prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
+    f.setup.settle()
+    await firstLaunch
+
+    rmSync(f.home('b'), { recursive: true })
+    const rebuilt = prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(2))
+    f.setup.settle()
+    await expect(rebuilt).resolves.toMatchObject({ configDir: f.home('b') })
   })
 
   it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {

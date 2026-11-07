@@ -17,6 +17,17 @@ import {
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 
+/** Records the launch's Claude account on its config, so a resume replays it as a saved choice. */
+export function withRecordedClaudeAccount(
+  config: SleepingAgentLaunchConfig | undefined,
+  launchOpts: { claudeAccountId?: string; launchClaudeAccountId?: string; launchAgent?: TuiAgent }
+): SleepingAgentLaunchConfig | undefined {
+  const accountId = launchOpts.claudeAccountId ?? launchOpts.launchClaudeAccountId
+  return config && accountId && launchOpts.launchAgent === 'claude'
+    ? { ...config, claudeAccountId: accountId }
+    : config
+}
+
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,
   second: readonly string[] | undefined
@@ -49,7 +60,8 @@ export function copySleepingAgentLaunchConfig(
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.claudeAccountId ? { claudeAccountId: config.claudeAccountId } : {})
   }
 }
 

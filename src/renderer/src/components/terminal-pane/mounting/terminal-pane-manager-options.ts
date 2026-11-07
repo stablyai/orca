@@ -26,6 +26,10 @@ import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
 import { formatTerminalUrlTooltip } from '../links/terminal-url-tooltip'
 import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
+import {
+  redirectsPtylessPaneActivation,
+  refusedClaudeLaunchStartupsFor
+} from '../refused-claude-launch-recovery'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -53,7 +57,14 @@ export function createTerminalPaneManagerOptions(
     onActivePaneChange: (pane) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
-      if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
+      if (
+        redirectsPtylessPaneActivation({
+          ptyIdsByLeafId,
+          leafId: pane.leafId,
+          paneId: pane.id,
+          refusedStartups: refusedClaudeLaunchStartupsFor(paneTransportsRef)
+        })
+      ) {
         const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
           root: layout?.root,
           activeLeafId: pane.leafId,

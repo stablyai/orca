@@ -76,6 +76,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the
    *  staleness window because the host still runs the provider child. */
   structuredHost?: StructuredHostStatus
+  /** Managed account main pinned this pane's Claude PTY to; absent when unpinned and from older hosts. */
+  claudeAccountId?: string
 } & WithAgentStatusObservation
 
 /** Match exact UI-cleared events by receivedAt/stateStartedAt. Exclude renderer-enriched connection/worktree attribution that differs from main's cache. */

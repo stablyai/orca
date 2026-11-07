@@ -18,7 +18,7 @@ import {
 } from '../../../../../../shared/app-environment'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
-type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
+type WorkerStartOptions = { terminal?: string; agent?: TuiAgent; account?: string }
 
 function isWorkerStartResult(value: unknown): value is { state: 'ready'; dispatchId: string } {
   return (
@@ -243,7 +243,8 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     const result = await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' })
+      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' }),
+      ...(options.account ? { account: options.account } : {})
     })
     if (!isWorkerStartResult(result)) {
       throw new Error('Expected worker-start to return a ready dispatch')

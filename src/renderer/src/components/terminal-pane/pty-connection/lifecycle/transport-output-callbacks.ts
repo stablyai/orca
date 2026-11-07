@@ -18,7 +18,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySession): void {
   const ownerErrors = new Set<string>()
   session.captureTransportOutputCallbacks = (
-    onError: (message: string) => void,
+    onError: (message: string, startup: PtyPaneStartup) => void,
     startup: PtyPaneStartup,
     savedStartup: ColdRestoreAgentResumeStartup | PtyPaneStartup = session.paneStartup
   ) => {
@@ -105,7 +105,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
               }
             }
             session.startupTiming?.finish('error')
-            onError(message)
+            onError(message, processExitState.startup)
           }
         },
         onErrorCleared: (message: string): void => {

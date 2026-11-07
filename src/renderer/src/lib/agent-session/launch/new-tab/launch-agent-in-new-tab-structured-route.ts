@@ -78,3 +78,18 @@ export function launchStructuredAgentFromNewTab(args: {
     }
   )
 }
+
+/** The host's "no" opens this same launch as a terminal, with the caller's arguments. */
+export function reopenStructuredLaunchAsTerminal(
+  args: LaunchAgentInNewTabArgs,
+  launch: (terminalArgs: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome
+) {
+  return (terminalPlan: AgentSessionLaunchPlan, activate?: false): AgentTabLaunchOutcome =>
+    launch({
+      ...args,
+      beforeSurfaceOpen: undefined,
+      ...(activate === false ? { prompt: undefined, activate: false } : {}),
+      requestId: undefined,
+      agentSessionLaunchPlan: terminalPlan
+    })
+}

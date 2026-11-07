@@ -7,7 +7,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import type { LaunchAgentBackgroundSessionArgs } from './agent-background-session-contract'
 import type { AgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/agent-session-launch-options'
 import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -70,7 +70,7 @@ async function createPreparedRuntimeAgentBackgroundTerminal(
   complete: boolean
 ): Promise<{ terminal: RuntimeTerminalCreate }> {
   const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-  const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+  const launchOptions = createAgentSessionLaunchOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
   if (!complete && args.sessionOptions !== undefined) {
     throw new Error('Update Orca on this host to use agent launch settings.')
@@ -100,7 +100,7 @@ async function createPreparedRuntimeAgentBackgroundTerminal(
                 'terminal.createAgentSession',
                 withAgentSessionCreateOperationId(
                   {
-                    ...(await keyboardOptions(args.environmentId)),
+                    ...(await launchOptions(args.environmentId, legacy?.launchConfig)),
                     ...agentSessionCreateRequest({
                       worktreeId: args.worktreeId,
                       agent: args.agent,

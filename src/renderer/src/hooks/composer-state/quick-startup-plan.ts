@@ -15,6 +15,7 @@ import {
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -32,6 +33,7 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  claudeAccountId?: string
   launchInputs?: WorktreeCreationRequest['launchInputs']
   route?: WorktreeCreationRequest['agentLaunchRoute']
 }
@@ -85,6 +87,13 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     })
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
+    }
+  }
+  // Why: stamped before `backendStartup` is derived so the backend and renderer lanes pin alike.
+  if (startupPlan && agent === 'claude') {
+    startupPlan = {
+      ...startupPlan,
+      launchConfig: withClaudeLaunchAccount(startupPlan.launchConfig, input.claudeAccountId)
     }
   }
   if (agent && input.route !== 'structured-native-chat' && !startupPlan) {

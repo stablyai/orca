@@ -1,6 +1,7 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { claudePinnedLaunchError } from '../../../../../../shared/claude/claude-pinned-launch-error'
 import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
 import { sendTerminalInputThroughPane } from '../test-fixtures/pty-connection-test-dom'
 import {
@@ -288,6 +289,34 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       expect(capturedOnError.current).toBeTypeOf('function')
       capturedOnError.current!('shell exited with code 1')
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(1, 'shell exited with code 1')
+    })
+
+    it('passes the startup with a pinned Claude refusal so the pane can relaunch it', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const transport = createMockTransport()
+      const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedOnError.current = callbacks.onError ?? null
+          return 'pty-1'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const deps = createDeps({
+        tabId: 'tab-pinned-refusal',
+        startup: { command: 'claude', launchAgent: 'claude' }
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      const refusal = claudePinnedLaunchError('account-missing', 'Account is gone').message
+      capturedOnError.current!(refusal)
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        refusal,
+        expect.objectContaining({ command: 'claude' })
+      )
     })
 
     it('threads the resolved local project runtime into IPC terminal transport options', async () => {

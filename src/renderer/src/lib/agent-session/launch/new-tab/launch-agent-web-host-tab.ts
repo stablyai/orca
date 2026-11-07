@@ -10,11 +10,12 @@ import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/c
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
+import {
+  pairedAgentLaunchInputs,
+  pairedAgentSessionCapabilities
+} from '../../../paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { toast } from 'sonner'
@@ -33,6 +34,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { translate } from '@/i18n/i18n'
 import { toWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-launch-admission'
+import { toastWebHostLaunchFailure } from '@/lib/web-host-launch-failure-toast'
+import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export async function launchAgentInWebHostTab(args: {
@@ -55,6 +58,10 @@ export async function launchAgentInWebHostTab(args: {
   /** False opens the host's tab without selecting it. */
   activate?: boolean
   onPromptDelivered?: () => void
+  /** The Claude account this launch runs on, sent to the host rather than planned by it. */
+  claudeAccountId?: string
+  /** Starts the same launch again, optionally on another Claude account, from a refusal toast. */
+  relaunch?: (claudeAccountId?: string) => void
 }): Promise<{ delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion> {
   const {
     agent,
@@ -84,17 +91,7 @@ export async function launchAgentInWebHostTab(args: {
   let startup: LaunchAgentStartupPromptPlan
   let launch: CreateWebRuntimeSessionTerminalOnHostArgs
   try {
-    const { capable, complete } = environmentId
-      ? await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {
-          if (
-            isRuntimeCompatBlockError(error) ||
-            (error instanceof Error && error.name === 'AbortError')
-          ) {
-            throw error
-          }
-          return { capable: false, complete: false }
-        })
-      : { capable: false, complete: false }
+    const { capable, complete } = await pairedAgentSessionCapabilities(environmentId)
     const inputs = environmentId
       ? await pairedAgentLaunchInputs({ ...args, environmentId, complete, capable })
       : { preparedAgentCommand: true }
@@ -129,6 +126,7 @@ export async function launchAgentInWebHostTab(args: {
       launchAgent: agent,
       agent,
       ...inputs,
+      claudeAccountId: args.claudeAccountId,
       ...(complete
         ? { agentSessionCreateCapability: AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY }
         : {}),
@@ -138,7 +136,9 @@ export async function launchAgentInWebHostTab(args: {
         ? { promptDelivery: promptDelivery === 'draft' ? 'draft' : 'auto-submit' }
         : {}),
       legacyAgentLaunch: async () => {
+        // Why: a legacy launch carries its Claude account only inside a planned launch config.
         if (
+          !args.claudeAccountId &&
           !Object.keys(args.sessionOptions ?? {}).length &&
           args.actionAgentArgs === undefined &&
           agentArgs === undefined &&
@@ -225,7 +225,7 @@ export async function launchAgentInWebHostTab(args: {
         return {
           command: plan.launchCommand,
           env: plan.env,
-          launchConfig: plan.launchConfig,
+          launchConfig: withClaudeLaunchAccount(plan.launchConfig, args.claudeAccountId),
           startupCommandDelivery: plan.startupCommandDelivery
         }
       }
@@ -259,7 +259,7 @@ export async function launchAgentInWebHostTab(args: {
           outcome: { status: 'failed', message: '' }
         }
       }
-      toast.error(failureMessage)
+      toastWebHostLaunchFailure(outcome.message, failureMessage, args.relaunch)
       return { delivered: false, failureNotified: true, outcome }
     }
     if (args.activate !== false) {

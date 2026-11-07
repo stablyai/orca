@@ -1,3 +1,4 @@
+import { stripClaudePinnedLaunchMarker } from '../../../shared/claude/claude-pinned-launch-error'
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerStartReceipt } from './worker-output'
 
@@ -48,6 +49,10 @@ type WorkerStartFields = {
   next?: string
 }
 
+function readableLastError(value: WorkerStartAgentReceipt): string | undefined {
+  return value.lastError === undefined ? undefined : stripClaudePinnedLaunchMarker(value.lastError)
+}
+
 export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, WorkerStartFields> =
   {
     fields: (value) => {
@@ -72,7 +77,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         terminal: findEffectId(value.effects, 'terminal', 'agent'),
         workspace: findEffectId(value.effects, 'worktree'),
         failedStage: value.failedStage,
-        lastError: unobserved ? undefined : value.lastError,
+        lastError: unobserved ? undefined : readableLastError(value),
         warning: value.lastError ? undefined : value.warning,
         // Its terminal is the live worker, and abandon or a screen read would invite a retry.
         residualResources:
@@ -99,7 +104,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             }
           : {
               code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
-              message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
+              message: `${value.failedStage ?? 'start'}: ${readableLastError(value) ?? value.state}`
             }
   }
 

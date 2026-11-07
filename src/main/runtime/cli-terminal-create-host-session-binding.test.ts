@@ -113,7 +113,10 @@ describe('host-initiated terminal creation under an attached window', () => {
           if (failure === 'cancelled') {
             signal.abort()
           }
-          return { plan: { env, command: 'claude' }, effectiveLaunchConfig: args.launchConfig }
+          return {
+            plan: { env, command: 'claude' },
+            effectiveLaunchConfig: args.launch.launchConfig
+          }
         })
       if (failure === 'refused') {
         spawn.mockRejectedValue(new Error('execution_owner_unavailable'))
@@ -170,7 +173,7 @@ describe('host-initiated terminal creation under an attached window', () => {
       .spyOn(launchPlan, 'buildRuntimeAgentTeamsLaunchPlan')
       .mockImplementation(async (args) => ({
         plan: { env: args.createTeamEnv('/shim', '/orca'), command: 'claude' },
-        effectiveLaunchConfig: args.launchConfig
+        effectiveLaunchConfig: args.launch.launchConfig
       }))
     runtime.setPtyController({
       spawn,

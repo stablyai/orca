@@ -113,6 +113,8 @@ export type RuntimeEnsureAgentSessionRequest =
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      /** A pinnable Claude account id or ACTIVE_CLAUDE_ACCOUNT, as recorded in the launch config. */
+      claudeAccountId?: string
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
       spawnIntent?: SpawnIntent
@@ -137,6 +139,8 @@ export type RuntimeCreateAgentSessionRequest = {
   sessionOptions?: Record<string, string>
   extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
+  /** A pinnable Claude account id or ACTIVE_CLAUDE_ACCOUNT, as recorded in the launch config. */
+  claudeAccountId?: string
   startupCwd?: string
   trustWorktreeId?: string
   presentation?: RuntimeTerminalPresentation
