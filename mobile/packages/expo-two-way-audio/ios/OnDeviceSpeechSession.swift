@@ -8,28 +8,109 @@ enum OnDeviceSpeechError: Error {
     case audioFormat
 }
 
-// Locale resolution and language assets for Apple's on-device transcriber.
+// SpeechTranscriber where the hardware runs it; elsewhere (older iPhones, the simulator) the keyboard dictation model.
+@available(iOS 26.0, macOS 26.0, *)
+enum OnDeviceTranscriber {
+    case speech(SpeechTranscriber)
+    case dictation(DictationTranscriber)
+
+    init(locale: Locale) {
+        if SpeechTranscriber.isAvailable {
+            self = .speech(SpeechTranscriber(locale: locale, preset: .progressiveTranscription))
+        } else {
+            self = .dictation(DictationTranscriber(locale: locale, preset: .progressiveLongDictation))
+        }
+    }
+
+    // nil when this language can't be transcribed on device.
+    static func supportedLocale(for identifier: String) async -> Locale? {
+        let locale = Locale(identifier: identifier)
+        guard locale.region == nil, let language = locale.language.languageCode else {
+            return await equivalent(to: locale)
+        }
+        // A bare language matches an arbitrary region ("en" gave en-NZ); prefer the phone's languages, then its region.
+        let preferred = Locale.preferredLanguages.map { Locale(identifier: $0) }.filter { $0.language.languageCode == language }
+        let regions = preferred.compactMap(\.region) + [Locale.current.region].compactMap { $0 }
+        for region in regions {
+            let regional = Locale(languageCode: language, script: locale.language.script, languageRegion: region)
+            if let match = await equivalent(to: regional), match.region == region {
+                return match
+            }
+        }
+        return await equivalent(to: locale)
+    }
+
+    private static func equivalent(to locale: Locale) async -> Locale? {
+        if SpeechTranscriber.isAvailable {
+            return await SpeechTranscriber.supportedLocale(equivalentTo: locale)
+        }
+        return await DictationTranscriber.supportedLocale(equivalentTo: locale)
+    }
+
+    var module: any SpeechModule {
+        switch self {
+        case .speech(let transcriber): transcriber
+        case .dictation(let transcriber): transcriber
+        }
+    }
+
+    // Collects results until the analyzer finishes; resolves with every finalized word.
+    func collect(
+        onText: @escaping @Sendable (_ revision: Int, _ committed: String, _ tentative: String) -> Void,
+        onFailure: @escaping @Sendable (Error) -> Void
+    ) -> Task<String, Error> {
+        switch self {
+        case .speech(let transcriber):
+            Self.collect(transcriber.results, text: { $0.text }, onText: onText, onFailure: onFailure)
+        case .dictation(let transcriber):
+            Self.collect(transcriber.results, text: { $0.text }, onText: onText, onFailure: onFailure)
+        }
+    }
+
+    private static func collect<Results: AsyncSequence & Sendable>(
+        _ results: Results,
+        text: @escaping @Sendable (Results.Element) -> AttributedString,
+        onText: @escaping @Sendable (Int, String, String) -> Void,
+        onFailure: @escaping @Sendable (Error) -> Void
+    ) -> Task<String, Error> where Results.Element: SpeechModuleResult {
+        Task {
+            var committed = ""
+            var revision = 0
+            do {
+                for try await result in results {
+                    let words = String(text(result).characters)
+                    revision += 1
+                    if result.isFinal {
+                        committed += words
+                        onText(revision, committed, "")
+                    } else {
+                        onText(revision, committed, words)
+                    }
+                }
+            } catch {
+                if !Task.isCancelled {
+                    onFailure(error)
+                }
+                throw error
+            }
+            return committed
+        }
+    }
+}
+
+// Language assets for the on-device transcriber.
 @available(iOS 26.0, macOS 26.0, *)
 enum OnDeviceSpeechAssets {
-    static func transcriber(for locale: Locale) -> SpeechTranscriber {
-        SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
-    }
-
-    // nil when this device or this language can't transcribe on device.
-    static func supportedLocale(for identifier: String) async -> Locale? {
-        guard SpeechTranscriber.isAvailable else { return nil }
-        return await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier))
-    }
-
     static func status(for locale: Locale) async -> AssetInventory.Status {
-        await AssetInventory.status(forModules: [transcriber(for: locale)])
+        await AssetInventory.status(forModules: [OnDeviceTranscriber(locale: locale).module])
     }
 
     static func install(_ locale: Locale, onProgress: @escaping @Sendable (Double) -> Void) async throws {
-        let transcriber = transcriber(for: locale)
+        let transcriber = OnDeviceTranscriber(locale: locale).module
         if await AssetInventory.status(forModules: [transcriber]) == .unsupported {
             throw OnDeviceSpeechError.unsupported
         }
+        try await reserve(locale)
         // A nil request means the assets are already installed.
         guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
             return
@@ -39,6 +120,19 @@ enum OnDeviceSpeechAssets {
         }
         defer { observation.invalidate() }
         try await request.downloadAndInstall()
+    }
+
+    // The system only downloads, and keeps, assets for locales the app has reserved, up to a per-app limit.
+    private static func reserve(_ locale: Locale) async throws {
+        let reserved = await AssetInventory.reservedLocales
+        if reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
+            return
+        }
+        // At the limit, give up another language's reservation rather than fail this download.
+        if reserved.count >= AssetInventory.maximumReservedLocales, let other = reserved.first {
+            await AssetInventory.release(reservedLocale: other)
+        }
+        try await AssetInventory.reserve(locale: locale)
     }
 }
 
@@ -62,7 +156,7 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
         let (stream, input) = AsyncStream.makeStream(of: AVAudioPCMBuffer.self)
         self.input = input
         let ready = Task { () throws -> Locale in
-            guard let locale = await OnDeviceSpeechAssets.supportedLocale(for: identifier) else {
+            guard let locale = await OnDeviceTranscriber.supportedLocale(for: identifier) else {
                 throw OnDeviceSpeechError.unsupported
             }
             switch await OnDeviceSpeechAssets.status(for: locale) {
@@ -114,10 +208,10 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
         onFailure: @escaping @Sendable (Error) -> Void
     ) async throws -> String {
         try Task.checkCancellation()
-        let transcriber = OnDeviceSpeechAssets.transcriber(for: locale)
+        let transcriber = OnDeviceTranscriber(locale: locale)
         guard
             let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
-                compatibleWith: [transcriber], considering: inputFormat),
+                compatibleWith: [transcriber.module], considering: inputFormat),
             let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
         else {
             onFailure(OnDeviceSpeechError.audioFormat)
@@ -126,30 +220,9 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
         // Keep every input frame; the default priming drops the start of each converted buffer.
         converter.primeMethod = .none
 
-        let collector = Task { () throws -> String in
-            var committed = ""
-            var revision = 0
-            do {
-                for try await result in transcriber.results {
-                    let text = String(result.text.characters)
-                    revision += 1
-                    if result.isFinal {
-                        committed += text
-                        onText(revision, committed, "")
-                    } else {
-                        onText(revision, committed, text)
-                    }
-                }
-            } catch {
-                if !Task.isCancelled {
-                    onFailure(error)
-                }
-                throw error
-            }
-            return committed
-        }
+        let collector = transcriber.collect(onText: onText, onFailure: onFailure)
         let (analyzerStream, analyzerInput) = AsyncStream.makeStream(of: AnalyzerInput.self)
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        let analyzer = SpeechAnalyzer(modules: [transcriber.module])
         do {
             do {
                 try await analyzer.start(inputSequence: analyzerStream)
@@ -158,6 +231,8 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
                 throw error
             }
             for await buffer in stream {
+                // A cancelled stream still yields its backlog; don't convert audio nobody will read.
+                if Task.isCancelled { break }
                 if let converted = convert(buffer, with: converter) {
                     analyzerInput.yield(AnalyzerInput(buffer: converted))
                 }

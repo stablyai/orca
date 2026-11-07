@@ -12,6 +12,8 @@ let ON_SPEECH_DOWNLOAD_PROGRESS_EVENT_NAME = "onSpeechDownloadProgress"
 final class OnDeviceSpeechController: @unchecked Sendable {
     private let lock = NSLock()
     private var current: OnDeviceSpeechSession?
+    // The session speechFinish is draining; speechCancel and a newer speechStart still stop it.
+    private var finishing: OnDeviceSpeechSession?
     // Bumped whenever the live session changes so a stale session's events and start result are dropped.
     private var generation = 0
     private let emit: @Sendable (String, [String: Any]) -> Void
@@ -21,7 +23,7 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     static func availability(locale identifier: String) async -> [String: Any] {
-        guard let locale = await OnDeviceSpeechAssets.supportedLocale(for: identifier) else {
+        guard let locale = await OnDeviceTranscriber.supportedLocale(for: identifier) else {
             return ["status": "unsupported", "locale": NSNull()]
         }
         switch await OnDeviceSpeechAssets.status(for: locale) {
@@ -35,7 +37,7 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     func download(locale identifier: String) async -> Bool {
-        guard let locale = await OnDeviceSpeechAssets.supportedLocale(for: identifier) else {
+        guard let locale = await OnDeviceTranscriber.supportedLocale(for: identifier) else {
             return false
         }
         let resolved = locale.identifier(.bcp47)
@@ -54,23 +56,24 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true) else {
             return ["started": false, "reason": "failed"]
         }
-        lock.lock()
-        current?.cancel()
-        generation += 1
-        let mine = generation
-        let session = OnDeviceSpeechSession(
-            locale: identifier,
-            inputFormat: format,
-            onText: { [weak self] revision, committed, tentative in
-                self?.emitIfCurrent(
-                    mine, ON_SPEECH_TEXT_EVENT_NAME,
-                    ["revision": revision, "committed": committed, "tentative": tentative])
-            },
-            onFailure: { [weak self] error in
-                self?.fail(mine, error)
-            })
-        current = session
-        lock.unlock()
+        let (session, mine, stale) = locked { () -> (OnDeviceSpeechSession, Int, [OnDeviceSpeechSession]) in
+            let stale = detachAll()
+            let mine = generation
+            let session = OnDeviceSpeechSession(
+                locale: identifier,
+                inputFormat: format,
+                onText: { [weak self] revision, committed, tentative in
+                    self?.emitIfCurrent(
+                        mine, ON_SPEECH_TEXT_EVENT_NAME,
+                        ["revision": revision, "committed": committed, "tentative": tentative])
+                },
+                onFailure: { [weak self] error in
+                    self?.fail(mine, error)
+                })
+            current = session
+            return (session, mine, stale)
+        }
+        stale.forEach { $0.cancel() }
 
         do {
             let locale = try await session.ready.value
@@ -87,15 +90,26 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     func feed(_ pcm: Data) {
-        lock.lock()
-        let session = current
-        lock.unlock()
-        session?.append(pcm: pcm)
+        locked { current }?.append(pcm: pcm)
     }
 
     func finish() async throws -> String {
-        guard let session = take(nil) else {
+        let session = locked { () -> OnDeviceSpeechSession? in
+            let session = current
+            current = nil
+            finishing = session
+            generation += 1
+            return session
+        }
+        guard let session else {
             throw Exception(name: "OnDeviceSpeechException", description: "No on-device speech session is running")
+        }
+        defer {
+            locked {
+                if finishing === session {
+                    finishing = nil
+                }
+            }
         }
         do {
             return try await session.finish()
@@ -105,7 +119,8 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     func cancel() {
-        take(nil)?.cancel()
+        let stale = locked { detachAll() }
+        stale.forEach { $0.cancel() }
     }
 
     private func fail(_ generation: Int, _ error: Error) {
@@ -115,29 +130,44 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         emit(ON_SPEECH_ERROR_EVENT_NAME, ["code": Self.reason(for: error)])
     }
 
+    // Emits under the lock (sendEvent only schedules) so a cancel or start can't slip in after the check.
     private func emitIfCurrent(_ generation: Int, _ name: String, _ body: [String: Any]) {
-        if isCurrent(generation) {
-            emit(name, body)
+        locked {
+            if current != nil && self.generation == generation {
+                emit(name, body)
+            }
         }
     }
 
     private func isCurrent(_ generation: Int) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return current != nil && self.generation == generation
+        locked { current != nil && self.generation == generation }
     }
 
-    // Detaches the live session, only if it is still the one from `generation` when given.
-    @discardableResult
-    private func take(_ generation: Int?) -> OnDeviceSpeechSession? {
+    // Detaches the live session if it is still the one from `generation`.
+    private func take(_ generation: Int) -> OnDeviceSpeechSession? {
+        locked {
+            guard let session = current, generation == self.generation else {
+                return nil
+            }
+            current = nil
+            self.generation += 1
+            return session
+        }
+    }
+
+    private func locked<Value>(_ body: () -> Value) -> Value {
         lock.lock()
         defer { lock.unlock() }
-        guard let session = current, generation == nil || generation == self.generation else {
-            return nil
-        }
+        return body()
+    }
+
+    // Call inside `locked`; the caller cancels the returned sessions after unlocking.
+    private func detachAll() -> [OnDeviceSpeechSession] {
+        let stale = [current, finishing].compactMap { $0 }
         current = nil
-        self.generation += 1
-        return session
+        finishing = nil
+        generation += 1
+        return stale
     }
 
     private static func reason(for error: Error) -> String {

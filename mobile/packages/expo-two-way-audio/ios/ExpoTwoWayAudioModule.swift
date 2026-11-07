@@ -29,6 +29,11 @@ public class ExpoTwoWayAudioModule: Module {
 
         }
 
+        OnDestroy {
+            guard #available(iOS 26.0, *) else { return }
+            self.onDeviceSpeech()?.cancel()
+        }
+
         AsyncFunction("initialize") { () -> Bool in
             do {
                 if self.audioEngine != nil {
