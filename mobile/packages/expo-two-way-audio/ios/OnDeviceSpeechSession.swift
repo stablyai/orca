@@ -26,17 +26,17 @@ enum OnDeviceTranscriber {
     // answers a different region on each call for "en" or an unsupported region such as "en-GH".
     static func supportedLocale(for identifier: String) async -> Locale? {
         let requested = Locale(identifier: identifier)
-        let language = requested.language.maximalIdentifier
+        let language = maximal(requested)
         let supported = SpeechTranscriber.isAvailable
             ? await SpeechTranscriber.supportedLocales
             : await DictationTranscriber.supportedLocales
-        let sameLanguage = supported.filter { sameLanguageAndScript($0.language.maximalIdentifier, language) }
+        let sameLanguage = supported.filter { sameLanguageAndScript(maximal($0), language) }
             .sorted { $0.identifier(.bcp47) < $1.identifier(.bcp47) }
         // The requested region, then the regions of the phone's own languages and its region, then the language's usual one.
         let phoneRegions = Locale.preferredLanguages.map(Locale.init(identifier:))
-            .filter { sameLanguageAndScript($0.language.maximalIdentifier, language) }
+            .filter { sameLanguageAndScript(maximal($0), language) }
             .map(\.region)
-        let regions = [requested.region] + phoneRegions + [Locale.current.region, Locale(identifier: language).region]
+        let regions = [requested.region] + phoneRegions + [Locale.current.region, language.region]
         for region in regions.compactMap({ $0 }) {
             if let match = sameLanguage.first(where: { $0.region == region }) {
                 return match
@@ -45,10 +45,13 @@ enum OnDeviceTranscriber {
         return sameLanguage.first
     }
 
-    private static func sameLanguageAndScript(_ a: String, _ b: String) -> Bool {
-        let left = Locale.Language(identifier: a)
-        let right = Locale.Language(identifier: b)
-        return left.languageCode == right.languageCode && left.script == right.script
+    // Fills in the likely script and region, so "zh-TW" compares as Hant and "en" carries US.
+    private static func maximal(_ locale: Locale) -> Locale.Language {
+        Locale.Language(identifier: locale.language.maximalIdentifier)
+    }
+
+    private static func sameLanguageAndScript(_ a: Locale.Language, _ b: Locale.Language) -> Bool {
+        a.languageCode == b.languageCode && a.script == b.script
     }
 
     var module: any SpeechModule {
@@ -204,9 +207,7 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
             return
         }
         buffer.frameLength = frames
-        pcm.withUnsafeBytes { raw in
-            _ = raw.copyBytes(to: UnsafeMutableRawBufferPointer(start: samples, count: Int(frames) * MemoryLayout<Int16>.size))
-        }
+        _ = pcm.copyBytes(to: UnsafeMutableBufferPointer(start: samples, count: Int(frames)))
         input.yield(buffer)
     }
 
@@ -231,30 +232,34 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
         let transcriber = OnDeviceTranscriber(locale: locale)
         guard
             let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
-                compatibleWith: [transcriber.module], considering: inputFormat),
-            let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
+                compatibleWith: [transcriber.module], considering: inputFormat)
         else {
             onFailure(OnDeviceSpeechError.audioFormat)
             throw OnDeviceSpeechError.audioFormat
         }
-        // Keep every input frame; the default priming drops the start of each converted buffer.
-        converter.primeMethod = .none
+        // Convert only when the analyzer wants something other than the fed format.
+        var converter: AVAudioConverter?
+        if analyzerFormat != inputFormat {
+            guard let resampler = AVAudioConverter(from: inputFormat, to: analyzerFormat) else {
+                onFailure(OnDeviceSpeechError.audioFormat)
+                throw OnDeviceSpeechError.audioFormat
+            }
+            // Keep every input frame; the default priming drops the start of each converted buffer.
+            resampler.primeMethod = .none
+            converter = resampler
+        }
 
         let collector = transcriber.collect(onText: onText, onFailure: onFailure)
         let (analyzerStream, analyzerInput) = AsyncStream.makeStream(of: AnalyzerInput.self)
         let analyzer = SpeechAnalyzer(modules: [transcriber.module])
         do {
-            do {
-                try await analyzer.start(inputSequence: analyzerStream)
-            } catch {
-                onFailure(error)
-                throw error
-            }
+            try await analyzer.start(inputSequence: analyzerStream)
             for await buffer in stream {
                 // A cancelled stream still yields its backlog; don't convert audio nobody will read.
                 if Task.isCancelled { break }
-                if let converted = convert(buffer, with: converter) {
-                    analyzerInput.yield(AnalyzerInput(buffer: converted))
+                let ready = if let converter { convert(buffer, with: converter) } else { Optional(buffer) }
+                if let ready {
+                    analyzerInput.yield(AnalyzerInput(buffer: ready))
                 }
             }
             try Task.checkCancellation()
@@ -263,6 +268,10 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
             // Results arrive asynchronously; returning before the collector drains loses the last words.
             return try await collector.value
         } catch {
+            // The controller ignores this once finish or cancel has detached the session.
+            if !Task.isCancelled {
+                onFailure(error)
+            }
             analyzerInput.finish()
             await analyzer.cancelAndFinishNow()
             collector.cancel()

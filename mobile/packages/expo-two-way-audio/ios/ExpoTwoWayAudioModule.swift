@@ -13,7 +13,8 @@ public class ExpoTwoWayAudioModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ExpoTwoWayAudio")
 
-        OnCreate {
+        OnCreate { [weak self] in
+            guard let self else { return }
             let permissionsManager = self.appContext?.permissions
             EXPermissionsMethodsDelegate.register(
                 [

@@ -56,7 +56,7 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true) else {
             return ["started": false, "reason": "failed"]
         }
-        let (session, mine, stale) = locked { () -> (OnDeviceSpeechSession, Int, [OnDeviceSpeechSession]) in
+        let (session, mine, stale) = lock.withLock { () -> (OnDeviceSpeechSession, Int, [OnDeviceSpeechSession]) in
             let stale = detachAll()
             let mine = generation
             let session = OnDeviceSpeechSession(
@@ -90,11 +90,11 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     func feed(_ pcm: Data) {
-        locked { current }?.append(pcm: pcm)
+        lock.withLock { current }?.append(pcm: pcm)
     }
 
     func finish() async throws -> String {
-        let session = locked { () -> OnDeviceSpeechSession? in
+        let session = lock.withLock { () -> OnDeviceSpeechSession? in
             let session = current
             current = nil
             finishing = session
@@ -102,10 +102,10 @@ final class OnDeviceSpeechController: @unchecked Sendable {
             return session
         }
         guard let session else {
-            throw Exception(name: "OnDeviceSpeechException", description: "No on-device speech session is running")
+            throw Self.speechException("No on-device speech session is running")
         }
         defer {
-            locked {
+            lock.withLock {
                 if finishing === session {
                     finishing = nil
                 }
@@ -114,12 +114,12 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         do {
             return try await session.finish()
         } catch {
-            throw Exception(name: "OnDeviceSpeechException", description: "On-device speech recognition failed: \(error)")
+            throw Self.speechException("On-device speech recognition failed: \(error)")
         }
     }
 
     func cancel() {
-        let stale = locked { detachAll() }
+        let stale = lock.withLock { detachAll() }
         stale.forEach { $0.cancel() }
     }
 
@@ -132,20 +132,20 @@ final class OnDeviceSpeechController: @unchecked Sendable {
 
     // Emits under the lock (sendEvent only schedules) so a cancel or start can't slip in after the check.
     private func emitIfCurrent(_ generation: Int, _ name: String, _ body: [String: Any]) {
-        locked {
-            if current != nil && self.generation == generation {
+        lock.withLock {
+            if self.generation == generation {
                 emit(name, body)
             }
         }
     }
 
     private func isCurrent(_ generation: Int) -> Bool {
-        locked { current != nil && self.generation == generation }
+        lock.withLock { self.generation == generation }
     }
 
     // Detaches the live session if it is still the one from `generation`.
     private func take(_ generation: Int) -> OnDeviceSpeechSession? {
-        locked {
+        lock.withLock {
             guard let session = current, generation == self.generation else {
                 return nil
             }
@@ -155,19 +155,18 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         }
     }
 
-    private func locked<Value>(_ body: () -> Value) -> Value {
-        lock.lock()
-        defer { lock.unlock() }
-        return body()
-    }
 
-    // Call inside `locked`; the caller cancels the returned sessions after unlocking.
+    // Call inside `lock.withLock`; the caller cancels the returned sessions after unlocking.
     private func detachAll() -> [OnDeviceSpeechSession] {
         let stale = [current, finishing].compactMap { $0 }
         current = nil
         finishing = nil
         generation += 1
         return stale
+    }
+
+    private static func speechException(_ description: String) -> Exception {
+        Exception(name: "OnDeviceSpeechException", description: description)
     }
 
     private static func reason(for error: Error) -> String {
