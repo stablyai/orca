@@ -136,4 +136,31 @@ describe('rate-limit probe and the gh semaphore', () => {
       snapshot: { core: { remaining: 4000 }, graphql: { remaining: 4500 } }
     })
   })
+
+  // A 403 forces a probe; joining one that started before the 403 would clear the new block.
+  it('answers a forced probe with quota read after the call', async () => {
+    let finishEarlierProbe: (value: { stdout: string }) => void = () => undefined
+    ghExecFileAsyncMock
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishEarlierProbe = resolve
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          resources: { core: { limit: 5000, remaining: 0, reset: 2_000_000_000 } }
+        })
+      })
+
+    const earlier = getRateLimit()
+    const forced = getRateLimit({ force: true })
+    finishEarlierProbe({
+      stdout: JSON.stringify({
+        resources: { core: { limit: 5000, remaining: 4000, reset: 2_000_000_000 } }
+      })
+    })
+
+    expect(await earlier).toMatchObject({ ok: true, snapshot: { core: { remaining: 4000 } } })
+    expect(await forced).toMatchObject({ ok: true, snapshot: { core: { remaining: 0 } } })
+  })
 })
