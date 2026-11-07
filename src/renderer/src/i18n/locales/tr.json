@@ -21676,11 +21676,9 @@
       "personal": "Google hesabı",
       "gcpProject": "Google Cloud projesi",
       "gcpLocation": "Google Cloud konumu",
-      "signInAgainWith": "{{method}} kullanmak için yeniden oturum açın.",
       "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
-      "signInWith": "{{host}} üzerinde {{method}} ile oturum açar.",
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
       "noReading": "Kullanım bilinmiyor: henüz okunmadı"
     },

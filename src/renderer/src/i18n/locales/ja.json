@@ -21272,11 +21272,9 @@
       "personal": "Google アカウント",
       "gcpProject": "Google Cloud プロジェクト",
       "gcpLocation": "Google Cloud ロケーション",
-      "signInAgainWith": "{{method}} を使用するには、再度サインインしてください。",
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
-      "signInWith": "{{host}} で {{method}} を使ってサインインします。",
       "lastReading": "{{reading}} · {{time}} に取得",
       "noReading": "使用量は不明：未取得"
     },

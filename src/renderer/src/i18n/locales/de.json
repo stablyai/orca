@@ -21695,11 +21695,9 @@
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
       "gcpLocation": "Google-Cloud-Standort",
-      "signInAgainWith": "Melde dich erneut an, um {{method}} zu verwenden.",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
-      "signInWith": "Meldet sich mit {{method}} auf {{host}} an.",
       "lastReading": "{{reading}} · Ausgelesen {{time}}",
       "noReading": "Nutzung unbekannt: noch nicht ausgelesen"
     },
