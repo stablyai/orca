@@ -4,8 +4,8 @@ import '../../../../../../shared/rpc-contract/structured-agent-session-continue-
 import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import {
-  requireStructuredCapability,
-  requireStructuredCleanupHost
+  requireCloseStructuredCapability,
+  requireCloseStructuredHost
 } from '../creation/structured-agent-session-gate'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -21,7 +21,7 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
   permission: 'workspace',
   params: OptionsParams,
   handler: async (params, ctx) => {
-    requireStructuredCapability(ctx)
+    requireCloseStructuredCapability(ctx)
     // Record close before requiring host so even failed closes fence racing creates.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       noteStructuredAgentSessionClose(
@@ -30,7 +30,9 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
           null
       )
     }
-    const host = requireStructuredCleanupHost(ctx)
+    const host = requireCloseStructuredHost(ctx)
+    // Read before closing; the CLI reports an unknown id instead of a close that did nothing.
+    const found = host.deps.store.getConversation(params.sessionId) !== null
     const surface = captureStructuredSessionSurface(host, params.sessionId, ctx.runtime)
     try {
       const result = await retireCapturedStructuredSessionSurface(
@@ -45,6 +47,6 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
     } finally {
       await host.close(params.sessionId, 'user-close')
     }
-    return { ok: true as const }
+    return { ok: true as const, found }
   }
 })

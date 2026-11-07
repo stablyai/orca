@@ -42,7 +42,7 @@ it('does not resurrect a History tab when normal close commits before its publis
             clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
           }
         )
-      ).toEqual({ ok: true })
+      ).toEqual({ ok: true, found: true })
       expect(rig.host.getSessionTabId(B)).toBeNull()
       events.push('close-committed')
       return admitted

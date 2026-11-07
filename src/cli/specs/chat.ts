@@ -15,5 +15,16 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
       'orca chat rename --name "Migrate auth to OAuth"',
       'orca chat rename --session <sessionId> --name "Release notes" --json'
     ]
+  },
+  {
+    path: ['chat', 'close'],
+    summary: 'Close a chat tab',
+    usage: 'orca chat close --session <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'session'],
+    notes: [
+      '--session takes the chat session id `orca agent launch` prints, and is always required.',
+      "Closing stops the chat's agent and removes its tab, the same as closing the tab by hand. The conversation stays in Session History."
+    ],
+    examples: ['orca chat close --session <sessionId> --json']
   }
 ]

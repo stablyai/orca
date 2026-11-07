@@ -201,7 +201,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'chat',
-    keys: ['chat rename'],
+    keys: ['chat rename', 'chat close'],
     load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
   },
   {
