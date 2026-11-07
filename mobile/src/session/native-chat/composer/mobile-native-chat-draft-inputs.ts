@@ -77,6 +77,29 @@ export function addMobileNativeChatDraftImages(
     ]
   }))
 }
+/** Drops only the chips a send carried, keeping any attached while it was in flight. */
+export function removeMobileNativeChatDraftImages(
+  destination: MobileNativeChatDraftDestination,
+  sent: readonly PendingNativeChatImage[]
+): void {
+  const sentIds = new Set(sent.map((image) => image.id))
+  updateMobileNativeChatDraftInputs(destination, (current) => ({
+    ...current,
+    images: current.images.filter((image) => !sentIds.has(image.id))
+  }))
+}
+/** Puts back the chips an unconfirmed send carried, after any attached since. */
+export function returnMobileNativeChatDraftAttachments(
+  destination: MobileNativeChatDraftDestination,
+  images: readonly PendingNativeChatImage[],
+  files: readonly PendingNativeChatFile[]
+): void {
+  updateMobileNativeChatDraftInputs(destination, (current) => ({
+    ...current,
+    images: [...current.images, ...images],
+    files: [...current.files, ...files]
+  }))
+}
 export function subscribeMobileNativeChatDraftInputs(
   scope: string | null,
   listener: () => void

@@ -1,6 +1,8 @@
 import {
   addMobileNativeChatDraftImages,
   readMobileNativeChatDraftInputs,
+  removeMobileNativeChatDraftImages,
+  returnMobileNativeChatDraftAttachments,
   useMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,
   mobileNativeChatDraftDestination,
@@ -173,15 +175,19 @@ export function useMobileNativeChatImageAttachments({
         }
         const pendingImages = attachments
         // Hold Send until all selected files finish uploading.
-        const storedFiles = structuredNativeChat
-          ? files.flatMap((file) =>
-              file.path === null ? [] : [{ kind: 'file' as const, id: file.id, path: file.path }]
-            )
-          : []
+        const sentFiles = structuredNativeChat ? files.filter((file) => file.path !== null) : []
+        const storedFiles = sentFiles.flatMap(({ id, path }) =>
+          path === null ? [] : [{ kind: 'file' as const, id, path }]
+        )
         const destination =
           scope && pendingImages.length + storedFiles.length > 0
             ? mobileNativeChatDraftDestination(scope)
             : null
+        // An unconfirmed send's text returns to the composer later; bring back the chips it carried too.
+        const handBackIntent = (owner: MobileNativeChatDraftDestination) => ({
+          ...intent,
+          onHandBack: () => returnMobileNativeChatDraftAttachments(owner, pendingImages, sentFiles)
+        })
         if (structuredNativeChat && destination) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
@@ -190,15 +196,16 @@ export function useMobileNativeChatImageAttachments({
           }
           const previews = pendingImages.map((attachment) => attachment.previewUri)
           const sendAttachments = [...pendingImages, ...storedFiles]
-          const outcome = await (intent
-            ? baseSend(text, previews, deadline, sendAttachments, undefined, intent)
-            : baseSend(text, previews, deadline, sendAttachments))
+          const outcome = await baseSend(
+            text,
+            previews,
+            deadline,
+            sendAttachments,
+            undefined,
+            handBackIntent(destination)
+          )
           if (outcome !== 'rejected' && destination.active) {
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            updateMobileNativeChatDraftInputs(destination, (current) => ({
-              ...current,
-              images: current.images.filter((attachment) => !sentIds.has(attachment.id))
-            }))
+            removeMobileNativeChatDraftImages(destination, pendingImages)
             onFilesSent?.(
               storedFiles.map((file) => file.id),
               destination
@@ -281,7 +288,8 @@ export function useMobileNativeChatImageAttachments({
             pendingImages.map((attachment) => attachment.previewUri),
             textDeadline,
             undefined,
-            sentAt
+            sentAt,
+            handBackIntent(destination)
           )
           if (outcome !== 'accepted') {
             // Rejected or unknown text/Enter may orphan an already-pasted path; both outcomes require healing.
@@ -289,11 +297,7 @@ export function useMobileNativeChatImageAttachments({
           }
           if (outcome !== 'rejected' && destination.active) {
             // Drop only chips in this send, including unknown delivery to avoid duplicate retries; preserve newly attached chips.
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            updateMobileNativeChatDraftInputs(destination, (current) => ({
-              ...current,
-              images: current.images.filter((attachment) => !sentIds.has(attachment.id))
-            }))
+            removeMobileNativeChatDraftImages(destination, pendingImages)
           }
           return outcome !== 'rejected'
         } catch {
