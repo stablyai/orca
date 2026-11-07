@@ -134,6 +134,32 @@ describe('ModelManager', () => {
     }
   })
 
+  it('reports a model downloaded in the old sherpa-onnx format as needing an update', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      const modelDir = manager.getModelDir('parakeet-tdt-0.6b-v2-int8')
+      mkdirSync(modelDir, { recursive: true })
+      for (const [name, size] of [
+        ['encoder.int8.onnx', 652_184_296],
+        ['decoder.int8.onnx', 7_257_753],
+        ['joiner.int8.onnx', 1_739_080],
+        ['tokens.txt', 9_384]
+      ] as const) {
+        writeFileSync(join(modelDir, name), '')
+        truncateSync(join(modelDir, name), size)
+      }
+
+      await expect(manager.getModelState('parakeet-tdt-0.6b-v2-int8')).resolves.toEqual({
+        id: 'parakeet-tdt-0.6b-v2-int8',
+        status: 'not-downloaded',
+        needsUpdate: true
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('aborts an in-flight model download request when cancelled', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {

@@ -92,6 +92,8 @@ export function VoiceSpeechModelSection({
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
+            // Only the old sherpa-onnx files are on disk; downloading replaces them.
+            const needsUpdate = mState?.needsUpdate === true && !isDownloading
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -164,8 +166,17 @@ export function VoiceSpeechModelSection({
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {speechModelDescription(manifest)}
                   </p>
+                  {needsUpdate && (
+                    <p className="text-[11px] font-medium mt-0.5 leading-snug">
+                      {t(
+                        'auto.components.settings.VoicePane.updateToFasterVersion',
+                        'Update to the faster version ({{value0}} MB)',
+                        { value0: sizeMb }
+                      )}
+                    </p>
+                  )}
                 </div>
-                {!isCloud && isReady ? (
+                {!isCloud && (isReady || needsUpdate) ? (
                   <Button
                     type="button"
                     variant="ghost"

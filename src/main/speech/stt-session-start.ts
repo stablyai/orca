@@ -1,3 +1,4 @@
+import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../shared/speech-model-retirement'
 import { engineDictationLanguage } from '../../shared/dictation-language'
 import type { SpeechModelManifest } from '../../shared/speech-types'
 import { getCatalogModel } from './model-catalog'
@@ -125,7 +126,11 @@ async function requireModelReady(state: SttSessionState, modelId: string): Promi
   const modelState = await state.modelManager.getModelState(modelId)
   if (modelState.status !== 'ready') {
     await teardownIdleSttEngine(state, modelId)
-    throw new Error(`Model not ready: ${modelState.status}`)
+    throw new Error(
+      modelState.needsUpdate
+        ? SPEECH_MODEL_NEEDS_UPDATE_ERROR
+        : `Model not ready: ${modelState.status}`
+    )
   }
 }
 

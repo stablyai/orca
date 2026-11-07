@@ -496,6 +496,7 @@
 10 src/main/speech/openai-api-key-store.ts
 2 src/main/speech/speech-model-download-cleanup.ts
 1 src/main/speech/speech-model-download-transport.ts
+1 src/main/speech/speech-model-files.ts
 2 src/main/speech/speech-model-http-download.ts
 2 src/main/speech/stt-gpu-failure-marker.ts
 1 src/main/speech/stt-worker-model-config.ts

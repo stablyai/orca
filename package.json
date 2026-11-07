@@ -394,6 +394,7 @@
     "@orca/windows-registry": "workspace:*",
     "@orca/windows-security": "workspace:*",
     "@transcribe-cpp/darwin-arm64-metal": "0.4.1",
+    "@transcribe-cpp/darwin-x64-cpu": "0.4.1",
     "@transcribe-cpp/linux-arm64-cpu-vulkan": "0.4.1",
     "@transcribe-cpp/linux-x64-cpu-vulkan": "0.4.1",
     "@transcribe-cpp/win32-x64-cpu-vulkan": "0.4.1",
