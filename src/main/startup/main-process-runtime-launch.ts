@@ -39,6 +39,7 @@ import {
 } from '../runtime/rpc/server/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
+import { repairStaleLocalAppImageCliRegistration } from '../cli/local-cli-registration-coordinator'
 import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
@@ -322,10 +323,13 @@ export async function initializeMainProcessRuntimeLaunch(
     desktopWindow = desktopStartup.window
   } else {
     // Start AppImage extraction before daemon host selection briefly awaits it; serve manages its own bounded extraction.
-    if (!serveOptions) {
-      void startAppImageCopyPreExtraction()
-    }
+    const appImagePreExtraction = !serveOptions ? startAppImageCopyPreExtraction() : null
     await shellPathReady
+    if (!serveOptions) {
+      void Promise.resolve(appImagePreExtraction).finally(() => {
+        void repairStaleLocalAppImageCliRegistration()
+      })
+    }
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }
   app.on('activate', options.handleMacAppActivation)

@@ -46,12 +46,34 @@ export type LinuxBareOrcaDispatcherResult = {
   target: string | null
 }
 
+export async function installLinuxBareOrcaDispatcherForLauncher(
+  launcherPath: string | null,
+  homePath = homedir()
+): Promise<LinuxBareOrcaDispatcherResult> {
+  const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+  if (existsSync(dispatcherPath) && !(await isOwnedDispatcher(dispatcherPath))) {
+    return { state: 'skipped-foreign', dispatcherPath, target: null }
+  }
+  if (!launcherPath || !existsSync(launcherPath)) {
+    return { state: 'skipped-launcher-missing', dispatcherPath, target: null }
+  }
+
+  const installed = await publishDispatcher(
+    dispatcherPath,
+    insertDispatcherMarker(buildBareOrcaDispatcherScript(launcherPath))
+  )
+  return installed
+    ? { state: 'installed', dispatcherPath, target: launcherPath }
+    : { state: 'skipped-foreign', dispatcherPath, target: null }
+}
+
 // Team launchers invoke bare `orca`, and a login shell can drop Orca's PATH entry ahead of it.
 // A regular file avoids the installer's legacy-symlink cleanup.
 export async function installLinuxBareOrcaDispatcher(
   options: LinuxBareOrcaDispatcherOptions
 ): Promise<LinuxBareOrcaDispatcherResult> {
-  const dispatcherPath = join(options.homePath ?? homedir(), '.local', 'bin', 'orca')
+  const homePath = options.homePath ?? homedir()
+  const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
   if (existsSync(dispatcherPath) && !(await isOwnedDispatcher(dispatcherPath))) {
     return { state: 'skipped-foreign', dispatcherPath, target: null }
   }
@@ -61,13 +83,7 @@ export async function installLinuxBareOrcaDispatcher(
     return { state: 'skipped-launcher-missing', dispatcherPath, target: null }
   }
 
-  const installed = await publishDispatcher(
-    dispatcherPath,
-    insertDispatcherMarker(buildBareOrcaDispatcherScript(launcher))
-  )
-  return installed
-    ? { state: 'installed', dispatcherPath, target: launcher }
-    : { state: 'skipped-foreign', dispatcherPath, target: null }
+  return installLinuxBareOrcaDispatcherForLauncher(launcher, homePath)
 }
 
 export function buildBareOrcaCliScript(launcherPath: string): string {

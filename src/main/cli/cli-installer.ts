@@ -14,7 +14,10 @@ import {
 } from './appimage-extracted-root'
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
-import { removeLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
+import {
+  installLinuxBareOrcaDispatcherForLauncher,
+  removeLinuxBareOrcaDispatcher
+} from './linux-bare-orca-dispatcher'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -138,6 +141,7 @@ export class CliInstaller extends CliPathRegistration {
     if (status.installMethod === 'symlink') {
       await this.installSymlink(status)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
+      await this.installLinuxBareOrcaDispatcher(status.launcherPath)
     } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
       // Why: packaged Windows already ships resources/bin/orca.exe; registration only owns the PATH entry.
     } else {
@@ -204,6 +208,21 @@ export class CliInstaller extends CliPathRegistration {
 
     await this.removeLinuxAppImagePayloads()
     return this.getStatus()
+  }
+
+  // Packaged Linux registers `orca-ide`; publish the bare `orca` dispatcher symmetrically with remove().
+  private async installLinuxBareOrcaDispatcher(launcherPath: string): Promise<void> {
+    if (this.platform !== 'linux' || !this.isPackaged || this.commandPathOverride) {
+      return
+    }
+    try {
+      await installLinuxBareOrcaDispatcherForLauncher(launcherPath, this.homePath)
+    } catch (error) {
+      console.warn(
+        '[cli] Could not install the bare orca dispatcher:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
   }
 
   // Removing the `orca` command also retires the bare-name dispatcher headless serve installed.
