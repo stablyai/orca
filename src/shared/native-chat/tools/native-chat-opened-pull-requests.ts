@@ -40,9 +40,14 @@ function createCount(code: string): number {
   return CREATE_RUNS.reduce((count, { run }) => count + [...code.matchAll(run)].length, 0)
 }
 
+/** A script with each heredoc body reduced to its `<<`, so no body line reads as a command. */
+export function withoutHeredocBodies(script: string): string {
+  return script.replace(HEREDOC_BODY, '<<')
+}
+
 /** The commands a script runs, without the text it carries. */
 export function shellCode(script: string): string {
-  return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
+  return withoutHeredocBodies(script).replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
     text === '\\\n' ? '' : "''"
@@ -89,9 +94,13 @@ export function shellSegments(script: string): string[] {
       continue
     }
     const pair = script.slice(index, index + 2)
-    // `>|` is a clobbering redirection, not a pipe.
-    const pipe = char === '|' && script[index - 1] !== '>'
-    if (pair === '&&' || pair === '||' || char === ';' || pipe || char === '\n') {
+    // `>|` is one redirection token, a clobbering write, not `>` before a pipe.
+    if (pair === '>|') {
+      current += pair
+      index++
+      continue
+    }
+    if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
       segments.push(current)
       current = ''
       if (pair === '&&' || pair === '||') {

@@ -66,6 +66,14 @@ describe('push updates from recorded tool calls', () => {
       { branch: 'review', newSha: 'c512e75' }
     ])
     expect(push('git push --dry-run 2>&1', output)).toEqual([])
+    // An escaped `>` before a real pipe doesn't hide the push after it.
+    expect(push('printf x \\>|git push origin HEAD', output)).toEqual([
+      { branch: 'review', newSha: 'c512e75' }
+    ])
+    // A heredoc prints a push and its update lines; no git command runs.
+    const printed =
+      'git push -u origin HEAD 2>&1\nTo github.com:acme/repo.git\n   1234567..89abcde  HEAD -> review\n'
+    expect(push(`cat <<'EOF'\n${printed}EOF`, printed)).toEqual([])
   })
 
   it('takes new branches and porcelain lines, and nothing from pushes that updated nothing', () => {
