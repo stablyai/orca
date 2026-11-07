@@ -105,7 +105,6 @@ describe('migrateWorktreeIdentity', () => {
       recentlyClosedBrowserPagesByWorkspace: { browser1: [{ id: 'closed-page', worktreeId: OLD }] },
       unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
-      splitLandingGroupIds: { group1: OLD },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
       gitStatusHeadByWorktree: { [OLD]: 'head-old' },
       gitBranchLineTotalByWorktree: { [OLD]: { added: 24, removed: 3, mergeBase: 'base-old' } },
@@ -137,6 +136,7 @@ describe('migrateWorktreeIdentity', () => {
       // Tab-id-keyed: must NOT be re-keyed (the tab keeps its id across rename).
       terminalLayoutsByTabId: { tab1: { root: { type: 'leaf', leafId: '0' } } }
     } as unknown as Partial<AppState>)
+    store.setState({ splitLandingGroupIds: { group1: OLD } })
 
     store.getState().migrateWorktreeIdentity(OLD, NEW)
     const s = store.getState()
