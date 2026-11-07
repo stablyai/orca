@@ -111,13 +111,14 @@ class FakeEdge implements EdgeAdmin {
   }
 }
 
-async function harness() {
+async function harness(cohort: 'host' | 'account' = 'host') {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const edgeConfig: EdgeRelayConfig = {
     cellUrl: EDGE_URL,
     rolloutPercent: 0,
-    allowHosts: new Set([HOST]),
+    allowHosts: cohort === 'host' ? new Set([HOST]) : new Set(),
+    allowUsers: cohort === 'account' ? new Set([USER]) : new Set(),
     denyHosts: new Set(),
     regions: new Set(['us-central1', 'asia-east2'])
   }
@@ -256,6 +257,13 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect((await h.assign()).status).toBe(500)
     expect(h.assignments.assign).not.toHaveBeenCalled()
     expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+  })
+
+  it('moves every host of an allowed account (relay token sub), with no host list', async () => {
+    const h = await harness('account')
+    const response = await h.assign()
+    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL })
+    expect(h.fake.pushes[0]).toMatchObject({ userId: USER, relayHostId: HOST })
   })
 
   it('does not touch the edge for hosts that were never on it', async () => {
