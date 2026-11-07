@@ -1,78 +1,82 @@
-import { editorViewTab } from '@/store/slices/editor/tabs/editor-view-placement'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import {
+  editorViewPlacement,
+  editorViewTab
+} from '@/store/slices/editor/tabs/editor-view-placement'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { beginLinkOpenRequest } from '@/lib/link-open-request'
-import { isLiveLinkOpenGroup } from '@/lib/link-open-intent'
-import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
+import { captureLinkOpenIntent } from '@/lib/link-open-intent'
+import { flushEditorFrames } from './save/flush/editor-pending-flush'
 
-export function openEditorHtmlPreview(fileId: string, viewStateId: string | null): void {
+export async function openEditorHtmlPreview(
+  fileId: string,
+  viewStateId: string | null
+): Promise<void> {
   const initial = useAppStore.getState()
   const file = initial.openFiles.find((candidate) => candidate.id === fileId)
-  if (!file) {
+  const source = file && editorViewTab(initial, file.id, viewStateId)
+  if (
+    !file ||
+    !source ||
+    initial.activeWorktreeId !== source.worktreeId ||
+    initial.groupsByWorktree[source.worktreeId]?.find((group) => group.id === source.groupId)
+      ?.activeTabId !== source.id
+  ) {
     return
   }
-  const source = editorViewTab(initial, file.id, viewStateId)
-  const placementWorkspaceId = source?.worktreeId ?? file.worktreeId
-  if (!source || initial.activeWorktreeId !== placementWorkspaceId) {
-    return
-  }
+  initial.focusGroup(source.worktreeId, source.groupId)
   const isCurrentRequest = beginLinkOpenRequest()
-  const reveal = captureBrowserLinkReveal(useAppStore.getState, useAppStore.subscribe)
-  let activeGroupId = initial.activeGroupIdByWorktree[placementWorkspaceId]
-  let sourceGroupId: string | undefined = source.groupId
-  let ownsSelection = true
-  const unsubscribe = useAppStore.subscribe((state) => {
-    const groupId = state.activeGroupIdByWorktree[placementWorkspaceId]
-    const tabGroupId = state.unifiedTabsByWorktree[placementWorkspaceId]?.find(
-      (tab) => tab.id === source.id
-    )?.groupId
-    ownsSelection &&=
-      (groupId === activeGroupId || (tabGroupId !== sourceGroupId && groupId === tabGroupId)) &&
-      state.groupsByWorktree[placementWorkspaceId]?.find((group) => group.id === tabGroupId)
+  const reveal = captureBrowserLinkReveal(useAppStore.getState, useAppStore.subscribe, () => {
+    const state = useAppStore.getState()
+    const tab = state.unifiedTabsByWorktree[source.worktreeId]?.find(
+      (candidate) => candidate.id === source.id
+    )
+    const groupId = state.activeGroupIdByWorktree[source.worktreeId]
+    return (
+      tab?.entityId === file.id &&
+      tab.contentType === source.contentType &&
+      tab.executionHostId === source.executionHostId &&
+      groupId === tab.groupId &&
+      state.groupsByWorktree[source.worktreeId]?.find((group) => group.id === tab.groupId)
         ?.activeTabId === source.id
-    activeGroupId = groupId
-    sourceGroupId = tabGroupId
+    )
   })
-  runAfterEditorFramesFlush(initial, [file.id], (_deferred, flushed) => {
-    try {
-      if (!flushed) {
-        return
-      }
-      const state = useAppStore.getState()
-      const currentFile = state.openFiles.find((candidate) => candidate.id === file.id)
-      const tab = state.unifiedTabsByWorktree[placementWorkspaceId]?.find(
-        (candidate) => candidate.id === source.id
-      )
-      if (
-        !ownsSelection ||
-        !isCurrentRequest() ||
-        !reveal.canReveal() ||
-        !currentFile ||
-        currentFile.worktreeId !== file.worktreeId ||
-        !tab ||
-        tab.entityId !== currentFile.id ||
-        tab.contentType !== source.contentType ||
-        tab.executionHostId !== source.executionHostId ||
-        !isLiveLinkOpenGroup(state, placementWorkspaceId, tab.groupId) ||
-        state.groupsByWorktree[placementWorkspaceId]?.find((group) => group.id === tab.groupId)
-          ?.activeTabId !== tab.id
-      ) {
-        return
-      }
+  try {
+    if (
+      !(await flushEditorFrames(initial, file.id)) ||
+      !isCurrentRequest() ||
+      !reveal.canReveal()
+    ) {
+      return
+    }
+    const state = useAppStore.getState()
+    const currentFile = state.openFiles.find((candidate) => candidate.id === file.id)
+    if (!currentFile || currentFile.worktreeId !== file.worktreeId) {
+      return
+    }
+    const placement = editorViewPlacement(state, currentFile, source.id)
+    await new Promise<void>((resolve) => {
       const plan = openFileInBrowserTab({
         filePath: currentFile.filePath,
-        worktreeId: file.worktreeId,
-        placementWorkspaceId,
-        targetGroupId: tab.groupId
+        worktreeId: currentFile.worktreeId,
+        fileExecutionHostId: editorViewPlacement(initial, file, source.id).executionHostId,
+        placementWorkspaceId: placement.placementWorkspaceId,
+        linkContext: {
+          linkIntent: captureLinkOpenIntent(state, placement.placementWorkspaceId, source.id, {
+            explicitSourceGroup: true
+          }),
+          isCurrentRequest,
+          canReveal: reveal.canReveal
+        },
+        onLinkOutcome: () => resolve()
       })
       if (plan.status === 'unsupported') {
         toast.error(plan.message)
       }
-    } finally {
-      unsubscribe()
-      reveal.dispose()
-    }
-  })
+    })
+  } finally {
+    reveal.dispose()
+  }
 }

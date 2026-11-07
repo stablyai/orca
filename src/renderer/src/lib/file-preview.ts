@@ -1,8 +1,4 @@
-import {
-  captureFilePreviewActivation,
-  createFilePreviewTab,
-  openDocPreviewTab
-} from './file-preview-tabs'
+import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
 import { openPlannedFileBrowserLink, type FileBrowserLinkTarget } from './file-preview-link-open'
 import type {
   BrowserLinkOpenContext,
@@ -16,6 +12,7 @@ import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
+import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-workspace-tab-activation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import {
@@ -25,7 +22,10 @@ import {
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
+import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
+import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { findWorkspaceShowingDoc } from './file-preview-page-conversion'
 
 export { convertBrowserPageToWorkspaceDoc } from './file-preview-page-conversion'
 
@@ -133,10 +133,59 @@ export function useWorkspaceFileBrowserActionPredicate(
   )
 }
 
+function openDocPreviewTab(
+  state: AppState,
+  params: {
+    filePath: string
+    worktreeId: string
+    activate: boolean
+    placementWorkspaceId?: string
+  },
+  placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
+): void {
+  const docLocation = {
+    kind: 'workspace-doc' as const,
+    worktreeId: params.worktreeId,
+    filePath: params.filePath
+  }
+  // Reuse the document’s tab; opening another would mint a second grant for the same file.
+  const placementWorkspaceId = params.placementWorkspaceId ?? params.worktreeId
+  const existing =
+    placementWorkspaceId === params.worktreeId
+      ? findWorkspaceShowingDoc(state, docLocation)
+      : (state.browserTabsByWorktree[placementWorkspaceId] ?? []).flatMap((tab) => {
+          const page = (state.browserPagesByWorkspace[tab.id] ?? []).find((candidate) =>
+            browserPageDocLocationsEqual(candidate.docLocation ?? null, docLocation)
+          )
+          return page ? [{ workspaceId: tab.id, pageId: page.id }] : []
+        })[0]
+  if (existing) {
+    if (
+      !params.activate ||
+      !activateBrowserWorkspaceTab({
+        worktreeId: placementWorkspaceId,
+        ...existing
+      })
+    ) {
+      state.setActiveBrowserTab(existing.workspaceId)
+      state.setActiveBrowserPage(existing.workspaceId, existing.pageId)
+    }
+    return
+  }
+  state.createBrowserTab(placementWorkspaceId, ORCA_BROWSER_BLANK_URL, {
+    docLocation,
+    title: basename(params.filePath) || params.filePath,
+    ...placement,
+    // The preview grant is minted on this desktop, so the page stays explicitly client-local even for remote worktrees.
+    browserRuntimeEnvironmentId: null,
+    // Foreground file opens follow the reader; side previews must leave their source visible.
+    activate: params.activate
+  })
+}
+
 export function openFileInBrowserTab(
   params: FileBrowserLinkTarget & {
     targetGroupId?: string
-    placementWorkspaceId?: string
     clientLocal?: boolean
     linkContext?: BrowserLinkOpenContext
     onLinkOutcome?: (outcome: BrowserOpenOutcome) => void
@@ -169,29 +218,17 @@ export function openFileInBrowserTab(
     }).then((outcome) => params.onLinkOutcome?.(outcome))
     return plan
   }
-  const placementWorkspaceId = params.placementWorkspaceId ?? params.worktreeId
   if (plan.status === 'doc-preview') {
-    openDocPreviewTab(
-      state,
-      { ...params, activate: true },
-      { targetGroupId: params.targetGroupId },
-      captureFilePreviewActivation(state, placementWorkspaceId, params.targetGroupId)
-    )
+    openDocPreviewTab(state, { ...params, activate: true }, { targetGroupId: params.targetGroupId })
     return plan
   }
 
-  createFilePreviewTab(
-    state,
-    placementWorkspaceId,
-    plan.url,
-    {
-      title: plan.title,
-      ...(params.targetGroupId ? { targetGroupId: params.targetGroupId } : {}),
-      activate: true,
-      ...(params.clientLocal ? { browserRuntimeEnvironmentId: null } : {})
-    },
-    captureFilePreviewActivation(state, placementWorkspaceId, params.targetGroupId)
-  )
+  state.createBrowserTab(params.worktreeId, plan.url, {
+    title: plan.title,
+    ...(params.targetGroupId ? { targetGroupId: params.targetGroupId } : {}),
+    activate: true,
+    ...(params.clientLocal ? { browserRuntimeEnvironmentId: null } : {})
+  })
   return plan
 }
 

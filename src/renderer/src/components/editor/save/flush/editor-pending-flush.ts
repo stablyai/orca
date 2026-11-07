@@ -137,12 +137,13 @@ export function hasEditorFrameFlush(state: EditorBufferViewIndex, fileId: string
   return frameFlushesOf(state, fileId).length > 0
 }
 
-/** Runs after every frame responds, with whether execution was deferred and every flush succeeded.
- *  Synchronous when none is mounted. Each flush has its own deadline, bounding the delay. */
+/** Runs `run` (a close or view switch that unmounts frames) once every frame view of these files
+ *  handed over its pending edits, so a dirty check sees them; synchronous when none is mounted, else
+ *  `deferred` (re-check what is still open). Each flush has its own deadline, bounding the delay. */
 export function runAfterEditorFramesFlush(
   state: EditorBufferViewIndex,
   fileIds: Iterable<string>,
-  run: (deferred: boolean, flushed: boolean) => void
+  run: (deferred: boolean) => void
 ): void {
   const flushes = new Set<FrameFlush>()
   for (const fileId of fileIds) {
@@ -151,10 +152,8 @@ export function runAfterEditorFramesFlush(
     }
   }
   if (flushes.size === 0) {
-    run(false, true)
+    run(false)
     return
   }
-  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then((results) =>
-    run(true, results.every(Boolean))
-  )
+  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => run(true))
 }
