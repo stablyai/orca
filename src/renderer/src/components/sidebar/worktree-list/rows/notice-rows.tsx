@@ -127,12 +127,14 @@ export function renderPendingCreationVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
-      className="absolute left-0 right-0 top-0 px-2 pb-1.5"
     >
-      <PendingWorktreeRow
-        creationId={args.row.creationId}
-        repoName={args.row.repo?.displayName ?? null}
-      />
+      {/* Why: inside the frame, so a host section's inset adds to this padding. */}
+      <div className="px-2 pb-1.5">
+        <PendingWorktreeRow
+          creationId={args.row.creationId}
+          repoName={args.row.repo?.displayName ?? null}
+        />
+      </div>
     </NoticeRowFrame>
   )
 }
