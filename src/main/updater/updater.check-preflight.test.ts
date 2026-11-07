@@ -83,6 +83,9 @@ describe('updater', () => {
     autoUpdaterMock.emit('update-available', { version: '1.0.61' })
     await vi.advanceTimersByTimeAsync(0)
     downloadUpdate()
+    // A scheduled check can still start mid-download; a downloaded update refuses new ones.
+    checkForUpdates()
+    await vi.waitFor(() => expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2))
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
     const nativeReady = nativeUpdaterMock.on.mock.calls.find(
       ([event]) => event === 'update-downloaded'
@@ -98,8 +101,6 @@ describe('updater', () => {
     )
     const stagedFeed = autoUpdaterMock.setFeedURL.mock.calls.at(-1)
 
-    checkForUpdates()
-    await vi.waitFor(() => expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2))
     quitAndInstall()
     await vi.advanceTimersByTimeAsync(100)
     expect(onBeforeQuit).toHaveBeenCalledOnce()

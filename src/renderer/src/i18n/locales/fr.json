@@ -2934,7 +2934,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Redémarrer pour mettre à jour",
-        "6714206e5a": "Orca v{{value0}} est téléchargée. Redémarrez quand vous êtes prêt.",
         "93794ea932": "Orca v{{value0}} est en cours de téléchargement.",
         "8acbdd3961": "Réduire dans la barre d'état",
         "17412483da": "Prêt à installer",
@@ -2951,7 +2950,6 @@
         "9abc59f814": "Mise à jour disponible",
         "aad383aecc": "Lire toutes les notes de version",
         "b1d867f4fb": "Vos sessions de terminal ne seront pas interrompues pendant la mise à jour.",
-        "09a55c39b5": "Installation...",
         "ea2a41adbe": "Vous utilisez déjà la dernière version.",
         "ba5ffc949c": "Recherche de mises à jour...",
         "2c2d3e03ca": "Réessayer",
@@ -22679,6 +22677,16 @@
       "rateLimitedInMinutesSignedOut_one": "Limite de débit GitHub atteinte. Réessayez dans environ {{count}} minute ou exécutez `gh auth login` pour qu'Orca puisse utiliser la limite plus élevée de votre compte.",
       "rateLimitedInMinutesSignedOut_other": "Limite de débit GitHub atteinte. Réessayez dans environ {{count}} minutes ou exécutez `gh auth login` pour qu'Orca puisse utiliser la limite plus élevée de votre compte.",
       "rateLimitedInMinutesSignedOut_many": "Limite de débit GitHub atteinte. Réessayez dans environ {{count}} minutes ou exécutez `gh auth login` pour qu'Orca puisse utiliser la limite plus élevée de votre compte."
+    },
+    "restartConfirm": {
+      "title": "Redémarrer maintenant pour mettre à jour ?",
+      "chatsMidReply_one": "{{count}} chat est encore en train de répondre. Le redémarrage l’interrompt ; vous pourrez le reprendre à la réouverture d’Orca. Les terminaux continuent de fonctionner.",
+      "chatsMidReply_other": "{{count}} chats sont encore en train de répondre. Le redémarrage les interrompt ; vous pourrez les reprendre à la réouverture d’Orca. Les terminaux continuent de fonctionner.",
+      "chatsMidReply_many": "{{count}} chats sont encore en train de répondre. Le redémarrage les interrompt ; vous pourrez les reprendre à la réouverture d’Orca. Les terminaux continuent de fonctionner.",
+      "cancel": "Pas maintenant"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} est téléchargé. Redémarrez quand vous êtes prêt, ou il s’installera la prochaine fois que vous quitterez Orca."
     }
   },
   "onboarding": {

@@ -2512,6 +2512,10 @@
       "unknownReleaseChannel": "Unknown release channel \"{{channel}}\".",
       "unsignedDevChannel": "{{channel}} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
+    },
+    "restartConfirm": {
+      "chatsMidReply_one": "{{count}} chat is still replying. Restarting stops it, and you can resume it when Orca reopens. Terminals keep running.",
+      "chatsMidReply_other": "{{count}} chats are still replying. Restarting stops them, and you can resume them when Orca reopens. Terminals keep running."
     }
   },
   "workspace": {

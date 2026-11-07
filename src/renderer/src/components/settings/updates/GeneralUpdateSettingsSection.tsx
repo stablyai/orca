@@ -1,4 +1,5 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
+import { useUpdateRestartRequest } from '../../maintenance/update-card/UpdateRestartConfirm'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
@@ -55,10 +56,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
     }
   }, [])
 
-  const handleRestartToUpdate = (): void => {
-    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
-    void window.api.updater.quitAndInstall().catch(console.error)
-  }
+  // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
+  const { requestRestart: handleRestartToUpdate, confirmDialog } = useUpdateRestartRequest()
 
   return (
     <section key="updates" className="space-y-4">
@@ -296,6 +295,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
+      {confirmDialog}
     </section>
   )
 }

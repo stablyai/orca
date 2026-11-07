@@ -142,9 +142,9 @@ export function UpdateReadyToInstallContent({
       </div>
       <p className="text-sm text-muted-foreground">
         {translate(
-          'auto.components.UpdateCard.6714206e5a',
-          "Orca v{{value0}} is downloaded. Restart when you're ready.",
-          { value0: version }
+          'updates.readyToInstall.installsOnQuit',
+          'Orca v{{version}} is downloaded. Restart when you’re ready, or it installs the next time you quit Orca.',
+          { version }
         )}
       </p>
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">

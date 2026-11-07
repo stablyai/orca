@@ -2661,7 +2661,6 @@
       },
       "UpdateCard": {
         "68b235d264": "업데이트하려면 다시 시작하세요.",
-        "6714206e5a": "Orca v{{value0}}이(가) 다운로드되었습니다. 준비가 되면 다시 시작하세요.",
         "93794ea932": "Orca v{{value0}}을(를) 다운로드 중입니다.",
         "8acbdd3961": "상태 표시줄로 최소화",
         "17412483da": "설치 준비 완료",
@@ -2678,7 +2677,6 @@
         "9abc59f814": "업데이트 가능",
         "aad383aecc": "전체 릴리스 노트 읽기",
         "b1d867f4fb": "업데이트 중에 terminal 세션이 중단되지 않습니다.",
-        "09a55c39b5": "설치 중...",
         "ea2a41adbe": "최신 버전을 사용 중입니다.",
         "ba5ffc949c": "업데이트 확인 중...",
         "2c2d3e03ca": "다시 시도",
@@ -21948,6 +21946,15 @@
       "rateLimitedInMinuteSignedOut": "GitHub 속도 제한에 도달했습니다. 약 1분 후 다시 시도하거나 `gh auth login`을 실행하여 Orca가 계정의 더 높은 한도를 사용할 수 있도록 하세요.",
       "rateLimitedInMinutes_other": "GitHub 속도 제한에 도달했습니다. 약 {{count}}분 후 다시 시도하세요.",
       "rateLimitedInMinutesSignedOut_other": "GitHub 속도 제한에 도달했습니다. 약 {{count}}분 후 다시 시도하거나 `gh auth login`을 실행하여 Orca가 계정의 더 높은 한도를 사용할 수 있도록 하세요."
+    },
+    "restartConfirm": {
+      "title": "지금 다시 시작해 업데이트할까요?",
+      "chatsMidReply_one": "채팅 {{count}}개가 아직 응답 중입니다. 다시 시작하면 중지되지만 Orca를 다시 열 때 이어서 진행할 수 있습니다. 터미널은 계속 실행됩니다.",
+      "chatsMidReply_other": "채팅 {{count}}개가 아직 응답 중입니다. 다시 시작하면 중지되지만 Orca를 다시 열 때 이어서 진행할 수 있습니다. 터미널은 계속 실행됩니다.",
+      "cancel": "나중에"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} 다운로드가 완료되었습니다. 준비되면 다시 시작하세요. 그렇지 않으면 다음에 Orca를 종료할 때 설치됩니다."
     }
   },
   "onboarding": {

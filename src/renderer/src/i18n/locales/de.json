@@ -3186,7 +3186,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Zum Aktualisieren neu starten",
-        "6714206e5a": "Orca v{{value0}} wurde heruntergeladen. Bei Gelegenheit neu starten.",
         "93794ea932": "Orca v{{value0}} wird heruntergeladen.",
         "8acbdd3961": "In die Statusleiste minimieren",
         "17412483da": "Bereit zur Installation",
@@ -3203,7 +3202,6 @@
         "9abc59f814": "Aktualisierung verfügbar",
         "aad383aecc": "Vollständige Versionshinweise lesen",
         "b1d867f4fb": "Terminal-Sitzungen werden während der Aktualisierung nicht unterbrochen.",
-        "09a55c39b5": "Wird installiert…",
         "ea2a41adbe": "Die neueste Version ist installiert.",
         "ba5ffc949c": "Es wird nach Aktualisierungen gesucht…",
         "2c2d3e03ca": "Erneut versuchen",
@@ -22136,6 +22134,15 @@
       "rateLimitedInMinutes_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen.",
       "rateLimitedInMinutesSignedOut_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
       "rateLimitedInMinutesSignedOut_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann."
+    },
+    "restartConfirm": {
+      "title": "Jetzt zum Aktualisieren neu starten?",
+      "chatsMidReply_one": "{{count}} Chat antwortet noch. Ein Neustart hält ihn an; du kannst ihn fortsetzen, sobald Orca wieder geöffnet ist. Terminals laufen weiter.",
+      "chatsMidReply_other": "{{count}} Chats antworten noch. Ein Neustart hält sie an; du kannst sie fortsetzen, sobald Orca wieder geöffnet ist. Terminals laufen weiter.",
+      "cancel": "Nicht jetzt"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} ist heruntergeladen. Starte neu, wenn du bereit bist, oder es wird beim nächsten Beenden von Orca installiert."
     }
   },
   "jira": {
