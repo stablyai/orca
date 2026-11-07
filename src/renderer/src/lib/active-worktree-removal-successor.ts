@@ -12,6 +12,8 @@ import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalo
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
+import { computeVisibleWorktrees } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -19,19 +21,8 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-
-type SuccessorState = Pick<
-  AppState,
-  | 'worktreesByRepo'
-  | 'repos'
-  | 'deleteStateByWorktreeId'
-  | 'lastVisitedAtByWorktreeId'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'activeView'
-  | 'activePendingCreationId'
->
 
 type RemovedActiveRow = {
   id: string
@@ -78,14 +69,26 @@ function isHostedOnRuntimeOwnedSshTarget(
 
 // Like closing a tab: the most recently visited other workspace of the project, else its main one.
 export function pickActiveWorktreeSuccessor(
-  state: SuccessorState,
+  state: AppState,
   removed: RemovedActiveRow
 ): Worktree | null {
   const repoById = getRepoMapFromState(state)
+  // Activating seeds a terminal, so a hidden sleeping row would be woken.
+  const visibleIdentities =
+    state.persistedUIReady && state.workspaceSessionReady
+      ? new Set(
+          computeVisibleWorktrees(selectWorktreesByRepo(state), [], {
+            ...buildVisibleWorktreeOptionsFromState(state, repoById),
+            // An ancestor shown only for lineage context still fails the filters.
+            injectLineageAncestors: false
+          }).map(getWorktreeHostIdentity)
+        )
+      : null
   const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
-      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
+      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
+      (!visibleIdentities || visibleIdentities.has(getWorktreeHostIdentity(worktree)))
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {
@@ -99,7 +102,7 @@ export function pickActiveWorktreeSuccessor(
   return siblings.find((worktree) => worktree.isMainWorktree) ?? null
 }
 
-function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
+function listedActiveRow(state: AppState): RemovedActiveRow | null {
   const id = state.activeWorktreeId
   const row = id ? findListedRow(state, id, state.activeWorkspaceExecutionHostId) : undefined
   return row && id
@@ -112,7 +115,7 @@ function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
     : null
 }
 
-function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
+function isSelectionEmptyTerminalView(state: AppState): boolean {
   return (
     state.activeView === 'terminal' &&
     state.activePendingCreationId === null &&

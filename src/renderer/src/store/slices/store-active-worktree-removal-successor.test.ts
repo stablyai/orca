@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-removal-successor'
 import { createTestStore, makeWorktree, seedStore, TEST_REPO } from './store-test-helpers'
+import { makeTerminalTab } from './worktrees-slice-test-fixtures'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -127,5 +128,36 @@ describe('deleting the active workspace', () => {
     await forget(store, sibling)
     await Promise.resolve()
     expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[0]).toBe(main.id)
+  })
+
+  it('does not wake a sibling that "Hide sleeping" keeps out of the sidebar', async () => {
+    const store = setup()
+    const awake = { ...sibling, id: 'repo1::/awake' }
+    store.setState({
+      worktreesByRepo: { repo1: [active, sibling, awake, main] },
+      lastVisitedAtByWorktreeId: { [sibling.id]: 2, [awake.id]: 1 },
+      showSleepingWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: false,
+      persistedUIReady: true,
+      workspaceSessionReady: true
+    })
+    store.setState({
+      tabsByWorktree: { [awake.id]: [makeTerminalTab({ id: 'awake-tab', worktreeId: awake.id })] },
+      ptyIdsByTabId: { 'awake-tab': ['pty-awake'] }
+    })
+    store.getState().setActiveWorktree(active.id, 'ssh:host')
+    await forget(store, active)
+    await Promise.resolve()
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls.map((call) => call[0])).toEqual([
+      awake.id
+    ])
+
+    store.getState().setActiveWorktree(awake.id, 'local')
+    vi.mocked(activateAndRevealWorktree).mockReset()
+    store.setState({ ptyIdsByTabId: {} })
+    await forget(store, awake)
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(store.getState().activeWorktreeId).toBeNull()
   })
 })
