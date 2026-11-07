@@ -1,9 +1,15 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { faviconUrlFromWebsite } from '../../../../../../shared/repo-icon'
+import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../shared/clipboard-image'
+import {
+  faviconUrlFromWebsite,
+  MAX_REPO_ICON_UPLOAD_BYTES
+} from '../../../../../../shared/repo-icon'
+import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
 import { Button } from '../../../ui/button'
+import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Input } from '../../../ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
@@ -21,7 +27,12 @@ const RepositoryIconEmojiPicker = lazyWithRetry(
   { reloadKey: 'repo-icon-emoji-picker' }
 )
 
+export type RepositoryIconTabsHandle = {
+  cancelUpload: () => void
+}
+
 type RepositoryIconTabsProps = {
+  ref?: React.Ref<RepositoryIconTabsHandle>
   initialTab: 'avatar' | 'icon' | 'emoji'
   selectedLucideName: string | null
   selectedEmoji: string
@@ -31,6 +42,7 @@ type RepositoryIconTabsProps = {
 }
 
 export function RepositoryIconTabs({
+  ref,
   initialTab,
   selectedLucideName,
   selectedEmoji,
@@ -40,32 +52,84 @@ export function RepositoryIconTabs({
 }: RepositoryIconTabsProps): React.JSX.Element {
   const [website, setWebsite] = useState('')
   const mountedRef = useMountedRef()
+  const uploadRequest = useRef<symbol | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [showUploadSpinner, setShowUploadSpinner] = useState(false)
+
+  useEffect(() => {
+    if (!uploading) {
+      setShowUploadSpinner(false)
+      return
+    }
+    const timer = setTimeout(() => setShowUploadSpinner(true), 200)
+    return () => clearTimeout(timer)
+  }, [uploading])
+
+  const cancelUpload = () => {
+    uploadRequest.current = null
+    setUploading(false)
+  }
+
+  useImperativeHandle(ref, () => ({ cancelUpload }))
+
+  const handleSetIcon = (icon: RepoIcon | null) => {
+    cancelUpload()
+    onSetIcon(icon)
+  }
 
   const handleUploadImage = async () => {
+    if (uploadRequest.current) {
+      return
+    }
+    const request = Symbol()
+    uploadRequest.current = request
+    setUploading(true)
     try {
       const result = await window.api.shell.pickRepoIconImage()
-      if (!result || !mountedRef.current) {
+      if (!result || !mountedRef.current || uploadRequest.current !== request) {
         return
       }
       if ('error' in result) {
         toast.error(repoIconPickFailureText(result))
         return
       }
-      onSetIcon({
+      const source = await (await fetch(result.dataUrl)).blob()
+      const png = await convertImageBlobToPng(source, { maxEdge: 128 })
+      if (png.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+        throw new Error('Repo icon image is too large.')
+      }
+      const dataUrl = `data:image/png;base64,${await blobToBase64(png)}`
+      if (!mountedRef.current || uploadRequest.current !== request) {
+        return
+      }
+      handleSetIcon({
         type: 'image',
-        src: result.dataUrl,
+        src: dataUrl,
         source: 'upload',
         label: result.fileName
       })
     } catch (error) {
+      if (!mountedRef.current || uploadRequest.current !== request) {
+        return
+      }
       toast.error(
         error instanceof Error
-          ? error.message
+          ? error.message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR ||
+            error.message.endsWith('Repo icon image must be 10MB or smaller.')
+            ? translate(
+                'auto.components.settings.RepositoryIconPicker.imageTooLarge',
+                'Image exceeds the 10MB or 32-megapixel limit.'
+              )
+            : error.message
           : translate(
               'auto.components.settings.RepositoryIconPicker.868c5c9b56',
               'Failed to import repo icon'
             )
       )
+    } finally {
+      if (mountedRef.current && uploadRequest.current === request) {
+        cancelUpload()
+      }
     }
   }
 
@@ -80,7 +144,7 @@ export function RepositoryIconTabs({
       )
       return
     }
-    onSetIcon({
+    handleSetIcon({
       type: 'image',
       src,
       source: 'favicon',
@@ -111,7 +175,10 @@ export function RepositoryIconTabs({
           variant="default"
           className="w-full gap-2"
           disabled={loadingGitHub}
-          onClick={() => void onUseGitHubAvatar()}
+          onClick={() => {
+            cancelUpload()
+            onUseGitHubAvatar()
+          }}
         >
           <Github className="size-3.5" />
           {translate(
@@ -130,10 +197,16 @@ export function RepositoryIconTabs({
           variant="outline"
           size="sm"
           className="gap-2"
+          disabled={uploading || loadingGitHub}
+          aria-busy={uploading}
           onClick={() => void handleUploadImage()}
         >
-          <Image className="size-3.5" />
-          {translate('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')}
+          {uploading && showUploadSpinner ? (
+            <LoadingSpinner className="size-3.5" />
+          ) : (
+            <Image className="size-3.5" />
+          )}
+          {translate('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload image')}
         </Button>
         <div className="flex gap-2">
           <Input
@@ -159,7 +232,7 @@ export function RepositoryIconTabs({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.RepositoryIconPicker.fde066a63b',
-            'PNG uploads must be 256KB or smaller.'
+            'PNG, JPEG, SVG, WebP, GIF, BMP, ICO or AVIF. Up to 10MB and 32 megapixels.'
           )}
         </p>
       </TabsContent>
@@ -174,7 +247,7 @@ export function RepositoryIconTabs({
                   variant={selectedLucideName === option.name ? 'secondary' : 'ghost'}
                   size="icon-xs"
                   className="size-8"
-                  onClick={() => onSetIcon({ type: 'lucide', name: option.name })}
+                  onClick={() => handleSetIcon({ type: 'lucide', name: option.name })}
                   aria-label={translate(
                     'auto.components.settings.RepositoryIconPicker.useRepoIcon',
                     'Use {{value0}} repo icon',
@@ -194,7 +267,7 @@ export function RepositoryIconTabs({
 
       <TabsContent value="emoji">
         <Suspense fallback={null}>
-          <RepositoryIconEmojiPicker selectedEmoji={selectedEmoji} onSetIcon={onSetIcon} />
+          <RepositoryIconEmojiPicker selectedEmoji={selectedEmoji} onSetIcon={handleSetIcon} />
         </Suspense>
       </TabsContent>
     </Tabs>

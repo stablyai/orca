@@ -6,7 +6,8 @@ export const IMAGE_FILE_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.avif': 'image/avif'
 }
 
 export const IMAGE_FILE_EXTENSIONS = Object.freeze(Object.keys(IMAGE_FILE_MIME_TYPES))
