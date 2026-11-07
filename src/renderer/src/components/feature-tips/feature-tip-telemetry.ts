@@ -38,9 +38,7 @@ export function trackCmdJPaletteFeatureTipAcknowledged(source: CmdJPaletteFeatur
 export type ChatUiFeatureTipAction = EventProps<'chat_ui_feature_tip_action'>['action']
 type ShownChatUiLaunchTipVariant = Exclude<ChatUiLaunchTipVariant, 'none'>
 
-function chatUiLaunchTipExperimentVersion(settings: Pick<GlobalSettings, 'telemetry'> | null) {
-  return settings?.telemetry?.chatUiLaunchTipRolloutCohort ? 'corner-card-v3' : 'corner-card-v2'
-}
+const CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION = 'corner-card-v3'
 
 const CHAT_UI_TIP_TELEMETRY_VARIANT = {
   'chat-ui-off': 'chat_ui_off',
@@ -50,28 +48,24 @@ const CHAT_UI_TIP_TELEMETRY_VARIANT = {
   EventProps<'chat_ui_feature_tip_shown'>['variant']
 >
 
-export function trackChatUiFeatureTipShown(
-  variant: ChatUiLaunchTipVariant,
-  settings: Pick<GlobalSettings, 'telemetry'> | null
-): void {
+export function trackChatUiFeatureTipShown(variant: ChatUiLaunchTipVariant): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_shown', {
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
-      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings)
+      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION
     })
   }
 }
 
 export function trackChatUiFeatureTipAction(
   variant: ChatUiLaunchTipVariant,
-  action: ChatUiFeatureTipAction,
-  settings: Pick<GlobalSettings, 'telemetry'> | null
+  action: ChatUiFeatureTipAction
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_action', {
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
       action,
-      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings)
+      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION
     })
   }
 }
@@ -110,7 +104,7 @@ export function trackChatUiFeatureTipExposure(
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_exposure', {
-      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings),
+      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION,
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
       launch_tip_cohort:
         settings?.telemetry?.chatUiLaunchTipRolloutCohort ??

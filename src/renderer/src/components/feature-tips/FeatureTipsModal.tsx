@@ -75,7 +75,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
       if (currentTip?.id === 'chat-ui-here') {
-        trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed', settings)
+        trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
       }
       setupRequestIdRef.current += 1
       markCurrentTipSeen()
@@ -126,12 +126,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
       await setAgentDefaultSurfaceFromFeatureTip('terminal')
       return
     }
-    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal', settings)
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
     handleSkip()
   }
 
   const openAgentSettings = (): void => {
-    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings', settings)
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
     markCurrentTipSeen()
     closeModal()
     openChatUiFeatureTipSettings()
@@ -153,7 +153,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
       case 'use-chat-ui': {
         closeModal()
         if (chatUiLaunchTipVariant !== 'chat-ui-off') {
-          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed', settings)
+          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
           break
         }
         await setAgentDefaultSurfaceFromFeatureTip('chat')

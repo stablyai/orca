@@ -20,8 +20,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
     await updateSettingsOrThrow({ agentDefaultSurface: surface })
     trackChatUiFeatureTipAction(
       surface === 'chat' ? 'chat-ui-off' : 'chat-ui-on',
-      surface === 'chat' ? 'use_chat_ui' : 'switch_to_terminal',
-      settings
+      surface === 'chat' ? 'use_chat_ui' : 'switch_to_terminal'
     )
     trackAgentDefaultSurfaceChanged({
       from_mode: fromSurface,
