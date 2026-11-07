@@ -1,4 +1,4 @@
-import { fork } from 'node:child_process'
+import { forkProcess } from '@orca/process-host/fork-process'
 import { getSttWorkerPath } from './stt-worker-paths'
 import {
   logSttWorkerStderr,
@@ -8,13 +8,13 @@ import {
 
 /** For orcad, which has no Electron utility processes. */
 export function spawnSttForkedProcess(): SttWorkerProcess {
-  const child = fork(getSttWorkerPath(), [], {
+  const child = forkProcess({
+    modulePath: getSttWorkerPath(),
     // Structured clone keeps feed audio a Float32Array.
     serialization: 'advanced',
     execArgv: [],
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    ...(process.platform === 'win32' ? { windowsHide: true } : {})
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
   })
   const kill = (): void => {
     child.kill('SIGKILL')

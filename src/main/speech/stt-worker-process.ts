@@ -1,8 +1,15 @@
 import { EventEmitter } from 'node:events'
 import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
+import type { RecognizerConfigInput } from './stt-worker-model-config'
 
 export const STT_WORKER_EXITED_ERROR = 'The speech engine stopped unexpectedly. Try again.'
 export const STT_WORKER_HUNG_ERROR = 'The speech engine stopped responding. Try again.'
+
+export type SttWorkerRequest =
+  | ({ type: 'init'; sherpaModulePath: string } & RecognizerConfigInput)
+  | { type: 'feed'; samples: Float32Array; sampleRate: number }
+  | { type: 'stop' }
+  | { type: 'discard' }
 
 export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'>
 export type SpawnSttWorkerProcess = () => SttWorkerProcess
@@ -14,14 +21,14 @@ export class SttWorkerChildProcess extends EventEmitter implements SttWorkerProc
 
   constructor(
     private readonly child: {
-      send(message: object): void
+      send(message: SttWorkerRequest): void
       kill(): void
     }
   ) {
     super()
   }
 
-  postMessage(message: object): void {
+  postMessage(message: SttWorkerRequest): void {
     if (!this.exited) {
       this.child.send(message)
     }

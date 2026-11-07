@@ -10,7 +10,8 @@ export type SttWorkerParentPort = {
 
 /** Electron's utility process (desktop) or a forked child (orcad). */
 export function connectSttWorkerParentPort(): SttWorkerParentPort {
-  const utilityPort: UtilityParentPort | undefined = Reflect.get(process, 'parentPort')
+  // Electron types it as always set, but only a utility process has one.
+  const utilityPort: UtilityParentPort | undefined = process.parentPort
   if (utilityPort) {
     return {
       post: (message) => utilityPort.postMessage(message),

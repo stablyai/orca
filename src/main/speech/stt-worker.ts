@@ -1,15 +1,10 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildRecognizerConfig, type RecognizerConfigInput } from './stt-worker-model-config'
+import { buildRecognizerConfig } from './stt-worker-model-config'
 import { createStopTailPadding } from './stt-stop-tail-padding'
 import { connectSttWorkerParentPort } from './stt-worker-parent-port'
-
-type WorkerMessage =
-  | ({ type: 'init'; sherpaModulePath: string } & RecognizerConfigInput)
-  | { type: 'feed'; samples: Float32Array; sampleRate: number }
-  | { type: 'stop' }
-  | { type: 'discard' }
+import type { SttWorkerRequest as WorkerMessage } from './stt-worker-process'
 
 const parentPort = connectSttWorkerParentPort()
 // Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
