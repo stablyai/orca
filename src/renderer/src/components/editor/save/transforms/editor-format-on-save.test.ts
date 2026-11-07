@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { createEditorSaveQueue } from '../queue/editor-save-queue'
 import type { EditorSaveQueue } from '../queue/editor-save-queue-contract'
@@ -18,7 +18,9 @@ import { bumpEditorDiscardEpoch, EditorSaveDiscardedError } from '../flush/edito
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 describe('format on the guarded save path', () => {

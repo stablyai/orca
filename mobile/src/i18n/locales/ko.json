@@ -2834,8 +2834,9 @@
       "phoneReady": "이 휴대폰에서 사용 가능",
       "phoneNeedsDownload": "언어 다운로드 필요",
       "phoneDownloading": "다운로드 중… {{progress}}%",
-      "phoneUnsupported": "이 휴대폰의 언어에서는 사용할 수 없음",
-      "download": "이 휴대폰에 다운로드"
+      "phoneUnsupported": "이 휴대폰에서는 사용할 수 없음",
+      "download": "이 휴대폰에 다운로드",
+      "downloadSize": "약 {{size}}MB"
     }
   },
   "sourceControl": {

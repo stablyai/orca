@@ -75,7 +75,7 @@ import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { collectionVisits } from '../../../../shared/collection-visits.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests

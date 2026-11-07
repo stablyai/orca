@@ -11,8 +11,10 @@ import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operatio
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({

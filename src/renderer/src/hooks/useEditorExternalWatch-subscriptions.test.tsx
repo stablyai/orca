@@ -26,7 +26,7 @@ vi.mock('@/store', () => ({
     getState: () => ({ openFiles: [] })
   })
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
     subscriptionState.contacts.set(id, listener)
     return subscriptionState.unsubscribeContact

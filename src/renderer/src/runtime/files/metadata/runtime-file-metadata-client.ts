@@ -5,7 +5,7 @@ import {
   getRemoteFileArgs,
   localAccess
 } from '../runtime-file-routing'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/local-file-access'
 

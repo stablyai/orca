@@ -1,5 +1,5 @@
 import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
-import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { translate } from '@/i18n/i18n'
 import type {
   NativeChatAttachmentOwner,

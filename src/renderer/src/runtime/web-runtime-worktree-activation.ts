@@ -1,6 +1,6 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   captureRuntimeEnvironmentCall,

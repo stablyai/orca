@@ -28,9 +28,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 // AICore. API 33 is the floor because that is when it can read our PCM instead of opening the mic.
 @RequiresApi(33)
 internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpeechEngine {
-  // One recognizer for checks, downloads and sessions, kept until close. Destroying a recognizer unbinds
-  // the app's connection to the service: other recognizers then fail with ERROR_SERVER_DISCONNECTED and
-  // a request sent while it unbinds is dropped without a callback. Main thread only.
+  // One recognizer for checks, downloads and sessions. Destroying a live one unbinds the app's connection
+  // to the service: other recognizers then fail with ERROR_SERVER_DISCONNECTED and a request sent while it
+  // unbinds is dropped without a callback. So it is replaced only once the service has disconnected it,
+  // never because an answer is slow. Main thread only.
   private var shared: SpeechRecognizer? = null
 
   override suspend fun resolve(candidates: List<Locale>): SpeechTarget? {
@@ -94,7 +95,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
             }
             is RecognitionEvent.Failed -> {
               if (event.error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
-                withContext(Dispatchers.Main) { shared?.let(::drop) }
+                withContext(Dispatchers.Main) { replace(listening) }
               }
               throw SpeechFailure(failureCode(event.error), "Recognizer error ${event.error}")
             }
@@ -124,13 +125,16 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
   }
 
   override fun close() {
-    context.mainExecutor.execute { shared?.let(::drop) }
+    context.mainExecutor.execute { replace(shared) }
   }
 
-  // A disconnected recognizer is replaced once; the new one binds the service afresh.
+  // A recognizer the service disconnected is replaced and asked once more. A service that answers too
+  // slowly is busy, not unsupported: the next check asks again on the same recognizer.
   private suspend fun support(locale: Locale): RecognitionSupport? {
     repeat(2) {
+      var asked: SpeechRecognizer? = null
       val (support, error) = request(SUPPORT_TIMEOUT_MS) { recognizer, done: (Pair<RecognitionSupport?, Int>) -> Unit ->
+        asked = recognizer
         recognizer.checkRecognitionSupport(
           recognizeIntent(locale),
           context.mainExecutor,
@@ -139,26 +143,28 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
             override fun onError(error: Int) = done(null to error)
           }
         )
-      } ?: return null
+      } ?: throw SpeechFailure("busy", "The speech service did not answer within ${SUPPORT_TIMEOUT_MS} ms.")
       if (error != SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
         if (support == null) Log.w(SPEECH_LOG_TAG, "Recognition support check for $locale failed: $error")
         return support
       }
-      withContext(Dispatchers.Main) { shared?.let(::drop) }
+      withContext(Dispatchers.Main) { replace(asked) }
     }
+    Log.w(SPEECH_LOG_TAG, "Recognition support check for $locale: the service stayed disconnected")
     return null
   }
 
   private fun recognizer(): SpeechRecognizer =
     shared ?: SpeechRecognizer.createOnDeviceSpeechRecognizer(context).also { shared = it }
 
-  private fun drop(recognizer: SpeechRecognizer) {
+  private fun replace(recognizer: SpeechRecognizer?) {
+    if (recognizer == null || shared !== recognizer) return
     recognizer.destroy()
-    if (shared === recognizer) shared = null
+    shared = null
   }
 
-  // Runs one callback-style request on the shared recognizer. Null when it timed out; the recognizer is
-  // then replaced, since a dropped request means its binding is gone.
+  // Runs one callback-style request on the shared recognizer. Null when it timed out; the recognizer is kept,
+  // since it may still be binding and its late answer is harmless.
   private suspend fun <T : Any> request(
     timeoutMs: Long?,
     send: (SpeechRecognizer, (T) -> Unit) -> Unit
@@ -169,9 +175,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
         send(recognizer) { if (continuation.isActive) continuation.resume(it) }
       }
     }
-    val answer = if (timeoutMs == null) call() else withTimeoutOrNull(timeoutMs) { call() }
-    if (answer == null) drop(recognizer)
-    answer
+    if (timeoutMs == null) call() else withTimeoutOrNull(timeoutMs) { call() }
   }
 
   private fun recognizeIntent(locale: Locale) = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -189,7 +193,8 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
     .putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
 
   private companion object {
-    const val SUPPORT_TIMEOUT_MS = 3_000L
+    // A cold bind of the speech service can take seconds on a loaded phone.
+    const val SUPPORT_TIMEOUT_MS = 10_000L
   }
 }
 

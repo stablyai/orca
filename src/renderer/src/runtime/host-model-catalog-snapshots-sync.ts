@@ -22,10 +22,10 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilitiesKnown
-} from './local-runtime-capabilities'
+} from './hosts/capabilities/local-runtime-capabilities'
 import { localStructuredChatsInUse } from './local-structured-chats'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 
 const LOCAL = { kind: 'local' } as const
 

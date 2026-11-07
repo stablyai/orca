@@ -40,7 +40,7 @@ import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees

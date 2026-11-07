@@ -71,7 +71,9 @@ export function useNativeChatLiveSession(
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
   // Cache the id index so each frame costs O(incoming), not O(existing).
   const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
-  appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
+  if (appendMergerRef.current == null) {
+    appendMergerRef.current = createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
+  }
 
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 

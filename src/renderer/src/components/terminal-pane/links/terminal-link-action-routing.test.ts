@@ -4,11 +4,11 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/browser/navigation/http-link-routing'
 import {
-  closeTerminalLinkActionRequest,
   requestTerminalLinkAction,
   type TerminalLinkActionContext,
   type TerminalLinkActionRequest
 } from './terminal-link-action-request'
+import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
 

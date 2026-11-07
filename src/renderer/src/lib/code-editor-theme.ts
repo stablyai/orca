@@ -68,7 +68,8 @@ function readThemeToken(
   }
   if ('tint' in rule) {
     const hue = read(rule.tint)
-    return hue ? `color-mix(in srgb, ${hue} ${rule.percent}%, transparent)` : ''
+    const into = rule.into ? read(rule.into) : 'transparent'
+    return hue && into ? `color-mix(in srgb, ${hue} ${rule.percent}%, ${into})` : ''
   }
   if ('mixForeground' in rule) {
     const foreground = read('--foreground')

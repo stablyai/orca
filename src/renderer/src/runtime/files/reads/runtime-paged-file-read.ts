@@ -15,16 +15,16 @@ import {
   type RuntimeFileSnapshot,
   type RuntimeRemoteFileAddress
 } from './runtime-file-range-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { captureRuntimeEnvironmentRequestRevision } from '../../runtime-environment-revision'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import { remoteFilePath, remoteFileRequest } from '../../../../../shared/remote-file-locator'
 import {
   isRenewableGrantError,
   renewTerminalArtifactGrant
-} from '../../runtime-terminal-artifact-grant'
+} from '../grants/runtime-terminal-artifact-grant'
 
 // Why: under files.readChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
 const PAGED_READ_CHUNK_BYTES = 384 * 1024

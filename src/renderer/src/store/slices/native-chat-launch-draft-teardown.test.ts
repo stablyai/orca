@@ -21,7 +21,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

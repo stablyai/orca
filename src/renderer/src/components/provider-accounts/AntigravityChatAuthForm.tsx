@@ -2,11 +2,11 @@ import {
   antigravityChatSignInRunning,
   readAntigravityChatSignInSnapshot,
   subscribeAntigravityChatSignIns
-} from '@/runtime/antigravity-chat-sign-in-status'
+} from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
-import { callAntigravityChatAuthConfig } from '@/runtime/runtime-antigravity-accounts-client'
+import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

@@ -1,7 +1,7 @@
 import type { JiraIssue, JiraTransition } from '../../../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { jiraListTransitionsForTarget } from '@/runtime/jira/runtime-jira-detail-client'
-import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
 

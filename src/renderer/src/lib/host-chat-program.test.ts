@@ -11,7 +11,7 @@ import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
@@ -27,14 +27,18 @@ const rpc = vi.hoisted(() => ({
   direct: vi.fn(),
   supports: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: rpc.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: rpc.supports
 }))
-vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
+  subscribeRuntimeRpc: rpc.subscribe
+}))
 import { useAppStore } from '@/store'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { acquireAgentLaunchChoices, holdChatProgramFacts } from './host-chat-program-acquisition'
 import * as chat from './host-chat-program'
 import { resolveQuickWorkspaceAgentSelection } from './quick-workspace-agent-selection'

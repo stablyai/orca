@@ -4,7 +4,7 @@ import {
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { branchName } from '@/lib/git-utils'

@@ -23,7 +23,7 @@ import {
   getRemoteFileArgs,
   withSshMutationExpectation
 } from '../runtime-file-routing'
-import { captureRuntimeEnvironmentRequestRevision } from '../../runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 function saveTempPath(relativePath: string): string {
   const normalized = normalizeRelativePath(relativePath)

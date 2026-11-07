@@ -7,7 +7,9 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', () => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
-vi.mock('./paired-parked-terminal-restore', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('../../../../../../shared/remote-runtime/remote-runtime-pty-id', () => ({
+  isRemoteRuntimePtyId: () => false
+}))
 vi.mock('../instrumentation/pty-connect-diagnostics', () => ({
   recordPtyConnectDiagnostic: vi.fn()
 }))

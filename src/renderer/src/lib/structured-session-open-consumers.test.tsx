@@ -12,7 +12,7 @@ import { writeAiVaultSessionDragData } from './agent-session/resume/history/ai-v
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 const transport = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: transport.toast, success: vi.fn() } }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: transport.rpc
 }))

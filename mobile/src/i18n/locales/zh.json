@@ -2834,8 +2834,9 @@
       "phoneReady": "已可在此手机上使用",
       "phoneNeedsDownload": "需要下载语言",
       "phoneDownloading": "正在下载… {{progress}}%",
-      "phoneUnsupported": "不支持此手机的语言",
-      "download": "下载到此手机"
+      "phoneUnsupported": "此手机不支持",
+      "download": "下载到此手机",
+      "downloadSize": "约 {{size}} MB"
     }
   },
   "sourceControl": {

@@ -64,7 +64,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
 import { useAppStore, type AppState } from '@/store/index'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'

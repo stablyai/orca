@@ -1,4 +1,4 @@
-import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from './rpc/environment-revisions/runtime-environment-revision'
 
 export type WebSessionIntentOwner = {
   environmentId: string

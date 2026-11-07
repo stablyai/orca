@@ -4,7 +4,8 @@ import {
   normalizeJiraQuickFilterState,
   type JiraQuickFilterState
 } from '../../../../shared/jira/jira-quick-filters'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '../runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export async function readJiraQuickFilterState(

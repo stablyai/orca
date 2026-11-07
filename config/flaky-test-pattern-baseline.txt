@@ -353,7 +353,6 @@
 1 test-no-real-time-wait:src/shared/git/status/git-branch-line-total-soft-deadline.test.ts
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 1 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-standing-intent.test.ts
-1 test-no-real-time-wait:src/shared/remote-runtime/remote-runtime-outbound-admission.test.ts
 1 test-no-real-time-wait:src/shared/secure-file-windows.test.ts
 1 test-no-real-time-wait:src/shared/secure-path-windows-acl.win32.test.ts
 1 test-no-real-time-wait:src/shared/setup-agent-sequencing-codex-no-daemon.test.ts

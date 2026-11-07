@@ -11,7 +11,7 @@ import {
 } from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

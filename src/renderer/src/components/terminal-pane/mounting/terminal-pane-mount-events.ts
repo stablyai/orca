@@ -6,7 +6,7 @@ import {
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-terminal-actions'
+import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-split'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../../terminal/terminal-tab-actions'
 import { useAppStore } from '@/store/index'

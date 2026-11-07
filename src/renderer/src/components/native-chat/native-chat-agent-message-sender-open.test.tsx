@@ -19,7 +19,7 @@ vi.mock('sonner', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   toast: { info: mocks.toastInfo, error: vi.fn() }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))

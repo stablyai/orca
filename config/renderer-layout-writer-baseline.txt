@@ -44,9 +44,9 @@
 5 src/renderer/src/runtime/web-session-tabs-sync/apply-terminal-records.ts
 4 src/renderer/src/runtime/web-session-tabs-sync/apply-worktree-records.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/session-tabs-inventory-absence.ts
-1 src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts
-2 src/renderer/src/runtime/web-session-terminal-orphan-topology.ts
-3 src/renderer/src/runtime/web-session-terminal-recovery-snapshot-validation.ts
+1 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-recovery-surface.ts
+2 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-topology.ts
+3 src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-recovery-snapshot-validation.ts
 10 src/renderer/src/store/slices/browser/cleanup/browser-close-actions.ts
 2 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/hydration/browser-hydration-state.ts

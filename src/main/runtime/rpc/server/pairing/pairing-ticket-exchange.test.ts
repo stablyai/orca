@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from './device-registry'
 import { devicePrincipalOf, fingerprintAuthenticatedPairingCredential } from './device-principal'
-import { PairingTicketExchangeError } from './pairing-ticket-exchange'
+import { PairingTicketExchangeError, usesOlderPairingMethod } from './pairing-ticket-exchange'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
 const REPLACEMENT = 'a'.repeat(48)
@@ -267,6 +267,48 @@ describe('pairing ticket exchange', () => {
       )
       registry.retireForkedTicket(late.deviceId)
       expect(registry.validateToken(shared.token)?.deviceId).toBe(shared.deviceId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flags only devices that signed in with a code and never moved off it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(3_000_000)
+      const registry = new DeviceRegistry(dir)
+      const older = pairedOffer(registry)
+      const exchanged = pairedOffer(registry)
+      registry.exchangePairingTicket(exchanged.deviceId, exchanged.token, REPLACEMENT)
+      const unscanned = registry.addDevice('Unscanned', 'mobile')
+      const link = registry.addDevice('Runtime', 'runtime')
+      registry.updateLastSeen(link.deviceId)
+      registry.forkDeviceKey(link.deviceId, Buffer.alloc(32, 4).toString('base64'), 'Chrome')
+      const httpLink = registry.addDevice('Plain http', 'runtime')
+      registry.updateLastSeen(httpLink.deviceId)
+      const tab = registry.forkDeviceKey(
+        httpLink.deviceId,
+        Buffer.alloc(32, 7).toString('base64'),
+        'Tab',
+        { ephemeral: true }
+      )
+
+      const flagged = (deviceId: string, reg = registry) =>
+        usesOlderPairingMethod(reg.getDevice(deviceId)!, reg.listDevices())
+      // Still pairing: an updated client is about to exchange.
+      expect(flagged(older.deviceId)).toBe(false)
+      vi.setSystemTime(3_000_000 + 10 * 60_000 + 1)
+      expect(flagged(older.deviceId)).toBe(true)
+      expect(flagged(unscanned.deviceId)).toBe(false)
+      expect(flagged(exchanged.deviceId)).toBe(false)
+      registry.validateToken(REPLACEMENT)
+      expect(flagged(exchanged.deviceId)).toBe(false)
+      expect(flagged(link.deviceId)).toBe(false)
+      expect(flagged(httpLink.deviceId)).toBe(false)
+      // A host restart drops session-only keys; the link is still not reported.
+      const restarted = new DeviceRegistry(dir)
+      expect(restarted.getDevice(tab.deviceId)).toBeNull()
+      expect(flagged(httpLink.deviceId, restarted)).toBe(false)
     } finally {
       vi.useRealTimers()
     }

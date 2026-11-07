@@ -34,7 +34,9 @@ export function useNativeChatSelectedHistory({
       return false
     }
     setSelectedSource(sourceKey)
-    release.current ??= retainHistory?.() ?? null
+    if (release.current == null) {
+      release.current = retainHistory?.() ?? null
+    }
     return true
   }, [root, retainHistory, sourceKey])
   const deferTrim = useCallback(() => {

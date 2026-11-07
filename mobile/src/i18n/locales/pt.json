@@ -2910,8 +2910,9 @@
       "phoneReady": "Pronto neste celular",
       "phoneNeedsDownload": "Precisa baixar o idioma",
       "phoneDownloading": "Baixando… {{progress}}%",
-      "phoneUnsupported": "Indisponível para o idioma deste celular",
-      "download": "Baixar para este celular"
+      "phoneUnsupported": "Indisponível neste celular",
+      "download": "Baixar para este celular",
+      "downloadSize": "Cerca de {{size}} MB"
     }
   },
   "sourceControl": {

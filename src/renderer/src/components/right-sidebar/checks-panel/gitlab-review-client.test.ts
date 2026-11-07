@@ -3,8 +3,10 @@ import type { GitLabWorkItemDetails } from '../../../../../shared/gitlab-types'
 
 const runtime = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtime.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtime.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 

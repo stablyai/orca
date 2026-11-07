@@ -153,7 +153,7 @@ export async function initializeAcpStructuredSession(
   if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.
     const wanted = acquire.permissionMode ?? 'ask'
-    const requested = mode.values[wanted]
+    const requested = child.permissionModes?.[wanted]
     if (requested === undefined) {
       throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
     }
@@ -222,7 +222,7 @@ export async function initializeAcpStructuredSession(
   }
   return {
     link,
-    reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+    reportedOptions: options.observedCurrent(child.permissionModes),
     catalogListing: options.startListing()
   }
 }

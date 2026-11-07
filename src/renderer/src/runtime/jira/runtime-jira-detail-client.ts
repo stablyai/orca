@@ -11,11 +11,11 @@ import type {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
-} from '../runtime-rpc-client'
+} from '../rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY } from '../../../../shared/jira/jira-detail-capabilities'
-import { RuntimeRpcCallError } from '../runtime-rpc-result'
+import { RuntimeRpcCallError } from '../rpc/calls/runtime-rpc-result'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
 
 export type JiraCommentResult = { ok: true; id: string } | { ok: false; error: string }

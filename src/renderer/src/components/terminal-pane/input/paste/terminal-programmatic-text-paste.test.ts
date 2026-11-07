@@ -7,10 +7,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./terminal-bracketed-paste', () => ({
-  BRACKETED_PASTE_END: '\u001b[201~',
-  BRACKETED_PASTE_START: '\u001b[200~',
-  pasteTerminalText: mocks.pasteTerminalText,
-  sanitizeTerminalPasteText: (text: string) => text.split('\u001b').join('\u241b')
+  pasteTerminalText: mocks.pasteTerminalText
 }))
 
 vi.mock('../terminal-input-activity', () => ({

@@ -5,7 +5,7 @@ import type { GitHubCommentResult } from '../../../../../shared/github/comment-t
 import { translate } from '@/i18n/i18n'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from '../cache/cache-identity'
 import { withBoundedCacheEntry } from '../cache/cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
