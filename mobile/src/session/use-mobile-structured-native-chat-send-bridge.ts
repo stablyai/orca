@@ -35,7 +35,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  restoreRejectedDraft: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    options?: { preserveConversationCommands?: boolean }
+  ) => void
   holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   onSendError: (message: string) => void
 }): {
@@ -103,6 +107,12 @@ export function useMobileStructuredNativeChatSendBridge(args: {
           onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
           settleMobileNativeChatInFlightSend(inFlightId)
         })
+        return outcome
+      }
+      if (outcome === 'unknown') {
+        // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
+        settleMobileNativeChatInFlightSend(inFlightId)
+        restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
         return outcome
       }
       settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
