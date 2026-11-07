@@ -1,10 +1,15 @@
 import { Plus } from 'lucide-react-native'
-import { Fragment, memo, useCallback } from 'react'
+import { Fragment, memo, useCallback, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { classifyConnection } from '../transport/connection-health'
+import {
+  getIrohHostStatus,
+  irohStatusDisplayLabel,
+  subscribeIrohHostStatus
+} from '../transport/mobile-iroh-host-status'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import type { ConnectionState, HostCatalogEntry } from '../transport/types'
 import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
@@ -87,8 +92,14 @@ type MobileHomeHostRowProps = Pick<
   | 'onOpenActions'
 > & { item: HostCatalogEntry }
 
+/** Projects one desktop's connection state and current Iroh hint into its actionable home row. */
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
   const { item, onOpen, onOpenActions } = props
+  const irohStatus = useSyncExternalStore(
+    subscribeIrohHostStatus,
+    () => getIrohHostStatus(item.id),
+    () => null
+  )
   const state = resolveHomeHostConnectionState(
     item.id,
     props.hostStates[item.id],
@@ -100,6 +111,7 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
     reconnectAttempts: props.hostAttempts[item.id] ?? 0,
     lastConnectedAt: props.hostLastConnected[item.id] ?? null,
     endpoint: item.endpoint,
+    irohHint: irohStatusDisplayLabel(irohStatus),
     pendingPath: connection?.pendingPath ?? null,
     pairingRejected: connection?.pairingRejected ?? false,
     relayHostReachability: connection?.relayHostReachability ?? 'connecting',

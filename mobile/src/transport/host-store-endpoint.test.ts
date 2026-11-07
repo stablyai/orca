@@ -6,7 +6,8 @@ import {
   RelayRoutingHostRemovedError,
   resetHostStoreForTests,
   setRelayRouting,
-  updateHostNameAndEndpoint
+  updateHostNameAndEndpoint,
+  updateLastConnected
 } from './host-store'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
 
@@ -111,6 +112,39 @@ describe('updateHostNameAndEndpoint', () => {
     )
     expect(AsyncStorage.setItem).not.toHaveBeenCalled()
   })
+
+  it.each([
+    { kind: 'malformed', relayUrl: 'not a URL', directAddresses: ['old-hostname:443'] },
+    {
+      kind: 'maximum-bounded',
+      relayUrl: 'r'.repeat(2048),
+      directAddresses: Array<string>(8).fill('a'.repeat(64))
+    }
+  ])(
+    'retains $kind legacy iroh hints when loading and updating a paired host',
+    async ({ relayUrl, directAddresses }) => {
+      resetHostStoreForTests()
+      resetMobileRelayHostOverlayStoreForTests()
+      const host = legacyOverride(stored[0]!)
+      const iroh = { endpointId: 'a'.repeat(64), relayUrl, directAddresses }
+      vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+        key === 'orca:hosts' ? JSON.stringify([{ ...host, iroh }, stored[1]]) : null
+      )
+      vi.mocked(SecureStore.getItemAsync).mockResolvedValue('token-1')
+
+      expect(await loadHosts()).toContainEqual({
+        ...host,
+        deviceToken: 'token-1',
+        iroh
+      })
+      await updateLastConnected(host.id)
+      expect(writtenHosts()).toContainEqual({
+        ...host,
+        lastConnected: expect.any(Number),
+        iroh
+      })
+    }
+  )
 })
 
 describe('relay routing after a host edit', () => {

@@ -105,6 +105,54 @@ it('returns current settings when a language change finishes after a newer theme
   expect(reply.theme).toBe('light')
 })
 
+it('saves canonical iroh relay settings and Automatic through the real profile store', async () => {
+  const { store, readState } = await createWorkerMaintenanceFixture()
+  registerSettingsHandlers(store)
+  const write = settingsWriter()
+
+  const selected = await write(event, { mobileIrohRelayUrl: ' HTTPS://Relay.Example:443 ' })
+  expect(selected.mobileIrohRelayUrl).toBe('https://relay.example/')
+  await store.flushPendingOrThrowAsync()
+  expect(readState().settings.mobileIrohRelayUrl).toBe('https://relay.example/')
+
+  const automatic = await write(event, { mobileIrohRelayUrl: '   ' })
+  expect(automatic.mobileIrohRelayUrl).toBeNull()
+  await store.flushPendingOrThrowAsync()
+  expect(readState().settings.mobileIrohRelayUrl).toBeNull()
+})
+
+it.each([
+  'https://private-user:private-token@relay.example/',
+  'https://relay.example/private-token',
+  'https://relay.example/?private-token',
+  'https://relay.example/#private-token',
+  'https://relay.example:',
+  42
+])('rejects invalid IPC relay updates without saving or leaking input: %s', async (invalid) => {
+  const { store, readState } = await createWorkerMaintenanceFixture()
+  store.updateSettings({ mobileIrohRelayUrl: 'https://saved.example/', theme: 'system' })
+  await store.flushPendingOrThrowAsync()
+  const before = readState().settings
+  const changed = vi.fn()
+  store.onSettingsChanged(changed)
+  registerSettingsHandlers(store)
+
+  const failure: unknown = await settingsWriter()(event, {
+    mobileIrohRelayUrl: invalid,
+    theme: 'dark'
+  }).catch((error: unknown) => error)
+  expect(failure).toBeInstanceOf(Error)
+  expect(String(failure)).not.toContain(String(invalid))
+  expect(String(failure)).not.toContain('private-token')
+  expect(store.getSettings()).toMatchObject({
+    mobileIrohRelayUrl: 'https://saved.example/',
+    theme: 'system'
+  })
+  expect(changed).not.toHaveBeenCalled()
+  await store.flushPendingOrThrowAsync()
+  expect(readState().settings).toEqual(before)
+})
+
 vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

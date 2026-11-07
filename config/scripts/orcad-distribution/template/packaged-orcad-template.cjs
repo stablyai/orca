@@ -1,5 +1,5 @@
 // Desktop deployment template ships JS/addons for every target, with no Node runtime (D2); SSH/managed deployments materialize its slots.
-// Reseal SignPath-modified binaries: node config/scripts/packaged-orcad-template.cjs --reseal-signed <appDir> <signedListFile>.
+// Reseal SignPath-modified binaries: node config/scripts/orcad-distribution/template/packaged-orcad-template.cjs --reseal-signed <appDir> <signedListFile>.
 const { createHash } = require('node:crypto')
 const {
   closeSync,
@@ -114,8 +114,12 @@ function resealOrcadTemplateManifest(templateDir, signedPaths) {
 }
 
 // Notarization requires Developer ID on nested Mach-O: afterPack signs, reseals and verifies exact shipped bytes.
+/**
+ * Sign and reseal macOS binaries, then compact/reference tools for the selected targets.
+ * Missing templates are allowed only when this build does not require one.
+ */
 async function finalizePackagedOrcadTemplate(resourcesDir, options) {
-  const { platform, env = process.env, signMacBinary } = options
+  const { platform, env = process.env, signMacBinary, targets } = options
   const templateDir = join(resourcesDir, ORCAD_TEMPLATE_RESOURCE_DIR)
   if (!existsSync(templateDir)) {
     if (isOrcadTemplateRequired(env)) {
@@ -131,8 +135,8 @@ async function finalizePackagedOrcadTemplate(resourcesDir, options) {
     }
     resealOrcadTemplateManifest(templateDir, machO)
   }
-  compactPackagedOrcadRipgrep(resourcesDir)
-  referencePackagedOrcadBrowser(resourcesDir)
+  compactPackagedOrcadRipgrep(resourcesDir, targets)
+  referencePackagedOrcadBrowser(resourcesDir, targets)
 }
 
 /** `inner-signing-list.txt` lines are app-relative Windows paths; keep the template's. */

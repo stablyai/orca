@@ -1,3 +1,5 @@
+import type { PairingIroh } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { isMobilePairingRelayDisabled } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimeDeviceGrant } from '../rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
@@ -32,6 +34,35 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  /** Expose only the current relay generation's online endpoint, never a superseded bind. */
+  getIrohStatus(): { bound: boolean; endpointId: string | null; relayUrl: string | null } {
+    const endpointId =
+      !this.stopping && this.appliedIrohRelayGeneration === this.irohRelayGeneration
+        ? (this.irohTransport?.endpointId ?? null)
+        : null
+    return {
+      bound: endpointId !== null,
+      endpointId,
+      relayUrl: endpointId ? (this.irohTransport?.endpointDialHints()?.relayUrl ?? null) : null
+    }
+  }
+
+  /** Build bounded pairing dial hints only when the selected iroh endpoint is ready. */
+  protected getIrohPairingTarget(): PairingIroh | null {
+    const { endpointId } = this.getIrohStatus()
+    if (!endpointId) {
+      return null
+    }
+    const hints = this.irohTransport?.endpointDialHints() ?? null
+    return {
+      endpointId,
+      ...(hints?.relayUrl ? { relayUrl: hints.relayUrl } : {}),
+      ...(hints && hints.directAddresses.length > 0
+        ? { directAddresses: hints.directAddresses }
+        : {})
+    }
+  }
+
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
   }
@@ -56,11 +87,13 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return this.pushUnregisterOutbox
   }
 
+  /** Store Relay bindings only for eligible mobile grants, revoking replaced credential families. */
   setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
+    const pairingMode = this.deviceRegistry?.getMobilePairingConnectionMode(deviceId)
     if (
       current?.scope !== 'mobile' ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+      (pairingMode != null && isMobilePairingRelayDisabled(pairingMode))
     ) {
       return false
     }
@@ -148,11 +181,14 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return ws?.endpoint ?? null
   }
 
+  /** Persist pending credentials only after the requested transport and E2EE identity are ready. */
   createPairingOffer(args: {
     address?: string | null
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Only iroh-mode mobile offers may advertise off-LAN iroh reachability.
+    includeIroh?: boolean
     // Persist local-only policy on grants so reconnect cannot expose every interface; other callers default to network reach (STA-2370).
     reach?: RuntimePairingReach
     // Grant administrative permissions only at pairing, never as later device upgrades.
@@ -172,12 +208,29 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
     }
-    const rawEndpoint = this.getWebSocketEndpoint()
-    if (!rawEndpoint) {
+    const iroh = args.includeIroh ? this.getIrohPairingTarget() : null
+    if (args.includeIroh && !iroh) {
       return pairingUnavailable(
-        'websocket_unavailable',
-        'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+        'iroh_unavailable',
+        'Iroh pairing is unavailable. Choose another home relay in Mobile settings or inspect the Iroh transport logs.'
       )
+    }
+    let endpoint: string
+    if (iroh) {
+      endpoint = `iroh://${iroh.endpointId}`
+    } else {
+      const rawEndpoint = this.getWebSocketEndpoint()
+      if (!rawEndpoint) {
+        return pairingUnavailable(
+          'websocket_unavailable',
+          'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+        )
+      }
+      const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+      if (!advertised.ok) {
+        return pairingUnavailable(advertised.reason, advertised.guidance)
+      }
+      endpoint = advertised.endpoint
     }
     if (!this.deviceRegistry) {
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -187,11 +240,6 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
-    if (!advertised.ok) {
-      return pairingUnavailable(advertised.reason, advertised.guidance)
-    }
-    const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: TokenDeviceEntry
@@ -214,6 +262,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       publicKeyB64,
       pairedDeviceId: device.deviceId,
       scope,
+      ...(iroh ? { iroh } : {}),
       // Runtime clients pin host identity; mobile does not need these extra QR bytes.
       ...(hostDescriptor && scope === 'runtime' ? { hostDescriptor } : {})
     })

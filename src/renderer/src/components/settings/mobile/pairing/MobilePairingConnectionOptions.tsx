@@ -11,6 +11,7 @@ import type {
 import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
+import { MobileIrohRelaySettingField } from './MobileIrohRelaySettingField'
 import { relayClockSkewMessage } from '../../../mobile/relay-clock-skew-message'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
@@ -41,6 +42,8 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   )
 }
 
+const MODE_ORDER: MobilePairingConnectionMode[] = ['automatic', 'local-only', 'iroh']
+
 // Show the landed Relay cell for support; the scheme offers no actionable detail.
 function relayCellLabel(cellUrl: string): string | null {
   try {
@@ -50,6 +53,7 @@ function relayCellLabel(cellUrl: string): string | null {
   }
 }
 
+/** Presents connection modes with Relay sign-in guidance and Iroh binding availability. */
 export function MobilePairingConnectionOptions({
   value,
   onChange,
@@ -65,7 +69,9 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
+  const irohRelayUrl = useAppStore((state) => state.settings?.mobileIrohRelayUrl ?? null)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
+  const [irohBound, setIrohBound] = useState(false)
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
@@ -74,12 +80,23 @@ export function MobilePairingConnectionOptions({
   // Availability is a property of the build, not of the current selection.
   const relayUnavailable = !signedIn && !configured
   const relayDisabled = relayMintRetrying || relayUnavailable
+  // Why: iroh is a default transport; the option only greys out if the endpoint failed to bind.
+  const irohDisabled = !irohBound
   const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
     automatic: null,
-    'local-only': null
+    'local-only': null,
+    iroh: null
   })
+  const modeDisabled = (mode: MobilePairingConnectionMode): boolean =>
+    (mode === 'automatic' && relayDisabled) || (mode === 'iroh' && irohDisabled)
+  // Why: roving tabindex needs exactly one stop — hand it to the first reachable
+  // row when the selected path is unavailable in this build.
+  const focusableMode = modeDisabled(value)
+    ? (MODE_ORDER.find((mode) => !modeDisabled(mode)) ?? 'local-only')
+    : value
 
-  // Wrap/focus radio arrow navigation, but leave nested Sign in controls’ arrows untouched.
+  // Wrap/focus enabled radios, but leave nested Sign in controls’ arrows untouched.
+  /** Calls `onChange` and moves focus only when an enabled alternative mode is found. */
   const handleArrowKeys = (event: React.KeyboardEvent): void => {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return
@@ -88,14 +105,19 @@ export function MobilePairingConnectionOptions({
     if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'radio') {
       return
     }
-    if (relayDisabled && value !== 'automatic') {
+    event.preventDefault()
+    const currentIndex = MODE_ORDER.findIndex((mode) => optionRefs.current[mode] === target)
+    const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1
+    for (let step = 1; step < MODE_ORDER.length; step++) {
+      const raw = (currentIndex + delta * step) % MODE_ORDER.length
+      const next = MODE_ORDER[(raw + MODE_ORDER.length) % MODE_ORDER.length]!
+      if (modeDisabled(next)) {
+        continue
+      }
+      onChange(next)
+      optionRefs.current[next]?.focus()
       return
     }
-    event.preventDefault()
-    const next: MobilePairingConnectionMode =
-      relayDisabled || value === 'automatic' ? 'local-only' : 'automatic'
-    onChange(next)
-    optionRefs.current[next]?.focus()
   }
 
   const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
@@ -128,6 +150,43 @@ export function MobilePairingConnectionOptions({
     }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    let checking = false
+    setIrohBound(false)
+    // A relay save replaces the endpoint; restart observation even after an earlier successful bind.
+    const check = (): void => {
+      if (checking) {
+        return
+      }
+      checking = true
+      void window.api.mobile
+        .getIrohStatus()
+        .then((status) => {
+          if (active) {
+            setIrohBound(status.bound)
+            if (status.bound) {
+              window.clearInterval(interval)
+            }
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setIrohBound(false)
+          }
+        })
+        .finally(() => {
+          checking = false
+        })
+    }
+    const interval = window.setInterval(check, 3000)
+    check()
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [irohRelayUrl])
+
   return (
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>
       <div
@@ -141,10 +200,10 @@ export function MobilePairingConnectionOptions({
       >
         <MobilePairingPathOption
           selected={value === 'automatic'}
-          tabIndex={value === 'automatic' && !relayDisabled ? 0 : -1}
+          tabIndex={focusableMode === 'automatic' ? 0 : -1}
           disabled={relayDisabled}
           positionInSet={1}
-          setSize={2}
+          setSize={3}
           optionRef={(el) => {
             optionRefs.current.automatic = el
           }}
@@ -213,9 +272,9 @@ export function MobilePairingConnectionOptions({
         <div className="border-t border-border" />
         <MobilePairingPathOption
           selected={value === 'local-only'}
-          tabIndex={value === 'local-only' || relayDisabled ? 0 : -1}
+          tabIndex={focusableMode === 'local-only' ? 0 : -1}
           positionInSet={2}
-          setSize={2}
+          setSize={3}
           optionRef={(el) => {
             optionRefs.current['local-only'] = el
           }}
@@ -229,7 +288,45 @@ export function MobilePairingConnectionOptions({
             'Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.'
           )}
         />
+        <div className="border-t border-border" />
+        <MobilePairingPathOption
+          selected={value === 'iroh'}
+          tabIndex={focusableMode === 'iroh' ? 0 : -1}
+          disabled={irohDisabled}
+          positionInSet={3}
+          setSize={3}
+          optionRef={(el) => {
+            optionRefs.current.iroh = el
+          }}
+          onSelect={() => onChange('iroh')}
+          title={translate(
+            'auto.components.settings.MobilePairingConnectionOptions.irohTitle',
+            'Iroh'
+          )}
+          description={
+            irohDisabled
+              ? translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.irohUnavailable',
+                  'Transport is unavailable. Choose another home relay or check logs.'
+                )
+              : translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.irohDescription',
+                  'Phone can be on cellular or any Wi‑Fi. No sign-in, no address setup. Direct P2P (hole-punched) with configured home-relay fallback.'
+                )
+          }
+          trailing={
+            irohDisabled ? (
+              <Badge variant="outline" className="text-[11px]">
+                {translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+                  'Unavailable'
+                )}
+              </Badge>
+            ) : null
+          }
+        />
       </div>
+      <MobileIrohRelaySettingField />
     </div>
   )
 }

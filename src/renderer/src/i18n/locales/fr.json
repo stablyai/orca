@@ -11681,6 +11681,7 @@
           "signInAgain": "Se reconnecter pour Relay",
           "localTitle": "LAN",
           "localDescription": "Le téléphone doit être sur ce Wi‑Fi ou connecté via Tailscale. Aucun compte requis.",
+          "irohUnavailable": "Le transport est indisponible. Choisissez un autre relais principal ou consultez les journaux.",
           "retrying": "Nouvelle tentative",
           "relayCell": "Cellule relais",
           "relaySignInDetail": "Connecte ce bureau à Orca et fait passer le téléphone par les serveurs d'Orca. Le LAN ne nécessite pas de compte."
@@ -12631,9 +12632,9 @@
           "notServing": "Orca n’a pas pu confirmer que son serveur sur {{host}} répond.",
           "hostNewer": "Exécute une version du serveur Orca plus récente que cette app ; il conserve cette version.",
           "failureDetails": "Détails",
+          "artifactsUnavailable": "Cette version d’Orca n’inclut pas le modèle de déploiement du serveur SSH. Compilez ou installez Orca avec le modèle adapté à la plateforme de cet hôte, puis redémarrez Orca et reconnectez-vous.",
           "cause": {
             "unsupportedHost": "Orca n'a pas de build de serveur pour ce système",
-            "artifactsUnavailable": "cette version d'Orca n'inclut pas le serveur",
             "libcUnidentified": "Orca n'a pas pu identifier les bibliothèques système de l'hôte",
             "runtimeSelfTest": "le runtime du serveur a échoué à son auto-test",
             "securitySoftware": "un logiciel de sécurité a modifié le runtime du serveur",

@@ -11478,6 +11478,9 @@
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN",
+          "irohTitle": "Iroh",
+          "irohDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Sin inicio de sesión ni configuración de dirección. P2P directo (hole punching) con el relé de inicio configurado como respaldo.",
+          "irohUnavailable": "El transporte no está disponible. Elige otro relé de inicio o revisa los registros.",
           "retrying": "Reintentando",
           "relayCell": "celda de relevo",
           "relaySignInDetail": "Inicia la sesión de este escritorio en Orca y enruta el teléfono a través de los servidores de Orca. LAN no necesita una cuenta."
@@ -12406,9 +12409,9 @@
           "notServing": "Orca no pudo confirmar que su servidor en {{host}} esté respondiendo.",
           "hostNewer": "Ejecuta una versión del servidor de Orca más reciente que esta app; conserva esa versión.",
           "failureDetails": "Detalles",
+          "artifactsUnavailable": "Esta compilación de Orca no incluye la plantilla de despliegue del servidor SSH. Compila o instala Orca con la plantilla para la plataforma de este host, luego reinicia Orca y vuelve a conectarte.",
           "cause": {
             "unsupportedHost": "Orca no tiene una compilación de servidor para este sistema",
-            "artifactsUnavailable": "esta compilación de Orca no incluye el servidor",
             "libcUnidentified": "Orca no pudo identificar las bibliotecas del sistema del host",
             "runtimeSelfTest": "el runtime del servidor no superó su autocomprobación",
             "securitySoftware": "el software de seguridad modificó el runtime del servidor",

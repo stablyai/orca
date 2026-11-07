@@ -38,6 +38,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       onPress: () => push('/browser-settings')
     },
     {
+      id: 'irohRelay',
+      label: translate('settings.menuItems.irohRelay', 'Iroh relay'),
+      icon: Globe,
+      onPress: () => push('/iroh-relay-settings')
+    },
+    {
       id: 'voice',
       label: translate('settings.menuItems.voice', 'Voice'),
       icon: Mic,

@@ -7620,6 +7620,7 @@
           "signInAgain": "Entrar novamente para o Relay",
           "localTitle": "LAN",
           "localDescription": "O celular precisa estar neste Wi-Fi ou conectado via Tailscale. Nenhuma conta necessária.",
+          "irohUnavailable": "O transporte está indisponível. Escolha outro relé principal ou verifique os logs.",
           "retrying": "Tentando novamente",
           "relayCell": "Célula do relay",
           "relaySignInDetail": "Conecta este computador ao Orca e encaminha a conexão do celular pelos servidores do Orca. A rede local não precisa de conta."
@@ -8906,9 +8907,9 @@
           "notServing": "O Orca não conseguiu confirmar se o servidor em {{host}} está respondendo.",
           "hostNewer": "Executa uma versão do servidor Orca mais recente que este aplicativo; essa versão será mantida.",
           "failureDetails": "Detalhes",
+          "artifactsUnavailable": "Esta compilação do Orca não inclui o modelo de implantação do servidor SSH. Compile ou instale o Orca com o modelo para a plataforma deste host, depois reinicie o Orca e conecte novamente.",
           "cause": {
             "unsupportedHost": "O Orca não tem uma compilação do servidor para este sistema",
-            "artifactsUnavailable": "esta compilação do Orca não inclui o servidor",
             "libcUnidentified": "o Orca não conseguiu identificar as bibliotecas do sistema do host",
             "runtimeSelfTest": "o ambiente de execução do servidor falhou no autoteste",
             "securitySoftware": "um software de segurança alterou o ambiente de execução do servidor",

@@ -30,8 +30,10 @@ export function unservedServerStatus(
 const HELD_MOVE_MESSAGE =
   'Orca paused moving this host’s projects to its Orca server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Orca on your SSH hosts.'
 
-// Host-fixable reasons carry their own remedy; others fall back to the unsupported-version line.
+// Build/host-fixable reasons carry their own remedy; others fall back to the unsupported-version line.
 const UNAVAILABLE_MESSAGES: Record<string, string> = {
+  artifacts_unavailable:
+    'This Orca build doesn’t include the SSH server deployment template. Build or install Orca with the template for this host’s platform, then restart Orca and reconnect.',
   runtime_noexec:
     'This host doesn’t allow running programs from ~/.orca-remote, so Orca can’t start its server there. This usually means the home folder is mounted with noexec. Ask the host’s administrator to allow running programs there, then connect again.',
   windows_build_unsupported:

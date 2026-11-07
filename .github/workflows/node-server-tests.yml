@@ -30,7 +30,7 @@ on:
       fast_runners:
         description: Use Blacksmith where the platform and architecture are available
         type: boolean
-        default: true
+        default: false
   # Release and dev builds qualify every platform for the template they ship.
   workflow_call:
     inputs:
@@ -157,11 +157,28 @@ jobs:
     # free hosted label; only explicit fast_runners callers rent Blacksmith where it has the platform.
     runs-on: >-
       ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15"}')[matrix.os] || matrix.os }}
-    timeout-minutes: 20
+    # Host-glibc SDK builds exceed the slot's 2.28 floor; qualify Linux in the same pinned images.
+    container: >-
+      ${{ fromJSON('{"ubuntu-22.04":"quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328","ubuntu-24.04-arm":"quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9"}')[matrix.os] || '' }}
+    # Fresh Windows qualification bootstraps pinned Rust and builds the SDK from source.
+    timeout-minutes: ${{ startsWith(matrix.os, 'windows-') && 45 || 20 }}
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       JOBS: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'max' || '' }}
     steps:
+      - name: Install glibc 2.28 prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          missing_tool=false
+          for tool in git ps unzip which tar xz; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              missing_tool=true
+            fi
+          done
+          if [ "$missing_tool" = true ]; then
+            dnf --disablerepo='epel*' install -y git procps-ng unzip which tar xz
+          fi
       - name: Parallelize Windows checkout
         if: (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && runner.os == 'Windows'
         shell: bash
@@ -173,6 +190,12 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+      - name: Configure the Linux floor toolchain
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          printf 'CC=gcc\nCXX=g++\nPYTHON=/opt/python/cp312-cp312/bin/python3\n' >> "$GITHUB_ENV"
       - uses: ./.github/actions/install-node-dependencies
         id: dependencies
         with:
@@ -202,7 +225,7 @@ jobs:
           node "$RUNNER_TEMP/bun-orcad-source/config/scripts/build-orcad-bun.mjs" --out-dir "$RUNNER_TEMP/bun-orcad"
           echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
           echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"
-      # Linux release slots come from the floor and Alpine lanes; this slot serves local tests.
+      # Linux release slots come from the floor and Alpine lanes; this independent slot serves local tests.
       - uses: ./.github/actions/prepare-orcad-prebuilds
         id: orcad-prebuild
         with:
@@ -211,6 +234,10 @@ jobs:
             (github.event_name == 'pull_request' ||
             (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
           restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
+      # SDK 1.1.0 has no darwin-x64 native; every supported host exercises its qualified SDK bytes.
+      - name: Verify the native Iroh incoming handshake deadline
+        if: runner.os != 'macOS' || runner.arch != 'X64'
+        run: node config/scripts/orcad-distribution/prebuilds/iroh-handshake-deadline-smoke.mjs
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
       - uses: ./.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'
@@ -394,14 +421,14 @@ jobs:
       - name: Install glibc 2.28 prerequisites
         run: |
           missing_tool=false
-          for tool in git ps unzip which xz; do
+          for tool in git ps unzip which tar xz; do
             if ! command -v "$tool" >/dev/null 2>&1; then
               missing_tool=true
             fi
           done
           if [ "$missing_tool" = true ]; then
             # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
-            dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
+            dnf --disablerepo='epel*' install -y git procps-ng unzip which tar xz
           fi
       - uses: actions/checkout@v6
         with:
@@ -413,11 +440,12 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           cache-pnpm-store: 'false'
-      - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
+      - name: Build and smoke this runner's native prebuild slot under the pinned Node
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
+          node config/scripts/orcad-distribution/prebuilds/iroh-handshake-deadline-smoke.mjs
       - uses: actions/download-artifact@v8
         with:
           name: orcad-mobile-web-bundle
@@ -535,13 +563,14 @@ jobs:
             node:24.22.1-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d sleep infinity
           docker exec -i orcad-alpine sh -s <<'NODE_SERVER_PREPARATION'
           set -eu
-          apk add --no-cache bash git libstdc++ python3 make g++
+          apk add --no-cache bash git libstdc++ python3 make g++ tar xz
           git config --global --add safe.directory /work
           npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds --smoke
+          node config/scripts/orcad-distribution/prebuilds/iroh-handshake-deadline-smoke.mjs
           NODE_SERVER_PREPARATION
       - uses: actions/download-artifact@v8
         with:

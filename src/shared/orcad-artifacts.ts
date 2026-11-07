@@ -99,6 +99,14 @@ export const ORCAD_EMOJI_SHORTCODE_DATASET =
 // linear-sdk.ts loads it through createRequire, which the server bundle cannot follow.
 export const ORCAD_LINEAR_SDK_ENTRY = 'node_modules/@linear/sdk/index.js'
 
+export const ORCAD_IROH_DIR = 'node_modules/@number0/iroh'
+/** The unmodified CJS loader needs its local native binding; only this target stages Iroh. */
+export const ORCAD_IROH_LINUX_X64_GLIBC_ARTIFACTS = [
+  `${ORCAD_IROH_DIR}/package.json`,
+  `${ORCAD_IROH_DIR}/index.js`,
+  `${ORCAD_IROH_DIR}/iroh.linux-x64-gnu.node`
+] as const
+
 export const ORCAD_VERSION = '0.1.0'
 export const ORCAD_LAUNCHER_FILENAME = 'orcad.js'
 export const ORCAD_SERVER_ENTRY_FILENAME = 'orcad-server.js'
@@ -275,6 +283,9 @@ export function orcadArtifactFilenames(
     (artifact) => artifact.filename
   )
   filenames.push(...orcadNodePtyNativeArtifacts(target), orcadRipgrepArtifact(target))
+  if (target === 'linux-x64-glibc') {
+    filenames.push(...ORCAD_IROH_LINUX_X64_GLIBC_ARTIFACTS)
+  }
   if (isWindowsTarget(target)) {
     filenames.push(
       ORCAD_WINDOWS_PROCESS_TREE_FILENAME,

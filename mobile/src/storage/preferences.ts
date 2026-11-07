@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { persistMirrored } from './mirrored-storage-keys'
+import { IROH_HOME_RELAY_URL_KEY, persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
+import { parseIrohRelayUrl } from '../../../src/shared/iroh-relay-preference'
 
 const PINS_PREFIX = 'orca:pins:'
 // Push-service consent is independent of legacy socket notifications.
@@ -182,6 +183,58 @@ export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Prom
     }
   })
   return write
+}
+
+let irohRelayWriteBarrier: Promise<void> | null = null
+let irohRelayWriteRevision = 0
+
+/**
+ * Waits for queued saves and retries reads superseded by a newer relay choice.
+ * Invalid stored URLs use the default relay (null); storage read failures propagate.
+ */
+export async function loadIrohHomeRelayUrl(): Promise<string | null> {
+  for (;;) {
+    const revision = irohRelayWriteRevision
+    await irohRelayWriteBarrier
+    if (revision !== irohRelayWriteRevision) {
+      continue
+    }
+    let raw: string | null
+    try {
+      raw = await AsyncStorage.getItem(IROH_HOME_RELAY_URL_KEY)
+    } catch (error) {
+      if (revision !== irohRelayWriteRevision) {
+        continue
+      }
+      throw error
+    }
+    // A read begun before a newer save must not configure the old endpoint.
+    if (revision !== irohRelayWriteRevision) {
+      continue
+    }
+    try {
+      return parseIrohRelayUrl(raw)
+    } catch {
+      return null
+    }
+  }
+}
+
+/** Validates and serializes relay changes, propagating save failures without blocking later writes. */
+export async function saveIrohHomeRelayUrl(value: string | null): Promise<void> {
+  const relayUrl = parseIrohRelayUrl(value)
+  irohRelayWriteRevision += 1
+  const write = (irohRelayWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(IROH_HOME_RELAY_URL_KEY, relayUrl, { trustNativeCommit: true })
+  )
+  const barrier = write.catch(() => undefined)
+  irohRelayWriteBarrier = barrier
+  void barrier.then(() => {
+    if (irohRelayWriteBarrier === barrier) {
+      irohRelayWriteBarrier = null
+    }
+  })
+  await write
 }
 
 function stringArray(value: unknown): string[] {

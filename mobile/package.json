@@ -25,6 +25,7 @@
   "dependencies": {
     "@formatjs/intl-pluralrules": "6.3.16",
     "@noble/hashes": "1.8.0",
+    "@orca/expo-iroh": "file:./packages/expo-iroh",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@tanstack/react-query": "5.105.3",

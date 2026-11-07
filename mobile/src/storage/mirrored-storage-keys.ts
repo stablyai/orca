@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+// Native-only preference; do not expose endpoint configuration to embedded pages.
+export const IROH_HOME_RELAY_URL_KEY = 'orca:irohHomeRelayUrl'
+
 // Shell init is synchronous, so mirror stored keys in memory; page-reachable writes must use persistMirrored.
 // Null records a known removal, distinct from an unhydrated key.
 const mirror = new Map<string, string | null>()
@@ -99,15 +102,25 @@ function note(key: string, value: string | null, source: MirroredWriteSource): v
   }
 }
 
-// Mirror only accepted writes; page stores can refuse route keys or oversized values, and callers need the refusal.
-export function persistMirrored(key: string, value: string | null): Promise<void> {
+/**
+ * Reads back page-store writes before mirroring because resolved mutations may have been refused.
+ * Native-only callers may trust a successful commit and skip the fallible post-commit read.
+ */
+export function persistMirrored(
+  key: string,
+  value: string | null,
+  options?: { trustNativeCommit?: boolean }
+): Promise<void> {
+  if (options?.trustNativeCommit) {
+    const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
+    return write.then(() => note(key, value, 'persisted'))
+  }
   return persistMirroredReadBack(key, value).then(() => {})
 }
 
 /** Resolves with what storage holds afterwards, which is not `value` when a page store dropped the write. */
 export function persistMirroredReadBack(key: string, value: string | null): Promise<string | null> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
-  // Read back before noting: the page adapter can resolve a refused write, so requested value is not proof of persistence.
   return write
     .then(() => AsyncStorage.getItem(key))
     .then((stored) => {

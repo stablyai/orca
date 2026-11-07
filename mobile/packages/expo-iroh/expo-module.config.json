@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoIrohModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.iroh.ExpoIrohModule"]
+  }
+}

@@ -2,10 +2,14 @@ import * as z from 'zod'
 import {
   PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
   PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_IROH_DIRECT_ADDRESS_MAX_CHARACTERS,
+  PAIRING_IROH_DIRECT_ADDRESS_MAX_COUNT,
+  PAIRING_IROH_ENDPOINT_ID_PATTERN,
   PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
   PAIRING_RELAY_URL_MAX_CHARACTERS
 } from './mobile-pairing-protocol-limits'
 import { RuntimeHostDescriptorSchema } from '../host-status/runtime-host-descriptor'
+import { parseIrohRelayUrl } from '../../iroh-relay-preference'
 
 export const PAIRING_OFFER_VERSION = 2
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
@@ -42,6 +46,55 @@ function isCanonicalBase64Key(value: string): boolean {
   }
 }
 
+/** Accept explicit relay origins, including the SDK's trailing slash, without URL repair or secrets. */
+function isIrohRelayOrigin(value: string): boolean {
+  try {
+    return value === value.trim() && parseIrohRelayUrl(value) !== null
+  } catch {
+    return false
+  }
+}
+
+const IrohIpv4Schema = z.ipv4()
+const IrohIpv6Schema = z.ipv6()
+
+/** Match Rust SocketAddr formatting, retaining numeric IPv6 scope IDs and IPv4-mapped IPv6. */
+function isIrohSocketAddress(value: string): boolean {
+  const socket = /^(?:([0-9.]+)|\[([0-9a-f:.]+)(?:%([0-9]+))?\]):([0-9]{1,5})$/i.exec(value)
+  if (!socket || Number(socket[4]) > 65535) {
+    return false
+  }
+  if (socket[3] && Number(socket[3]) > 0xffffffff) {
+    return false
+  }
+  return (socket[1] ? IrohIpv4Schema : IrohIpv6Schema).safeParse(socket[1] ?? socket[2]).success
+}
+
+export const PairingIrohSchema = z.object({
+  endpointId: z.string().regex(PAIRING_IROH_ENDPOINT_ID_PATTERN),
+  // Dial hints preserve offline-LAN connections and skip discovery, but are untrusted input.
+  relayUrl: z
+    .string()
+    .min(1)
+    .max(PAIRING_RELAY_URL_MAX_CHARACTERS)
+    .refine(
+      isIrohRelayOrigin,
+      'Expected HTTPS relay origin without credentials, paths, queries or fragments'
+    )
+    .optional(),
+  directAddresses: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(PAIRING_IROH_DIRECT_ADDRESS_MAX_CHARACTERS)
+        .refine(isIrohSocketAddress, 'Expected IP socket address with a port from 0 to 65535')
+    )
+    .max(PAIRING_IROH_DIRECT_ADDRESS_MAX_COUNT)
+    .optional()
+})
+
+/** Validate v2 pairing offers, bounding iroh dial hints and enforcing Relay scope, key and expiry rules. */
 export function createPairingOfferSchema(now: () => number = () => Date.now()) {
   const relaySchema = z.object({
     v: z.literal(1),
@@ -76,6 +129,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       pairedDeviceId: z.string().min(1).max(128).optional(),
       scope: PairingScopeSchema.optional(),
       relay: relaySchema.optional(),
+      iroh: PairingIrohSchema.optional(),
       // Why catch: a descriptor this build cannot read is dropped, never a reason to refuse pairing.
       hostDescriptor: RuntimeHostDescriptorSchema.optional().catch(undefined)
     })
@@ -102,3 +156,4 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
 export const PairingOfferSchema = createPairingOfferSchema()
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
 export type PairingRelay = NonNullable<PairingOffer['relay']>
+export type PairingIroh = NonNullable<PairingOffer['iroh']>

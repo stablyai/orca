@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
@@ -6,9 +6,10 @@ import {
 
 type MutableRef<T> = { current: T }
 
-/** Keep QR policy aligned with mode/auth changes, including other windows; Relay sign-out clears instead of falling back to local-only. */
+/** Keep QR policy and dial hints aligned with mode/auth/relay changes, including other windows. */
 export function useMobilePairingQrInvalidation(params: {
   connectionMode: MobilePairingConnectionMode
+  irohRelayUrl: string | null
   signedIn: boolean
   pairLoading: boolean
   hasGeneratedRef: MutableRef<boolean>
@@ -23,6 +24,7 @@ export function useMobilePairingQrInvalidation(params: {
 }): void {
   const {
     connectionMode,
+    irohRelayUrl,
     signedIn,
     pairLoading,
     hasGeneratedRef,
@@ -38,6 +40,7 @@ export function useMobilePairingQrInvalidation(params: {
   const wasSignedInRef = useRef(signedIn)
   // Distinguish new cross-window mode preferences from changes already handled here.
   const handledModeRef = useRef(connectionMode)
+  const handledIrohRelayRef = useRef(irohRelayUrl)
 
   // On Relay auth changes, clear old QR/loading; sign-in may remint, but sign-out cannot silently mint a local-only code.
   useEffect(() => {
@@ -73,12 +76,15 @@ export function useMobilePairingQrInvalidation(params: {
     regenerate
   ])
 
-  // Invalidate late old-policy responses before reminting; the preference is already saved, so do not write it back across windows.
-  useEffect(() => {
-    if (connectionMode === handledModeRef.current) {
+  // Routing-only changes refresh hints, never credentials; main also owns rotation on a mode mismatch.
+  useLayoutEffect(() => {
+    const modeChanged = connectionMode !== handledModeRef.current
+    const relayChanged = irohRelayUrl !== handledIrohRelayRef.current
+    handledModeRef.current = connectionMode
+    handledIrohRelayRef.current = irohRelayUrl
+    if (!modeChanged && !(relayChanged && connectionMode === 'iroh')) {
       return
     }
-    handledModeRef.current = connectionMode
     pairingRequestIdRef.current += 1
     const shouldRegenerate = hasGeneratedRef.current || pairLoading
     hasGeneratedRef.current = false
@@ -95,6 +101,7 @@ export function useMobilePairingQrInvalidation(params: {
     }
   }, [
     connectionMode,
+    irohRelayUrl,
     signedIn,
     pairLoading,
     hasGeneratedRef,

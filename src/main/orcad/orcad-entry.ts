@@ -58,6 +58,10 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 
+/**
+ * Restore the headless runtime before starting RPC and publishing readiness.
+ * Register teardown as resources start and follow the profile's live iroh relay preference.
+ */
 async function startOrcadRuntime(
   options: OrcadOptions,
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
@@ -294,6 +298,8 @@ async function startOrcadRuntime(
   const rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
+    irohRelayUrl: profileStore.getSettings().mobileIrohRelayUrl,
+    onStop: () => unsubscribeIrohRelay(),
     enableWebSocket: true,
     // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
     pinnedBindHost: bindHost,
@@ -304,6 +310,13 @@ async function startOrcadRuntime(
     },
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
+  })
+  const unsubscribeIrohRelay = profileStore.onSettingsChanged((updates, settings) => {
+    if ('mobileIrohRelayUrl' in updates) {
+      void rpc.setIrohRelayUrl(settings.mobileIrohRelayUrl).catch(() => {
+        console.warn('[orcad] Could not apply the saved iroh relay preference')
+      })
+    }
   })
   pairedEnvironments.bindRpc(rpc)
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())

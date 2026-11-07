@@ -123,6 +123,15 @@ function sourceChangedLine(): SshHostServerStatusLine {
 
 /** `reason` is main's OrcadHostUnavailableReason; an unknown one is shown only as a detail. */
 function unavailableLine(reason: string | undefined): SshHostServerStatusLine {
+  if (reason === 'artifacts_unavailable') {
+    return {
+      tone: 'destructive',
+      text: translate(
+        'auto.components.settings.sshHostServer.artifactsUnavailable',
+        'This Orca build doesn’t include the SSH server deployment template. Build or install Orca with the template for this host’s platform, then restart Orca and reconnect.'
+      )
+    }
+  }
   if (reason === TUNNEL_UNAVAILABLE) {
     return tunnelUnavailableLine()
   }
@@ -151,17 +160,13 @@ function unavailableLine(reason: string | undefined): SshHostServerStatusLine {
   }
 }
 
+/** Returns a translated cause for the unsupported-host message, or null for unrecognized reasons. */
 function unavailableCause(reason: string): string | null {
   switch (reason) {
     case 'unsupported_host':
       return translate(
         'auto.components.settings.sshHostServer.cause.unsupportedHost',
         'Orca has no server build for this system'
-      )
-    case 'artifacts_unavailable':
-      return translate(
-        'auto.components.settings.sshHostServer.cause.artifactsUnavailable',
-        'this Orca build doesn’t include the server'
       )
     case 'libc_unidentified':
       return translate(

@@ -11,7 +11,7 @@ import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
-export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
+export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay' | 'iroh'
 
 export class LogicalClientCutoverError extends Error {
   constructor(cause?: unknown) {

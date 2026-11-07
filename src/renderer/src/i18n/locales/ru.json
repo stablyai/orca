@@ -13013,7 +13013,6 @@
           "failureDetails": "Подробности",
           "cause": {
             "unsupportedHost": "У Orca нет серверной сборки для этой системы",
-            "artifactsUnavailable": "эта сборка Orca не содержит сервер",
             "libcUnidentified": "Orca не смогла определить системные библиотеки сервера",
             "runtimeSelfTest": "среда выполнения сервера не прошла самопроверку",
             "securitySoftware": "защитное ПО изменило среду выполнения сервера",

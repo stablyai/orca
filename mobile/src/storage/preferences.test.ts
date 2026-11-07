@@ -1,6 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
+import {
+  loadIrohHomeRelayUrl,
+  loadTerminalLinkOpenMode,
+  saveIrohHomeRelayUrl,
+  saveTerminalLinkOpenMode
+} from './preferences'
+import {
+  IROH_HOME_RELAY_URL_KEY,
+  readMirroredStorage,
+  retainMirroredStorage,
+  subscribeMirroredKey
+} from './mirrored-storage-keys'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
@@ -16,6 +27,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     getItem: vi.fn(async (key: string) => stored.get(key) ?? null),
     setItem: vi.fn(async (key: string, value: string) => {
       stored.set(key, value)
+    }),
+    removeItem: vi.fn(async (key: string) => {
+      stored.delete(key)
     })
   }
 }))
@@ -240,5 +254,167 @@ describe('terminal link open mode preference', () => {
     await Promise.all([firstMount, secondMount])
     await expect(reader).resolves.toBe('orca-browser')
     expect(stored).toBe('orca-browser')
+  })
+})
+
+describe('phone Iroh home relay preference', () => {
+  const oldRelay = 'https://old-relay.example/'
+  const newRelay = 'https://new-relay.example/'
+
+  beforeEach(() => {
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
+    vi.mocked(AsyncStorage.removeItem)
+      .mockReset()
+      .mockImplementation(async (key) => {
+        stored.delete(key)
+      })
+  })
+
+  it('loads Automatic when absent, canonicalizes old origins, and ignores corrupt stored values', async () => {
+    await expect(loadIrohHomeRelayUrl()).resolves.toBeNull()
+    stored.set(IROH_HOME_RELAY_URL_KEY, ' HTTPS://RELAY.EXAMPLE:443 ')
+    await expect(loadIrohHomeRelayUrl()).resolves.toBe('https://relay.example/')
+    stored.set(IROH_HOME_RELAY_URL_KEY, 'https://user:secret@relay.example/')
+    await expect(loadIrohHomeRelayUrl()).resolves.toBeNull()
+  })
+
+  it('does not mistake unavailable storage for Automatic', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('storage unavailable'))
+    await expect(loadIrohHomeRelayUrl()).rejects.toThrow('storage unavailable')
+  })
+
+  it('stores canonical raw origins and removes Automatic before notifying consumers', async () => {
+    const observed: { value: string | null; stored: string | null }[] = []
+    const unsubscribe = subscribeMirroredKey(IROH_HOME_RELAY_URL_KEY, (value) => {
+      observed.push({ value, stored: stored.get(IROH_HOME_RELAY_URL_KEY) ?? null })
+    })
+    try {
+      await saveIrohHomeRelayUrl(' HTTPS://RELAY.EXAMPLE:443 ')
+      expect(observed).toEqual([
+        { value: 'https://relay.example/', stored: 'https://relay.example/' }
+      ])
+      await saveIrohHomeRelayUrl(null)
+      expect(stored.has(IROH_HOME_RELAY_URL_KEY)).toBe(false)
+      expect(observed[1]).toEqual({ value: null, stored: null })
+      await expect(loadIrohHomeRelayUrl()).resolves.toBeNull()
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('rejects invalid saves without writing or notifying', async () => {
+    const changed = vi.fn()
+    const unsubscribe = subscribeMirroredKey(IROH_HOME_RELAY_URL_KEY, changed)
+    try {
+      await expect(saveIrohHomeRelayUrl('http://relay.example/')).rejects.toThrow()
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+      expect(AsyncStorage.removeItem).not.toHaveBeenCalled()
+      expect(changed).not.toHaveBeenCalled()
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('orders writes and makes a waiting load follow a write queued after that load began', async () => {
+    const firstWrite = Promise.withResolvers<void>()
+    const firstStarted = Promise.withResolvers<void>()
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      if (value === oldRelay) {
+        firstStarted.resolve()
+        await firstWrite.promise
+      }
+      stored.set(key, value)
+    })
+    const first = saveIrohHomeRelayUrl(oldRelay)
+    await firstStarted.promise
+    const reader = loadIrohHomeRelayUrl()
+    const second = saveIrohHomeRelayUrl(newRelay)
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    firstWrite.resolve()
+    await Promise.all([first, second])
+    await expect(reader).resolves.toBe(newRelay)
+  })
+
+  it('discards a pending old storage read after a newer preference commits', async () => {
+    const staleRead = Promise.withResolvers<string | null>()
+    const readStarted = Promise.withResolvers<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementationOnce(() => {
+      readStarted.resolve()
+      return staleRead.promise
+    })
+    const reader = loadIrohHomeRelayUrl()
+    await readStarted.promise
+    await saveIrohHomeRelayUrl(newRelay)
+    staleRead.resolve(oldRelay)
+    await expect(reader).resolves.toBe(newRelay)
+  })
+
+  it('discards an old read failure when a newer write has succeeded', async () => {
+    const staleRead = Promise.withResolvers<string | null>()
+    const readStarted = Promise.withResolvers<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementationOnce(() => {
+      readStarted.resolve()
+      return staleRead.promise
+    })
+    const reader = loadIrohHomeRelayUrl()
+    await readStarted.promise
+    await saveIrohHomeRelayUrl(newRelay)
+    staleRead.reject(new Error('old read failed'))
+    await expect(reader).resolves.toBe(newRelay)
+  })
+
+  it('keeps the committed preference after a failed save and continues the write queue', async () => {
+    const release = retainMirroredStorage([IROH_HOME_RELAY_URL_KEY])
+    await saveIrohHomeRelayUrl(oldRelay)
+    const changed = vi.fn()
+    const unsubscribe = subscribeMirroredKey(IROH_HOME_RELAY_URL_KEY, changed)
+    try {
+      vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage full'))
+      await expect(saveIrohHomeRelayUrl(newRelay)).rejects.toThrow('storage full')
+      expect(changed).not.toHaveBeenCalled()
+      await expect(loadIrohHomeRelayUrl()).resolves.toBe(oldRelay)
+      expect(readMirroredStorage([IROH_HOME_RELAY_URL_KEY])[IROH_HOME_RELAY_URL_KEY]).toBe(oldRelay)
+      await saveIrohHomeRelayUrl(newRelay)
+      expect(changed).toHaveBeenCalledExactlyOnceWith(newRelay, 'persisted')
+    } finally {
+      unsubscribe()
+      release()
+    }
+  })
+
+  it('publishes a committed canonical relay without a fallible storage readback', async () => {
+    const release = retainMirroredStorage([IROH_HOME_RELAY_URL_KEY])
+    await saveIrohHomeRelayUrl(oldRelay)
+    const changed = vi.fn()
+    const unsubscribe = subscribeMirroredKey(IROH_HOME_RELAY_URL_KEY, changed)
+    try {
+      vi.mocked(AsyncStorage.getItem).mockClear().mockRejectedValue(new Error('read unavailable'))
+      await expect(saveIrohHomeRelayUrl(' HTTPS://NEW-RELAY.EXAMPLE:443 ')).resolves.toBeUndefined()
+      expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+      expect(stored.get(IROH_HOME_RELAY_URL_KEY)).toBe(newRelay)
+      expect(changed).toHaveBeenCalledExactlyOnceWith(newRelay, 'persisted')
+      expect(readMirroredStorage([IROH_HOME_RELAY_URL_KEY])[IROH_HOME_RELAY_URL_KEY]).toBe(newRelay)
+    } finally {
+      vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => stored.get(key) ?? null)
+      unsubscribe()
+      release()
+    }
+    await expect(loadIrohHomeRelayUrl()).resolves.toBe(newRelay)
+  })
+
+  it('recovers the saved origin from durable storage after a module relaunch', async () => {
+    await saveIrohHomeRelayUrl(newRelay)
+    vi.resetModules()
+    // Exercise a fresh module's empty write barrier; a static import would reuse the old instance.
+    const relaunched = await import('./preferences')
+    await expect(relaunched.loadIrohHomeRelayUrl()).resolves.toBe(newRelay)
   })
 })

@@ -11196,6 +11196,9 @@
           "localTitle": "局域网",
           "retrying": "重试",
           "relayCell": "中继单元",
+          "irohTitle": "Iroh",
+          "irohDescription": "手机可使用蜂窝数据或任意 Wi‑Fi。无需登录、无需选择地址。直接 P2P（打洞直连），使用配置的主中继兜底。",
+          "irohUnavailable": "传输不可用。请选择其他主中继或查看日志。",
           "relaySignInDetail": "将此桌面登录到 Orca，并通过 Orca 的服务器路由手机。LAN 无需账户。"
         },
         "MobilePairingSetupSection": {
@@ -12136,9 +12139,9 @@
           "notServing": "Orca 无法确认其在 {{host}} 上的服务器是否正在响应。",
           "hostNewer": "运行的 Orca 服务器比此应用新；它会保留该版本。",
           "failureDetails": "详情",
+          "artifactsUnavailable": "此 Orca 构建不包含 SSH 服务器部署模板。请构建或安装包含此主机平台对应模板的 Orca，然后重启 Orca 并重新连接。",
           "cause": {
             "unsupportedHost": "Orca 没有适用于此系统的服务器构建",
-            "artifactsUnavailable": "此 Orca 构建不包含该服务器",
             "libcUnidentified": "Orca 无法识别主机的系统库",
             "runtimeSelfTest": "服务器的运行时未通过自检",
             "securitySoftware": "安全软件更改了服务器的运行时",

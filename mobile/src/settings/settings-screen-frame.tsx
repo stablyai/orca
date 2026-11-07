@@ -62,6 +62,7 @@ export function SettingsScreen({
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {children}
       </ScrollView>

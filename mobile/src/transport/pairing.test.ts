@@ -58,6 +58,37 @@ describe('pairing deep links', () => {
     expect(parsePairingCode(`${code}==`)).toEqual(paddedOffer)
     expect(parsePairingCode(alias)).toEqual(paddedOffer)
   })
+
+  it('preserves native iroh endpoint and dial hints from pairing offers', () => {
+    const withIroh = {
+      ...offer,
+      iroh: {
+        endpointId: 'a'.repeat(64),
+        relayUrl: 'https://aps1-1.relay.n0.iroh.link./',
+        directAddresses: ['192.168.1.9:41234', '[fe80::1%3]:41234', '[::ffff:192.0.2.1]:443']
+      }
+    }
+    expect(parsePairingCode(encodeOffer(withIroh))).toEqual(withIroh)
+  })
+
+  it('rejects invalid iroh endpoint ids on pairing offers', () => {
+    const bad = {
+      ...offer,
+      iroh: { endpointId: 'not-a-valid-id' }
+    }
+    expect(parsePairingCode(encodeOffer(bad))).toBeNull()
+  })
+
+  it.each([
+    { relayUrl: 'not a URL' },
+    { relayUrl: 'https://relay.example/path' },
+    { directAddresses: ['old-hostname:443'] },
+    { directAddresses: ['[:::1]:443'] }
+  ])('rejects malformed iroh hints at QR import (%j)', (hints) => {
+    const bad = { ...offer, iroh: { endpointId: 'a'.repeat(64), ...hints } }
+
+    expect(parsePairingCode(encodeOffer(bad))).toBeNull()
+  })
 })
 
 function base64Alias(character: string): string {

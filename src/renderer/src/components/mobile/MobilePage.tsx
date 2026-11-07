@@ -24,6 +24,10 @@ import {
   useMobilePairingAddressPreference
 } from './use-mobile-pairing-address-preference'
 
+/**
+ * Runs mobile installation, pairing, and device management with offers scoped to the current visit.
+ * Address-based modes wait for that visit's network lookup; Iroh can mint independently.
+ */
 export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
@@ -39,6 +43,7 @@ export default function MobilePage(): React.JSX.Element {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const irohRelayUrl = useAppStore((state) => state.settings?.mobileIrohRelayUrl ?? null)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
@@ -101,6 +106,10 @@ export default function MobilePage(): React.JSX.Element {
   })
   useLayoutEffect(() => {
     pairingAddressChangeRef.current = ({ address, source }) => {
+      // Iroh offers contain no LAN address, so unrelated address preferences cannot rotate them.
+      if (connectionMode === 'iroh') {
+        return
+      }
       const pairingContext = { connectionMode, signedIn }
       if (source === 'user') {
         if (canMintMobilePairingOffer(pairingContext)) {
@@ -174,6 +183,7 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePairingQrInvalidation({
     connectionMode,
+    irohRelayUrl,
     signedIn,
     pairLoading,
     hasGeneratedRef,
@@ -184,7 +194,12 @@ export default function MobilePage(): React.JSX.Element {
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
-    regenerate: (mode, opts) => void generatePairing(opts.rotate, undefined, mode)
+    regenerate: (mode, opts) => {
+      // Mode invalidation must wait for this visit's address, just like the initial mint.
+      if (mode === 'iroh' || pairingAddressSettled) {
+        void generatePairing(opts.rotate, undefined, mode)
+      }
+    }
   })
 
   const loadNetworkInterfaces = useCallback(async () => {
@@ -264,12 +279,12 @@ export default function MobilePage(): React.JSX.Element {
     if (!canGenerate) {
       return
     }
-    // Wait for this visit’s address before minting or its replacement could rotate away the just-created credential.
-    if (!pairingAddressSettled) {
+    // Iroh dials by key; only address-based paths need this visit's LAN lookup to settle.
+    if (connectionMode !== 'iroh' && !pairingAddressSettled) {
       return
     }
     void generatePairing(false)
-  }, [stage, stepIdx, canGenerate, generatePairing, pairingAddressSettled])
+  }, [stage, stepIdx, canGenerate, connectionMode, generatePairing, pairingAddressSettled])
 
   // Refresh only a code on screen; the old one stays valid for a phone mid-scan.
   const pairingCodeShown = stage === 'flow' && stepIdx === 1 && pairingUrl != null
@@ -321,7 +336,11 @@ export default function MobilePage(): React.JSX.Element {
 
   // Show address waiting as busy separately from pairLoading, or a mode switch could regenerate before address resolution.
   const awaitingPairingAddress =
-    stage === 'flow' && stepIdx === 1 && canGenerate && !pairingAddressSettled
+    stage === 'flow' &&
+    stepIdx === 1 &&
+    canGenerate &&
+    connectionMode !== 'iroh' &&
+    !pairingAddressSettled
 
   return (
     <MobilePageContent

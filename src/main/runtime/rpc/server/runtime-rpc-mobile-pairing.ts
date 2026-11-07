@@ -1,4 +1,7 @@
-import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import {
+  parseMobilePairingConnectionMode,
+  type MobilePairingConnectionMode
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
   type MobileRelayMintFailure
@@ -20,12 +23,14 @@ import {
 
 // How long an automatic mint waits for an on-demand Relay install before reporting it missing.
 const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
+const IROH_RELAY_BIND_WAIT_MS = 15_000
 
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
     return { create: (params) => createOwnerPairingOffer(this, params) }
   }
 
+  /** Coalesce Relay mint requests while letting local-only and iroh choices supersede them. */
   async createMobilePairingOffer(args: {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
@@ -33,17 +38,21 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     rotate?: boolean
     offerTtlMs?: number
   }): Promise<MobilePairingOffer> {
-    // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
-    try {
-      await this.ensureNetworkExposure()
-    } catch (error) {
-      console.error(
-        '[runtime] Network exposure failed while creating a mobile pairing offer:',
-        error
-      )
-      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+    // Network pairing opts into LAN exposure before advertising QR endpoints; iroh needs no WS listener (STA-2370).
+    if (args.connectionMode !== 'iroh') {
+      try {
+        await this.ensureNetworkExposure()
+      } catch (error) {
+        console.error(
+          '[runtime] Network exposure failed while creating a mobile pairing offer:',
+          error
+        )
+        return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+      }
     }
-    if (args.connectionMode === 'local-only') {
+    // Why: modes that never mint Relay credentials skip the mint queue; the
+    // generation bump supersedes an in-flight Anywhere request the user left.
+    if (args.connectionMode === 'local-only' || args.connectionMode === 'iroh') {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
     }
@@ -84,6 +93,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     return request
   }
 
+  /** Mint under a persisted connection policy, bounding iroh readiness and rejecting stale requests. */
   protected async createMobilePairingOfferSerial(
     args: {
       address?: string | null
@@ -94,8 +104,15 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     },
     generation: number
   ): Promise<MobilePairingOffer> {
-    // Renderer input is untrusted; only explicit local-only may suppress Relay provisioning.
-    const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    // Renderer input is untrusted; only known modes may suppress Relay provisioning.
+    const connectionMode = parseMobilePairingConnectionMode(args.connectionMode)
+    if (connectionMode === 'iroh') {
+      // Bound the request, not native readiness: a late online endpoint can serve the next QR.
+      await withTimeout(this.waitForIrohRelayBinding(), IROH_RELAY_BIND_WAIT_MS, undefined)
+      if (generation !== this.mobilePairingOfferGeneration) {
+        return this.relayPairingRequestSuperseded()
+      }
+    }
     // Expired offers leave through discard so their Relay invites are revoked too.
     for (const expired of this.deviceRegistry?.listExpiredPairingOffers('mobile') ?? []) {
       this.discardPendingMobilePairingDevice(expired.deviceId)
@@ -119,7 +136,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     const direct = this.createPairingOffer({
       ...args,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope: 'mobile',
+      includeIroh: connectionMode === 'iroh'
     })
     if (!direct.available) {
       return direct
@@ -139,6 +157,10 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         this.discardPendingMobilePairingDevice(direct.deviceId)
       }
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
+    // Iroh dials by endpoint key and never receives Orca Relay credentials.
+    if (connectionMode === 'iroh') {
+      return { ...direct, connectionMode: 'iroh' }
     }
     // Why: explicit LAN path never needs Relay; mint the direct-only offer as selected.
     if (connectionMode === 'local-only') {

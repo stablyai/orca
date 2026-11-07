@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { orcadRipgrepArtifact } from '../../../shared/orcad-artifacts'
+import {
+  ORCAD_IROH_LINUX_X64_GLIBC_ARTIFACTS,
+  orcadRipgrepArtifact
+} from '../../../shared/orcad-artifacts'
 import {
   listRemoteInstallBaseDirsCommand,
   probeRemoteInstallCompleteCommand
@@ -27,7 +30,10 @@ describe('remote install namespace', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orcad-remote-probe-'))
     try {
       const host = getRemoteHostPlatform('linux-x64')
-      const required = [...ORCAD_INSTALL_MODEL.requiredArtifacts(host), '.install-complete']
+      const required = [
+        ...ORCAD_INSTALL_MODEL.requiredArtifacts(host, 'linux-x64-glibc'),
+        '.install-complete'
+      ]
       for (const filename of required) {
         const path = join(dir, filename)
         mkdirSync(dirname(path), { recursive: true })
@@ -37,6 +43,43 @@ describe('remote install namespace', () => {
       expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('OK')
       rmSync(join(dir, orcadRipgrepArtifact('linux-x64')))
       expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('MISSING')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32').each([
+    ['linux-x64-glibc', 'linux-x64'],
+    ['linux-x64-musl', 'linux-x64'],
+    ['linux-x64-glibc217', 'linux-x64'],
+    ['linux-arm64-glibc', 'linux-arm64'],
+    ['linux-arm64-musl', 'linux-arm64']
+  ] as const)('requires the Iroh closure only for linux-x64-glibc (%s)', (target, platform) => {
+    const dir = mkdtempSync(join(tmpdir(), 'orcad-iroh-probe-'))
+    try {
+      const host = getRemoteHostPlatform(platform)
+      const required = [
+        ...ORCAD_INSTALL_MODEL.requiredArtifacts(host, target),
+        ORCAD_INSTALL_MODEL.installCompleteFilename
+      ]
+      for (const filename of required) {
+        const path = join(dir, filename)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, '')
+      }
+      const command = probeRemoteInstallCompleteCommand(host, dir, required)
+      expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('OK')
+      for (const filename of ORCAD_IROH_LINUX_X64_GLIBC_ARTIFACTS) {
+        const requiresIroh = target === 'linux-x64-glibc'
+        expect(required.includes(filename)).toBe(requiresIroh)
+        rmSync(join(dir, filename), { force: true })
+        expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe(
+          requiresIroh ? 'MISSING' : 'OK'
+        )
+        if (requiresIroh) {
+          writeFileSync(join(dir, filename), '')
+        }
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

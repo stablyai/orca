@@ -26,7 +26,7 @@ export type MobileApi = {
         qrSize: number | null
         qrError?: 'encoding_failed'
         pairingUrl: string
-        /** Null when no direct address was advertised — the QR pairs over Relay alone. */
+        /** Iroh key-dial URL, direct WebSocket address, or null for address-free Relay offers. */
         endpoint: string | null
         deviceId: string
         connectionMode: MobilePairingConnectionMode
@@ -81,6 +81,12 @@ export type MobileApi = {
   revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
+  /** Iroh endpoint bind status for the pairing path picker. */
+  getIrohStatus: () => Promise<{
+    bound: boolean
+    endpointId: string | null
+    relayUrl: string | null
+  }>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
   consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>

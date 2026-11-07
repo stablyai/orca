@@ -45,6 +45,11 @@ const nativePosix = getRemoteHostPlatform(
   process.platform === 'darwin' ? 'darwin-x64' : 'linux-x64'
 )
 const windows = getRemoteHostPlatform('win32-x64')
+const orcadTargets = {
+  linux: 'linux-x64-glibc',
+  darwin: 'darwin-x64',
+  win32: 'win32-x64'
+} as const
 const powerShellExecutable = [
   process.env.ORCA_POWERSHELL_EXECUTABLE,
   ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
@@ -70,7 +75,7 @@ const listRelayBaseDirsCommand = (host: typeof posix, baseDir: string): string =
 
 function probeOrcadInstalledCommand(host: typeof posix, dir: string): string {
   return probeRemoteInstallCompleteCommand(host, dir, [
-    ...ORCAD_INSTALL_MODEL.requiredArtifacts(host),
+    ...ORCAD_INSTALL_MODEL.requiredArtifacts(host, orcadTargets[host.os]),
     ORCAD_INSTALL_MODEL.installCompleteFilename
   ])
 }
@@ -142,7 +147,7 @@ describe('ssh remote command builders', () => {
 
   it('requires every declared artifact before calling an install complete', () => {
     const posixProbe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
-    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(posix)) {
+    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(posix, 'linux-x64-glibc')) {
       expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
     }
     expect(posixProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
@@ -150,7 +155,7 @@ describe('ssh remote command builders', () => {
     const windowsProbe = decodePowerShellCommand(
       probeOrcadInstalledCommand(windows, 'C:/Users/me/orcad')
     )
-    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(windows)) {
+    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(windows, 'win32-x64')) {
       expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
     }
     expect(windowsProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
@@ -159,7 +164,7 @@ describe('ssh remote command builders', () => {
   // Stage a complete install, then remove one artifact: the probe must flip.
   function stageOrcadInstall(host: typeof posix): { dir: string; artifact: string } {
     const dir = mkdtempSync(join(tmpdir(), 'orca-install-probe-'))
-    const artifacts = ORCAD_INSTALL_MODEL.requiredArtifacts(host)
+    const artifacts = ORCAD_INSTALL_MODEL.requiredArtifacts(host, orcadTargets[host.os])
     for (const filename of artifacts) {
       mkdirSync(dirname(join(dir, filename)), { recursive: true })
       writeFileSync(join(dir, filename), '')

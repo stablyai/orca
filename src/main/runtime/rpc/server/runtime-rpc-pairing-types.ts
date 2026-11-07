@@ -1,3 +1,4 @@
+import type { IrohTransportOptions } from '../iroh-transport'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -47,6 +48,12 @@ export type OrcaRuntimeRpcServerOptions = {
   // `orca serve` only: refuse public source addresses unless allowed (desktop listeners never filter).
   serveNetworkSources?: ServeNetworkSourceOptions
   webClientRoot?: string
+  /** Home relay preference; null uses the SDK's N0 defaults. */
+  irohRelayUrl?: string | null
+  /** Release process-owned subscriptions when this server stops. */
+  onStop?: () => void
+  // Tests inject a fake bind so CI never loads the native module or opens UDP.
+  irohBindEndpoint?: IrohTransportOptions['bindEndpoint']
   // Test-only timing overrides; production keeps design §3.1 defaults.
   keepaliveIntervalMs?: number
   longPollCap?: number
@@ -63,6 +70,7 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'iroh_unavailable'
 
 export type PairingOfferUnavailable = {
   available: false

@@ -1,9 +1,15 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../../../src/shared/windows-transient-lock-removal.ts'
+import {
+  IROH_BUILD_IDENTITY,
+  IROH_PREBUILD_FILES
+} from '../../orcad-distribution/prebuilds/iroh-prebuild.mjs'
+import { mergeManifest } from '../../orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs'
 
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../../../electron-builder.config.cjs')
@@ -292,10 +298,11 @@ describe('packaged runtime resources', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'prunes non-target native packages before the Linux glibc gate',
+    'prunes foreign natives and stages verified Iroh before Linux presence and glibc gates',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-after-pack-prune-order-'))
       const previousPath = process.env.PATH
+      const previousPrebuildsDir = process.env.ORCAD_PREBUILDS_DIR
       try {
         const appOutDir = join(root, 'linux-unpacked')
         const resourcesDir = join(appOutDir, 'resources')
@@ -321,8 +328,8 @@ describe('packaged runtime resources', () => {
 
         const target =
           process.arch === 'x64'
-            ? { electronArch: 3, machine: 0xb7, nonTarget: 'x64' }
-            : { electronArch: 1, machine: 0x3e, nonTarget: 'arm64' }
+            ? { electronArch: 3, arch: 'arm64', machine: 0xb7, nonTarget: 'x64' }
+            : { electronArch: 1, arch: 'x64', machine: 0x3e, nonTarget: 'arm64' }
         const wrongArchPackage = join(
           resourcesDir,
           'node_modules',
@@ -336,6 +343,9 @@ describe('packaged runtime resources', () => {
         wrongArchElf.writeUInt16LE(target.machine, 18)
         await writeFile(join(wrongArchPackage, 'watcher.node'), wrongArchElf)
         await seedClipboardPublisher(resourcesDir, target.machine)
+        const prebuildsDir = join(root, 'orcad-prebuilds')
+        const iroh = await seedPackagedIrohFloor(resourcesDir, prebuildsDir, target)
+        process.env.ORCAD_PREBUILDS_DIR = prebuildsDir
 
         await stubObjdump(root)
 
@@ -348,13 +358,60 @@ describe('packaged runtime resources', () => {
           })
         ).resolves.toBeUndefined()
         await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
+        await expect(readFile(iroh.destination)).resolves.toEqual(iroh.bytes)
       } finally {
         process.env.PATH = previousPath
+        if (previousPrebuildsDir === undefined) {
+          delete process.env.ORCAD_PREBUILDS_DIR
+        } else {
+          process.env.ORCAD_PREBUILDS_DIR = previousPrebuildsDir
+        }
         await removeTree(root)
       }
     }
   )
 })
+
+/** Seed a target floor artifact and loader without any installed optional native package. */
+async function seedPackagedIrohFloor(resourcesDir, prebuildsDir, target) {
+  const slot = `linux-${target.arch}-glibc`
+  const relative = IROH_PREBUILD_FILES[slot]
+  const filename = relative.split('/').at(-1)
+  const nativePath = join(prebuildsDir, slot, ...relative.split('/'))
+  const bytes = Buffer.alloc(64)
+  bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1])
+  bytes.writeUInt16LE(3, 16)
+  bytes.writeUInt16LE(target.machine, 18)
+  bytes.writeUInt32LE(1, 20)
+  bytes.writeUInt16LE(64, 52)
+  await mkdir(dirname(nativePath), { recursive: true })
+  await writeFile(nativePath, bytes)
+  const manifest = mergeManifest(null, {
+    version: '1.1.0',
+    napi: 8,
+    nodeHeaders: '24.21.0',
+    slot,
+    entry: {
+      files: { [relative]: createHash('sha256').update(bytes).digest('hex') },
+      iroh: IROH_BUILD_IDENTITY
+    }
+  })
+  await writeFile(join(prebuildsDir, 'manifest.json'), JSON.stringify(manifest))
+  const packageName = `@number0/iroh-linux-${target.arch}-gnu`
+  const loaderDir = join(resourcesDir, 'node_modules', '@number0', 'iroh')
+  await mkdir(loaderDir, { recursive: true })
+  await writeFile(join(loaderDir, 'index.js'), 'module.exports = {}\n')
+  await writeFile(
+    join(loaderDir, 'package.json'),
+    JSON.stringify({
+      name: '@number0/iroh',
+      version: IROH_BUILD_IDENTITY.sdkVersion,
+      main: 'iroh-js/index.js',
+      optionalDependencies: { [packageName]: IROH_BUILD_IDENTITY.sdkVersion }
+    })
+  )
+  return { destination: join(resourcesDir, 'node_modules', packageName, filename), bytes }
+}
 
 // Headers model architecture; objdump is stubbed for these packaging-layout tests.
 async function seedClipboardPublisher(resourcesDir, machine) {

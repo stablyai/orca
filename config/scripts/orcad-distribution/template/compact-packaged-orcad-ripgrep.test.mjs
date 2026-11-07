@@ -15,7 +15,11 @@ import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs
 
 const require = createRequire(import.meta.url)
 const { compactPackagedOrcadRipgrep } = require('./compact-packaged-orcad-ripgrep.cjs')
-const { resealSignedWindowsApp } = require('./packaged-orcad-template.cjs')
+const {
+  finalizePackagedOrcadTemplate,
+  resealSignedWindowsApp
+} = require('./packaged-orcad-template.cjs')
+const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 const roots = []
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 
@@ -86,6 +90,42 @@ describe('packaged ripgrep storage', () => {
         )
       )
     ).toBe(false)
+  })
+
+  it('requires explicit targets to finalize the fork Linux x64-only template', async () => {
+    const f = await fixture()
+    for (const target of Object.keys(f.manifest.targets)) {
+      if (target === 'linux-x64-glibc') {
+        continue
+      }
+      delete f.manifest.targets[target]
+      await rm(join(f.templateDir, 'targets', target), { recursive: true })
+    }
+    const linux = f.manifest.targets['linux-x64-glibc']
+    await rm(join(f.templateDir, 'targets/linux-x64-glibc', linux.browserName))
+    delete linux.browserName
+    delete linux.browserSha256
+    await writeFile(join(f.resourcesDir, 'agent-browser-linux-x64'), 'desktop driver')
+    await writeFile(f.manifestPath, JSON.stringify(f.manifest))
+    await expect(
+      finalizePackagedOrcadTemplate(f.resourcesDir, { platform: 'linux' })
+    ).rejects.toThrow('target manifest inventory mismatch')
+    await finalizePackagedOrcadTemplate(f.resourcesDir, {
+      platform: 'linux',
+      targets: ['linux-x64-glibc']
+    })
+    expect(() => verifyPackagedOrcadTemplate(f.resourcesDir, ['linux-x64-glibc'])).not.toThrow()
+    const manifest = JSON.parse(await readFile(f.manifestPath, 'utf8'))
+    expect(Object.keys(manifest.targets)).toEqual(['linux-x64-glibc'])
+    expect(manifest.targets['linux-x64-glibc'].packagedRipgrep).toBe(true)
+    expect(manifest.targets['linux-x64-glibc'].packagedBrowser).toBe(true)
+    await writeFile(join(f.resourcesDir, 'ripgrep/linux-x64/rg'), 'tampered')
+    await expect(
+      finalizePackagedOrcadTemplate(f.resourcesDir, {
+        platform: 'linux',
+        targets: ['linux-x64-glibc']
+      })
+    ).rejects.toThrow('checksum mismatch')
   })
 
   it('keeps binaries that differ and never removes Darwin signing inputs', async () => {

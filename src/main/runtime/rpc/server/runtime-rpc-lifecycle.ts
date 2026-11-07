@@ -1,6 +1,3 @@
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
@@ -12,12 +9,8 @@ import {
   wsFallbackPortLadder,
   writeWsFallbackPort
 } from '../ws-fallback-port-store'
-import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
-import { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
-import { MobileSocketWiring } from '../mobile-socket-wiring'
 import { createServeNetworkSourceGuard } from './serve-network-source-policy'
-import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
+import { RuntimeRpcMobileTransportLifecycle } from './runtime-rpc-mobile-transport-lifecycle'
 import {
   formatWsEndpoint,
   WS_BIND_HOST_ALL_INTERFACES,
@@ -33,9 +26,10 @@ import {
   publishHostDescriptor
 } from '../../hosts/platform-probe/host-descriptor'
 
-export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
+export class RuntimeRpcLifecycle extends RuntimeRpcMobileTransportLifecycle {
+  /** Publish local RPC independently of iroh readiness, cleaning up transports if metadata fails. */
   async start(): Promise<void> {
-    if (this.activeTransports.length > 0) {
+    if (this.stopping || this.activeTransports.length > 0) {
       return
     }
 
@@ -78,9 +72,14 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     })
 
     await socketTransport.start()
+    if (this.stopping) {
+      await socketTransport.stop()
+      return
+    }
 
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
+    this.activeTransports = activeTransports
 
     // Per-device tokens/E2EE avoid React Native's inability to pin self-signed TLS certificates.
     if (this.enableWebSocket) {
@@ -96,6 +95,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
+        if (this.stopping) {
+          return
+        }
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
@@ -113,6 +115,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             // Persist fallback ports for paired endpoints (STA-1511); explicit zero remains random for E2E.
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
+          if (this.stopping) {
+            await transport.stop()
+            return
+          }
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           } else if (transport.persistedFallbackFailed) {
@@ -121,29 +127,42 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
-          // WS is supplementary; keep Unix transport serving if it fails.
+          // WS is supplementary unless an explicit port pin requires this listener.
           console.error('[runtime] Failed to start WebSocket transport:', error)
-          this.mobileSocketWiring?.dispose()
-          this.mobileSocketWiring = null
           if (error instanceof PinnedPortUnavailableError) {
+            this.mobileSocketWiring?.dispose()
+            this.mobileSocketWiring = null
             await socketTransport.stop().catch(() => {})
             throw error
           }
         }
+
+        // Iroh is supplementary: an unavailable relay must not delay local/WS discovery.
+        this.irohRuntimeStarted = true
+        void this.ensureIrohRelayBinding().catch(() => {
+          console.error('[runtime] Failed to initialize Iroh transport')
+        })
       }
     }
 
+    if (this.stopping) {
+      return
+    }
     // Set live endpoint/token before metadata publication.
-    this.activeTransports = activeTransports
     this.transports = transportsMeta
 
     try {
       this.writeMetadata()
     } catch (error) {
       // Without metadata CLI cannot discover runtime; close transports rather than serve invisibly.
+      this.stopping = true
+      this.irohRelayRetry.cancel()
+      await this.pendingIrohTransport?.stop().catch(() => {})
+      await this.waitForIrohRelayBinding()
+      const transports = this.activeTransports
       this.activeTransports = []
       this.transports = []
-      await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
+      await Promise.all(transports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
 
@@ -167,7 +186,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     })
   }
 
-  // Default to loopback until explicit network pairing or a connected network-reach grant; local-only browser grants must never trigger reconnect exposure (STA-2370).
+  /** Keep WS loopback unless explicit exposure or a connected non-iroh network grant requires it. */
   protected resolveInitialWebSocketBindHost(): string {
     if (this.pinnedBindHost) {
       return this.pinnedBindHost
@@ -178,7 +197,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     const hasConnectedNetworkDevice =
       this.deviceRegistry
         ?.listDevices()
-        .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
+        .some(
+          (device) =>
+            device.lastSeenAt > 0 &&
+            device.pairingReach !== 'this-computer' &&
+            !(device.scope === 'mobile' && device.mobilePairingConnectionMode === 'iroh')
+        ) ?? false
     return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
@@ -224,84 +248,5 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       transport: wsTransport,
       endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort)
     }
-  }
-
-  // Direct/relay sockets share session wiring captured by brokers; swap transports within it during rebind or relay identity/binary/revocation state is lost.
-  protected ensureMobileSocketWiring(
-    deviceRegistry: DeviceRegistry,
-    e2eeKeypair: E2EEKeypair
-  ): MobileSocketWiring {
-    if (this.mobileSocketWiring) {
-      return this.mobileSocketWiring
-    }
-    // Allow one re-pair notification per session, including across rebinds.
-    this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
-      onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
-    })
-    const mobileSocketWiring = new MobileSocketWiring({
-      deviceRegistry,
-      e2eeKeypair,
-      onText: (socket, plaintext, reply, sendBinary) => {
-        void this.trackClientRequest(() =>
-          this.handleWebSocketMessage(
-            plaintext,
-            reply,
-            sendBinary,
-            undefined,
-            socket.ws,
-            socket.device.deviceToken ?? null,
-            socket
-          )
-        )
-      },
-      onBinary: (socket, bytes) => {
-        this.lastClientRequestAt = Date.now()
-        this.handleWebSocketBinaryMessage(bytes, socket.ws)
-      },
-      onReady: (socket) => {
-        if (socket.transport.transport === 'direct') {
-          this.authenticatedSourceRecorder.note(socket.transport.sourceClass)
-        }
-        this.mobileRelayPairingProvider?.onDemandStateChanged?.()
-        if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
-          this.runtime.noteAgentLaunchClientReady?.()
-        }
-        // Publish every live host terminal as a tab on attach.
-        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-          void placeUnshownLiveTerminalsBestEffort(this.runtime)
-        }
-        // Update capabilities once per socket; only phones send their own later update.
-        if (socket.device.scope === 'runtime') {
-          this.runtime.sidebarFacts?.noteRuntimeClient(
-            socket.connectionId,
-            socket.clientCapabilities
-          )
-        }
-      },
-      onClose: (socket, hasOtherConnections) => {
-        if (!socket) {
-          return
-        }
-        this.abortWebSocketDispatches(socket.ws)
-        this.mobileDesktopRelay?.closePhoneConnection(socket.connectionId)
-        // Stream cleanup is socket-scoped; disconnect state spans all transports for that device.
-        this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-        // Optional: runtime stand-ins without staged saves must still close cleanly.
-        void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
-        this.binaryMessageRouter.deleteConnection(socket.connectionId)
-        this.declaredDesktopClients.forget(socket.connectionId)
-        if (!hasOtherConnections) {
-          this.runtime.onClientDisconnected(socket.device.clientId)
-        }
-      },
-      // Relay handles authorization upstream; only direct failures prompt local re-pairing.
-      onUnpairedDeviceAuthFailure: (metadata) => {
-        if (metadata.transport === 'direct') {
-          this.unpairedDeviceAuthThrottle?.recordFailure()
-        }
-      }
-    })
-    this.mobileSocketWiring = mobileSocketWiring
-    return mobileSocketWiring
   }
 }

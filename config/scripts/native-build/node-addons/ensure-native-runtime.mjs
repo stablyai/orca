@@ -14,6 +14,7 @@ import {
 } from '../windows/windows-process-tree-gyp-rebuild.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
+import { ensureSourceIrohRuntime } from '../../orcad-distribution/prebuilds/stage-source-iroh.mjs'
 import {
   isSharedNativePackage,
   isSourceBuildDir,
@@ -48,6 +49,7 @@ const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
+  await prepareSourceIroh({ checkOnly: true, provision: false })
   const failures = collectNativeModuleFailures()
   if (failures.length > 0) {
     for (const failure of failures) {
@@ -56,6 +58,11 @@ if (process.argv.includes(CHILD_CHECK_FLAG)) {
     process.exit(1)
   }
   process.exit(0)
+}
+
+// Source SDK preparation is independent of node-pty health and never joins generic addon rebuilds.
+if (runtime === 'node' || runtime === 'electron') {
+  await prepareSourceIroh({ provision: runtime === 'electron' })
 }
 
 if (runtime === 'node') {
@@ -67,6 +74,15 @@ if (runtime === 'node') {
     'Usage: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node|electron'
   )
   process.exit(2)
+}
+
+async function prepareSourceIroh(options) {
+  try {
+    await ensureSourceIrohRuntime({ root: projectDir, ...options })
+  } catch (error) {
+    // Iroh is supplementary: local work still starts, while the transport refuses stock SDK bytes.
+    console.warn(`[native-runtime] ${formatError(error)}`)
+  }
 }
 
 function readRuntimeArg() {

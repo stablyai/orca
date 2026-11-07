@@ -17,10 +17,12 @@ const {
   verifyMacTerminalHost
 } = require('./scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
+  assertPackagedIrohNativeVariantInstalled,
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
+  stagePackagedIrohNative,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const {
@@ -387,12 +389,19 @@ module.exports = {
   },
   // electron-builder calls this with the context alone. The second parameter is the bundle root,
   // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
+  /** Reject missing release inputs, and provision qualified target-native dependencies before copying. */
   beforePack: (
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard,
     orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
   ) => {
+    if (
+      process.env.ORCA_LINUX_X64_ONLY_TEMPLATE === '1' &&
+      (context.electronPlatformName !== 'linux' || context.arch !== 1)
+    ) {
+      throw new Error('ORCA_LINUX_X64_ONLY_TEMPLATE is only supported for Linux x64 packages.')
+    }
     // The template is the server every SSH host gets, so a dark test template must never ship.
     assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
@@ -403,7 +412,16 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
     }
+    return import('./scripts/orcad-distribution/prebuilds/ensure-iroh-prebuild.mjs').then(
+      ({ ensureIrohPrebuild }) =>
+        ensureIrohPrebuild({
+          targetPlatform: context.electronPlatformName,
+          arch:
+            typeof context.arch === 'string' ? context.arch : { 1: 'x64', 3: 'arm64' }[context.arch]
+        })
+    )
   },
+  /** Finalize copied target-native resources and the deployment template before app signing. */
   afterPack: async (context) => {
     const resourcesDir =
       context.electronPlatformName === 'darwin'
@@ -444,6 +462,12 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    await stagePackagedIrohNative(resourcesDir, context.electronPlatformName, context.arch)
+    assertPackagedIrohNativeVariantInstalled(
+      context.electronPlatformName,
+      context.arch,
+      join(resourcesDir, 'node_modules')
+    )
     assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Gate native glibc floor after pruning foreign CPU variants; GLIBC_2.34 once broke Ubuntu 20.04 startup (#9902).
     let appImageNodeRuntime = null
@@ -509,6 +533,7 @@ module.exports = {
     }
     await finalizePackagedOrcadTemplate(resourcesDir, {
       platform: context.electronPlatformName,
+      targets: process.env.ORCA_LINUX_X64_ONLY_TEMPLATE === '1' ? ['linux-x64-glibc'] : undefined,
       signMacBinary: (path) =>
         signMacStandaloneHelper(path, 'orcad template binary', context.packager)
     })

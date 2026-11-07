@@ -57,6 +57,7 @@ async function pairingAddress(
   return address ?? (await getDefaultPairingAddress(server.getNetworkExposureBindHost(), lookup))
 }
 
+/** Shares desktop/CLI mobile offers while keeping Iroh key-dial independent of LAN discovery. */
 export async function requestMobilePairingOffer(
   server: PairingOfferServer,
   args: {
@@ -71,7 +72,9 @@ export async function requestMobilePairingOffer(
   | PairingOfferUnavailable
   | (Omit<MobilePairingOfferAvailable, 'endpoint'> & { endpoint: string | null })
 > {
-  const ip = await pairingAddress(server, args.address, lookup)
+  // Iroh dials by key; stale LAN selections must not advertise an unexposed WS listener.
+  const ip =
+    args.connectionMode === 'iroh' ? null : await pairingAddress(server, args.address, lookup)
   // Relay works without a direct candidate; LAN-only must refuse when none is usable.
   if (!ip && args.connectionMode === 'local-only') {
     return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
@@ -88,7 +91,7 @@ export async function requestMobilePairingOffer(
     return offer
   }
   // Unadvertised loopback fallback points at the scanning device; omit it from UI endpoints.
-  return { ...offer, endpoint: ip ? offer.endpoint : null }
+  return { ...offer, endpoint: ip || offer.connectionMode === 'iroh' ? offer.endpoint : null }
 }
 
 export async function requestRuntimePairingOffer(

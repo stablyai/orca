@@ -74,11 +74,35 @@ job reports in its summary whether the PR changes them, which means dev clients 
 1. Open Orca desktop.
 2. Go to Settings > Mobile.
 3. Scan the pairing QR code from the mobile app.
-4. Confirm the mobile host endpoint is `ws://<desktop-ip>:6768`.
+4. For Local network pairing, confirm the host endpoint is `ws://<desktop-ip>:6768`.
 
 For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use the desktop LAN IP, for example `ws://192.168.0.179:6768`.
 
 If the phone has a stale host entry, remove it from the app and pair again.
+
+### Iroh Transport And Phone Relay
+
+Iroh requires a native development client; Expo Go does not include `@orca/expo-iroh`.
+Pairing keeps the desktop's Iroh endpoint and dial hints alongside its direct endpoint.
+Iroh uses the same encrypted mobile RPC and pairing credentials as direct connections.
+Native write failures reject pending RPCs and reconnect through fresh authentication,
+even when a connection-log consumer throws.
+
+Desktop Iroh pairing waits up to 15 seconds for relay readiness before reporting it unavailable.
+Readiness continues in the background, and transient network or socket failures retry the selected
+relay with capped backoff rather than switching to Automatic. Retry pairing once the relay is online.
+A missing or incompatible desktop Iroh SDK stays unavailable without background retries; install a
+compatible native module and restart the runtime.
+An Iroh-only pairing does not expose the desktop WebSocket listener after restart; explicit
+network-serving settings and previously paired network WebSocket clients still can.
+
+Settings > Iroh relay controls this phone's home relay, including while offline.
+Automatic uses the default N0 relays; named regions or a custom HTTPS origin override it.
+Custom origins cannot contain credentials, paths, queries, or fragments. Draft edits apply only
+after Save succeeds. The preference stays in native storage, not embedded-page storage.
+Only a durable preference change reconnects active Iroh clients through their ordinary
+subscription-replay path; direct/LAN clients, desktop relay preferences, and saved pairing hints
+are unchanged.
 
 ## Development Paths
 

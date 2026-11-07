@@ -61,6 +61,19 @@ describe('copyScriptWithLocalModules', () => {
     expect(names).toContain('leaf.cjs')
   })
 
+  it('copies file-URL assets without interpreting their contents as module imports', () => {
+    expect(
+      copiedNames(
+        {
+          'entry.mjs': "import './patch.mjs'\n",
+          'patch.mjs': "new URL('./deadline.rs', import.meta.url)\n",
+          'deadline.rs': "use crate::Connection;\n// import './not-a-module.mjs'\n"
+        },
+        'entry.mjs'
+      )
+    ).toEqual(['deadline.rs', 'entry.mjs', 'patch.mjs'])
+  })
+
   it('terminates on a cycle rather than recursing forever', () => {
     expect(
       copiedNames({ 'a.mjs': "import './b.mjs'\n", 'b.mjs': "import './a.mjs'\n" }, 'a.mjs')

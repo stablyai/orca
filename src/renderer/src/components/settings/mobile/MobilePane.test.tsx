@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import '../../../../../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { act } from 'react'
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -10,6 +16,12 @@ import {
   type PairedMobileDevice as PairedDevice
 } from '../../mobile/paired-mobile-devices'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import { decodePairingOffer } from '../../../../../shared/remote-runtime/pairing/pairing'
+import { registerMobileHandlers } from '../../../../../main/ipc/mobile'
+import { OrcaRuntimeService } from '../../../../../main/runtime/orca-runtime'
+import { OrcaRuntimeRpcServer } from '../../../../../main/runtime/rpc/server/runtime-rpc'
+import type { MobilePairingQrResult } from '../../../../../main/runtime/rpc/server/pairing/mobile-pairing-qr'
+import { MOBILE_PAIRING_OFFER_TTL_MS } from '../../../../../main/runtime/rpc/server/pairing/pairing-offer-expiry'
 
 type PairedDevicesProps = {
   devices: readonly PairedDevice[]
@@ -40,6 +52,7 @@ const mocks = vi.hoisted(() => {
   return {
     holder,
     useAppStore,
+    ipcHandlers: new Map<string, (...args: unknown[]) => unknown>(),
     latestPairedDevicesProps: null as PairedDevicesProps | null,
     getPairingQR: vi.fn(),
     listDevices: vi.fn(),
@@ -51,8 +64,17 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/store/index', () => ({ useAppStore: mocks.useAppStore }))
+vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
 vi.mock('../../../store/index', () => ({ useAppStore: mocks.useAppStore }))
+
+vi.mock('electron', () => ({
+  app: { isPackaged: false },
+  ipcMain: {
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
+      mocks.ipcHandlers.set(channel, handler)
+  },
+  shell: { openExternal: vi.fn() }
+}))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({
@@ -164,9 +186,46 @@ import { MobilePane } from './MobilePane'
 describe('MobilePane pairing connection mode', () => {
   const getPairingQR = mocks.getPairingQR
   const updateSettings = mocks.updateSettings
+  const encodePairingQr = vi.fn<(pairingUrl: string) => Promise<MobilePairingQrResult>>()
+  let pairingBackend: OrcaRuntimeRpcServer | undefined
+  let pairingUserDataPath: string | undefined
+
+  /** Route renderer pairing requests through real IPC handlers and expose the registry for token checks. */
+  async function startPairingBackend() {
+    pairingUserDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-pane-'))
+    pairingBackend = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime: new OrcaRuntimeService(),
+      userDataPath: pairingUserDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await pairingBackend.start()
+    registerMobileHandlers(pairingBackend, { encodePairingQr })
+    const handler = mocks.ipcHandlers.get('mobile:getPairingQR')
+    const registry = pairingBackend.getDeviceRegistry()
+    if (!handler || !registry) {
+      throw new Error('Pairing backend did not initialize')
+    }
+    const generate = (args: Parameters<typeof window.api.mobile.getPairingQR>[0]) =>
+      handler(null, args)
+    getPairingQR.mockImplementation(generate)
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingConnectionMode: 'local-only',
+      mobilePairingCustomAddress: '100.64.1.20:6768'
+    }
+    return { registry, generate }
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.ipcHandlers.clear()
+    encodePairingQr.mockReset().mockResolvedValue({
+      ok: true,
+      qrDataUrl: 'data:image/png;base64,qr',
+      qrSize: 218
+    })
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
     getPairingQR.mockReset().mockResolvedValue({
@@ -202,10 +261,113 @@ describe('MobilePane pairing connection mode', () => {
     })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup()
     _resetPairedMobileDevicesCacheForTests()
     document.body.innerHTML = ''
+    try {
+      await pairingBackend?.stop()
+    } finally {
+      pairingBackend = undefined
+      if (pairingUserDataPath) {
+        rmSync(pairingUserDataPath, { recursive: true, force: true })
+        pairingUserDataPath = undefined
+      }
+    }
+  })
+
+  it('rotates invalidated credentials through a lost reply, then reuses a successful copy-only offer', async () => {
+    const { registry, generate } = await startPairingBackend()
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('qr')).not.toHaveTextContent(/^none$/))
+    const first = decodePairingOffer(screen.getByTestId('pairing-url').textContent ?? '')
+    expect(first).toMatchObject({ scope: 'mobile', endpoint: 'ws://100.64.1.20:6768' })
+    expect(registry.validateToken(first.deviceToken)).toMatchObject({ lastSeenAt: 0 })
+
+    await user.click(screen.getByRole('button', { name: 'choose-custom-address' }))
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('100.126.117.25:6768')
+    expect(screen.getByTestId('qr')).toHaveTextContent(/^none$/)
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent(/^none$/)
+    encodePairingQr.mockResolvedValue({ ok: false, reason: 'encoding_failed' })
+    getPairingQR.mockImplementationOnce(async (args) => {
+      await generate(args)
+      throw new Error('Pairing reply lost')
+    })
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled())
+    const lost = registry.getPendingDevice('mobile', MOBILE_PAIRING_OFFER_TTL_MS)!
+    expect(lost.token).not.toBe(first.deviceToken)
+    expect(registry.validateToken(first.deviceToken)).toBeNull()
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent(/^none$/)
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-url')).not.toHaveTextContent(/^none$/))
+    const replacement = decodePairingOffer(screen.getByTestId('pairing-url').textContent ?? '')
+    expect(replacement.endpoint).toBe('ws://100.126.117.25:6768')
+    expect(replacement.deviceToken).not.toBe(lost.token)
+    expect(registry.validateToken(lost.token)).toBeNull()
+    expect(registry.validateToken(replacement.deviceToken)).toMatchObject({ lastSeenAt: 0 })
+    expect(getPairingQR).toHaveBeenLastCalledWith({
+      address: '100.126.117.25:6768',
+      connectionMode: 'local-only',
+      rotate: true
+    })
+    expect(screen.getByTestId('qr')).toHaveTextContent(/^none$/)
+    expect(screen.getByTestId('qr-error')).toHaveTextContent('true')
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled())
+    const refreshed = decodePairingOffer(screen.getByTestId('pairing-url').textContent ?? '')
+    expect(refreshed.deviceToken).toBe(replacement.deviceToken)
+    expect(registry.validateToken(replacement.deviceToken)).toMatchObject({ lastSeenAt: 0 })
+    expect(getPairingQR).toHaveBeenLastCalledWith({
+      address: '100.126.117.25:6768',
+      connectionMode: 'local-only'
+    })
+  })
+
+  it('ignores a stale success without consuming a newer address invalidation', async () => {
+    const { registry, generate } = await startPairingBackend()
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Wi-Fi', address: '100.64.1.20' }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('qr')).not.toHaveTextContent(/^none$/))
+    const first = decodePairingOffer(screen.getByTestId('pairing-url').textContent ?? '')
+
+    await user.click(screen.getByRole('button', { name: 'choose-custom-address' }))
+    const minted = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    getPairingQR.mockImplementationOnce(async (args) => {
+      const result = await generate(args)
+      minted.resolve()
+      await release.promise
+      return result
+    })
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await minted.promise
+    const stale = registry.getPendingDevice('mobile', MOBILE_PAIRING_OFFER_TTL_MS)!
+    expect(stale.token).not.toBe(first.deviceToken)
+
+    await user.click(screen.getByRole('button', { name: 'choose-discovered-address' }))
+    await act(async () => release.resolve())
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent(/^none$/)
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-url')).not.toHaveTextContent(/^none$/))
+    const current = decodePairingOffer(screen.getByTestId('pairing-url').textContent ?? '')
+    expect(current.deviceToken).not.toBe(stale.token)
+    expect(registry.validateToken(stale.token)).toBeNull()
+    expect(registry.validateToken(current.deviceToken)).toMatchObject({ lastSeenAt: 0 })
+    expect(getPairingQR).toHaveBeenLastCalledWith({
+      address: '100.64.1.20',
+      connectionMode: 'local-only',
+      rotate: true
+    })
   })
 
   it('drops loading after switching path mid-generate', async () => {
@@ -237,5 +399,46 @@ describe('MobilePane pairing connection mode', () => {
 
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     expect(screen.getByTestId('qr')).toHaveTextContent('none')
+  })
+
+  it('copies useful Relay diagnostics without disclosing the selected address or local interfaces', async () => {
+    mocks.holder.state.settings.mobilePairingCustomAddress = '100.126.117.25:6768'
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Wi-Fi', address: '192.168.1.24' }]
+    })
+    mocks.getPairingQR.mockResolvedValue({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('100.126.117.25:6768')
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
+
+    const writeClipboardText = vi.mocked(window.api.ui.writeClipboardText)
+    await waitFor(() =>
+      expect(writeClipboardText).toHaveBeenCalledWith(
+        expect.stringContaining('"mobile_pairing_relay_failure"')
+      )
+    )
+    const copied = writeClipboardText.mock.calls[0]![0]
+    const diagnostics = JSON.parse(copied)
+    expect(diagnostics).toMatchObject({
+      kind: 'mobile_pairing_relay_failure',
+      preferredConnectionMode: 'automatic',
+      failure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay'
+      }
+    })
+    expect(diagnostics).not.toHaveProperty('selectedAddress')
+    expect(copied).not.toContain('100.126.117.25')
+    expect(copied).not.toContain('192.168.1.24')
   })
 })

@@ -33,6 +33,7 @@ export class RpcSynthesizedCloseIndex {
   }
 }
 
+/** Identifies replaced-socket events so late callbacks cannot change the current session. */
 export function isStaleRpcSocketEvent(
   current: WebSocket | null,
   opening: WebSocket,
@@ -43,16 +44,17 @@ export function isStaleRpcSocketEvent(
   if (current === opening) {
     return false
   }
-  console.log('[net] stale ws event ignored', { eventName, state, attempt })
+  console.log('[net] stale transport event ignored', { eventName, state, attempt })
   return true
 }
 
+/** Logs transport lifetime and inbound-idle evidence, returning the supplied close code if present. */
 export function logRpcSocketClose(options: SocketCloseLogOptions): number | undefined {
   const event = options.event as { code?: number; reason?: string; wasClean?: boolean } | undefined
   const closeAt = Date.now()
   const constructToCloseMs = closeAt - options.constructedAt
   const closeEvent = describeSocketEvent(options.event)
-  console.log('[net] ws.onclose', {
+  console.log('[net] transport.onclose', {
     code: event?.code,
     reason: event?.reason,
     wasClean: event?.wasClean,

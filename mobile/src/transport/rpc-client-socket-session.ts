@@ -34,6 +34,7 @@ type SocketSessionOptions = {
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
   onForcedClose: (session: RpcClientSocketSession) => void
+  createSocket?: (endpoint: string) => WebSocket
 }
 
 export class RpcClientSocketSession {
@@ -48,12 +49,29 @@ export class RpcClientSocketSession {
   private connectTimer: ReturnType<typeof setTimeout> | null = null
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
+  /**
+   * Creates the injected transport or a ws/wss socket, then installs handlers and a connect deadline.
+   * Unsupported default URL schemes throw before opening a socket.
+   */
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = receiveBinaryAsBase64(new WebSocket(options.endpoint))
+    // Why: default WS for LAN/relay; iroh injects MobileIrohFramedSocket (same probe path).
+    if (options.createSocket) {
+      this.socket = options.createSocket(options.endpoint)
+    } else {
+      const { protocol } = new URL(options.endpoint)
+      if (protocol !== 'ws:' && protocol !== 'wss:') {
+        throw new Error('Unsupported WebSocket URL scheme: expected ws:// or wss://.')
+      }
+      this.socket = receiveBinaryAsBase64(new WebSocket(options.endpoint))
+    }
     this.attachHandlers()
     this.armConnectTimeout()
   }
 
+  /**
+   * Returns whether framing accepted the request; serialization or send errors return false.
+   * Forces replacement of the current session on send exceptions or connected-state transport desync.
+   */
   sendEncrypted(request: RpcRequest): boolean {
     if (this.socket.readyState === WebSocket.OPEN && this.framing) {
       try {
@@ -78,7 +96,7 @@ export class RpcClientSocketSession {
       this.options.getCurrentSocket() === this.socket &&
       this.socket.readyState !== WebSocket.OPEN
     ) {
-      console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
+      console.log('[net] sendEncrypted detected transport desync — forcing reconnect', {
         readyState: this.socket.readyState
       })
       this.options.onForcedClose(this)
@@ -106,15 +124,19 @@ export class RpcClientSocketSession {
     this.framing = null
   }
 
+  /**
+   * Guards open, message, and error events against replaced sockets.
+   * Close events still reach the controller so a late auth rejection is not lost.
+   */
   private attachHandlers(): void {
     this.socket.onopen = () => {
       if (this.isStale('open')) {
         return
       }
-      console.log('[net] ws.onopen', { attempt: this.options.getReconnectAttempt() })
+      console.log('[net] transport.onopen', { attempt: this.options.getReconnectAttempt() })
       this.clearConnectTimer()
       this.options.onHandshakeStarted()
-      this.options.emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
+      this.options.emitLog('success', 'Transport open', 'Starting E2EE handshake')
       this.startHandshake()
     }
     this.socket.onmessage = (event) => {
@@ -145,7 +167,7 @@ export class RpcClientSocketSession {
       }
       const error = event as { message?: string } | undefined
       const description = describeSocketEvent(event)
-      console.log('[net] ws.onerror', {
+      console.log('[net] transport.onerror', {
         message: error?.message,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),

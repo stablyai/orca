@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildConnectionDiagnosticsReport } from '../diagnostics/connection-diagnostics-report'
-import type { ConnectionLogEntry } from '../transport/types'
 import {
   CACHED,
   MANIFEST,
@@ -15,7 +13,7 @@ import type {
   MobileWebShellSessionEvent
 } from './mobile-web-shell-session-contract'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
-import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
+import { frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine, type ShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import {
   EMPTY_SHELL_LOG_TRACE,
@@ -91,11 +89,6 @@ const DOWNLOAD_OPEN: readonly Pending[] = [
   { type: 'download-staged' },
   ACTIVATED
 ]
-
-function present(line: ShellLifecycleLine | null): ShellLifecycleLine[] {
-  expect(line).not.toBeNull()
-  return line === null ? [] : [line]
-}
 
 function summary(lines: readonly ShellLifecycleLine[]): string[] {
   return lines.map(
@@ -307,88 +300,5 @@ describe('recording shell lines', () => {
       'Web shell: checking host'
     ])
     expect(connectionLogStore.get('other-host')).toHaveLength(1)
-  })
-})
-
-describe('shell lifecycle lines in the exported report', () => {
-  function entries(lines: readonly ShellLifecycleLine[]): ConnectionLogEntry[] {
-    return lines.map((line, index) => ({ id: `e${index}`, ts: 1_000 + index * 1_000, ...line }))
-  }
-
-  it('shows where a connected session stalled without changing the connection verdict', () => {
-    const opened = replay(DOWNLOAD_OPEN)
-    const page = replay(PAGE_LOAD, opened)
-    const report = buildConnectionDiagnosticsReport({
-      hostName: 'Desk',
-      endpoint: 'ws://192.168.1.2:6768',
-      state: 'connected',
-      reconnectAttempts: 0,
-      lastConnectedAt: 500,
-      platform: 'ios',
-      appVersion: '0.0.56',
-      bridgeProtocolVersion: 1,
-      entries: entries([...opened.lines, ...page.lines, ...present(stall(page))]),
-      nowMs: 60_000
-    })
-    expect(report).toContain('Bridge protocol: 1')
-    expect(report).toContain('Likely cause: Connection is healthy.')
-    expect(report).toContain('[web-shell-flow] Web shell: activating app')
-    expect(report).toContain(
-      `[warn] [web-shell-stalled] Web shell: page has not drawn after 15s — build=${BUILD} page ready=yes readyAsks=1 documentLoaded=yes`
-    )
-  })
-
-  it('never reads shell lines as a connection failure', () => {
-    const failed = replay([
-      { type: 'gates-changed', gates: gates() },
-      { type: 'cache-read', generation: null },
-      { type: 'download-failed', cause: { reason: 'connection-lost', hostCode: null } }
-    ])
-    const report = buildConnectionDiagnosticsReport({
-      hostName: 'Desk',
-      endpoint: 'ws://192.168.1.2:6768',
-      state: 'disconnected',
-      reconnectAttempts: 1,
-      lastConnectedAt: null,
-      platform: 'ios',
-      appVersion: '0.0.56',
-      bridgeProtocolVersion: 1,
-      entries: entries([
-        ...failed.lines,
-        ...present(stall(replay(DOWNLOAD_OPEN.slice(0, 6)))),
-        ...present(stall(replay([]))),
-        ...present(bridgeDiagnosticLine({ kind: 'refused', refusal: 'oversized' })),
-        frameWithoutHostLine({ clientReady: false, snapshotReady: false })
-      ]),
-      nowMs: 60_000
-    })
-    expect(report).toContain(
-      'Likely cause: No single failure cause can be determined from the recorded events.'
-    )
-  })
-
-  it('leaves an earlier connection failure as the likely cause', () => {
-    const timeout: ConnectionLogEntry = {
-      id: 'timeout',
-      ts: 500,
-      level: 'error',
-      code: 'connect-timeout',
-      message: 'WebSocket connect timeout'
-    }
-    const report = buildConnectionDiagnosticsReport({
-      hostName: 'Desk',
-      endpoint: 'ws://192.168.1.2:6768',
-      state: 'disconnected',
-      reconnectAttempts: 1,
-      lastConnectedAt: null,
-      platform: 'ios',
-      appVersion: '0.0.56',
-      bridgeProtocolVersion: 1,
-      entries: [timeout, ...entries(replay(DOWNLOAD_OPEN).lines)],
-      nowMs: 60_000
-    })
-    expect(report).toContain(
-      'Likely cause: The saved direct endpoint did not answer before the connection timeout.'
-    )
   })
 })

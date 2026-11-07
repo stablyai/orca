@@ -44,6 +44,7 @@ export class DirectRpcClient implements RpcClient {
   private authenticationGeneration = 0
   private livenessSession: RpcClientSocketSession | null = null
 
+  /** Starts dialing immediately, sharing authentication, liveness, and reconnect handling with injected transports. */
   constructor(
     private readonly endpoint: string,
     private readonly deviceToken: string,
@@ -86,6 +87,7 @@ export class DirectRpcClient implements RpcClient {
       onTimeout: this.connectionLog.livenessTimeout
     })
     this.socketFactory = new RpcClientSocketFactory({
+      ...(options.createSocket ? { createSocket: options.createSocket } : {}),
       endpoint,
       deviceToken,
       serverPublicKeyB64,
@@ -108,7 +110,7 @@ export class DirectRpcClient implements RpcClient {
       endpoint,
       stopLiveness: () => this.stopLiveness(),
       emitWarning: (message, detail) =>
-        this.connectionLog.emit('warn', message, detail, { code: 'authentication-rejected' }),
+        this.connectionLog.emitWarning(message, detail, { code: 'authentication-rejected' }),
       retry: (reason) => this.retryAuthentication(reason),
       latchFailure: (reason) => this.latchAuthenticationFailure(reason)
     })
@@ -128,8 +130,7 @@ export class DirectRpcClient implements RpcClient {
           this.stopLiveness()
         }
       },
-      emitWarning: (message, detail, evidence) =>
-        this.connectionLog.emit('warn', message, detail, evidence)
+      emitWarning: this.connectionLog.emitWarning
     })
     this.openConnection()
   }

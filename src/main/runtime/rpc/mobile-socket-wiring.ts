@@ -17,6 +17,7 @@ type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
 export type MobileSocketTransportMetadata =
   | { transport: 'direct'; sourceClass?: NetworkSourceClass }
+  | { transport: 'iroh' }
   | {
       transport: 'relay'
       relayHostId: string
@@ -172,6 +173,7 @@ export class MobileSocketWiring {
     return terminated
   }
 
+  /** Authenticate and dispatch E2EE frames, restricting iroh token and key auth to iroh mobile grants. */
   private handleRawMessage(
     transport: MobileSocketTransport,
     ws: WebSocket,
@@ -201,6 +203,15 @@ export class MobileSocketWiring {
           if (!device) {
             return null
           }
+          // Iroh shares direct E2EE, not LAN-only or runtime credential authorization.
+          if (
+            metadata.transport === 'iroh' &&
+            (device.scope !== 'mobile' ||
+              device.pairingReach === 'this-computer' ||
+              this.deviceRegistry.getMobilePairingConnectionMode(device.deviceId) !== 'iroh')
+          ) {
+            return null
+          }
           // Outer relay authorization cannot choose Orca identity; E2EE resolves the device before readiness.
           if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
             return null
@@ -211,6 +222,14 @@ export class MobileSocketWiring {
           const lookup = this.deviceRegistry.lookupDeviceKey(deviceId)
           if (lookup.kind !== 'found') {
             return lookup
+          }
+          if (
+            metadata.transport === 'iroh' &&
+            (lookup.device.scope !== 'mobile' ||
+              lookup.device.pairingReach === 'this-computer' ||
+              this.deviceRegistry.getMobilePairingConnectionMode(lookup.device.deviceId) !== 'iroh')
+          ) {
+            return { kind: 'refused' }
           }
           // Enforce token auth's Relay binding; forks inherit it. Never answer unknown for an existing device or the client deletes its key.
           if (

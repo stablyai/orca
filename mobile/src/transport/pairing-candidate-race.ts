@@ -28,7 +28,7 @@ function isRefusedReply(reply: RpcResponse): boolean {
   return !reply.ok && reply.error.code === 'unauthorized'
 }
 
-export type PairingCandidatePath = 'direct' | 'relay'
+export type PairingCandidatePath = 'direct' | 'relay' | 'iroh'
 
 export type PairingCandidate = {
   path: PairingCandidatePath
@@ -39,6 +39,10 @@ export type PairingCandidateWinner = PairingCandidate & {
   status: HostStatusReply | null
 }
 
+/**
+ * Selects a non-refused status reply, preferring direct among replies received before queued selection.
+ * Closes losing clients after success and rejects when every candidate fails.
+ */
 export function racePairingCandidates(
   candidates: readonly PairingCandidate[]
 ): Promise<PairingCandidateWinner> {
@@ -89,10 +93,13 @@ export function racePairingCandidates(
     function rejectIfFinished(): void {
       if (!settled && failures === candidates.length && successes.length === 0) {
         settled = true
+        const irohOnly = candidates.every((candidate) => candidate.path === 'iroh')
         reject(
           codeRejected
             ? new PairingCodeRejectedError()
-            : new Error('direct and relay pairing paths both failed')
+            : new Error(
+                irohOnly ? 'iroh pairing path failed' : 'direct and relay pairing paths both failed'
+              )
         )
       }
     }
