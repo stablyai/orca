@@ -22,8 +22,7 @@ export async function openJournalWriterSession(
   const restored = journalInputOrder(session.state)
   // Restore stamps cards before its frontier exists; a reopen re-derives both in that order.
   restored.lineage.reopen()
-  restored.cards.reopen()
-  restored.cards.ensure(session.state)
+  restored.cards.reopen(session.state)
   restored.lineage.restoreFrontier(session.state.lastSequence, session.state.inputEntries)
   for (const key of liveWorkItemKeys(session)) {
     const item = session.state.items.get(key)

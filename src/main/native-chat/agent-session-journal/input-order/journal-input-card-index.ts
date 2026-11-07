@@ -135,33 +135,28 @@ export class JournalInputCardIndex {
     return gatePlaces(mergeInputPlaces(current, this.released.query(place)), this.facts.failed)
   }
 
-  /** A reopened chat's cards index as a fresh open's first ensure does: no host floor yet. */
-  reopen(): void {
-    this.facts.initialized = false
+  /** A reopened chat's live cards index as a fresh open's first ensure does, with no host floor
+   *  yet; retained history keeps its saved facts. */
+  reopen(state: JournalReducerState): void {
     this.facts.floor = null
+    this.facts.initialized = true
+    this.repause(state, this.pauseInputs(state))
+    const overlays = [...this.facts.overlayCards()].filter(
+      (c) => !state.queue.cards.has(c.messageId)
+    )
+    for (const card of [...overlays, ...this.facts.currentCards()]) {
+      this.indexCard(state, card)
+    }
   }
 
   ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
     if (floor !== undefined) {
       this.facts.floor = floor
     }
-    const marks = state.queuePauseMarks
-    this.facts.failed =
-      failedQueueTurnSequence(
-        journalInputOrder(state).newestTurn.failure(),
-        marks.resumedSequence
-      ) > 0
-    const pauseInputs = journalInputCardPauseInputs(
-      state.epoch,
-      marks,
-      state.latestAcceptedTurnSequence,
-      this.facts.floor
-    )
+    const pauseInputs = this.pauseInputs(state)
     const first = !this.facts.initialized
     if (first || !this.facts.pauseKeyMatches(pauseInputs)) {
-      this.facts.pauseKey = pauseInputs
-      this.facts.replaceClearMembers(pauseInputs[2] ? (marks.cleared?.messageIds ?? []) : [])
-      this.facts.pauses = journalInputCardPauses(state.epoch, pauseInputs)
+      this.repause(state, pauseInputs)
       if (first) {
         this.facts.initialized = true
         for (const card of this.facts.overlayCards()) {
@@ -180,6 +175,29 @@ export class JournalInputCardIndex {
         }
       }
     }
+  }
+
+  private pauseInputs(state: JournalReducerState): ReturnType<typeof journalInputCardPauseInputs> {
+    this.facts.failed =
+      failedQueueTurnSequence(
+        journalInputOrder(state).newestTurn.failure(),
+        state.queuePauseMarks.resumedSequence
+      ) > 0
+    return journalInputCardPauseInputs(
+      state.epoch,
+      state.queuePauseMarks,
+      state.latestAcceptedTurnSequence,
+      this.facts.floor
+    )
+  }
+
+  private repause(
+    state: JournalReducerState,
+    pauseInputs: ReturnType<typeof journalInputCardPauseInputs>
+  ): void {
+    this.facts.pauseKey = pauseInputs
+    this.facts.replaceClearMembers(pauseInputs[2]?.messageIds ?? [])
+    this.facts.pauses = journalInputCardPauses(state.epoch, pauseInputs)
   }
 
   version(): number {
