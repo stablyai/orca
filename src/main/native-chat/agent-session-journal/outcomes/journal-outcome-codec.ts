@@ -1,3 +1,4 @@
+import { admitOutcomeFormat3, JOURNAL_OUTCOME_FORMAT_3 } from './journal-outcome-format-3'
 import {
   admitOutcomeFormat2,
   JOURNAL_OUTCOME_FORMAT_2,
@@ -42,14 +43,15 @@ export function encodeJournalOutcomes(
   state: JournalReducerState,
   changes: readonly JournalEntryChange[],
   before: Record<string, unknown>,
-  untracked: (key: string, value: unknown) => unknown
+  untracked: (key: string, value: unknown) => unknown,
+  format: 2 | 3 = JOURNAL_OUTCOME_FORMAT_2
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
   const next = scalars(state)
   const values = changes.map((entry) => ({
     seq: state.lastSequence,
     field: entry.path,
     key: JSON.stringify(entry.key),
-    format: JOURNAL_OUTCOME_FORMAT_2,
+    format,
     json: entry.deleted
       ? 'null'
       : entry.path === 'items'
@@ -73,7 +75,7 @@ export function encodeJournalOutcomes(
         seq: state.lastSequence,
         field: '$',
         key: JSON.stringify(key),
-        format: JOURNAL_OUTCOME_FORMAT_2,
+        format,
         json: JSON.stringify(value),
         deleted: false
       })
@@ -81,8 +83,9 @@ export function encodeJournalOutcomes(
   }
   for (const value of values) {
     // A reducer field format 1 has no home for needs a new outcome format, never a silent change.
-    if (admitOutcomeFormat2(value) === 'unknown') {
-      throw new Error(`journal outcome format 2 does not store ${value.field} ${value.key}`)
+    const admit = format === JOURNAL_OUTCOME_FORMAT_3 ? admitOutcomeFormat3 : admitOutcomeFormat2
+    if (admit(value) === 'unknown') {
+      throw new Error(`journal outcome format ${format} does not store ${value.field} ${value.key}`)
     }
   }
   return { values, scalars: next }
@@ -130,7 +133,9 @@ function admitJournalOutcome(row: SqliteRow): { value: JournalOutcome; admitted:
         ? admitOutcomeFormat1(value)
         : value.format === JOURNAL_OUTCOME_FORMAT_2
           ? admitOutcomeFormat2(value)
-          : 'unknown'
+          : value.format === JOURNAL_OUTCOME_FORMAT_3
+            ? admitOutcomeFormat3(value)
+            : 'unknown'
     if (admitted === 'unknown') {
       throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer outcome')
     }
