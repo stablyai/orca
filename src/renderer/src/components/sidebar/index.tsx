@@ -27,6 +27,9 @@ import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 
 // Keep the Agents activity pipeline out of the workspace view’s initial bundle.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
+const ConversationHistory = lazyWithRetry(
+  () => import('../right-sidebar/ai-vault/panel/AiVaultPanel')
+)
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
@@ -69,7 +72,7 @@ function Sidebar({
   const repos = useAppStore((s) => s.repos)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
-  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
+  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'conversations')
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
@@ -158,7 +161,7 @@ function Sidebar({
   const drawerCoversSeam =
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
 
-  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody !== 'workspaces')
   // A collapsed sidebar takes no drops.
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -188,7 +191,14 @@ function Sidebar({
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
-              {sidebarBody === 'agents' ? (
+              {sidebarBody === 'conversations' ? (
+                <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
+                  <ConversationHistory
+                    conversationNavigation
+                    onSessionOpened={closeWorkspaceBoard}
+                  />
+                </React.Suspense>
+              ) : sidebarBody === 'agents' ? (
                 <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
                   <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
                     <SidebarAgentsList
