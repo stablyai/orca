@@ -91,6 +91,12 @@ describe('edge cohort', () => {
       inEdgeCohort(edgeConfig({ rolloutPercent: 100, regions: new Set(['us-central1', 'asia-east2']) }), host, 'asia-east2')
     ).toBe(true)
     expect(inEdgeCohort(edgeConfig({ rolloutPercent: 0 }), host, 'us-central1')).toBe(false)
+    // An allowed account brings every host it has, in any region; deny still wins.
+    const team = edgeConfig({ allowUsers: new Set(['user-team']), regions: new Set() })
+    expect(inEdgeCohort(team, host, 'asia-east2', 'user-team')).toBe(true)
+    expect(inEdgeCohort(team, host, 'us-central1', 'user-other')).toBe(false)
+    expect(inEdgeCohort(team, host, 'us-central1')).toBe(false)
+    expect(inEdgeCohort({ ...team, denyHosts: new Set([host]) }, host, 'us-central1', 'user-team')).toBe(false)
     expect(inEdgeCohort(edgeConfig({ allowHosts: new Set([host]), regions: new Set() }), host, 'asia-east2')).toBe(true)
     expect(
       inEdgeCohort(edgeConfig({ rolloutPercent: 100, allowHosts: new Set([host]), denyHosts: new Set([host]) }), host, 'us-central1')

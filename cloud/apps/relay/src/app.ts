@@ -496,7 +496,7 @@ export function createRelayApp(
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
-      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion)
+      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
     if (edge?.pushes && !toEdge) {
       // Any lane below may re-place a host whose row is on the edge; its devices come back first.
       try {

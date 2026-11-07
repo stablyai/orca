@@ -164,6 +164,8 @@ const EnvSchema = z.object({
   ORCA_RELAY_EDGE_ROLLOUT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
   ORCA_RELAY_EDGE_ALLOW_HOSTS: z.string().default(''),
   ORCA_RELAY_EDGE_DENY_HOSTS: z.string().default(''),
+  // Comma-separated account ids (relay token `sub`); every host of these accounts joins.
+  ORCA_RELAY_EDGE_ALLOW_USERS: z.string().default(''),
   ORCA_RELAY_EDGE_REGIONS: z.string().default(RELAY_DEFAULT_REGION),
   // Set: the edge keeps host data in its objects, so moves push and export it (signed with this
   // key, never the assignment lease key). Never unset while rows are on the edge.
@@ -449,6 +451,19 @@ function hostIdList(value: string, name: string): Set<string> {
   return new Set(ids)
 }
 
+function userIdList(value: string): Set<string> {
+  const ids = value
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+  for (const id of ids) {
+    if (id.length > 128 || !/^[A-Za-z0-9_.:|-]+$/.test(id)) {
+      throw new Error('ORCA_RELAY_EDGE_ALLOW_USERS has an invalid account id')
+    }
+  }
+  return new Set(ids)
+}
+
 function parseEdgeConfig(
   parsed: z.infer<typeof EnvSchema>,
   publicUrl: string
@@ -474,6 +489,7 @@ function parseEdgeConfig(
     adminSigningKey: new TextEncoder().encode(adminKey),
     rolloutPercent: parsed.ORCA_RELAY_EDGE_ROLLOUT_PERCENT,
     allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),
+    allowUsers: userIdList(parsed.ORCA_RELAY_EDGE_ALLOW_USERS),
     denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),
     regions: new Set(regions)
   }

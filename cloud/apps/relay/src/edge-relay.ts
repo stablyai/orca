@@ -25,6 +25,8 @@ export type EdgeRelayConfig = {
   // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100.
   rolloutPercent: number
   allowHosts: ReadonlySet<string>
+  // Accounts (relay token `sub`) whose hosts all join, e.g. the team's own accounts.
+  allowUsers?: ReadonlySet<string>
   denyHosts: ReadonlySet<string>
   // Regions whose hosts may join the cohort, by the region the host asked for.
   regions: ReadonlySet<RelayRegion>
@@ -34,14 +36,16 @@ export function edgeCohortBucket(relayHostId: string): number {
   return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0) % 100
 }
 
-// Deny wins, then allow, then region scope and the rollout share.
+// Deny wins, then allow (host or account), then region scope and the rollout share.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
-  region: RelayRegion | undefined
+  region: RelayRegion | undefined,
+  userId?: string
 ): boolean {
   if (config.denyHosts.has(relayHostId)) return false
   if (config.allowHosts.has(relayHostId)) return true
+  if (userId !== undefined && config.allowUsers?.has(userId)) return true
   if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) return false
   return edgeCohortBucket(relayHostId) < config.rolloutPercent
 }

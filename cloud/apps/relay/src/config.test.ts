@@ -349,6 +349,7 @@ describe('relay edge configuration', () => {
       adminSigningKey: new TextEncoder().encode('edge-admin-key-with-at-least-32-bytes!!'),
       rolloutPercent: 0,
       allowHosts: new Set(),
+      allowUsers: new Set(),
       denyHosts: new Set(),
       regions: new Set(['us-central1'])
     })
@@ -362,16 +363,19 @@ describe('relay edge configuration', () => {
       ORCA_RELAY_EDGE_ROLLOUT_PERCENT: '10',
       ORCA_RELAY_EDGE_ALLOW_HOSTS: 'abcdefghijklmnop, ABCDEFGHIJKLMNOP',
       ORCA_RELAY_EDGE_DENY_HOSTS: 'zzzzzzzzzzzzzzzz',
+      ORCA_RELAY_EDGE_ALLOW_USERS: ' user_01ABC , 6b1f-uuid ',
       ORCA_RELAY_EDGE_REGIONS: 'us-central1,asia-east2'
     }
     expect(loadRelayConfig(env).edge).toMatchObject({
       rolloutPercent: 10,
       allowHosts: new Set(['abcdefghijklmnop', 'ABCDEFGHIJKLMNOP']),
+      allowUsers: new Set(['user_01ABC', '6b1f-uuid']),
       denyHosts: new Set(['zzzzzzzzzzzzzzzz']),
       regions: new Set(['us-central1', 'asia-east2'])
     })
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_ROLLOUT_PERCENT: '101' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_ALLOW_HOSTS: 'short' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_ALLOW_USERS: 'a b' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_REGIONS: 'europe-west1' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com/path' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://c1.relay.example.com' })).toThrow()
