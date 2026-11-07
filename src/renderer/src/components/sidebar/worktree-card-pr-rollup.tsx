@@ -161,8 +161,9 @@ export function WorktreeCardPrRollup({
     closed: { ...hidden.closed }
   }
   const hasHidden = STATE_ORDER.some((key) => hidden[key].count > 0)
-  const showOwn = !ownRepresentsDescendant || !hasHidden
-  if (showOwn) {
+  if (ownRepresentsDescendant && own?.state && hidden[own.state].count > 0) {
+    merge(states[own.state], { count: 0, review: own })
+  } else {
     add(states, own)
   }
   const shown = STATE_ORDER.filter((key) => states[key].count > 0)
@@ -186,9 +187,7 @@ export function WorktreeCardPrRollup({
           ) : null}
         </span>
       ))}
-      {showOwn && own && !own.state ? (
-        <ReviewIcon review={own} className="size-3 shrink-0" />
-      ) : null}
+      {own && !own.state ? <ReviewIcon review={own} className="size-3 shrink-0" /> : null}
     </>
   )
   const buttonClass =
@@ -239,7 +238,7 @@ export function WorktreeCardPrRollup({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent onClick={(event) => event.stopPropagation()} align="end">
-        {showOwn && own ? (
+        {own ? (
           <DropdownMenuItem onClick={onOpenOwn}>
             <ReviewIcon review={own} className="size-3" />
             {getReviewLabel(own)} #{own.number}: {own.title}

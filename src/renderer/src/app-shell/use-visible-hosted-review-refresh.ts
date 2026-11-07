@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { getWorktreeCardStyle } from '../../../shared/worktree/card-style'
 import { useAppStore } from '@/store'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -19,7 +20,10 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       const state = useAppStore.getState()
       const selectedOnly = isWebClientLocation()
       scheduler.update([
-        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
+        // Collapsed review rollups also need background reads on paired clients; this shared queue bounds them.
+        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, {
+          selectedOnly: selectedOnly && getWorktreeCardStyle(state.settings) !== 'experimental-2'
+        }),
         ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
       ])
     }
