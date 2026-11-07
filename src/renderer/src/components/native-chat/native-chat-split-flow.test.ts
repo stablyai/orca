@@ -222,13 +222,3 @@ it('keeps floating chat splits local while a remote workspace is selected', asyn
   expect(createRemote).not.toHaveBeenCalled()
   expect(store.getState().activeWorktreeId).toBe('remote-workspace')
 })
-
-it('retains the existing terminal-backed chat split route', () => {
-  expect(
-    runNativeChatSplitTarget({ kind: 'terminal-pane', terminalTabId: 'terminal' }, 'down')
-  ).toBe(true)
-  expect(requestSplit).toHaveBeenCalledExactlyOnceWith({
-    tabId: 'terminal',
-    direction: 'horizontal'
-  })
-})

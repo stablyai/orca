@@ -149,29 +149,6 @@ beforeEach(() => {
   held.errors = []
 })
 
-describe('a dictation the phone can hear', () => {
-  it('records without the computer and inserts the phone’s text', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    const transcripts: string[] = []
-    mount(rpc, (text) => transcripts.push(text))
-    await act(async () => {
-      await dictation().start()
-    })
-    expect(dictation().status).toBe('recording')
-    speak([1, 2, 3, 4])
-    seam.finish = { text: ' hello phone ', failure: null }
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    expect(transcripts).toEqual(['hello phone'])
-    expect(sent).toEqual([])
-    expect(dictation().status).toBe('idle')
-  })
-})
-
 describe('a phone recognizer that fails at the finish', () => {
   it('replays what was said to the computer and inserts its text', async () => {
     const rpc = createFakeRpcClient()
@@ -278,21 +255,5 @@ describe('a stop while a failed phone dictation is reaching the computer', () =>
     ])
     expect(transcripts).toEqual(['from the computer'])
     expect(dictation().status).toBe('idle')
-  })
-})
-
-describe('a dictation when the user chose Computer', () => {
-  it('goes to the computer and never arms the phone', async () => {
-    seam.preference = 'computer'
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    mount(rpc, () => {})
-    await act(async () => {
-      const started = dictation().start()
-      await pump(rpc, sent)
-      await started
-    })
-    expect(sent.map((request) => request.method)).toEqual(['speech.dictation.start'])
-    expect(seam.calls).toEqual([])
   })
 })

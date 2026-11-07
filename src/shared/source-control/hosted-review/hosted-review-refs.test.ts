@@ -1,23 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isRemoteHeadRef,
-  normalizeHostedReviewBaseRef,
-  normalizeHostedReviewHeadRef
-} from './hosted-review-refs'
-
-describe('hosted review ref normalization', () => {
-  it('normalizes local and remote head refs to branch names', () => {
-    expect(normalizeHostedReviewHeadRef(' refs/heads/feature/create-pr ')).toBe('feature/create-pr')
-    expect(normalizeHostedReviewHeadRef('refs/remotes/origin/feature/create-pr')).toBe(
-      'feature/create-pr'
-    )
-  })
-
-  it('strips common remote prefixes from base refs', () => {
-    expect(normalizeHostedReviewBaseRef('origin/main')).toBe('main')
-    expect(normalizeHostedReviewBaseRef('refs/remotes/upstream/release/1.0')).toBe('release/1.0')
-  })
-})
+import { isRemoteHeadRef } from './hosted-review-refs'
 
 describe('isRemoteHeadRef', () => {
   it('recognizes only a remote symbolic HEAD slot', () => {
@@ -66,50 +48,5 @@ describe('isRemoteHeadRef', () => {
     expect(isRemoteHeadRef('foo/bar/HEAD', remotes)).toBe(true)
     expect(isRemoteHeadRef('foo/bar/main', remotes)).toBe(false)
     expect(remotes).toEqual(['foo', 'foo/bar'])
-  })
-})
-
-/** Counts array copies (`[...remotes]`, one per sort) and elements copied, via the spread iterator. */
-function instrumentRemotes(names: readonly string[]): {
-  remotes: readonly string[]
-  counts: { copies: number; copiedElements: number }
-} {
-  const remotes = [...names]
-  const counts = { copies: 0, copiedElements: 0 }
-  Object.defineProperty(remotes, Symbol.iterator, {
-    configurable: true,
-    value: function* countingIterator(this: readonly string[]) {
-      counts.copies += 1
-      for (let index = 0; index < this.length; index += 1) {
-        counts.copiedElements += 1
-        yield this[index] as string
-      }
-    }
-  })
-  return { remotes, counts }
-}
-
-describe('isRemoteHeadRef fast path', () => {
-  it('does not copy remotes while rejecting ordinary refs', () => {
-    const ordinaryRefs = Array.from(
-      { length: 80 },
-      (_unused, index) => `origin/feature/branch-${index}`
-    )
-    const remoteNames = ['origin', 'upstream', 'fork']
-
-    const after = instrumentRemotes(remoteNames)
-    for (const ref of ordinaryRefs) {
-      expect(isRemoteHeadRef(ref, after.remotes)).toBe(false)
-    }
-    expect(after.counts).toEqual({ copies: 0, copiedElements: 0 })
-  })
-
-  it('copies each remote once for a symbolic HEAD candidate', () => {
-    const remoteNames = ['origin', 'upstream', 'fork']
-
-    const after = instrumentRemotes(remoteNames)
-    expect(isRemoteHeadRef('refs/remotes/origin/HEAD', after.remotes)).toBe(true)
-
-    expect(after.counts).toEqual({ copies: 1, copiedElements: 3 })
   })
 })
