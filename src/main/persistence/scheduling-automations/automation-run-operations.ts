@@ -227,7 +227,11 @@ export function updateAutomationRun(
     ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
-      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
+    // Later updates (completion) keep the dispatch's note.
+    ...(result.setupSkippedReason === 'setup-changed'
+      ? { setupSkippedReason: result.setupSkippedReason }
+      : {})
   }
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>

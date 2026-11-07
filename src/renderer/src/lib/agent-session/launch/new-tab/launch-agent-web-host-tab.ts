@@ -1,3 +1,5 @@
+import { agentTabLaunchStore } from './launch-agent-execution-context'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -36,6 +38,7 @@ import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-
 export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
+  workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
   cwd?: string | null
@@ -205,10 +208,10 @@ export async function launchAgentInWebHostTab(args: {
             })
           } else {
             // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-              kind: 'git-worktree',
-              worktreeId
-            })
+            const preferences = await ensureAgentLaunchPreferences(
+              agentTabLaunchStore(useAppStore.getState(), args),
+              { kind: 'git-worktree', worktreeId }
+            )
             startup = args.buildStartup(preferences.agentLaunchChoices)
           }
         } catch (error) {

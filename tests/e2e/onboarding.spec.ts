@@ -102,16 +102,14 @@ async function expectAddProjectDialog(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: ADD_PROJECT_DIALOG_HEADING })).toBeVisible()
 }
 
-async function continueFromPostNotificationsToRepo(page: Page): Promise<void> {
-  if (await page.getByRole('heading', { name: ADD_PROJECT_DIALOG_HEADING }).isVisible()) {
-    return
-  }
+async function completeOnboardingIntoWorkspace(page: Page): Promise<void> {
   await continueThroughOptionalTaskSourcesAndWindowsTerminal(page)
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
   await expectOnboardingProgress(page, /^[456] of [456]$/)
-  await expect(onboardingFooterButton(page, /^Add your first project\b/)).toBeVisible()
+  await expect(onboardingFooterButton(page, /^Continue\b/)).toBeVisible()
   await continueOnboarding(page)
-  await expectAddProjectDialog(page)
+  await expect(page.locator('[data-onboarding-overlay]')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: ADD_PROJECT_DIALOG_HEADING })).toHaveCount(0)
 }
 
 async function continueThroughOptionalTaskSourcesAndWindowsTerminal(page: Page): Promise<void> {
@@ -251,7 +249,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await expectOnboardingCustomSoundOption(orcaPage)
 
-    await continueFromPostNotificationsToRepo(orcaPage)
+    await completeOnboardingIntoWorkspace(orcaPage)
 
     await expect
       .poll(
@@ -499,7 +497,7 @@ test.describe('Onboarding flow', () => {
 
     await chooseOnboardingNotificationSound(orcaPage, /^Ding$/i)
 
-    await continueFromPostNotificationsToRepo(orcaPage)
+    await completeOnboardingIntoWorkspace(orcaPage)
     await expect
       .poll(
         async () => {
@@ -543,7 +541,7 @@ test.describe('Onboarding flow', () => {
   test('final notification step can be dismissed via Escape or click-off', async ({ orcaPage }) => {
     await chooseOnboardingAgentSurface(orcaPage)
 
-    // On the final step, primary hands off to Add Project; Escape/click-off must still offer skip confirmation.
+    // On the final step, Continue closes into the workspace; Escape/click-off must still offer skip confirmation.
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await continueFromThemeToNotifications(orcaPage)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
@@ -26,20 +27,19 @@ import {
 
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
-export { STEPS } from './use-onboarding-flow-types'
-export type { AgentSurface, StepId, StepNumber } from './use-onboarding-flow-types'
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
   onOnboardingChange: (state: OnboardingState) => void
 ) {
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
+  const selectedWorkspaceId = useAppStore(selectOnboardingWorkspaceId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -113,7 +113,6 @@ export function useOnboardingFlow(
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
-      // Count changed picks, excluding repeated clicks on the current agent.
       const prev = selectedAgentRef.current
       setSelectedAgent(value)
       if (value === null || value === prev) {
@@ -268,7 +267,7 @@ export function useOnboardingFlow(
     yoloPermissionsChosen,
     theme,
     settings,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     onboardingChecklist: onboarding.checklist,
     onOnboardingChange,
     setError
@@ -283,6 +282,7 @@ export function useOnboardingFlow(
     trackTaskSourcesSnapshot,
     settings,
     persistCurrentStep,
+    selectedWorkspaceId,
     closeWith,
     openModal,
     getNextStepIndex,
@@ -293,13 +293,13 @@ export function useOnboardingFlow(
     agentSurface,
     themeLookBaseline,
     setTheme,
-    updateSettings,
+    updateSettings: updateSettingsOrThrow,
     skipOptions
   })
 
   return {
     settings,
-    updateSettings,
+    updateSettings: useAppStore((s) => s.updateSettings),
     stepIndex,
     progressSteps,
     progressStepIndex,
@@ -317,6 +317,7 @@ export function useOnboardingFlow(
     themeLookBaseline,
     setThemeLookBaseline,
     busyLabel,
+    hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
     refreshDetectedAgents,
