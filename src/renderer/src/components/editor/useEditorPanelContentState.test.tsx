@@ -172,6 +172,10 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       ...createTestStore().getState(),
       settings: null,
+      repos: [{ id: 'repo-1', path: '/repo', hostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
     })

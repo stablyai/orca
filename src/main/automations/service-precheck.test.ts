@@ -176,7 +176,10 @@ describe('AutomationService prechecks', () => {
       run,
       target: { ok: true, cwd: '/repo', repo: store.getRepo('r1')! },
       dispatcher: headlessDispatcher,
-      runs: createAutomationRunWriter(store, null),
+      transition: (result) => ({
+        applied: true,
+        run: createAutomationRunWriter(store, null).updateRun({ runId: run.id, ...result })
+      }),
       runPrecheck: () => service.runPrecheck(automation.id, run.id),
       markDispatchResult: (result) => service.markDispatchResult(result),
       watchRun: () => {}

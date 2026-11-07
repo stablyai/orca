@@ -1,3 +1,4 @@
+import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-workspace-trust-decision'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
@@ -86,7 +87,7 @@ export async function connectIpcPty(
         ? null
         : awaitAgentWorkspaceTrustDecision({
             launchAgent: options.launchAgent ?? transportOptions.launchAgent,
-            workspaceId: transportOptions.worktreeId,
+            workspaceId: resolveAgentWorkspaceTrustOwner(transportOptions),
             connectionId: transportOptions.connectionId
           })
     // Bounded: an unanswered prompt releases with today's default (agent-workspace-trust-decision-prompt).

@@ -8,7 +8,7 @@ import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-t
 import {
   terminalPaneHasOtherOwner,
   type UnboundTerminalPaneRetirement
-} from './terminal-pane-retirement-ownership'
+} from './mounting/terminal-pane-retirement-ownership'
 
 /** An exact scoped handle authorizes close; a native hint cannot name its incarnation. */
 export function retireUnboundRuntimeTerminalPane(args: UnboundTerminalPaneRetirement): void {

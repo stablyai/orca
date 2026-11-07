@@ -1,3 +1,4 @@
+import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
@@ -36,6 +37,9 @@ export function buildWorktreePurgeState(
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
+  for (const target of targets) {
+    retireRemovedWorktreeCommitDrafts(target.id, target.hostId)
+  }
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
     return buildFullWorktreePurgeState(s, targets, changedPaneKeys)

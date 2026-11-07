@@ -22,7 +22,7 @@ afterEach(cleanup)
 function forkAction(overrides: Partial<NativeChatForkRowAction> = {}): NativeChatForkRowAction {
   return {
     support: { kind: 'known', fork: 'checkpoint' },
-    pending: false,
+    pendingItemId: null,
     request: vi.fn(),
     ...overrides
   }
@@ -119,7 +119,7 @@ it('keeps the hover row the same on an older turn when unknown support resolves 
     onRevealDiff: () => {}
   }
   const surface = (support: NativeChatForkSurface['support']): NativeChatForkSurface => {
-    const rowAction = { support, pending: false, request: vi.fn() }
+    const rowAction = { support, pendingItemId: null, request: vi.fn() }
     return { ...rowAction, contextFloorSequence: 0, forkableItemIds: new Set(['reply']), rowAction }
   }
   const draw = (fork: NativeChatForkSurface) => (

@@ -13935,7 +13935,8 @@
             "clearNotesFromFile_other": "{{count}} Notizen aus {{path}} löschen?",
             "markResolved": "Als gelöst markieren",
             "keepFile": "Datei behalten",
-            "keepDeletion": "Löschung beibehalten"
+            "keepDeletion": "Löschung beibehalten",
+            "refreshAll": "Alle aktualisieren"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -16970,7 +16971,8 @@
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
-          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
@@ -18295,6 +18297,10 @@
           "actionsUnavailable": "Plugin-Aktionen sind in diesem Client nicht verfügbar.",
           "messageTooLarge": "Die Nachricht überschreitet die Größenbeschränkung.",
           "tooManyRequests": "Zu viele Anfragen."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Diesen Worktree öffnen",
+          "reconnect": "Stelle die Verbindung wieder her, um die Änderungen dieses Worktrees zu sehen."
         }
       },
       "link": {
@@ -21014,6 +21020,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "In {{value0}} gestartet",
     "actionSaveFailed": "Diese Aktion konnte nicht gespeichert werden. In den Einstellungen erneut speichern.",
     "discard": {
       "deleteUntrackedFileDescription": "Diese nicht versionierte Datei wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",

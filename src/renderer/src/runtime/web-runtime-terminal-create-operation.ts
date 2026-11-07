@@ -1,3 +1,4 @@
+import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -20,7 +21,6 @@ import {
   recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -45,7 +45,10 @@ import {
 } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
-import { agentSessionCreateRequest } from './agent-session-create-request'
+import {
+  createAgentSessionTrustWorktreeOptions,
+  agentSessionCreateRequest
+} from './agent-session-create-request'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalOnHostArgs
@@ -92,6 +95,7 @@ export async function createWebRuntimeSessionTerminalResult(
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+      const trustOptions = createAgentSessionTrustWorktreeOptions(args.trustWorktreeId)
       let legacyAlreadyPlacedInGroup = false
       // Keep legacy placement until structured creation supports afterTabId.
       // Focus belongs to this client; headless hosts have no renderer.
@@ -140,6 +144,7 @@ export async function createWebRuntimeSessionTerminalResult(
                       params: withAgentSessionCreateOperationId(
                         {
                           ...(await keyboardOptions(environmentId)),
+                          ...(args.trustWorktreeId ? await trustOptions(environmentId) : {}),
                           ...agentSessionCreateRequest({
                             ...args,
                             agent,
@@ -170,31 +175,13 @@ export async function createWebRuntimeSessionTerminalResult(
           : {}),
         legacy: async () => {
           const legacyAgentLaunch = await args.legacyAgentLaunch?.()
-          const legacy = legacyAgentLaunch ?? args
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
-            params: {
-              worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
-              targetGroupId: args.targetGroupId,
-              ...(legacy.command ? { command: legacy.command } : {}),
-              cwd: args.cwd,
-              ...(legacy.env ? { env: legacy.env } : {}),
-              ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-              startupCommandDelivery: legacy.startupCommandDelivery,
-              ...(legacy.launchConfig ? { launchConfig: legacy.launchConfig } : {}),
-              ...(legacyAgentLaunch?.agentPrompt
-                ? { agentPrompt: legacyAgentLaunch.agentPrompt }
-                : {}),
-              ...(args.launchToken ? { launchToken: args.launchToken } : {}),
-              ...(args.agent ? { agent: args.agent } : {}),
-              ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-              ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-              // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
-              activate: false,
-              select: args.activate !== false,
-              navigation: 'caller'
-            },
+            params: buildLegacyAgentCreateTerminalParams(
+              args,
+              legacyAgentLaunch,
+              args.trustWorktreeId ? await trustOptions(environmentId) : {}
+            ),
             timeoutMs: 15_000
           })
           const legacyCreated = unwrapRuntimeRpcResult(

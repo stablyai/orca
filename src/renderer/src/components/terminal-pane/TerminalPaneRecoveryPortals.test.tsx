@@ -7,7 +7,7 @@ import {
   CALM_STATUS_MIN_VISIBLE_MS,
   CALM_STATUS_REVEAL_DELAY_MS
 } from '../../../../shared/calm-status-reveal'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 import { resetRemoteServerNoticeClaimsForTests } from './remote-server-notice-claims'
 
 const outage = vi.hoisted((): { environmentId: string | null } => ({ environmentId: 'env-1' }))

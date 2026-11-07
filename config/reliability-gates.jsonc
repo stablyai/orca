@@ -6803,23 +6803,23 @@
       "invariant": "Within one terminal tab, each PTY has at most one layout leaf, pane manager surface, and xterm renderer owner. Restore and remote mirroring must normalize duplicate ownership before replay while retaining active-leaf focus, scrollback, pane authority, agent metadata, and distinct sibling PTYs.",
       "oracle": "Launch Orca with a real daemon PTY running a synchronized full-screen stream, close the desktop client without killing the daemon process, seed the persisted tab layout with two leaves bound to that PTY, and relaunch. Hide the restored tab behind a sibling and reveal it, then require the stream to remain visible with exactly one manager pane, one xterm DOM node, one root leaf, one PTY binding, and one unique PTY. Component contracts cover persisted replay, rootless and repeated-leaf layouts, metadata repair, and deeply nested input. Retained store contracts cover live/future authority transfer onto a retained leaf and preservation of a prior detach destination.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/workspace-layout/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/layout/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+        "src/shared/workspace-layout/terminal-layout-pty-ownership-depth.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/terminal-layout-pty-ownership.test.ts",
         "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
         "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
+          "file": "src/shared/workspace-layout/terminal-layout-pty-ownership-depth.test.ts",
           "assertions": ["prunes deeply nested duplicate ownership without recursive stack growth"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/terminal-layout-pty-ownership.test.ts",
           "assertions": [
             "keeps the active leaf and prunes the stale surface plus its metadata",
             "is idempotent and preserves one owner across PTY and focus permutations"
@@ -6904,11 +6904,11 @@
       "invariant": "A terminal split creates and activates its renderer pane before an inherited-CWD lookup settles, starts its PTY only after the resolved directory is available, and cannot be externally detached while that deferred spawn remains unbound. A whole-tab remount or worktree rehome preserves the same stable pane's CWD promise and admitted local pre-connect bytes in order until a successor binds or the intent is definitively abandoned; stale owners cannot append or clear the successor's record. Other unbound panes preserve resolved cwd as startupCwd when detached. Bounded pre-connect input and later live local input share byte order, and teardown settles acknowledged writes without creating or rebinding a stale PTY. A disconnected or detached pending connect cannot bind its late fresh spawn, report its late failure through current callbacks, or ID-retire a newer same-ID owner; rejecting a stale direct-SSH spawn also releases the matching deferred-CWD fence. Natural exit cannot deliver queued work into a reused PTY id. Bound and remote-runtime splits remain owned by their execution host.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Hold CWD resolution behind a controllable promise, invoke the production split path, and require manager.splitPane plus split telemetry before resolving it. Before PTY bind, require both cwd-pending and cwd-resolved deferred detach attempts to return null without layout, pane, tab, ownership, or focus mutation; separately require resolved cwd on an allowed unbound detach and unchanged persisted/live PTY adoption. Exercise the stable-pane handoff registry through repeated remounts and a worktree rehome, requiring the identical CWD promise, ordered ordinary/acknowledged/immediate seed replay, stale-owner fencing, 64-record/15-second bounds, and discard on bind, failure, or explicit close. Rotate a mocked direct-SSH authority while its delayed spawn is in flight, reject and disconnect the stale PTY claim, then require exactly one deferred-CWD cleanup when the delayed connect settles. At the local IPC PTY boundary, require zero connect calls while pending, the resolved CWD in spawn and local recovery metadata, one shared FIFO across seeded/new pre-connect and live ordinary/acknowledged/immediate input, prompt predecessor acknowledged-promise settlement on teardown, retirement of an unowned late fresh spawn, preservation of a newer same-ID owner, and zero stale delivery after failure, close, destroy, detach, natural exit, or same-id reuse. Capture callback exceptions must not change admission results. In visible Electron, press the real split shortcut for 3 warmup cycles, then after a cold inherited-CWD interval for each of 20 measured cycles, require an exact clean revision identity, complete focus/CWD/spawn/bind/fixture/input/echo attribution, distinct child PTYs, pane count, and child exits for every cycle; a timed-out, missing-event, or cleanup-aborted run must publish no headline latency and fail.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-main-probe.ts tests/e2e/terminal-split-activation-latency-phases.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/layout/split/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-main-probe.ts tests/e2e/terminal-split-activation-latency-phases.ts --reporter=dot",
         // Historical evidence maps to the surviving command below.
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts --reporter=dot",
         // Historical evidence maps to the surviving command below.
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/layout/split/deferred-split-pane-handoff.test.ts --reporter=dot",
         // Historical schema-v1 evidence records only; their labels do not verify the checkout or harness.
         "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -6919,20 +6919,21 @@
         "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-073e6c7b0eb-headful-clean ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-073e6c7b0eb-headful-clean.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts",
-        "src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-with-inherited-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/input/pty-preconnect-input-buffer.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-input-write.test.ts",
-        "src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/deferred-split-pane-handoff.test.ts",
         "tests/e2e/terminal-split-activation-latency-main-probe.ts",
         "tests/e2e/terminal-split-activation-latency-phases.ts",
         "tests/e2e/terminal-split-activation-latency.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-with-inherited-cwd.test.ts",
           "assertions": [
             "creates and records the split before pending CWD resolution",
             "passes the resolved CWD promise without reviving a stale manager",
@@ -6941,7 +6942,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts",
           "assertions": [
             "preserves a deferred split fence when OSC 7 updates cwd",
             "clears a settled deferred entry only for matching promise identity",
@@ -6949,7 +6950,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts",
           "assertions": [
             "rejects a deferred split while inherited CWD is pending without mutation",
             "continues rejecting after CWD resolves until PTY bind",
@@ -6983,7 +6984,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/split/deferred-split-pane-handoff.test.ts",
           "assertions": [
             "hands the same cwd promise and buffered input to a remounted leaf in order",
             "keeps input across repeated remounts and fences stale owners",
@@ -9022,13 +9023,15 @@
       "invariant": "When output is queued during a focus or visibility transition, Orca records the pre-flush viewport intent before xterm parses backlog writes, so a follow-output terminal stays at the bottom and a pinned terminal keeps its prior position.",
       "oracle": "Unit tests require exactly one intent sync before each queued-output flush. The Electron test injects a transient top-of-buffer xterm wobble during refocus and requires every presented scrollbar frame, including the final rendered output, to remain at the bottom.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
         "pnpm exec electron-vite build --mode e2e"
       ],
-      "testFiles": ["src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts"
+      ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
           "assertions": [
             "window-wake recovery synchronizes viewport intent exactly once before flushing queued output",
             "heavy visibility resume synchronizes intent exactly once before flushing queued output"
@@ -9043,7 +9046,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
           "result": "passed",
           "durationSeconds": 0.096,
-          "summary": "14 tests passed, including exact sync count and pre-flush ordering for wake and heavy visibility resume."
+          "summary": "14 tests passed, including exact sync count and pre-flush ordering for wake and heavy visibility resume.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -10555,11 +10559,11 @@
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Deterministic tests cover bounded stale-handle replacement, suspended heartbeat clocks, cold and established subscription failure, ten partition/recovery cycles, automatic-recovery cutoff, manual reconnect, and direct SSH binding retention. They assert SSH state changes leave PTY bindings in place, relay identity survives, and another target/local/WSL/runtime panes remain byte-identical through target snapshot hydration and reconnect. Both remount callbacks consume split-count activity suppression, intentional dispose emits no failure/timeout, and a same-attempt StrictMode remount still owns one timeout. Hydration clears an untrusted PTY hint without clearing its current pending owner, healthy current-authority bindings suppress correction, hydration finalizes once, and reconnect emits no paired close lifecycle. A provider-level session-ID reattach returns an incarnation, then a legacy exit without an incarnation must resolve to that returned identity rather than minting a fallback identity. The shared-control oracle withholds the first encrypted ready frame, starts one RPC, triggers the successful-probe refresh, then requires exactly two client connections, one host request, a successful response, zero pending calls, and zero retained request bytes. Tests also assert one unsubscribe per remote-runtime epoch, observable recovery phases, stable PTY identity, resumed snapshot/output/input, no healthy state before replay, no retry or input after cutoff, a new manual epoch against the same PTY, quiet recovery UI with an explicit Reconnect action, pane-close state cleanup, one stable create mutation id, old-runtime no-retry behavior, cross-process PTY adoption, and bounded in-flight coordination. A focused recovery oracle surfaces two distinct failures through one transport, completes authoritative replay, and requires both matching clear callbacks; pane-state tests require only the active pane's error to render, matching-pane recovery to preserve sibling and unrelated errors, dismissal to re-admit later failures, and distinct storms to retain only the newest eight messages within 24 lines and 4,000 characters. The retained store replacement assertion observes one atomic pane/tab subscriber publication; repeated rotations and snapshot-first pending-restart migration no longer have their direct store examples.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/paired-reconnect-multi-pane-materialization.test.ts src/renderer/src/runtime/paired-reconnect-sidebar-agent-count.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-request.test.ts src/renderer/src/components/terminal-pane/mounting/queued-pane-startup.test.ts src/renderer/src/components/terminal-pane/layout/split/pane-split-startup.test.ts src/renderer/src/components/terminal-pane/parking/one-shot-park-replay.test.ts src/renderer/src/components/terminal-pane/appearance/mounted-terminal-scrollback.test.ts src/renderer/src/components/terminal-pane/mounting/pane-transport-unmount.test.ts src/renderer/src/components/terminal-pane/titles/restored-pane-titles.test.ts src/renderer/src/components/terminal-pane/mounting/queued-initial-cwd.test.ts src/renderer/src/components/terminal-pane/links/pane-link-cwd.test.ts src/renderer/src/components/terminal-pane/mounting/pane-seed-cwd.test.ts src/renderer/src/components/terminal-pane/viewport/pane-visibility-identity.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-detach-attach-handoff.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/shared/remote-runtime/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal/terminal-create-idempotency.test.ts src/main/runtime/terminal/launch/orca-runtime-terminal-create-idempotency.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/runtime/hosts/platform-probe/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
@@ -10570,7 +10574,17 @@
         "src/renderer/src/runtime/paired-reconnect-sidebar-agent-count.test.ts",
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
         "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
-        "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-request.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/queued-pane-startup.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/pane-split-startup.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/one-shot-park-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/appearance/mounted-terminal-scrollback.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/pane-transport-unmount.test.ts",
+        "src/renderer/src/components/terminal-pane/titles/restored-pane-titles.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/queued-initial-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/links/pane-link-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/pane-seed-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/pane-visibility-identity.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-reattach-admission.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-detach-attach-handoff.test.ts",
@@ -10594,7 +10608,8 @@
         "tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts",
         "src/renderer/src/store/slices/terminals-hydration.test.ts",
         "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts",
         "src/main/ipc/ssh/ssh.test.ts",
         "src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts",
         "src/main/runtime/hosts/platform-probe/public-ssh-state.test.ts",
@@ -10697,7 +10712,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts",
           "assertions": [
             "a detached null-PTY leaf remains marked for pending activation before ownership transfer"
           ]
@@ -13848,13 +13863,13 @@
       "invariant": "Ordinary PTY output must never clear the shared WebGL glyph atlas, including synchronized frames, hidden output, renderer-risk glyphs, and alternate-screen entry, redraw, or exit. Affected visible panes still receive pane-local refresh after parsing. Explicit paste, reveal, visibility-resume, system-resume, context-loss, and confirmed-desync recovery remain available and may reset visible renderers.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste recovery. Completed settled tab-reveal repaint is not verified by the remaining unit evidence. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-input-and-repaint.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-input-and-repaint.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-        "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-hidden-replay.test.ts",
@@ -13863,11 +13878,11 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts",
           "assertions": ["preserves the glyph atlas when a fullscreen Space becomes visible"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
           "assertions": [
             "preserves WebGL texture atlases when the active terminal document becomes visible"
           ]
@@ -14032,27 +14047,27 @@
       "oracle": "Hold DEC 2026, invoke explicit atlas recovery, require an atlas clear, screenshot the pane, force a direct renderer present, and assert the bounded pixel diff is immaterial. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
-        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts",
           "assertions": [
             "deduplicates a deferred dpr retry and consumes it after repair succeeds",
             "caps a deferred dpr transition at sixteen animation-frame retries"
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
           "assertions": ["defers a heavy-reveal dpr present until the shared atlas recovery"]
         },
         {
@@ -14069,7 +14084,7 @@
           "result": "passed",
           "durationSeconds": 2,
           "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage. Administrative command maintenance removes deleted unit suites; the executed command and result are historical, with no rerun or equivalence claim.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
         },
         {
           "date": "2026-08-23",
@@ -14141,19 +14156,19 @@
       "oracle": "Paint and capture a coherent frame, hide the real terminal tab, build a distinct full-screen frame while DEC 2026 is held, reveal through production, and require zero atlas clears plus pixel-equivalence with the coherent frame. Then release normally and through the one-second watchdog, requiring both compositor frames to match a direct renderer present.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-runtime-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-hidden-backlog-snapshot.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/viewport/visibility/terminal-visibility-resume.test.ts",
           "assertions": [
             "schedules an atlas-preserving present on a light tab reveal",
             "keeps heavy atlas recovery off a plain window refocus"
@@ -15476,14 +15491,24 @@
       "invariant": "A Quick Command selected for a new terminal remains owned by that tab through a recovery remount, executes exactly once only after the successor PTY binds, and never reaches an unrelated terminal.",
       "oracle": "Arm the E2E-only pre-spawn barrier, click the visible Quick Command, force one recovery generation while the original spawn is blocked, and release it. Require one exact semantic xterm marker, an independently written pane/tab identity file matching the bound live PTY, queue consumption only after bind, and a live interactive sibling canary.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/host-ownership/pty-connection-owner-hydration-backend-retention.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-queued-startup-consume.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/host-ownership/pty-connection-owner-hydration-backend-retention.test.ts src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-queued-startup-consume.test.ts src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-request.test.ts src/renderer/src/components/terminal-pane/mounting/queued-pane-startup.test.ts src/renderer/src/components/terminal-pane/layout/split/pane-split-startup.test.ts src/renderer/src/components/terminal-pane/parking/one-shot-park-replay.test.ts src/renderer/src/components/terminal-pane/appearance/mounted-terminal-scrollback.test.ts src/renderer/src/components/terminal-pane/mounting/pane-transport-unmount.test.ts src/renderer/src/components/terminal-pane/titles/restored-pane-titles.test.ts src/renderer/src/components/terminal-pane/mounting/queued-initial-cwd.test.ts src/renderer/src/components/terminal-pane/links/pane-link-cwd.test.ts src/renderer/src/components/terminal-pane/mounting/pane-seed-cwd.test.ts src/renderer/src/components/terminal-pane/viewport/pane-visibility-identity.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection/host-ownership/pty-connection-owner-hydration-backend-retention.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-queued-startup-consume.test.ts",
-        "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-request.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/queued-pane-startup.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/pane-split-startup.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/one-shot-park-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/appearance/mounted-terminal-scrollback.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/pane-transport-unmount.test.ts",
+        "src/renderer/src/components/terminal-pane/titles/restored-pane-titles.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/queued-initial-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/links/pane-link-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/mounting/pane-seed-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/viewport/pane-visibility-identity.test.ts",
         "tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts"
       ],
       "assertionRefs": [
@@ -15623,7 +15648,7 @@
       "invariant": "Cold parking or restarting a host renderer/runtime never retires a live PTY's runtime-graph leaf, erases a paired viewer's last verified leaf binding merely because the host temporarily publishes pending-handle, or drops the surviving PTY's history writer. A split request for a cold-parked tab replays against its stable source leaf after exact-tab remount without switching workspaces or focusing the tab. The paired stream, input, resize, pane identity, multi-pane routing, checkpoint, and output log converge to the authoritative ready handle; the binding clears only after positive replacement, mismatch, or two consecutive authoritative absence observations without an intervening ready surface.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Cold-park a host-owned pane while a paired client actively views it, require the host manager to unmount, then type through the client and require the same PTY to receive and echo the token without any disconnected sample. Restart a real pinned-port headless runtime while its daemon PTY survives, observe a pending-handle snapshot, require the viewer binding never to become empty, then require rendered output, focused keyboard input, a post-recovery window resize, the pre-restart checkpoint, and post-restart output-log append to reach the same PTY and process before authoritative close clears the binding. Invoke the real `orca-dev terminal split` against a cold-parked renderer-owned tab, require only that tab to acquire and release the existing background-mount lease, complete before the historical timeout, preserve the active worktree/tab/focus, then reveal two rendered panes and type through each while retaining the stable source leaf and PTY. Deterministically require synchronous stable-leaf replay after lifecycle registration and fail closed for a missing or stale leaf. Separately publish multi-pane parked leaves with exact pane runtime IDs and require per-PTY disposal to remove only the retired leaf.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-protocol-compatibility.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-recovery.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/host-parked-pane-remote-viewer.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-parked-cli-split.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -15631,7 +15656,7 @@
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts",
+        "src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-request-routing.test.ts",
         "src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts",
         "src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts",
         "src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts",
@@ -15652,7 +15677,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-request-routing.test.ts",
           "assertions": [
             "a cold-parked split request acquires only the exact tab's background-mount lease and replays synchronously on lifecycle registration",
             "a reminted numeric pane ID resolves through the stable source leaf while a missing or stale leaf fails closed",
