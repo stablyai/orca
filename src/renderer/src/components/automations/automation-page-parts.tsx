@@ -157,3 +157,25 @@ export function AutomationRunErrorNotice({
     </div>
   )
 }
+
+/** The run's new workspace skipped setup because its branch's setup differs from the approved one. */
+export function AutomationRunSetupSkippedNotice({
+  className
+}: {
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div
+      role="status"
+      className={cn(
+        'rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2 text-sm text-status-warning-text',
+        className
+      )}
+    >
+      {translate(
+        'auto.components.automations.AutomationsPage.setupSkippedChanged',
+        "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved when the automation was saved. Save the automation again to review the current commands."
+      )}
+    </div>
+  )
+}

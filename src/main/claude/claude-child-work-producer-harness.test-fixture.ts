@@ -9,7 +9,7 @@ import type { AgentChildWorkReconcileOutcome } from '../../shared/agent-status/c
 import { createAgentStatusStore } from '../../shared/agent-status/store/agent-status-store'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 
 function makeFile(id: string, overrides: Partial<OpenFile> = {}): OpenFile {

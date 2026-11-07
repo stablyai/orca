@@ -1,6 +1,6 @@
 // Send opens under proposed tab IDs used by emulator attach; surface only after main’s frame draws the tab.
 
-import { createBrowserUuid } from './browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { afterPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'

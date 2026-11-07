@@ -30,7 +30,7 @@ import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createCodexAtRestSkillCatalog } from '../../../codex/structured/catalog/codex-at-rest-skills-probe'
 import type { CodexAppServerInvocation } from '../../../codex/app-server/codex-app-server-session'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/at-rest-command-context'
+import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { structuredAgentConfiguredArgs } from '../../../native-chat/structured-agent-configured-args'
 
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))

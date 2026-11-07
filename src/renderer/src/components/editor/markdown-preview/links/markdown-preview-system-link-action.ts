@@ -1,14 +1,14 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { useAppStore } from '@/store/index'
 import {
   absolutePathToFileUri,
   resolveMarkdownLinkTarget
 } from '../../markdown/link-routing/markdown-internal-links'
+import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import type { MarkdownPreviewLinkContext } from './markdown-preview-link-actions'
 import {
   getMarkdownPreviewLinkTarget,
@@ -63,6 +63,7 @@ export function handleMarkdownPreviewSystemLinkClick({
     showLocalPathOpenBlockedToast()
     return true
   }
+  const openInEditor = markdownPreviewLinkEditorOpener(href, filePath, context)
   const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
   if (
     classified?.kind === 'markdown' ||
@@ -83,10 +84,37 @@ export function handleMarkdownPreviewSystemLinkClick({
           )
           return
         }
-        void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
+        void openMarkdownFileLinkWithSystemDefault(cleanUri, openInEditor)
       })
     return true
   }
-  void window.api.shell.openFileUri(parsed.toString(), LOCAL_EXECUTION_HOST_ID)
+  void openMarkdownFileLinkWithSystemDefault(parsed.toString(), openInEditor)
   return true
+}
+
+/** Opens the link in an Orca editor tab when main declines to launch it; null without a workspace. */
+export function markdownPreviewLinkEditorOpener(
+  href: string,
+  filePath: string,
+  context: Pick<
+    MarkdownPreviewLinkContext,
+    | 'sourceRoutingWorktreeId'
+    | 'worktreeRoot'
+    | 'sourceOwner'
+    | 'resolvedSourceRuntimeEnvironmentId'
+    | 'activateMarkdownLink'
+  >
+): (() => void) | null {
+  const { sourceRoutingWorktreeId, worktreeRoot, sourceOwner } = context
+  if (!sourceRoutingWorktreeId) {
+    return null
+  }
+  return () =>
+    void context.activateMarkdownLink(href, {
+      sourceFilePath: filePath,
+      worktreeId: sourceRoutingWorktreeId,
+      worktreeRoot,
+      runtimeEnvironmentId: context.resolvedSourceRuntimeEnvironmentId,
+      sourceOwner
+    })
 }

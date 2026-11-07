@@ -10,7 +10,7 @@ import {
 } from './quick-open-file-list-test-harness'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
-vi.mock('@/runtime/runtime-file-search-client', async () => {
+vi.mock('@/runtime/files/search/runtime-file-search-client', async () => {
   const mocks = await import('./__mocks__/quick-open-runtime-file-client')
   return {
     listRuntimeFiles: mocks.listRuntimeFilesMock,

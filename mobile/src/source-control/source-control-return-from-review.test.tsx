@@ -2,16 +2,17 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
+import { useMobileDiffReviewSnapshot } from '../session/use-mobile-diff-review-snapshot'
 
 const focus = vi.hoisted(() => ({ current: true }))
 vi.mock('expo-router', () => ({
-  useFocusEffect: (effect: () => void) =>
-    useEffect(() => {
-      if (focus.current) {
-        effect()
-      }
-    }, [effect, focus.current])
+  useFocusEffect: (effect: () => (() => void) | void) =>
+    useEffect(() => (focus.current ? effect() : undefined), [effect, focus.current])
 }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
@@ -25,19 +26,35 @@ vi.mock('lucide-react-native', () => ({
   RefreshCw: 'RefreshCw'
 }))
 
-it('refreshes the staging area when returning from review without remounting the screen', async () => {
+it('shows what Review staged when returning to Changes without remounting the screen', async () => {
   const client = createFakeRpcClient()
   const clearError = () => {}
   let tree: ReactTestRenderer | null = null
-  const read: { loaders: ReturnType<typeof useMobileSourceControlLoaders> | null } = {
-    loaders: null
-  }
-  function Screen() {
+  const read: {
+    loaders: ReturnType<typeof useMobileSourceControlLoaders> | null
+    review: ReturnType<typeof useMobileDiffReviewSnapshot> | null
+  } = { loaders: null, review: null }
+  const queries = documentQueryClient()
+  const screen = (reviewOpen = false) => queries.wrap(createElement(Screen, { reviewOpen }))
+  function Screen({ reviewOpen }: { reviewOpen: boolean }) {
     read.loaders = useMobileSourceControlLoaders({
+      hostId: 'host',
       client,
       connState: 'connected',
       statusIdentityKey: 'host:wt',
       worktreeId: 'wt',
+      setActionError: clearError
+    })
+    return reviewOpen ? createElement(Review) : null
+  }
+  function Review() {
+    read.review = useMobileDiffReviewSnapshot({
+      client,
+      connState: 'connected',
+      hostId: 'host',
+      worktreeId: 'wt',
+      commitOid: null,
+      filter: 'unstaged',
       setActionError: clearError
     })
     return null
@@ -52,10 +69,11 @@ it('refreshes the staging area when returning from review without remounting the
         rpcSuccess('status', { entries: [{ path: 'app.ts', status: 'modified', area }] })
       )
     )
+    await settleQueryNotifications()
   }
   try {
     await act(async () => {
-      tree = create(createElement(Screen))
+      tree = create(screen())
     })
     await resolveStatus('unstaged')
     expect(read.loaders?.screenState).toMatchObject({
@@ -64,17 +82,17 @@ it('refreshes the staging area when returning from review without remounting the
     })
     focus.current = false
     await act(async () => {
-      tree?.update(createElement(Screen))
+      tree?.update(screen(true))
     })
-    const beforeReturn = client.requests.filter((request) => request.method === 'git.status').length
+    // Review's read after its stage lands in the entry Changes shows.
+    await act(async () => {
+      void read.review?.loadReviewData()
+    })
+    await resolveStatus('staged')
     focus.current = true
     await act(async () => {
-      tree?.update(createElement(Screen))
+      tree?.update(screen())
     })
-    expect(client.requests.filter((request) => request.method === 'git.status')).toHaveLength(
-      beforeReturn + 1
-    )
-    await resolveStatus('staged')
     expect(read.loaders?.screenState).toMatchObject({
       kind: 'ready',
       status: { entries: [{ area: 'staged' }] }

@@ -6,7 +6,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useJiraProjectInventory } from './use-jira-project-inventory'
 
 const { status, projects } = vi.hoisted(() => ({ status: vi.fn(), projects: vi.fn() }))
-vi.mock('@/runtime/runtime-jira-project-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-project-client', () => ({
   jiraStatusForTarget: status,
   jiraListProjectsForTarget: projects
 }))

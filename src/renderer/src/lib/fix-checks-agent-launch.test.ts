@@ -1,6 +1,6 @@
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import type { LaunchAgentInNewTabArgs } from './agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { getDefaultSettings } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
@@ -61,7 +61,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     store,
-    activateAndRevealWorktree: vi.fn(),
+    activateAndRevealWorktreeWithOutcome: vi.fn(),
     findGithubPrWorkspaceAttachment: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
     getConnectionId: vi.fn(),
@@ -101,15 +101,15 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
-vi.mock('@/lib/github-work-item-workspace-attachment', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: mocks.findGithubPrWorkspaceAttachment
 }))
 
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
 
-vi.mock('@/lib/launch-work-item-direct', () => ({
+vi.mock('@/lib/workspace/creation/work-item/launch-work-item-direct', () => ({
   launchWorkItemDirect: mocks.launchWorkItemDirect
 }))
 
@@ -132,8 +132,8 @@ vi.mock('@/lib/execution-host-facts', async () => {
   }
 })
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktreeWithOutcome: mocks.activateAndRevealWorktreeWithOutcome
 }))
 
 vi.mock(
@@ -145,6 +145,38 @@ vi.mock(
 )
 
 describe('startFixChecksAgent', () => {
+  it.each(['immediate', 'deferred'] as const)(
+    'reports a disappeared checks workspace once on %s activation',
+    async (timing) => {
+      mocks.activateAndRevealWorktreeWithOutcome.mockReturnValue({
+        refused: { reason: 'workspace-missing', failureNotified: false }
+      })
+      const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+      let reveal: (() => boolean | void) | undefined
+      if (timing === 'deferred') {
+        mocks.launchAgentInNewTab.mockImplementation((args) => {
+          reveal = args.beforeSurfaceOpen
+          return { surface: { kind: 'host-published' } }
+        })
+      }
+      await expect(
+        startFixChecksAgent({
+          repoId: 'repo-1',
+          worktreeId: 'wt-1',
+          basePrompt: 'Fix checks',
+          launchSource: 'task_page'
+        })
+      ).resolves.toBe(timing === 'deferred')
+      if (timing === 'deferred') {
+        expect(mocks.toastError).not.toHaveBeenCalled()
+        expect(reveal?.()).toBe(false)
+      }
+      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+        'Unable to open the workspace attached to these checks.'
+      )
+    }
+  )
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.store.settings = { defaultTuiAgent: 'codex' }
@@ -172,12 +204,14 @@ describe('startFixChecksAgent', () => {
     ]
     mocks.store.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
-    mocks.activateAndRevealWorktree.mockReturnValue(true)
+    mocks.activateAndRevealWorktreeWithOutcome.mockReturnValue({ opened: { primaryTabId: null } })
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
     mocks.getConnectionId.mockReturnValue(null)
     mocks.launchAgentInNewTab.mockImplementation(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
+        if (args.beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
+          return null
+        }
         return { surface: { kind: 'local-terminal', tabId: 'tab-1' } }
       }
     )

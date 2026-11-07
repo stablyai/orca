@@ -17,7 +17,7 @@ import {
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
-import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
+import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { claudeTerminalPromptChannel } from '../../claude-terminal-prompt-channel'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'

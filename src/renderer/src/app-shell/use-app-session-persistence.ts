@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
+import { createSessionWriteSubscriber } from '../lib/workspace/persistence/session-write-subscriber'
 import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
@@ -10,11 +10,11 @@ import {
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
-} from '../lib/workspace-session'
+} from '../lib/workspace/persistence/workspace-session'
 import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
-} from '../lib/workspace-session-host-persistence'
+} from '../lib/workspace/persistence/workspace-session-host-persistence'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
@@ -22,7 +22,7 @@ import {
 import { showShutdownCheckpointFailureToast } from '../lib/shutdown-checkpoint-failure-toast'
 import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
-import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress

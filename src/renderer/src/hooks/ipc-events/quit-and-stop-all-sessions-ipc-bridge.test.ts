@@ -19,7 +19,7 @@ vi.mock('@/components/shared/kill-all-terminal-surfaces', () => ({
   runKillAllTerminalSurfaces: mocks.runKillAll,
   snapshotKillAllTerminalSurfaceIds: mocks.snapshotIds
 }))
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
+vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
   waitForWorkspaceSessionReady: mocks.waitReady
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.storeState } }))

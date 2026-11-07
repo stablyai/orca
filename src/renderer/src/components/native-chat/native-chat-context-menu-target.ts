@@ -1,4 +1,4 @@
-import type { FileLinkActions } from '@/components/terminal-pane/terminal-file-link-actions'
+import type { FileLinkActions } from '@/components/terminal-pane/links/files/terminal-file-link-actions'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatLinkActions } from './native-chat-link-target-actions'

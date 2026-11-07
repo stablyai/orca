@@ -26,11 +26,11 @@ const { readSavedFilters, mutateSavedFilters, readQuickFilters, writeQuickFilter
     writeQuickFilters: vi.fn()
   })
 )
-vi.mock('@/runtime/runtime-jira-saved-filter-state', () => ({
+vi.mock('@/runtime/jira/runtime-jira-saved-filter-state', () => ({
   readJiraSavedFilterState: readSavedFilters,
   mutateJiraSavedFilters: mutateSavedFilters
 }))
-vi.mock('@/runtime/runtime-jira-quick-filter-state', () => ({
+vi.mock('@/runtime/jira/runtime-jira-quick-filter-state', () => ({
   readJiraQuickFilterState: readQuickFilters,
   writeJiraQuickFilterState: writeQuickFilters
 }))

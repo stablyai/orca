@@ -1,6 +1,6 @@
 import { agentHookServer } from '../agent-hooks/server'
-import type { AgentPromptChannel } from './orchestration/mailbox-pointer-channel-submit'
-import type { OrchestrationMailboxTerminal } from './orchestration/mailbox-owner'
+import type { AgentPromptChannel } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-channel-submit'
+import type { OrchestrationMailboxTerminal } from './orchestration/mailbox/routing/mailbox-owner'
 
 /** The prompt channel of the Claude running in this terminal, when Orca's plugin in it is polling. */
 export function claudeTerminalPromptChannel(

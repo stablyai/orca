@@ -11,7 +11,7 @@ export async function loadAnsiConsumers(root = process.cwd()) {
     ['parseAnsiSegments', 'renderer/src/components/editor/notebook/outputs/ipynb-ansi'],
     [
       'restoredSnapshotPaintsPrintableContent',
-      'renderer/src/components/terminal-pane/restored-snapshot-coverage'
+      'renderer/src/components/terminal-pane/snapshots/restored-snapshot-coverage'
     ],
     ['parseCodexLoginAuthUrl', 'main/codex-accounts/codex-login-auth-url'],
     ['TerminalCommandPaint', 'main/runtime/terminal/input/terminal-command-paint'],

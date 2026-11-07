@@ -24,7 +24,7 @@ import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
 import type { GitLabPrimaryActions } from './use-gitlab-primary-actions'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: GitLabWorkItem | null

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BROWSER_CORE_METHODS } from '../runtime/rpc/methods/browser-core'
-import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser-extras'
-import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser-screencast'
+import { BROWSER_CORE_METHODS } from '../runtime/rpc/methods/browser/browser-core'
+import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser/browser-extras'
+import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser/browser-screencast'
 import { electronSidecarRuntimeMethodName } from './electron-sidecar-method-routing'
 
 // Exercise real RPC registration: names that diverge from runtime camel-casing can become unreachable.
@@ -14,7 +14,10 @@ const BROWSER_RPC_METHODS = [
 // Known Log-suffix mismatches: remove entries when fixed; never add entries to hide new failures.
 const UNROUTABLE_RUNTIME_COMMANDS = new Set(['browserConsoleLog', 'browserNetworkLog'])
 
-const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set(['browser.screencast.unsubscribe'])
+const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set([
+  'browser.screencast.unsubscribe',
+  'browser.screencast.ack'
+])
 
 async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]

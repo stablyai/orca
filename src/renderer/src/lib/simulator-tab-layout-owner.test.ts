@@ -9,7 +9,7 @@ import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-l
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import {
   createTestStore,
   makeRuntimeOwnedWorktree,

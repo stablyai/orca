@@ -1,7 +1,10 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
 /** After a pick, focus the composer unless an outside click already moved focus elsewhere. */
-export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | undefined): {
+export function useNativeChatPickerFocusReturn(
+  focusComposer: (() => void) | undefined,
+  restoreDisappearingTrigger = false
+): {
   triggerRef: React.RefObject<HTMLButtonElement | null>
   notePick: () => void
   onInteractOutside: (event: Event) => void
@@ -10,6 +13,20 @@ export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | und
   const triggerRef = useRef<HTMLButtonElement>(null)
   const picked = useRef(false)
   const interactedOutside = useRef(false)
+  const [returnAfterClose, setReturnAfterClose] = useState(false)
+  useLayoutEffect(() => {
+    if (!returnAfterClose) {
+      return
+    }
+    setReturnAfterClose(false)
+    const trigger = triggerRef.current
+    // The closed layout may have removed More after the pane expanded.
+    if (trigger?.isConnected && !trigger.closest('[inert], [aria-hidden="true"]')) {
+      trigger.focus()
+    } else {
+      focusComposer?.()
+    }
+  }, [returnAfterClose, focusComposer])
   return {
     triggerRef,
     notePick: () => {
@@ -30,6 +47,11 @@ export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | und
         document.activeElement !== document.body
       picked.current = false
       interactedOutside.current = false
+      if (restoreDisappearingTrigger && !used && !focusedElsewhere) {
+        event.preventDefault()
+        setReturnAfterClose(true)
+        return
+      }
       if (!used || !focusComposer || focusedElsewhere) {
         return
       }

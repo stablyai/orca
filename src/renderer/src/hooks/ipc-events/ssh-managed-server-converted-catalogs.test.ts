@@ -8,7 +8,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore, makeWorktree } from '../../store/slices/store-test-helpers'
-import { buildBrowserPage } from '../../store/slices/browser-page-records'
+import { buildBrowserPage } from '../../store/slices/browser/pages/browser-page-records'
 
 const store = createTestStore()
 vi.mock('../../store', () => ({ useAppStore: store }))

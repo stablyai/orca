@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
+import { makeAnnotation } from '@/store/slices/browser/annotations/browser-annotation-test-fixture'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../../../shared/browser-annotation-viewport-bridge'
 import { syncGuestAnnotationViewportBridge } from './guest-annotation-viewport-bridge'
 

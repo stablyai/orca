@@ -11,9 +11,9 @@ import {
   type RpcMethod,
   type RpcStreamingMethod
 } from './core'
-import type { ALL_RPC_METHODS } from './methods'
-import { STATUS_METHODS } from './methods/status'
-import type { HOST_CAPABILITY_METHODS } from './methods/host-capabilities'
+import type { ALL_RPC_METHODS } from './methods/rpc-method-registry'
+import { STATUS_METHODS } from './methods/host-management/status'
+import type { HOST_CAPABILITY_METHODS } from './methods/host-management/host-capabilities'
 
 const ProbeParams = z.object({ id: z.string(), count: z.number().optional() })
 

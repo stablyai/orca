@@ -27,6 +27,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--tab-active-indicator': ['--tab-active-foreground'],
   '--tab-inactive': { light: { mixForeground: 4, into: '--tab-bar' }, dark: ['--tab-bar'] },
   '--tab-inactive-foreground': ['--muted-foreground'],
+  '--worktree-sidebar-active': tint('--worktree-sidebar-foreground', 8, 10),
   '--host-badge': { light: ['--accent'], dark: { tint: '--accent', percent: 80 } },
   '--host-badge-foreground': ['--muted-foreground'],
   '--diff-added': ['--git-decoration-added'],

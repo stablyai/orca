@@ -21,7 +21,7 @@ vi.mock('@/hooks/useGitHubTaskItems', () => ({
 vi.mock('./use-task-page-github-list-pending', () => ({
   useTaskPageGitHubListPending: () => false
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: lookup
 }))
 const repo = {

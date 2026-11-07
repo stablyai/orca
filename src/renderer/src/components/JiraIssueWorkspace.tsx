@@ -4,7 +4,10 @@ import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
-import { jiraGetIssueForTarget, jiraUpdateIssueForTarget } from '@/runtime/runtime-jira-client'
+import {
+  jiraGetIssueForTarget,
+  jiraUpdateIssueForTarget
+} from '@/runtime/jira/runtime-jira-detail-client'
 import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
@@ -14,7 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
 import { useJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
-import { getJiraReadIdentity } from '@/store/slices/jira-read-coordination'
+import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'

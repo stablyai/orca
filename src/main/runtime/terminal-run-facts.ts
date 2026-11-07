@@ -46,6 +46,7 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  private readonly userOpenedByPtyId = new Set<string>()
   private readonly unattributedDraftSeenAtByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
@@ -94,6 +95,7 @@ export class TerminalRunFactsRegister {
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
+      this.userOpenedByPtyId.delete(commit.id)
       this.unattributedDraftSeenAtByPtyId.delete(commit.id)
     }
     this.runsByPtyId.set(commit.id, {
@@ -136,6 +138,15 @@ export class TerminalRunFactsRegister {
     if (run && isDrivingInputKind(inputKind)) {
       run.firstUserInputAt ??= now
     }
+  }
+
+  /** A client opened this PTY's tab by the user's act; a later process starts unopened. */
+  recordUserOpen(ptyId: string): void {
+    this.userOpenedByPtyId.add(ptyId)
+  }
+
+  wasOpenedByUser(ptyId: string): boolean {
+    return this.userOpenedByPtyId.has(ptyId)
   }
 
   /** When input other than a terminal reply last reached the PTY's current process, launch writes
@@ -188,6 +199,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.userOpenedByPtyId.delete(ptyId)
     this.unattributedDraftSeenAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }

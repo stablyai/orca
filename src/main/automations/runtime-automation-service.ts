@@ -20,6 +20,7 @@ import {
   createRuntimeAutomationRunTerminalObserver
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
+import { automationRunSetupSkip } from './automation-run-setup-skip'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -36,6 +37,8 @@ export function createRuntimeAutomationService(input: {
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
     getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
+    getAcceptedReply: (paneKey, leadTurnKey) => runtime.getAcceptedAgentReply(paneKey, leadTurnKey),
+    subscribeStatusChanges: (listener) => runtime.subscribeAgentStatusRowChanges(listener),
     agentCommandsForRun: (run) =>
       automationAgentCommands(
         store.listAutomations().find((entry) => entry.id === run.automationId)?.agentId
@@ -149,10 +152,19 @@ export function createRuntimeAutomationService(input: {
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.headless,
     chatDispatcher: async (request) => {
-      const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
+      const { terminalHandle, ...launched } = await launchAutomationChatAgent(runtime, {
         ...request,
         runs: store.listAutomationRuns(request.automation.id)
       })
+      const launch = {
+        ...launched,
+        ...(await automationRunSetupSkip(
+          runtime,
+          request.automation,
+          request.target.repo,
+          launched.workspaceId
+        ))
+      }
       if (launch.terminalPaneKey && terminalHandle) {
         launchedHandles.set(launch.terminalPaneKey, terminalHandle)
         if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
@@ -163,10 +175,19 @@ export function createRuntimeAutomationService(input: {
     },
     headlessDispatcher: input.headless
       ? async (request) => {
-          const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
+          const { terminalHandle, ...launched } = await launchHeadlessAutomationAgent(runtime, {
             ...request,
             runs: store.listAutomationRuns(request.automation.id)
           })
+          const launch = {
+            ...launched,
+            ...(await automationRunSetupSkip(
+              runtime,
+              request.automation,
+              request.target.repo,
+              launched.workspaceId
+            ))
+          }
           if (launch.terminalPaneKey) {
             launchedHandles.set(launch.terminalPaneKey, terminalHandle)
             if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {

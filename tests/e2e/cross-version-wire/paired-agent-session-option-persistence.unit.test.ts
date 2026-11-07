@@ -10,18 +10,18 @@ import type { RuntimeClientSettings } from '../../../src/main/runtime/client/set
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
-import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-ui'
-import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/status'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
+import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-state/client-ui'
+import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/host-management/status'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
+import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import {
-  createRestTestRig,
-  REST_TEST_SESSION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import {
+  HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'

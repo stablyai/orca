@@ -3,7 +3,7 @@ import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath, getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
-import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
+import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { RuntimeTerminalPathResolution } from '../../../shared/runtime-file-contracts'
@@ -12,7 +12,7 @@ import {
   isQuickOpenAbsolutePath,
   type QuickOpenQueryTarget
 } from '../../../shared/quick-open-query-target'
-import { hostAbsentRefusal } from './terminal-pane/host-file-refusal'
+import { hostAbsentRefusal } from './terminal-pane/host-files/host-file-refusal'
 import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import {

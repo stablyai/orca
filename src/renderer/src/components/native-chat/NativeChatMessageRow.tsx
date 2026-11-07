@@ -19,7 +19,7 @@ import type {
   NativeChatSubagentDisclosure,
   NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useNativeChatWorkRun } from './use-native-chat-work-run'
 import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
@@ -32,11 +32,13 @@ export type NativeChatDeliveryNotice =
       onEdit?: never
       onSend?: never
       detail?: never
+      failureKind?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
+      failureKind?: string
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void

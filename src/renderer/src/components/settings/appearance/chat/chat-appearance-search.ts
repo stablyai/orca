@@ -3,7 +3,6 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
-import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../chat/native-chat-turn-diff-setting-target'
 
 export function chatTerminalControlledHint(): string {
   return translate('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
@@ -86,19 +85,6 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         keywords: [
           translate('settings.appearance.chat.title', 'Chat UI'),
           ...getChatWidthOptions().map((option) => option.label)
-        ]
-      },
-      changedFilesSummary: {
-        targetSectionId: NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID,
-        title: translate('settings.appearance.chat.changedFilesSummary', 'Changed files summary'),
-        description: translate(
-          'settings.appearance.chat.changedFilesSummaryDescription',
-          'Shows the files each turn changed, with line counts, below the reply.'
-        ),
-        keywords: [
-          translate('settings.appearance.chat.title', 'Chat UI'),
-          translate('settings.appearance.chat.changedFilesSummaryKeywordDiff', 'diff'),
-          translate('settings.appearance.chat.changedFilesSummaryKeywordEdits', 'edits')
         ]
       },
       reset: {
