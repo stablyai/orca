@@ -247,7 +247,7 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeExpiredOrReplaced": "This pairing code expired or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
     },
     "pair": {
       "missingCode": "Missing pairing code",

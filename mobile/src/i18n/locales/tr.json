@@ -111,7 +111,7 @@
       "scanCodeStep": "QR kodunu tarayın",
       "title": "Masaüstüyle eşleştir",
       "tryAgain": "Tekrar Dene",
-      "codeExpiredOrReplaced": "Bu eşleştirme kodunun süresi doldu veya kod değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
+      "codeNoLongerValid": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
       "defaultText": "Varsayılan (%100)",

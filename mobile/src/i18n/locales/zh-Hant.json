@@ -111,7 +111,7 @@
       "scanCodeStep": "掃描 QR Code",
       "title": "與電腦配對",
       "tryAgain": "重試",
-      "codeExpiredOrReplaced": "此配對碼已過期或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
+      "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
     },
     "terminalSettings": {
       "defaultText": "預設（100%）",

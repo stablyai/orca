@@ -113,7 +113,7 @@
       "scanCodeStep": "Escanea el código QR",
       "title": "Emparejar con un escritorio",
       "tryAgain": "Reintentar",
-      "codeExpiredOrReplaced": "Este código de emparejamiento caducó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
+      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
       "defaultText": "Predeterminado (100%)",
