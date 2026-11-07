@@ -131,14 +131,17 @@ export function consumeClaudeSessionRecord(
     accumulator.messageCount++
     const title = extractMessageText(record.message)
     // Known injected tags may lack isMeta; custom tags must remain real prompts rather than fallback titles.
-    const isMetaUserTurn =
-      record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
+    const isHarnessTurn = title != null && isKnownHarnessInjectedUserTurnText(title)
+    const isMetaUserTurn = record.isMeta === true || isHarnessTurn
     addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
     if (title) {
       if (isMetaUserTurn) {
-        state.metaTitle ??= title
+        // Harness markup such as /clear's command caveat is never a readable stand-in title.
+        if (!isHarnessTurn) {
+          state.metaTitle ??= title
+        }
       } else {
         state.firstUserTitle ??= title
       }
