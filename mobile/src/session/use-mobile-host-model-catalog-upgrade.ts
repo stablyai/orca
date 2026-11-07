@@ -77,6 +77,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
+    // A read sent before the chat's first turn or send answers for the account a new chat pins.
+    const records = recordsNewChat.current
     const params = {
       agent,
       sessionId,
@@ -102,7 +104,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
         return
       }
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      if (recordsNewChat.current) {
+      if (records) {
         modelCatalogCache?.record(worktree ?? '', catalog)
       }
       receiver.current(catalog, settled ? 'settled' : event)

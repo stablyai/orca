@@ -108,6 +108,8 @@ export function useHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
+    // A read sent before the chat's first turn or send answers for the account a new chat pins.
+    const records = recordsNewChat.current
     const params = {
       agent,
       sessionId,
@@ -138,7 +140,7 @@ export function useHostModelCatalogUpgrade(args: {
           : { key: waitKey, unavailable: next }
       })
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      if (catalog && recordsNewChat.current) {
+      if (catalog && records) {
         recordHostModelCatalogSnapshot(target, agent, worktree ?? '', catalog)
       }
       receiver.current(catalog, settled ? 'settled' : event)

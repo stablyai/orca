@@ -41,29 +41,48 @@ function heldPreloadClient() {
   return { client, answer: (catalog: AgentSessionModelCatalogResult) => answer(catalog) }
 }
 
+async function mountCache(client: RpcClient) {
+  const mounted: { cache: HostModelCatalogCache | null } = { cache: null }
+  function Probe(): null {
+    const current = useHostModelCatalogCache({
+      hostId: 'host-1',
+      client,
+      agent: 'claude',
+      enabled: true
+    })
+    useLayoutEffect(() => {
+      mounted.cache = current
+    })
+    return null
+  }
+  const renderer = await act(async () => createWithQueryClient(createElement(Probe)))
+  return { mounted, unmount: () => act(async () => renderer.unmount()) }
+}
+
 describe('useHostModelCatalogCache', () => {
   it("keeps a new chat's answer that lands while an older preload is out", async () => {
     const host = heldPreloadClient()
-    let cache: HostModelCatalogCache | null = null
-    function Probe(): null {
-      const current = useHostModelCatalogCache({
-        hostId: 'host-1',
-        client: host.client,
-        agent: 'claude',
-        enabled: true
-      })
-      useLayoutEffect(() => {
-        cache = current
-      })
-      return null
-    }
-    const renderer = await act(async () => createWithQueryClient(createElement(Probe)))
-    const launch = { newLaunch: true, worktree: 'wt-1', seedsModel: false }
+    const { mounted, unmount } = await mountCache(host.client)
 
-    await act(async () => cache?.record('wt-1', listed('opus')))
+    await act(async () => mounted.cache?.record('wt-1', listed('opus')))
     await act(async () => host.answer(listed('sonnet')))
 
-    expect(cache?.seed(launch)).toEqual(listed('opus'))
-    await act(async () => renderer.unmount())
+    expect(mounted.cache?.seed({ newLaunch: true, worktree: 'wt-1', seedsModel: false })).toEqual(
+      listed('opus')
+    )
+    await unmount()
+  })
+
+  it('lets the preload land when the chat answered only that its listing is running', async () => {
+    const host = heldPreloadClient()
+    const { mounted, unmount } = await mountCache(host.client)
+
+    await act(async () =>
+      mounted.cache?.record('wt-1', { origin: 'unknown', listingInProgress: true })
+    )
+    await act(async () => host.answer(listed('saved')))
+
+    expect(mounted.cache?.seed({ newLaunch: false, seedsModel: false })).toEqual(listed('saved'))
+    await unmount()
   })
 })
