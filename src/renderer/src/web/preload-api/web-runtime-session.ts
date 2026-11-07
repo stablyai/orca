@@ -136,7 +136,15 @@ function credentialFor(environment: StoredWebRuntimeEnvironment) {
     // Why not close clients here: the transport is mid-verdict and moves itself to auth-failed.
     forgetPairing: () => {
       if (isActivePairing(environment)) {
-        clearStoredWebRuntimeEnvironment()
+        const stored = readStoredWebRuntimeEnvironment()
+        // Why: a stale tab must not erase a pairing another tab saved since this one loaded.
+        if (
+          !stored ||
+          (stored.id === environment.id &&
+            pairingRevisionOf(stored) === pairingRevisionOf(environment))
+        ) {
+          clearStoredWebRuntimeEnvironment()
+        }
         webRuntimeState.activeEnvironment = null
       }
     }
