@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
-import { listenForHibernatedAgentWake } from '../hibernated-agent-wake-listener'
+import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
 export function useTerminalPaneHibernationWake(
   deps: Pick<UseTerminalPaneLifecycleDeps, 'worktreeId' | 'panePtyBindingsRef'>

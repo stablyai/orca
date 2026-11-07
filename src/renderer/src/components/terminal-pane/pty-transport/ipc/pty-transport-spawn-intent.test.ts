@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 const RESUME = { key: 'session_id', id: 'provider-session-1' } as const
 

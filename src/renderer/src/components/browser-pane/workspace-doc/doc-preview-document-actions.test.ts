@@ -52,7 +52,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: () => mocks.connectionIdForWorkspace,
   getConnectionIdForFile: () => mocks.connectionIdForFile
 }))
-vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
+vi.mock('@/components/terminal-pane/links/files/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 vi.mock('@/store', () => ({

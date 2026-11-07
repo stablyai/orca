@@ -19,10 +19,10 @@ import {
   terminalUrlOpenHintOptionsFor
 } from '../links/terminal-link-open-hints'
 import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
-import type { TerminalPathExistsCache } from '../terminal-path-exists-cache'
+import type { TerminalPathExistsCache } from '../links/files/terminal-path-exists-cache'
 import type { TerminalLinkActionContext } from '../links/terminal-link-action-request'
 import type { TerminalHttpLinkActionDestinations } from '../links/http/terminal-url-link-hit-testing'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from '../viewport/mounted-pane-fit'

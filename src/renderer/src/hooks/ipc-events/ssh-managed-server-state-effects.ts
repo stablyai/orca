@@ -71,7 +71,7 @@ function remountBridgedTabsOnce(targetId: string, next: ManagedServerStatus): vo
   }
   bridgedTargetsRemounted.add(targetId)
   // Load panes lazily because module import itself subscribes to the bridge.
-  void import('../../components/terminal-pane/legacy-relay-bridge-panes').then(
+  void import('../../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes').then(
     ({ legacyRelayBridgedTabIds }) => {
       const store = useAppStore.getState()
       for (const tabId of legacyRelayBridgedTabIds(targetId)) {

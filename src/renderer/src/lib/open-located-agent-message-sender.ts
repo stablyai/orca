@@ -12,7 +12,7 @@ import {
   focusRendererTerminalHandle,
   focusRuntimeTerminalHandle
 } from '@/components/terminal-pane/links/handles/terminal-handle-links'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback,

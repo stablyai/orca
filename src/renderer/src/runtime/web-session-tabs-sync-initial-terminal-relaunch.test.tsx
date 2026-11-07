@@ -7,7 +7,7 @@ import {
   type RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
 

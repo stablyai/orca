@@ -4,7 +4,7 @@ import {
   clampTerminalViewport
 } from '../../../../../../shared/terminal/viewport/terminal-viewport'
 import { onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
-import { recordTerminalFreezeBreadcrumb } from '../../terminal-freeze-breadcrumbs'
+import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

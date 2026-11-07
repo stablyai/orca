@@ -10,7 +10,7 @@ import {
   canClientOsOpenWorkspaceFile
 } from '@/lib/workspace-file-host-routing'
 import { useAppStore } from '@/store'
-import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/links/files/terminal-remote-file-download-open'
 
 export type DocPreviewDocument = {
   filePath: string

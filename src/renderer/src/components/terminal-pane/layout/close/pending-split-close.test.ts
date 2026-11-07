@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { makeCloseTestTab, preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { flushPtySideEffects } from '../../pty-transport-test-harness'
+import { flushPtySideEffects } from '../../pty-transport/ipc/pty-transport-test-harness'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 const replyFor = (kind: 'reattach' | 'cold-restore-new' | 'ordinary-fresh') => ({

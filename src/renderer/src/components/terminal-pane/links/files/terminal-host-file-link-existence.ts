@@ -10,7 +10,7 @@ import {
   writeTerminalPathExistence,
   startTerminalPathExistsProbe,
   type TerminalPathExistsCache
-} from '../../terminal-path-exists-cache'
+} from './terminal-path-exists-cache'
 
 /** A paired-server path outside the terminal's workspace: only its host can say whether it opens. */
 export function isHostPathOutsideWorkspace(target: FileLinkTarget): boolean {

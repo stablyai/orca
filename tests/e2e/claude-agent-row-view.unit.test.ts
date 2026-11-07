@@ -37,7 +37,7 @@ vi.mock('@/lib/terminal-tab-owner-activation', () => ({ activateTerminalTabOnOwn
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/stale-agent-row', () => ({
+vi.mock('@/components/terminal-pane/agent-status/stale-agent-row', () => ({
   dismissStaleAgentRowByKey: vi.fn()
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 1000 }))
