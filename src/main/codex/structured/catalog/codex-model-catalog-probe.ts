@@ -3,17 +3,13 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
-import {
-  envWithPathRelativeTo,
-  catalogListingDirectory
-} from '../../../../shared/node-cli-command-resolution'
+import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
-import { codexProjectConfigIsolationArgs } from './codex-project-config-isolation'
 import { applyCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
 import {
   resolveCodexStructuredInvocation,
@@ -72,17 +68,12 @@ export function createCodexModelCatalogProbe(
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })
     assertStructuredAgentResolutionCurrent(operation)
-    const userArgs = [
-      ...prefixArgs,
-      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : [])
-    ]
-    // A command line that may name files relative to the chat's folder runs there; the listing
-    // still asks for `cwd`'s config, and that folder's own project config is never loaded, so the
-    // project's settings never replace the account's list.
-    const listIn = catalogListingDirectory(command, userArgs, cwd, launchDirectory)
+    // Every listing runs in `cwd` with the user's command line, as other Codex hosts list from their
+    // own folder: a repo's project config never reaches the account's list, and relative paths in
+    // user arguments are not resolved against the chat's folder.
     const args = [
-      ...userArgs,
-      ...(listIn && listIn !== cwd ? await codexProjectConfigIsolationArgs(listIn) : []),
+      ...prefixArgs,
+      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]
     assertStructuredAgentResolutionCurrent(operation)
@@ -94,7 +85,7 @@ export function createCodexModelCatalogProbe(
       CODEX_HOME: accountHomePath
     }
     return {
-      identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
+      identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
       run: async (
         signal?: AbortSignal,
         runOperation = operation
@@ -107,7 +98,7 @@ export function createCodexModelCatalogProbe(
           {
             command,
             args,
-            ...(listIn ? { cwd: listIn } : {}),
+            ...(cwd ? { cwd } : {}),
             cliPath: command,
             env,
             timeoutMs: AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS,
@@ -160,14 +151,14 @@ export function createCodexModelCatalogProbe(
           throw new Error('codex app-server listed no models')
         }
         return {
-          models: listIn
+          models: cwd
             ? listing.models
             : applyCodexConfiguredLaunchDefaults(listing.models, {
                 model: listing.configured?.model ?? null,
                 effort: listing.configured?.effort ?? null
               }),
           complete: listing.complete !== false,
-          ...(listIn && listing.configured ? { configured: listing.configured } : {}),
+          ...(cwd && listing.configured ? { configured: listing.configured } : {}),
           origin: 'probe',
           ...(unavailable ? { unavailable } : {})
         }

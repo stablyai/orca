@@ -86,7 +86,7 @@ describe('agentSession.modelCatalog', () => {
     )
   })
 
-  it('lists the local desktop catalog under its pinned account and launch arguments, in the chat folder those arguments may name files in', async () => {
+  it("lists the local desktop catalog under its pinned account and launch arguments, from Orca's folder rather than the chat's", async () => {
     record = {
       ...agentSessionRecordFixture(),
       provider: 'codex',
@@ -98,7 +98,7 @@ describe('agentSession.modelCatalog', () => {
       listed(invocation)
       expect(invocation).toMatchObject({
         command: '/installed/codex',
-        cwd: '/repo/work',
+        cwd: resolveHiddenProbeCwd(),
         env: { CODEX_HOME: '/account/work' }
       })
       expect(invocation.args).toEqual(expect.arrayContaining(['-c', 'model_provider="work"']))
