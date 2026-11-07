@@ -338,13 +338,20 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && !disabled ? { steerHead, steerLast } : {}),
       chordSteersQueued: sendButton.chordSteersQueued,
+      sendHeld,
       setActiveSuggestion,
       setDraft,
       setCaret
     })
 
     const pickerOpen = autocomplete.mode !== 'none'
-    const steerChord = useNativeChatSteerChordPreview(root, sendButton, steerLast, send, pickerOpen)
+    const steerChord = useNativeChatSteerChordPreview(
+      root,
+      { ...sendButton, sendHeld },
+      steerLast,
+      send,
+      pickerOpen
+    )
 
     const draftEvents = useNativeChatDraftEvents({
       draft,

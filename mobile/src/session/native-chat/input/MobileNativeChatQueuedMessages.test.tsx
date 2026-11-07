@@ -230,7 +230,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(open).toHaveBeenCalledWith(from, from.senders[0])
   })
 
-  it('the empty chord presses only the head card where its own button would, and offers it only while that press would act, across chat switches', async () => {
+  it('the empty chord presses only the newest card where its own button would, and offers it only while that press would act, across chat switches', async () => {
     let tray!: MobileNativeChatComposerTray
     function Tray(props: Parameters<typeof useMobileNativeChatComposerTray>[0]['queued']) {
       tray = useMobileNativeChatComposerTray({
@@ -264,12 +264,12 @@ describe('MobileNativeChatQueuedMessages', () => {
     await show(chatA)
     expect(tray.steerHead!.steers(true)).toBe(true)
     expect(press()).toBe(true)
-    expect(onSend).toHaveBeenLastCalledWith('a1')
+    expect(onSend).toHaveBeenLastCalledWith('a2')
     // On its way: neither offered nor admitted again, like a second tap.
     expect(tray.steerHead!.steers(true)).toBe(false)
     expect(press()).toBe(false)
 
-    // Another chat's head is its own; A settling later must not clear B's hold.
+    // Another chat's newest card is its own; A settling later must not clear B's hold.
     await show(chatB)
     expect(tray.steerHead!.steers(true)).toBe(true)
     expect(press()).toBe(true)
@@ -289,13 +289,15 @@ describe('MobileNativeChatQueuedMessages', () => {
     await act(async () => settles[2]!(true))
     expect(tray.steerHead!.steers(true)).toBe(true)
 
-    // No turn running (the paused queue after Stop): the head card's own Send.
+    // No turn running (the paused queue after Stop): the newest card's own Send.
     await show(chatA, { agentWorking: false })
     expect(tray.steerHead!.steers(false)).toBe(true)
     const refusals: [Partial<Parameters<typeof Tray>[0]>, boolean][] = [
       [{}, false],
       [{ steerHeld: true }, true],
-      [{ cards: [card({ messageId: 'a1', command: true }), card({ messageId: 'a2' })] }, true]
+      [{ cards: [card({ messageId: 'a1' }), card({ messageId: 'a2', command: true })] }, true],
+      [{ cards: [card({ messageId: 'a1' }), card({ messageId: 'a2', hold: 'sending' })] }, true],
+      [{ cards: [card({ messageId: 'a1' }), card({ messageId: 'a2', hold: 'returned' })] }, true]
     ]
     for (const [props, alternateSteers] of refusals) {
       await show(chatA, props)

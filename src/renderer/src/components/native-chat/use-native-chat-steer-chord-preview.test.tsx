@@ -15,6 +15,7 @@ vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   hasDraft: boolean
+  sendHeld?: boolean
   chordSteersQueued: boolean
   steerHead: (() => boolean) | undefined
   send: () => void
@@ -23,10 +24,11 @@ type Props = {
 
 function Composer(props: Props): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
-  const { alternateSend, hasDraft, chordSteersQueued, steerHead, send, pickerOpen } = props
+  const { alternateSend, hasDraft, chordSteersQueued, steerHead, send, pickerOpen, sendHeld } =
+    props
   const { preview, runPreview } = useNativeChatSteerChordPreview(
     root,
-    { alternateSend, hasDraft, chordSteersQueued },
+    { alternateSend, hasDraft, chordSteersQueued, sendHeld },
     steerHead,
     send,
     pickerOpen
@@ -72,6 +74,15 @@ describe('useNativeChatSteerChordPreview', () => {
     return { props, view, field, button, hold, preview: () => button.dataset.preview }
   }
 
+  it.each([false, true])('does not preview or send while held, with draft: %s', (hasDraft) => {
+    const { props, button, hold, preview } = setup({ hasDraft, sendHeld: true })
+    hold()
+    expect(preview()).toBe('')
+    fireEvent.click(button)
+    expect(props.steerHead).not.toHaveBeenCalled()
+    expect(props.send).not.toHaveBeenCalled()
+  })
+
   it('never flashes for a quick chord such as Cmd+C', () => {
     const { field, preview } = setup()
     fireEvent.keyDown(field, { key: 'Meta' })
@@ -96,7 +107,7 @@ describe('useNativeChatSteerChordPreview', () => {
     expect(preview()).toBe('')
   })
 
-  it('previews sending the head card after a Stop, when no turn runs to steer into', () => {
+  it('previews sending the queued card after a Stop, when no turn runs to steer into', () => {
     const { props, button, hold, preview } = setup({ alternateSend: undefined })
     hold()
     expect(preview()).toBe('steer-queued')

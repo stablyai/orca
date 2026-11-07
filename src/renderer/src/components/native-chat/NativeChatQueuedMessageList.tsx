@@ -141,6 +141,7 @@ export function NativeChatQueuedMessageList({
                     agentName={agentName}
                     statedFailures={statedFailures}
                     showsSteerShortcut={card === steerableHead}
+                    previewsSteer={card === newest && controller.steerLast !== undefined}
                     agentWorking={controller.isWorking}
                     steerHeld={steerHeld}
                     pending={controller.pending(card.messageId)}

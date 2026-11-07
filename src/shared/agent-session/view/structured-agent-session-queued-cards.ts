@@ -190,6 +190,14 @@ export function headSteerableQueuedMessageCard(
   return head && head.hold !== 'sending' && queuedMessageCardSteers(head) ? head : null
 }
 
+/** Empty Cmd/Ctrl+Enter sends the newest card, never an older substitute. */
+export function lastSteerableQueuedMessageCard(
+  cards: readonly QueuedMessageCard[]
+): QueuedMessageCard | null {
+  const last = cards.at(-1)
+  return last && last.hold !== 'sending' && queuedMessageCardSteers(last) ? last : null
+}
+
 /** The card's line: its text, or for a card of images alone, the image's name or their count. */
 export function queuedMessageCardLine(
   card: Pick<QueuedMessageCard, 'text' | 'images' | 'displayText'>,
