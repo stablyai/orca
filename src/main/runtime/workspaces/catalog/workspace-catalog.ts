@@ -126,38 +126,6 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  /** The fleet from cached scans for synchronous selector matching, reprojected only when its inputs change. */
-  protected projectCachedWorktrees(): ResolvedWorktreeRowsJoin {
-    const cachedScans = (this.store?.getRepos() ?? []).map((repo) => {
-      const entry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-      return { repo, entry, scan: entry && (entry.listing ?? entry.result) }
-    })
-    return this.resolvedWorktrees.projectCachedScans(
-      this.store,
-      cachedScans.flatMap(({ repo, entry, scan }) => [getRepoHostIdentity(repo), entry, scan]),
-      () => {
-        const scans: ResolvedWorktreeRepoScans = new Map()
-        for (const { repo, entry, scan } of cachedScans) {
-          if (entry && scan) {
-            scans.set(getRepoHostIdentity(repo), {
-              ...scan,
-              gitRun: entry
-            })
-          }
-        }
-        return projectResolvedWorktreeScans(
-          this.store,
-          () => ({
-            ...this.repoWorktreeRowDeps(),
-            listFolderWorkspaces: (repo, count) =>
-              RuntimeFolders.projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
-          }),
-          scans
-        )
-      }
-    )
-  }
-
   protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
     const store = this.requireStore()
     return {
