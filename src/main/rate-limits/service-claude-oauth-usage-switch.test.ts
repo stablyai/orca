@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import {
+  deferred,
   mockFreshBackgroundProviderFetches,
   okProvider,
   resetRateLimitProviderMocks
@@ -126,6 +127,67 @@ describe('Claude OAuth usage switch', () => {
 
     expect(service.getState().claude?.status).toBe('ok')
     expect(service.getState().claude?.session?.usedPercent).toBe(33)
+  })
+
+  it.each(['refresh', 'refreshClaudeForTarget'] as const)(
+    'discards earlier OAuth usage on %s after opting out',
+    async (refresh) => {
+      let enabled = true
+      const service = new RateLimitService()
+      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+      await service.refresh()
+      enabled = false
+
+      await service[refresh]()
+
+      expect(service.getState().claude).toMatchObject({ status: 'unavailable', session: null })
+    }
+  )
+
+  it.each(['refresh', 'refreshClaudeForTarget'] as const)(
+    'discards an OAuth result completing after opt-out during %s',
+    async (refresh) => {
+      let enabled = true
+      const service = new RateLimitService()
+      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+      const started = deferred<void>()
+      const pending = deferred<Awaited<ReturnType<typeof fetchClaudeRateLimits>>>()
+      vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => {
+        started.resolve()
+        return pending.promise
+      })
+      const cycle = service[refresh]()
+      await started.promise
+      enabled = false
+      pending.resolve(okProvider('claude', 81))
+      await cycle
+
+      expect(service.getState().claude).toMatchObject({ status: 'unavailable', session: null })
+    }
+  )
+
+  it('keeps live usage when an older OAuth request completes after opt-out', async () => {
+    let enabled = true
+    const service = new RateLimitService()
+    service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+    const started = deferred<void>()
+    const pending = deferred<Awaited<ReturnType<typeof fetchClaudeRateLimits>>>()
+    vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => {
+      started.resolve()
+      return pending.promise
+    })
+    const cycle = service.refresh()
+    await started.promise
+    enabled = false
+    service.ingestLiveClaudeRateLimits(LIVE_POST)
+    pending.resolve(okProvider('claude', 81))
+    await cycle
+
+    expect(service.getState().claude).toMatchObject({
+      status: 'ok',
+      session: { usedPercent: 33 },
+      usageMetadata: { source: 'live-session' }
+    })
   })
 
   it('fetches when the user turns it on', async () => {

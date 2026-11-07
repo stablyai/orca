@@ -26,7 +26,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
 
   // Keep statusLine-fed numbers; an old failure or in-flight chip has nothing left to settle it.
   protected claudeUsageWithoutOAuth(limits: ProviderRateLimits | null): ProviderRateLimits {
-    return limits?.status === 'ok' ? limits : claudeOAuthUsageDisabledResult()
+    return limits?.status === 'ok' && limits.usageMetadata?.source === 'live-session'
+      ? limits
+      : claudeOAuthUsageDisabledResult()
   }
 
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -86,6 +88,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return this.claudeUsageWithoutOAuth(this.state.claude)
+    }
     this.lastClaudeCheckCompletedAt = fresh.updatedAt
     // Failed OAuth must preserve newer live display while forwarding Retry-After to the poll gate.
     const current = this.state.claude
