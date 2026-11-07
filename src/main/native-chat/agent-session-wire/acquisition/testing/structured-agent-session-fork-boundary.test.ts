@@ -1,3 +1,9 @@
+import { acpHistoryTurns } from '../../../../acp/history/acp-history-replay'
+import { translateHistoryTurn } from '../../../../acp/history/acp-history-translation'
+import { OPENCODE_ACP_DIALECT } from '../../../../acp/acp-dialects/opencode-dialect'
+import { readAcpFixture } from '../../../../acp/acp-timeline-fixture.test-support'
+import { structuredRewindCut } from '../../rewind/structured-rewind-cut'
+import type { JournalReplacementItem } from '../../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { prepareForkSnapshot } from '../structured-agent-session-fork-snapshot'
 import type {
   AgentJournalSnapshot,
@@ -275,6 +281,10 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
         { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'rich original' }] },
         l('root1')
       ),
+      {
+        ...row(l(continuedOutsideRecordId('T1')), continuedOutsideNotice(false)),
+        turnScope: { kind: 'thread' }
+      },
       row(
         l('running'),
         { kind: 'tool-call', name: 'command', callId: 'call-running', input: {}, state: 'running' },
@@ -414,6 +424,7 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
     'codex:child:T1:0',
     'legacy:codex:source:root1',
     'codex:child:T1:1',
+    'legacy:codex:source:continued-outside%3AT1',
     'legacy:codex:source:late',
     'legacy:codex:source:tool',
     'legacy:codex:source:settled-helper',
@@ -425,7 +436,7 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
     userItemId: 'codex:child:T1:0',
     state: 'completed'
   })
-  expect(copied[4]?.body).toMatchObject({
+  expect(copied[5]?.body).toMatchObject({
     input: { turnItemId: 'codex:source:T1:0', userItemId: 'legacy:codex:source:running' }
   })
   snapshot.items[2]!.body = { kind: 'status', text: 'changed source' }
@@ -450,9 +461,19 @@ it('cuts before a Claude continuation notice attributed to the next imported pro
       [
         { itemId: turn('T1'), body: { kind: 'turn', turnId: 'T1', state: 'completed' } },
         {
+          itemId: turn(continuedOutsideRecordId(key('answer'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
           itemId: key('answer'),
           body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'FOXTROT' }] },
           turnScope: { kind: 'turn', turnItemId: turn('T1') }
+        },
+        {
+          itemId: turn(continuedOutsideRecordId(key('late-detail'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
         },
         {
           itemId: turn(continuedOutsideRecordId(key('terminal-user'))),
@@ -492,5 +513,213 @@ it('cuts before a Claude continuation notice attributed to the next imported pro
     prepareForkSnapshot({ snapshot, nextItemId: turn('T2') }).map((item) =>
       agentJournalItemKey(item.identity)
     )
-  ).toEqual(['legacy:claude:chat:T1', 'claude:source:answer', 'claude:source:late-detail'])
+  ).toEqual([
+    'legacy:claude:chat:T1',
+    'legacy:claude:chat:continued-outside%3Aclaude%3Asource%3Aanswer',
+    'claude:source:answer',
+    'legacy:claude:chat:continued-outside%3Aclaude%3Asource%3Alate-detail',
+    'claude:source:late-detail'
+  ])
+})
+
+it.each(['rewind', 'persisted', 'unrelated T3', 'saved fork'])(
+  'forks FOXTROT without the orphan terminal notice: %s',
+  async (route) => {
+    const native = (turnId: string, ordinal: number) =>
+      ({ provider: 'codex', threadId: 'thread-1', turnId, ordinal }) as const
+    const legacy = (recordId: string) =>
+      ({ provider: 'legacy', agent: 'codex', sessionId: 'session-1', recordId }) as const
+    const root1 = agentJournalItemKey(legacy('root1'))
+    const root2 = agentJournalItemKey(legacy('root2'))
+    const source: JournalReplacementItem[] = (
+      [
+        {
+          identity: native('T1', 0),
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }
+        },
+        {
+          identity: legacy('root1'),
+          body: {
+            kind: 'turn',
+            turnId: 'T1',
+            userItemId: 'codex:thread-1:T1:0',
+            state: 'completed'
+          }
+        },
+        {
+          identity: native('T1', 1),
+          turnScope: { kind: 'turn', turnItemId: root1 },
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'FOXTROT' }] }
+        },
+        {
+          identity: legacy(continuedOutsideRecordId('T2')),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
+          identity: legacy('root2'),
+          body: {
+            kind: 'turn',
+            turnId: 'T2',
+            userItemId: 'codex:thread-1:T2:0',
+            state: 'completed'
+          }
+        },
+        {
+          identity: native('T2', 0),
+          turnScope: { kind: 'turn', turnItemId: root2 },
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'terminal prompt' }]
+          }
+        },
+        {
+          identity: native('T2', 1),
+          turnScope: { kind: 'turn', turnItemId: root2 },
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'terminal answer' }]
+          }
+        }
+      ] satisfies Omit<JournalReplacementItem, 'observedAt' | 'ownerFence'>[]
+    ).map((row) => ({ ...row, observedAt: 123, ownerFence: 0 }))
+    const journal = fixture.journal
+    await journal.replaceEpochItems('session_created', 1, source)
+    if (route === 'rewind') {
+      const cut = structuredRewindCut(journal, {
+        itemId: 'codex:thread-1:T2:0',
+        provider: 'codex',
+        nativeId: 'thread-1'
+      })
+      expect(cut).not.toBeNull()
+      await journal.replaceEpochItems('handle_forked', 1, cut!.kept)
+    } else {
+      await journal.replaceEpochItems('session_created', 1, [
+        ...source.slice(0, 4),
+        // Earlier work alone cannot be introduced by a later notice.
+        {
+          identity: legacy(continuedOutsideRecordId('T1')),
+          body: continuedOutsideNotice(false),
+          observedAt: 123,
+          ownerFence: 0
+        },
+        ...(route === 'unrelated T3'
+          ? [
+              {
+                identity: legacy('root3'),
+                body: { kind: 'turn' as const, turnId: 'T3', state: 'completed' as const },
+                observedAt: 123,
+                ownerFence: 0
+              },
+              {
+                ...source[5]!,
+                identity: native('T3', 0),
+                turnScope: {
+                  kind: 'turn' as const,
+                  turnItemId: agentJournalItemKey(legacy('root3'))
+                }
+              }
+            ]
+          : [])
+      ])
+    }
+    const record = agentSessionRecordFixture({ sessionId: 'session-1', provider: 'codex' })
+    let snapshot = journal.snapshot()
+    let selected = 'codex:thread-1:T1:1'
+    let sourceThreadId = 'thread-1'
+    if (route === 'saved fork') {
+      const copied = prepareForkSnapshot({
+        snapshot,
+        nextItemId: null,
+        sourceThreadId,
+        childThreadId: 'child'
+      })
+      await journal.replaceEpochItems('session_created', 1, [
+        ...copied,
+        source[3]!,
+        {
+          identity: legacy('fork-marker'),
+          body: {
+            kind: 'status',
+            text: 'Forked',
+            forkedFrom: { sessionId: 'parent' }
+          },
+          observedAt: 123,
+          ownerFence: 0
+        }
+      ])
+      snapshot = journal.snapshot()
+      selected = 'codex:child:T1:1'
+      sourceThreadId = 'child'
+    }
+    const boundary = structuredAgentSessionForkBoundary(snapshot, record, selected)
+    expect(boundary).not.toBeNull()
+    expect(
+      prepareForkSnapshot({
+        snapshot,
+        nextItemId: boundary!.nextItemId,
+        sourceThreadId,
+        childThreadId: 'result'
+      }).map((row) => agentJournalItemKey(row.identity))
+    ).toEqual(['codex:result:T1:0', 'legacy:codex:session-1:root1', 'codex:result:T1:1'])
+  }
+)
+
+it('retains the notice for an encoded ACP replay turn only while its introduced work survives', async () => {
+  const frames = (await readAcpFixture('opencode-v2-reopen-outside'))
+    .filter((frame) => frame.process === 'C' && frame.message.method === 'session/update')
+    .map((frame) => ({ method: 'session/update', params: frame.message.params }))
+  const first = acpHistoryTurns(frames, 'user-message-id')[0]!
+  if (first.turn === null) {
+    throw new Error('recorded replay has no user id')
+  }
+  const rows = translateHistoryTurn(
+    {
+      agent: 'opencode',
+      sessionId: 'chat',
+      providerSessionId: 'session-1',
+      dialect: OPENCODE_ACP_DIALECT,
+      identity: 'user-message-id'
+    },
+    { ...first, turn: first.turn }
+  )
+  const notice = {
+    itemId: 'legacy:opencode:chat:continued-outside%3Amsg_15fad6c9f001d4ix8WtRMUSWtI',
+    body: continuedOutsideNotice(false),
+    turnScope: { kind: 'thread' as const }
+  }
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: 'chat',
+    cursor: { epoch: 'epoch', sequence: 3 },
+    submissions: [],
+    items: [
+      notice,
+      ...rows.map((row) => ({ ...row, itemId: agentJournalItemKey(row.identity) }))
+    ].map((row, index) => ({ ...row, sequence: index + 1, revision: 1, observedAt: 123 }))
+  }
+  expect(
+    prepareForkSnapshot({ snapshot, nextItemId: null }).map((row) =>
+      agentJournalItemKey(row.identity)
+    )
+  ).toEqual([
+    'legacy:opencode:chat:continued-outside%3Amsg_15fad6c9f001d4ix8WtRMUSWtI',
+    'legacy:opencode:chat:turn-lifecycle%3Ap%3Asession-1%3Amsg_15fad6c9f001d4ix8WtRMUSWtI',
+    'legacy:opencode:chat:item%3Ap%3Asession-1%3Asession-1%2Fuser%253Amsg_15fad6c9f001d4ix8WtRMUSWtI'
+  ])
+  snapshot.items[2]!.body = { kind: 'tool-call', name: 'command', state: 'running', input: {} }
+  expect(
+    prepareForkSnapshot({ snapshot, nextItemId: null }).map((row) =>
+      agentJournalItemKey(row.identity)
+    )
+  ).toEqual([])
+  snapshot.items.pop()
+  expect(
+    prepareForkSnapshot({ snapshot, nextItemId: null }).map((row) =>
+      agentJournalItemKey(row.identity)
+    )
+  ).toEqual([
+    'legacy:opencode:chat:turn-lifecycle%3Ap%3Asession-1%3Amsg_15fad6c9f001d4ix8WtRMUSWtI'
+  ])
 })

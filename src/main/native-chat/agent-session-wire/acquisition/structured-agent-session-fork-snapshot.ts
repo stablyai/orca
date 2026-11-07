@@ -15,6 +15,10 @@ import { turnMembership } from '../rewind/structured-rewind-cut'
 import { namedSubagents } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/native-chat-background-task-row'
+import {
+  providerTimelineKeyPart,
+  providerTimelineTurnKeyPart
+} from '../../agent-session-timeline/provider-timeline-identity'
 import { continuedOutsideRecordId } from './structured-agent-session-history-catch-up'
 
 /** Freeze presentation once; native history supplies context and coverage, never the copied bodies. */
@@ -51,24 +55,9 @@ export function prepareForkSnapshot(input: {
   const next = items[end]
   if (next) {
     const nextTurn = member(next)
-    const anchors = new Set([next.itemId, nextTurn, readAgentJournalTurn(next.body)?.userItemId])
-    const prefix = continuedOutsideRecordId('')
-    // Catch-up notices name their following turn (Codex) or first imported row (Claude).
-    end = items.findIndex((item) => {
-      if (item === next || (nextTurn !== undefined && member(item) === nextTurn)) {
-        return true
-      }
-      const identity = parseAgentJournalItemKey(keys.providerKey(item.itemId))
-      if (identity?.provider !== 'legacy' || !identity.recordId.startsWith(prefix)) {
-        return false
-      }
-      const anchor = identity.recordId.slice(prefix.length)
-      const row = rowsById.get(anchor)
-      return (
-        anchors.has(anchor) ||
-        (nextTurn !== undefined && row !== undefined && member(row) === nextTurn)
-      )
-    })
+    end = items.findIndex(
+      (item) => item === next || (nextTurn !== undefined && member(item) === nextTurn)
+    )
   }
   const keptTurns = new Set(items.slice(0, end).flatMap((item) => member(item) ?? []))
   const candidates = items.filter((item, index) => index < end || keptTurns.has(member(item) ?? ''))
@@ -163,9 +152,49 @@ export function prepareForkSnapshot(input: {
       }
     }
   }
+  const retained = candidates.filter((item) => !omitted.has(item.itemId))
+  const noticePrefix = continuedOutsideRecordId('')
+  const notices = new Map<string, string>()
+  const lastWork = new Map<string, number>()
+  const scoped = (...parts: string[]) => JSON.stringify(parts)
+  for (const [index, item] of retained.entries()) {
+    const identity = parseAgentJournalItemKey(keys.providerKey(item.itemId))!
+    if (identity.provider === 'legacy' && identity.recordId.startsWith(noticePrefix)) {
+      const anchor = identity.recordId.slice(noticePrefix.length)
+      notices.set(
+        item.itemId,
+        identity.agent === 'codex'
+          ? scoped('codex', anchor)
+          : identity.agent === 'claude'
+            ? scoped('row', anchor)
+            : scoped(identity.agent, identity.sessionId, providerTimelineKeyPart(anchor))
+      )
+      continue
+    }
+    if (readAgentJournalTurn(item.body)) {
+      continue
+    }
+    lastWork.set(scoped('row', item.itemId), index)
+    lastWork.set(scoped('row', keys.providerKey(item.itemId)), index)
+    const turn = member(item)
+    if (input.sourceThreadId && turn !== undefined) {
+      lastWork.set(scoped('codex', turn), index)
+    } else if (item.turnScope?.kind === 'turn') {
+      const root = rowsById.get(item.turnScope.turnItemId)
+      const rootIdentity = root && parseAgentJournalItemKey(keys.providerKey(root.itemId))
+      const lifecycle = root && readAgentJournalTurn(root.body)
+      const keyPart = lifecycle && providerTimelineTurnKeyPart(lifecycle.turnId)
+      if (rootIdentity?.provider === 'legacy' && keyPart !== null && keyPart !== undefined) {
+        lastWork.set(scoped(rootIdentity.agent, rootIdentity.sessionId, keyPart), index)
+      }
+    }
+  }
   const rewrite = (id: string) => mapped.get(id) ?? id
-  return candidates
-    .filter((item) => !omitted.has(item.itemId))
+  return retained
+    .filter((item, index) => {
+      const anchor = notices.get(item.itemId)
+      return anchor === undefined || (lastWork.get(anchor) ?? -1) > index
+    })
     .map((item) => {
       const identity = parseAgentJournalItemKey(mapped.get(item.itemId)!)!
       const body: AgentJournalItemBody = mapBodyLinks(
