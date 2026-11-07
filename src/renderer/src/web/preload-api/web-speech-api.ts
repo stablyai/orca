@@ -161,14 +161,16 @@ export function createWebSpeechApi(): Pick<
         throw error
       }
     },
+    // The host's chunk RPC doesn't report the cloud upload cap, so the web client never sees it reached.
     feedAudio: async (samples, sampleRate, sessionId) => {
       const dictation = active
       if (!dictation || dictation.sessionId !== sessionId || dictation.failed) {
-        return
+        return false
       }
       dictation.pending.push(samples)
       dictation.sampleRate = sampleRate
       dictation.sending ??= sendPendingAudio(dictation)
+      return false
     },
     stopDictation: async (sessionId = '') => {
       const dictation = active?.sessionId === sessionId ? active : null
