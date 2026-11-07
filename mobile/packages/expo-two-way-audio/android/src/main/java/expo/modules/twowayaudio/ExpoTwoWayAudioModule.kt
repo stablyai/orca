@@ -5,7 +5,6 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
-import expo.modules.kotlin.typedarray.Uint8Array
 import expo.modules.interfaces.permissions.Permissions
 
 class ExpoTwoWayAudioModule : Module() {
@@ -115,13 +114,8 @@ class ExpoTwoWayAudioModule : Module() {
             speech.start(locale, sampleRate)
         }
 
-        Function("speechFeed") { pcm: Uint8Array ->
-            runCatching {
-                val bytes = ByteArray(pcm.byteLength)
-                pcm.read(bytes, 0, bytes.size)
-                speech.feed(bytes)
-            }
-            Unit
+        Function("speechFeed") { pcm: ByteArray ->
+            speech.feed(pcm)
         }
 
         AsyncFunction("speechFinish") Coroutine { ->

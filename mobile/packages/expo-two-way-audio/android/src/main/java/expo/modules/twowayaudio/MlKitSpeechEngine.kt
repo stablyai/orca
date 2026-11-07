@@ -94,7 +94,6 @@ internal class MlKitSpeechEngine : OnDeviceSpeechEngine {
   }
 
   override fun failureCode(error: Throwable): String = when (error) {
-    is SpeechFailure -> error.failureCode
     is GenAiException -> when (error.errorCode) {
       GenAiException.ErrorCode.BUSY -> "busy"
       GenAiException.ErrorCode.NOT_AVAILABLE,

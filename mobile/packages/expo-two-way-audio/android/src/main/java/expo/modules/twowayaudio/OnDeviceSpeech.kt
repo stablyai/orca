@@ -51,7 +51,7 @@ internal class OnDeviceSpeech(
     } catch (error: CancellationException) {
       throw error
     } catch (error: Exception) {
-      Log.w(TAG, "Speech download failed for $tag", error)
+      Log.w(SPEECH_LOG_TAG, "Speech download failed for $tag", error)
       false
     }
   }
@@ -60,7 +60,7 @@ internal class OnDeviceSpeech(
     val (previous, startGeneration) = synchronized(lock) { endSession() to generation }
     // Its teardown releases the recognizer this session may reuse; let it land first.
     previous?.result?.join()
-    if (sampleRate != SPEECH_SAMPLE_RATE) return notStarted(SpeechStatus.UNSUPPORTED.wire)
+    if (sampleRate != MIC_SAMPLE_RATE) return notStarted(SpeechStatus.UNSUPPORTED.wire)
     val (speech, target) = resolve(locale) ?: return notStarted(SpeechStatus.UNSUPPORTED.wire)
     if (target.status != SpeechStatus.READY) return notStarted(SpeechStatus.NEEDS_DOWNLOAD.wire)
     synchronized(lock) {
@@ -76,8 +76,8 @@ internal class OnDeviceSpeech(
       // Registered after the session is current, so a failure that already happened is still reported.
       next.result.invokeOnCompletion { error ->
         if (error == null || error is CancellationException) return@invokeOnCompletion
-        Log.w(TAG, "On-device speech failed", error)
-        emitIfCurrent(next) { SPEECH_ERROR_EVENT to mapOf("code" to speech.failureCode(error)) }
+        Log.w(SPEECH_LOG_TAG, "On-device speech failed", error)
+        emitIfCurrent(next) { SPEECH_ERROR_EVENT to mapOf("code" to failureCode(speech, error)) }
       }
     }
     return mapOf("started" to true, "locale" to target.locale.toLanguageTag())
@@ -96,7 +96,7 @@ internal class OnDeviceSpeech(
     } catch (error: Exception) {
       current.cancel()
       if (error is SpeechFailure) throw error
-      throw SpeechFailure(current.engine.failureCode(error), error.message ?: "On-device speech failed.", error)
+      throw SpeechFailure(failureCode(current.engine, error), error.message ?: "On-device speech failed.", error)
     } finally {
       synchronized(lock) { if (session === current) session = null }
     }
@@ -136,7 +136,7 @@ internal class OnDeviceSpeech(
       } catch (error: CancellationException) {
         throw error
       } catch (error: Exception) {
-        Log.w(TAG, "Speech availability check failed for $locale", error)
+        Log.w(SPEECH_LOG_TAG, "Speech availability check failed for $locale", error)
         null
       } ?: continue
       if (target.status == SpeechStatus.READY) return engine to target
@@ -147,7 +147,6 @@ internal class OnDeviceSpeech(
 
   private fun notStarted(reason: String) = mapOf("started" to false, "reason" to reason)
 
-  private companion object {
-    const val TAG = "OnDeviceSpeech"
-  }
+  private fun failureCode(engine: OnDeviceSpeechEngine, error: Throwable) =
+    (error as? SpeechFailure)?.failureCode ?: engine.failureCode(error)
 }

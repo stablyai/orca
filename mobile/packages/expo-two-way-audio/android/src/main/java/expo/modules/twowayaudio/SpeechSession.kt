@@ -9,8 +9,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
 
-internal const val SPEECH_SAMPLE_RATE = 16000
-internal const val SPEECH_BYTES_PER_MS = SPEECH_SAMPLE_RATE * 2 / 1000
+internal const val SPEECH_LOG_TAG = "OnDeviceSpeech"
+internal const val SPEECH_BYTES_PER_MS = MIC_SAMPLE_RATE * 2 / 1000
 
 // Wire values of the on-device speech contract (mobile/packages/expo-two-way-audio/src/speech.ts).
 internal enum class SpeechStatus(val wire: String) {
@@ -36,7 +36,8 @@ internal interface OnDeviceSpeechEngine {
   // Recognizes PCM from audio until it closes. onText gets the whole committed text and the tentative tail.
   suspend fun recognize(target: SpeechTarget, audio: PcmQueue, onText: (String, String) -> Unit): String
 
-  fun failureCode(error: Throwable): String
+  // Maps the engine's own exceptions to a contract code; SpeechFailure carries its code already.
+  fun failureCode(error: Throwable): String = "failed"
 
   // Releases anything the engine keeps between sessions.
   fun close() = Unit

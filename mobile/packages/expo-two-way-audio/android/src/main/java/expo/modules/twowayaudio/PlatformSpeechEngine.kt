@@ -5,8 +5,6 @@ import android.content.Intent
 import android.media.AudioFormat
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.speech.ModelDownloadListener
 import android.speech.RecognitionListener
@@ -75,7 +73,6 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
   ): String = PacedPcmPipe().use { pipe ->
     val events = Channel<RecognitionEvent>(Channel.UNLIMITED)
     var listening: SpeechRecognizer? = null
-    var ended = false
     try {
       // Not cancellable, and inside the try: a session cancelled mid-setup must still be cancelled below.
       withContext(NonCancellable + Dispatchers.Main) {
@@ -92,7 +89,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
           when (event) {
             is RecognitionEvent.Partial -> tentative = segmentTail(committed, event.text)
             is RecognitionEvent.Segment -> {
-              appendSegment(committed, event.text)
+              committed.append(segmentTail(committed, event.text))
               tentative = ""
             }
             is RecognitionEvent.Failed -> {
@@ -109,20 +106,15 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
           writer.cancel()
           throw SpeechFailure("failed", "Speech recognition ended before the recording did.")
         }
-        ended = true
         committed.append(tentative)
         committed.toString()
       }
-    } finally {
+    } catch (error: Throwable) {
       val started = listening
-      if (!ended && started != null) {
-        withContext(NonCancellable + Dispatchers.Main) { runCatching { started.cancel() } }
-      }
+      if (started != null) withContext(NonCancellable + Dispatchers.Main) { runCatching { started.cancel() } }
+      throw error
     }
   }
-
-  override fun failureCode(error: Throwable): String =
-    if (error is SpeechFailure) error.failureCode else "failed"
 
   private fun failureCode(error: Int): String = when (error) {
     SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "unsupported"
@@ -132,7 +124,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
   }
 
   override fun close() {
-    Handler(Looper.getMainLooper()).post { shared?.let(::drop) }
+    context.mainExecutor.execute { shared?.let(::drop) }
   }
 
   // A disconnected recognizer is replaced once; the new one binds the service afresh.
@@ -149,7 +141,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
         )
       } ?: return null
       if (error != SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
-        if (support == null) Log.w(TAG, "Recognition support check for $locale failed: $error")
+        if (support == null) Log.w(SPEECH_LOG_TAG, "Recognition support check for $locale failed: $error")
         return support
       }
       withContext(Dispatchers.Main) { shared?.let(::drop) }
@@ -167,7 +159,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
 
   // Runs one callback-style request on the shared recognizer. Null when it timed out; the recognizer is
   // then replaced, since a dropped request means its binding is gone.
-  private suspend fun <T> request(
+  private suspend fun <T : Any> request(
     timeoutMs: Long?,
     send: (SpeechRecognizer, (T) -> Unit) -> Unit
   ): T? = withContext(Dispatchers.Main) {
@@ -177,9 +169,9 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
         send(recognizer) { if (continuation.isActive) continuation.resume(it) }
       }
     }
-    val answer = if (timeoutMs == null) Result.success(call()) else withTimeoutOrNull(timeoutMs) { Result.success(call()) }
+    val answer = if (timeoutMs == null) call() else withTimeoutOrNull(timeoutMs) { call() }
     if (answer == null) drop(recognizer)
-    answer?.getOrNull()
+    answer
   }
 
   private fun recognizeIntent(locale: Locale) = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -192,21 +184,16 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pipe.readEnd)
     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
-    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, SPEECH_SAMPLE_RATE)
+    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, MIC_SAMPLE_RATE)
     // Keep listening across pauses until the audio source ends, reporting each segment as it closes.
     .putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
 
   private companion object {
-    const val TAG = "OnDeviceSpeech"
     const val SUPPORT_TIMEOUT_MS = 3_000L
   }
 }
 
 private fun List<String>.containsTag(locale: Locale) = any { it.equals(locale.toLanguageTag(), ignoreCase = true) }
-
-private fun appendSegment(text: StringBuilder, segment: String) {
-  text.append(segmentTail(text, segment))
-}
 
 // What a segment adds after the text so far. Segments arrive without separators; scripts written
 // without spaces (Chinese, Japanese, Thai) stay joined.
