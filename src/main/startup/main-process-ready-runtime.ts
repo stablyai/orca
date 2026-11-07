@@ -44,6 +44,7 @@ import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-pro
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
+import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -123,6 +124,15 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
   runAfterFirstWindowShown(() => {
     app.on('browser-window-focus', startSpeechModelWarmup(store))
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  runAfterFirstWindowShown(() => {
+    startClaudeCodeThemeSync({
+      getSettings: () => store.getSettings(),
+      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+      userDataPath: app.getPath('userData')
+    })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.
