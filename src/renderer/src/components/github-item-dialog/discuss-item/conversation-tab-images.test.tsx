@@ -52,6 +52,7 @@ it('edits the canonical body after rendering its signed image source', async () 
               title: 'Image',
               type: 'issue',
               state: 'open',
+              author: null,
               url: 'https://github.com/acme/widgets/issues/2',
               labels: [],
               updatedAt: ''

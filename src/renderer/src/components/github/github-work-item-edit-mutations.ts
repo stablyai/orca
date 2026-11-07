@@ -163,6 +163,7 @@ export async function runWorkItemBodyUpdate(args: {
     number: args.item.number,
     updates: { body: args.body }
   })
+  return undefined
 }
 
 export async function runPullRequestStateUpdate(args: {
