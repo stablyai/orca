@@ -9,6 +9,8 @@ import { createTestStore, makeWorktree, seedStore, TEST_REPO } from '../../store
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
+import { toast } from 'sonner'
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
 
 const id = 'repo1::/workspace/twin'
@@ -118,9 +120,8 @@ it.each(['local', 'runtime:peer'] as const)(
         ])
       }
     })
-    const created = await createUntitledFileInActiveWorkspace(
-      store.getState,
-      'group',
+    vi.mocked(toast.error).mockClear()
+    const create = vi.fn<Parameters<typeof createUntitledFileInActiveWorkspace>[2]>(
       async (context) => {
         context.assertOperationCurrent()
         return {
@@ -129,10 +130,15 @@ it.each(['local', 'runtime:peer'] as const)(
           worktreeId: id,
           language: 'markdown',
           isUntitled: true,
-          mode: 'edit',
+          mode: 'edit' as const,
           operationProvenance: context.operationProvenance
         }
-      },
+      }
+    )
+    const created = await createUntitledFileInActiveWorkspace(
+      store.getState,
+      'group',
+      create,
       'Creation failed',
       id,
       'local'
@@ -144,6 +150,8 @@ it.each(['local', 'runtime:peer'] as const)(
         expect.anything()
       )
     } else {
+      expect(create).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Reopen the file'))
       expect(store.getState().openFile).not.toHaveBeenCalled()
     }
   }

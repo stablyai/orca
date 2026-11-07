@@ -43,8 +43,10 @@ export function resolveAgentLaunchExecutionContext(
     : undefined
   const workspacePath = (
     selectedWorktree ??
-    store.getKnownWorktreeById?.(args.worktreeId) ??
-    store.allWorktrees?.().find((entry) => entry.id === args.worktreeId)
+    store.getKnownWorktreeById?.(args.worktreeId, args.executionHostId) ??
+    (args.executionHostId
+      ? undefined
+      : store.allWorktrees?.().find((entry) => entry.id === args.worktreeId))
   )?.path
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(

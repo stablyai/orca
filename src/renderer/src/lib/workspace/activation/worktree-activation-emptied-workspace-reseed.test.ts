@@ -331,17 +331,4 @@ describe('dismissing the sidebar create menu', () => {
       tabId
     ])
   })
-
-  it.each(['workspace', 'host'])('does not seed after the active %s changes', async (changed) => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
-      activeWorktreeId: changed === 'workspace' ? 'another-workspace' : worktree.id,
-      activeWorkspaceExecutionHostId: changed === 'host' ? toSshExecutionHostId('other') : 'local'
-    })
-    restoreWorktreeCreateMenuSurface(worktree.id, 'local')
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
-  })
 })

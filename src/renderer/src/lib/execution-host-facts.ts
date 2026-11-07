@@ -1,7 +1,6 @@
 import { resolveOwner } from './resolve-owner'
 import { findIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
-import { selectWorkspaceByHostTarget } from '@/store/workspace-record-selectors'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -171,10 +170,7 @@ export function resolveWorktreeExecutionHostPlatform(
     return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
   }
   const selectedWorktree = executionHostId
-    ? selectWorkspaceByHostTarget(
-        state,
-        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
-      )
+    ? findKnownWorktreeById({ ...state, floatingWorkspacePath: null }, worktreeId, executionHostId)
     : undefined
   const selectedRepo =
     selectedWorktree && executionHostId
@@ -201,15 +197,17 @@ export function resolveWorktreeExecutionHostPlatform(
         : null,
     workspacePath,
     projectRuntime: () =>
-      getLocalProjectExecutionRuntimeContext(
-        state,
-        worktreeId,
-        undefined,
-        undefined,
-        selectedWorktree && selectedRepo
-          ? { worktree: selectedWorktree, repo: selectedRepo }
-          : undefined
-      )
+      executionHostId && !(selectedWorktree && selectedRepo)
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(
+            state,
+            worktreeId,
+            undefined,
+            undefined,
+            selectedWorktree && selectedRepo
+              ? { worktree: selectedWorktree, repo: selectedRepo }
+              : undefined
+          )
   })
 }
 

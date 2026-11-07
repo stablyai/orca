@@ -1,4 +1,5 @@
 import * as rendererPlatform from '@/lib/renderer-app-platform'
+import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
@@ -196,4 +197,45 @@ it('compares a folder custom cwd with the selected copy root', () => {
     tuiCustomization: { cwd: '/srv/remote' }
   })
   expect(input.startsOutsideWorkspaceRoot).toBe(true)
+  expect(
+    buildAgentLaunchRouteInput(store.getState(), {
+      agent: 'codex',
+      workspace: { kind: 'folder', worktreeId: 'folder:notes', hostId: 'local' },
+      tuiCustomization: { cwd: '/srv/local' }
+    }).startsOutsideWorkspaceRoot
+  ).toBe(false)
+})
+
+it('uses the selected detected server path when a local WSL twin is detected first', () => {
+  const store = setup()
+  const status = store.getState().runtimeStatusByEnvironmentId.get('env-1')!
+  store.setState({
+    worktreesByRepo: {},
+    runtimeStatusByEnvironmentId: new Map([
+      ['env-1', { ...status, status: { ...status.status!, hostPlatform: 'win32' } }]
+    ]),
+    detectedWorktreesByRepo: {
+      repo1: makeDetectedResult('repo1', [
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          hostId: 'local',
+          path: String.raw`\\wsl.localhost\Ubuntu\repo`
+        }),
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          hostId: 'runtime:env-1',
+          runtimeOwnerEnvironmentId: 'env-1',
+          path: 'C:\\server'
+        })
+      ])
+    }
+  })
+  expect(
+    resolveAgentLaunchExecutionContext(store.getState(), {
+      worktreeId: id,
+      executionHostId: 'runtime:env-1'
+    })
+  ).toMatchObject({ resolvedLaunchPlatform: 'win32', isRemote: true })
 })

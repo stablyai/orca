@@ -206,6 +206,7 @@ describe('explicit workspace terminal creation', () => {
 it.each([undefined, 'pwsh.exe'])(
   'routes a captured host and shell despite another active host (%s)',
   async (shellOverride) => {
+    remoteCreate.mockClear()
     const store = createTestStore()
     const id = 'repo1::/path/twin'
     seedStore(store, {
@@ -239,9 +240,11 @@ it.each([undefined, 'pwsh.exe'])(
       { userAct: true }
     )
     expect(store.getState().tabsByWorktree[id] ?? []).toEqual([])
+    remoteCreate.mockClear()
     await store
       .getState()
       .openNewTerminalTabInActiveWorkspace('menu-group', id, 'local', shellOverride)
+    expect(remoteCreate).not.toHaveBeenCalled()
     expect(store.getState().unifiedTabsByWorktree[id]?.[0]?.executionHostId).toBe('local')
     expect(store.getState().tabsByWorktree[id]?.[0]?.shellOverride).toBe(shellOverride)
   }
