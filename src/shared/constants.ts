@@ -102,6 +102,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: defaultTerminalFontWeight(),
+    // Fresh Windows profiles start on Regular, so a later 500 is a choice, not the old default.
+    terminalFontWeightWindowsRegular:
+      typeof process !== 'undefined' && process.platform === 'win32' ? 'done' : undefined,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),

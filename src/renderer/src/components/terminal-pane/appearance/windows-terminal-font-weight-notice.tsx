@@ -50,21 +50,40 @@ function TerminalWeightSamples({ fontFamily }: { fontFamily: string }): React.JS
   )
 }
 
+const UNDO_TOAST_ID = 'windows-terminal-font-weight-undo'
+const NOTICE_TOAST_ID = 'windows-terminal-font-weight-notice'
+
+function finishNotice(updates: Partial<GlobalSettings> = {}): void {
+  const store = useAppStore.getState()
+  if (store.settings?.terminalFontWeightWindowsRegular !== 'notice-pending') {
+    return
+  }
+  void store
+    .updateSettings({ ...updates, terminalFontWeightWindowsRegular: 'done' })
+    .catch(console.error)
+}
+
 /** Tells Windows profiles moved off the old 500 default, with an Undo that outlives the Adjust action. */
 export function useWindowsTerminalFontWeightNotice(): void {
   const noticePending = useAppStore(
     (s) => s.settings?.terminalFontWeightWindowsRegular === 'notice-pending'
   )
+  const weightChosenSinceMigration = useAppStore(
+    (s) => noticePending && s.settings?.terminalFontWeight !== WINDOWS_TERMINAL_FONT_WEIGHT
+  )
+
+  // A weight picked by hand supersedes Undo, which would otherwise overwrite it with 500.
+  useEffect(() => {
+    if (weightChosenSinceMigration) {
+      finishNotice()
+    }
+  }, [weightChosenSinceMigration])
 
   useEffect(() => {
     if (!noticePending) {
+      toast.dismiss(UNDO_TOAST_ID)
+      toast.dismiss(NOTICE_TOAST_ID)
       return
-    }
-    const store = useAppStore.getState()
-    const finish = (updates: Partial<GlobalSettings> = {}): void => {
-      void store
-        .updateSettings({ ...updates, terminalFontWeightWindowsRegular: 'done' })
-        .catch(console.error)
     }
     // Shown first so the explanation stacks on top; it stays after that toast closes.
     toast(
@@ -74,20 +93,20 @@ export function useWindowsTerminalFontWeightNotice(): void {
       ),
       {
         // Stable IDs let sonner dedupe StrictMode's repeat.
-        id: 'windows-terminal-font-weight-undo',
+        id: UNDO_TOAST_ID,
         duration: Infinity,
-        onDismiss: () => finish(),
+        onDismiss: () => finishNotice(),
         action: {
           label: translate('terminal.windowsFontWeight.undo.action', 'Undo'),
           // Sonner actions skip onDismiss, so consume the notice here too.
-          onClick: () => finish({ terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT })
+          onClick: () => finishNotice({ terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT })
         }
       }
     )
     toast.info(
       translate('terminal.windowsFontWeight.notice.title', 'Terminal text is lighter on Windows'),
       {
-        id: 'windows-terminal-font-weight-notice',
+        id: NOTICE_TOAST_ID,
         description: (
           <>
             {translate(
@@ -95,7 +114,9 @@ export function useWindowsTerminalFontWeightNotice(): void {
               'Windows fonts like Cascadia Mono have no Medium face, so 500 drew as SemiBold. Terminals now use Regular.'
             )}
             <TerminalWeightSamples
-              fontFamily={buildFontFamily(store.settings?.terminalFontFamily ?? '')}
+              fontFamily={buildFontFamily(
+                useAppStore.getState().settings?.terminalFontFamily ?? ''
+              )}
             />
           </>
         ),

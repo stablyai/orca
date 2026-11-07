@@ -26,6 +26,7 @@ export function buildDefaultSettings(args: {
   primarySelectionDefaultedForLinux: boolean
   terminalFontFamily: string
   terminalFontWeight: number
+  terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
   terminalInactivePaneOpacity: number
   terminalRightClickToPaste: boolean
   notifications: NotificationSettings
@@ -75,6 +76,7 @@ export function buildDefaultSettings(args: {
     terminalFontSize: 14,
     terminalFontFamily: args.terminalFontFamily,
     terminalFontWeight: args.terminalFontWeight,
+    terminalFontWeightWindowsRegular: args.terminalFontWeightWindowsRegular,
     terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,

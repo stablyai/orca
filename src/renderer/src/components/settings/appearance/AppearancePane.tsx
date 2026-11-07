@@ -103,6 +103,9 @@ export function AppearancePane({
       return next
     })
     clearAppearanceAccordionDeepLink()
+    if (appearanceAccordionDeepLink !== 'window') {
+      return
+    }
     // Scroll next frame after synchronous expansion so the target has nonzero height.
     const frameId = requestAnimationFrame(() => {
       document
