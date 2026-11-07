@@ -219,7 +219,7 @@ export async function getIssueBodyAndComments(
       ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       body?: string
       comments?: {
         author: { login: string }
@@ -229,7 +229,7 @@ export async function getIssueBodyAndComments(
         viewerDidAuthor?: boolean
       }[]
       assignees?: { login: string }[]
-    }
+    } = JSON.parse(stdout)
     const comments = (data.comments ?? []).map((comment, index): PRComment => ({
       id: index,
       author: comment.author?.login ?? 'ghost',

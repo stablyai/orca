@@ -13,7 +13,7 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import React, { useState, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { DetailPayload, GitHubDetailFile } from './mobile-tasks-provider-detail-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
@@ -471,6 +471,12 @@ it.each(['comment', 'status'] as const)(
 )
 
 it('keeps an unconfirmed comment with a notice until the reloaded thread shows the viewer posted it', async () => {
+  // The send records Date.now() as its start; pin it so "after the send" is a fixed time.
+  const now = '2026-11-07T09:00:00.000Z'
+  vi.setSystemTime(now)
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const f = await mount()
   await act(async () => f.read().setItemCommentDraft('Ship it'))
   let pending!: Promise<void>
@@ -490,7 +496,6 @@ it('keeps an unconfirmed comment with a notice until the reloaded thread shows t
       text: 'Not confirmed. Check the thread before sending again.'
     }
   })
-  const now = new Date().toISOString()
   const theirs = { id: 40, body: 'Ship it', createdAt: now, author: 'alice' }
   // Mine, from long before the send, that the refresh read for the first time.
   const myOlder = {

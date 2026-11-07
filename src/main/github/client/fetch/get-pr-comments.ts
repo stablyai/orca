@@ -117,7 +117,7 @@ async function readPRComments(
       ghOptions
     )
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-    const data = JSON.parse(stdout) as {
+    const data: {
       comments: {
         author: { login: string }
         body: string
@@ -125,7 +125,7 @@ async function readPRComments(
         url: string
         viewerDidAuthor?: boolean
       }[]
-    }
+    } = JSON.parse(stdout)
     return (data.comments ?? []).map((c, i) => ({
       id: i,
       author: c.author?.login ?? 'ghost',
