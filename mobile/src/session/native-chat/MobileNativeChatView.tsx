@@ -230,9 +230,9 @@ export function MobileNativeChatView({
   const offlineQueue = useMobileNativeChatOfflineQueue({
     scope: draftKey,
     inputLockReason: inputLockReason ?? null,
-    promptPending:
-      !structuredActivityUi &&
-      (ask ?? permission ?? question ?? collapsedPrompt ?? awaitingInput) != null,
+    held: structuredActivityUi
+      ? status !== 'ready'
+      : (ask ?? permission ?? question ?? collapsedPrompt ?? awaitingInput) != null,
     send: onSend
   })
   const { lockReason } = offlineQueue
