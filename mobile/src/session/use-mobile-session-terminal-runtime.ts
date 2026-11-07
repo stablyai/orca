@@ -40,8 +40,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminals,
     setLiveInputCapture,
     activeHandle,
-    activeSessionTabId,
-    keyboardHeight
+    activeSessionTabId
   } = scope
   // Keep pushed terminal modes synchronous for paste without another round trip.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
@@ -126,6 +125,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
     sendLiveInputClick
@@ -152,7 +152,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeHandleRef,
     canSend,
     inputRef: liveInputRef,
-    keyboardHeight,
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
@@ -220,6 +219,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     flushPendingLiveInputBeforeExternalSend,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
     sendLiveInputClick,

@@ -38,10 +38,7 @@ import {
 import { markStructuredAgentSessionLaunchCancelled } from './structured-agent-session-launch-cancel'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
-import {
-  prepareStructuredLaunchCreateMessage,
-  publishStructuredLaunchCreateOptions
-} from './structured-agent-session-launch-create-message'
+import { publishWithHeldOptions } from './structured-agent-session-launch-create-message'
 import {
   maybeCleanupLaunchState,
   trackLaunchSettlement
@@ -75,28 +72,13 @@ export type StructuredAgentLaunchResult = {
   releaseCallerAfterUnknownOutcome: () => boolean
 }
 
-/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
-function publishWithHeldOptions(
-  state: StructuredLaunchState,
-  created: Promise<StructuredAgentLaunchReceipt>
-): Promise<StructuredAgentLaunchReceipt> {
-  state.intent.prepareCreate = (hostTakesExplicitOptions) =>
-    prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
-  const publishing: Promise<StructuredAgentLaunchReceipt> = created.then((receipt) =>
-    state.promise === publishing
-      ? publishStructuredLaunchCreateOptions(state, receipt)
-      : state.promise
-  )
-  return publishing
-}
-
 /** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
 function adoptPairedHostSeed(
   state: StructuredLaunchState,
   seedOptions: StructuredLaunchState['selection']['seed']
 ): void {
   // The support answer is a fresh seed; continuation baseline belongs to actual host create.
-  if (state.intent.params.resumeFrom) {
+  if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     seedOptions = undefined
   }
   const { seedPending, ...selection } = state.selection
@@ -112,28 +94,38 @@ function adoptPairedHostSeed(
   notifyStructuredLaunchListeners()
 }
 
-function resetStructuredLaunchCallers(state: StructuredLaunchState): void {
-  state.callers = createStructuredLaunchCallerGroup({ kind: 'retry' })
+function resetStructuredLaunchCallers(
+  state: StructuredLaunchState,
+  retainedOpening: boolean
+): void {
+  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
+  state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
 
-function restartStructuredLaunchState(state: StructuredLaunchState): void {
+function restartStructuredLaunchState(state: StructuredLaunchState, requested = false): void {
   const wasVisibilityUnknown = state.visibilityUnknown
-  if (!wasVisibilityUnknown) {
+  const retainedOpening = wasVisibilityUnknown && !!state.intent.params.firstMessage
+  if (!wasVisibilityUnknown || (retainedOpening && requested)) {
     const surfaceAddress = state.intent.surfaceAddress
-    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
+    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening)
     state.intent.surfaceAddress = surfaceAddress
   }
-  resetStructuredLaunchCallers(state)
+  resetStructuredLaunchCallers(state, retainedOpening)
   delete state.failure
+  delete state.operationEnded
   state.callers.outcome = 'pending'
   // A new create seeds from the settings of now (a paired server's arrive with its probe); picks
   // held through the failure still apply.
-  state.selection = initialStructuredLaunchSelection(state.intent)
-  state.onHostSeed = (seedOptions) => adoptPairedHostSeed(state, seedOptions)
+  if (!retainedOpening) {
+    state.selection = initialStructuredLaunchSelection(state.intent)
+  }
+  state.onHostSeed = retainedOpening
+    ? undefined
+    : (seedOptions) => adoptPairedHostSeed(state, seedOptions)
   state.promise = publishWithHeldOptions(
     state,
-    wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
+    wasVisibilityUnknown ? reconcileUnknownLaunch(state, requested) : launchAndReconcile(state)
   )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
@@ -207,9 +199,12 @@ function structuredAgentLaunchState(
     options.executionHostId,
     options.resumeFrom,
     options.hostSeedOptions,
-    options.activate
+    options.activate,
+    options.forkFrom
   )
-  intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
+  // A fork inherits its source's options.
+  intent.explicitLaunchOptions =
+    !options.forkFrom && options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
   intent.createAfter = options.createAfter
   intent.surfaceAddress = options.surfaceAddress
@@ -296,12 +291,13 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
     restorePersistedStructuredLaunchState(worktreeId, sessionId)
   if (
     state?.intent.worktreeId !== worktreeId ||
-    (state.visibilityUnknown && !!state.intent.params.firstMessage) ||
+    state.cancelled ||
+    state.callers.outcome === 'pending' ||
     (!state.visibilityUnknown && state.callers.outcome !== 'failed')
   ) {
     return false
   }
-  restartStructuredLaunchState(state)
+  restartStructuredLaunchState(state, true)
   return true
 }
 

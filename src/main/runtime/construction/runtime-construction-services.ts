@@ -15,13 +15,13 @@ import type { TuiIdleHookTurn } from '../terminal/wait/tui-idle-hook-lane'
 import type { RuledScreen } from '../terminal/wait/screen-input-veto'
 import type {
   TerminalHandlePty,
-  TerminalHandleLeaf,
-  TerminalWaiter,
-  OrchestrationCompatibilityTerminalAuthority
-} from '../runtime-terminal-contracts'
+  TerminalHandleLeaf
+} from '../terminal/identity/terminal-handle-records'
+import type { TerminalWaiter } from '../terminal/wait/terminal-waiter'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
-import type { WorkerTerminalResourceRow } from '../orchestration/worker-terminal-ownership'
+import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type {
   RuntimeTerminalShow,
@@ -35,15 +35,15 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
-import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
-import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
-import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
+import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
+import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
+import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { StructuredPointerTarget } from '../orchestration/structured-mailbox-pointer-delivery'
+import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
-import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
+import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
@@ -299,6 +299,6 @@ export abstract class RuntimeConstructionServices {
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
   protected abstract getFreshExplicitAgentStatusForHandle(
     handle: string,
-    paneKeyOverride?: string | null
+    ptyId: string
   ): ReturnType<typeof selectFreshExplicitAgentStatus>
 }

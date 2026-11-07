@@ -25,6 +25,7 @@ import {
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { replaceRetiredSpeechModelId } from '../../speech/model-catalog'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -52,6 +53,7 @@ export function normalizeLoadedGlobalSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,
@@ -72,6 +74,7 @@ export function normalizeLoadedGlobalSettings(
     normalizedSourceControlGroupOrder
   } = profile
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
+  const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
   const matchTerminalSidebarInputs = {
     pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
     pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
@@ -102,6 +105,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
     // False was always explicit; the old true default may be reset once.
@@ -169,6 +173,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
+    agentWorkspaceTrustExistingReposMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
@@ -183,9 +188,6 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: {
-      ...getDefaultVoiceSettings(),
-      ...parsed.settings?.voice
-    }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) }
   }
 }

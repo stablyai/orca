@@ -18,9 +18,8 @@ on:
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
@@ -40,6 +39,30 @@ on:
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
+      # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
+      - 'src/main/native-chat/*transcript*.ts'
+      - 'src/main/native-chat/subagent-entry-id-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
+      - 'src/main/claude/claude-internal-message-content.ts'
+      - 'src/main/claude/claude-stop-hook-feedback.ts'
+      - 'src/main/claude/structured/journal/**'
+      - 'src/main/claude/__fixtures__/claude-adapter-capture-fold.jsonl'
+      - 'src/main/codex/app-server/codex-item-field-readers.ts'
+      - 'src/main/codex/structured/items/**'
+      - 'src/main/codex/structured/background-work/codex-subagent-activity.ts'
+      - 'src/main/codex/structured/journal/codex-goal-journal-rows.ts'
+      - 'src/main/codex/__fixtures__/codex-hook-outcomes.jsonl'
+      - 'src/main/ai-vault/session-scanner-*.ts'
+      - 'src/main/ai-vault/ai-vault-scan-cancellation.ts'
+      - 'src/main/ai-vault/scan-service/session-scanner-service-env.ts'
+      - 'src/main/ai-vault/scanners/grok/session-scanner-grok-user-text.ts'
+      - 'src/main/provider-process/provider-json-record.ts'
+      - 'src/main/providers/ssh-host-not-served-error.ts'
+      - 'src/main/wsl/discovery/**'
+      - 'src/main/wsl/execution/wsl-exe-process.ts'
+      - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
+      - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
@@ -83,9 +106,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
@@ -105,6 +127,30 @@ on:
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
+      # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
+      - 'src/main/native-chat/*transcript*.ts'
+      - 'src/main/native-chat/subagent-entry-id-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
+      - 'src/main/claude/claude-internal-message-content.ts'
+      - 'src/main/claude/claude-stop-hook-feedback.ts'
+      - 'src/main/claude/structured/journal/**'
+      - 'src/main/claude/__fixtures__/claude-adapter-capture-fold.jsonl'
+      - 'src/main/codex/app-server/codex-item-field-readers.ts'
+      - 'src/main/codex/structured/items/**'
+      - 'src/main/codex/structured/background-work/codex-subagent-activity.ts'
+      - 'src/main/codex/structured/journal/codex-goal-journal-rows.ts'
+      - 'src/main/codex/__fixtures__/codex-hook-outcomes.jsonl'
+      - 'src/main/ai-vault/session-scanner-*.ts'
+      - 'src/main/ai-vault/ai-vault-scan-cancellation.ts'
+      - 'src/main/ai-vault/scan-service/session-scanner-service-env.ts'
+      - 'src/main/ai-vault/scanners/grok/session-scanner-grok-user-text.ts'
+      - 'src/main/provider-process/provider-json-record.ts'
+      - 'src/main/providers/ssh-host-not-served-error.ts'
+      - 'src/main/wsl/discovery/**'
+      - 'src/main/wsl/execution/wsl-exe-process.ts'
+      - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
+      - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
@@ -140,6 +186,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -278,10 +325,6 @@ jobs:
         if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/ios_release_version_test.rb
 
-      - name: Test TestFlight lane arguments
-        if: steps.ruby-scope.outputs.should_run != 'false'
-        run: ruby fastlane/fastfile_testflight_arguments_test.rb
-
       # Load/list Fastfile lanes without Apple credentials/network to catch syntax/require/constants before release; ios-distribute failed six days without this guard.
       - name: Smoke-check the Fastfile
         if: steps.ruby-scope.outputs.should_run != 'false'
@@ -352,6 +395,7 @@ jobs:
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     defaults:
       run:

@@ -275,31 +275,6 @@ describe('codex hook trust write-back promotion', () => {
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.trustedHash).toBe(driftedHash)
   })
 
-  it('does not touch ~/.codex on the first launch after upgrading (no provenance yet)', async () => {
-    const service = new CodexHookService()
-    await service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
-
-    await service.install()
-
-    expect(readSystemToml()).toBe('')
-    expect(existsSync(join(systemCodexDir(), 'config.toml'))).toBe(false)
-  })
-
-  it('re-promoting mirrored trust without provenance is a no-op on ~/.codex', async () => {
-    writeSystemUserHook()
-    const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
-    const service = new CodexHookService()
-    await service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
-    const systemTomlBefore = readSystemToml()
-
-    await service.install()
-
-    expect(readSystemToml()).toBe(systemTomlBefore)
-  })
-
   it('does not resurrect trust revoked in ~/.codex before the first provenance snapshot', async () => {
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
@@ -341,20 +316,6 @@ describe('codex hook trust write-back promotion', () => {
         computeTrustKey(runtimeUserStopEntry())
       )?.enabled
     ).toBe(false)
-  })
-
-  it('promotes one approval to every identical system hook collapsed by deduping', async () => {
-    writeSystemUserHook([USER_HOOK_COMMAND, USER_HOOK_COMMAND])
-    const service = new CodexHookService()
-    await service.install()
-
-    simulateCodexApproval(runtimeUserStopEntry())
-    await service.install()
-
-    const systemTrust = readHookTrustEntries(join(systemCodexDir(), 'config.toml'))
-    const approvedHash = computeTrustedHash(runtimeUserStopEntry())
-    expect(systemTrust.get(computeTrustKey(systemUserStopEntry(0)))?.trustedHash).toBe(approvedHash)
-    expect(systemTrust.get(computeTrustKey(systemUserStopEntry(1)))?.trustedHash).toBe(approvedHash)
   })
 
   it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', async () => {

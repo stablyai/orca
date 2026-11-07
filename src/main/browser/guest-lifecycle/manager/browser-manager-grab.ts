@@ -2,7 +2,10 @@ import { webContents } from 'electron'
 import { buildGuestOverlayScript } from '../../element-grab/grab-guest-script'
 import { clampGrabPayload } from '../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../element-grab/browser-grab-screenshot'
-import { getWorkspaceDocPageGuest } from '../../document-preview/doc-preview-guest-policy'
+import {
+  getWorkspaceDocPageGuest,
+  readDocPreviewGuestDocumentUrl
+} from '../../document-preview/doc-preview-guest-policy'
 import type {
   BrowserGrabCancelReason,
   BrowserGrabResult,
@@ -105,7 +108,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       if (!rawPayload || typeof rawPayload !== 'object') {
         return null
       }
-      return clampGrabPayload(rawPayload)
+      return clampGrabPayload(rawPayload, readDocPreviewGuestDocumentUrl(guest))
     } catch {
       return null
     }

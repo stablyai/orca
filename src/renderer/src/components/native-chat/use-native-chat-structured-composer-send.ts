@@ -9,7 +9,7 @@ import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentati
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { SkillRefLimitError } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { promptSkillRefs } from './native-chat-prompt-document'
+import { promptHasInteractionModeSkill, promptSkillRefs } from './native-chat-prompt-document'
 import type { StructuredAgentSessionAttachmentPreparation } from './structured-agent-session-send-slot'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
@@ -82,10 +82,15 @@ export function useNativeChatStructuredComposerSend({
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       const submittedText = text
       text = projectNativeChatPastedText(text, submitted.pastedTextFiles)
-      const hostCommand = isStructuredAgentSessionHostCommand(
-        text,
-        structuredTransport.threadGoal !== undefined
-      )
+      const pickedModeSkill = promptHasInteractionModeSkill(agent, text, submitted.document)
+      const hostCommand =
+        !pickedModeSkill &&
+        isStructuredAgentSessionHostCommand(
+          text,
+          structuredTransport.threadGoal !== undefined,
+          agent,
+          structuredTransport.optionSnapshot
+        )
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&

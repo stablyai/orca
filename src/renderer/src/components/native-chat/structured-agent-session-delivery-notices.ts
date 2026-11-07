@@ -7,8 +7,9 @@ import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session
 import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -53,19 +54,19 @@ export function structuredAgentSessionDeliveryNotices(args: {
     } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
+      const statedByRow = agentSessionFailureStatedByRow(fact, args.startFailures)
       const detail =
         fact &&
         classifyDispatchRejection({ reason: null, rejection: fact }).category === 'startFailed' &&
-        !agentSessionFailureStatedByRow(fact, args.startFailures)
+        !statedByRow
           ? agentSessionFailureDetailText(fact)
           : undefined
       notices.set(id, {
+        failureKind: statedByRow ? undefined : fact?.kind,
         text: agentSessionWriteNoticeText(
-          structuredAgentSessionRecordedRejectionParts(
-            submission,
-            { agentName },
-            args.startFailures
-          )
+          statedByRow
+            ? agentSessionWriteNotDoneParts('send')
+            : structuredAgentSessionRejectionParts(submission.reason, 'send', fact, { agentName })
         ),
         ...(detail ? { detail } : {})
       })

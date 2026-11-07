@@ -51,6 +51,21 @@ export function presentPdf(uri: string): Promise<void> {
   ).presentPdf(uri)
 }
 
+type ImageModule = {
+  shareImage: (uri: string, mime: string) => Promise<void>
+  saveImageToPhotos: (uri: string, mime: string) => Promise<void>
+}
+
+// iOS takes a file:// URI; Android takes a FileProvider content:// URI and grants the chosen app read access.
+export function shareImage(uri: string, mime: string): Promise<void> {
+  return requireNativeModule<ImageModule>('OrcaMobileWebShell').shareImage(uri, mime)
+}
+
+// iOS asks for add-only Photos access; Android writes to Pictures/Orca. Rejects with code native_image_permission_denied when refused.
+export function saveImageToPhotos(uri: string, mime: string): Promise<void> {
+  return requireNativeModule<ImageModule>('OrcaMobileWebShell').saveImageToPhotos(uri, mime)
+}
+
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,
   parseMobileWebShellLoadState,

@@ -41,7 +41,7 @@ vi.mock('@/store', () => ({
   )
 }))
 vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: mocks.details,
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.item
 }))
@@ -64,7 +64,9 @@ vi.mock('@/i18n/i18n', async (original) => ({
   ...(await original<object>()),
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('./github-item-dialog-issue-header', () => ({
   GitHubItemDialogIssueHeader: (props: {

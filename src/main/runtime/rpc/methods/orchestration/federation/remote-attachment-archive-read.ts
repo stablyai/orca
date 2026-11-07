@@ -1,5 +1,5 @@
-import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { readArchivedWorkerOutput } from '../worker/worker-archive-read'
 
 export async function readRemoteAttachmentArchive(args: {

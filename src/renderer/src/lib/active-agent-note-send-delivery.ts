@@ -1,5 +1,5 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import { sanitizeTerminalPasteText } from '@/components/terminal-pane/terminal-bracketed-paste'
+import { sanitizeTerminalPasteText } from '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import './agent-paste-draft'
 import {

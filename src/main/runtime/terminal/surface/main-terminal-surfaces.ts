@@ -21,7 +21,10 @@ import {
 } from './terminal-surface-index'
 
 export type MainTerminalSurfacesHost = {
-  store: () => Pick<RuntimeStore, 'getWorkspaceSessionHostIds' | 'getSettings'> | null
+  store: () => Pick<
+    RuntimeStore,
+    'getWorkspaceSessionHostIds' | 'getSettings' | 'getWorkspaceSession'
+  > | null
   /** Main's one layout projection. */
   reads: () => WorkspaceLayoutReads
   homeHostId: (key: string) => ExecutionHostId | null
@@ -60,6 +63,7 @@ class MainSurfacePublisher {
       reads: host.reads,
       hostIds: () => host.store()?.getWorkspaceSessionHostIds?.() ?? [],
       homeHostId: host.homeHostId,
+      savedSession: (hostId) => host.store()?.getWorkspaceSession?.(hostId) ?? null,
       generatedTitlesEnabled: () => host.store()?.getSettings?.().tabAutoGenerateTitle === true,
       onChanged: () => this.schedule({ merge: true })
     })
@@ -77,6 +81,10 @@ class MainSurfacePublisher {
           mobileSessionTabs: graph.mobileSessionTabs.map((rows) => this.withMainRows(rows))
         }
       : composed
+  }
+
+  savedSessionTabsOf(worktreeId: string): ReturnType<TerminalSurfaceIndex['sessionTabsOf']> {
+    return this.index.sessionTabsOf(worktreeId)
   }
 
   /** A workspace main owns publishes main's terminal and editor rows; any other, the window's. */

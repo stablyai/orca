@@ -16,15 +16,15 @@ import {
 import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest,
   waitForWsClose,
   type AuthenticatedMobileWs
-} from './runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+} from './rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import { DECLARED_CLIENT_RECONNECT_GRACE_MS } from './declared-desktop-clients'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 

@@ -3,7 +3,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import { restoreExpandedLayoutFrom } from './expand-collapse'
-import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
+import './parking/output-watchers/terminal-parked-tab-watchers'
+import { captureParkedTerminalPaneCandidates } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { shouldDetachPaneTransportOnUnmount } from './terminal-pane-lifecycle-primitives'
 import { cancelQueuedTerminalPaneSplitRequests } from './terminal-pane-split-request-routing'
 import {
@@ -13,6 +14,7 @@ import {
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
+import { clearTerminalFontSizeOverride } from './appearance/terminal-font-size-overrides'
 import { e2eConfig } from '@/lib/e2e-config'
 import { useAppStore } from '@/store'
 
@@ -114,6 +116,9 @@ export function cleanupTerminalPaneMount(args: {
   if (!tabStillExists) {
     // Cleanup also covers transports removed by a racing close.
     discardDeferredSplitPaneHandoffsForTab(tabId)
+    for (const pane of manager.getPanes()) {
+      clearTerminalFontSizeOverride(pane.leafId)
+    }
   }
   for (const binding of panePtyBindingsRef.current.values()) {
     binding.dispose()

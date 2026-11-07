@@ -12,7 +12,10 @@ import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-er
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import {
+  buildRuntimeSetupReceipt,
+  prepareRuntimeLocalWorktreeSetup
+} from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
@@ -31,7 +34,7 @@ import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
-  protected abstract resolveLineageForWorktreeCreate(
+  abstract resolveLineageForWorktreeCreate(
     input?: Lineage.WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<Lineage.WorktreeLineageResolution>
@@ -183,18 +186,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       rearm,
       timing
     })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult } = localCreate
-    const { lineage, workspaceLineage, warnings: lineageWarnings } = localCreate.metadataResult
+    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
+      localCreate
+    const { lineage, workspaceLineage } = metadataResult
 
-    let {
-      setup,
-      defaultTabs,
-      warning,
-      effectiveDecision,
-      hookFound,
-      shouldRunSetup,
-      didStartInProcessSetupHook
-    } = await prepareRuntimeLocalWorktreeSetup({
+    const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
       request: args,
       repo,
       worktreePath,
@@ -207,6 +203,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
+    const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
+    let { warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -266,29 +264,19 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         workspaceLineage,
         git: created
       },
-      ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
+      ...(lineageInput ? metadataResult : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
-              hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+            setupReceipt: buildRuntimeSetupReceipt(
+              preparedSetup,
+              didSpawnSetup,
+              setupTerminalHandle
+            )
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
+      ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
       ...(warning ? { warning } : {}),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh

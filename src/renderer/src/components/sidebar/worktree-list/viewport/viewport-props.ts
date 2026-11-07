@@ -46,6 +46,7 @@ export type VirtualizedWorktreeViewportProps = {
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
+  onToggleAllProjects?: () => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
@@ -84,6 +85,7 @@ export type VirtualizedWorktreeViewportProps = {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
   // Full canonical repo-id order; must include hidden repos or a reorder silently drops them.
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void

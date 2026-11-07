@@ -120,7 +120,7 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mockStore.activateWorktreeFromSidebar
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
@@ -308,6 +308,7 @@ function setAgentLineageState(options: {
     projectGroups: [],
     ptyIdsByTabId: {},
     recordFeatureInteraction: vi.fn(),
+    suppressContextualTour: vi.fn(),
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),

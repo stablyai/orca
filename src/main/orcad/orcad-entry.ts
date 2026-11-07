@@ -5,7 +5,7 @@ import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
-import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
+import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   startOrcadWithHost,
@@ -67,7 +67,7 @@ async function startOrcadRuntime(
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   // The daemon and its PTYs inherit the adopted login env and nothing later startup writes, so it
-  // spawns as soon as that lands, in parallel with the imports, stores and hook server. Never rejects.
+  // spawns as soon as that lands, alongside imports, stores and hooks. Rejects only when supervised.
   const daemonStartup = loginEnvironment.then(() => timed('daemon', () => startOrcadDaemon()))
   // Observed now: an early abort may never reach the await below.
   void daemonStartup.catch(() => {})
@@ -76,7 +76,7 @@ async function startOrcadRuntime(
   // in-flight spawn settles; a failed one leaves only the disconnect to do.
   registerCleanup(() => daemonStartup.catch(() => {}).then(() => stopOrcadDaemon()))
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
-  const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
+  const { OrcaRuntimeRpcServer } = await import('../runtime/rpc/server/runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')
   const { getLocalPtyProvider } = await import('../ipc/pty/provider/registry')
   const { installOrcadObservability } = await import('./orcad-observability')
@@ -297,6 +297,11 @@ async function startOrcadRuntime(
     enableWebSocket: true,
     // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
     pinnedBindHost: bindHost,
+    serveNetworkSources: {
+      allowPublic: options.allowPublic === true,
+      refusePublic: options.refusePublic === true,
+      pairingAddress: options.pairingAddress ?? null
+    },
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })

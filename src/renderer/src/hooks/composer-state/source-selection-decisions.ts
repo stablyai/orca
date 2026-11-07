@@ -7,7 +7,7 @@ import type { SmartGitHubSubmitResolution } from '@/lib/smart-github-submit'
 import {
   resolveGitHubWorkItemIdentity,
   type GitHubWorkItemIdentity
-} from '@/lib/github-work-item-identity'
+} from '../../../../shared/new-workspace/github-work-item-identity'
 
 export type PendingSmartGitHubSubmitResolution =
   | { kind: 'none' }

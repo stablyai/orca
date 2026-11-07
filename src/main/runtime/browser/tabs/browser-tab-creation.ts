@@ -24,6 +24,8 @@ export class RuntimeBrowserTabCreation {
       | 'resolveBrowserWorkspace'
       | 'resolveBrowserNetworkExecutionHost'
       | 'getBrowserHostLeaseRegistry'
+      | 'getBrowserHostRequestRegistry'
+      | 'getPairedDeviceName'
       | 'getRuntimeBrowserPageRegistry'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'

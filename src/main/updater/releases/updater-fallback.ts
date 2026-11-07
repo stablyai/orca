@@ -25,7 +25,10 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.delayedUpdate?.version === right.delayedUpdate?.version &&
         left.delayedUpdate?.availableAt === right.delayedUpdate?.availableAt &&
         left.delayedUpdate?.releasedAt === right.delayedUpdate?.releasedAt &&
-        left.delayedUpdate?.delayDays === right.delayedUpdate?.delayDays
+        left.delayedUpdate?.delayDays === right.delayedUpdate?.delayDays &&
+        left.unsupportedSystemUpdate?.version === right.unsupportedSystemUpdate?.version &&
+        left.unsupportedSystemUpdate?.minimumMacosVersion ===
+          right.unsupportedSystemUpdate?.minimumMacosVersion
       )
     case 'available':
       return (

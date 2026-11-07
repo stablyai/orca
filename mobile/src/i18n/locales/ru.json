@@ -114,7 +114,8 @@
       "pastePairingCode": "Или вставить код сопряжения",
       "scanCodeStep": "Отсканируйте QR-код",
       "title": "Сопряжение с компьютером",
-      "tryAgain": "Повторить попытку"
+      "tryAgain": "Повторить попытку",
+      "codeExpiredOrReplaced": "Срок действия этого кода сопряжения истёк, или он был заменён. Покажите новый код на компьютере и отсканируйте его снова."
     },
     "terminalSettings": {
       "defaultText": "По умолчанию (100%)",
@@ -197,6 +198,11 @@
       "sendQueueHint": "Выполнится после текущего хода",
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
+    "contextUsage": {
+      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
+      "title": "Контекст",
+      "estimated": "Оценка по последнему ответу."
+    },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
       "file": "Файл",
@@ -222,16 +228,30 @@
       "historyRepaired": "Часть истории этого чата не удалось загрузить."
     },
     "message": {
-      "copyMessage": "Копировать сообщение"
+      "copyMessage": "Копировать сообщение",
+      "forkFromResponse": "Создать ответвление от этого ответа",
+      "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Не удалось записать текст в буфер обмена.",
       "copyFailed": "Не удалось скопировать",
       "copyMessage": "Копировать сообщение",
-      "selectText": "Выделить текст"
+      "selectText": "Выделить текст",
+      "rewind": "Вернуться к этому сообщению"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Закрыть изображение"
+      "closeImage": "Закрыть изображение",
+      "imageActions": "Действия с изображением",
+      "copyImage": "Копировать изображение",
+      "saveImage": "Сохранить изображение",
+      "share": "Поделиться…",
+      "imageCopied": "Изображение скопировано",
+      "imageSaved": "Изображение сохранено",
+      "copyFailed": "Не удалось скопировать изображение",
+      "saveFailed": "Не удалось сохранить изображение",
+      "shareFailed": "Не удалось поделиться изображением",
+      "photosAccessDenied": "Разрешите Orca добавлять фото в Настройках",
+      "imageTooLarge": "Изображение слишком большое"
     },
     "nativeChatProse": {
       "attachedImage": "Прикреплённое изображение",
@@ -290,7 +310,10 @@
       "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
       "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
       "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
-      "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
+      "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
+      "signIn": "Войти",
+      "signInHint": "Открывает терминал на компьютере с этим чатом",
+      "forkedFrom": "Ответвление от"
     },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
@@ -299,6 +322,13 @@
       "remote": "Во время ответа Orca на {{machine}} остановилась.",
       "unnamedServer": "удалённом сервере",
       "update": "Во время ответа Orca на {{machine}} перезапустилась для обновления."
+    },
+    "interruptedContinue": {
+      "failed": "Не удалось продолжить чат. Повторите попытку или отправьте сообщение.",
+      "explanation": "При продолжении агент сначала проверит, завершился ли его последний шаг."
+    },
+    "sendError": {
+      "dismiss": "Скрыть"
     },
     "permission": {
       "needsAccessTo": "Требуется доступ: ",
@@ -587,12 +617,19 @@
     "usageLimit": {
       "reached": "{{agent}} достиг лимита использования.",
       "reachedNamed": "{{agent}} достиг лимита: {{window}}.",
-      "resetsAt": "Сброс: {{when}}.",
       "theAgent": "Агент",
       "windowCredits": "дополнительное использование",
       "windowSession": "на сессию",
       "windowWeekly": "на неделю",
-      "windowWeeklyModel": "на неделю для модели"
+      "windowWeeklyModel": "на неделю для модели",
+      "switchAccount": "Сменить аккаунт",
+      "autoContinueCancelFailed": "Не удалось отменить автоматическое продолжение. Попробуйте ещё раз.",
+      "autoContinueCancel": "Не продолжать",
+      "statusResetAt": "Сброшено в {{time}}",
+      "statusResetsAt": "Сброс в {{time}}",
+      "statusContinuesShortly": "Orca скоро продолжит",
+      "statusContinuesThen": "Orca продолжит тогда",
+      "statusWontContinue": "Orca не продолжит автоматически"
     },
     "useImageUpload": {
       "attachFailed": "Не удалось прикрепить",
@@ -621,9 +658,58 @@
       "byteSize": "{{size}} байт",
       "saveUpdate": "Сохранение станет доступно после обновления приложения на телефоне.",
       "fullCopySaveUpdate": "Полное копирование и сохранение этого вложения станут доступны после обновления приложения на телефоне."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} переподключается…",
+      "stopped": "{{hostName}} остановлен. Запустите его на компьютере.",
+      "server": "Сервер",
+      "unavailable": "{{hostName}} недоступен с телефона. Откройте один из его проектов на компьютере."
+    },
+    "goal": {
+      "chip": "Цель",
+      "exitMode": "Выйти из режима цели",
+      "placeholder": "Опишите цель и укажите измеримые результаты",
+      "pursuing": "Достигает цели",
+      "set": "Цель задана",
+      "paused": "Цель приостановлена",
+      "blocked": "Цель заблокирована",
+      "limited": "Достигнут лимит цели",
+      "clear": "Очистить цель",
+      "expand": "Показать полную цель",
+      "collapse": "Скрыть полную цель",
+      "attachmentsUnsupported": "Уберите вложения перед постановкой цели.",
+      "pause": "Приостановить",
+      "resume": "Возобновить"
+    },
+    "rewind": {
+      "title": "Вернуться к этому сообщению?",
+      "confirmation": "Убрать это сообщение и всё после него? Оно вернётся в поле ввода для правки и повторной отправки. Изменённые файлы на диске сохранятся.",
+      "confirm": "Вернуться",
+      "unsupported": "В этом чате нельзя вернуться к предыдущему сообщению.",
+      "historyNotPaginated": "В этом старом чате Codex нельзя вернуться к предыдущему сообщению. Создайте новый чат, чтобы использовать возврат к сообщению.",
+      "busy": "Доступно, когда агент закончит работу и чат не будет ждать вашего ответа.",
+      "staleEpoch": "Разговор изменился. Просмотрите последние сообщения и повторите попытку.",
+      "invalidTarget": "Нельзя вернуться к этому сообщению. Ничего не изменилось.",
+      "historyLimit": "Разговор слишком длинный для возврата. Ничего не изменилось.",
+      "providerRefused": "Агент не смог вернуться к этому сообщению.",
+      "proofMismatch": "История агента не совпала с этим чатом. Проверьте разговор перед продолжением.",
+      "outcomeUnknown": "Не удалось подтвердить возврат к предыдущему сообщению. Orca проверит состояние перед отправкой следующего сообщения.",
+      "refused": "Не удалось вернуться к этому сообщению. Проверьте разговор перед продолжением.",
+      "unavailable": "Дождитесь подключения чата.",
+      "outcomeUnknownReturned": "Не удалось подтвердить возврат к этому сообщению. Ваш текст снова в поле ввода. Orca проверит разговор перед отправкой следующего сообщения.",
+      "timeout": "После возврата к сообщению чат не обновился. Откройте его заново, чтобы увидеть актуальную историю.",
+      "pending": "Дождитесь возврата к предыдущему сообщению."
+    },
+    "fork": {
+      "busy": "Открывается другой чат или терминал. Подождите и повторите создание ответвления чата {{agent}}.",
+      "unconfirmed": "{{agent}} не удалось подтвердить создание ответвления. Возможно, оно всё же открылось; проверьте историю сеансов, прежде чем повторить попытку.",
+      "failed": "{{agent}} не удалось создать ответвление этого чата. {{detail}}",
+      "unsupported": "На этом хосте установлена старая версия Orca. Обновите Orca на хосте и повторите попытку."
     }
   },
   "common": {
+    "details": "Подробности",
+    "hideDetails": "Скрыть подробности",
     "back": "Назад",
     "cancel": "Отмена",
     "close": "Закрыть",
@@ -827,8 +913,8 @@
       "pairingInvalid": "Сопряжение недействительно",
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "repairHint": "Нажмите, чтобы повторно выполнить сопряжение с компьютером",
+      "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
-      "updateDesktopHint": "Обновите Orca на компьютере и войдите в учётную запись, чтобы подключаться откуда угодно",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
     },
     "hostDiagnosticsLink": {
@@ -856,7 +942,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
-      "openImage": "Открыть изображение"
+      "openImage": "Открыть изображение",
+      "wrapLines": "Переносить строки",
+      "disableLineWrap": "Выключить перенос строк"
+    },
+    "markdownCallout": {
+      "note": "Заметка",
+      "tip": "Совет",
+      "important": "Важно",
+      "warning": "Предупреждение",
+      "caution": "Осторожно"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
@@ -1065,6 +1160,12 @@
     "mermaidDiagram": {
       "expand": "Развернуть диаграмму",
       "label": "Диаграмма Mermaid"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "План",
+        "exitPlanMode": "Выйти из режима планирования"
+      }
     }
   },
   "connection": {
@@ -1288,6 +1389,10 @@
       "retryLoading": "Повторить загрузку {{path}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Копировать имя",
+      "copyRelativePath": "Копировать относительный путь"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
       "copySource": "Скопировать исходный код Markdown",
@@ -1490,7 +1595,8 @@
       "removeHost": "Удалить сервер",
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
-      "unpin": "Открепить"
+      "unpin": "Открепить",
+      "rename": "Переименовать"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Проверки: не пройдены",
@@ -1572,6 +1678,12 @@
       "thisComputer": "Этот компьютер",
       "waitingForDesktop": "Всё ещё ждём ответа компьютера",
       "workspaceOptions": "Параметры рабочих пространств"
+    },
+    "workspaceRenameSheet": {
+      "title": "Переименовать рабочее пространство",
+      "emptyUsesBranch": "Оставьте пустым, чтобы использовать имя ветки.",
+      "emptyUsesFolder": "Оставьте пустым, чтобы использовать имя папки.",
+      "failed": "Не удалось переименовать рабочее пространство. {{reason}}"
     }
   },
   "navigation": {
@@ -1877,13 +1989,8 @@
       "noUpdate": "Нет обновлений уже {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "От {{sender}}",
-      "fromMore": "От {{sender}} +{{count}}",
-      "fromUnnamed": "От агента",
-      "messageFrom": "Сообщение от {{sender}}",
-      "messageFromMore": "Сообщение от {{sender}} +{{count}}",
-      "messageFromUnnamed": "Сообщение от агента",
-      "unnamedSender": "агента"
+      "unnamedSender": "агента",
+      "fromSender": "От"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Не удалось создать терминал",
@@ -1918,6 +2025,7 @@
       "countWorkflows_one": "{{count}} процесс",
       "countWorkflows_other": "{{count}} процесса",
       "detailsUnavailable": "Подробности задач в этой сессии недоступны.",
+      "outputFile": "Вывод: {{value0}}",
       "groupAgents": "Агенты",
       "groupMonitors": "Наблюдения",
       "groupShell": "Оболочка",
@@ -2096,6 +2204,8 @@
       "managedAccountEnvOverride": "При этом запуске Claude используются собственные переменные окружения для входа в Anthropic. Удалите их, чтобы использовать управляемую учётную запись Claude.",
       "managedAccountUnsupported": "Хотя учётная запись Claude добавлена в WSL, для чатов Claude нужна учётная запись Claude в Windows.",
       "modelUnavailable": "{{agent}} не смог использовать {{detail}}. Выберите другую модель и отправьте сообщение снова.",
+      "modelUnavailableUpdate": "{{agent}} не смог использовать {{detail}}. Обновите {{agent}} до {{minimumVersion}} или новее, чтобы сохранить его после перезапуска, или выберите другую модель и отправьте сообщение снова.",
+      "modelNotSelected": "У {{agent}} не выбрана модель. Проверьте выбор модели и вход в {{agent}}, затем отправьте сообщение снова.",
       "noTurnToStop": "{{agent}} сейчас не выполняет задачу, которую можно остановить.",
       "notDelivered": "Это сообщение не доставлено.",
       "notDeliveredSendAgain": "Это сообщение не доставлено. Отправьте его снова, чтобы продолжить.",
@@ -2143,7 +2253,8 @@
       "usageLimitWindowWeeklyModel": "на неделю для модели",
       "waitForBackgroundTasks": "Дождитесь завершения фоновых задач.",
       "waitForStart": "Дождитесь запуска агента.",
-      "writeFailed": "Orca не смогла передать сообщение агенту, поэтому оно не отправлено."
+      "writeFailed": "Orca не смогла передать сообщение агенту, поэтому оно не отправлено.",
+      "pluginInputRequired": "{{agent}} остановился, потому что плагин «{{plugin}}» ожидает ввода на панели терминала. Отключите плагин для сеансов чата или запустите задачу в терминале {{agent}}."
     },
     "fileReader": {
       "copyReviewNotes": "Копировать заметки по проверке",
@@ -2281,8 +2392,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Команды нельзя сохранять в сообщении в очереди.",
-      "editing": "Редактирование сообщения",
-      "editingAttributed": "Редактирование сообщения · {{attribution}}"
+      "editing": "Редактирование сообщения"
     },
     "quickCommandEditorForm": {
       "action": "Действие",
@@ -2379,7 +2489,8 @@
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
       "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
-      "allowAutoClose": "Разрешить автоматическое закрытие"
+      "allowAutoClose": "Разрешить автоматическое закрытие",
+      "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "На сервере этого рабочего пространства не найдено включённых ИИ-агентов.",
@@ -3385,7 +3496,8 @@
       "moreFields_one": "+{{count}} поле",
       "moreFields_other": "+{{count}} поля",
       "noItems": "В проекте нет элементов",
-      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "Ещё {{count}}"
     },
     "githubProjectPickers": {
       "add": "Добавить",
@@ -4095,6 +4207,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Исходная панель агента недоступна. Сохранённый вывод остаётся здесь.",
       "openAgent": "Открыть агента",
       "retryHistory": "Повторить загрузку истории",
+      "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
+      "retryFullOutput": "Повторить",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "В загруженной истории нет подходящих запусков. Загрузите ещё, чтобы продолжить.",
       "noMatchingRunsYet": "Подходящих запусков пока нет.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4135,7 +4249,11 @@
       "notReported": "Не сообщено",
       "searchOptions": "Поиск вариантов",
       "task": "Задача",
-      "review": "Проверка"
+      "review": "Проверка",
+      "discardChangesTitle": "Отменить изменения?",
+      "discardChangesMessage": "Несохранённые изменения этой автоматизации будут потеряны.",
+      "discard": "Отменить изменения",
+      "keepEditing": "Продолжить редактирование"
     },
     "orphanIssues": {
       "hostReselection": "Прежде чем запускать эту автоматизацию, отредактируйте её и заново выберите хост.",

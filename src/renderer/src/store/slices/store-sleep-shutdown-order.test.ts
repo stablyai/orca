@@ -28,12 +28,14 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: orderHarness.unregister
 }))
 
-vi.mock('@/components/terminal-pane/pty-shutdown-exit-deferral', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral', () => ({
   clearCommittedPtyShutdownSettlements: vi.fn(),
   hasCommittedPtyShutdownSettlement: vi.fn(() => false),
   markCommittedPtyShutdowns: vi.fn(),

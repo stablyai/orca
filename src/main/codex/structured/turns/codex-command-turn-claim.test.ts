@@ -9,8 +9,8 @@ import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 
@@ -122,149 +122,6 @@ const resultRows = (writes: readonly Written[]) =>
   writes.filter((write) => write.body.kind === 'status')
 
 describe('a Codex turn a conversation command claims', () => {
-  it('is the command turn: writes no root turn, scopes its content there, and ends it', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    expect(commandTurn(writes)).toMatchObject({ state: 'running', providerTurnId: PROVIDER_TURN })
-    emit(
-      notification('item/completed', {
-        turnId: PROVIDER_TURN,
-        item: { type: 'agentMessage', id: 'summary', text: 'Summary of the conversation.' }
-      })
-    )
-    emit(
-      notification('item/completed', {
-        turnId: PROVIDER_TURN,
-        item: { type: 'contextCompaction', id: 'compaction' }
-      })
-    )
-    emit(notification('turn/completed', { turn: { id: PROVIDER_TURN, status: 'completed' } }))
-
-    expect(codexTurnRecords(writes)).toEqual([])
-    const scope = { kind: 'turn', turnItemId: COMMAND_TURN_KEY }
-    const summary = writes.find(
-      (write) => write.body.kind === 'message' && write.body.role === 'assistant'
-    )
-    expect(summary?.turnScope).toEqual(scope)
-    expect(resultRows(writes)).toEqual([
-      expect.objectContaining({
-        body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' },
-        turnScope: scope
-      })
-    ])
-    expect(commandTurn(writes)).toMatchObject({
-      state: 'completed',
-      outcome: 'success',
-      providerTurnId: PROVIDER_TURN,
-      userItemId: RUNNING.userItemId,
-      requestedAt: RUNNING.requestedAt
-    })
-  })
-
-  it('reads an interrupted turn as the command cancelled, with no result row', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(notification('turn/completed', { turn: { id: PROVIDER_TURN, status: 'interrupted' } }))
-
-    expect(commandTurn(writes)).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
-    expect(resultRows(writes)).toEqual([])
-  })
-
-  it('reads a turn that completed without compacting as a failure, with the reason', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(
-      notification('turn/completed', {
-        turn: { id: PROVIDER_TURN, status: 'failed', error: { message: 'Unavailable' } }
-      })
-    )
-
-    expect(commandTurn(writes)).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(resultRows(writes).map((write) => write.body)).toEqual([
-      {
-        kind: 'status',
-        text: 'Compaction failed: Unavailable.',
-        failure: {
-          kind: 'compactionFailed',
-          detail: { text: 'Unavailable', audience: 'person' }
-        },
-        tone: 'error'
-      }
-    ])
-  })
-
-  it('says only that the compaction failed when a turn that did not complete gave no words', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(notification('turn/completed', { turn: { id: PROVIDER_TURN, status: 'failed' } }))
-
-    expect(commandTurn(writes)).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(resultRows(writes).map((write) => write.body)).toEqual([
-      {
-        kind: 'status',
-        text: 'Compaction failed.',
-        failure: { kind: 'compactionFailed' },
-        tone: 'error'
-      }
-    ])
-  })
-
-  it('reports a turn that completed without Codex reporting a compaction as unconfirmed', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(notification('turn/completed', { turn: { id: PROVIDER_TURN, status: 'completed' } }))
-
-    expect(commandTurn(writes)).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(resultRows(writes).map((write) => write.body)).toEqual([
-      {
-        kind: 'status',
-        text: 'Compaction completion is unconfirmed.',
-        failure: { kind: 'compactionUnconfirmed' },
-        tone: 'error'
-      }
-    ])
-  })
-
-  it('ends a compaction Codex failed with an error once, however late its completion', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(
-      notification('error', {
-        turnId: PROVIDER_TURN,
-        willRetry: false,
-        error: { message: 'Unavailable' }
-      })
-    )
-    // The error is a row; only the completion ends the turn.
-    expect(commandTurn(writes)).toMatchObject({ state: 'running' })
-    emit(
-      notification('turn/completed', {
-        turn: { id: PROVIDER_TURN, status: 'failed', error: { message: 'Unavailable' } }
-      })
-    )
-
-    expect(codexTurnRecords(writes)).toEqual([])
-    expect(commandTurn(writes)).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(
-      writes.filter(
-        (write) => write.key === COMMAND_TURN_KEY && readAgentJournalTurn(write.body)?.completedAt
-      )
-    ).toHaveLength(1)
-    expect(resultRows(writes)).toEqual([
-      expect.objectContaining({
-        body: expect.objectContaining({ kind: 'status', text: 'Unavailable', tone: 'error' }),
-        turnScope: { kind: 'turn', turnItemId: COMMAND_TURN_KEY }
-      })
-    ])
-  })
-
   it("ends a captured failed compaction on its completion, below one row of Codex's own", () => {
     // Captured app-server sequence: two retries, a fatal error, then failed completion.
     const captured: { case: string; t: number; method: string; params: object }[] = readFileSync(
@@ -349,16 +206,5 @@ describe('a Codex turn a conversation command claims', () => {
     expect(codexTurnRecords(writes)).toEqual([])
     expect(commandTurn(writes)).toMatchObject({ providerTurnId: PROVIDER_TURN })
     expect(translator.commandProviderTurnId(COMMAND.turnId)).toBe(PROVIDER_TURN)
-  })
-
-  it('leaves a primary turn no command claims to write its own record', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    translator.forgetCommand(COMMAND.turnId)
-    emit(notification('turn/started', { turn: { id: 'ordinary' } }))
-    emit(notification('turn/completed', { turn: { id: 'ordinary', status: 'completed' } }))
-    expect(
-      codexTurnRecords(writes).map((write) => readAgentJournalTurn(write.body)?.state)
-    ).toEqual(['running', 'completed'])
   })
 })

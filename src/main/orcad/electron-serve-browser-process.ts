@@ -14,7 +14,7 @@ import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/brow
 import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
-import { readRuntimeMetadata } from '../runtime/runtime-metadata'
+import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
 import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 import { removeTree } from '../../shared/windows-transient-lock-removal'

@@ -86,7 +86,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
-  const { compareAgainstUpstream } = useMobileSourceControlSettings(client, connState).settings
+  const { compareAgainstUpstream } = useMobileSourceControlSettings(
+    hostId,
+    client,
+    connState
+  ).settings
 
   const loadReviewData = useCallback(async () => {
     const generation = loadGenerationRef.current + 1
@@ -212,6 +216,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     screenState.kind === 'ready' ? getUnsentMobileDiffComments(screenState.comments) : []
 
   const diffState = useMobileDiffReviewDiffLoading({
+    hostId,
     client,
     connState,
     worktreeId,

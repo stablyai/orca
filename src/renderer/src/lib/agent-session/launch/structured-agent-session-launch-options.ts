@@ -1,10 +1,10 @@
 import {
   createLegacyPrerequisites,
   type LegacyPrerequisites
-} from '../../structured-agent-session-launch-prerequisites'
+} from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
   SelectionOutcome
@@ -51,6 +51,9 @@ export type StructuredLaunchSelection = {
 export function initialStructuredLaunchSelection(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredLaunchSelection {
+  if (intent.params.forkFrom) {
+    return {}
+  }
   return {
     seed: intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),

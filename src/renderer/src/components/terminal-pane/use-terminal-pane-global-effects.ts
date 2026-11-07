@@ -8,14 +8,15 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { IDisposable } from '@xterm/xterm'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
-import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
-import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
+import { useTerminalContainerFitSync } from './viewport/use-terminal-container-fit-sync'
+import { handleTerminalProgrammaticTextPaste } from './input/paste/terminal-programmatic-text-paste'
+import { registerDictationTerminalTarget } from '../dictation/dictation-insertion-target'
 import {
   hideTerminalVisibility,
   resumeTerminalVisibility,
@@ -25,7 +26,7 @@ import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recove
 import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
-} from './pty-renderer-delivery-claims'
+} from './pty-transport/delivery/pty-renderer-delivery-claims'
 import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
@@ -273,7 +274,7 @@ export function useTerminalPaneGlobalEffects({
   useEffect(() => {
     const onPasteText = (event: Event): void => {
       const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
-      handleTerminalProgrammaticTextPaste({
+      void handleTerminalProgrammaticTextPaste({
         detail,
         tabId,
         getManager: () => managerRef.current,
@@ -284,38 +285,19 @@ export function useTerminalPaneGlobalEffects({
     return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
   }, [tabId, managerRef, paneTransportsRef])
 
-  // Global dictation events must reach only the active pane or every mounted tab inserts the text.
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return
-    }
-    const onDictationInsert = (event: Event): void => {
-      if (!isActiveRef.current) {
-        return
-      }
-      const detail = (
-        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
-      ).detail
-      const text = typeof detail === 'string' ? detail : detail?.text
-      if (!text) {
-        return
-      }
-      if (typeof detail === 'object' && detail.tabId && detail.tabId !== tabId) {
-        return
-      }
-      const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
-      handleTerminalProgrammaticTextPaste({
-        detail: {
+  // Dictation finishes into the pane it started in, even if this tab was switched away meanwhile.
+  useEffect(
+    () =>
+      registerDictationTerminalTarget(tabId, (text, paneId) =>
+        handleTerminalProgrammaticTextPaste({
+          detail: { tabId, text, paneId },
           tabId,
-          text,
-          ...(typeof requestedPaneId === 'number' ? { paneId: requestedPaneId } : {})
-        },
-        tabId,
-        getManager: () => managerRef.current,
-        getPaneTransports: () => paneTransportsRef.current
-      })
-    }
-    document.addEventListener('dictation:insertText', onDictationInsert)
-    return () => document.removeEventListener('dictation:insertText', onDictationInsert)
-  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
+          getManager: () => managerRef.current,
+          getPaneTransports: () => paneTransportsRef.current,
+          // A hidden tab's terminal must not take focus from where the user went.
+          focusAfterPaste: () => isActiveRef.current
+        })
+      ),
+    [isActiveRef, managerRef, paneTransportsRef, tabId]
+  )
 }

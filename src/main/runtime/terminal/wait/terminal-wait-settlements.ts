@@ -10,10 +10,14 @@ import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
-import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
-import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
+import {
+  readTerminalComposerTypedText,
+  type TerminalCursorContext
+} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
@@ -145,14 +149,33 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return true
     }
-    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    return (
-      lastInputAt !== null &&
-      Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
-      !!state &&
-      !!readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
+    // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
+    // launch text; a process it attached to, as after a restart, may hold one typed before, which a
+    // screen still restoring cannot rule out yet.
+    const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
+    const unattributedSince = facts.noteUnattributedDraft(
+      ptyId,
+      unattributed && (draft || restoring)
     )
+    const holdSince = drivingInputAt ?? unattributedSince
+    return (
+      (draft || (unattributed && restoring)) &&
+      holdSince !== null &&
+      Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
+    )
+  }
+
+  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    return (agent === 'opencode' || agent === 'opencode2') && context
+      ? openCodeComposerHoldsDraft(context)
+      : !!readTerminalComposerTypedText(context)
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {

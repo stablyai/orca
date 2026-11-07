@@ -5,16 +5,16 @@ import {
   type AgentJournalTurnLifecycleState
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
+import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { CodexStructuredItemStreams } from '../items/codex-structured-item-stream-contracts'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'

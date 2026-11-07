@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import {
-  CLIPBOARD_IMAGE_MAX_PIXELS,
-  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
-} from '../../shared/clipboard-image'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../shared/clipboard-image'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -74,6 +71,7 @@ function setImage(size = { width: 32, height: 24 }, empty = false) {
   const image = {
     isEmpty: () => empty,
     getSize: () => size,
+    resize: () => image,
     toPNG: mocks.toPNG,
     toDataURL: () => 'data:image/png;base64,PREVIEW'
   }
@@ -203,20 +201,6 @@ describe('macOS clipboard image data beside a file URL', () => {
     setTrustedClipboardRendererWebContentsId(42)
     expect(() => invoke('clipboard:hasImage')).toThrow('Unauthorized clipboard IPC sender')
     expect(mocks.has).not.toHaveBeenCalled()
-  })
-
-  it.each([false, true])('rejects oversized dimensions with raw recovery: %s', async (recover) => {
-    const image = setImage({ width: CLIPBOARD_IMAGE_MAX_PIXELS + 1, height: 1 })
-    if (recover) {
-      setImage({ width: 0, height: 0 }, true)
-      mocks.readBuffer.mockReturnValue(Buffer.from([0xff, 0xd8]))
-      mocks.createFromBuffer.mockReturnValue(image)
-    }
-    await expect(invoke('clipboard:saveImageAsTempFile')).rejects.toThrow(
-      'Clipboard image is too large'
-    )
-    expect(mocks.toPNG).not.toHaveBeenCalled()
-    expect(mocks.writeFile).not.toHaveBeenCalled()
   })
 
   it.each([false, true])('rejects oversized PNG output with raw recovery: %s', async (recover) => {

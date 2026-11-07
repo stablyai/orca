@@ -419,7 +419,6 @@ async function startTestRuntime(
   let connectionCount = 0
 
   wss.on('connection', (ws) => {
-    connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
 
@@ -430,6 +429,12 @@ async function startTestRuntime(
           type?: string
           publicKeyB64?: string
         }
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
+        connectionCount += 1
         const clientPublicKey = Buffer.from(hello.publicKeyB64 ?? '', 'base64')
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))

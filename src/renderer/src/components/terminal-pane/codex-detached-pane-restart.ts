@@ -18,7 +18,8 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { ptyDataHandlers } from './pty-dispatcher'
+import './pty-transport/delivery/pty-dispatcher'
+import { ptyDataHandlers } from './pty-transport/shutdown/pty-shutdown-data-suspension'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from './codex-restart-main-pane'

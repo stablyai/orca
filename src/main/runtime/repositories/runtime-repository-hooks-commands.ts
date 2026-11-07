@@ -1,5 +1,4 @@
 import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
-import { createHash } from 'node:crypto'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../../shared/repo-types'
@@ -16,8 +15,9 @@ import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -116,7 +116,7 @@ export class RuntimeRepositoryHooksCommands {
 }
 
 function hookTrust(scriptContent: string): { contentHash: string; scriptContent: string } {
-  return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
+  return { contentHash: hashOrcaHookTrustContent(scriptContent), scriptContent }
 }
 
 function archiveTrust(

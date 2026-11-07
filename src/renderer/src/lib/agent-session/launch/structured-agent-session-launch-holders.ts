@@ -1,9 +1,9 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
 import {
   structuredLaunchStates,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+import type { AgentLaunchRequestId } from './routing/agent-launch-request-id'
 
 // Coalesce re-delivery of one action only. Other actions and failed/unconfirmed retries open independent chats/text; conversation resumes still hold because hosts refuse duplicate adoption.
 function holdsLaunchIdentity(
@@ -14,15 +14,15 @@ function holdsLaunchIdentity(
   if (lifecycle === 'failed' || lifecycle === 'cancelled') {
     return false
   }
-  if (state.intent.params.resumeFrom) {
+  // A fork of one response holds like a resume, so a lost reply replays rather than copies again.
+  if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     return true
   }
   const { attempt } = state.callers
   return (
     (lifecycle !== 'visibility-unknown' ||
       (!!state.intent.params.firstMessage && requestId !== undefined)) &&
-    attempt.kind === 'first' &&
-    (requestId === undefined || attempt.requestId === requestId)
+    (requestId === undefined ? attempt.kind === 'first' : attempt.requestId === requestId)
   )
 }
 

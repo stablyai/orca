@@ -115,6 +115,27 @@ describe('TerminalRemoteRuntimeReconnectBanner', () => {
     expect(screen.getByText('This host no longer accepts this computer')).toBeInTheDocument()
     expect(screen.queryByText('Reconnecting to Desk')).not.toBeInTheDocument()
   })
+
+  it('sends a replaced server to Settings instead of an ineffective Reconnect (#37766)', async () => {
+    const onReconnect = vi.fn()
+    const openSettings = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <TerminalRemoteRuntimeReconnectBanner
+        recovery={{ phase: 'backoff' }}
+        serverName="Desk"
+        onReconnect={onReconnect}
+        pairingRefused
+        onOpenReplacedServerSettings={openSettings}
+      />
+    )
+
+    expect(screen.getByText('This host runs a different Orca server')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Open server settings' }))
+    expect(openSettings).toHaveBeenCalledOnce()
+    expect(onReconnect).not.toHaveBeenCalled()
+  })
 })
 
 describe('SSH sign-in wait', () => {

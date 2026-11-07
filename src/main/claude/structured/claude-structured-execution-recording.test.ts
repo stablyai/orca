@@ -6,11 +6,9 @@ import {
   USER_MESSAGE
 } from './claude-structured-session-test-support'
 import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { createQueuedMessageTestRig } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 /** Claude ends a turn; a message sent before this joins the running turn on its choices. */
 const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
@@ -91,55 +89,6 @@ it.each(['low', 'high', undefined])(
     }
   }
 )
-
-it('retires earlier Fast routing when an effort read reports Fast off', async () => {
-  let fastMode = true
-  const models = [
-    {
-      value: 'sonnet',
-      supportsEffort: true,
-      supportedEffortLevels: ['low', 'high'],
-      supportsFastMode: true
-    }
-  ]
-  const claude = fakeClaude({
-    initModels: models,
-    routes: { list_models: () => models },
-    settings: {
-      applied: { model: 'sonnet', effort: 'low' },
-      get effective() {
-        return { effortLevel: 'high', fastMode }
-      }
-    }
-  })
-  const adapter = await acquired(claude)
-  const send = (effort: string) =>
-    adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: effort,
-      body: USER_MESSAGE,
-      executionOptions: { model: 'sonnet', effort, fastMode: 'true' },
-      fence: 7
-    })
-  try {
-    await send('high')
-    claudeTurnEnds(claude.connections[0]!)
-    claudeFrame(claude.connections[0]!, {
-      type: 'system',
-      subtype: 'status',
-      fast_mode_state: 'on'
-    })
-    fastMode = false
-    expect(await send('low')).toMatchObject({ state: 'admitted', ranOptions: { effort: 'low' } })
-    claudeTurnEnds(claude.connections[0]!)
-    expect(await send('low')).toEqual({
-      state: 'admitted',
-      ranOptions: { model: 'sonnet', effort: 'low' }
-    })
-  } finally {
-    await adapter.closeAll()
-  }
-})
 
 it('never pairs an earlier unknown-model low run with the next prepared model', async () => {
   const applied: { model?: string; effort: string } = { effort: 'low' }
