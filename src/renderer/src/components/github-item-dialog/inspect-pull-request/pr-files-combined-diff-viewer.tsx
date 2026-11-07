@@ -13,10 +13,12 @@ import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-di
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
   PR_DIFF_OVERSCAN,
+  createPRFileDiffSections,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
+import { usePRFileViewedCollapse } from '@/components/github/pr-file-viewed-collapse'
 import { buildInlineReviewComments } from '@/components/pull-request-page/files/inline-comments'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { PRFilesCombinedDiffBody } from './pr-files-combined-diff-body'
@@ -92,29 +94,14 @@ function PRFilesCombinedDiffSections({
   setFileTreeCollapsed
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
   const isDark = useDocumentDarkTheme()
+  const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
   // The keyed mount fixes this file set; state preserves its identity without a render-time ref cache.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
   const [sections, setSections] = useState<DiffSection[]>(() =>
-    entries.map((entry) => ({
-      key: getPRFileSectionKey(entry.path),
-      path: entry.path,
-      oldPath: entry.oldPath,
-      status: entry.status,
-      added: entry.added,
-      removed: entry.removed,
-      originalContent: '',
-      modifiedContent: '',
-      collapsed: false,
-      loading: true,
-      error: undefined,
-      dirty: false,
-      diffResult: null,
-      largeDiffRenderLimit: null
-    }))
+    createPRFileDiffSections(entries, fileByPath)
   )
-  const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
   // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
   const getCommentableLineNumbers = useCallback(
     (section: DiffSection): readonly number[] | undefined =>
@@ -226,6 +213,14 @@ function PRFilesCombinedDiffSections({
     virtualizer.measure()
   }, [sideBySide, virtualizer])
 
+  const handleViewedToggle = usePRFileViewedCollapse({
+    sectionsRef,
+    toggleSection,
+    scrollContainerRef,
+    virtualizer,
+    onViewedChange
+  })
+
   const handleTreeNavigate = useCallback(
     (entry: CombinedDiffFileTreeEntry) => {
       const navigatedIndex = handleCombinedDiffFileTreeNavigation({
@@ -291,13 +286,13 @@ function PRFilesCombinedDiffSections({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              void onViewedChange(file.path, !viewed)
+              void handleViewedToggle(file.path, !viewed)
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths]
+    [fileByPath, handleViewedToggle, pendingViewedPaths]
   )
 
   return (
