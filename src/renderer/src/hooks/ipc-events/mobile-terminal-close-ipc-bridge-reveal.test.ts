@@ -31,7 +31,7 @@ vi.mock('../../store', () => ({
       testStore().setState(...args)
   }
 }))
-vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))

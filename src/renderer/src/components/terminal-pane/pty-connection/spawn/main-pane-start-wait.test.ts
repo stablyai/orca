@@ -51,7 +51,7 @@ describe('waitsForMainPaneStart', () => {
   it("shows main's stopped-distro hold as the Start card, which asks main to start it", async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
     const { wslDistroStoppedHoldStore, startHeldPanesForWslDistro } =
-      await import('../../wsl-distro-stopped-hold-state')
+      await import('../../session-restore/wsl-distro/wsl-distro-stopped-hold-state')
     const pane = session()
     store.setStarts({ [PANE_KEY]: { status: 'starting' } })
 
@@ -74,7 +74,8 @@ describe('waitsForMainPaneStart', () => {
 
   it("clears the card once main's start ends another way", async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
-    const { wslDistroStoppedHoldStore } = await import('../../wsl-distro-stopped-hold-state')
+    const { wslDistroStoppedHoldStore } =
+      await import('../../session-restore/wsl-distro/wsl-distro-stopped-hold-state')
     const pane = session()
     store.setStarts({ [PANE_KEY]: { status: 'starting' } })
     const connect = vi.fn()
@@ -91,7 +92,8 @@ describe('waitsForMainPaneStart', () => {
 
   it('carries an unchecked distro to the card as unverifiable', async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
-    const { wslDistroStoppedHoldStore } = await import('../../wsl-distro-stopped-hold-state')
+    const { wslDistroStoppedHoldStore } =
+      await import('../../session-restore/wsl-distro/wsl-distro-stopped-hold-state')
     const pane = session()
     store.setStarts({ [PANE_KEY]: { status: 'starting' } })
 
@@ -109,7 +111,8 @@ describe('waitsForMainPaneStart', () => {
 
   it('shows the Start card when the refusal carries the readable sentence, not the code', async () => {
     const { showPaneStartFailure } = await import('./main-pane-start-wait')
-    const { wslDistroStoppedHoldStore } = await import('../../wsl-distro-stopped-hold-state')
+    const { wslDistroStoppedHoldStore } =
+      await import('../../session-restore/wsl-distro/wsl-distro-stopped-hold-state')
     const pane = session()
 
     showPaneStartFailure(

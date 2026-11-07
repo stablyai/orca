@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTerminalClientTab } from '../../../shared/runt
 
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
-import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
+import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 

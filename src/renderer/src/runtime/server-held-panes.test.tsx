@@ -15,8 +15,8 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
-import { NewerDaemonHoldBanner } from '@/components/terminal-pane/NewerDaemonHoldBanner'
-import { newerDaemonHoldStore } from '@/components/terminal-pane/newer-daemon-hold-state'
+import { NewerDaemonHoldBanner } from '@/components/terminal-pane/session-restore/newer-daemon/NewerDaemonHoldBanner'
+import { newerDaemonHoldStore } from '@/components/terminal-pane/session-restore/newer-daemon/newer-daemon-hold-state'
 import {
   CAPABLE,
   ENV,

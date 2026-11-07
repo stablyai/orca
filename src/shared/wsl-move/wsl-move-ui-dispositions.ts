@@ -22,6 +22,7 @@ export const UI_STATE_DISPOSITIONS = {
     rewriteDesktopCopy: true,
     newManifestSection: true
   }),
+  gitGraphFiltersByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   showDotfilesByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   filterRepoIds: moveDisposition(38),
   agentsFilterRepoIds: moveDisposition(38),

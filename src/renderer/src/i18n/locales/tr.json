@@ -13535,7 +13535,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Henüz commit yok",
-            "781a8bcf7b": "Grafik yükleniyor...",
             "d0fb0f4bf2": "Commit'leri yenile",
             "9f7535d22b": "Ref'ler, tam olarak o commit'i işaret eden branch veya tag adlarıdır. Yalnızca Git'in commit için adlandırılmış bir ref'i olduğu yerlerde görünürler.",
             "9289ba0cb9": "Ref nedir?",
@@ -14760,7 +14759,6 @@
             "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dosyalar yükleniyor…",
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
             "c3d4e5f6a7": "Tüm değişiklikleri birlikte aç"
           },
@@ -23432,5 +23430,32 @@
     "discussionAction": "Tartışmaya katıl",
     "checkAction": "Uyumluluğu kontrol et",
     "settingsStatus": "Orca {{version}}, macOS {{macos}} veya sonraki bir sürümü gerektirir. Bu, Mac’iniz için en son sürümdür."
+  },
+  "gitGraph": {
+    "copyHash": "Commit karmasını kopyala",
+    "parents": "Üst commitler",
+    "files": "Dosyalar",
+    "currentBranch": "Geçerli dal",
+    "allBranches": "Tüm dallar",
+    "chosenBranches": "Seçilen dallar",
+    "searchRefs": "Dal ve etiket ara",
+    "oldServer": "Bu sunucunun Orca sürümü yalnızca geçerli dalı gösterir",
+    "copyBranch": "Dal adını kopyala",
+    "switchWorkspace": "Çalışma alanına geç",
+    "workspaceClosed": "Bu dal artık başka bir çalışma alanında açık değil.",
+    "workspaceCheckFailed": "Bu çalışma alanı kontrol edilemedi. Bağlandıktan sonra tekrar deneyin.",
+    "refresh": "Commitleri yenile",
+    "branchTag": "Dal / Etiket",
+    "graph": "Grafik",
+    "resizeColumn": "Grafik sütununu yeniden boyutlandır",
+    "message": "Mesaj",
+    "author": "Yazar",
+    "date": "Tarih",
+    "loadMore": "Daha fazla yükle",
+    "noCommits": "Henüz commit yok",
+    "historyChanged": "Geçmiş yeniden değişti. Tekrar denemek için Git grafiğini yenileyin.",
+    "loadFailed": "Git geçmişi yüklenemedi",
+    "updateHost": "Git grafiğini açmak için {{host}} üzerindeki Orca’yı güncelleyin",
+    "title": "Git Grafiği"
   }
 }

@@ -13454,7 +13454,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aucun commit pour le moment",
-            "781a8bcf7b": "Chargement du graphe...",
             "d0fb0f4bf2": "Actualiser les commits",
             "9f7535d22b": "Les refs sont des noms de branche ou de tag pointant vers ce commit exact. Elles n'apparaissent que là où Git possède une ref nommée pour ce commit.",
             "9289ba0cb9": "Que sont les refs ?",
@@ -14717,7 +14716,6 @@
             "f8a2c4d1e0": "Mode de recherche de l'explorateur"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Chargement des fichiers…",
             "b2c3d4e5f6": "Aucune modification de fichier dans ce commit",
             "c3d4e5f6a7": "Ouvrir toutes les modifications ensemble"
           },
@@ -23858,5 +23856,32 @@
     "discussionAction": "Participer à la discussion",
     "checkAction": "Vérifier la compatibilité",
     "settingsStatus": "Orca {{version}} nécessite macOS {{macos}} ou une version ultérieure. Il s’agit de la dernière version pour ce Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Copier le hash du commit",
+    "parents": "Commits parents",
+    "files": "Fichiers",
+    "currentBranch": "Branche actuelle",
+    "allBranches": "Toutes les branches",
+    "chosenBranches": "Branches choisies",
+    "searchRefs": "Rechercher des branches et des tags",
+    "oldServer": "Cette version d’Orca sur le serveur affiche uniquement la branche actuelle",
+    "copyBranch": "Copier le nom de la branche",
+    "switchWorkspace": "Passer à l’espace de travail",
+    "workspaceClosed": "Cette branche n’est plus ouverte dans un autre espace de travail.",
+    "workspaceCheckFailed": "Impossible de vérifier cet espace de travail. Réessayez une fois la connexion rétablie.",
+    "refresh": "Actualiser les commits",
+    "branchTag": "Branche / Tag",
+    "graph": "Graphe",
+    "resizeColumn": "Redimensionner la colonne du graphe",
+    "message": "Message",
+    "author": "Auteur",
+    "date": "Date",
+    "loadMore": "Charger plus",
+    "noCommits": "Aucun commit pour le moment",
+    "historyChanged": "L’historique a encore changé. Actualisez le graphe Git pour réessayer.",
+    "loadFailed": "Impossible de charger l’historique Git",
+    "updateHost": "Mettez à jour Orca sur {{host}} pour ouvrir le graphe Git",
+    "title": "Graphe Git"
   }
 }

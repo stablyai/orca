@@ -1,5 +1,5 @@
 import { useLayoutEffect } from 'react'
-import { syncSessionRestoredBannerTitleSpace } from '../session-restored-banner-pane-state'
+import { syncSessionRestoredBannerTitleSpace } from './session-restored-banner-pane-state'
 import { fitPanes } from '../viewport/mounted-pane-fit'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 

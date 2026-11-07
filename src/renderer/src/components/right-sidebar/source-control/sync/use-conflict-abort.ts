@@ -123,6 +123,7 @@ export function useSourceControlConflictAbort({
       } finally {
         operationStore.setState({ isAbortingOperation: false })
         refreshSourceControlAfterRemoteAction({
+          worktreeId: activeWorktreeId,
           refreshGitStatus: refreshActiveGitStatusAfterMutation,
           refreshBranchCompare: refreshBranchCompareRef.current,
           refreshGitHistory: refreshGitHistoryRef.current

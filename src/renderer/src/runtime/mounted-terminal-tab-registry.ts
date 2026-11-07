@@ -1,7 +1,7 @@
 import {
   activePaneIsCoveredByNativeChat,
   paneIsCoveredByNativeChat
-} from '@/components/terminal-pane/native-chat-covered-pane'
+} from '@/components/terminal-pane/chat/native-chat-covered-pane'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 

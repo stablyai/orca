@@ -5,7 +5,7 @@ import {
   installTerminalLinkPtyMouseSuppression,
   type TerminalLinkPtyMouseSuppression
 } from '../gestures/terminal-link-pty-mouse-suppression'
-import { getTerminalBufferPositionForMouseEvent } from '../../terminal-mouse-buffer-position'
+import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import {

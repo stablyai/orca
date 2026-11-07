@@ -8,7 +8,7 @@ import {
 } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { installProgramStatusQueryResponder } from '../../../../../shared/program-status/query-responder'
-import { terminalThemeColorSchemeReport } from '../terminal-view-attributes-publisher'
+import { terminalThemeColorSchemeReport } from '../appearance/terminal-view-attributes-publisher'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 

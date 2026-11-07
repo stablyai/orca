@@ -1,3 +1,4 @@
+import { GIT_GRAPH_TAB_CAPABILITY } from '../../shared/source-control/runtime/git-graph-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   type RuntimeCapability
@@ -15,6 +16,7 @@ import {
 
 /** Curate one capability set for unary/streaming desktop calls; remote-only gates can alter local semantics even on the same build. */
 export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapability[] = [
+  GIT_GRAPH_TAB_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   // Agent-launch authorization requires this even for the same-build desktop renderer.

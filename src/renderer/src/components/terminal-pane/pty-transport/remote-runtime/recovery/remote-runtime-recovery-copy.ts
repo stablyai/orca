@@ -1,5 +1,5 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import type { VisiblePtyRecoveryState } from '../../../terminal-remote-runtime-recovery-ui-state'
+import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 
 /** Why recovery is happening, as far as this client has evidence for it. */
 export type RemoteRuntimeRecoveryCause =

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
-import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/viewport/visibility/stale-document-visibility'
 import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visibility'
 
 // Assert source stream IPC: inactive panes must avoid frame delivery/blob churn/decoding while keeping the session attached.

@@ -3,20 +3,20 @@ import {
   _resetTerminalPaneRecoveryForTests,
   captureTerminalPaneRecoveryGeneration
 } from './terminal-pane-recovery'
-import { requestAndSettle } from '../../terminal-recovery-ledger-test-driver'
+import { requestAndSettle } from './terminal-recovery-ledger-test-driver'
 import {
   recoveryLedgerMocks as mocks,
   resetRecoveryLedgerStore,
   setTerminalTabs
-} from '../../terminal-recovery-ledger-test-store'
+} from './terminal-recovery-ledger-test-store'
 
 vi.mock('@/store/index', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
 })
 
 vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
 })
 

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 // No ok member means the host’s legacy unstructured success.
 export type GitHubPrMutationStatus =

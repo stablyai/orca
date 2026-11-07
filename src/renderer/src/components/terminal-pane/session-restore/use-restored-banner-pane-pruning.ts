@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { pruneSessionRestoredBannerPaneIds } from '../session-restored-banner-pane-state'
+import { pruneSessionRestoredBannerPaneIds } from './session-restored-banner-pane-state'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
 export function useRestoredBannerPanePruning({
