@@ -6,6 +6,8 @@ import {
   getKeybindingPlatform,
   isKeybindingActionId,
   keybindingFileDiagnostic,
+  LEGACY_MAC_SEARCH_BINDINGS,
+  LEGACY_TAB_SWITCH_BINDINGS,
   normalizeKeybindingArrayForAction,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
@@ -90,18 +92,24 @@ export function migrateLegacyKeybindings(
   platform: NodeJS.Platform,
   legacyOverrides: KeybindingOverrides | undefined
 ): void {
-  if (existsSync(path) || !legacyOverrides || Object.keys(legacyOverrides).length === 0) {
+  if (!legacyOverrides || Object.keys(legacyOverrides).length === 0) {
     return
   }
-  const keybindingPlatform = getKeybindingPlatform(platform)
-  const document = createEmptyDocument()
-  document.platforms = {
-    darwin: {},
-    linux: {},
-    win32: {},
-    [keybindingPlatform]: legacyOverrides
+  const { document, exists } = readJsonDocument(path)
+  const current = readKeybindingFile(path, platform)
+  if (
+    exists &&
+    (!isJsonObject(document?.migrations) ||
+      document.migrations.legacySettings !== 'pending' ||
+      current.diagnostics.length > 0 ||
+      Object.keys(current.commonOverrides).length > 0 ||
+      Object.values(current.platformOverrides).some((bindings) => Object.keys(bindings).length > 0))
+  ) {
+    return
   }
-  writeJsonDocument(path, document)
+  writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
+    Object.assign(activePlatform, legacyOverrides)
+  })
 }
 
 /** Pin each uncustomized action to its pre-swap chord in the active-platform section, preserving resettable user choices. */
@@ -115,6 +123,21 @@ export function seedLegacyKeybindings(
   const readResult = readJsonDocument(path)
   if (!readResult.document) {
     throw new Error(readResult.error ?? 'Could not read keybindings file.')
+  }
+  const doc = readResult.document
+  if (
+    (doc.keybindings !== undefined && !isJsonObject(doc.keybindings)) ||
+    (doc.platforms !== undefined &&
+      (!isJsonObject(doc.platforms) ||
+        ['darwin', 'linux', 'win32'].some(
+          (key) =>
+            doc.platforms &&
+            isJsonObject(doc.platforms) &&
+            doc.platforms[key] !== undefined &&
+            !isJsonObject(doc.platforms[key])
+        )))
+  ) {
+    throw new Error('Cannot migrate malformed keybinding sections.')
   }
   const migrations = isJsonObject(readResult.document.migrations)
     ? readResult.document.migrations
@@ -159,10 +182,13 @@ export function seedLegacyKeybindings(
             if (failedActionIds.length === 0) {
               document.migrations = {
                 ...migrations,
+                ...(!readResult.exists ? { legacySettings: 'pending' } : {}),
+                ...(pins.length > 0 ? { legacySettings: 'done' } : {}),
                 [keybindingPlatform]: { ...platformMigrations, [migration]: true }
               }
             }
-          }
+          },
+          'migration'
         )
       : current
   if (failedActionIds.length > 0) {
@@ -176,7 +202,9 @@ function writeActivePlatformSection(
   path: string,
   platform: NodeJS.Platform,
   fallbackCommonOverrides: KeybindingOverrides,
-  mutateActivePlatform: (activePlatform: JsonObject, document: JsonObject) => void
+  mutateActivePlatform: (activePlatform: JsonObject, document: JsonObject) => void,
+  source: 'migration' | 'settings' = 'settings',
+  resetMigration?: 'tab-switch' | 'search'
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
@@ -198,6 +226,20 @@ function writeActivePlatformSection(
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
   mutateActivePlatform(activePlatform, document)
+  // A deliberate reset is authoritative even when it leaves every binding section empty.
+  if (source === 'settings') {
+    const migrations = isJsonObject(document.migrations) ? document.migrations : {}
+    const platformMigrations = isJsonObject(migrations[keybindingPlatform])
+      ? migrations[keybindingPlatform]
+      : {}
+    document.migrations = {
+      ...migrations,
+      legacySettings: 'done',
+      ...(resetMigration
+        ? { [keybindingPlatform]: { ...platformMigrations, [resetMigration]: true } }
+        : {})
+    }
+  }
 
   document.version = FILE_VERSION
   document.keybindings = common
@@ -256,6 +298,14 @@ export function writeKeybindingOverride(
       } else {
         activePlatform[actionId] = normalizedBindings
       }
-    }
+    },
+    'settings',
+    normalizedBindings === null
+      ? Object.hasOwn(LEGACY_TAB_SWITCH_BINDINGS, actionId)
+        ? 'tab-switch'
+        : Object.hasOwn(LEGACY_MAC_SEARCH_BINDINGS, actionId)
+          ? 'search'
+          : undefined
+      : undefined
   )
 }

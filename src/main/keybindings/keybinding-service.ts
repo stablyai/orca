@@ -37,7 +37,12 @@ export class KeybindingService {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
     // A keybindings file supersedes shortcuts stored in legacy global settings.
-    migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
+    try {
+      migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
+    } catch (error) {
+      console.error('Failed to import legacy keybindings:', error)
+      return
+    }
     // Complete the cohort only after successful pinning so transient I/O failures retry next launch.
     for (const [seed, bindings, name] of [
       [options.legacyTabSwitchSeed, LEGACY_TAB_SWITCH_BINDINGS, 'tab-switch'],
@@ -51,12 +56,15 @@ export class KeybindingService {
         continue
       }
       const pending = seed.isPending()
+      if (!pending) {
+        continue
+      }
       try {
         // Seed already read the file; reuse its snapshot for the lazy cache.
         this.snapshot = seedLegacyKeybindings(
           this.configPath,
           this.platform,
-          pending ? bindings : {},
+          bindings,
           name
         ).snapshot
         if (pending) {
