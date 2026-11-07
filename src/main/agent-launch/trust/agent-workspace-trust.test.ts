@@ -144,7 +144,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('trusts the explicit section owner and preserves ordinary root trust for outside starts', async () => {
+  it('respects the section repo choice and preserves ordinary root trust for outside starts', async () => {
     const workspaceRoot = join(root, 'folder')
     const outsideCwd = join(root, 'attached-worktree')
     mkdirSync(workspaceRoot)
@@ -168,7 +168,22 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     })
     await applyAgentWorkspaceTrustToSpawn({
       ...spawn,
-      trustWorktreeId: `repo::${outsideCwd}`
+      trustWorktreeId: `repo::${outsideCwd}`,
+      store: {
+        ...spawn.store,
+        getRepo: () => ({ agentWorkspaceTrust: 'agent-asks' })
+      }
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+    })
+    await applyAgentWorkspaceTrustToSpawn({
+      ...spawn,
+      trustWorktreeId: `repo::${outsideCwd}`,
+      store: {
+        ...spawn.store,
+        getRepo: () => ({ agentWorkspaceTrust: 'pre-trust' })
+      }
     })
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
       projects: {

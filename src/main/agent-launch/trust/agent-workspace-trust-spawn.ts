@@ -12,6 +12,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   shouldPreTrustAgentWorkspace,
+  resolveAgentWorkspaceTrustOwner,
   type AgentWorkspaceTrustDecision
 } from '../../../shared/agent-workspace-trust-decision'
 
@@ -60,12 +61,13 @@ export function applyAgentWorkspaceTrustToSpawn(
     spawnOptions: AgentTrustSpawnFields
   } & AgentTrustLaunchContext
 ): Promise<void> | null {
+  const trustWorkspaceId = resolveAgentWorkspaceTrustOwner(args)
   if (
     !args.isFreshLaunch ||
     args.skipForThisLaunch === true ||
     !shouldPreTrustAgentWorkspace(
       args.settings?.agentWorkspaceTrustEnabled,
-      agentWorkspaceTrustDecisionForWorkspace(args.worktreeId, args.store)
+      agentWorkspaceTrustDecisionForWorkspace(trustWorkspaceId, args.store)
     )
   ) {
     return null
@@ -77,7 +79,7 @@ export function applyAgentWorkspaceTrustToSpawn(
     return null
   }
   const workspaceRoot = resolveTerminalWorkspacePath(
-    args.trustWorktreeId ?? args.worktreeId,
+    trustWorkspaceId,
     (folderWorkspaceId) => args.store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
   )
   const workspacePath = AGENT_TRUST_KEYED_BY_START_FOLDER[preset]

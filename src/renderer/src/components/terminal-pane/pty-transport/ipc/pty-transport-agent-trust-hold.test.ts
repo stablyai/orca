@@ -47,6 +47,25 @@ describe('createIpcPtyTransport: first-launch agent trust answer', () => {
     })
   })
 
+  it('reattaches a section terminal without asking or changing trust', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    await createIpcPtyTransport({
+      ...CLAUDE_LAUNCH,
+      worktreeId: 'folder:placement',
+      trustWorktreeId: CLAUDE_LAUNCH.worktreeId
+    }).connect({ url: '', callbacks: {}, sessionId: 'existing-pty' })
+
+    expect(prompt.answer).not.toHaveBeenCalled()
+    expect(vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]).toMatchObject({
+      sessionId: 'existing-pty',
+      worktreeId: 'folder:placement',
+      trustWorktreeId: CLAUDE_LAUNCH.worktreeId
+    })
+    expect(vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]).not.toHaveProperty(
+      'skipAgentWorkspaceTrust'
+    )
+  })
+
   it("spawns with today's default when the prompt is released without an answer", async () => {
     prompt.answer.mockResolvedValueOnce(null)
 
