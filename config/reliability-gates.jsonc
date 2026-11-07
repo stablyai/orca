@@ -3769,6 +3769,7 @@
       ],
       "knownGaps": [
         "No physical iOS or Android device was exercised.",
+        "No test in the commands covers the decisive on-demand Relay probe that runs while a dictation reply is overdue (rpc-liveness-probe-while-waiting.ts).",
         "No affected-device log yet proves the old one-window watchdog caused the reported live-session drop.",
         "Carrier NAT, production Tailscale, production relay cells, and real scheduler suspension remain unmeasured.",
         "Persistent pre-client failure metadata is not yet exposed in Home UI.",

@@ -46,23 +46,9 @@ async function readNetworkFingerprint(): Promise<string | null> {
 
 type NetworkReading = { type: string; local: string | null } | null
 
-// Every paired host's supervisor reads in the same synchronous nudge fan-out, so they share one native read.
-// A later caller gets its own: a read started before its event can report the network the phone just left.
-let networkRead: Promise<NetworkReading> | null = null
-
-function readNetwork(): Promise<NetworkReading> {
-  if (!networkRead) {
-    networkRead = readNetworkNow()
-    queueMicrotask(() => {
-      networkRead = null
-    })
-  }
-  return networkRead
-}
-
 // iOS gives no SSID without an entitlement, so the local /24 stands in for it. Cellular has no local
 // fingerprint because carrier addresses churn; neither does any network without a Wi-Fi address (Android VPN on cellular).
-async function readNetworkNow(): Promise<NetworkReading> {
+async function readNetwork(): Promise<NetworkReading> {
   const [state, ip] = await Promise.all([getNetworkStateAsync(), getIpAddressAsync()])
   const type = state.type
   // iOS reports UNKNOWN while a VPN such as Tailscale is up, so it still gets a fingerprint.

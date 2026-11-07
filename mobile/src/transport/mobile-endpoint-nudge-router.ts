@@ -61,7 +61,7 @@ export class MobileEndpointNudgeRouter {
     try {
       network = await this.args.readLocalNetwork()
     } catch {
-      // A failed read isn't a move; keeping the baseline stops the same Wi-Fi from counting as an arrival next time.
+      // Keep the baseline: a failed read isn't a move.
       if (!this.args.isStopped()) {
         this.args.scheduleDirectProbe()
       }
