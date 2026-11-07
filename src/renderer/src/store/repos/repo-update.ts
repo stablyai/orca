@@ -5,6 +5,7 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-workspace-trust-decision'
 import {
   findRepoForHost,
   getRepoHostIdentityForParts,
@@ -58,6 +59,12 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     sanitized.forkSyncMode !== 'off'
   ) {
     delete sanitized.forkSyncMode
+  }
+  if (
+    'agentWorkspaceTrust' in sanitized &&
+    sanitizeAgentWorkspaceTrustDecision(sanitized.agentWorkspaceTrust) === undefined
+  ) {
+    delete sanitized.agentWorkspaceTrust
   }
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
     const normalized = normalizeGhAccountBinding(sanitized.ghAccount)

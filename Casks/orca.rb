@@ -18,7 +18,7 @@ cask "orca" do
   # Let the in-app updater own updates; Homebrew skips auto_updates unless --greedy.
   auto_updates true
   conflicts_with cask: "orca@rc"
-  depends_on macos: :big_sur
+  depends_on macos: :ventura
 
   app "Orca.app"
 
