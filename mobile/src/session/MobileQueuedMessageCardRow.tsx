@@ -26,6 +26,8 @@ type QueuedMessageCardRowProps = {
   card: MobileQueuedMessageCard
   editor?: MobileQueuedMessageInlineEditor
   busy: boolean
+  /** The card the composer's Steer queued preview would send. */
+  lit?: boolean
   editBlocked: boolean
   steerHeld: boolean
   /** Steer only into a running turn; an idle agent's card reads Send. */
@@ -60,6 +62,7 @@ export function MobileQueuedMessageCardRow({
 function QueuedMessageCardContents({
   card,
   busy,
+  lit = false,
   editBlocked,
   steerHeld,
   agentWorking,
@@ -75,7 +78,7 @@ function QueuedMessageCardContents({
   const steers = agentWorking && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
   return (
-    <View testID="queued-card-row" style={[styles.card, styles.divided]}>
+    <View testID="queued-card-row" style={[styles.card, styles.divided, lit && styles.pressed]}>
       <View style={styles.row}>
         {dragHandle}
         {card.needsAttention ? (

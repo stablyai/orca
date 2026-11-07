@@ -190,6 +190,7 @@
       "sendMessage": "Enviar mensaje",
       "sendQueue": "Poner en cola",
       "sendSteer": "Enviar ahora",
+      "sendSteerQueued": "Enviar el siguiente ahora",
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },

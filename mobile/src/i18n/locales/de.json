@@ -186,6 +186,7 @@
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
       "sendSteer": "Steuern",
+      "sendSteerQueued": "Wartende steuern",
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },

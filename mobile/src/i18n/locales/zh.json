@@ -186,6 +186,7 @@
       "sendMessage": "发送消息",
       "sendQueue": "加入队列",
       "sendSteer": "立即发送",
+      "sendSteerQueued": "立即发送下一条",
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },

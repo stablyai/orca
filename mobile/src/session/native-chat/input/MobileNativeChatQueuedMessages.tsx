@@ -27,6 +27,25 @@ const MOVE_KEY = '\u0000move'
 export type MobileNativeChatQueuedMessagesHandle = {
   /** Runs the head card's own Steer, or with no turn running its Send; false where that press is unavailable. */
   steerHead: (alternateSteers: boolean) => boolean
+  /** Lights the head card while the composer previews sending it (Steer queued). */
+  lightHead: (lit: boolean) => void
+}
+
+/** The card an empty Cmd/Ctrl+Enter presses, or null where it presses none. */
+export function mobileNativeChatChordHeadId(
+  {
+    cards,
+    steerHeld,
+    agentWorking,
+    editor
+  }: Pick<MobileNativeChatQueuedMessagesProps, 'cards' | 'steerHeld' | 'agentWorking' | 'editor'>,
+  alternateSteers: boolean
+): string | null {
+  // Mid-turn only where the chord's other way is steer, or a second press would steer the card
+  // the first one just queued; with no turn running the card's own Send (a paused queue after Stop).
+  const steers = !steerHeld && (alternateSteers || !agentWorking)
+  const head = cards && steers ? headSteerableQueuedMessageCard(cards) : null
+  return head && editor?.messageId !== head.messageId ? head.messageId : null
 }
 
 export type MobileNativeChatQueuedMessagesProps = {
@@ -69,6 +88,7 @@ export function MobileNativeChatQueuedMessages({
   const inFlightRef = useRef(new Set<string>())
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
+  const [headLit, setHeadLit] = useState(false)
   const largeText = useLargeSystemText()
   const run = (
     messageId: string,
@@ -93,12 +113,13 @@ export function MobileNativeChatQueuedMessages({
   }
   useImperativeHandle(ref, () => ({
     steerHead: (alternateSteers) => {
-      // Mid-turn only where the chord's other way is steer, or a second press would steer the card
-      // the first one just queued; with no turn running the card's own Send (a paused queue after Stop).
-      const steers = !steerHeld && (alternateSteers || !agentWorking)
-      const head = cards && steers ? headSteerableQueuedMessageCard(cards) : null
-      return head !== null && editor?.messageId !== head.messageId && run(head.messageId, onSend)
-    }
+      const head = mobileNativeChatChordHeadId(
+        { cards, steerHeld, agentWorking, editor },
+        alternateSteers
+      )
+      return head !== null && run(head, onSend)
+    },
+    lightHead: setHeadLit
   }))
   if (!cards || cards.length === 0) {
     if (!expanded) {
@@ -107,6 +128,7 @@ export function MobileNativeChatQueuedMessages({
     return null
   }
   const queueBusy = busyIds.has(QUEUE_KEY)
+  const litId = headLit ? headSteerableQueuedMessageCard(cards)?.messageId : undefined
   const messageIds = cards.map((card) => card.messageId)
   // Clear all takes every card, so it waits for any card's own action rather than skip that card.
   const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
@@ -221,6 +243,7 @@ export function MobileNativeChatQueuedMessages({
                   dragHandle={handle}
                   editor={editor?.messageId === card.messageId ? editor : undefined}
                   busy={busyIds.has(card.messageId)}
+                  lit={card.messageId === litId}
                   editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
                   steerHeld={steerHeld}
                   agentWorking={agentWorking}

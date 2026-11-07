@@ -13,17 +13,27 @@ import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedT
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
+  mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesHandle,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 
+/** The head queued card as an empty Cmd/Ctrl+Enter reaches it. */
+export type MobileNativeChatSteerHead = {
+  /** Whether the chord would press it now, read from the rendered queue. */
+  steers: (alternateSteers: boolean) => boolean
+  /** Runs its own Steer or Send; false where that press is unavailable. */
+  run: (alternateSteers: boolean) => boolean
+  /** Lights it while the composer previews sending it. */
+  light: (lit: boolean) => void
+}
+
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInput | null>
-  /** Runs the head queued card's own Steer or Send for an empty Cmd/Ctrl+Enter; false where it may not. */
-  steerHead?: (alternateSteers: boolean) => boolean
+  steerHead?: MobileNativeChatSteerHead
 }
 
 export type ComposerTrayProps = {
@@ -47,10 +57,11 @@ export function useMobileNativeChatComposerTray({
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
   const queuedRef = useRef<MobileNativeChatQueuedMessagesHandle>(null)
-  const steerHead = useCallback(
+  const run = useCallback(
     (alternateSteers: boolean) => queuedRef.current?.steerHead(alternateSteers) ?? false,
     []
   )
+  const light = useCallback((lit: boolean) => queuedRef.current?.lightHead(lit), [])
   const {
     cards,
     onSend,
@@ -100,7 +111,15 @@ export function useMobileNativeChatComposerTray({
         })
       ),
       composerInputRef,
-      steerHead
+      steerHead: {
+        steers: (alternateSteers: boolean) =>
+          mobileNativeChatChordHeadId(
+            { cards, steerHeld, agentWorking, editor },
+            alternateSteers
+          ) !== null,
+        run,
+        light
+      }
     }),
     [
       taskList,
@@ -117,7 +136,8 @@ export function useMobileNativeChatComposerTray({
       pause,
       sessionKey,
       steerHeld,
-      steerHead,
+      run,
+      light,
       agentWorking
     ]
   )
