@@ -19,7 +19,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'claude-accounts/keychain',
   'skills/bundled-skill-install/cli-entry',
   'filesystem/macos-tree-clone',
-  'orcad/orcad-stale-lock-reclaim',
+  ...['stale-lock-reclaim', 'host-identity-reset'].map((module) => `orcad/orcad-${module}`),
   'plugins/plugin-authoring-checks',
   ...[
     'access',
