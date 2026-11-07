@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { resolveTerminalProcessExitRestartStartup } from '../terminal-process-exit-restart'
-import type { PaneProcessExit } from '../pty-connection-types'
+import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
+import type { PaneProcessExit } from './pane-process-exit'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 

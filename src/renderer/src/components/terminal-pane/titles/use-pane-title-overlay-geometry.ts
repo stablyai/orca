@@ -2,8 +2,8 @@ import { useCallback, useLayoutEffect } from 'react'
 import {
   arePaneTitleOverlayRectsEqual,
   clearPaneTitleOverlayRects
-} from '../pane-title-overlay-rects'
-import type { PaneTitleOverlayRect } from '../TerminalPaneHeaderOverlay'
+} from './pane-title-overlay-rects'
+import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
 export function usePaneTitleOverlayGeometry({

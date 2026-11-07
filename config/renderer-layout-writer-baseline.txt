@@ -14,7 +14,7 @@
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
 3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
-4 src/renderer/src/components/terminal-pane/terminal-recovery-ledger-test-store.ts
+4 src/renderer/src/components/terminal-pane/render-health/recovery/terminal-recovery-ledger-test-store.ts
 3 src/renderer/src/components/worktree-jump/worktree-jump-palette-status-inputs.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
 9 src/renderer/src/lib/agent-session/launch/background/agent-background-session-test-state.ts

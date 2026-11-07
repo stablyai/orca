@@ -1,8 +1,8 @@
 import {
   TerminalLaunchInputAttempt,
   type TerminalLaunchInputAttemptOwner
-} from '../../terminal-launch-input-attempt'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+} from '../../pty-connection/startup/terminal-launch-input-attempt'
+import type { PtyConnectionDeps } from '../../pty-connection/pty-connection-deps'
 
 import {
   type PaneKey,

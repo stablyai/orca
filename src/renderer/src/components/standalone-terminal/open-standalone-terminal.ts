@@ -7,7 +7,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/terminal-option-shortcut-policy'
-import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
+import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/clipboard/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import type { PreviewTerminalLinkHandlers } from '../dashboard-popout/preview-terminal-links'

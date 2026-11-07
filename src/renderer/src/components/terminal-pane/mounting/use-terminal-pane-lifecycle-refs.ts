@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import type { TerminalPaneVisibilitySnapshot } from '../viewport/pane-visibility-identity'
-import type { ReplayingPanesRef } from '../replay-guard'
+import type { ReplayingPanesRef } from '../snapshots/replay-guard'
 import type { installTerminalLinkPointerGesture } from '../links/gestures/terminal-link-pointer-gesture'
 import type { installHttpLinkClickFallback } from '../links/http/terminal-url-link-hit-testing'
 

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { createTerminalPathExistenceBatch } from '../components/terminal-pane/terminal-path-existence-batch'
+import { createTerminalPathExistenceBatch } from '../components/terminal-pane/links/files/terminal-path-existence-batch'
 import './runtime-file-metadata-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {

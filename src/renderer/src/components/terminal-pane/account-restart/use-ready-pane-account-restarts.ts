@@ -4,7 +4,7 @@ import { useAppStore } from '../../../store'
 import {
   isAccountRestartReady,
   selectReadyAccountRestartPtyIds
-} from '../pane-account-restart-readiness'
+} from './pane-account-restart-readiness'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'

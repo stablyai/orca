@@ -6,13 +6,13 @@ import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types
 import type { TerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../../shared/host-spawn-admission'
-import { createTerminalStartupTiming } from '../../terminal-startup-timing'
+import { createTerminalStartupTiming } from '../../diagnostics/startup/terminal-startup-timing'
 import type {
   PtyReplayDataMeta,
   PtyTransportRecoveryState
 } from '../../pty-transport/pty-transport-types'
 import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
-import type { PtyPaneStartup } from '../../pty-connection-types'
+import type { PtyPaneStartup } from '../startup/pty-pane-startup'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySession): void {

@@ -1,4 +1,4 @@
-import { replayIntoTerminal, replayIntoTerminalAsync } from '../../replay-guard'
+import { replayIntoTerminal, replayIntoTerminalAsync } from '../../snapshots/replay-guard'
 import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import {
   buildPostReplayLiveAgentReattachReset,

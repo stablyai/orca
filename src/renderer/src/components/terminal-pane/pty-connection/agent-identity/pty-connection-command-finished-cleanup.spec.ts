@@ -301,7 +301,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       // Import after resetModules to share pty-connection’s registry; static imports would assert against a different instance.
       const { createCommandFinishedStatusStore } =
-        await import('../../command-finished-status-store-test-fixture')
+        await import('./command-finished-status-store-test-fixture')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
       vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }

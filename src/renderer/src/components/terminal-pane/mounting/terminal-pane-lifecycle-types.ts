@@ -13,12 +13,13 @@ import type {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
-import type { PaneProcessExit, PtyPaneStartup } from '../pty-connection-types'
+import type { PaneProcessExit } from '../process-exit/pane-process-exit'
+import type { PtyPaneStartup } from '../pty-connection/startup/pty-pane-startup'
 import type { PtyTransport, PtyTransportRecoveryState } from '../pty-transport/pty-transport-types'
-import type { ReplayingPanesRef } from '../replay-guard'
+import type { ReplayingPanesRef } from '../snapshots/replay-guard'
 import type { TerminalLinkActionRequester } from '../links/terminal-link-action-request'
 import type { TerminalLinkRoutingPreferenceRequester } from '../links/http/terminal-url-link-hit-testing'
-import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
+import type { SessionRestoredBannerReason } from '../session-restore/session-restored-banner-pane-state'
 import type { DetachTerminalPaneToNewTab } from '../layout/detach/terminal-pane-tab-detach'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
