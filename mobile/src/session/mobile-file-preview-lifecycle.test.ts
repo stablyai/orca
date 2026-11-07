@@ -85,6 +85,7 @@ function previewSession() {
         sessionTabsRef,
         setSessionTabs: () => {},
         setFileDocs,
+        forgetLastSessionTab: () => {},
         closedTabTombstonesRef: { current: new Map() },
         pendingBrowserFocusPageIdRef: { current: null },
         activeSessionTabIdRef: { current: keptTab.id },

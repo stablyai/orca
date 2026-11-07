@@ -24,6 +24,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
+    forgetLastSessionTab,
     closedTabTombstonesRef,
     setActiveHandle,
     setActiveSessionTabId,
@@ -152,6 +153,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
+        forgetLastSessionTab(tab.id)
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (selectedSessionTabIdRef.current === tab.id) {
