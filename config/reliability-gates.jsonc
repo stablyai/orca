@@ -15589,9 +15589,9 @@
           "file": "src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-orphan-recovery-adoption-regressions.test.ts",
           "assertions": [
             "retries a transient thrown adoption on an unchanged semantic frame",
-            "retains the client epoch and retries when the post-adoption list has %s",
-            "preserves the prior inventory and mirror bindings after a post-adoption %s and retries",
-            "merges host-projected %s sibling state after adoption without treating pending as exited",
+            "retains the client epoch and retries when the post-adoption list has $failure",
+            "preserves prior terminal bindings after a post-adoption $failure and retries",
+            "merges host-projected $verdict sibling state after adoption without treating pending as exited",
             "does not apply an adoption result after the local tab closes while adoption is blocked",
             "does not apply an adoption result after the local tab moves groups while adoption is blocked"
           ]
