@@ -22011,6 +22011,22 @@
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+      },
+      "apiEndpoint": {
+        "add": "Ajouter un endpoint d’API",
+        "addTitle": "Ajouter un endpoint d’API",
+        "editTitle": "Modifier l’endpoint d’API",
+        "description": "Claude Code envoie les requêtes de ce compte à un endpoint compatible Anthropic avec votre jeton.",
+        "name": "Nom",
+        "baseUrl": "URL de base",
+        "token": "Jeton",
+        "tokenKeep": "Laisser vide pour le conserver",
+        "model": "Modèle",
+        "smallFastModel": "Modèle d’arrière-plan",
+        "sameAsModel": "Identique au modèle",
+        "save": "Enregistrer",
+        "saveFailed": "Impossible d’enregistrer l’endpoint.",
+        "edit": "Modifier"
       }
     },
     "hostSignIn": {

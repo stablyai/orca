@@ -21452,6 +21452,22 @@
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+      },
+      "apiEndpoint": {
+        "add": "新增 API 端點",
+        "addTitle": "新增 API 端點",
+        "editTitle": "編輯 API 端點",
+        "description": "此帳號的 Claude Code 會使用你的權杖，將請求傳送到相容 Anthropic 的端點。",
+        "name": "名稱",
+        "baseUrl": "基礎 URL",
+        "token": "權杖",
+        "tokenKeep": "留空則保留目前的權杖",
+        "model": "模型",
+        "smallFastModel": "背景模型",
+        "sameAsModel": "與模型相同",
+        "save": "儲存",
+        "saveFailed": "無法儲存此端點。",
+        "edit": "編輯"
       }
     },
     "managedData": {

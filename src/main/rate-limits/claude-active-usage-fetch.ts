@@ -9,7 +9,12 @@ import { classifyClaudeOAuthUsageError } from './claude-usage-error-classificati
 import { OAuthUsageError } from './claude-oauth-usage-error'
 import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
 import { abortedClaudeRateLimitResult, makeClaudeUsageResult } from './claude-usage-result'
-import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../shared/claude-profile-routing'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  CLAUDE_API_ENDPOINT_FILE,
+  CLAUDE_PROFILE_MISSING_MESSAGE
+} from '../../shared/claude-profile-routing'
 
 /** Usage observes the account; only a user-started Claude process may refresh its login. */
 export async function fetchActiveClaudeRateLimits(
@@ -25,6 +30,14 @@ export async function fetchActiveClaudeRateLimits(
   }
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
+  }
+  // An endpoint account has no Claude login to read or plan to report.
+  const configDir = options?.authPreparation?.configDir
+  if (configDir && existsSync(join(configDir, CLAUDE_API_ENDPOINT_FILE))) {
+    return makeClaudeUsageResult('unavailable', 'No subscription plan — API endpoint', {
+      authProvenance: options?.authPreparation?.provenance ?? 'system',
+      attemptedSources: []
+    })
   }
   const credentials = await readClaudeOAuthCredentials(
     resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)

@@ -113,6 +113,8 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),
+    // The endpoint token is written into the host's account folder.
+    saveApiEndpoint: rejectHostOnlySignIn,
     remove: ({ accountId }) =>
       callRuntimeResult<ClaudeRateLimitAccountsState>(
         'accounts.removeClaude',

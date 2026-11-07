@@ -21352,6 +21352,22 @@
         "reasonSharedSession": "別のペインでも開いています",
         "sharedOne": "別のペインで同じ会話が開いているため、1 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
         "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。"
+      },
+      "apiEndpoint": {
+        "add": "API エンドポイントを追加",
+        "addTitle": "API エンドポイントを追加",
+        "editTitle": "API エンドポイントを編集",
+        "description": "このアカウントの Claude Code は、入力したトークンで Anthropic 互換のエンドポイントに接続します。",
+        "name": "名前",
+        "baseUrl": "ベース URL",
+        "token": "トークン",
+        "tokenKeep": "空欄なら今のトークンのまま",
+        "model": "モデル",
+        "smallFastModel": "バックグラウンド用モデル",
+        "sameAsModel": "モデルと同じ",
+        "save": "保存",
+        "saveFailed": "エンドポイントを保存できませんでした。",
+        "edit": "編集"
       }
     },
     "hostSignIn": {

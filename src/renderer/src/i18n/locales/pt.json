@@ -22140,6 +22140,22 @@
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
         "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+      },
+      "apiEndpoint": {
+        "add": "Adicionar endpoint de API",
+        "addTitle": "Adicionar endpoint de API",
+        "editTitle": "Editar endpoint de API",
+        "description": "O Claude Code envia as solicitações desta conta a um endpoint compatível com a Anthropic usando seu token.",
+        "name": "Nome",
+        "baseUrl": "URL base",
+        "token": "Token",
+        "tokenKeep": "Deixe em branco para manter",
+        "model": "Modelo",
+        "smallFastModel": "Modelo em segundo plano",
+        "sameAsModel": "Igual ao Modelo",
+        "save": "Salvar",
+        "saveFailed": "Não foi possível salvar o endpoint.",
+        "edit": "Editar"
       }
     },
     "managedData": {

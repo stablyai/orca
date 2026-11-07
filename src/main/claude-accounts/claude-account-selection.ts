@@ -109,6 +109,10 @@ export class ClaudeAccountSelection {
       return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
     }
     const home = this.runtimeAuth.router.accountHome(account.id)
+    // Its token sits in its folder, so there is no login to read.
+    if (account.authMethod === 'api-endpoint') {
+      return { ...summary, home }
+    }
     const login = readClaudeFolderLogin(claudeStateFile(home))
     if (login) {
       return {
@@ -132,6 +136,7 @@ export class ClaudeAccountSelection {
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       authMethod: account.authMethod ?? 'unknown',
+      ...(account.apiEndpoint ? { apiEndpoint: account.apiEndpoint } : {}),
       organizationUuid: account.organizationUuid ?? null,
       organizationName: account.organizationName ?? null,
       createdAt: account.createdAt,

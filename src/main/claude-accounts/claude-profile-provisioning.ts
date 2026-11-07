@@ -20,6 +20,7 @@ import {
 } from './claude-profile-report'
 import { syncClaudeProfileSettings } from './claude-profile-settings'
 import { copyClaudeProfileFile, linkClaudeProfileDirectory } from './claude-profile-sharing'
+import { copySettingsWithEndpoint } from './claude-profile-endpoint-settings'
 
 const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
 
@@ -232,6 +233,8 @@ export async function provisionClaudeProfile(args: {
   platform?: NodeJS.Platform
   /** Before the setup marker, a folder in the profile is one Claude made, not one the user owns. */
   firstSetup?: boolean
+  /** An endpoint account's env, merged into the copied settings. */
+  endpointEnv?: Record<string, string> | null
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
@@ -267,14 +270,18 @@ export async function provisionClaudeProfile(args: {
         : copyClaudeProfileFile(source, target)
     })
   }
-  await runClaudeProfileSurface(report, 'settings.json', () =>
-    syncClaudeProfileSettings(
-      join(defaultHome, 'settings.json'),
-      join(args.profileHome, 'settings.json'),
-      // Beside the setup marker, outside the folder Claude reads.
-      join(dirname(args.profileHome), 'settings-sync.json')
-    )
-  )
+  await runClaudeProfileSurface(report, 'settings.json', () => {
+    const source = join(defaultHome, 'settings.json')
+    const target = join(args.profileHome, 'settings.json')
+    // Beside the setup marker, outside the folder Claude reads.
+    const record = join(dirname(args.profileHome), 'settings-sync.json')
+    if (args.endpointEnv) {
+      // Without the record, the next sync without an endpoint rewrites the whole file, token included.
+      rmSync(record, { force: true })
+      return copySettingsWithEndpoint(source, target, args.endpointEnv)
+    }
+    return syncClaudeProfileSettings(source, target, record)
+  })
   const statePath = (configDir: string | undefined): string =>
     resolveClaudeGlobalConfigFile({
       env: { CLAUDE_CONFIG_DIR: configDir },

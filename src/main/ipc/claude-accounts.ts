@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { ClaudeApiEndpointAccountRequest } from '../../shared/managed-account-types'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
 
@@ -18,6 +19,11 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       claudeAccounts.reauthenticateAccount(args.accountId, args.copyLink)
   )
   ipcMain.handle('claudeAccounts:waitForSignInLink', () => claudeAccounts.waitForSignInLink())
+  ipcMain.handle(
+    'claudeAccounts:saveApiEndpoint',
+    (_event, args: { endpoint: ClaudeApiEndpointAccountRequest; accountId?: string }) =>
+      claudeAccounts.saveApiEndpointAccount(args.endpoint, args.accountId)
+  )
   ipcMain.handle('claudeAccounts:remove', (_event, args: { accountId: string }) =>
     claudeAccounts.removeAccount(args.accountId)
   )
