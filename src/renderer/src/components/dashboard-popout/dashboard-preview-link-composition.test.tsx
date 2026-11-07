@@ -427,7 +427,11 @@ it('refuses real selected/drag/nonlink reports and retains the real in-window Bo
       onBrowserForeground={foreground}
     />
   )
-  fireEvent.click(view.getByRole('button', { name: /Workspace 0/ }))
+  // Cmd/Ctrl+Click opens the preview; a plain click reveals the worktree instead.
+  fireEvent.click(
+    view.getByRole('button', { name: /Workspace 0/ }),
+    navigator.userAgent.includes('Mac') ? { metaKey: true } : { ctrlKey: true }
+  )
   await waitFor(() => screenFor(document.body))
   await output(osc)
   const realScreen = screenFor(document.body)

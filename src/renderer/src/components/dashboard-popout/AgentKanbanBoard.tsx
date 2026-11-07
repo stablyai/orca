@@ -67,13 +67,15 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  onOpenTerminal,
+  onOpenWorktree
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenTerminal: (card: DashboardCard) => void
+  onOpenWorktree: (card: DashboardCard) => void
 }): React.JSX.Element {
   const label = bucketLabel(bucket)
 
@@ -104,6 +106,7 @@ function KanbanColumn({
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
               onOpenTerminal={onOpenTerminal}
+              onOpenWorktree={onOpenWorktree}
             />
           ))
         )}
@@ -220,6 +223,20 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
+  // Plain card clicks skip the preview dialog and focus the agent's pane like the dialog's Open worktree button.
+  const handleOpenWorktree = useCallback(
+    (card: DashboardCard) => {
+      onAckAgent(card.paneKey, 'explicit')
+      onRevealAgent({
+        repoId: card.repoId,
+        worktreeId: card.worktreeId,
+        executionHostId: card.executionHostId,
+        tabId: card.tabId,
+        leafId: card.leafId
+      })
+    },
+    [onAckAgent, onRevealAgent]
+  )
   // Acknowledge state changes while watched so open-dialog cards do not become unseen again.
   useEffect(() => {
     // The click already read the state it opened on; only later changes are watched.
@@ -287,6 +304,7 @@ export function AgentKanbanBoard({
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
                 onOpenTerminal={handleOpenTerminal}
+                onOpenWorktree={handleOpenWorktree}
               />
             ))}
           </div>

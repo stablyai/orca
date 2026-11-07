@@ -186,7 +186,6 @@ describe('Dashboard and retained sidebar destination contract', () => {
         </TooltipProvider>
       )
       fireEvent.click(screen.getByRole('button', { name: /Open this conversation/ }))
-      fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
 
       const assertDestination = async (): Promise<void> => {
         const state = useAppStore.getState()
