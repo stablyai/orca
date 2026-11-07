@@ -70,6 +70,12 @@ describe('Claude Code theme sync', () => {
     expect(readSettings()).toEqual({ theme: 'light-daltonized' })
   })
 
+  it('leaves a colorblind or custom theme the user picked alone', async () => {
+    writeSettings({ theme: 'dark-daltonized' })
+    await sync(on)
+    expect(readSettings()).toEqual({ theme: 'dark-daltonized' })
+  })
+
   it('never rewrites a settings file it cannot parse', async () => {
     writeFileSync(settingsPath, '{ "theme": "dark", ')
     await sync(on)
