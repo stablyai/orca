@@ -1,21 +1,23 @@
-import type { Worker } from 'node:worker_threads'
 import type { ModelManager } from './model-manager'
 import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
+import type { SpawnSttWorkerProcess, SttWorkerProcess } from './stt-worker-process'
 
 export type StopInFlight = {
-  worker: Worker
+  worker: SttWorkerProcess
   owner: string
   promise: Promise<void>
 }
 
 export type SttSessionState = {
-  worker: Worker | null
+  spawnWorker: SpawnSttWorkerProcess
+  worker: SttWorkerProcess | null
   cloudSession: OpenAiTranscriptionSession | null
   cloudStopInFlight: { session: OpenAiTranscriptionSession; promise: Promise<void> } | null
   modelManager: ModelManager
   activeModelId: string | null
   activeHotwordsFilePath: string | undefined
+  activeLanguage: string | undefined
   activeOwner: string | null
   startingOwner: string | null
   startingModelId: string | null
@@ -28,14 +30,19 @@ export type SttSessionState = {
   cleanupWorkerLifecycleListeners: (() => void) | null
 }
 
-export function createSttSessionState(modelManager: ModelManager): SttSessionState {
+export function createSttSessionState(
+  modelManager: ModelManager,
+  spawnWorker: SpawnSttWorkerProcess
+): SttSessionState {
   return {
+    spawnWorker,
     worker: null,
     cloudSession: null,
     cloudStopInFlight: null,
     modelManager,
     activeModelId: null,
     activeHotwordsFilePath: undefined,
+    activeLanguage: undefined,
     activeOwner: null,
     startingOwner: null,
     startingModelId: null,

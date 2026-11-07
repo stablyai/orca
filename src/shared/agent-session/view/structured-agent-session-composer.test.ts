@@ -1,3 +1,5 @@
+import { structuredAgentSessionInteractionDescriptor } from '../options/agent-session-interaction-mode'
+import { createStructuredAgentSessionOptionState } from '../options/structured-agent-session-options'
 import { queuedMessageEditAcceptsText } from '../../queued-message-edit-command'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -142,11 +144,13 @@ describe('agent-implemented commands pass through to the agent', () => {
       [],
       [{ name: 'permissions', kind: 'command' as const }]
     ]) {
-      expect(queuedMessageEditAcceptsText('/fast status', 'omp', sessionCommands)).toBe(true)
-      expect(queuedMessageEditAcceptsText('/clear', 'omp', sessionCommands)).toBe(false)
       expect(
-        isStructuredAgentSessionComposerCommand('/permissions', 'codex', sessionCommands)
-      ).toBe(false)
+        queuedMessageEditAcceptsText('/fast status', 'omp', sessionCommands, false, false)
+      ).toBe(true)
+      expect(queuedMessageEditAcceptsText('/clear', 'omp', sessionCommands, false, false)).toBe(
+        false
+      )
+      expect(isStructuredAgentSessionComposerCommand('/permissions', 'codex', [])).toBe(false)
       expect(
         await dispatchStructuredAgentSessionComposerCommand('/permissions', {
           ...controller,
@@ -162,5 +166,50 @@ describe('agent-implemented commands pass through to the agent', () => {
         })
       ).toEqual(PASSED_THROUGH)
     }
+  })
+})
+
+it('routes standalone supported Plan commands through the option writer and preserves ordinary text', async () => {
+  const descriptor = structuredAgentSessionInteractionDescriptor({
+    ...createStructuredAgentSessionOptionState('codex', null),
+    interactionModeSupported: true
+  })!
+  const setOption = vi.fn(async () => true)
+  const controller = {
+    agent: 'codex',
+    snapshot: [descriptor],
+    invokeAction: async () => true,
+    setOption
+  }
+  for (const [text, value] of [
+    ['/plan', 'plan'],
+    ['/default', 'default'],
+    ['/plan ', 'plan']
+  ]) {
+    expect(await dispatchStructuredAgentSessionComposerCommand(text!, controller)).toEqual({
+      handled: true,
+      accepted: true,
+      error: null
+    })
+    expect(setOption).toHaveBeenLastCalledWith('interactionMode', value)
+  }
+  for (const text of ['/plan explain this', '/planning', ' /plan', '/default now']) {
+    expect(await dispatchStructuredAgentSessionComposerCommand(text, controller)).toMatchObject({
+      handled: false
+    })
+  }
+  expect(
+    await dispatchStructuredAgentSessionComposerCommand('/plan', { ...controller, snapshot: [] })
+  ).toMatchObject({ handled: false })
+  expect(
+    await dispatchStructuredAgentSessionComposerCommand('/default', {
+      ...controller,
+      agent: 'claude'
+    })
+  ).toMatchObject({ handled: false })
+  setOption.mockResolvedValueOnce(false)
+  expect(await dispatchStructuredAgentSessionComposerCommand('/plan', controller)).toMatchObject({
+    handled: true,
+    accepted: false
   })
 })

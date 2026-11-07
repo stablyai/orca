@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
@@ -40,7 +41,7 @@ export function AgentLaunchSettingsSection({
   renderPermissions: AgentPermissionsRenderer
 }): React.JSX.Element {
   const environmentId = runtimeTargetEnvironmentId(hostScope.target)
-  const environment = useAppStore((state) =>
+  const environment = useAppStateValue((state) =>
     environmentId ? state.runtimeEnvironments.find((entry) => entry.id === environmentId) : null
   )
   return (

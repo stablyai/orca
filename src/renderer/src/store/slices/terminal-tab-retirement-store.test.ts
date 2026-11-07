@@ -20,7 +20,7 @@ vi.stubGlobal('window', {
 import {
   capturedPanesByTabId,
   parkedWatchersByTabId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
+} from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   createTestStore,
   makeWorktree,

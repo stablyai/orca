@@ -19,7 +19,7 @@ import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/i
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
@@ -36,6 +36,7 @@ import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { splitNativeChatSlotsWaitingBehindLiveTurn } from './native-chat-transcript-slots'
 import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
+import { useNativeChatHistoryRetention } from './use-native-chat-history-retention'
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
 import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
@@ -129,6 +130,12 @@ export function NativeChatMessageList({
   }, [])
 
   const { hasMore, loadingEarlier, loadEarlier } = session
+  const historyRetention = useNativeChatHistoryRetention({
+    ...session,
+    isVisible,
+    root: contentRef,
+    sourceKey: `${session.agent}:${session.sessionId}`
+  })
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready'
 
@@ -237,15 +244,20 @@ export function NativeChatMessageList({
     scrollToEnd: transcriptWindow.scrollToEnd,
     restoreScrollOffset: transcriptWindow.restoreScrollOffset,
     consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
-    reconcileReaderScroll: transcriptWindow.reconcileReaderScroll
+    reconcileReaderScroll: transcriptWindow.reconcileReaderScroll,
+    onLeaveEnd: historyRetention.leaveEnd,
+    onReturnToEnd: historyRetention.returnToEnd
   })
   const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
+  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
     isVisible,
     hasMore: showOlderHistory,
+    autoLoad: historyRetention.autoLoadHistory,
+    onManualLoad: readerLeavesEnd,
     loadingEarlier,
     loadEarlier
   })
@@ -275,8 +287,12 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
+  const onReaderScroll = useCallback(() => {
+    beginNavigation()
+    recordReaderScroll()
+  }, [beginNavigation, recordReaderScroll])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
-    onReaderScroll: beginNavigation,
+    onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
     onReaderAct: transcriptWindow.releaseEndPin,
     onLeaveEnd: readerLeavesEnd,
@@ -288,9 +304,10 @@ export function NativeChatMessageList({
       if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerWasAtEnd) {
         return
       }
-      jumpToLatest()
+      beginNavigation()
+      scrollToBottom('send')
     },
-    [jumpToLatest, readerAtEnd]
+    [beginNavigation, readerAtEnd, scrollToBottom]
   )
   useNativeChatMessageListHandle(
     ref,
@@ -332,7 +349,7 @@ export function NativeChatMessageList({
               data-native-chat-scroll
               aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >
               {showOlderHistory ? (
                 <NativeChatOlderHistoryRow

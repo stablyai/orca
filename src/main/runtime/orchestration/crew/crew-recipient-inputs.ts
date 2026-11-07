@@ -7,19 +7,19 @@ import {
 } from './crew-recipient-owner-queries'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   createLineageRunningSessionResolver,
   type AgentSessionRecordReader
-} from '../structured-session-lineage'
-import { runBoundToCoordinator } from '../orchestration-caller-identity'
+} from '../addressing/session-lineage/structured-session-lineage'
+import { runBoundToCoordinator } from '../addressing/orchestration-caller-identity'
 import { paneKeyMatchSuffix } from '../db/pane-key-match'
 import {
   activeDispatchMailboxBranch,
   equivalentDispatchMailboxOwners
 } from '../db/dispatch-mailbox-selection'
 import { selectBareRecipientOwner } from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import { deriveStructuredSessionMailReach } from '../structured-session-mail-address'
+import { deriveStructuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
 
 import { createCrewRecipientMailboxSelection } from './crew-recipient-mailbox-selection'
 import {

@@ -3,7 +3,7 @@ import {
   readyAgain,
   CACHED,
   MANIFEST,
-  afterCacheRead,
+  awaitingManifest,
   gates,
   readySession,
   run,
@@ -26,16 +26,21 @@ describe('the gates decide whether a step is taken at all', () => {
 })
 
 describe('the offline rule', () => {
-  it('waits on a cache read that lands mid-dial instead of opening it unchecked', () => {
+  it('opens a cache read that lands mid-dial without asking for the manifest', () => {
     const dialling = run(started().session, {
       type: 'gates-changed',
       gates: gates({ reachability: 'connecting' })
     })
     const step = run(dialling.session, { type: 'cache-read', generation: CACHED })
-    // Wait through connecting so the host’s imminent compatibility verdict is not skipped.
-    expect(step.session.state).toEqual({ kind: 'checking' })
-    expect(step.session.cached).toEqual(CACHED)
-    expect(step.effects).toEqual([])
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(step.effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      }
+    ])
   })
 
   it('restarts the flow when the host becomes reachable while offline is showing', () => {
@@ -52,7 +57,7 @@ describe('the connected flow', () => {
   it('opens a same-build hit without paging, under the fresh grants', () => {
     // Use unservable cached routes to prove fresh manifest grants decide the online same-build session.
     const stale = { ...CACHED, routes: [{ pathname: '/h/[hostId]', grants: ['teleport'] }] }
-    const step = run(afterCacheRead(stale).session, { type: 'manifest-read', manifest: MANIFEST })
+    const step = run(awaitingManifest(stale).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     // Opening must not rewrite the manifest while the native view reads it.
     expect(step.effects).toEqual([
@@ -69,7 +74,7 @@ describe('the connected flow', () => {
 
 describe('a read the link cut short falls back to what is on disk', () => {
   function manifestInFlight() {
-    return afterCacheRead(CACHED)
+    return awaitingManifest(CACHED)
   }
 
   it('opens the cached generation when the socket drops before the reachability change does', () => {
@@ -109,7 +114,7 @@ describe('a displayed generation is not restarted by the gates', () => {
   it('keeps a wall and a terminal failure', () => {
     const wall = started({ hostCapabilities: [] })
     expect(run(wall.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
-    const failed = run(afterCacheRead(null).session, {
+    const failed = run(awaitingManifest(null).session, {
       type: 'download-failed',
       cause: BUNDLE_REFUSED
     })
@@ -126,7 +131,7 @@ describe('recovery follows the shell view contract', () => {
       gates: gates({ statusReadable: false, hostCapabilities: [] })
     })
     expect(stale.session.state).toMatchObject({ kind: 'ready' })
-    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const step = run(stale.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(step.session.state).toEqual({
       kind: 'failed',
       reason: 'status-unreadable',
@@ -138,39 +143,39 @@ describe('recovery follows the shell view contract', () => {
     expect(rearmed.effects).toEqual([{ kind: 'open-cache' }])
   })
 
-  it('walls a recovery when the host no longer serves a bundle', () => {
+  it('walls a ready page as soon as the host stops serving a bundle', () => {
     const stale = run(readySession().session, {
       type: 'gates-changed',
       gates: gates({ hostCapabilities: [] })
     })
-    const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
-    expect(step.session.state).toEqual(NO_BUNDLE_WALL)
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(stale.session.state).toEqual(NO_BUNDLE_WALL)
   })
 
-  it('deletes the suspect cache and waits when the recovery lands mid-reconnect', () => {
+  it('deletes the suspect cache and reads it again when the recovery lands mid-reconnect', () => {
     const dialling = run(readySession().session, {
       type: 'gates-changed',
       gates: gates({ reachability: 'connecting' })
     })
     const step = run(dialling.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(step.session.state).toEqual({ kind: 'checking' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
     expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
       { kind: 'open-cache' }
     ])
   })
 
-  it.each(['generation-unreadable', 'document-load-failed'] as const)(
-    'is terminal the second time %s is reported',
-    (reason) => {
-      const first = run(readySession().session, { type: 'shell-failed', reason })
-      const refetched = readyAgain(first.session, 'session-two')
-      const second = run(refetched.session, { type: 'shell-failed', reason })
-      expect(second.effects).toEqual([])
-      expect(second.session.state).toEqual({ kind: 'failed', reason, retriedOnce: true })
-    }
-  )
+  it('is terminal the second time an unreadable generation needs a refetch', () => {
+    const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
+    const first = run(readySession().session, unreadable)
+    const refetched = readyAgain(first.session, 'session-two')
+    const second = run(refetched.session, unreadable)
+    expect(second.effects).toEqual([])
+    expect(second.session.state).toEqual({
+      kind: 'failed',
+      reason: 'generation-unreadable',
+      retriedOnce: true
+    })
+  })
 
   it('is terminal the second time the render process is gone, still without a delete', () => {
     const first = run(readySession().session, {
@@ -186,28 +191,39 @@ describe('recovery follows the shell view contract', () => {
       retriedOnce: false
     })
   })
+
+  it('remounts again when the render process goes after the remounted page painted', () => {
+    const recovered = run(
+      readySession().session,
+      { type: 'shell-failed', reason: 'render-process-gone' },
+      { type: 'remounted', sessionId: 'session-two' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    )
+    const second = run(recovered.session, { type: 'shell-failed', reason: 'render-process-gone' })
+    expect(second.effects).toEqual([{ kind: 'remount' }])
+    expect(second.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-two' })
+  })
 })
 
 describe('try again', () => {
-  it('clears both latches and restarts the flow', () => {
+  it('clears every latch, deletes the unreadable files and restarts the flow', () => {
+    const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
     const lost = run(readySession().session, {
       type: 'shell-failed',
       reason: 'render-process-gone'
     })
     const remounted = run(lost.session, { type: 'remounted', sessionId: 'session-remounted' })
-    const first = run(remounted.session, {
-      type: 'shell-failed',
-      reason: 'document-load-failed'
-    })
+    const first = run(remounted.session, unreadable)
     const refetched = readyAgain(first.session, 'session-two')
-    const failed = run(refetched.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const failed = run(refetched.session, unreadable)
     expect(failed.session.retriedOnce).toBe(true)
     expect(failed.session.remountedOnce).toBe(true)
     const retried = run(failed.session, { type: 'retry-pressed' })
     expect(retried.session.retriedOnce).toBe(false)
     expect(retried.session.remountedOnce).toBe(false)
     expect(retried.session.cached).toBeNull()
-    expect(retried.effects).toEqual([{ kind: 'open-cache' }])
+    expect(retried.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
     const again = run(
       run(retried.session, { type: 'cache-read', generation: CACHED }).session,
       { type: 'manifest-read', manifest: MANIFEST },
@@ -219,7 +235,7 @@ describe('try again', () => {
         totalBytes: 4096,
         elapsedMs: 3
       },
-      { type: 'shell-failed', reason: 'document-load-failed' }
+      unreadable
     )
     expect(again.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
   })
@@ -238,12 +254,17 @@ describe('a result from a superseded flow reports into nothing', () => {
     expect(stale.effects).toEqual([])
     expect(stale.session.cached).toBeNull()
     expect(run(stale.session, { type: 'cache-read', generation: CACHED }).effects).toEqual([
-      { kind: 'read-manifest' }
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      }
     ])
   })
 
   it('drops the manifest of a run the socket drop replaced, so no download is asked for', () => {
-    const first = afterCacheRead(null)
+    const first = awaitingManifest(null)
     const restarted = run(first.session, {
       type: 'gates-changed',
       gates: gates({ reachability: 'unreachable' })
@@ -262,7 +283,7 @@ describe('a result from a superseded flow reports into nothing', () => {
 
   it('keeps a workspace on screen when the manifest read the drop abandoned finally rejects', () => {
     // Settle the abandoned RPC only after socket loss opens cache, exposing any missing flow guard.
-    const inFlight = afterCacheRead(CACHED)
+    const inFlight = awaitingManifest(CACHED)
     const offline = run(inFlight.session, {
       type: 'gates-changed',
       gates: gates({ reachability: 'unreachable' })
@@ -303,7 +324,7 @@ describe('a result from a superseded flow reports into nothing', () => {
   })
 })
 
-describe('the remount budget is one per session, not one per reconnect', () => {
+describe('a reconnect does not refill the remount budget', () => {
   it('keeps the latch set when the gates restart the flow after a load failure', () => {
     const remounted = run(
       readySession().session,
@@ -322,7 +343,7 @@ describe('only the state that mounted the view hears the view', () => {
   it('ignores the second failure of one native batch, leaving the first recovery running', () => {
     const recovering = run(readySession().session, {
       type: 'shell-failed',
-      reason: 'document-load-failed'
+      reason: 'generation-unreadable'
     })
     const batched = run(recovering.session, {
       type: 'shell-failed',
@@ -414,12 +435,17 @@ describe('the page has to speak for the document that loaded', () => {
     expect(step.session.pageReady).toBe(true)
   })
 
-  it('deletes the cache and runs the flow again when the wait expires', () => {
+  it('remounts the same files when the wait expires', () => {
     const ready = run(readySession().session, { type: 'document-loaded' })
     const step = run(ready.session, { type: 'page-ready-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
-    expect(step.session.retriedOnce).toBe(true)
-    expect(step.session.state.kind).toBe('checking')
+    expect(step.effects).toEqual([{ kind: 'remount' }])
+    expect(step.session.retriedOnce).toBe(false)
+  })
+
+  it('retires both waits once the page speaks', () => {
+    expect(run(readySession().session, { type: 'page-ready' }).effects).toEqual([
+      { kind: 'cancel-deadlines' }
+    ])
   })
 
   it('does nothing when the wait expires after the page has spoken', () => {
@@ -471,11 +497,10 @@ describe('the page has to speak for the document that loaded', () => {
 
 // Refused/uncommitted loads may report nothing; retain a deadline for iOS cancellation (#28626).
 describe('the view has to finish the document it was given', () => {
-  it('deletes the cache and runs the flow again when no document ever finished', () => {
+  it('remounts the same files when no document ever finished', () => {
     const started = run(readySession().session, { type: 'document-started' })
     const step = run(started.session, { type: 'document-load-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
-    expect(step.session.state.kind).toBe('checking')
+    expect(step.effects).toEqual([{ kind: 'remount' }])
   })
 
   it('does nothing once the document finished or the page spoke', () => {
@@ -544,5 +569,77 @@ describe('the page reporting a frame on screen', () => {
     )
     expect(painted.session.pagePainted).toBe(true)
     expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+})
+
+describe('a cached page opened before the verdict', () => {
+  const NEWER = { ...MANIFEST, buildId: 'c'.repeat(64) }
+
+  function openedWhileDialling() {
+    const dialling = started({ reachability: 'connecting' })
+    return run(
+      dialling.session,
+      { type: 'cache-read', generation: CACHED },
+      {
+        type: 'activated',
+        generationDirectory: CACHED.directory,
+        sessionId: 'session-early',
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes,
+        elapsedMs: 1
+      }
+    )
+  }
+
+  it('checks for a newer build once the verdict opens, and stages it behind the page', () => {
+    const opened = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
+    expect(opened.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
+    expect(opened.effects).toEqual([{ kind: 'read-manifest' }])
+    const staged = run(opened.session, { type: 'manifest-read', manifest: NEWER })
+    expect(staged.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
+    expect(staged.effects).toEqual([{ kind: 'stage-update' }])
+  })
+
+  it('lets the desktop manifest decide when the verdict puts it outside the window', () => {
+    const blocked = run(openedWhileDialling().session, {
+      type: 'gates-changed',
+      gates: gates({ hostStatus: { protocolVersion: 10, minCompatibleMobileVersion: 99 } })
+    })
+    expect(blocked.session.state).toEqual({ kind: 'checking' })
+    expect(blocked.effects).toEqual([{ kind: 'open-cache' }])
+  })
+
+  it('shows the status failure when the status it waited for cannot be read', () => {
+    const unreadable = run(openedWhileDialling().session, {
+      type: 'gates-changed',
+      gates: gates({ statusReadable: false, hostCapabilities: [] })
+    })
+    expect(unreadable.session.state).toEqual({
+      kind: 'failed',
+      reason: 'status-unreadable',
+      retriedOnce: false
+    })
+  })
+
+  it('walls a page that already talked when a new connection puts it outside the window', () => {
+    const talked = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
+    const reconnected = run(
+      talked.session,
+      { type: 'gates-changed', gates: gates({ reachability: 'connecting' }) },
+      {
+        type: 'gates-changed',
+        gates: gates({ hostStatus: { protocolVersion: 10, minCompatibleMobileVersion: 99 } })
+      }
+    )
+    expect(reconnected.session.state).toEqual({
+      kind: 'wall',
+      verdict: {
+        kind: 'blocked',
+        reason: 'bundle-incompatible',
+        side: 'mobile',
+        bundleRuntimeProtocolVersion: CACHED.compat.runtimeProtocolVersion,
+        requiredBundleRuntimeProtocolVersion: 99
+      }
+    })
   })
 })

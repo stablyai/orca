@@ -1,3 +1,4 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
@@ -120,11 +121,13 @@ export type AcpLaunchSpec = {
   scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
   dialect: AcpDialect
   loginCommand: readonly string[]
-  /** Selects an advertised method using the execution host's environment; undefined leaves it signed out. */
+  /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
     advertised: readonly string[]
+    antigravityChatAuth?: AntigravityChatAuthConfig
     env: Readonly<Record<string, string>>
   }): string | undefined
+  authMethodUnavailableMessage?: string
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
   account: AcpAccountBinding

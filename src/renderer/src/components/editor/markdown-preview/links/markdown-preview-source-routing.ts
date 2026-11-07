@@ -1,5 +1,5 @@
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { dirname } from '@/lib/path'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'

@@ -42,8 +42,17 @@ const store = vi.hoisted((): JiraStoreBoundary & { statusPatches: string[] } => 
   statusPatches: []
 }))
 
-vi.mock('@/runtime/runtime-jira-client', () => runtime)
-vi.mock('@/runtime/runtime-jira-detail-client', () => runtime)
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
+  jiraAddIssueCommentForTarget: runtime.jiraAddIssueCommentForTarget,
+  jiraGetIssueForTarget: runtime.jiraGetIssueForTarget,
+  jiraIssueCommentsForTarget: runtime.jiraIssueCommentsForTarget,
+  jiraListPrioritiesForTarget: runtime.jiraListPrioritiesForTarget,
+  jiraListTransitionsForTarget: runtime.jiraListTransitionsForTarget,
+  jiraUpdateIssueForTarget: runtime.jiraUpdateIssueForTarget
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: runtime.jiraListAssignableUsersForTarget
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: (select: (state: JiraStoreBoundary) => unknown) => select(store)
 }))

@@ -7,9 +7,9 @@ import {
   REPO_SLUG_FAILURE_TTL_MS,
   repoSlugCacheKey
 } from '@/lib/repo-slug-cache'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from './native-chat-file-link'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, isUnresolvedOwnerHostId } from '../../../../shared/execution-host'

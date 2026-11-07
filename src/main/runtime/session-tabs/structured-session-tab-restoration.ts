@@ -6,7 +6,7 @@ import {
 } from './structured-session-tab-publication'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

@@ -248,6 +248,14 @@ export function keepStoppedSendsInSendOrder(
   return moved
 }
 
+const stoppedSendNoticeBlocks: NativeChatMessage['blocks'] = [
+  {
+    type: 'text',
+    text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
+    presentation: NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
+  }
+]
+
 /** One row after each run of sends a Stop took back (`stopped`, by id), placed with the last. */
 export function withStopRowsAfterStoppedSends(
   messages: readonly NativeChatMessage[],
@@ -262,13 +270,7 @@ export function withStopRowsAfterStoppedSends(
             role: 'system' as const,
             source: 'transcript' as const,
             timestamp: message.timestamp,
-            blocks: [
-              {
-                type: 'text' as const,
-                text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
-                presentation: NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
-              }
-            ],
+            blocks: stoppedSendNoticeBlocks,
             ...(message.journalPosition ? { journalPosition: message.journalPosition } : {})
           }
         ]

@@ -9,13 +9,13 @@ import {
 import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField
-} from '@/runtime/runtime-file-search-bounds'
-import { searchRuntimeFiles } from '@/runtime/runtime-file-search-client'
+} from '@/runtime/files/search/runtime-file-search-bounds'
+import { searchRuntimeFiles } from '@/runtime/files/search/runtime-file-search-client'
 import { useAppStore } from '@/store/index'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from '@/lib/worktree-runtime-owner'
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import type { SearchResult } from '../../../../../../shared/code-search-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'

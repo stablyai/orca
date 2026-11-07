@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { joinPath } from '@/lib/path'
 import {
   getOpenFilesForExternalFileChange,
@@ -12,7 +12,7 @@ import {
   getRecentSelfWrite,
   type RecentSelfWrite
 } from '@/components/editor/external-changes/editor-self-write-registry'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 

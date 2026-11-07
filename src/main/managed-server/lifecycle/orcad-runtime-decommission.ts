@@ -6,6 +6,8 @@ import type {
 } from '../../../shared/orcad-managed-runtime'
 import type { OrcadDaemonRetirementVerdict } from '../../../shared/orcad-stop-request'
 import { removeManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findManagedSshTwin } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-key-match'
 import type {
   KnownRuntimeEnvironment,
   OrcadSshDeploymentLink
@@ -78,23 +80,54 @@ export function forgetManagedOrcadEnvironment(
   args: { selector: string },
   policy: ManagedOrcadStopPolicy
 ): Promise<OrcadManagedForgetResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
-    const { environment, deployment } = managed
-    if (policy.isActiveEnvironment(environment.id)) {
-      return refuse(
-        'live',
-        'orcad_forget_active_environment',
-        'This server is the default host for new projects. Choose another one under New projects open on before forgetting it.'
+  return withManagedOrcadLifecycle(userDataPath, args.selector, (managed) =>
+    forgetLinkedEnvironment(userDataPath, managed, policy)
+  )
+}
+
+/** Forget one of two saved entries for one managed server; the other keeps managing it, so the host is not contacted. */
+export function forgetRedundantManagedOrcadEnvironment(
+  userDataPath: string,
+  args: { selector: string },
+  policy: ManagedOrcadStopPolicy
+): Promise<OrcadManagedForgetResult> {
+  return withManagedOrcadLifecycle(userDataPath, args.selector, (managed) => {
+    // Checked in the queue and unlinked in the same tick, so two Removes cannot each count the other as the twin.
+    if (!findManagedSshTwin(listEnvironments(userDataPath), managed.environment)) {
+      return Promise.resolve(
+        refuse(
+          'live',
+          'orcad_forget_no_managed_twin',
+          'No other saved entry manages this server anymore, so removing this one would leave it unmanaged. Stop it instead.'
+        )
       )
     }
-    await unlinkEnvironmentLocally(userDataPath, environment, deployment, policy)
-    return {
-      outcome: 'forgotten',
-      verdict: 'unverifiable',
-      environmentId: environment.id,
-      sshTargetId: deployment.sshTargetId
-    }
+    return forgetLinkedEnvironment(userDataPath, managed, policy)
   })
+}
+
+async function forgetLinkedEnvironment(
+  userDataPath: string,
+  {
+    environment,
+    deployment
+  }: { environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink },
+  policy: ManagedOrcadStopPolicy
+): Promise<OrcadManagedForgetResult> {
+  if (policy.isActiveEnvironment(environment.id)) {
+    return refuse(
+      'live',
+      'orcad_forget_active_environment',
+      'This server is the default host for new projects. Choose another one under New projects open on before forgetting it.'
+    )
+  }
+  await unlinkEnvironmentLocally(userDataPath, environment, deployment, policy)
+  return {
+    outcome: 'forgotten',
+    verdict: 'unverifiable',
+    environmentId: environment.id,
+    sshTargetId: deployment.sshTargetId
+  }
 }
 
 async function stopRemote(

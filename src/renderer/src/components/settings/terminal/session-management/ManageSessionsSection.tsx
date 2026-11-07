@@ -4,7 +4,7 @@ import type { PtyManagementSession } from '../../../../../../preload/api/pty-man
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { getManageSessionsSearchEntries } from '../terminal-window-setup-search'
 import { useAppStore } from '../../../../store/index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useDaemonActions, DaemonActionDialog } from '../../../shared/useDaemonActions'
 import { ManageSessionKillDialog } from './ManageSessionKillDialog'

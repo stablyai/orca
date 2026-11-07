@@ -27,7 +27,7 @@ import {
 import { useAppStore } from '@/store'
 import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../shared/dispatched-worker-attention'
-import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
+import { getNotificationWorkspaceLabels } from '../../attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
 

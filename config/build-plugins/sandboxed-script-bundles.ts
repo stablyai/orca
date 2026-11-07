@@ -10,7 +10,8 @@ type BundledScript = { code: string; moduleIds: string[] }
 
 const GUEST_PRELOADS = [
   { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
-  { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' }
+  { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' },
+  { entry: 'src/preload/plugin-frame-guest.ts', fileName: 'plugin-frame-guest-preload.js' }
 ]
 
 const WORKER_SHIM = {

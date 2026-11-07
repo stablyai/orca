@@ -1,20 +1,23 @@
 import { useCallback, useEffect } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
-import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/runtime-git-status-client'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/source-control/git/runtime-git-status-client'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 
 export function useGitStatusUpstreamRefWatch(args: {
   enabled: boolean
-  executionHostId: string | null | undefined
+  executionHostId: ExecutionHostId | null | undefined
   worktreeId: string | null
   worktreePath: string | null
 }): (status: GitStatusResult) => void {
-  const owner = getWorktreeGitOwnerTarget(args.worktreeId)
+  const copy = args.worktreeId
+    ? resolveWorktreeGitCopyNow(args.worktreeId, args.executionHostId)
+    : null
+  const owner = copy?.transport
   // Key by primitive identity so new target objects cannot rearm the effect.
   const runtimeEnvironmentId = owner?.kind === 'environment' ? owner.environmentId : null
-  const connectionId = args.worktreeId ? (getConnectionId(args.worktreeId) ?? undefined) : undefined
+  const connectionId = copy?.connectionId
   const scope =
     args.enabled && args.executionHostId && owner
       ? `${args.executionHostId}\0${runtimeEnvironmentId}\0${args.worktreeId}\0${args.worktreePath}`
@@ -43,12 +46,12 @@ export function useGitStatusUpstreamRefWatch(args: {
       ).catch(() => {})
     },
     [
+      scope,
       args.executionHostId,
       args.worktreeId,
       args.worktreePath,
       connectionId,
-      runtimeEnvironmentId,
-      scope
+      runtimeEnvironmentId
     ]
   )
 

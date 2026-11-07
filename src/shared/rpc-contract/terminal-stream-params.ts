@@ -32,12 +32,30 @@ export const TerminalSubscribe = TerminalHandle.extend({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       mobileInputLeaseOnly: z.literal(1).optional(),
-      writeUnavailable: z.literal(1).optional()
+      writeUnavailable: z.literal(1).optional(),
+      // Ask for credited output; the host echoes `outputAck: true` and a `streamToken` in `subscribed`.
+      outputAck: z.literal(1).optional()
+    })
+    .optional(),
+  /** Continue an ended stream: `units` is the Output text, in UTF-16 code units, the client applied from that
+   * stream id after its snapshot (or its `resumed` reply), read once it stops applying that stream. The host
+   * answers `resumed: true` and sends only what was missed, or a snapshot as usual. Each token resumes at
+   * most once; older hosts strip this and snapshot. */
+  resume: z
+    .object({
+      streamToken: requiredString('Missing stream token'),
+      units: z.number().int().nonnegative()
     })
     .optional(),
   /** Budget the JSON frame, not raw text: ESC expands sixfold and can push a 512 KiB snapshot past a 640 KiB bridge cap.
    * Optional for legacy raw-byte trimming; never infer from client.type because mobile socket clients have no frame cap. */
   snapshotByteBudget: z.number().int().positive().optional()
+})
+
+/** Credit for Output text the client has parsed, in UTF-16 code units since its previous ack. */
+export const TerminalAckOutput = z.object({
+  streamToken: requiredString('Missing stream token'),
+  units: z.number().int().positive()
 })
 
 export const TerminalMultiplex = z.object({})

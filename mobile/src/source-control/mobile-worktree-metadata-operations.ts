@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'

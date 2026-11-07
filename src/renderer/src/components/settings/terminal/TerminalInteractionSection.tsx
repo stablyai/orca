@@ -8,8 +8,8 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './platform/terminal-windows-search'
-import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/osc52-clipboard-setting-anchor'
-import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
+import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/clipboard/osc52-clipboard-setting-anchor'
+import { isMacPlatform } from '../../terminal-pane/links/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,

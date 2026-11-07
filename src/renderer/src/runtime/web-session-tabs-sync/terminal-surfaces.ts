@@ -10,7 +10,7 @@ import type {
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
-import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
+import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,

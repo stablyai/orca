@@ -35,6 +35,7 @@ function savedSession(): WorkspaceSessionState {
     entry('ed-a', 'editor', '/w/a.ts', 1),
     entry('ghost-review', 'conflict-review', '/w/conflict', 2),
     entry('ghost-checks', 'check-details', '/w/checks', 3),
+    entry('ghost-graph', 'git-graph', `${KEY}::git-graph`, 4),
     entry('ghost-html', 'editor', 'html-preview::/w/page.html', 4),
     entry('kept-diff', 'diff', '/w/b.ts', 5),
     entry('ed-b', 'editor', '/w/b.ts', 6)
@@ -87,7 +88,7 @@ describe("main's layout load of view-less saved editor tabs", () => {
       nameBasedLoadContext()
     ).layout.workspaces[KEY]!
 
-    expect(workspace.tabs).toHaveLength(7)
+    expect(workspace.tabs).toHaveLength(8)
   })
 
   it('keeps a transient tab while main still holds its view', () => {

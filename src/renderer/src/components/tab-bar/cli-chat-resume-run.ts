@@ -8,8 +8,8 @@ import {
 } from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import {
   StructuredAgentSessionCreateSourceFailedError,
   type StructuredAgentSessionCreateGate

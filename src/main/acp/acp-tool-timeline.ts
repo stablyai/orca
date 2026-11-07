@@ -8,7 +8,7 @@ import {
   JOURNAL_RUNNING_PREVIEW_LIMITS,
   journalPayload,
   journalToolPayload
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+} from '../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin

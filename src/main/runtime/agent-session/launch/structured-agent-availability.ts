@@ -19,6 +19,7 @@ import {
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../runtime-store-contract'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -50,7 +51,10 @@ async function observeHostAgent(
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
   if (!supportsLocation(HOST_LOCATION)) {
-    return { agent, state: 'refused', reason: 'agent' }
+    const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
+      ? 'windows'
+      : 'agent'
+    return { agent, state: 'refused', reason }
   }
   // A failed probe or an unrunnable Command setting says nothing about the installed release.
   const seen = await observeStructuredAgentLaunch(

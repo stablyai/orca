@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
-import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { activationTreatsNoteAsFinished } from './agent-session/resume/sleeping-agent-pane-ownership'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

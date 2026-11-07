@@ -8,11 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   assertEditorFileOperationCurrent,
-  captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
-} from './editor-file-operation-owner'
-import { applyOpenFileToState } from '@/store/slices/editor/actions/open-file-apply'
-import { buildEditorSessionData } from './workspace-session'
+  captureEditorFileOperationProvenance
+} from './editor-file-operation-provenance'
+import { getEditorFileOperationContext } from './editor-file-operation-owner'
+import { applyOpenFileToState } from '@/store/slices/editor/opening/open-file-apply'
+import { buildEditorSessionData } from './workspace/persistence/workspace-session'
 import { restorableEditorFile } from '@/store/slices/editor/tabs/editor-tab-layout-owner'
 import { isSameOwnedDocument } from '@/store/slices/editor/file-ids/same-owned-editor-document'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from './open-editor-move-owner'
@@ -29,13 +29,13 @@ import {
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
-import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
-import type { OpenFile } from '@/store/slices/editor'
+import type * as RuntimeFileMutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { FileWriteResult } from '../../../shared/file-write-disk-precondition'
 
 const { writeRuntimeFile } = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileMutationClient>()),
   writeRuntimeFile
 }))

@@ -1,6 +1,6 @@
 import { MAX_PROMPT_BYTES } from './structured-agent-session-message-params'
 import { Identifier } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH

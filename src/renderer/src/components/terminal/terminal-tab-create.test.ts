@@ -17,9 +17,11 @@ vi.mock('@/store', () => ({
     getState: getStateMock
   }
 }))
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: createBrowserUuidMock
+
+vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: createBrowserUuidMock
 }))
+
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))

@@ -11,7 +11,7 @@ export type RecentlyClosedTabPosition = {
 
 /** Share worktree position index across bulk closes; per-tab order/group rescans make close-all cubic. */
 export type RecentlyClosedTabPositionIndex = {
-  positionFor: (entityId: string) => RecentlyClosedTabPosition | undefined
+  positionFor: (entityId: string, tabId?: string) => RecentlyClosedTabPosition | undefined
 }
 
 export function createRecentlyClosedTabPositionIndex(
@@ -76,9 +76,13 @@ export function createRecentlyClosedTabPositionIndex(
   }
 
   return {
-    positionFor: (entityId) => {
-      const tabBarIndex = tabBarOrder ? (tabBarIndexByEntityId.get(entityId) ?? -1) : -1
-      const unifiedTab = tabByEntityId.get(entityId)
+    positionFor: (entityId, tabId) => {
+      const tabBarIndex = tabBarOrder
+        ? (tabBarIndexByEntityId.get(tabId ?? entityId) ??
+          tabBarIndexByEntityId.get(entityId) ??
+          -1)
+        : -1
+      const unifiedTab = tabId ? tabById.get(tabId) : tabByEntityId.get(entityId)
       const group = unifiedTab ? groupById.get(unifiedTab.groupId) : undefined
       const groupIndex =
         group && unifiedTab ? (tabOrderIndexByGroupId.get(group.id)?.get(unifiedTab.id) ?? -1) : -1
