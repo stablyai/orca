@@ -303,7 +303,9 @@ it.each([false, true])(
     await removing
     const expected = foreign ? 'independent foreign input @/report.pdf' : ''
     expect(readNativeChatComposerDraft(SCOPE).text).toBe(expected)
-    expect((await storage.read(SCOPE))?.text ?? '').toBe(expected)
+    expect(await storage.read(SCOPE)).toEqual(
+      foreign ? expect.objectContaining({ text: expected }) : undefined
+    )
     vi.useRealTimers()
     await reload()
     expect(readNativeChatComposerDraft(SCOPE).text).toBe(expected)

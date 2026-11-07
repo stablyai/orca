@@ -382,7 +382,7 @@ it.each([false, true])(
   async (independent) => {
     let composing = true
     let attachment!: ReturnType<typeof useNativeChatResolvedPathAttachments>
-    let input: NativeChatComposerInput | null = null
+    const input: { current: NativeChatComposerInput | null } = { current: null }
     function Composer() {
       const field = useRef<NativeChatComposerInput>(null)
       const mounted = useRef(true)
@@ -401,7 +401,7 @@ it.each([false, true])(
         textareaRef: field
       })
       useLayoutEffect(() => {
-        input = field.current
+        input.current = field.current
         if (field.current && field.current.value !== draft.draft) {
           field.current.value = draft.draft
         }
@@ -439,12 +439,14 @@ it.each([false, true])(
       composing = false
       attachment.flushPendingAttachments()
     })
-    expect(input?.value).toBe(independent ? '@/captured.pdf @/later.pdf ' : '@/captured.pdf ')
+    expect(input.current?.value).toBe(
+      independent ? '@/captured.pdf @/later.pdf ' : '@/captured.pdf '
+    )
     await act(async () => {
       held.reply()
       await removing
     })
-    expect(input?.value).toBe(independent ? '@/captured.pdf @/later.pdf ' : '')
+    expect(input.current?.value).toBe(independent ? '@/captured.pdf @/later.pdf ' : '')
     await nativeChatComposerDraftWriteSettled(MEMBER)
     cleanup()
     await nativeChatComposerDraftWritesSettled()

@@ -239,7 +239,12 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       if (!paths.length) {
         return input
       }
-      return prepareNativeChatStagedUpload(input, session, paths, () => currentFiles(files))
+      return prepareNativeChatStagedUpload(
+        input,
+        { sessionId: session.sessionId, runtimeEnvironmentId: session.runtimeEnvironmentId },
+        paths,
+        () => currentFiles(files)
+      )
     }
   }
 }

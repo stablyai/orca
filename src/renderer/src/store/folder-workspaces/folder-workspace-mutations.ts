@@ -1,4 +1,7 @@
-import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutation-coordinator'
+import {
+  getFolderWorkspaceUpdateCoordinator,
+  type FolderWorkspaceUpdateField
+} from './folder-workspace-mutation-coordinator'
 export {
   getFolderWorkspaceUpdateCoordinator,
   folderWorkspaceUpdateCoordinators,

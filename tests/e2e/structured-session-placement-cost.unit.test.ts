@@ -179,12 +179,12 @@ it.each([20, 200])(
       }
     })
     const order = tabMerge.appendChatTabOrder
-    vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((groups, prior, tabs, active) => {
+    vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((groups, prior, tabs) => {
       const orders = (list: readonly RuntimeMobileSessionTabGroup[] | undefined) =>
         (list ?? []).reduce((sum, group) => sum + group.tabOrder.length, 0)
       inherited.chatOrderMerges++
       inherited.chatOrderInput += orders(groups) + orders(prior) + tabs.length
-      const ordered = collectionVisits(() => order(groups, prior, tabs, active))
+      const ordered = collectionVisits(() => order(groups, prior, tabs))
       inherited.chatOrderVisits += ordered.visits
       return ordered.value
     })

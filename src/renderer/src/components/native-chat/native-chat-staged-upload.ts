@@ -4,7 +4,7 @@ import type { NativeChatStagedInput } from './native-chat-draft-attachment-stagi
 
 export async function prepareNativeChatStagedUpload<T extends NativeChatStagedInput>(
   input: T,
-  session: { sessionId: string; runtimeEnvironmentId: string | null },
+  session: { sessionId: string; runtimeEnvironmentId: string },
   paths: readonly string[],
   getFiles: () => { uploads: Map<string, Map<string, Promise<string>>> }
 ): Promise<T> {

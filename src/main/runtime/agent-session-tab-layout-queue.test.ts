@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createChatTabLayoutQueue } from './agent-session-tab-layout-queue'
+import type { ChatTabLayoutCommand } from './agent-session/agent-session-tab-layout'
 
 const layoutOwner = vi.hoisted(() => ({ main: false }))
 vi.mock('../../shared/layout-owner-switch', () => ({

@@ -7,7 +7,7 @@ import {
   type AuthorityRig
 } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { SESSION_TAB_METHODS } from '../../src/main/runtime/rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from '../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
