@@ -60,9 +60,10 @@ export function useMobileStructuredHeldOptionPicks(args: {
         return { kind: 'unknown' }
       }
       // The kept value shows once the refused pick has left the overlay.
-      void pick.result.then(() => {
+      void pick.result.then((outcome) => {
         const kept = shown()
-        if (picked && kept) {
+        // A chat left or a pick replaced meanwhile has nothing to report.
+        if (outcome.kind === 'refused' && !controller.current(pick.key) && picked && kept) {
           latest.current.args.onOptionError?.(
             translate(
               'chat.sessionOptionPickers.heldPickRefused',
