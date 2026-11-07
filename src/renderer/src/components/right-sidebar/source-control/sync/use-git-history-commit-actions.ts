@@ -72,10 +72,7 @@ export function useGitHistoryCommitActions({
       if (cached) {
         return cached.entries
       }
-      const connectionId =
-        ownerConnectionId === undefined
-          ? sourceControlConnectionId(scope, activeWorktreeId)
-          : (ownerConnectionId ?? undefined)
+      const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
       const result = await getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
@@ -221,10 +218,7 @@ export function useGitHistoryCommitActions({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId:
-              ownerConnectionId === undefined
-                ? sourceControlConnectionId(scope, activeWorktreeId)
-                : (ownerConnectionId ?? undefined)
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
           },
           { sha: item.id }
         )
