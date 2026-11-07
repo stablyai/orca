@@ -89,6 +89,23 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
+  it('shows the unsent draft for a pending-input refusal', () => {
+    expect(
+      formatTerminalSend({
+        send: {
+          handle: 'term_1',
+          accepted: false,
+          bytesWritten: 0,
+          refusedReason: 'pending-input',
+          pendingInput: 'fix the\nflaky test'
+        }
+      })
+    ).toBe(
+      'Refused: terminal term_1 has unsent input in its composer: "fix the\\nflaky test"\n' +
+        'Wait for the user to send or clear it.'
+    )
+  })
+
   it.each([
     {
       observation: 'permission' as const,

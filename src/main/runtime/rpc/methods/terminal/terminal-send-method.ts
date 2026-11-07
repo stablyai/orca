@@ -7,6 +7,7 @@ import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isUntypedTerminalInput } from '../../../../../shared/terminal/input/terminal-untyped-input'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { AgentPromptPendingInputError } from '../../../terminal/input/agent-prompt-permission-hold'
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import {
@@ -33,7 +34,7 @@ import {
 // Every refused send reports the same zero-byte result, with the guard's reason when it has one.
 function refusedSend(
   handle: string,
-  refusedReason?: NonNullable<ReturnType<typeof getTerminalSendGuardRefusedReason>>
+  refusedReason?: NonNullable<RuntimeTerminalSend['refusedReason']>
 ) {
   return {
     send: { handle, accepted: false, bytesWritten: 0, ...(refusedReason ? { refusedReason } : {}) }
@@ -255,6 +256,10 @@ export const TERMINAL_SEND_METHODS = [
           mobileFloorClaim.current?.rollback()
           if (acceptedPromptCheckpoint) {
             return acceptedPromptCheckpoint
+          }
+          if (error instanceof AgentPromptPendingInputError) {
+            const { send } = refusedSend(params.terminal, 'pending-input')
+            return { send: { ...send, pendingInput: error.pendingInput } }
           }
           const refusedReason = getTerminalSendGuardRefusedReason(error)
           if (refusedReason) {

@@ -32,10 +32,10 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
-import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import { OrcaRuntimeWithPendingComposerInputGuard } from './terminal-agent-prompt-pending-input'
 import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
-export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithPendingComposerInputGuard {
   protected abstract createAgentPromptRenderGate(
     ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
   ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
@@ -80,7 +80,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     if (options.onPermission === 'wait') {
       this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
     }
+    // Why first: a permission dialog's ❯ row must report agent_prompt_blocked, not pending-input.
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
+    await this.assertNoPendingComposerInput(ptyId, options.promptForSchedule, observationSignal)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
@@ -131,6 +133,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let baseline: AgentPromptActivity
     try {
       await beforeWrite(admissionSignal)
+      // Why: beforeWrite can poll for a second; re-read the composer, then assertWritable last.
+      await this.assertNoPendingComposerInput(ptyId, options.promptForSchedule, admissionSignal)
       assertWritable(admissionSignal)
       if (options.onPermission === 'wait') {
         this.throwIfAgentPromptPermissionReturned(

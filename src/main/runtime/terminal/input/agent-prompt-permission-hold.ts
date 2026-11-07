@@ -11,6 +11,14 @@ export class AgentPromptPermissionReturnedError extends Error {
   }
 }
 
+/** The writer's other pre-paste refusal: the composer already holds unsent text. */
+export class AgentPromptPendingInputError extends Error {
+  constructor(readonly pendingInput: string) {
+    super('agent_prompt_pending_input')
+    this.name = 'AgentPromptPendingInputError'
+  }
+}
+
 export type AgentPromptPermissionHold = {
   /** The writer's predicate; throws when the write must not happen at all (binding changed). */
   isBlocked: () => boolean

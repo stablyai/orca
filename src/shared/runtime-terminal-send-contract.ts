@@ -4,7 +4,9 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
+  refusedReason?: 'no-agent' | 'permission' | 'pending-input'
+  /** Unsent composer text that refused a submitting send (`refusedReason: 'pending-input'`). */
+  pendingInput?: string
   prompt?: RuntimeTerminalPromptDelivery
   writeSettlement?: WriteSettlement
 }
