@@ -8,6 +8,7 @@ import {
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeCapExceededError, BridgeHostDisposedError } from './bridge-host-errors'
+import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
 
 export type DesktopBound = Extract<BridgeClientMessage, { type: 'request' | 'subscribe' }>
 
@@ -29,7 +30,9 @@ const PHONE_ONLY_NATIVE_VERBS: ReadonlySet<string> = new Set([
   'native.audio.stop',
   'native.storage.read',
   'native.image.act',
-  'native.speech.act'
+  'native.speech.act',
+  // The phone's own store: a draft or queued message saved while the desktop is out must land now, not on reconnect.
+  BRIDGE_STORE_VERB
 ])
 
 export type BridgeVerdictHold = {
