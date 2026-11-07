@@ -1,4 +1,4 @@
-import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
+import type { JournalIndexedInputCard } from './input-order/journal-input-card-index'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation, JournalSqlValueReference } from './journal-sql-value-codec'
@@ -35,15 +35,9 @@ export function writeJournalSqlCardMemberColumns(
   if (indexed) {
     scope.db
       .prepare(`UPDATE journal_proj_indexed_cards SET ${captured('source') ? '' : 'lineage_message_id=NULL, '}
-        actionable=?, handoff=?, released=?, released_at=?
+        actionable=?, handoff=?, released=?
         WHERE session_id=? AND epoch=? AND message_id=? AND incarnation=?`)
-      .run(
-        Number(indexed.actionable),
-        Number(indexed.handoff),
-        Number(indexed.released),
-        indexed.releasedAt ?? null,
-        ...key
-      )
+      .run(Number(indexed.actionable), Number(indexed.handoff), Number(indexed.released), ...key)
   }
   return true
 }

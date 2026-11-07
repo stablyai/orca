@@ -1,4 +1,3 @@
-import { journalInputAcceptance } from '../input-order/journal-input-provenance'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
@@ -50,9 +49,7 @@ export function publishJournalOutcomeEpoch(
     throw new Error('missing founding epoch')
   }
   const source = startJournalOutcomeLog(db, sessionId, epoch, 0, first.ts)
-  const initial = createJournalReducerState(sessionId, epoch, (id) =>
-    journalInputAcceptance(db, sessionId, id)
-  )
+  const initial = createJournalReducerState(sessionId, epoch)
   journalInputOrder(initial).beginReconstruction()
   const transition = persistJournalOutcomeRows(
     db,

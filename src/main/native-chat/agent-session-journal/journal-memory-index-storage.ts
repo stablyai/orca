@@ -1,6 +1,5 @@
 import type { JournalIndexStorageFactory } from './journal-index-storage'
 import { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import { JournalInputDomainIndex } from './input-order/journal-input-domain-index'
 import { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
 import { JournalInputCandidates } from './input-order/journal-input-candidates'
 import { JournalSubmissionIndex } from './input-order/journal-submission-index'
@@ -26,7 +25,6 @@ export const memoryJournalIndexStorage: JournalIndexStorageFactory = {
   linkFacts: memoryJournalSubmissionLinkFacts,
   lineageFacts: memoryJournalInputLineageFacts,
   place: () => new JournalInputPlaceIndex(''),
-  domain: () => new JournalInputDomainIndex(),
   released: () => new JournalInputReleasedPositions(),
   candidates: () => new JournalInputCandidates(),
   submissions: () => new JournalSubmissionIndex(),

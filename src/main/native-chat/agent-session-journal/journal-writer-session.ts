@@ -27,7 +27,6 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { readJournalSqlMeta } from './journal-sql-meta'
 import { publishJournalWriterEpoch } from './journal-writer-epoch'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { journalInputAcceptance } from './input-order/journal-input-provenance'
 import {
   advanceJournalOutcomeSource,
   journalOutcomeSource,
@@ -198,9 +197,7 @@ export class JournalWriterSession {
       throw new Error('journal projection no longer covers the saved chat')
     }
     const scope = new JournalSqlScope(db, target.sessionId, meta.scope)
-    const reducer = new JournalSqlReducer(scope, target.epoch, (id) =>
-      journalInputAcceptance(db, target.sessionId, id)
-    )
+    const reducer = new JournalSqlReducer(scope, target.epoch)
     if (reducer.state.lastSequence !== meta.through) {
       throw new Error('journal projection writer has stale coverage')
     }

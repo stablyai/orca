@@ -10,7 +10,6 @@ import {
   AgentSessionJournalError
 } from '../writing/journal-write-guards'
 
-import { journalInputAcceptance } from '../input-order/journal-input-provenance'
 import {
   applyJournalRow,
   applyMarker5JournalRow,
@@ -44,10 +43,7 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   if (epoch === null) {
     return null
   }
-  return foldJournalFromState(
-    db,
-    createJournalReducerState(sessionId, epoch, (id) => journalInputAcceptance(db, sessionId, id))
-  )
+  return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
 }
 
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
@@ -62,9 +58,7 @@ export function restoreJournal(
   if (epoch === null) {
     return null
   }
-  const empty = createJournalReducerState(sessionId, epoch, (id) =>
-    journalInputAcceptance(db, sessionId, id)
-  )
+  const empty = createJournalReducerState(sessionId, epoch)
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
@@ -161,9 +155,8 @@ export function startJournalRowFold(
     untilDamage?: boolean
     interpretation?: 'marker5' | 'sources'
     deferNativeCleanup?: boolean
-    originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
   },
-  state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
+  state = createJournalReducerState(input.sessionId, input.epoch)
 ): {
   add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad

@@ -215,13 +215,6 @@ const FACTS = {
     counter: 'handoff_places',
     payload: true
   },
-  'order.originals': {
-    table: 'journal_proj_original_acceptances',
-    id: 'input_id',
-    value: 'payload_json',
-    counter: 'original_acceptances',
-    payload: true
-  },
   'evidence.carrierCoverage': {
     table: 'journal_proj_carrier_coverage',
     id: 'input_id',

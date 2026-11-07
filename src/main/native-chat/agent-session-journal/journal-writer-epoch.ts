@@ -1,7 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { journalInputAcceptance } from './input-order/journal-input-provenance'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { exportJournalControlState } from './journal-sql-control-export'
@@ -27,8 +26,7 @@ export function publishJournalWriterEpoch(
   }
   const exported = new JournalSqlReducer(
     new JournalSqlScope(db, state.sessionId, state.epoch),
-    state.epoch,
-    (id) => journalInputAcceptance(db, state.sessionId, id)
+    state.epoch
   )
   exported.context.bulkLoad(() => {
     exportJournalControlState(state, exported.state, { items: true })

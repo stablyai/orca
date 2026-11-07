@@ -22,11 +22,7 @@ export class JournalSqlReducer {
   private readonly scalars: JournalSqlScalars
   private scopeBefore: string | null
 
-  constructor(
-    scope: JournalSqlScope,
-    epoch: string,
-    originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
-  ) {
+  constructor(scope: JournalSqlScope, epoch: string) {
     this.context = new JournalSqlValueContext(scope, new JournalSqlItemValues(scope))
     this.context.access('inputEntries')
     this.context.access('inputCards')
@@ -37,7 +33,7 @@ export class JournalSqlReducer {
       collections: { items: () => items },
       stateQueries: sqlJournalStateQueries(this.context, this.facts)
     })
-    const state = createJournalReducerState(scope.sessionId, epoch, originalAcceptance, storage)
+    const state = createJournalReducerState(scope.sessionId, epoch, storage)
     this.scalars = new JournalSqlScalars(scope, 'reducer')
     const historyOrigin: JournalReducerState['historyOrigin'] = null
     this.scalars.define(state, {

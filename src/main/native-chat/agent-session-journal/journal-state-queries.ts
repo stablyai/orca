@@ -22,7 +22,6 @@ export type JournalStateQueries = {
     fence: number
   ) => Iterable<AgentJournalSubmission>
   returnedCommandIds: (state: JournalReducerState) => Iterable<string>
-  legacyInputEntryCount: (state: JournalReducerState) => number
   latestAcceptedUnopened: (state: JournalReducerState) => boolean
   newestTurnBySequence: (state: JournalReducerState) => AgentJournalTurnLifecycle | null
   oldestAppliedSettlementId: (state: JournalReducerState) => string | undefined

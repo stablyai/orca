@@ -62,20 +62,6 @@ export function isInputLineage(value: unknown): value is JournalInputLineage {
   })
 }
 
-export function queryInputContext<T>(
-  context: JournalInputContext,
-  original: AgentJournalCursor | undefined,
-  before: (coordinate: AgentJournalCursor) => T,
-  all: () => T,
-  merge: (left: T, right: T) => T
-): T {
-  if (context.basis === 'observed' || original?.epoch === context.source.epoch) {
-    return all()
-  }
-  const source = before(context.source)
-  return original ? merge(source, before(original)) : source
-}
-
 /** Initial source coordinates and introduction cuts never follow physical restatement rows. */
 export class JournalInputLineageOwner {
   constructor(

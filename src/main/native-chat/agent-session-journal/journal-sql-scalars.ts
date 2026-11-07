@@ -18,14 +18,12 @@ const SCALAR_COLUMNS = {
   inputs: { revision: 'integer' },
   order: {
     reconstructing: 'boolean',
-    legacyPlaces: 'integer',
     receiptCount: 'integer',
     queueRevision: 'integer',
     revision: 'integer'
   },
   cards: {
     pauseKey: 'json',
-    history: 'boolean',
     currentRevision: 'integer',
     initialized: 'boolean',
     floor: 'json',

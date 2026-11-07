@@ -1,24 +1,17 @@
 import type { JournalInputReleasedStorage } from './journal-index-storage'
 import type { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
-import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
+import type { JournalIndexedInputCard } from './input-order/journal-input-card-index'
 import type { JournalInputCard } from './input-order/journal-input-lineage'
 import type { JournalInputPlace } from './input-order/journal-input-order-state'
-import { mergeInputPlaces, type InputPlaceQuery } from './input-order/journal-input-place-index'
-import { JournalSqlDomainIndex } from './journal-sql-domain-index'
+import type { InputPlaceQuery } from './input-order/journal-input-place-index'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 export class JournalSqlReleasedPositions implements JournalInputReleasedStorage {
-  private readonly domains: JournalSqlDomainIndex
-  private readonly fallback: JournalSqlDomainIndex
-
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly indexId: string
-  ) {
-    this.domains = new JournalSqlDomainIndex(scope, `${indexId}:released-at`)
-    this.fallback = new JournalSqlDomainIndex(scope, `${indexId}:released-fallback`)
-  }
+  ) {}
 
   private get prefix(): [string, string, string] {
     return [...this.scope.prefix, this.indexId]
@@ -26,12 +19,6 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
 
   /** Releases since the latest pause share its generation; earlier ones keep an older one. */
   importState(state: ReturnType<JournalInputReleasedPositions['exportState']>): void {
-    for (const { introduced, entry } of state.domains.exportEntries()) {
-      this.domains.importEntry(introduced, entry)
-    }
-    for (const { introduced, entry } of state.fallback.exportEntries()) {
-      this.fallback.importEntry(introduced, entry)
-    }
     const paused = state.floor !== -Infinity
     const releases = [...state.releases]
     if (!paused && releases.length === 0) {
@@ -65,23 +52,13 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
   }
 
   delete(prior: JournalIndexedInputCard): void {
-    if (prior.releasedAt !== undefined) {
-      this.domains.delete(prior.card, { ...prior.source, introduced: prior.releasedAt })
-    } else {
-      this.fallback.delete(prior.card, prior.source)
-    }
     this.scope.db
       .prepare(`DELETE FROM journal_proj_releases
         WHERE session_id=? AND epoch=? AND index_id=? AND id=?`)
       .run(...this.prefix, prior.card.messageId)
   }
 
-  add(card: QueuedMessageRow, source: JournalInputCard, releasedAt?: number): void {
-    if (releasedAt !== undefined) {
-      this.domains.setPosition(card, { ...source, introduced: releasedAt })
-    } else {
-      this.fallback.setPosition(card, source)
-    }
+  add(card: QueuedMessageRow, source: JournalInputCard): void {
     if (card.state === 'withdrawn') {
       return
     }
@@ -115,22 +92,15 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
       return { position: -Infinity }
     }
     this.scope.examined(exists)
-    if (place.context.basis === 'observed') {
-      const sincePause = place.context.cut <= floor
-      const eligible = this.scope.db
-        .prepare(`SELECT MAX(position) AS position FROM journal_proj_releases
+    const sincePause = place.context.cut <= floor
+    const eligible = this.scope.db
+      .prepare(`SELECT MAX(position) AS position FROM journal_proj_releases
           WHERE session_id=? AND epoch=? AND index_id=? ${sincePause ? 'AND pause_gen=?' : ''}
           AND introduced<?`)
-        .get(...this.prefix, ...(sincePause ? [state.pause_gen] : []), place.context.cut)!
-      this.scope.examined(eligible)
-      if (eligible.position !== null) {
-        return { position: Number(eligible.position) }
-      }
-    } else if (place.context.cut > floor) {
-      return mergeInputPlaces(
-        this.domains.query({ ...place.context, cut: floor }, place.original),
-        this.fallback.query(place.context, place.original)
-      )
+      .get(...this.prefix, ...(sincePause ? [state.pause_gen] : []), place.context.cut)!
+    this.scope.examined(eligible)
+    if (eligible.position !== null) {
+      return { position: Number(eligible.position) }
     }
     return { position: -Infinity }
   }

@@ -86,10 +86,9 @@ export function sqlJournalInputOrderFacts(deps: JournalSqlFactsDeps): JournalInp
   const recoveryOwed = deps.set<string>('order.recoveryOwed')
   const facts: Omit<
     JournalInputOrderFacts,
-    'reconstructing' | 'legacyPlaces' | 'receiptCount' | 'queueRevision' | 'revision'
+    'reconstructing' | 'receiptCount' | 'queueRevision' | 'revision'
   > = {
     recoveryOwed,
-    originals: deps.map('order.originals'),
     queued,
     entered,
     overrides,
@@ -104,8 +103,8 @@ export function sqlJournalInputOrderFacts(deps: JournalSqlFactsDeps): JournalInp
   }
   const scalars: Pick<
     JournalInputOrderFacts,
-    'reconstructing' | 'legacyPlaces' | 'receiptCount' | 'queueRevision' | 'revision'
-  > = { reconstructing: false, legacyPlaces: 0, receiptCount: 0, queueRevision: 0, revision: 0 }
+    'reconstructing' | 'receiptCount' | 'queueRevision' | 'revision'
+  > = { reconstructing: false, receiptCount: 0, queueRevision: 0, revision: 0 }
   return new JournalSqlScalars(context.scope, 'order').define(facts, scalars)
 }
 
@@ -120,7 +119,7 @@ export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInpu
   let overlayRows: readonly QueuedMessageRow[] = []
   const facts: Omit<
     JournalInputCardFacts,
-    'history' | 'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
+    'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
   > = {
     current,
     indexed: deps.map('cards.indexed'),
@@ -160,9 +159,8 @@ export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInpu
   }
   const scalars: Pick<
     JournalInputCardFacts,
-    'history' | 'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
+    'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
   > = {
-    history: true,
     currentRevision: 0,
     initialized: false,
     floor: null,
@@ -295,7 +293,7 @@ export function sqlJournalInputLineageFacts(
       scope.examined(card)
       return Math.max(Number(entry.frontier ?? 0), Number(card.frontier ?? 0))
     },
-    // Lineage cards exist only while legacy places did; the walk deletes or trims each.
+    // Reconstruction releases finished cards and retains current introductions.
     cardsForRelease: () => orderedEntries<string, JournalInputCard>(context, sqlCollection(cards))
   }
   const scalars: Pick<JournalInputLineageFacts, 'base' | 'clock'> = { base: 0, clock: 0 }

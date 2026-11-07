@@ -16,7 +16,6 @@ import {
   journalSqlOrderedValues
 } from './journal-sql-keyed-values'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
-import { JournalSqlDomainIndex } from './journal-sql-domain-index'
 import { JournalSqlReleasedPositions } from './journal-sql-released-positions'
 import { JournalSqlCandidates } from './journal-sql-candidates'
 import { JournalSqlTurnSources } from './journal-sql-turn-sources'
@@ -99,7 +98,6 @@ export function sqlJournalIndexStorage(
     linkFacts: () => sqlJournalSubmissionLinkFacts(deps),
     lineageFacts: (cards) => sqlJournalInputLineageFacts(deps, cards),
     place,
-    domain: (name) => new JournalSqlDomainIndex(indexScope, name),
     released: (name) => new JournalSqlReleasedPositions(indexScope, name),
     candidates: (name) => new JournalSqlCandidates(indexScope, name),
     submissions: (name) =>

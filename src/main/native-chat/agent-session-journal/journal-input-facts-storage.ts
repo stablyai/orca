@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
+import type { JournalIndexedInputCard } from './input-order/journal-input-card-index'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
@@ -9,7 +9,6 @@ import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
 
 export type JournalInputOrderFacts = {
   recoveryOwed: JournalKeyedSet<string>
-  originals: JournalKeyedMap<string, AgentJournalCursor | undefined>
   queued: JournalKeyedMap<string, AgentJournalSubmission>
   entered: JournalKeyedMap<string, AgentJournalSubmission>
   overrides: JournalKeyedMap<string, AgentJournalSubmission>
@@ -18,7 +17,6 @@ export type JournalInputOrderFacts = {
   enteredSubmissions: () => Iterable<AgentJournalSubmission>
   recoveryOwedIds: () => Iterable<string>
   reconstructing: boolean
-  legacyPlaces: number
   receiptCount: number
   queueRevision: number
   revision: number
@@ -35,7 +33,6 @@ export type JournalInputCardFacts = {
   unintroducedIds: () => Iterable<string>
   replaceOverlays: (cards: Map<string, QueuedMessageRow>) => void
   replaceClearMembers: (ids: readonly string[]) => void
-  history: boolean
   currentRevision: number
   initialized: boolean
   overlayRows: readonly QueuedMessageRow[]

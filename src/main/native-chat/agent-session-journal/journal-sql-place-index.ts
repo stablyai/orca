@@ -175,16 +175,8 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     return this.summary()
   }
 
-  queryCommand(epoch: string, sequence: number): QueuedMessageRow | undefined {
-    return this.summary({ epoch, sequence }, true).command
-  }
-
-  allCommand(): QueuedMessageRow | undefined {
-    return this.summary(undefined, true).command
-  }
-
-  private summary(cut?: { epoch: string; sequence: number }, commandOnly = false): InputPlaceQuery {
-    const flags = commandOnly ? 'command' : '(head OR command OR waiting OR handoff)'
+  private summary(cut?: { epoch: string; sequence: number }): InputPlaceQuery {
+    const flags = '(head OR command OR waiting OR handoff)'
     const rows = this.scope.db
       .prepare(`SELECT id, sequence, tie, position, head, command, waiting, handoff, card_json
         FROM journal_proj_places WHERE session_id=? AND epoch=? AND index_id=?
@@ -196,15 +188,13 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     for (const row of rows) {
       result = mergeInputPlaces(result, journalSqlPlaceSummary(this.scope, row))
     }
-    if (!commandOnly) {
-      const eligible = this.scope.db
-        .prepare(`SELECT MAX(position) AS position FROM journal_proj_places
+    const eligible = this.scope.db
+      .prepare(`SELECT MAX(position) AS position FROM journal_proj_places
           WHERE session_id=? AND epoch=? AND index_id=? ${cut ? 'AND domain=? AND sequence<?' : ''}`)
-        .get(...this.prefix, ...(cut ? [cut.epoch, cut.sequence] : []))!
-      this.scope.examined(eligible)
-      if (eligible.position !== null) {
-        result.position = Number(eligible.position)
-      }
+      .get(...this.prefix, ...(cut ? [cut.epoch, cut.sequence] : []))!
+    this.scope.examined(eligible)
+    if (eligible.position !== null) {
+      result.position = Number(eligible.position)
     }
     return result
   }

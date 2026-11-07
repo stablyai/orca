@@ -1,5 +1,4 @@
 import type { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import type { JournalInputDomainIndex } from './input-order/journal-input-domain-index'
 import type { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
 import type { JournalInputCandidates } from './input-order/journal-input-candidates'
 import type { JournalSubmissionIndex } from './input-order/journal-submission-index'
@@ -30,13 +29,6 @@ export type JournalInputPlaceStorage = Pick<
   | 'idsAfter'
   | 'firstPosition'
   | 'allPlaces'
-  | 'queryCommand'
-  | 'allCommand'
->
-
-export type JournalInputDomainStorage = Pick<
-  JournalInputDomainIndex,
-  'set' | 'setPosition' | 'delete' | 'clear' | 'query'
 >
 
 export type JournalInputReleasedStorage = Pick<
@@ -80,7 +72,6 @@ export type JournalIndexStorageFactory = {
   linkFacts: () => JournalSubmissionLinkFacts
   lineageFacts: (cards: JournalKeyedMap<string, JournalInputCard>) => JournalInputLineageFacts
   place: (name: string, key?: string | number) => JournalInputPlaceStorage
-  domain: (name: string) => JournalInputDomainStorage
   released: (name: string) => JournalInputReleasedStorage
   candidates: (name: string) => JournalInputCandidateStorage
   submissions: (name: string) => JournalSubmissionStorage

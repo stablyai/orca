@@ -1,7 +1,6 @@
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import { JournalInputDomainIndex } from './input-order/journal-input-domain-index'
 import { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
 import { JournalInputCandidates } from './input-order/journal-input-candidates'
 import { JournalSubmissionIndex } from './input-order/journal-submission-index'
@@ -152,10 +151,6 @@ function copyContainer(memory: unknown, sql: unknown, path: string): void {
     for (const entry of memory.exportEntries()) {
       sql.importEntry(entry)
     }
-  } else if (memory instanceof JournalInputDomainIndex) {
-    for (const { introduced, entry } of memory.exportEntries()) {
-      sql.importEntry(introduced, entry)
-    }
   } else if (memory instanceof JournalInputReleasedPositions) {
     sql.importState(memory.exportState())
   } else if (memory instanceof JournalInputCandidates) {
@@ -178,7 +173,6 @@ function isContainer(value: unknown): value is object {
     value instanceof Map ||
     value instanceof Set ||
     value instanceof JournalInputPlaceIndex ||
-    value instanceof JournalInputDomainIndex ||
     value instanceof JournalInputReleasedPositions ||
     value instanceof JournalInputCandidates ||
     value instanceof JournalSubmissionIndex ||

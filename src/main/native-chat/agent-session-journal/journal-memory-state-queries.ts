@@ -42,15 +42,6 @@ export const memoryJournalStateQueries: JournalStateQueries = {
   returnedCommandIds(state) {
     return memoryJournalSet(state.queue.returnedCommands).values()
   },
-  legacyInputEntryCount(state) {
-    let count = 0
-    for (const entry of memoryJournalMap(state.inputEntries).values()) {
-      if (entry.context.basis === 'legacy') {
-        count++
-      }
-    }
-    return count
-  },
   latestAcceptedUnopened: memoryLatestAcceptedSendUnopened,
   newestTurnBySequence(state) {
     return newestStructuredAgentSessionTurnBySequence(memoryJournalMap(state.items).values())

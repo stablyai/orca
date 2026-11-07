@@ -6,7 +6,6 @@ import { initializeJournalInputOrder, journalInputOrder } from './journal-input-
 import type { JournalOutcomeFold } from '../outcomes/journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../../sqlite/sync-database'
-import { journalInputAcceptance } from './journal-input-provenance'
 
 export type JournalNativePrefix = {
   entries: Map<string, JournalInputEntry>
@@ -72,16 +71,22 @@ export function restoreJournalNativeState(
         state.inputEntries.set(id, {
           context: {
             source: { epoch: state.epoch, sequence },
-            basis: 'legacy',
+            basis: 'observed',
             cut: prefix.base + sequence
           }
         })
       }
     }
   }
-  const owner = initializeJournalInputOrder(state, (id) =>
-    journalInputAcceptance(db, state.sessionId, id)
-  )
+  for (const [id, entry] of memoryJournalMap(state.inputEntries)) {
+    if (entry.context.basis === 'legacy') {
+      state.inputEntries.set(id, {
+        ...entry,
+        context: { ...entry.context, basis: 'observed' }
+      })
+    }
+  }
+  const owner = initializeJournalInputOrder(state)
   owner.beginReconstruction()
   owner.restore(state)
   owner.overlay(state, readJournalLegacyCards(db, state))

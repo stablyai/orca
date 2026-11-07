@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS journal_proj_indexed_cards (
   actionable INTEGER,
   handoff INTEGER,
   released INTEGER,
-  released_at REAL,
   PRIMARY KEY (session_id, epoch, message_id, incarnation)
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_indexed_cards_current

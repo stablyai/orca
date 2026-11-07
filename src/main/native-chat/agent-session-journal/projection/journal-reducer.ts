@@ -11,11 +11,7 @@ import {
   journalInputPresentationMember
 } from '../input-order/journal-input-obligations'
 import { resolveJournalItemId } from './journal-item-echo'
-import {
-  journalInputOrder,
-  initializeJournalInputOrder,
-  type JournalInputOrder
-} from '../input-order/journal-input-order'
+import { journalInputOrder, initializeJournalInputOrder } from '../input-order/journal-input-order'
 import type { JournalInputEntry, JournalInputCard } from '../input-order/journal-input-lineage'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -111,7 +107,6 @@ export type JournalReducerState = {
 export function createJournalReducerState(
   sessionId: string,
   epoch: string,
-  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1],
   storage: JournalIndexStorageFactory = memoryJournalIndexStorage
 ): JournalReducerState {
   const state: JournalReducerState = {
@@ -146,7 +141,7 @@ export function createJournalReducerState(
     inputCards: storage.map('inputCards'),
     historyOrigin: null
   }
-  initializeJournalInputOrder(state, originalAcceptance, storage)
+  initializeJournalInputOrder(state, storage)
   return state
 }
 

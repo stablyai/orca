@@ -166,13 +166,6 @@ export class JournalSqlInputEntity {
         SET ${counter}_count=?, ${counter}_ordinal=?, ${counter}_incarnation=?
         WHERE session_id=? AND epoch=?`)
       .run(size, size, size, ...this.scope.prefix)
-    if (this.collection === 'inputEntries') {
-      this.scope.db
-        .prepare(`UPDATE journal_proj_domain_counters SET legacy_entries_count=(
-          SELECT COUNT(*) FROM journal_proj_input_entries WHERE session_id=? AND epoch=? AND current=1 AND basis='legacy')
-          WHERE session_id=? AND epoch=?`)
-        .run(...this.scope.prefix, ...this.scope.prefix)
-    }
   }
 
   store(
@@ -183,7 +176,6 @@ export class JournalSqlInputEntity {
     ordinal: number
   ): void {
     if (current) {
-      this.legacyDelta(-1, location.key)
       this.scope.db
         .prepare(`UPDATE ${this.table.table} SET current=0
           WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND current=1`)
@@ -204,7 +196,6 @@ export class JournalSqlInputEntity {
       )
     this.writeCaptures(location, encoded)
     writeJournalSqlInputEntityColumns(this.scope, location, value, encoded.refs)
-    this.legacyDelta(1, location.key, location.incarnation)
   }
 
   update(
@@ -212,7 +203,6 @@ export class JournalSqlInputEntity {
     encoded: EncodedJournalSqlValue,
     value: unknown
   ): boolean {
-    this.legacyDelta(-1, location.key, location.incarnation)
     const result = this.scope.db
       .prepare(`UPDATE ${this.table.table} SET payload_json=?
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
@@ -220,13 +210,11 @@ export class JournalSqlInputEntity {
     if (result.changes) {
       this.writeCaptures(location, encoded)
       writeJournalSqlInputEntityColumns(this.scope, location, value, encoded.refs)
-      this.legacyDelta(1, location.key, location.incarnation)
     }
     return !!result.changes
   }
 
   delete(key: string): void {
-    this.legacyDelta(-1, key)
     this.scope.db
       .prepare(`UPDATE ${this.table.table} SET current=0
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND current=1`)
@@ -238,7 +226,6 @@ export class JournalSqlInputEntity {
   }
 
   remove(location: JournalSqlValueLocation): boolean {
-    this.legacyDelta(-1, location.key, location.incarnation)
     return !!this.scope.db
       .prepare(`DELETE FROM ${this.table.table}
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
@@ -251,23 +238,5 @@ export class JournalSqlInputEntity {
         WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal LIMIT ?`)
       .all(...this.scope.prefix, limit)
       .map((row) => JSON.stringify(this.scope.examined(row).id))
-  }
-
-  private legacyDelta(delta: number, key: string, incarnation?: number): void {
-    if (this.collection !== 'inputEntries') {
-      return
-    }
-    this.scope.db
-      .prepare(`UPDATE journal_proj_domain_counters SET legacy_entries_count=legacy_entries_count+?
-        WHERE session_id=? AND epoch=? AND EXISTS (SELECT 1 FROM journal_proj_input_entries
-          WHERE session_id=? AND epoch=? AND input_id=? AND current=1 AND basis='legacy'
-          ${incarnation === undefined ? '' : 'AND incarnation=?'})`)
-      .run(
-        delta,
-        ...this.scope.prefix,
-        ...this.scope.prefix,
-        this.id(key),
-        ...(incarnation === undefined ? [] : [incarnation])
-      )
   }
 }

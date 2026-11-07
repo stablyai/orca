@@ -13,10 +13,9 @@ export function setJournalInputOrder(state: JournalReducerState, owner: JournalI
 
 export function initializeJournalInputOrder(
   state: JournalReducerState,
-  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1],
   storage: JournalIndexStorageFactory = memoryJournalIndexStorage
 ): JournalInputOrder {
-  const owner = new JournalInputOrder(state, originalAcceptance, undefined, storage)
+  const owner = new JournalInputOrder(state, undefined, storage)
   setJournalInputOrder(state, owner)
   return owner
 }

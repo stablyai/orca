@@ -97,15 +97,6 @@ CREATE TABLE IF NOT EXISTS journal_proj_handoff_places (
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_handoff_places_order ON journal_proj_handoff_places(session_id, epoch, ordinal);
-CREATE TABLE IF NOT EXISTS journal_proj_original_acceptances (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  input_id TEXT NOT NULL,
-  payload_json TEXT,
-  ordinal INTEGER NOT NULL,
-  PRIMARY KEY (session_id, epoch, input_id)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_original_acceptances_order ON journal_proj_original_acceptances(session_id, epoch, ordinal);
 CREATE TABLE IF NOT EXISTS journal_proj_carrier_coverage (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

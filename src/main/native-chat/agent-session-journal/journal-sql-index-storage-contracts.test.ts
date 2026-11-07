@@ -62,7 +62,6 @@ it('keeps Map insertion order, delete-then-set reinsertion and scalars across co
     facts.queued.set('c', send('c'))
     facts.entered.set('x', send('x'))
     facts.revision++
-    facts.legacyPlaces = 3
   }
   c.finish()
 
@@ -84,11 +83,7 @@ it('keeps Map insertion order, delete-then-set reinsertion and scalars across co
   expect(sql.queued.get('b')?.clientMessageId).toBe('b2')
   expect(ids(sql.enteredSubmissions())).toEqual(ids(memory.enteredSubmissions()))
   expect([...sql.recoveryOwedIds()]).toEqual([...memory.recoveryOwedIds()])
-  expect([sql.revision, sql.legacyPlaces, sql.queued.size]).toEqual([
-    memory.revision,
-    memory.legacyPlaces,
-    memory.queued.size
-  ])
+  expect([sql.revision, sql.queued.size]).toEqual([memory.revision, memory.queued.size])
   expect(sql.explicitSend()).toBeUndefined()
 })
 

@@ -26,26 +26,6 @@ CREATE INDEX IF NOT EXISTS journal_proj_places_eligible
 CREATE INDEX IF NOT EXISTS journal_proj_places_live
   ON journal_proj_places(session_id, epoch, index_id, domain, sequence)
   WHERE head OR command OR waiting OR handoff;
-CREATE INDEX IF NOT EXISTS journal_proj_places_command
-  ON journal_proj_places(session_id, epoch, index_id, domain, sequence) WHERE command;
-CREATE TABLE IF NOT EXISTS journal_proj_domains (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  index_id TEXT NOT NULL,
-  id TEXT NOT NULL,
-  introduced INTEGER NOT NULL,
-  domain TEXT NOT NULL,
-  sequence INTEGER NOT NULL,
-  position REAL NOT NULL,
-  head INTEGER NOT NULL,
-  command INTEGER NOT NULL,
-  waiting INTEGER NOT NULL,
-  handoff INTEGER NOT NULL,
-  card_json TEXT,
-  PRIMARY KEY (session_id, epoch, index_id, id)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_domains_range
-  ON journal_proj_domains(session_id, epoch, index_id, introduced, domain, sequence);
 CREATE TABLE IF NOT EXISTS journal_proj_release_state (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

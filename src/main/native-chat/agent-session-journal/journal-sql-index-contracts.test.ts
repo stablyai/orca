@@ -3,12 +3,10 @@ import Database from '../../sqlite/sync-database'
 import { journalSqlIndexSchema } from './journal-sql-index-schema'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import { JournalInputDomainIndex } from './input-order/journal-input-domain-index'
 import { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
 import { JournalInputCandidates } from './input-order/journal-input-candidates'
 import { MemoryJournalTurnSources } from './journal-memory-turn-sources'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
-import { JournalSqlDomainIndex } from './journal-sql-domain-index'
 import { JournalSqlReleasedPositions } from './journal-sql-released-positions'
 import { JournalSqlCandidates } from './journal-sql-candidates'
 import { JournalSqlTurnSources } from './journal-sql-turn-sources'
@@ -45,10 +43,10 @@ function card(id: string, position: number, sequence = position): QueuedMessageR
   }
 }
 
-function place(cut: number, basis: 'legacy' | 'observed'): JournalInputPlace {
+function place(cut: number): JournalInputPlace {
   return {
     coordinate: { epoch: 'epoch', sequence: cut },
-    context: { cut, basis, source: { epoch: 'epoch', sequence: cut } }
+    context: { cut, basis: 'observed', source: { epoch: 'epoch', sequence: cut } }
   }
 }
 
@@ -68,73 +66,37 @@ it('keeps admission cuts, command-only selection and numeric positions through r
   }
   expect(sql.query('epoch', 2)).toEqual({ position: -Infinity })
   expect(sql.query('epoch', 3).head?.messageId).toBe('a')
-  expect(sql.queryCommand('epoch', 3)?.messageId).toBe('a')
+  expect(sql.query('epoch', 3).command?.messageId).toBe('a')
   expect(sql.allPlaces().position).toBe(99)
   expect(sql.idsAfter(1)).toEqual(['a', 'z'])
   expect([sql.firstPosition(), sql.lastId(), sql.successorId(1)]).toEqual([99, 'z', 'a'])
   expect(sql.query('epoch', 3)).toEqual(memory.query('epoch', 3))
   s.db.exec('SAVEPOINT command')
   sql.delete('a')
-  expect(sql.queryCommand('epoch', 3)).toBeUndefined()
+  expect(sql.query('epoch', 3).command).toBeUndefined()
   s.db.exec('ROLLBACK TO command; RELEASE command')
   expect(sql.query('epoch', 3)).toEqual(memory.query('epoch', 3))
 })
 
-it('folds equal-position cards in introduction-block order and applies both legacy coordinates', () => {
-  const s = scope()
-  const sql = new JournalSqlDomainIndex(s, 'domain')
-  const memory = new JournalInputDomainIndex()
-  for (const index of [sql, memory]) {
-    index.set(card('z', 7, 1), { introduced: 0, baseline: { coordinate: null } }, true, false)
-    index.set(
-      card('a', 7, 2),
-      { introduced: 1, baseline: { coordinate: { epoch: 'epoch', sequence: 2 } } },
-      true,
-      true
-    )
-    index.set(card('ignored', 1), { introduced: 2 }, true, false)
-  }
-  const context = place(3, 'legacy').context
-  expect(sql.query(context).head?.messageId).toBe('a')
-  expect(sql.query(context)).toEqual(memory.query(context))
-  const original = { epoch: 'old', sequence: 2 }
-  const observed = { ...context, basis: 'observed' as const }
-  expect(sql.query(observed).head?.messageId).toBe('z')
-  expect(sql.query(context, original)).toEqual(memory.query(context, original))
-  for (const index of [sql, memory]) {
-    index.setPosition(card('a', 7, 2), {
-      introduced: 1,
-      baseline: { coordinate: { epoch: 'epoch', sequence: 2 } }
-    })
-  }
-  expect(sql.query(context).handoff?.messageId).toBe('a')
-  expect(sql.query(context)).toEqual(memory.query(context))
-})
-
-it('retains released positions with a pause frontier and a separate legacy fallback', () => {
+it('retains released positions across a pause frontier', () => {
   const s = scope()
   const sql = new JournalSqlReleasedPositions(s, 'release')
   const memory = new JournalInputReleasedPositions()
   for (const index of [sql, memory]) {
-    index.add(
-      card('old', 8),
-      { introduced: 1, baseline: { coordinate: { epoch: 'epoch', sequence: 1 } } },
-      2
-    )
+    index.add(card('old', 8), {
+      introduced: 1,
+      baseline: { coordinate: { epoch: 'epoch', sequence: 1 } }
+    })
     index.pause(3)
     index.add(card('new', 4), {
       introduced: 1,
       baseline: { coordinate: { epoch: 'epoch', sequence: 1 } }
     })
   }
-  expect(sql.query(place(2, 'observed'))).toEqual({ position: 4 })
-  expect(sql.query(place(4, 'observed'))).toEqual({ position: 8 })
-  expect(sql.query(place(3, 'legacy'))).toEqual({ position: -Infinity })
-  expect(sql.query(place(4, 'legacy'))).toEqual({ position: 8 })
-  for (const basis of ['legacy', 'observed'] as const) {
-    for (const cut of [1, 2, 3, 4]) {
-      expect(sql.query(place(cut, basis))).toEqual(memory.query(place(cut, basis)))
-    }
+  expect(sql.query(place(2))).toEqual({ position: 4 })
+  expect(sql.query(place(4))).toEqual({ position: 8 })
+  for (const cut of [1, 2, 3, 4]) {
+    expect(sql.query(place(cut))).toEqual(memory.query(place(cut)))
   }
 })
 

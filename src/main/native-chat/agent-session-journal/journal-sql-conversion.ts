@@ -6,7 +6,6 @@ import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { exportJournalControlState } from './journal-sql-control-export'
-import { journalInputAcceptance } from './input-order/journal-input-provenance'
 import {
   beginJournalSqlConversion,
   markJournalSqlReady,
@@ -56,8 +55,7 @@ export function prepareJournalSqlConversion(
     )
     const exported = new JournalSqlReducer(
       new JournalSqlScope(staging, sessionId, watermark.epoch),
-      watermark.epoch,
-      (id) => journalInputAcceptance(db, sessionId, id)
+      watermark.epoch
     )
     staging.exec('BEGIN')
     exported.context.bulkLoad(

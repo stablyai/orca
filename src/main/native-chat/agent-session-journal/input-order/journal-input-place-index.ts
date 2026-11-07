@@ -268,12 +268,4 @@ export class JournalInputPlaceIndex {
   allPlaces(): InputPlaceQuery {
     return this.all?.result ?? empty()
   }
-
-  queryCommand(epoch: string, sequence: number): QueuedMessageRow | undefined {
-    return this.query(epoch, sequence).command
-  }
-
-  allCommand(): QueuedMessageRow | undefined {
-    return this.allPlaces().command
-  }
 }

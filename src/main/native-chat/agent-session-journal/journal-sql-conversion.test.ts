@@ -24,6 +24,60 @@ import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
+import { insertJournalRow } from './durable-rows/journal-row-table'
+import type { JournalRow } from './durable-rows/journal-row-schema'
+import { applyJournalRow } from './projection/journal-reducer'
+import { journalInputOrder } from './input-order/journal-input-order'
+
+function admissionRows(legacy: boolean): JournalRow[] {
+  const rows = journalSqlRetryRows(true)
+  const epoch = rows[0]!
+  const queue = rows.find((row) => row.kind === 'queue')!
+  const send = rows.find((row) => row.kind === 'submission')!
+  if (queue.change.op !== 'queued') {
+    throw new Error('expected queued fixture')
+  }
+  const submission = { ...send, queuedMessageId: undefined }
+  return [
+    epoch,
+    { ...queue, seq: 2 },
+    {
+      ...submission,
+      seq: 3,
+      clientMessageId: 'old',
+      ...(legacy
+        ? {
+            inputOrderContext: { source: { epoch: 'prior', sequence: 7 }, basis: 'legacy', cut: 3 }
+          }
+        : {})
+    },
+    {
+      ...queue,
+      seq: 4,
+      messageId: 'finished',
+      change: { ...queue.change, op: 'queued', position: 10 }
+    },
+    { ...send, seq: 5, clientMessageId: 'finished-send', queuedMessageId: 'finished' },
+    {
+      v: epoch.v,
+      epoch: 'epoch',
+      ts: 100,
+      fence: 1,
+      seq: 6,
+      kind: 'dispatch',
+      clientMessageId: 'finished-send',
+      state: 'accepted',
+      providerItemId: 'provider',
+      reason: null
+    },
+    {
+      ...submission,
+      seq: 7,
+      clientMessageId: 'native',
+      inputOrderContext: { source: { epoch: 'epoch', sequence: 7 }, basis: 'observed', cut: 7 }
+    }
+  ]
+}
 
 let root: string
 let database: JournalHostDatabase
@@ -35,6 +89,111 @@ afterEach(async () => {
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
+
+it.each([false, true])(
+  'normalizes raw admissions and releases finished cards (legacy=%s)',
+  (legacy) => {
+    const rows = admissionRows(legacy)
+    database.transaction((db) => {
+      publishTestJournalEpoch(db, 'session', 'epoch')
+      for (const row of rows) {
+        insertJournalRow(db, 'session', row)
+      }
+    })
+    const saved = () => database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    const before = saved()
+    database.transaction((db) => convertJournalSqlProjection(db, 'session'))
+    expect(saved()).toEqual(before)
+    const reducer = new JournalSqlReducer(
+      new JournalSqlScope(database.db, 'session', 'epoch'),
+      'epoch'
+    )
+    const state = reducer.state
+    expect(state.inputEntries.get('old')).toEqual({
+      context: {
+        source: legacy ? { epoch: 'prior', sequence: 7 } : { epoch: 'epoch', sequence: 3 },
+        basis: 'observed',
+        cut: 3
+      },
+      witnessCardId: 'command'
+    })
+    expect(state.inputEntries.get('native')).toEqual({
+      context: { source: { epoch: 'epoch', sequence: 7 }, basis: 'observed', cut: 7 },
+      witnessCardId: 'command'
+    })
+    expect(journalInputOrder(state).firstQueued()?.clientMessageId).toBe('old')
+    expect(journalInputOrder(state).predecessors(state, 'native').position).toBe(10)
+    applyJournalRow(state, {
+      v: rows[0]!.v,
+      epoch: 'epoch',
+      ts: 100,
+      fence: 1,
+      kind: 'tombstone',
+      seq: 8,
+      itemId: 'reopen',
+      revision: 1,
+      queueReopen: true
+    })
+    expect(journalInputOrder(state).predecessors(state, 'native').position).toBe(1)
+    reducer.flush()
+    const reopened = new JournalSqlReducer(
+      new JournalSqlScope(database.db, 'session', 'epoch'),
+      'epoch'
+    )
+    expect(journalInputOrder(reopened.state).firstQueued()?.clientMessageId).toBe('old')
+    expect(journalInputOrder(reopened.state).predecessors(reopened.state, 'native').position).toBe(
+      1
+    )
+  }
+)
+
+it.each([1, 2])(
+  'normalizes materialized format-%s admissions without rewriting saved outcomes',
+  (format) => {
+    database.transaction((db) => {
+      publishTestJournalEpoch(db, 'session', 'epoch')
+      publishJournalOutcomeEpoch(db, 'session', 'epoch', admissionRows(false))
+      if (format === 1) {
+        db.prepare(
+          "DELETE FROM journal_outcomes WHERE field IN ('inputEntries', 'inputCards')"
+        ).run()
+        db.prepare('UPDATE journal_outcomes SET format=1').run()
+        db.prepare('UPDATE journal_outcome_epochs SET format=1').run()
+      } else {
+        db.prepare(
+          `UPDATE journal_outcomes SET value_json=? WHERE field='inputEntries' AND entry_key=?`
+        ).run(
+          JSON.stringify([
+            'old',
+            {
+              context: { source: { epoch: 'prior', sequence: 7 }, basis: 'legacy', cut: 3 },
+              witnessCardId: 'command'
+            }
+          ]),
+          JSON.stringify('old')
+        )
+      }
+    })
+    const saved = () =>
+      database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq,field,entry_key').all()
+    const before = saved()
+    database.transaction((db) => convertJournalSqlProjection(db, 'session'))
+    expect(saved()).toEqual(before)
+    const state = new JournalSqlReducer(
+      new JournalSqlScope(database.db, 'session', 'epoch'),
+      'epoch'
+    ).state
+    expect(state.inputEntries.get('old')).toEqual({
+      context: {
+        source: format === 1 ? { epoch: 'epoch', sequence: 3 } : { epoch: 'prior', sequence: 7 },
+        basis: 'observed',
+        cut: 3
+      },
+      ...(format === 2 ? { witnessCardId: 'command' } : {})
+    })
+    expect(journalInputOrder(state).firstQueued()?.clientMessageId).toBe('old')
+  }
+)
 
 it.each([
   { name: 'lifecycle and rollback', rows: journalSqlLifecycleRows() },

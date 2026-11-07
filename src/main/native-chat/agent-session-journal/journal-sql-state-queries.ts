@@ -99,17 +99,6 @@ export function sqlJournalStateQueries(
     candidatesForFence: (_state, fence) => candidateRows('effective_fence', fence),
     candidatesForHandoverFence: (_state, fence) => candidateRows('handover_fence', fence),
     returnedCommandIds: () => journalSqlOrderedValues<string>(context, 'queue.returnedCommands'),
-    legacyInputEntryCount() {
-      facts.flush()
-      const row = scope.db
-        .prepare(`SELECT legacy_entries_count FROM journal_proj_domain_counters
-        WHERE session_id=? AND epoch=?`)
-        .get(...scope.prefix)
-      if (row) {
-        scope.examined(row)
-      }
-      return Number(row?.legacy_entries_count ?? 0)
-    },
     latestAcceptedUnopened(state) {
       facts.flush()
       const latest = scope.db

@@ -19,7 +19,6 @@ export function memoryJournalInputOrderFacts(): JournalInputOrderFacts {
   const overrides = new Map<string, AgentJournalSubmission>()
   return {
     recoveryOwed,
-    originals: new Map(),
     queued,
     entered,
     overrides,
@@ -36,7 +35,6 @@ export function memoryJournalInputOrderFacts(): JournalInputOrderFacts {
       return memoryJournalSet(this.recoveryOwed).values()
     },
     reconstructing: false,
-    legacyPlaces: 0,
     receiptCount: 0,
     queueRevision: 0,
     revision: 0
@@ -68,7 +66,6 @@ export function memoryJournalInputCardFacts(): JournalInputCardFacts {
     replaceClearMembers(ids) {
       this.cleared = new Set(ids)
     },
-    history: true,
     currentRevision: 0,
     initialized: false,
     overlayRows: [],
