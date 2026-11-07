@@ -192,10 +192,10 @@ function WorktreeCreateMenu({
       return () => {
         mounted.current = false
         closeGeneration.current++
-        clearFocus(null)
         if (closed.current) {
           return
         }
+        clearFocus(null)
         void Promise.allSettled(pending.current).then(() =>
           afterPendingWorkspaceTabs(worktreeId, () => {
             if (!mounted.current) {
