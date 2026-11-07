@@ -19221,7 +19221,6 @@
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
         "listLabel": "キュー内のメッセージ",
-        "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",

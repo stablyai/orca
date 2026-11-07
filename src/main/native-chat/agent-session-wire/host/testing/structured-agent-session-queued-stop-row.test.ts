@@ -67,7 +67,7 @@ async function expectHeld(reason: string | null, ...draftIds: string[]): Promise
   expect(await rig.queuePause()).toEqual(reason === null ? null : { reason })
 }
 
-async function mailTurn(): Promise<string> {
+async function personalTurn(): Promise<string> {
   const mail = rig.send('coordinator mail')
   await mail.result
   await eventually(async () => expect((await rig.submission(mail.id))?.handedOverAt).toBeDefined())
@@ -128,7 +128,7 @@ describe("Stop's event", () => {
     const working = await rig.workingSend()
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    const mail = await mailTurn()
+    const mail = await personalTurn()
     const typed = await queuedDraft('typed during the mail turn')
     expect(await rig.queuePause()).toBeNull()
     await rig.settleAccepted(mail, 'mail')
@@ -148,23 +148,36 @@ describe("Stop's event", () => {
     await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
   })
 
-  it("any accepted turn sent after it lifts it, Orca's own mail included; a later Stop supersedes", async () => {
+  it('keeps personal rows and their Stop visible while mail is pending and accepted', async () => {
     const working = await rig.workingSend()
-    const first = await queuedDraft('first')
+    const first = await queuedDraft('held personal work')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
+    const mail = rig.send('coordinator mail', undefined, {
+      internal: true,
+      from: {
+        kind: 'agent',
+        senders: [
+          {
+            party: { address: 'agent:coordinator', terminalHandle: null, orcaSessionId: null },
+            name: null
+          }
+        ],
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: 'agent:worker',
+          dispatchId: null,
+          messages: []
+        }
+      }
+    })
+    await mail.result
     await expectHeld('stopped', first)
-    const person = rig.send('the person asks for a turn')
+    await rig.settleAccepted(mail.id, 'mail')
+    await expectHeld('stopped', first)
+    const person = rig.send('resume my work')
     await person.result
-    // A later Stop supersedes: the send made before it no longer lifts anything.
-    await rig.stop()
     await rig.settleAccepted(person.id, 'person')
-    await expectHeld('stopped', first)
-    // Orchestration mail sent after the second Stop: once accepted, the queue carries on.
-    const mail = await mailTurn()
-    // Not shown while the mail awaits the agent, and nothing sends yet.
-    await expectHeld(null, first)
-    await rig.settleAccepted(mail, 'mail')
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
   })
 
@@ -265,7 +278,7 @@ describe("a restart's hold over a card queued after a Stop", () => {
     const working = await rig.workingSend()
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    const mail = await mailTurn()
+    const mail = await personalTurn()
     const typed = await queuedDraft('typed during the mail turn')
     // The process dies with no close: a quit writes no Stop event, so only a turn ends the pauses.
     rig.crashRestartHostProcess()
@@ -329,7 +342,8 @@ describe("a /clear's carried cards", () => {
         hostTestOperationId(),
         replacementId
       ),
-      body: text
+      body: text,
+      userSend: true
     })
     const sent = await person
     if (!sent.ok || !('submission' in sent.value)) {
