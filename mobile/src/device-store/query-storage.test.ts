@@ -6,16 +6,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrcaQueryStorage, type OrcaQueryStoreBackend } from './query-storage'
 
-type WriteOps = Parameters<OrcaQueryStoreBackend['write']>[0]
-
 function memoryBackend(hostId: string) {
   const rows = new Map<string, string>()
-  const writes: WriteOps[] = []
   const backend: OrcaQueryStoreBackend = {
     hostId,
     read: async (keys) => ({ status: 'ok', values: keys.map((key) => rows.get(key) ?? null) }),
     write: async (ops) => {
-      writes.push(ops)
       for (const op of ops) {
         if (op.value === null) {
           rows.delete(op.key)
@@ -26,7 +22,7 @@ function memoryBackend(hostId: string) {
       return { written: true }
     }
   }
-  return { backend, rows, writes }
+  return { backend, rows }
 }
 
 function persisterOver(storage: ReturnType<typeof createOrcaQueryStorage>) {
@@ -70,7 +66,7 @@ describe('createOrcaQueryStorage', () => {
     ).resolves.toEqual({ rows: ['main'] })
   })
 
-  it('writes a refetch that kept the same data once, until the stored copy is a minute old', async () => {
+  it('keeps the stored copy of unchanged data until it is a minute old', async () => {
     const memory = memoryBackend('host-a')
     const storage = createOrcaQueryStorage(memory.backend)
     const persister = persisterOver(storage)
@@ -82,13 +78,19 @@ describe('createOrcaQueryStorage', () => {
       await persister.persistQueryByKey(queryKey, client)
       await storage.flush()
     }
+    const stored = () =>
+      createOrcaQueryStorage(memory.backend).getItem(
+        'q1|worktree.ps@1-["orca","host-a","worktree.ps",{"exec":"local"},{}]'
+      )
 
     await persistAt(['main'], startedAt)
     await persistAt(['main'], startedAt + 3_000)
-    expect(memory.writes).toHaveLength(1)
+    expect((await stored())?.state.dataUpdatedAt).toBe(startedAt)
 
-    await persistAt(['main', 'feature'], startedAt + 6_000)
-    await persistAt(['main', 'feature'], startedAt + 6_000 + 61_000)
-    expect(memory.writes).toHaveLength(3)
+    await persistAt(['main'], startedAt + 61_000)
+    expect((await stored())?.state.dataUpdatedAt).toBe(startedAt + 61_000)
+
+    await persistAt(['main', 'feature'], startedAt + 62_000)
+    expect((await stored())?.state.data).toEqual({ rows: ['main', 'feature'] })
   })
 })

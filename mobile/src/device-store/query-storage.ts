@@ -108,12 +108,13 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
       if (query !== null && isAlreadyWritten(key, query)) {
         continue
       }
-      // A record too large or unencodable removes the stored one, which is older than memory.
+      // A record too large or unencodable removes the stored one, which is older than memory, and is
+      // remembered like a write so a refetch of the same data doesn't encode it again.
       const value = query === null ? null : encodeForStore(query)
       ops.push({ key, value })
       sent.set(
         key,
-        query === null || value === null
+        query === null
           ? null
           : { data: query.state.data, buster: query.buster, updatedAt: query.state.dataUpdatedAt }
       )
@@ -122,12 +123,10 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
     if (ops.length === 0) {
       return
     }
-    let stored = false
-    try {
-      stored = (await backend.write(ops)).written
-    } catch {
-      stored = false
-    }
+    const stored = await backend.write(ops).then(
+      (result) => result.written,
+      () => false
+    )
     for (const [key, record] of sent) {
       // After a refusal the next persist of these keys writes again.
       if (stored && record !== null) {
@@ -165,6 +164,9 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
       schedule()
     },
     removeItem(key) {
+      if (key.length > STORE_KEY_MAX_LENGTH) {
+        return
+      }
       pending.set(key, null)
       schedule()
     },
