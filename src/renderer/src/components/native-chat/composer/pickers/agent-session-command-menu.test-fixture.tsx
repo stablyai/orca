@@ -1,11 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import type { CommandMenuRendererFixtureModule } from '../../../../../../shared/agent-session/agent-session-command-menu.test-fixture-contract'
-import { resetStructuredAgentSessionReadOwnersForTests } from '../../session/structured/read/structured-agent-session-read-owner-registry'
 import { useStructuredAgentSessionCommandMenu } from './structured-agent-session-command-refresh'
 import { useStructuredAgentSessionRead } from '../../session/structured/read/use-structured-agent-session-read'
-
-export const resetReadOwners: CommandMenuRendererFixtureModule['resetReadOwners'] =
-  resetStructuredAgentSessionReadOwnersForTests
 
 export const renderCommandMenu: CommandMenuRendererFixtureModule['renderCommandMenu'] = (
   sessionId

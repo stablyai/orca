@@ -1,7 +1,7 @@
 import { basename } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
-import { isNativeChatImageAttachmentPath } from '../../paste/native-chat-image-paste'
+import { isImageDropPath } from '../../../../../../shared/image-path-paste'
 import type { NativeChatAttachmentFocusOptions } from '../uploads/native-chat-resolved-path-ownership'
 import {
   nativeChatAttachFailedNotice,
@@ -111,7 +111,7 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
       }
       continue
     }
-    if (isNativeChatImageAttachmentPath(storedPath)) {
+    if (isImageDropPath(storedPath)) {
       args.chips.resolve(chipId, storedPath, null, args.options)
       continue
     }

@@ -8,7 +8,7 @@ import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
 } from '../../media/images/native-chat-image-copy'
-import { isNativeChatImageAttachmentPath } from '../../paste/native-chat-image-paste'
+import { isImageDropPath } from '../../../../../../shared/image-path-paste'
 import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import { isAgentSessionAttachmentStorePath } from '../../../../../../shared/agent-session/agent-session-attachments'
@@ -205,8 +205,7 @@ function NativeChatImageThumbnail({
     : translate('components.native-chat.composer.imageSaving', 'Saving pasted image…')
   const label = isPending ? (attachment.pendingName ?? pendingLabel) : filename
   // A dropped document uploads as a chip too, and becomes an `@` reference once stored.
-  const isFile =
-    attachment.pendingName !== undefined && !isNativeChatImageAttachmentPath(attachment.pendingName)
+  const isFile = attachment.pendingName !== undefined && !isImageDropPath(attachment.pendingName)
   const KindIcon = isFile ? FileText : ImageIcon
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)

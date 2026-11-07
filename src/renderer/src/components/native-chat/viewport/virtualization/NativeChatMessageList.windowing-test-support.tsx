@@ -53,10 +53,6 @@ function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): (
   }
 }
 
-function reservedTranscriptHeight(root: ParentNode): number {
-  return transcriptWindowHeight(root)
-}
-
 // Provide offsetHeight for measurement; optional clamped scroll geometry opens at the document end.
 export function stubLayout({
   scrollGeometry = false,
@@ -81,7 +77,7 @@ export function stubLayout({
           return viewportHeight()
         }
         if (this.hasAttribute('data-native-chat-window')) {
-          return reservedTranscriptHeight(this.parentElement ?? this)
+          return transcriptWindowHeight(this.parentElement ?? this)
         }
         const index = this.dataset.index
         if (index !== undefined) {
@@ -89,7 +85,7 @@ export function stubLayout({
         }
         // The observed column includes reserved rows and trailing chrome.
         return this.hasAttribute('data-native-chat-transcript-column')
-          ? reservedTranscriptHeight(this) + belowTranscriptPx
+          ? transcriptWindowHeight(this) + belowTranscriptPx
           : 0
       }
     })
@@ -104,7 +100,7 @@ export function stubLayout({
       overrideLayoutProperty('scrollHeight', {
         get(this: HTMLElement): number {
           return this.hasAttribute('data-native-chat-scroll')
-            ? aboveTranscriptPx + reservedTranscriptHeight(this) + belowTranscriptPx
+            ? aboveTranscriptPx + transcriptWindowHeight(this) + belowTranscriptPx
             : 0
         }
       }),

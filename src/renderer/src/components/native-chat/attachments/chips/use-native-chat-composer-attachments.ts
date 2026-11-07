@@ -32,7 +32,7 @@ import {
   settlePendingImageReferences,
   takePendingImageWithReferences
 } from '../../composer/editor/native-chat-composer-image-references'
-import { isNativeChatImageAttachmentPath } from '../../paste/native-chat-image-paste'
+import { isImageDropPath } from '../../../../../../shared/image-path-paste'
 import { useNativeChatPastedTextAdmission } from '../../composer/editor/native-chat-pasted-text-state'
 
 export function useNativeChatComposerAttachments({
@@ -169,11 +169,7 @@ export function useNativeChatComposerAttachments({
       })
       setPreview(id, previewUrl)
       // A dropped file's kind shows in its name; a clipboard paste is always an image.
-      if (
-        imageReferences &&
-        acceptsImages &&
-        (!pendingName || isNativeChatImageAttachmentPath(pendingName))
-      ) {
+      if (imageReferences && acceptsImages && (!pendingName || isImageDropPath(pendingName))) {
         insertImageReferences(destinationScope(), scopeEditor(), [id])
       }
       return id

@@ -63,10 +63,6 @@ export function overrideLayoutProperty(name: string, descriptor: PropertyDescrip
   }
 }
 
-export function reservedTranscriptHeight(root: ParentNode): number {
-  return transcriptWindowHeight(root)
-}
-
 // Windowing needs offsetHeight; default rows match estimates, with measuredRowHeights overrides. Optional clamped scroll geometry exercises bottom pinning.
 export function stubLayout({
   scrollGeometry = false,
@@ -102,14 +98,14 @@ export function stubLayout({
           return viewportHeight()
         }
         if (this.hasAttribute('data-native-chat-window')) {
-          return reservedTranscriptHeight(this.parentElement ?? this)
+          return transcriptWindowHeight(this.parentElement ?? this)
         }
         const index = this.dataset.index
         if (index !== undefined) {
           return layout.measuredRowHeights[Number(index)] ?? ROW_PX
         }
         return this.hasAttribute('data-native-chat-transcript-column')
-          ? reservedTranscriptHeight(this) + layout.belowTranscriptPx
+          ? transcriptWindowHeight(this) + layout.belowTranscriptPx
           : 0
       }
     })
@@ -125,7 +121,7 @@ export function stubLayout({
         get(this: HTMLElement): number {
           return this.hasAttribute('data-native-chat-scroll') && laidOut()
             ? aboveTranscriptPx(this.querySelector<HTMLElement>('[data-native-chat-window]')) +
-                reservedTranscriptHeight(this) +
+                transcriptWindowHeight(this) +
                 layout.belowTranscriptPx
             : 0
         }

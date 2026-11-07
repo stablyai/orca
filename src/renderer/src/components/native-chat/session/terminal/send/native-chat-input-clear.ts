@@ -1,8 +1,6 @@
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../../shared/agent-launch/startup/agent-tui-input-clear'
 
-export const NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = AGENT_TUI_CLEAR_INPUT_MAX
-
 /** Gap before re-reading the agent's input line to confirm a clear landed. */
 export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
 
@@ -23,7 +21,7 @@ export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSe
   if (options?.clearInput === '' || options?.clearInput === null) {
     return
   }
-  sendRuntimePtyInput(ptyId, options?.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT, 'driving')
+  sendRuntimePtyInput(ptyId, options?.clearInput ?? AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
 }
 
 /** Clear before body on the same byte stream; optional inspection waits and widens the clear because direct TUI edits can exceed the seeded draft. */
