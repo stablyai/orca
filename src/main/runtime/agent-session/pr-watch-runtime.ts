@@ -64,7 +64,10 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
     running = service
     await service.start()
   })().catch((error: unknown) => {
-    starting = null
+    // A stopped run's failure must not clear a newer run's start.
+    if (startedIn === generation) {
+      starting = null
+    }
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
   })
   return starting

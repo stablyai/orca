@@ -98,10 +98,10 @@ export class PRWatchService {
     let index = 0
     for (const [prKey, action] of active) {
       await this.watchChatPR(prKey, action, this.now() + STARTUP_SPACING_MS * index++)
-    }
-    // Stopped, or its database closed, while a workspace was resolving: nothing more to start.
-    if (this.deps.database.isClosed || !this.stopObserving) {
-      return
+      // Stopped, or its database closed, while a workspace was resolving: nothing more to start.
+      if (this.stopped) {
+        return
+      }
     }
     for (const [prKey, watch] of this.chatWatches) {
       index = this.earlierHeads.scheduleMoved(prKey, watch.candidate, index)
@@ -114,6 +114,10 @@ export class PRWatchService {
       this.chatWatches.keys()
     )
     this.resume.drain()
+  }
+
+  private get stopped(): boolean {
+    return this.deps.database.isClosed || !this.stopObserving
   }
 
   stop(): void {
@@ -170,7 +174,8 @@ export class PRWatchService {
           ? prWatchCandidate(workspace, action.number)
           : undefined
     }
-    if (!candidate) {
+    // A workspace that resolved after the service stopped starts nothing.
+    if (!candidate || this.stopped) {
       return
     }
     this.chatWatches.set(prKey, {

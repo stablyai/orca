@@ -14,7 +14,11 @@ import {
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { assemblePRRefreshFoundOutcome } from '../client/lookup/pr-refresh-outcome-assembly'
 import type { PRWatchJob } from '../pr-refresh-watch-jobs'
-import { readPRPendingDeliveryChatIds, readPRPendingHeads } from './pr-check-event-tables'
+import {
+  readPRPendingDeliveryChatIds,
+  readPRPendingHeads,
+  upsertPRPendingHead
+} from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { capturePRPendingActions } from './pr-pending-actions'
 import { shellCallRow } from './pr-watch-test-fixtures'
@@ -123,6 +127,35 @@ function observe(candidate: GitHubPRRefreshCandidate, outcome: PRRefreshOutcome)
   queue.observers.forEach((observer) => observer(candidate, outcome))
 }
 
+/** A chat's opened PR, verified by an earlier run: by default Q, an unrelated chat's recent PR. */
+async function seedOpenedPR(
+  chatId = 'chat-q',
+  number = 5
+): Promise<ReturnType<typeof openTestJournalHostDatabase>> {
+  const database = openTestJournalHostDatabase(root)
+  capturePRPendingActions(
+    database.db,
+    chatId,
+    [
+      shellCallRow(
+        `${chatId}-item`,
+        'gh pr create --fill',
+        `https://github.com/acme/repo/pull/${number}\n`
+      )
+    ],
+    Date.now(),
+    () => undefined
+  )
+  const earlier = service(async () => WORKSPACE)
+  await earlier.start()
+  await vi.waitFor(() =>
+    expect(database.db.prepare('SELECT 1 FROM pr_pending_actions').get()).toBeUndefined()
+  )
+  earlier.stop()
+  queue.scheduled.length = 0
+  return database
+}
+
 describe('PRWatchService startup retirement', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'pr-watch-service-'))
@@ -140,21 +173,7 @@ describe('PRWatchService startup retirement', () => {
   })
 
   it('keeps a push verified while startup waits, so its earlier head still reports', async () => {
-    // Q: an unrelated chat's recent PR, verified by an earlier run.
-    const database = openTestJournalHostDatabase(root)
-    capturePRPendingActions(
-      database.db,
-      'chat-q',
-      [shellCallRow('q-item', 'gh pr create --fill', 'https://github.com/acme/repo/pull/5\n')],
-      Date.now(),
-      () => undefined
-    )
-    const earlier = service(async () => WORKSPACE)
-    await earlier.start()
-    await vi.waitFor(() =>
-      expect(database.db.prepare('SELECT 1 FROM pr_pending_actions').get()).toBeUndefined()
-    )
-    earlier.stop()
+    const database = await seedOpenedPR()
 
     // P: chat-p's push to `review`, captured with its call and not yet verified.
     const journal = await journals.open({
@@ -213,5 +232,32 @@ describe('PRWatchService startup retirement', () => {
       { head_sha: HEAD_A, verdict: 'success' }
     ])
     next.stop()
+  })
+
+  it('starts nothing from a workspace that resolves after the service stopped', async () => {
+    // R's action is past the action window, so retirement, had it run, would delete R's head.
+    vi.setSystemTime(1_800_000_000_000 - 30 * 24 * 60 * 60_000)
+    await seedOpenedPR('chat-r', 9)
+    vi.setSystemTime(1_800_000_000_000)
+    const database = await seedOpenedPR()
+    const STALE_KEY = 'github.com/acme/repo#9'
+    database.transaction((db) =>
+      upsertPRPendingHead(db, {
+        prKey: STALE_KEY,
+        headSha: HEAD_A,
+        now: Date.now(),
+        movedAt: null,
+        ttlMs: 60_000
+      })
+    )
+    let releaseQ = (_workspace: PRWatchWorkspace) => {}
+    const qWorkspace = new Promise<PRWatchWorkspace>((resolve) => (releaseQ = resolve))
+    const stopping = service(() => qWorkspace)
+    const starting = stopping.start()
+    stopping.stop()
+    releaseQ(WORKSPACE)
+    await starting
+    expect(queue.scheduled).toEqual([])
+    expect(readPRPendingHeads(database.db, STALE_KEY)).toHaveLength(1)
   })
 })
