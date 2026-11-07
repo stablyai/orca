@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-input-notice'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc } from './runtime-rpc-client'

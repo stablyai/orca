@@ -121,6 +121,7 @@ export function usePersistedUIWriter(): void {
   const activeView = useAppStore((s) => s.activeView)
   const ui = useAppStore(
     useShallow((s): PersistedUIWriteBaseline => ({
+      gitGraphFiltersByWorktree: s.gitGraphFiltersByWorktree,
       sidebarWidth: s.sidebarWidth,
       sidebarOpen: s.sidebarOpen,
       rightSidebarOpen: s.rightSidebarOpen,

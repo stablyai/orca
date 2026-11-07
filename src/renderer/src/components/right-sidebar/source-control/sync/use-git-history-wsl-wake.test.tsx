@@ -8,7 +8,7 @@ import {
 } from '@/lib/workspace-switch-user-act'
 
 const getRuntimeGitHistoryMock = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-git-status-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: getRuntimeGitHistoryMock
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
@@ -21,6 +21,7 @@ const props = (overrides: Partial<Props> = {}): Props => ({
   activeRepoTarget: { kind: 'local' },
   activeWorktreeId: 'wt-1',
   worktreePath: '\\\\wsl.localhost\\Ubuntu\\repo',
+  branchName: 'main',
   compareBaseRef: 'main',
   isFolder: false,
   isBranchVisible: true,

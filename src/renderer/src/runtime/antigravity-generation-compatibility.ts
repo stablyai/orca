@@ -1,12 +1,12 @@
-import { ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { hasFlag } from '../../../shared/agent-session/options/agent-cli-flag-detection'
-import { planCommitMessageGeneration } from '../../../shared/commit-message-plan'
-import { resolveSourceControlAiForOperation } from '../../../shared/source-control-ai'
+import { planCommitMessageGeneration } from '../../../shared/source-control/ai/generation/commit-message-plan'
+import { resolveSourceControlAiForOperation } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   getRuntimeCommitMessageSettings,
   type RuntimeGitContext,
   type RuntimeGenerateCommitMessageOverrides
-} from './runtime-git-client-context'
+} from './source-control/git/runtime-git-client-context'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 
 export async function antigravityGenerationCompatibilityError(

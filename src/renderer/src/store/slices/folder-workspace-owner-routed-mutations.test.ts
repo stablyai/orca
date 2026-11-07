@@ -1,7 +1,7 @@
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
-import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../shared/workspace-attachment-capabilities'
+import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,

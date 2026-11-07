@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { IsAgentLaunchPaneLive } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

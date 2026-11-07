@@ -5,7 +5,7 @@ import {
   createPasteReadinessTimeoutNotice,
   noticeGeneratedInputFailure,
   showGeneratedInputNotice
-} from './launch-agent-paste-timeout-notice'
+} from './agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 
 vi.mock('sonner', () => ({ toast: { message: vi.fn() } }))
 const registered = vi.hoisted((): { calls: unknown[]; keeps: boolean } => ({

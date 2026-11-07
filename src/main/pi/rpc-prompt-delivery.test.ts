@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PiRpcPromptDelivery } from './rpc-prompt-delivery'
+import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 
 const deliveries: PiRpcPromptDelivery[] = []
 afterEach(() => {
@@ -147,6 +147,9 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
 })
 
 it('retains Pi provider detail with sign-in guidance after bounded authentication retries', async () => {
+  // Pi 0.73.1, recorded from a signed-out temporary home.
+  const error =
+    'No API key found for the selected model.\n\nUse /login to log into a provider via OAuth or API key. See:\n  /opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/providers.md\n  /opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/models.md'
   vi.useFakeTimers()
   const h = rig()
   await h.delivery.submit('signed-out', 1, { type: 'prompt', message: 'hello' })
@@ -155,7 +158,7 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       type: 'response',
       command: 'prompt',
       success: false,
-      error: 'No API key found for anthropic'
+      error
     })
     await vi.advanceTimersByTimeAsync(250)
   }
@@ -165,13 +168,65 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       state: 'rejected',
       rejection: {
         kind: 'notSignedIn',
-        detail: { text: 'No API key found for anthropic', audience: 'person' },
+        detail: { text: error, audience: 'log' },
         // Pi checks sign-in before it records a prompt, so the agent never had this one.
         neverReachedAgent: true
       }
     })
   )
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('No API key found for anthropic')
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`pi`')
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`/login`')
+})
+
+// Pi b556cfe5: auth/resolve.ts, utils/error-body.ts and api/bedrock-converse-stream.ts.
+it.each([
+  [
+    'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
+    'notSignedIn'
+  ],
+  ['OAuth refresh failed for openai-codex: fetch failed', 'providerRejected'],
+  ['401: Invalid bearer token', 'notSignedIn'],
+  ['OpenAI API error (401): Unauthorized', 'notSignedIn'],
+  ['UnrecognizedClientException: 401: Invalid security token', 'notSignedIn'],
+  ['403: Organization policy denies this model', 'providerRejected'],
+  ['OpenAI API error (503): upstream reported 401', 'providerRejected'],
+  ['Service unavailable: 503: upstream reported 401', 'providerRejected'],
+  ['The message mentions 401 but has no status envelope', 'providerRejected'],
+  ['OAuth refresh failed for openai-codex: 401: network unavailable', 'providerRejected']
+])('settles %s without retrying an unusable grant', async (error, kind) => {
+  vi.useFakeTimers()
+  const h = rig()
+  await h.delivery.submit('auth-failure', 1, { type: 'prompt', message: 'hello' })
+  h.delivery.reply({ type: 'response', command: 'prompt', success: false, error })
+  expect(h.settled).toHaveBeenCalledWith(
+    'auth-failure',
+    expect.objectContaining({ state: 'rejected', rejection: expect.objectContaining({ kind }) })
+  )
+  await vi.runAllTimersAsync()
+  expect(h.send).toHaveBeenCalledOnce()
+})
+
+it.each([100, 1000])('classifies a refresh diagnostic with %i token mentions', (count) => {
+  const prefix = 'OAuth refresh failed for openai-codex: '
+  const mentions = 'refresh token '.repeat(count)
+  const diagnostic = prefix + mentions
+  const exec = RegExp.prototype.exec
+  let scanSteps = 0
+  const scan = vi.spyOn(RegExp.prototype, 'exec').mockImplementation(function (this: RegExp, text) {
+    if (text === diagnostic && this.global) {
+      scanSteps += 1
+    }
+    return exec.call(this, text)
+  })
+  let kind: string
+  try {
+    kind = piRpcFailureFact(diagnostic).kind
+  } finally {
+    scan.mockRestore()
+  }
+  expect(kind).toBe('providerRejected')
+  expect(scanSteps).toBeGreaterThan(0)
+  // One advancing token per mention, plus the terminal search; no repeated suffix searches.
+  expect(scanSteps).toBeLessThanOrEqual(count + 1)
+  expect(piRpcFailureFact(`${prefix}${mentions}expired`).kind).toBe('notSignedIn')
+  expect(piRpcFailureFact(`${prefix}${mentions}\nexpired`).kind).toBe('providerRejected')
+  expect(piRpcFailureFact(`${prefix}${mentions}\nrefresh\ntoken expired`).kind).toBe('notSignedIn')
 })

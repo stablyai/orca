@@ -4,7 +4,7 @@ import { getJiraSelfUser } from '@/components/jira-self-user'
 import { JiraUserPicker, type JiraUserPickerFixedOption } from '@/components/jira-user-picker'
 import { hasJiraAssigneeCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
 import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
-import { jiraListAssignableUsersForProject } from '@/runtime/runtime-jira-client'
+import { jiraListAssignableUsersForProject } from '@/runtime/jira/runtime-jira-user-fields-client'
 import { translate } from '@/i18n/i18n'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 

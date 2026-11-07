@@ -1,4 +1,4 @@
-import { isSafeGitRefName } from '../../../shared/git-status-upstream-ref'
+import { isSafeGitRefName } from '../../../shared/git/status/git-status-upstream-ref'
 
 type GitStatusUpstreamRefExec = (
   args: string[],

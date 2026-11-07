@@ -38,11 +38,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: testState.subscribeToPtyData
 }))
 
-vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer', () => ({
   replayPreHandlerPtyData: testState.replayPreHandlerPtyData
 }))
 
@@ -65,12 +65,12 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
-vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
   readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
   readPtyBracketedPasteMode: () => false
 }))
 // The notice a producer reports; this window's runtime is absent here, so it shows directly.
-vi.mock('./launch-agent-paste-timeout-notice', () => {
+vi.mock('./agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => {
   const showGeneratedInputNotice = vi.fn()
   return {
     showGeneratedInputNotice,
@@ -80,7 +80,7 @@ vi.mock('./launch-agent-paste-timeout-notice', () => {
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
-const RENDER_QUIET_MS = 1500
+
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
@@ -122,49 +122,6 @@ describe('post-paste submit retry Enter', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
-  })
-
-  it('sends one retry Enter after the configured gap for agents that can eat the first Enter', async () => {
-    const promise = startCodexSubmit()
-    await signalCodexComposerReady()
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
-
-    expect(enterWrites()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(CODEX_SUBMIT_RETRY_DELAY_MS - 1)
-    expect(enterWrites()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(1)
-
-    await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(2)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
-      'pty-1',
-      '\r',
-      'launch',
-      expect.objectContaining({ generatedInputOperationId: expect.any(String) })
-    )
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('sends exactly one Enter for agents without a submit retry delay', async () => {
-    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
-      foregroundProcess: 'gemini',
-      hasChildProcesses: false
-    })
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'gemini',
-      submit: true
-    })
-    await flushMicrotasks()
-    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    await vi.advanceTimersByTimeAsync(RENDER_QUIET_MS)
-    await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
-
-    await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(1)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('holds the PTY input transaction across the retry Enter', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 
 const { statSyncMock } = vi.hoisted(() => ({ statSyncMock: vi.fn() }))
 

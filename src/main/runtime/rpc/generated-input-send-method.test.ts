@@ -1,9 +1,9 @@
 import './unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { GENERATED_INPUT_METHODS } from './methods/generated-input'
+import { GENERATED_INPUT_METHODS } from './methods/terminal/generated-input'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
 import { TerminalSendGeneratedInputParams } from '../../../shared/rpc-contract/generated-input-params'
-import { MOBILE_RPC_METHOD_ROUTES } from '../runtime-rpc/runtime-rpc-mobile-method-routing'
+import { MOBILE_RPC_METHOD_ROUTES } from './server/runtime-rpc-mobile-method-routing'
 
 const send = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
   (method): method is RpcMethod =>

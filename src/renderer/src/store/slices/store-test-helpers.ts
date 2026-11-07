@@ -9,12 +9,12 @@ import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createKeybindingsSlice } from './keybindings'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
+import { createGitHubSlice } from '../github/github'
+import { createHostedReviewSlice } from './hosted-review/hosted-review'
+import { createLinearSlice } from './linear/linear'
 import { createPreflightSlice } from './preflight'
-import { createJiraSlice } from './jira'
-import { createEditorSlice } from './editor'
+import { createJiraSlice } from './jira/jira'
+import { createEditorSlice } from './editor/create-editor-slice'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
@@ -24,7 +24,7 @@ import {
   createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from './usage-provider-slices'
-import { createBrowserSlice } from './browser'
+import { createBrowserSlice } from './browser/create-browser-slice'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
@@ -39,7 +39,7 @@ import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 import { createWorkspaceCleanupBrowseSlice } from './workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './runtime-status'
-import { createPullRequestGenerationSlice } from './pull-request-generation'
+import { createPullRequestGenerationSlice } from './hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
@@ -68,7 +68,9 @@ export {
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
 
-export function createTestStore() {
+export function createTestStore(
+  isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
+) {
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withTestStorePolicies(
@@ -76,7 +78,7 @@ export function createTestStore() {
         ...createRepoSlice(...a),
         ...createSparsePresetsSlice(...a),
         ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a),
+        ...createTerminalSlice(...a, isClaudeAgent),
         ...createTabsSlice(...a),
         ...createUISlice(...a),
         ...createSettingsSlice(...a),

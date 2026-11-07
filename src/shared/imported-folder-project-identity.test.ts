@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveGitRemoteIdentity } from './git-remote-identity'
+import { deriveGitRemoteIdentity } from './git/remotes/git-remote-identity'
 import { resolveImportedFolderProjectLink } from './imported-folder-project-identity'
 import { getProjectIdentityKey } from './project-host-setup-projection'
 

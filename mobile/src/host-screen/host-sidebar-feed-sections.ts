@@ -3,7 +3,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getFolderWorkspaceHostId } from '../../../src/shared/sidebar-list/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../src/shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../src/shared/sidebar-list/row-types'
@@ -231,9 +231,12 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           view: {
             ...hostContext,
             sectionListKey: row.key,
-            lineageDepth: 0,
+            lineageDepth: row.depth,
             ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
-            ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {})
+            ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {}),
+            lineageChildCount: row.lineageChildCount ?? 0,
+            lineageCollapsed: row.lineageCollapsed === true,
+            ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {})
           }
         })
         break

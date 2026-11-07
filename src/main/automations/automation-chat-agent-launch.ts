@@ -1,6 +1,8 @@
+import { automationCanonicalLaunchSetup } from '../../shared/automation-launch-setup'
+import { automationLaunchInputs } from '../../shared/automation-launch-setup-source'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
+import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch/agent-launch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
 import { buildHeadlessAutomationWorkspaceName } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
@@ -57,6 +59,10 @@ async function launchChat(
       return reused
     }
   }
+  const views = automationLaunchInputs(
+    automation.agentId,
+    automationCanonicalLaunchSetup(automation)
+  )
   const operationId = automationRunOperationId(run, 'fresh-launch')
   try {
     const result = await launchAgentOnHost(
@@ -64,6 +70,9 @@ async function launchChat(
         agent: automation.agentId,
         operationId,
         surface: 'chat',
+        ...(views.chatSessionOptions !== undefined
+          ? { sessionOptions: {}, chatOptions: views.chatSessionOptions }
+          : {}),
         presentation: 'background',
         prompt: { text: automation.prompt, delivery: 'submit' },
         target:
@@ -76,6 +85,9 @@ async function launchChat(
                   name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
                   ...(automation.baseBranch ? { baseBranch: automation.baseBranch } : {}),
                   setupDecision: automation.setupDecision ?? 'skip',
+                  ...(automation.setupTrustHash
+                    ? { approvedSetupHash: automation.setupTrustHash }
+                    : {}),
                   activate: false,
                   automationProvenanceRequest: {
                     automationId: automation.id,

@@ -3,7 +3,7 @@
 import { act, createElement, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
@@ -12,7 +12,7 @@ import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quic
 
 const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-file-search-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   listRuntimeFiles: listRuntimeFilesMock,
   cancelRuntimeFileList: vi.fn(),
   searchRuntimeFilePaths: vi.fn()

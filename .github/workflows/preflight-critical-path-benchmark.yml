@@ -4,7 +4,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - .github/workflows/preflight-critical-path-benchmark.yml
-      - config/scripts/benchmark-ci-preflight-critical-path.mjs
+      - config/scripts/preflight/benchmarks/benchmark-ci-preflight-critical-path.mjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
       - uses: ./.github/actions/install-mobile-dependencies
         if: matrix.comparison == 'smoke'
       - name: Compare checks and verify their results
-        run: node config/scripts/benchmark-ci-preflight-critical-path.mjs ${{ matrix.comparison }}
+        run: node config/scripts/preflight/benchmarks/benchmark-ci-preflight-critical-path.mjs ${{ matrix.comparison }}
       - uses: actions/upload-artifact@v7
         if: always()
         with:

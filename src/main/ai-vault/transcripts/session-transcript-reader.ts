@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseAgentSessionFile } from '../session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from '../session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'

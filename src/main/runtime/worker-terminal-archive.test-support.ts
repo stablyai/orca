@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
-import { createRuntime, syncSinglePty } from './orca-runtime-test-fixtures.spec'
-import { captureWorkerOutputArchive } from './orchestration/worker-output-archive'
+import { createRuntime, syncSinglePty } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { captureWorkerOutputArchive } from './orchestration/workers/archives/worker-output-archive'
 
 // Synthetic normal-screen output; this exercises capture, not agent prompt detection.
 export const ARCHIVE_SCREEN_LINES = [

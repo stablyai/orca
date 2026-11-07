@@ -6,7 +6,7 @@ const capabilities = vi.hoisted(() => ({ unsupported: new Set<string>() }))
 // marks unsupported. A call is handed over, as the real client does, just before it is sent.
 vi.mock('./runtime-rpc-client', async () => {
   const cache = await import('./runtime-compatibility-cache')
-  const caps = await import('../../../shared/terminal-runtime-capabilities')
+  const caps = await import('../../../shared/terminal/runtime-policy/terminal-runtime-capabilities')
   const generated = await import('../../../shared/generated-terminal-input')
   return {
     callRuntimeRpc: (...args: [unknown, string, unknown, { beforeSend?: () => void }?]) => {
@@ -36,7 +36,7 @@ const { compatibilityEntry, rememberRuntimeEnvironmentCompatibility, runtimeComp
 const {
   GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-} = await import('../../../shared/terminal-runtime-capabilities')
+} = await import('../../../shared/terminal/runtime-policy/terminal-runtime-capabilities')
 
 beforeEach(() => callRuntimeRpc.mockReset())
 

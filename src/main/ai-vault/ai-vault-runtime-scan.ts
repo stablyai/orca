@@ -2,7 +2,7 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   abandonRemoteSessionScanOnCancel,
   throwIfAiVaultScanCancelled

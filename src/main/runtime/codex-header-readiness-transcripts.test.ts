@@ -3,7 +3,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
   replayTranscript,
@@ -15,8 +15,8 @@ import {
   isKnownReadyPromptSettled,
   isQuietReadyScreenBody
 } from '../../shared/terminal-wait-detection'
-import { waitForLaunchedAgentComposer } from './launched-agent-composer-readiness'
-import { clearWorkingIndicators } from '../../shared/agent-title-status'
+import { waitForLaunchedAgentComposer } from './terminal/wait/launched-agent-composer-readiness'
+import { clearWorkingIndicators } from '../../shared/agent-status/title/agent-title-working-indicators'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

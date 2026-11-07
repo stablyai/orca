@@ -1,9 +1,9 @@
-import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
 import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
-import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
+import { filesystemPathToFileUri } from '../../../src/shared/file-links/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'

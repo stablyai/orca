@@ -1,7 +1,8 @@
 import { isQoderComposerReady } from './qoder-terminal-readiness'
-import { memoizeTitleClassification } from './terminal-title-classification-memo'
-import { detectAgentStatusFromTitle, type AgentStatus } from './agent-detection'
-import type { RuntimeTerminalWaitBlockedReason } from './runtime-types'
+import { memoizeTitleClassification } from './agent-status/title/terminal-title-classification-memo'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
+import type { AgentStatus } from './agent-status/title/agent-title-core'
+import type { RuntimeTerminalWaitBlockedReason } from './runtime-terminal-contracts'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import {
   evaluateAgentStateRules,

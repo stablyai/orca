@@ -3,7 +3,7 @@ import {
   bufferPreHandlerPtyData,
   clearPreHandlerPtyState,
   drainPreHandlerPtyData
-} from '@/components/terminal-pane/pty-pre-handler-buffer'
+} from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
 import { waitForPaneAgentToLookReady } from './agent-draft-readiness'
 import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
@@ -12,7 +12,7 @@ const testState = vi.hoisted(() => ({
   unsubscribe: vi.fn()
 }))
 
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (_ptyId: string, observer: (data: string) => void) => {
     testState.observer = observer
     return testState.unsubscribe
@@ -24,7 +24,7 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: () => false
 }))
 
-vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
   readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
   readPtyBracketedPasteMode: () => true
 }))

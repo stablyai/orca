@@ -11,7 +11,7 @@ import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
 import { basename } from '@/lib/path'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   isWindowsAbsolutePathLike,

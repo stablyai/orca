@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
-import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/generated-input'
+import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/terminal/generated-input'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../../../main/runtime/rpc/core'
 import { RegisterGeneratedInputNoticeParams } from '../../../shared/rpc-contract/generated-input-params'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -11,7 +11,7 @@ import { GENERATED_INPUT_RUNTIME_CAPABILITY } from '../../../shared/generated-te
 import {
   GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-} from '../../../shared/terminal-runtime-capabilities'
+} from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -20,8 +20,8 @@ import {
   addEnvironmentFromPairingCode,
   resolveEnvironment,
   updateEnvironmentFromPairingCode
-} from '../../../shared/runtime-environment-store'
-import { encodePairingOffer } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/host-runtime-capabilities'
 import {
   closeSharedControlTestServers,

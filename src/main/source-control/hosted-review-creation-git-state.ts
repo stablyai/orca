@@ -2,17 +2,18 @@ import {
   isRemoteHeadRef,
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../shared/hosted-review-refs'
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
-import type { GitUpstreamStatus } from '../../shared/git-status-types'
+} from '../../shared/source-control/hosted-review/hosted-review-refs'
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
-import { isShowRefNoMatchError, probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
+import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
+import { probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
 import {
   parsePorcelainV1Records,
   type PorcelainV1Record
 } from '../git/source-control/porcelain-v1-records'
-import { resolveDefaultBaseRefViaExec } from '../git/repo'
+import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 import { getUpstreamStatus } from '../git/source-control/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'

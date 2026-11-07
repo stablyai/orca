@@ -3,9 +3,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as NoticeSubscriptions from './generated-agent-input-notices'
 import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
-import { GENERATED_INPUT_NOTICE_REGISTER_METHODS } from '../../../main/runtime/rpc/methods/generated-input-notice-register'
+import { GENERATED_INPUT_NOTICE_REGISTER_METHODS } from '../../../main/runtime/rpc/methods/terminal/generated-input-notice-register'
 import type { RpcContext } from '../../../main/runtime/rpc/core'
-import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   generatedInputNoticeFrames,
   type GeneratedAgentInputNotice,

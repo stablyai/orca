@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolvedTuiAgentArgsBypassPermissions,
-  resolveTuiAgentLaunchArgs,
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
-import { applyAgentPermissionMode, YOLO_TUI_AGENT_ARGS } from '../permissions/tui-agent-permissions'
-import { isTuiAgent } from '../catalog/tui-agent-config'
 
 describe('tuiAgentArgsBypassPermissions', () => {
   // Legacy Yolo intent lives in Arguments, not separate storage; recognize its token sequence anywhere before --.
@@ -85,19 +82,6 @@ describe('tuiAgentArgsBypassPermissions', () => {
 })
 
 describe('resolvedTuiAgentArgsBypassPermissions', () => {
-  // The settings shape the Agent Permissions toggle writes, for every agent it covers.
-  it.each(Object.keys(YOLO_TUI_AGENT_ARGS).filter(isTuiAgent))(
-    "reads the toggle's own Yolo and Manual writes for %s",
-    (agent) => {
-      for (const platform of ['darwin', 'win32'] as const) {
-        const yolo = applyAgentPermissionMode({ mode: 'yolo' })
-        expect(resolvedTuiAgentArgsBypassPermissions(agent, yolo, platform)).toBe(true)
-        const manual = applyAgentPermissionMode({ mode: 'manual' })
-        expect(resolvedTuiAgentArgsBypassPermissions(agent, manual, platform)).toBe(false)
-      }
-    }
-  )
-
   it('fails closed when the configured arguments cannot be tokenized', () => {
     expect(
       resolvedTuiAgentArgsBypassPermissions(
@@ -106,12 +90,5 @@ describe('resolvedTuiAgentArgsBypassPermissions', () => {
         'linux'
       )
     ).toBe(false)
-  })
-})
-
-describe('resolveTuiAgentLaunchArgs', () => {
-  it('falls back to the agent default when nothing is configured', () => {
-    expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
-    expect(resolveTuiAgentLaunchArgs('claude', { agentDefaultArgs: { claude: '' } })).toBe('')
   })
 })

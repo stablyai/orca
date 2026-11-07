@@ -4,12 +4,14 @@ import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
 import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
-import { SavedHostScopeWidenGate } from '../components/sidebar/SavedHostScopeWidenGate'
+import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
-import { useAppStore } from '../store'
+import { RemoteHostBrowserControlNoticeHost } from '../components/browser-pane/remote-host-control/RemoteHostBrowserControlNoticeHost'
+import { useAppStore } from '../store/index'
 import { ActiveWorkspaceSyncGate } from './ActiveWorkspaceSyncGate'
 import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/StructuredAgentSessionAttentionBridge'
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/StructuredAgentSessionStatusBridge'
+import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/NativeChatVisualGuestThemePublisher'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
 
@@ -22,10 +24,12 @@ export function AppBackgroundServices(): React.JSX.Element {
 
   return (
     <>
+      <NativeChatVisualGuestThemePublisher />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
       <ActiveWorkspaceSyncGate />
       {/* Keep permission notices available across app surfaces. */}
       <MacosTccPromptNoticeHost />
+      <RemoteHostBrowserControlNoticeHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
       <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />

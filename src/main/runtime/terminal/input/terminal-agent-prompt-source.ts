@@ -1,10 +1,10 @@
-import { assertTerminalInputAdmitted } from '../../terminal-input-admission'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import { assertTerminalInputAdmitted } from './terminal-input-admission'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
   assertAgentPromptRequestActive,
   waitForAgentPromptDelay,
   waitForAgentPromptPromise
-} from '../../orca-runtime-core'
+} from './agent-prompt-signals'
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
   AGENT_PROMPT_SUBMIT,
@@ -17,7 +17,7 @@ import {
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import type {
   GeneratedInputFrameGate,
   GeneratedInputSource
@@ -26,6 +26,7 @@ import type { GeneratedInputLifetime } from '../../../../shared/generated-input-
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 import { OrcaRuntimeWithObserveAgentPromptTurn } from './terminal-agent-prompt-turn'
+import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
 type RenderGate = { arm: () => void; wait: () => Promise<void>; dispose: () => void }
 
@@ -57,9 +58,8 @@ export type AgentPromptSourceState = {
 /** The PTY host as a generated-input source: its facts, queue turn, checks and writes. */
 export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithObserveAgentPromptTurn {
   protected abstract createAgentPromptRenderGate(
-    ptyId: string,
-    pasteIngestMs: number
-  ): RenderGate | null
+    ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
+  ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
 
   protected bindAgentPromptTarget(
     ptyId: string,
@@ -231,7 +231,7 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         // A ready Claude composer never settles this gate, adding its full 8s cap.
         state.render = options.composerReady
           ? null
-          : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+          : this.createAgentPromptRenderGate(ptyId, pasteIngestMs, options.promptForSchedule)
         // Claude can lose the start of a large bracketed paste split across writes.
         state.render?.arm()
         const data = submitWithPaste ? payload + AGENT_PROMPT_SUBMIT : payload

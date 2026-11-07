@@ -5,7 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 import { useAppStore } from '@/store'
-import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import {
+  __resetTrustPromptChainForTests,
+  confirmCreatedWorktreeSetupContent,
+  ensureHooksConfirmed
+} from '@/lib/ensure-hooks-confirmed'
 import type { Repo } from '../../../../shared/repo-types'
 
 const hooksCheck = vi.fn()
@@ -114,16 +118,37 @@ describe('OrcaYamlTrustDialog Always trust', () => {
     clickButton("Don't run")
     await expect(edited).resolves.toBe('skip')
   })
+})
 
-  it('still lets a single-host repo run an edited script without prompting', async () => {
+describe('OrcaYamlTrustDialog created branch review', () => {
+  it("runs a created branch's setup once without replacing the primary checkout's approval", async () => {
     useAppStore.setState({ repos: [makeRepo('local')] })
     serveSetupScript('pnpm install')
+    const primary = confirmSetup()
+    await waitForPrompt()
+    clickButton('Run hooks')
+    await expect(primary).resolves.toBe('run')
+    const primaryApproval = useAppStore.getState().trustedOrcaHooks['repo-1']
 
-    const first = confirmSetup()
-    await approveWithAlwaysTrust()
-    await expect(first).resolves.toBe('run')
+    const review = confirmCreatedWorktreeSetupContent(
+      () => useAppStore.getState(),
+      'repo-1',
+      'pnpm install && pnpm build',
+      'local'
+    )
+    await waitForPrompt()
+    expect(document.body.textContent).toContain(
+      "This workspace's branch has different setup commands"
+    )
+    expect(document.body.textContent).toContain('pnpm install && pnpm build')
+    clickButton('Run hooks')
 
-    serveSetupScript('pnpm install --frozen-lockfile')
+    await expect(review).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: expect.any(String)
+    })
+    // The next create from the primary checkout must not prompt again.
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual(primaryApproval)
     await expect(confirmSetup()).resolves.toBe('run')
     expect(useAppStore.getState().activeModal).toBe('none')
   })

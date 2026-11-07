@@ -1,13 +1,13 @@
 import type { TerminalIdentityReadContext } from './terminal/query/terminal-identity-read-context'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import {
   RuntimeAgentOrchestrationProjection,
   type RuntimeAgentOrchestrationDependencies
 } from './runtime-agent-orchestration-projection'
 import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import {
   mintAgentStatusFleetEvidence,

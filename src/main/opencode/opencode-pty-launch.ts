@@ -6,7 +6,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { isOpenCodeRunCommand } from '../../shared/opencode-headless-command'
+import { isOpenCodeRunCommand } from '../../shared/agent-status/process/opencode-headless-command'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_NONCE_ENV,

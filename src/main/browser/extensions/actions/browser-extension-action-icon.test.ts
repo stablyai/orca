@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   encodeRgbaPng,
   iconFromImageData,
-  pickToolbarSize,
   resolveActionIconDataUrl
 } from './browser-extension-action-icon'
 
@@ -45,14 +44,6 @@ describe('action icons', () => {
     const decoded = decodePng(Buffer.from(dataUrl.replace('data:image/png;base64,', ''), 'base64'))
     expect(decoded.width).toBe(32)
     expect(iconFromImageData({ width: 2, height: 2, data: [1, 2, 3] })).toBeNull()
-  })
-
-  it('prefers the first size at or above 32 px, else the largest', () => {
-    const sizes = (list: number[]): { size: number; value: number }[] =>
-      list.map((size) => ({ size, value: size }))
-    expect(pickToolbarSize(sizes([16, 48, 128, 32]))).toBe(32)
-    expect(pickToolbarSize(sizes([16, 19]))).toBe(19)
-    expect(pickToolbarSize([])).toBeNull()
   })
 })
 

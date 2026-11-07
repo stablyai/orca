@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { useAppStore } from '@/store'
-import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
+import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
 import ProjectBoard from './ProjectBoard'
@@ -23,7 +23,7 @@ import type {
 } from '../../../../shared/github/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>

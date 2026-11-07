@@ -140,7 +140,8 @@ it('gives the caller’s refusal handler the accepted id, and shows nothing once
   const [operation] = frames()
   expect(onTimeout).toHaveBeenCalledExactlyOnceWith('not-sent', true, operation.id)
   h.notices!.dismiss(operation.id, 'window')
-  const { noticeGeneratedInputFailure } = await import('./launch-agent-paste-timeout-notice')
+  const { noticeGeneratedInputFailure } =
+    await import('./agent-session/launch/prompt/launch-agent-paste-timeout-notice')
   noticeGeneratedInputFailure({ agent: 'codex', text: 'exact', operationId: operation.id })
   await vi.advanceTimersByTimeAsync(6000)
   expect(h.fallback).not.toHaveBeenCalled()

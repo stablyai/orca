@@ -3,7 +3,7 @@ import {
   CACHED,
   CACHED_BELOW_HOST_FLOOR,
   MANIFEST_WIRE,
-  afterCacheRead,
+  awaitingManifest,
   gates,
   manifestFacts,
   run,
@@ -24,14 +24,17 @@ describe('an update this shell refused falls back to the generation that already
 
   function refused() {
     return run(
-      afterCacheRead(CACHED).session,
+      awaitingManifest(CACHED).session,
       { type: 'manifest-read', manifest: NEWER },
       { type: 'download-failed', cause: BUNDLE_REFUSED }
     )
   }
 
   it('asks for the newer generation before any of this, so the refusal is a real one', () => {
-    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     expect(fetching.session.state).toMatchObject({ kind: 'fetching' })
     expect(fetching.effects).toEqual([{ kind: 'download' }])
   })
@@ -74,7 +77,7 @@ describe('an update this shell refused falls back to the generation that already
   })
 
   it('still walls when there is no cached generation to fall back to', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: NEWER
     })
@@ -90,7 +93,7 @@ describe('an update this shell refused falls back to the generation that already
   it('walls the cached generation the host has moved past rather than serving it', () => {
     // Unlike offline fallback, this reachable host can have moved outside the cached bundle’s compatibility window.
     const step = run(
-      run(afterCacheRead(CACHED_BELOW_HOST_FLOOR).session, {
+      run(awaitingManifest(CACHED_BELOW_HOST_FLOOR).session, {
         type: 'manifest-read',
         manifest: NEWER
       }).session,
@@ -111,7 +114,7 @@ describe('an update this shell refused falls back to the generation that already
 
   it('shows the download failure when the cached bundle never carried the route, before any wall', () => {
     // An unclaimed cached route is download failure, not a compat wall, even when those unused bytes are below the host floor.
-    const fetching = run(afterCacheRead({ ...CACHED_BELOW_HOST_FLOOR, routes: [] }).session, {
+    const fetching = run(awaitingManifest({ ...CACHED_BELOW_HOST_FLOOR, routes: [] }).session, {
       type: 'manifest-read',
       manifest: NEWER
     })
@@ -124,7 +127,7 @@ describe('an update this shell refused falls back to the generation that already
   it('shows the download failure for a generation from before routes were listed at all', () => {
     // Older cached manifests lack routes and cannot claim this one; do not wall bytes that will not run.
     const fetching = run(
-      afterCacheRead({ ...CACHED_BELOW_HOST_FLOOR, routes: undefined }).session,
+      awaitingManifest({ ...CACHED_BELOW_HOST_FLOOR, routes: undefined }).session,
       { type: 'manifest-read', manifest: NEWER }
     )
     const step = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
@@ -137,7 +140,10 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
   const NEWER = manifestFacts({ ...MANIFEST_WIRE, buildId: 'c'.repeat(64) })
 
   function refusedUnder(patch: Parameters<typeof gates>[0], cached = CACHED) {
-    const fetching = run(afterCacheRead(cached).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(cached).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     const moved = run(fetching.session, { type: 'gates-changed', gates: gates(patch) })
     return run(moved.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
   }
@@ -171,20 +177,13 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
     expect(step.session.updateNotice).toBe('update-failed')
   })
 
-  it.each(['connecting' as const])('waits on a dial in progress (%s) rather than deciding', () => {
-    const step = refusedUnder({ reachability: 'connecting' })
-    expect(step.session.state).toEqual({ kind: 'checking' })
-    expect(withoutRecord(step.effects)).toEqual([])
-    expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
-      { kind: 'open-cache' }
-    ])
-  })
-
-  it('waits on a status still pending rather than reading its empty capability list', () => {
-    const step = refusedUnder({ statusPending: true, hostCapabilities: [] })
-    expect(step.session.state).toEqual({ kind: 'checking' })
-    expect(withoutRecord(step.effects)).toEqual([])
-  })
+  it.each([{ reachability: 'connecting' as const }, { statusPending: true, hostCapabilities: [] }])(
+    'opens the cached generation before the verdict (%o), which then judges it',
+    (patch) => {
+      const step = refusedUnder(patch, CACHED_BELOW_HOST_FLOOR)
+      expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    }
+  )
 
   it('judges the generation only on the verdict that leaves a host to judge against', () => {
     const step = refusedUnder({}, CACHED_BELOW_HOST_FLOOR)
@@ -197,7 +196,7 @@ describe('an update this shell refused, once it is on screen', () => {
 
   function refused() {
     return run(
-      afterCacheRead(CACHED).session,
+      awaitingManifest(CACHED).session,
       { type: 'manifest-read', manifest: NEWER },
       { type: 'download-failed', cause: BUNDLE_REFUSED }
     )
@@ -207,11 +206,19 @@ describe('an update this shell refused, once it is on screen', () => {
     const retried = run(refused().session, { type: 'retry-pressed' })
     expect(retried.session.updateNotice).toBeNull()
     expect(retried.effects).toEqual([{ kind: 'open-cache' }])
-    const again = run(retried.session, { type: 'cache-read', generation: CACHED })
-    expect(again.effects).toEqual([{ kind: 'read-manifest' }])
-    expect(run(again.session, { type: 'manifest-read', manifest: NEWER }).effects).toEqual([
-      { kind: 'download' }
-    ])
+    const again = run(
+      retried.session,
+      { type: 'cache-read', generation: CACHED },
+      {
+        type: 'activated',
+        generationDirectory: CACHED.directory,
+        sessionId: 'session-two',
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes,
+        elapsedMs: 8
+      }
+    )
+    expect(again.effects).toContainEqual({ kind: 'read-manifest' })
   })
 
   it('drops the notice the moment the flow runs again, before anything is known again', () => {
@@ -223,7 +230,7 @@ describe('an update this shell refused, once it is on screen', () => {
       totalBytes: CACHED.totalBytes,
       elapsedMs: 8
     })
-    const dropped = run(served.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const dropped = run(served.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(dropped.session.updateNotice).toBeNull()
   })
 })

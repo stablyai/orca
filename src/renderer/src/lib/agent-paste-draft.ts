@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 import type { GeneratedInputOutcome } from '../../../shared/generated-terminal-input'
 import { sendGeneratedTerminalInput } from '@/runtime/generated-terminal-input-client'
@@ -8,15 +8,11 @@ import {
   type GeneratedInputAttempt
 } from '@/runtime/generated-input-attempt'
 import { useAppStore } from '@/store'
-import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { createLegacyGeneratedInputSource } from './agent-draft-readiness'
 import { runGeneratedInputOperation } from '../../../shared/generated-input-operation'
 import { GeneratedInputLifetime } from '../../../shared/generated-input-lifetime'
-import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
+import { noticeGeneratedInputFailure } from './agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import {
   acceptGeneratedInput,
   deliverKeepingNotice,
@@ -34,8 +30,6 @@ export {
 } from './agent-draft-paste-content'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
-export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
-export { BRACKETED_PASTE_END }
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000

@@ -7,7 +7,7 @@ import {
   type OrcadManagedPastLiveTerminals,
   type OrcadManagedRuntimeStatus
 } from '../../../../../../shared/orcad-managed-runtime'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { managedServerOutcomeLabel } from './managed-server-copy'

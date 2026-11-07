@@ -1,5 +1,8 @@
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneResumeOutcome,
   PaneStartStatus
@@ -13,9 +16,12 @@ import type {
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
-import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
+import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
+import type {
+  NativeChatLaunchDraft,
+  NativeChatLaunchPrompt
+} from '@/components/native-chat/drafts/native-chat-launch-prompt'
+import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type {
   AccountRestartAgent,
   AutomaticAgentResumeClaim,
@@ -68,6 +74,7 @@ export type TerminalState = {
       resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       /** The agent launch the pane's own spawn starts, instead of `command`. */
       agentLaunch?: AgentPaneLaunchRequest
       agentArgsOverride?: string | null

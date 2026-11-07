@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { captureStructuredAgentCliSource } from '../../native-chat/structured-agent-cli-source'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from './core'
 import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import type { RpcCallerScope } from './rpc-caller-scope'
@@ -20,6 +20,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'capabilitySource'
   | 'updateClientCapabilities'
   | 'pairing'
+  | 'pairingOffers'
   | 'deviceSelf'
   | 'mobileRelayHosts'
   | 'peerDesktops'
@@ -73,6 +74,7 @@ export function rpcContextFromTransport(
     updateClientCapabilities: options?.updateClientCapabilities,
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
     pairing: options?.pairing,
+    pairingOffers: options?.pairingOffers,
     deviceSelf: options?.deviceSelf,
     mobileRelayHosts: options?.mobileRelayHosts,
     peerDesktops: options?.peerDesktops,

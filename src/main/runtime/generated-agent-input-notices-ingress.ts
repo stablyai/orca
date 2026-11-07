@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { TerminalSendGeneratedInputParams } from '../../shared/rpc-contract/generated-input-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { readTerminalSendAcknowledgment } from '../../shared/terminal-send-acknowledgment'
-import { GeneratedInputParts } from './rpc/methods/generated-input-parts'
+import { readTerminalSendAcknowledgment } from '../../shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
+import { GeneratedInputParts } from './rpc/methods/terminal/generated-input-parts'
 import type {
   GeneratedAgentInputNotices,
   GeneratedInputNoticeOwner

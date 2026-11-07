@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentHookServer } from '../../agent-hooks/server'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { collectWslMoveGateInputs, type WslMoveGateFactSources } from './wsl-move-gate-facts'
 import { assessWslMoveTerminals } from './wsl-move-terminal-gate'
 

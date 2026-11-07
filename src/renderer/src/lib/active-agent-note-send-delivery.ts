@@ -13,16 +13,17 @@ import { codeForReadinessStatus } from './active-agent-note-send-diagnostics'
 export async function sendPromptWithLegacyCombinedSend(
   runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
-  prompt: string
+  prompt: string,
+  submit = true
 ): Promise<ActiveAgentNotesSendResult> {
-  return notesResultForOutcome(await deliverNotes(runtimeTarget, terminalHandle, prompt))
+  return notesResultForOutcome(await deliverNotes(runtimeTarget, terminalHandle, prompt, submit))
 }
 
 export async function sendPromptWithGuardedPasteAndEnter(
   runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
   prompt: string,
-  options: { allowLegacyFallback: boolean }
+  options: { allowLegacyFallback: boolean; submit?: boolean }
 ): Promise<ActiveAgentNotesSendResult> {
   const initialAgentStatus = await getTerminalAgentSendReadiness(
     runtimeTarget,
@@ -39,7 +40,9 @@ export async function sendPromptWithGuardedPasteAndEnter(
     }
   }
 
-  return notesResultForOutcome(await deliverNotes(runtimeTarget, terminalHandle, prompt))
+  return notesResultForOutcome(
+    await deliverNotes(runtimeTarget, terminalHandle, prompt, options.submit !== false)
+  )
 }
 
 /** Notes are generated input: a capable host runs its operation; an older paired host gets the
@@ -48,13 +51,15 @@ export async function sendPromptWithGuardedPasteAndEnter(
 async function deliverNotes(
   runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
-  prompt: string
+  prompt: string,
+  /** False pastes the notes and leaves them, editable, in the agent's input (Add to chat). */
+  submit: boolean
 ): Promise<GeneratedInputOutcome> {
   // One accepted request: its end and the route it selects carry into the older-host fallback.
   const attempt = generatedInputAttempt(Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const request = {
     text: prompt,
-    submit: true,
+    submit,
     inputKind: 'driving' as const,
     intent: 'running' as const,
     timeoutMs: GENERATED_AGENT_INPUT_TIMEOUT_MS
@@ -78,7 +83,7 @@ async function deliverNotes(
   return await deliverGeneratedPaste({
     ptyId: toRemoteRuntimePtyId(terminalHandle, runtimeTarget.environmentId),
     content: prompt,
-    submit: true,
+    submit,
     inputKind: 'driving',
     intent: 'running',
     deadline: attempt.end!,

@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
+import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 
 function changedFilesSummary(

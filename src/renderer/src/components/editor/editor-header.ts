@@ -1,6 +1,6 @@
-import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { GitBranchChangeEntry } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
 import { translate } from '@/i18n/i18n'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -34,6 +34,14 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
     }
   }
 
+  if (file.mode === 'git-graph') {
+    return {
+      copyText: null,
+      copyToastLabel: '',
+      pathLabel: translate('gitGraph.title', 'Git Graph'),
+      pathTitle: translate('gitGraph.title', 'Git Graph')
+    }
+  }
   if (file.mode === 'check-details') {
     const label =
       file.checkRunDetails?.check.name ??

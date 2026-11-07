@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { engineDictationLanguage } from '../../shared/dictation-language'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
@@ -11,24 +11,22 @@ import {
   stopSttDictation,
   teardownSttWorker
 } from './stt-session-stop'
-import {
-  getSherpaModulePath,
-  getSttWorkerPath,
-  LOCAL_SPEECH_UNAVAILABLE_ERROR
-} from './stt-worker-paths'
+import { getSherpaModulePath, LOCAL_SPEECH_UNAVAILABLE_ERROR } from './stt-worker-paths'
 import {
   attachSttWorkerLifecycle,
   initializeSttWorker,
   waitForSttWorkerReady
 } from './stt-worker-startup'
 import { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+import { STT_WORKER_EXITED_ERROR } from './stt-worker-process'
 
 export async function startSttDictation(
   state: SttSessionState,
   modelId: string,
   sink: SttEventSink,
   hotwordsFilePath?: string,
-  owner = 'desktop'
+  owner = 'desktop',
+  language?: string
 ): Promise<void> {
   if (state.starting) {
     if (state.startingOwner !== owner) {
@@ -45,7 +43,7 @@ export async function startSttDictation(
   clearSttIdleTeardownTimer(state)
 
   try {
-    await startSttSession(state, modelId, sink, hotwordsFilePath, owner)
+    await startSttSession(state, modelId, sink, hotwordsFilePath, owner, language)
     if (state.canceledOwners.delete(owner)) {
       await stopSttDictation(state, owner, { cancelStarting: false, discard: true })
       throw new Error('dictation_canceled')
@@ -64,12 +62,14 @@ async function startSttSession(
   modelId: string,
   sink: SttEventSink,
   hotwordsFilePath: string | undefined,
-  owner: string
+  owner: string,
+  language: string | undefined
 ): Promise<void> {
   const manifest = getCatalogModel(modelId)
   if (!manifest) {
     throw new Error(`Unknown model: ${modelId}`)
   }
+  const engineLanguage = engineDictationLanguage(manifest, language)
 
   if (manifest.provider === 'openai') {
     if (state.worker) {
@@ -81,7 +81,11 @@ async function startSttSession(
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    state.cloudSession = new OpenAiTranscriptionSession(
+      modelId,
+      readOpenAiSpeechApiKey,
+      engineLanguage
+    )
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink
@@ -97,6 +101,7 @@ async function startSttSession(
     reusableWorker &&
     state.activeModelId === modelId &&
     state.activeHotwordsFilePath === hotwordsFilePath &&
+    state.activeLanguage === engineLanguage &&
     state.stopInFlight?.worker !== reusableWorker
   ) {
     if (!state.activeOwner) {
@@ -110,6 +115,7 @@ async function startSttSession(
       state.worker === reusableWorker &&
       state.activeModelId === modelId &&
       state.activeHotwordsFilePath === hotwordsFilePath &&
+      state.activeLanguage === engineLanguage &&
       state.stopInFlight?.worker !== reusableWorker
     ) {
       state.eventSink = sink
@@ -132,10 +138,11 @@ async function startSttSession(
   if (!sherpaModulePath) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
-  const worker = new Worker(getSttWorkerPath(), { workerData: { sherpaModulePath } })
+  const worker = state.spawnWorker()
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath
+  state.activeLanguage = engineLanguage
   state.eventSink = sink
 
   const readyPromise = waitForSttWorkerReady(worker, START_DICTATION_TIMEOUT_MS)
@@ -147,17 +154,23 @@ async function startSttSession(
     onExit: () => {
       const stoppedSink = state.stopInFlight?.worker === worker ? null : state.eventSink
       handleSttWorkerFailure(state)
+      // Startup and stop report their own outcome; a live dictation must not end as "No speech detected".
+      if (!state.starting) {
+        stoppedSink?.({ type: 'error', error: STT_WORKER_EXITED_ERROR })
+      }
       stoppedSink?.({ type: 'stopped' })
     }
   })
   initializeSttWorker(worker, {
+    sherpaModulePath,
     modelDir: state.modelManager.getModelDir(modelId),
     modelType: manifest.type,
     streaming: manifest.streaming,
     sampleRate: manifest.sampleRate,
     files: manifest.files ?? [],
     hotwordsFilePath,
-    modelingUnit: manifest.modelingUnit
+    modelingUnit: manifest.modelingUnit,
+    language: engineLanguage
   })
 
   try {

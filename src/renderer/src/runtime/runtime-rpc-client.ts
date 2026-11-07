@@ -273,45 +273,14 @@ export async function getRuntimeEnvironmentCapabilityStatus(
   return getRuntimeEnvironmentStatusEntry(trimmed, timeoutMs, origin)
 }
 
-/** A status that lacks a capability is read again by the next capability decision, so an
- *  in-place upgrade is seen; its protocol proof stays for this call. */
-export function forgetMissingRuntimeCapability(
-  environmentId: string,
-  read: { status: RuntimeStatus; entry: RuntimeCompatibilityCacheEntry }
-): void {
-  const resolved = runtimeCompatibilityChecks.get(environmentId.trim())
-  // Why runtimeId: a status publication may have replaced the entry with its own copy.
-  if (
-    resolved &&
-    (resolved === read.entry || resolved.status?.runtimeId === read.status.runtimeId)
-  ) {
-    resolved.statusCheckedAt = null
-  }
-}
-
-export async function runtimeEnvironmentSupportsCapability(
-  environmentId: string,
-  capability: RuntimeCapability,
-  timeoutMs?: number
-): Promise<boolean> {
-  const read = await getRuntimeEnvironmentCapabilityStatus(environmentId, timeoutMs)
-  const supported = read.status.capabilities?.includes(capability) === true
-  if (!supported) {
-    forgetMissingRuntimeCapability(environmentId, read)
-  }
-  return supported
-}
-
-export async function assertRuntimeEnvironmentCapability(
-  environmentId: string,
-  capability: RuntimeCapability,
-  message: string,
-  timeoutMs?: number
-): Promise<void> {
-  if (!(await runtimeEnvironmentSupportsCapability(environmentId, capability, timeoutMs))) {
-    throw new Error(message)
-  }
-}
+export {
+  assertRuntimeEnvironmentCapability,
+  forgetMissingRuntimeCapability,
+  runtimeEnvironmentCapabilityProof,
+  runtimeEnvironmentSupportsCapabilities,
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeCapabilityProof
+} from './runtime-environment-capability-decisions'
 
 export function clearRuntimeCompatibilityCacheForTests(): void {
   clearRuntimeCompatibilityCache()

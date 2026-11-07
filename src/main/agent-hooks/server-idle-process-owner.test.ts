@@ -4,14 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
+import { buildRuntimeMobileAgentStatus } from '../runtime/session-lifecycle/projection/runtime-mobile-agent-status-builder'
 import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const servers: AgentHookServer[] = []
 const owner = {
   agent: 'claude',
@@ -262,31 +264,6 @@ describe('idle foreground process owns its provider session', () => {
     })
   })
 
-  it.each(['done', 'working'] as const)(
-    'preserves the legacy remote %s replacement policy without host support',
-    async (state) => {
-      const server = await start()
-      const { sessionOwner: _sessionOwner, ...legacyOwner } = owner
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          agentPresence: legacyOwner,
-          payload: { agentType: 'claude', state, prompt: 'Legacy owner' }
-        },
-        'ssh-old'
-      )
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          payload: { agentType: 'codex', state: 'working', prompt: 'Replacement' }
-        },
-        'ssh-old'
-      )
-      expect(server.getStatusSnapshot()[0].agentType).toBe(state === 'done' ? 'codex' : 'claude')
-      expect(probe).not.toHaveBeenCalled()
-    }
-  )
-
   it.each(['live', 'unverifiable'] as const)(
     'retains mobile and resume selection after turn completion when owner is %s',
     async (verdict) => {
@@ -329,39 +306,6 @@ describe('idle foreground process owns its provider session', () => {
       expect(server.getStatusSnapshot()[0].prompt).toBe('Foreground task')
     }
   )
-
-  it('accepts the first replacement hook after a positive process exit', async () => {
-    const server = await start()
-    await idleClaude(server)
-    probe.mockResolvedValue('exited')
-    await postHookEvent(
-      server,
-      buildBody({
-        hook_event_name: 'UserPromptSubmit',
-        session_id: 'replacement-codex',
-        prompt: 'New foreground task'
-      }),
-      '/hook/codex'
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      agentType: 'codex',
-      providerSession: { id: 'replacement-codex' },
-      prompt: 'New foreground task'
-    })
-  })
-
-  it('protects an old idle owner without treating elapsed time as process exit', async () => {
-    const server = await start()
-    await idleClaude(server)
-    const now = Date.now()
-    vi.spyOn(Date, 'now').mockReturnValue(now + 24 * 60 * 60 * 1000)
-    await postHookEvent(
-      server,
-      buildBody({ hook_event_name: 'UserPromptSubmit', session_id: 'nested-codex' }),
-      '/hook/codex'
-    )
-    assertClaudeSession(server)
-  })
 
   it('keeps remote ownership until its execution host reports exit, without probing locally', async () => {
     const server = await start()

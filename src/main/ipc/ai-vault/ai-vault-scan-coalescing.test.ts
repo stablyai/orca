@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult } from '../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessionsInService: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (impo
 vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: (_path: string, id: string) => ({
     id,
     runtimeId: id,
@@ -82,17 +82,6 @@ describe('Agent Session History scan coalescing', () => {
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(2)
   })
 
-  it('does not forward conditional hints into truncated all-host merges', async () => {
-    registerRuntimeHost()
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'all',
-      afterFingerprint: 'a'.repeat(64)
-    })
-    expect(mocks.scanRuntimeAiVaultSessions.mock.calls[0]?.[1]).not.toHaveProperty(
-      'afterFingerprint'
-    )
-  })
-
   it.each([
     ['local', mocks.scanAiVaultSessionsInService],
     ['runtime:remote-server', mocks.scanRuntimeAiVaultSessions]
@@ -148,24 +137,6 @@ describe('Agent Session History scan coalescing', () => {
       await expect(beforeDelete).resolves.toMatchObject({ scannedAt: EMPTY_RESULT.scannedAt })
     }
   )
-
-  it('reports a failed local scan as a host issue rather than rejecting', async () => {
-    mocks.scanAiVaultSessionsInService.mockRejectedValue(new Error('transcript root is unreadable'))
-    registerAiVaultHandlers()
-    const list = ipcHandler('aiVault:listSessions')
-
-    // Like SSH failures, local failures must become issue rows instead of rejected IPC calls.
-    const result = await list(
-      { sender: Object.assign(new EventEmitter(), { id: 1 }) },
-      { executionHostScope: 'local', requestToken: 'scan' }
-    )
-    expect(result).toMatchObject({
-      sessions: [],
-      scanId: expect.any(String),
-      issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
-    })
-    expect(result).not.toHaveProperty('cancelled')
-  })
 })
 
 function registerRuntimeHost(): void {

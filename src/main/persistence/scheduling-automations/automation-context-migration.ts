@@ -1,11 +1,12 @@
 import type { AutomationDefinitionOperations } from './automation-definition-operations'
-import type { WorkspaceRunContext } from '../../../shared/task-source-context'
+
 import type {
   Automation,
   AutomationPrecheckResult,
   AutomationRun,
   AutomationRunOutputSnapshot,
-  AutomationSchedulerOwner
+  AutomationSchedulerOwner,
+  AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
@@ -15,11 +16,12 @@ import { hasExtraAgentArgs } from '../../../shared/agent-launch/startup/automati
 import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
+  type WorkspaceRunContext,
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
 } from '../../../shared/task-source-context'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
   const trimmed = value?.trim()
@@ -99,14 +101,37 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     automation.workspaceMode,
     automation.setupDecision
   )
-  const { extraAgentArgs, ...rest } = automation
+  const { extraAgentArgs, setupTrustHash, ...rest } = automation
   return {
     ...rest,
     ...(hasExtraAgentArgs(extraAgentArgs) ? { extraAgentArgs } : {}),
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
+    ...automationSetupTrustHash(setupDecision, setupTrustHash),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
+}
+
+/** The approved setup hash only means something beside a saved `run`. */
+function automationSetupTrustHash(
+  setupDecision: Automation['setupDecision'],
+  setupTrustHash: unknown
+): Pick<Automation, 'setupTrustHash'> {
+  return setupDecision === 'run' && typeof setupTrustHash === 'string' && setupTrustHash
+    ? { setupTrustHash }
+    : {}
+}
+
+/** A write naming the setup decision or hash replaces the approval; CLI `--setup run` sends none, so runs behave as before. */
+export function applyAutomationSetupTrust(
+  automation: Automation,
+  write: Pick<AutomationUpdateInput, 'setupDecision' | 'setupTrustHash'>,
+  current?: Pick<Automation, 'setupTrustHash'>
+): void {
+  const replaces = Object.hasOwn(write, 'setupDecision') || Object.hasOwn(write, 'setupTrustHash')
+  const setupTrustHash = replaces ? write.setupTrustHash : current?.setupTrustHash
+  delete automation.setupTrustHash
+  Object.assign(automation, automationSetupTrustHash(automation.setupDecision, setupTrustHash))
 }
 
 export function normalizeAutomationSetupDecisionForWorkspaceMode(

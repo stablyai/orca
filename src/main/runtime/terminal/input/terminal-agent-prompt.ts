@@ -1,7 +1,9 @@
-import { agentPromptObservationSignal } from './agent-prompt-signals'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
-import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-types'
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import {
+  agentPromptObservationSignal,
+  assertAgentPromptRequestActive
+} from './agent-prompt-signals'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
+import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { runGeneratedInputOperation } from '../../../../shared/generated-input-operation'
 import { GeneratedInputLifetime } from '../../../../shared/generated-input-lifetime'
 import {

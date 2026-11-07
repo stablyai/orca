@@ -15,6 +15,8 @@ import {
 } from '../../src/main/github/project-view/project-view-cache'
 import { ghExecFileAsync } from '../../src/main/github/project-view/internals'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../src/shared/github/project-types'
+import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
+import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
 import { sortRows, groupRows } from '../../src/shared/github/project-group-sort'
 
 import ProjectCell from '../../src/renderer/src/components/github-project/ProjectCell'
@@ -464,18 +466,68 @@ describe('Project columns from the items response', () => {
     renderColumns(groups[0].rows[0])
     expect(document.body.textContent).toBe('')
     cleanup()
-    // Existing builtin ordering still uses the field map, with no new relation value kind.
     for (const field of [prs, progress]) {
       const relationTable = {
         ...table,
         selectedView: {
           ...table.selectedView,
-          groupByFields: [field],
+          groupByFields: field === progress ? [field] : [],
           sortByFields: [{ field, direction: 'ASC' as const }]
         }
       }
       expect(sortRows(relationTable, table.rows).map((row) => row.id)).toEqual(['item-1', 'legacy'])
-      expect(groupRows(relationTable, table.rows).map((group) => group.key)).toEqual(['__empty__'])
+      if (field === progress) {
+        expect(
+          groupRows(relationTable, table.rows).map((group) => group.rows.map((row) => row.id))
+        ).toEqual([['item-1'], ['legacy']])
+      }
     }
   })
+})
+
+it('sorts linked PRs by their first number and treats count-only metadata as an unknown sort key', () => {
+  const field = {
+    kind: 'field',
+    id: 'prs',
+    name: 'Linked pull requests',
+    dataType: 'LINKED_PULL_REQUESTS'
+  } as const
+  const rows = ['ten', 'two-high', 'count-only', 'two-low', 'absent'].map((id, position) => ({
+    ...normalized({ id, type: 'ISSUE', content: { title: id } }),
+    position
+  }))
+  const table = projectRelationsTableFixture()
+  table.rows = rows
+  for (const [index, numbers] of [
+    [0, [10]],
+    [1, [2, 100]],
+    [3, [2, 9]]
+  ] as const) {
+    rows[index].content.linkedPullRequests = {
+      pullRequests: numbers.map((number) => ({
+        number,
+        title: 'PR',
+        url: `https://github.com/acme/repo/pull/${number}`
+      })),
+      totalCount: numbers.length
+    }
+  }
+  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
+    __typename: 'ProjectV2ItemFieldPullRequestValue',
+    pullRequests: { nodes: [null, {}], totalCount: 3 }
+  })
+  for (const [direction, expected] of [
+    ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
+    ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]
+  ] as const) {
+    expect(
+      sortRows(
+        {
+          ...table,
+          selectedView: { ...table.selectedView, sortByFields: [{ field, direction }] }
+        },
+        rows
+      ).map((row) => row.id)
+    ).toEqual(expected)
+  }
 })

@@ -6,17 +6,16 @@ import {
   resolveSubscriptionEnvironment,
   crewSubscriptionSetupFailure,
   type RuntimeEnvironmentSubscribeArgs,
-  type CrewSubscriptionSetupResult,
-  type RuntimeEnvironmentSetupFailure,
   type RuntimeEnvironmentSubscriptionHandlerDependencies,
   assertSubscriptionPairingCurrent
 } from './runtime-environment-subscription-setup'
+import type * as SubscriptionSetup from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
-import { toBinaryPayload } from './runtime-environment-binary-payload'
+import { registerSubscriptionBinaryHandler } from './runtime-environment-binary-payload'
 import { acceptRemoteGeneratedInput } from './runtime-environment-generated-input-notice-hosts'
 import { generatedInputDispatch } from './runtime-environment-generated-input-dispatch'
 
@@ -41,10 +40,12 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
     async (
       event,
       args: RuntimeEnvironmentSubscribeArgs
-    ): Promise<{ subscriptionId: string; requestId: string } | CrewSubscriptionSetupResult> => {
+    ): Promise<
+      { subscriptionId: string; requestId: string } | SubscriptionSetup.CrewSubscriptionSetupResult
+    > => {
       const subscriptionId = runtimeEnvironmentSubscriptionId(args)
       const crewResult = args.setupResult === 'crew'
-      let failure: RuntimeEnvironmentSetupFailure | undefined
+      let failure: SubscriptionSetup.RuntimeEnvironmentSetupFailure | undefined
       let setupSignal: AbortSignal | undefined
       let operation: 'environment-resolution' | 'subscription' = 'environment-resolution'
       // Before any refusal or wait: a cancellable generated request is held by this window's runtime.
@@ -292,20 +293,5 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
       return { unsubscribed: true }
     }
   )
-  ipcMain.on(
-    'runtimeEnvironments:subscriptionBinary',
-    (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
-      if (typeof args.subscriptionId !== 'string') {
-        return
-      }
-      const bytes = toBinaryPayload(args.bytes)
-      if (!bytes) {
-        return
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (subscription?.ownerWebContentsId === event.sender.id) {
-        subscription.sendBinary(bytes)
-      }
-    }
-  )
+  registerSubscriptionBinaryHandler(remoteRuntimeSubscriptions)
 }

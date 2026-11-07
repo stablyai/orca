@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PendingEditorFocusRequest } from '@/store/slices/editor'
+import type { PendingEditorFocusRequest } from '@/store/slices/editor/types/pending-editor-reveal'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 
 const request: PendingEditorFocusRequest = {

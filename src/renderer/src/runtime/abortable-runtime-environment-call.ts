@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {

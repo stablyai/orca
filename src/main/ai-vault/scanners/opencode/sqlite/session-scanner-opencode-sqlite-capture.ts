@@ -2,7 +2,7 @@ import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
   OPENCODE_CAPTURE_TEXT_LIMIT
 } from './opencode-transcript-capture-limits'
-import type { AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { timestampIso } from '../../../session-scanner-accumulator'
 import { asRecord } from '../../../session-scanner-record-value'
 import { extractPartText, readOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'

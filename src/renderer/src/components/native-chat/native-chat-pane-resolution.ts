@@ -1,4 +1,7 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isNativeChatSupportedAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { nativeChatAvailabilityAgent } from '../../../../shared/native-chat/native-chat-availability'

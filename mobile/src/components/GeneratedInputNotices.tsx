@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from 'react'
 import { z } from 'zod'
 import type { GeneratedAgentInputNotice } from '../../../src/shared/generated-agent-input-notice'
 import { generatedInputAgentName } from '../../../src/shared/generated-agent-input-notice'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   createGeneratedInputNoticeFeed,
   generatedInputNoticesPageSchema

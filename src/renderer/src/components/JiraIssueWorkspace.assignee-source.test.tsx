@@ -14,7 +14,7 @@ import {
 } from '../../../shared/task-source-context'
 import type { AppState } from '@/store/types'
 import type * as I18n from '@/i18n/i18n'
-import { getJiraReadIdentity } from '@/store/slices/jira-read-coordination'
+import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import JiraIssueWorkspace from './JiraIssueWorkspace'
 
@@ -49,14 +49,16 @@ vi.mock('@/store', () => ({
       readJiraStatus: store.readStatus
     })
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraGetIssueForTarget: runtime.getIssue,
-  jiraListAssignableUsersForTarget: runtime.search,
   jiraUpdateIssueForTarget: runtime.update,
   jiraListPrioritiesForTarget: async () => [],
   jiraListTransitionsForTarget: async () => [],
   jiraIssueCommentsForTarget: runtime.comments,
-  jiraAddIssueCommentForTarget: async () => ({ ok: true }),
+  jiraAddIssueCommentForTarget: async () => ({ ok: true })
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: runtime.search,
   jiraSearchUsers: vi.fn()
 }))
 vi.mock('@/i18n/i18n', async (importOriginal) => ({

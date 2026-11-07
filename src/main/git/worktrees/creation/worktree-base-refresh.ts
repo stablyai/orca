@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/worktree/base-ref-drift-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { createCoalescingKeyedRunner } from '../../../../shared/coalescing-keyed-runner'
-import { parseWorktreeList } from '../../../../shared/git-worktree-porcelain-parser'
+import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import {
   fastForwardLocalBaseBranch,
   inspectLocalBaseBranch,

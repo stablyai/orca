@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -18,7 +18,7 @@ import {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status'
 import { createDiffCommentsSlice } from './diffComments'
-import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()

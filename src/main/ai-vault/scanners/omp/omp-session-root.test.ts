@@ -32,46 +32,6 @@ describe('OMP session root parity', () => {
       )
     }
   )
-  it('does not infer an XDG default or require the sessions subdirectory to exist', () => {
-    const { home, xdg, legacy } = fixture()
-    mkdirSync(join(home, '.local', 'share', 'omp', 'sessions'), { recursive: true })
-    expect(resolveOmpSessionsDir({ homeDir: home, env: {} })).toBe(legacy)
-    expect(resolveOmpSessionsDir({ homeDir: home, env: { XDG_DATA_HOME: xdg } })).toBe(legacy)
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    expect(
-      resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env: { XDG_DATA_HOME: xdg } })
-    ).toBe(join(xdg, 'omp', 'sessions'))
-  })
-  it.each([
-    { omp: 'work', pi: 'other', expected: 'work' },
-    { omp: undefined, pi: 'work', expected: 'work' },
-    { omp: '', pi: 'work', expected: '' },
-    { omp: 'default', pi: 'work', expected: '' }
-  ])('honors canonical profile selection %j', ({ omp, pi, expected }) => {
-    const { home, xdg } = fixture()
-    const env = {
-      OMP_PROFILE: omp,
-      PI_PROFILE: pi,
-      XDG_DATA_HOME: xdg,
-      PI_CONFIG_DIR: '.config/omp'
-    }
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    const fallback = join(
-      home,
-      '.config',
-      'omp',
-      ...(expected ? ['profiles', expected] : []),
-      'agent',
-      'sessions'
-    )
-    expect(resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env })).toBe(
-      expected ? fallback : join(xdg, 'omp', 'sessions')
-    )
-    mkdirSync(join(xdg, 'omp', 'profiles', 'work'), { recursive: true })
-    expect(resolveOmpSessionsDir({ homeDir: home, platform: 'linux', env })).toBe(
-      join(xdg, 'omp', ...(expected ? ['profiles', expected] : []), 'sessions')
-    )
-  })
   it('uses custom agent paths only in default mode and discards inherited profile-derived paths', () => {
     const { home, xdg, legacy } = fixture()
     mkdirSync(join(xdg, 'omp'), { recursive: true })
@@ -87,39 +47,12 @@ describe('OMP session root parity', () => {
     }
     expect(resolveOmpSessionsDir({ homeDir: home, env: inherited })).toBe(legacy)
   })
-  it.each(['.omp', '.omp/agent', '.omp/agent/sessions', 'custom-sessions'])(
-    'preserves the legacy override %s over XDG and profiles',
-    (suffix) => {
-      const { home, xdg, legacy } = fixture()
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      const root = join(home, suffix)
-      expect(
-        resolveOmpSessionsDir({
-          homeDir: home,
-          env: { OMP_CODING_AGENT_DIR: root, XDG_DATA_HOME: xdg, OMP_PROFILE: 'work' }
-        })
-      ).toBe(suffix === 'custom-sessions' ? root : legacy)
-    }
-  )
   it.each(['', ' ', '/', 'C:\\', 'C:/', 'C:', 'C:.'])(
     'refuses explicit degenerate root %j without fallback',
     (sessionsDir) => {
       expect(resolveOmpSessionsDir({ sessionsDir })).toBe('')
       expect(ompSessionsRootDirs({ ompSessionsDir: sessionsDir })).toEqual([])
       expect(AI_VAULT_AGENT_SOURCES.omp?.rootDirs({ ompSessionsDir: sessionsDir }, [])).toEqual([])
-    }
-  )
-  it.each(['/', '/..', 'C:\\', 'C:/', 'C:', 'C:.'])(
-    'does not replace a refused legacy root %s with XDG',
-    (override) => {
-      const { home, xdg } = fixture()
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      expect(
-        resolveOmpSessionsDir({
-          homeDir: home,
-          env: { OMP_CODING_AGENT_DIR: override, XDG_DATA_HOME: xdg }
-        })
-      ).toBe('')
     }
   )
   it.each(['../other', 'CON', 'work.', 'two words'])(

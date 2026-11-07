@@ -2,7 +2,10 @@ import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal
 } from '../../../../native-chat/transcript-opencode-sqlite-query'
-import type { AiVaultScanIssue, AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type {
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { TranscriptMessage } from '../../../transcripts/session-transcript-consumers'
 

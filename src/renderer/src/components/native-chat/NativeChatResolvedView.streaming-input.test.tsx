@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type { NativeChatComposerProps } from './native-chat-composer-types'
-import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type * as StreamingModule from '../../../../shared/native-chat/native-chat-streaming'
 import { clearPendingSendCacheForTests } from './native-chat-pending'
 

@@ -1,5 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { useGlobalSearchParams, usePathname } from 'expo-router'
+import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
+import { firstParam } from '../navigation/route-param-reader'
+import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
@@ -9,7 +13,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { GeneratedInputNotices, PairedServerGeneratedInputNotices } from './GeneratedInputNotices'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 
 type Props = {
   hostId: string | undefined
@@ -19,6 +23,8 @@ type Props = {
   /** In place of the block screen, for a route that hands a blocked host to the host list. */
   blocked?: ReactNode
 }
+
+const NATIVE_HOST_ROUTE = /^\/h\/[^/]+\/edit$/
 
 // Gate all /h/[hostId] UI together while leaving host list/other hosts usable.
 export function HostProtocolGate({
@@ -37,7 +43,16 @@ export function HostProtocolGate({
   const hostKey = hostId ?? null
   const resolvedNow = state === 'connected' && client !== null && !statusPending
   const blocked = compatVerdict.kind === 'blocked'
-  const pending = statusPending && resolvedHostIdRef.current !== hostKey
+  // A phone page route renders its cached build at once; its bridge holds desktop-bound frames until the verdict.
+  // Edit, the wide native sidebar and remote workspaces (whose gates need the desktop's capabilities) still wait.
+  const pathname = usePathname()
+  const { executionHost } = useGlobalSearchParams<{ executionHost?: string | string[] }>()
+  const { isWideLayout } = useResponsiveLayout()
+  const pageRoute =
+    !isWideLayout &&
+    !NATIVE_HOST_ROUTE.test(pathname) &&
+    !isRemoteExecutionHostId(firstParam(executionHost))
+  const pending = statusPending && resolvedHostIdRef.current !== hostKey && !pageRoute
   const holdBack = pending && mountedHostIdRef.current !== hostKey
   const covered = pending && !transparentWhilePending
 

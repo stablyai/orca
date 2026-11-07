@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
+import { currentSoftKeyboardHeight } from '../platform/keyboard-occlusion'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
 import {
@@ -36,12 +37,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     setFileActionTarget,
     setBrowserActionTarget,
     setAgentSessionActionTarget,
-    keyboardHeight,
     deviceTokenRef,
     clientRef,
     connStateRef,
     liveInputRef,
-    commandInputRef,
     ptyModesRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
@@ -49,11 +48,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     sessionTabActionSheetRequestSeqRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    sendingRef,
-    bufferedTerminalDraftState,
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
+    handleLiveInputCompositionEnd,
     handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
@@ -64,7 +62,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   const dismissSoftwareKeyboard = useCallback(() => {
     dismissTerminalKeyboard({
       clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
-      commandInput: commandInputRef.current,
       dismissKeyboard: () => Keyboard.dismiss(),
       liveInput: liveInputRef.current
     })
@@ -97,56 +94,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       void handleAccessoryKey(input)
       return true
-    }
+    },
+    handleLiveInputCompositionEnd
   )
-
-  async function handleSend() {
-    // Offline Return must preserve composed text instead of firing a doomed write.
-    if (!client || !activeHandle || sendingRef.current || !canSend) {
-      return
-    }
-    sendingRef.current = true
-
-    const draft = bufferedTerminalDraftState.input
-    const text = normalizeTerminalTextInput(draft)
-    const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
-      activeHandle,
-      draft
-    )
-    const sendOrigin = {
-      handle: activeHandle,
-      tab: activeSessionTab,
-      generation: getSendCompletionGeneration()
-    }
-    const restoreRejectedDraft = () =>
-      bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
-
-    try {
-      // Fail/restore immediately so reconnect cannot execute stale text long after the tap.
-      const response = await sendUserInput(
-        client,
-        buildTerminalSendParams({
-          terminal: activeHandle,
-          text,
-          enter: true,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      const accepted = terminalInputSend.interpret(response) === true
-      if (!accepted) {
-        restoreRejectedDraft()
-      }
-      const draftUnchanged =
-        accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
-      dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
-    } catch {
-      restoreRejectedDraft()
-    } finally {
-      bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
-      sendingRef.current = false
-    }
-  }
 
   async function handleAccessoryKey(
     input: ReturnType<typeof createTerminalLiveAccessoryInput>,
@@ -273,7 +223,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
 
-      if (keyboardHeight <= 0) {
+      if (currentSoftKeyboardHeight() <= 0) {
         liveInputRef.current?.blur()
         Keyboard.dismiss()
         openAfterDismiss()
@@ -288,16 +238,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       Keyboard.dismiss()
       scheduleDelayedAction(openAfterDismiss, TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS)
     },
-    [
-      clearSessionTabActionSheetKeyboardListener,
-      keyboardHeight,
-      openSessionTabActionSheet,
-      scheduleDelayedAction
-    ]
+    [clearSessionTabActionSheetKeyboardListener, openSessionTabActionSheet, scheduleDelayedAction]
   )
 
   return {
-    handleSend,
     handleAccessoryKey,
     sendLiveTerminalInput,
     clearSessionTabActionSheetKeyboardListener,

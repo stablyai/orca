@@ -1,4 +1,4 @@
-import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
+import type { BrowserPageCreationPlacement } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { BrowserTabCreateResult } from '../../../shared/runtime-types'
 import { translate } from '../i18n/i18n'
@@ -32,7 +32,7 @@ import {
 } from './web-runtime-browser-creation-e2e-fault'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import { registerPairedBrowserTabCreator } from '../store/slices/browser/paired-browser-tab-creator'
+import { registerPairedBrowserTabCreator } from '../store/slices/browser/tabs/paired-browser-tab-creator'
 import {
   forgetStagedBrowserTabHandover,
   wasStagedBrowserTabHandedToFrames

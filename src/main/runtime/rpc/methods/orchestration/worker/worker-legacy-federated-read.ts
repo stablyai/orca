@@ -5,7 +5,7 @@ import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
 import type { resolvePinnedFederatedServer } from './worker-observation'
 
 // Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.

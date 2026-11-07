@@ -2,19 +2,19 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../src/shared/ai-vault-search-client'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-client'
 import {
   searchHit,
   searchResults,
   fakeSearchService
-} from '../../../src/shared/ai-vault-search-test-fixture'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   searchSessionService,
   sessionSearchServiceStatus,
   setSessionSearchService
 } from '../../../src/main/ai-vault-search/session-search-service-registry'
-import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
-import { redactForTransport } from '../../../src/shared/ai-vault-search-transport'
+import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import { redactForTransport } from '../../../src/shared/ai-vault/search/ai-vault-search-transport'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 import { prepareReleaseFixtures } from './release-fixture-setup'
 

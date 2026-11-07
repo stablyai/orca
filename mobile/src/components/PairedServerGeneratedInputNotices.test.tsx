@@ -5,8 +5,8 @@ import { PairedServerGeneratedInputNotices } from './GeneratedInputNotices'
 import { relayHostsFeed } from '../worktree/relay-hosts-feed'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 
 // Host discovery polls only while the app is active; nothing else of React Native is reached.
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))

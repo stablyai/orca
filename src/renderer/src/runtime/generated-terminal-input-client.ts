@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import {
   GENERATED_INPUT_RUNTIME_CAPABILITY,
   splitGeneratedInputText,
@@ -14,7 +14,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-} from '../../../shared/terminal-runtime-capabilities'
+} from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import {
   clearRuntimeCompatibilityEntry,

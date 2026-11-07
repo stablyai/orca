@@ -37,7 +37,7 @@ beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(RELEASE_REF)
   const [oldModule, newModule] = await Promise.all([
     importReleaseCheckoutModule(checkout, 'src/shared/pairing.ts'),
-    import('../../../src/shared/pairing')
+    import('../../../src/shared/remote-runtime/pairing/pairing')
   ])
   released = pairingModuleOf(oldModule)
   current = pairingModuleOf(newModule)

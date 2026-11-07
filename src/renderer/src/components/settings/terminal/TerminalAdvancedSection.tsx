@@ -2,13 +2,13 @@ import { TerminalLimitSetting } from './session-management/TerminalLimitSetting'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal-word-separator'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal/input/terminal-word-separator'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
   normalizeDesktopTerminalScrollbackRows,
   DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS
-} from '../../../../../shared/terminal-scrollback-policy'
+} from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../../ui/toggle-group'
@@ -23,7 +23,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './platform/terminal-windows-search'
 import { TerminalMacKeyboardSection } from './platform/TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 type TerminalAdvancedSectionProps = {
   hostScope?: SettingsHostScope

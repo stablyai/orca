@@ -9,7 +9,7 @@ import {
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
 import type { RuntimeDocPreviewReadParams } from './doc-preview-file-reader'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const TIMEOUT_MS = 15_000
 const UPDATE_REQUIRED_MESSAGE =

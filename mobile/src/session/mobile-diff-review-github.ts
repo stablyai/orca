@@ -1,7 +1,10 @@
 import type { GitHubPRFile } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { getPRInlineCommentPlacement } from '../../../src/shared/github/pr-inline-comment-placement'
-import { groupPRComments, type PRCommentGroup } from '../../../src/shared/pr-comment-groups'
+import {
+  groupPRComments,
+  type PRCommentGroup
+} from '../../../src/shared/source-control/review-comments/pr-comment-groups'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 

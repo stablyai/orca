@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
@@ -7,7 +8,10 @@ import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
-import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
+import {
+  NotesSendMenu,
+  type NotesSendMenuScope
+} from '../editor/review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 
 export function getRenderSignature(
@@ -130,6 +134,7 @@ export function renderDiffCommentZoneCard(
 }
 
 export type DiffCommentDraftCardContext = {
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
@@ -144,6 +149,7 @@ export function renderDiffCommentDraftCard(
   root: Root,
   draft: { lineNumber: number; startLine?: number },
   {
+    imageUploadAddress,
     placeholder,
     submitLabel,
     submittingLabel,
@@ -157,6 +163,7 @@ export function renderDiffCommentDraftCard(
   root.render(
     <TooltipProvider delayDuration={400}>
       <DiffCommentDraftCard
+        imageUploadAddress={imageUploadAddress}
         lineNumber={draft.lineNumber}
         startLine={draft.startLine}
         placeholder={placeholder}

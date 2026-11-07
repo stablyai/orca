@@ -1,5 +1,5 @@
 /** Whether the move orchestrator still has a reason to keep a distro's record (D3a-2 pruning). */
-import { readWslHostDeployments } from '../../../shared/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { Store } from '../loading-store/store'

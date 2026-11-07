@@ -45,14 +45,16 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, key) => values?.[key] ?? '')
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraGetIssueForTarget: async () => null,
   jiraIssueCommentsForTarget: async () => [],
   jiraListTransitionsForTarget: mocks.transitions,
   jiraListPrioritiesForTarget: async () => [],
-  jiraListAssignableUsersForTarget: async () => [],
   jiraUpdateIssueForTarget: mocks.update,
   jiraAddIssueCommentForTarget: async () => ({ ok: true })
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
 }))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>

@@ -1,4 +1,8 @@
-import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import {
+  RECIPE_VM_REFUSAL_CODES,
+  RecipeVmWakeUnavailableError
+} from '../../../shared/remote-runtime/recipe-vm-wake'
+import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
 import {
@@ -11,7 +15,7 @@ import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connec
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -32,7 +36,7 @@ import {
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
 import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
-import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
@@ -111,6 +115,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...RECIPE_VM_REFUSAL_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
@@ -191,6 +196,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof RecipeVmWakeUnavailableError) {
+    return errorResponse(id, meta, error.code, message)
   }
   if (
     error instanceof TerminalSplitOutcomeError ||

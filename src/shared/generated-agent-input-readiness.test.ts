@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitForGeneratedAgentInput } from './generated-agent-input-readiness'
+import { admitsGeneratedInput } from './generated-agent-input-admission'
 
 const MARKER = '\x1b[?2004h\x1b[?2031h❯\u00a0'
 
@@ -144,5 +145,19 @@ describe('generated input admission', () => {
     )
     await vi.advanceTimersByTimeAsync(5000)
     await expect(result).resolves.toBe(false)
+  })
+
+  // A packaged or versioned agent binary is that agent where quiet alone admits input.
+  it('admits a quiet screen in front of a packaged or versioned binary of the expected agent', () => {
+    const quietIn = (foreground: string, agent: 'codex' | 'claude' | 'grok') =>
+      admitsGeneratedInput({
+        agent,
+        screen: 'unknown',
+        process: { known: true, foreground, hasChildProcesses: false },
+        quiet: true
+      })
+    expect(quietIn('codex-aarch64-ap', 'codex')).toBe(true)
+    expect(quietIn('grok-0.2.51', 'grok')).toBe(true)
+    expect(quietIn('codex-aarch64-ap', 'claude')).toBe(false)
   })
 })

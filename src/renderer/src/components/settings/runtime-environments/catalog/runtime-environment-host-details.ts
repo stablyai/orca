@@ -14,11 +14,12 @@ import {
 } from '../../../../../../shared/worktree-runtime-capabilities'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/task-source-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import '@/runtime/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   runtimeHostConnectionState,
-  type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
+  type RuntimeHostConnectionState as RuntimeServerConnectionState
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 export type RuntimeHostDetails = {
   status: 'loading' | 'ready' | 'error'
@@ -172,8 +173,6 @@ export function isRuntimeEnvironmentRemovalBlocked(
 ): boolean {
   return activeRuntimeEnvironmentId === environmentId
 }
-
-export type RuntimeServerConnectionState = RuntimeHostConnectionState
 
 export function getRuntimeServerConnectionState(
   details: RuntimeHostDetails | undefined

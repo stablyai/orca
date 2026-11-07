@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,

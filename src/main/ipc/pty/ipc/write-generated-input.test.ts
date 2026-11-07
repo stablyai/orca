@@ -13,6 +13,7 @@ vi.mock('../pty-host-bindings', () => ({
       h.handlers.set(channel, handler),
     handle: (channel: string, handler: (event: unknown, args: unknown) => unknown) =>
       h.handlers.set(channel, handler),
+    removeHandler: (channel: string) => h.handlers.delete(channel),
     removeAllListeners: vi.fn()
   })
 }))

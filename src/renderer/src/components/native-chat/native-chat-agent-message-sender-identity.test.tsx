@@ -16,7 +16,7 @@ import {
   type AgentSessionConversationNames
 } from '../../../../shared/agent-session/agent-session-conversation-names'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
@@ -48,6 +48,12 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
       getNamingSnapshot: () => feed.names,
       getSessionObservation: () => (feed.live ? 'live' : 'unverifiable'),
       subscribe: (listener: () => void) => {
+        feed.listeners.add(listener)
+        return () => {
+          feed.listeners.delete(listener)
+        }
+      },
+      subscribeSession: (_sessionId: string, listener: () => void) => {
         feed.listeners.add(listener)
         return () => {
           feed.listeners.delete(listener)

@@ -21,6 +21,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   xhigh: 'Extra high',
   max: 'Max',
   ultra: 'Ultra',
+  ultracode: 'Ultracode',
   minimalShort: 'Min',
   mediumShort: 'Med',
   xhighShort: 'XHigh',
@@ -51,7 +52,8 @@ const LEVEL_IDS = {
   high: 'high',
   xhigh: 'xhigh',
   max: 'max',
-  ultra: 'ultra'
+  ultra: 'ultra',
+  ultracode: 'ultracode'
 } as const satisfies Record<string, NativeChatSessionOptionCopyId>
 
 const SHORT_LEVEL_IDS = {

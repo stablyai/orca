@@ -114,6 +114,7 @@ describe('active agent note send', () => {
     )
   })
 
+  // Add to chat reuses this guarded paste but leaves the text in the agent's input for the user.
   it('refuses explicit targets when an older runtime cannot verify agent status', async () => {
     const methods: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
@@ -437,5 +438,59 @@ describe('active agent note send', () => {
         noteTarget: { tabId: 'web-terminal-tab-9', leafId: OTHER_LEAF_ID }
       })
     ).resolves.toEqual({ status: 'sent' })
+  })
+
+  // Add to chat: the notes are staged in the agent's input, editable, with no Enter.
+  it('stages notes in an explicit target without Enter when told not to submit', async () => {
+    testState.sendGenerated.mockResolvedValue('staged')
+    const methods: string[] = []
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      methods.push(method)
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-2',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'working' } }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: '> quote',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID },
+        submit: false
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
+    expect(testState.sendGenerated).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'term-2',
+      expect.objectContaining({ text: '> quote', submit: false, intent: 'running' }),
+      undefined,
+      undefined,
+      undefined,
+      { end: expect.any(Number) }
+    )
   })
 })

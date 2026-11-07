@@ -5,18 +5,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { codexScriptedChild } from '../../codex/codex-scripted-child.test-fixture'
+import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
-import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
+import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

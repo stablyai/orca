@@ -2,7 +2,7 @@ import type {
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
@@ -19,6 +19,7 @@ import { aiVaultScanWorkload, noteAiVaultScanReading } from './ai-vault-scan-pro
 import { yieldScanInventory } from './session-scanner-scope-inventory'
 import { prepareScopeScan, scanInScopeSessions } from './session-scanner-scope-walk'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
+import { withAntigravityArtifactPaths } from './scanners/antigravity/antigravity-session-artifacts'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
@@ -26,7 +27,7 @@ import {
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { clampPositiveInteger } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
+import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
 import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-scan-scope'
 
@@ -127,7 +128,10 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         span.setAttribute('issues', issues.length)
 
         return {
-          sessions: mergeSessions(cappedSessions, scopeSessions),
+          sessions: withAntigravityArtifactPaths(
+            mergeSessions(cappedSessions, scopeSessions),
+            discoveries
+          ),
           issues: issues.map((issue) => ({ executionHostId, ...issue })),
           scannedAt: new Date().toISOString()
         }

@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
-import type { ParkedTerminalTabWatcherSyncEntry } from './terminal-pane/terminal-parked-tab-watchers'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { ParkedTerminalTabWatcherSyncEntry } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 type WatcherController = Parameters<typeof useTerminalWatcherEffects>[0]
 
@@ -21,13 +22,20 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'unverifiable'
 }))
-vi.mock('./terminal-pane/terminal-parked-tab-watchers', () => ({
+vi.mock('./terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: mocks.canCover,
-  disposeAllParkedTerminalWatchers: vi.fn(),
-  pruneParkedTerminalWatchers: mocks.prune,
-  syncParkedTerminalTabWatchersForWorkspaces: mocks.sync,
-  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids)
+  syncParkedTerminalTabWatchersForWorkspaces: mocks.sync
 }))
+
+vi.mock(
+  './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    disposeAllParkedTerminalWatchers: vi.fn(),
+    pruneParkedTerminalWatchers: mocks.prune,
+    terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids)
+  })
+)
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const SURFACE_COUNT = 423

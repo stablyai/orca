@@ -58,24 +58,15 @@ describe('OpenCode worker model execution host', () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version: '1.18.30',
       pluginApi: 'v1',
+      v1SessionPolicyFiltersTools: true,
       promptMode: 'submit'
     })
-  })
-  it('checks only the version route for a model in a local folder', async () => {
-    expect(await probe(host())).toBe(true)
-    expect(probeOpenCodeLaunchCapabilities).toHaveBeenCalledExactlyOnceWith({
-      command: '/tmp/private-opencode',
-      agent: 'opencode',
-      cwd: '/tmp/folder',
-      env: expect.objectContaining({ OPENCODE_CONFIG_DIR: '/tmp/private-config' }),
-      hostIdentity: 'host-1'
-    })
-    expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
   it('refuses an unsafe version before model discovery or worker creation', async () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version: '2.0.14',
       pluginApi: 'v2',
+      v1SessionPolicyFiltersTools: false,
       promptMode: 'unknown'
     })
     await expect(probe(host())).rejects.toMatchObject({

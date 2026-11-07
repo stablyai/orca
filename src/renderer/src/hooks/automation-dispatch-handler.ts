@@ -1,9 +1,10 @@
+import { automationTerminalLaunchInputs } from '../../../shared/automation-launch-setup'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { reusedAutomationPromptRefusal } from '../../../shared/generated-agent-input-notice'
-import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
+import { launchAgentBackgroundSession } from '@/lib/agent-session/launch/background/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
@@ -140,13 +141,16 @@ export async function handleAutomationDispatchRequest({
               }
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
+              const handleReusableAgentStatus = (payload: {
+                state: string
+                interrupted?: boolean
+              }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
                 if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
+                  completion.handleAgentDone(payload)
                 }
               }
               const reuseCompletionStartedAt = Date.now()
@@ -203,7 +207,7 @@ export async function handleAutomationDispatchRequest({
       resolvedTarget: { worktree, repo: resolved.repo },
       prompt: automation.prompt,
       ...(promptOperationId ? { promptOperationId } : {}),
-      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+      ...automationTerminalLaunchInputs(automation),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,
@@ -213,7 +217,7 @@ export async function handleAutomationDispatchRequest({
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)
@@ -240,6 +244,9 @@ export async function handleAutomationDispatchRequest({
         terminalPaneKey: result.paneKey,
         terminalPtyId: result.ptyId,
         precheckResult: resolved.context.precheckResult,
+        ...(resolved.context.setupSkippedReason
+          ? { setupSkippedReason: resolved.context.setupSkippedReason }
+          : {}),
         error: null
       })
       await completion.settlePendingAfterDispatch()

@@ -1,4 +1,4 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { AgentSessionAssociationObservation } from '../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import { getRuntimeEnvironmentTransportGeneration } from '../runtime-environments/runtime-environment-transport-generation'
 

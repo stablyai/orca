@@ -8,7 +8,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -54,6 +54,15 @@ export const uiClipboardAndWindowControlsApi = {
   },
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
+  },
+  onTerminalPaneMoveToNewTabRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:terminalPaneMoveToNewTabRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalPaneMoveToNewTabRequest', listener)
+  },
+  replyTerminalPaneMoveToNewTab: (reply) => {
+    ipcRenderer.send('ui:terminalPaneMoveToNewTabReply', reply)
   },
   onWorkspaceSleep: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>

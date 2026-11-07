@@ -6,7 +6,7 @@ import {
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
-} from '../../agent-process-recognition'
+} from '../../agent-status/process/agent-process-recognition'
 
 const SLEEP_PREFIX =
   /^[ \t]*(?:sleep|\/bin\/sleep|\/usr\/bin\/sleep)[ \t]+(?:\d+(?:\.\d+)?|\.\d+)[smhd]?[ \t]*&&[ \t]*/

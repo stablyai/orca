@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  waitForTranscriptIdle
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
   readTimedRuntimeFixture,
@@ -19,7 +22,7 @@ import {
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
   type TuiIdleEvaluationInput
-} from './tui-idle-evidence'
+} from './terminal/wait/tui-idle-evidence'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
 vi.mock('electron', () => ({

@@ -5,7 +5,7 @@ import type {
   BrowserExtensionActionResult,
   BrowserExtensionListing,
   BrowserExtensionListResult
-} from '../../../../../../shared/browser-extension-types'
+} from '../../../../../../shared/browser/extensions/browser-extension-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'

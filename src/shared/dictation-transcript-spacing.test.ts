@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { formatFinalTranscriptSegment } from './dictation-transcript-spacing'
+import { dictationSeparators } from './dictation-transcript-spacing'
 
-describe('formatFinalTranscriptSegment', () => {
-  it('adds a boundary between word-like streaming final segments', () => {
-    expect(formatFinalTranscriptSegment('world', 'hello')).toBe(' world')
+const place = (before: string, text: string, after: string): string => {
+  const { leading, trailing } = dictationSeparators(before, text, after)
+  return `${before}${leading}${text}${trailing}${after}`
+}
+
+describe('dictationSeparators', () => {
+  it('spaces dictated words from the words on either side', () => {
+    expect(place('hello', 'world', '')).toBe('hello world')
+    expect(place('fix the ', 'flaky', 'test')).toBe('fix the flaky test')
+    expect(place('Hello.', 'World', '')).toBe('Hello. World')
+    expect(place('hello,', 'world', '')).toBe('hello, world')
   })
 
-  it('adds a boundary after sentence and phrase punctuation', () => {
-    expect(formatFinalTranscriptSegment('World', 'Hello.')).toBe(' World')
-    expect(formatFinalTranscriptSegment('world', 'hello,')).toBe(' world')
-  })
-
-  it('does not add a boundary before punctuation', () => {
-    expect(formatFinalTranscriptSegment('.', 'hello')).toBe('.')
-  })
-
-  it('does not add a boundary around CJK final segments', () => {
-    expect(formatFinalTranscriptSegment('世界', '你好')).toBe('世界')
+  it('does not add a space before punctuation or around CJK', () => {
+    expect(place('hello', '.', '')).toBe('hello.')
+    expect(place('你好', '世界', '')).toBe('你好世界')
   })
 })

@@ -22,10 +22,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
-vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
+vi.mock('@/lib/agent-session/resume/history/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -56,15 +56,19 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { useAppStore } from '@/store'
-import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer/src/lib/agent-session/structured-agent-session-provisional-tab'
-import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/launch-work-item-direct-agent-routing'
+import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
-import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
+import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -747,27 +751,32 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
   })
 })
 
-it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+it('keeps an explicit chat and its prompt when its host declines startup', async () => {
   seedPairedServerWorkspace()
-  for (const supported of [false, true]) {
-    mocks.toastError.mockClear()
-    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
-    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
-    if (supported) {
-      mocks.createSupport
-        .mockResolvedValueOnce({ supported: true })
-        .mockResolvedValueOnce({ supported: false })
-    }
-    const onHostDeclined = vi.fn()
-    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
-    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
-    expect(onHostDeclined).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
-    if (!supported) {
-      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
-        delivered: false,
-        failureNotified: true
-      })
-    }
+  mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+  const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+  const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {} })
+  if (!launch?.tab) {
+    throw new Error('An explicit chat must open before its host answers')
   }
+
+  await expect(launch.settlement).resolves.toMatchObject({
+    kind: 'failed',
+    error: { code: 'structured_agent_session_unsupported' }
+  })
+  await expect(launch.promptDeliveryResult).resolves.toMatchObject({
+    delivered: false,
+    inComposer: true
+  })
+  expect(
+    readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(launch.tab.entityId)).text
+  ).toBe('fix the flaky test')
+  await vi.waitFor(() =>
+    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({
+        contentType: 'agent-session',
+        executionHostId: 'runtime:server-1'
+      })
+    ])
+  )
 })

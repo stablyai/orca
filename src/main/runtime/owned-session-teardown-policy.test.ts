@@ -9,20 +9,21 @@ import {
   OWNED_SESSION_KINDS,
   OWNED_SESSION_TEARDOWN,
   type OwnedSessionKind
-} from './owned-session-teardown-policy'
+} from './workspaces/removal/owned-session-teardown-policy'
 import {
   getRuntimeBrowserPageRegistry,
   type RuntimeBrowserClientPage
-} from './runtime-browser-page-registry'
+} from './browser/client-pages/runtime-browser-page-registry'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 function makeRuntime() {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(

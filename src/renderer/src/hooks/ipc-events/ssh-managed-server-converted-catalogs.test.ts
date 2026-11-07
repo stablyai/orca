@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -8,7 +8,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore, makeWorktree } from '../../store/slices/store-test-helpers'
-import { buildBrowserPage } from '../../store/slices/browser-page-records'
+import { buildBrowserPage } from '../../store/slices/browser/pages/browser-page-records'
 
 const store = createTestStore()
 vi.mock('../../store', () => ({ useAppStore: store }))

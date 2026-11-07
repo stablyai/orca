@@ -4,7 +4,7 @@ import type { OrcadManagedPendingMigrationRow } from '../../../../../../shared/o
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'

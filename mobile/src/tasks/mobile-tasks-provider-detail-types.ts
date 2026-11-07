@@ -3,9 +3,9 @@ import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
   RpcClient,
-  HostedReviewDecision,
   LinearMobileIssue
 } from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
   id: string
@@ -33,6 +33,7 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  headSha?: string
   isCrossRepository?: boolean
   additions?: number
   deletions?: number
@@ -177,6 +178,8 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
+  // Set only by hosts that read GitHub GraphQL; GitLab, REST fallbacks and older hosts never send it.
+  viewerDidAuthor?: boolean
   body: string
   createdAt?: string
   url?: string

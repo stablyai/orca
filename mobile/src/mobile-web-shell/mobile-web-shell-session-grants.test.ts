@@ -8,7 +8,7 @@ import {
   MANIFEST,
   MANIFEST_WIRE,
   PAGE_ROUTES,
-  afterCacheRead,
+  awaitingManifest,
   manifestFacts,
   run,
   LINK_LOST
@@ -25,7 +25,7 @@ describe('falling back to the cached generation after a failed download', () => 
   })
 
   it('opens it under its own grants, not the ones the newer manifest declared', () => {
-    const fetching = run(afterCacheRead(cachedOnlyNavigate).session, {
+    const fetching = run(awaitingManifest(cachedOnlyNavigate).session, {
       type: 'manifest-read',
       manifest: manifestWithClipboard
     })
@@ -36,7 +36,7 @@ describe('falling back to the cached generation after a failed download', () => 
   })
 
   it('carries a verb declared in the manifest through to the session grants', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: manifestFacts({
         ...MANIFEST_WIRE,
@@ -76,23 +76,29 @@ describe('the route grants a downloaded generation is activated under', () => {
   }
 
   it('is the manifest it downloaded, on a cold cache', () => {
-    const step = activate(afterCacheRead(null).session, DOWNLOADED)
+    const step = activate(awaitingManifest(null).session, DOWNLOADED)
     expect(step.session.state.kind).toBe('ready')
     expect(step.session.pageRouteGrants).toEqual(TWO_ROUTES)
   })
 
   it('is the manifest it matched, on a cached hit', () => {
-    const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    const step = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: MANIFEST
+    })
     expect(step.session.state.kind).toBe('activating')
     expect(step.session.pageRouteGrants).toEqual(PAGE_ROUTES)
   })
 
   it("replaces the previous generation's entries when the generation changes", () => {
     // Seed older pairs so a missed update exposes stale grants as well as empty defaults.
-    const first = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    const first = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: MANIFEST
+    })
     expect(first.session.pageRouteGrants).toEqual(PAGE_ROUTES)
     const step = activate(
-      run(first.session, { type: 'retry-pressed' }, { type: 'cache-read', generation: CACHED })
+      run(first.session, { type: 'retry-pressed' }, { type: 'cache-read', generation: null })
         .session,
       DOWNLOADED
     )

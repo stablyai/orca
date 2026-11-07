@@ -1,12 +1,12 @@
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
-import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/structured-agent-session-status-observation'
+import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import {
   clampConversationNameFirstPrompt,
   conversationNameSeed
-} from '../../shared/conversation-name-generation'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -18,11 +18,11 @@ import {
 import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure
-} from './agent-session-wire/structured-agent-session-host-types'
+} from './agent-session-wire/host/structured-agent-session-host-types'
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from './agent-session-wire/structured-agent-session-logger'
+} from './agent-session-wire/host/structured-agent-session-logger'
 
 /** null means unavailable/canceled: no failure to display or retry. */
 export type StructuredChatNameGeneration =

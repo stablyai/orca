@@ -1,12 +1,14 @@
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './terminal-derived-agent-facts'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
-import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
-import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
+import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
+import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
+import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
+  private readonly publishedOutputRings = new TerminalPublishedOutputRings()
 
   protected getPtyLifecycleSignal(ptyId: string): AbortSignal {
     let controller = this.ptyLifecycleCancellation.get(ptyId)
@@ -118,8 +120,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
+    // A phone that saw the previous process gets a fresh snapshot, never a resume across the respawn.
+    this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
 
   synchronizePtyOutputSequenceFromProvider(
@@ -211,6 +214,15 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     listener: (data: string, meta?: RuntimeTerminalDataMeta) => void
   ): () => void {
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
+  }
+
+  /** Keeps this PTY's published output from now on, so a phone stream can later resume from it. */
+  retainPublishedTerminalOutput(ptyId: string): ReturnType<TerminalPublishedOutputRings['retain']> {
+    return this.publishedOutputRings.retain(ptyId, {
+      seq: this.getPtyOutputSequence(ptyId),
+      size: () => this.getTerminalSize(ptyId),
+      subscribe: (listener) => this.subscribeToTerminalData(ptyId, listener)
+    })
   }
 
   readRecentTerminalOutput(ptyId: string): string | undefined {

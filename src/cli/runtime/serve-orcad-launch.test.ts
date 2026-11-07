@@ -60,6 +60,22 @@ describe('orca serve asking the app which host to run', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('asks the app on packaged macOS when orcad is requested explicitly', async () => {
+    const selection = {
+      kind: 'orcad' as const,
+      runtime: '/rt/node',
+      entry: '/slot/orcad.js',
+      version: '1'
+    }
+    const run = answering(formatServeRuntimeSelection(selection))
+    expect(
+      await resolveLocalServeRuntime(
+        { ...options, usesMacUpdateHandoff: true, env: { ORCA_SERVE_RUNTIME: 'orcad' } },
+        run
+      )
+    ).toEqual(selection)
+  })
+
   it('selects Electron with a reason when the app gives no answer', async () => {
     expect(await resolveLocalServeRuntime(options, answering('', 1))).toEqual({
       kind: 'electron',
@@ -79,6 +95,7 @@ describe('orca serve asking the app which host to run', () => {
       orcadServeArgs({
         json: true,
         port: '6768',
+        bind: '127.0.0.1',
         pairingAddress: '10.0.0.5',
         noPairing: true,
         mobilePairing: true,
@@ -87,7 +104,7 @@ describe('orca serve asking the app which host to run', () => {
       })
     ).toEqual([
       '--bind',
-      '0.0.0.0',
+      '127.0.0.1',
       '--json',
       '--port',
       '6768',
@@ -100,6 +117,30 @@ describe('orca serve asking the app which host to run', () => {
       '/work/app'
     ])
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
+  })
+
+  it('renders the same argv as before --bind existed when --bind is omitted', () => {
+    const options = { json: true, port: '6768', pairingAddress: '10.0.0.5', mobilePairing: true }
+    const expectedOrcad = [
+      '--bind',
+      '0.0.0.0',
+      '--json',
+      '--port',
+      '6768',
+      '--pairing-address',
+      '10.0.0.5',
+      '--mobile-pairing'
+    ]
+    expect(orcadServeArgs(options)).toEqual(expectedOrcad)
+    expect(orcadServeArgs({ ...options, bind: null })).toEqual(expectedOrcad)
+    expect(serveOptionArgs({ ...options, bind: null }, '--serve-')).toEqual([
+      '--serve-json',
+      '--serve-port',
+      '6768',
+      '--serve-pairing-address',
+      '10.0.0.5',
+      '--serve-mobile-pairing'
+    ])
   })
 
   it("hands orcad the app's browser client directory when the app has one", () => {
@@ -121,10 +162,12 @@ describe('orca serve asking the app which host to run', () => {
         {
           json: true,
           port: '6768',
+          bind: '127.0.0.1',
           pairingAddress: '10.0.0.5',
           noPairing: true,
           mobilePairing: true,
           grantDesktopControl: true,
+          allowPublic: true,
           recipeJson: true,
           projectRoot: '/work/app'
         },
@@ -134,11 +177,14 @@ describe('orca serve asking the app which host to run', () => {
       '--serve-json',
       '--serve-port',
       '6768',
+      '--serve-bind',
+      '127.0.0.1',
       '--serve-pairing-address',
       '10.0.0.5',
       '--serve-no-pairing',
       '--serve-mobile-pairing',
       '--serve-grant-desktop-control',
+      '--serve-allow-public',
       '--serve-recipe-json',
       '--serve-project-root',
       '/work/app'

@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Matches the renderer's other catalog-style cache TTLs (checks, work items, Jira). */
 export const RUNTIME_CATALOG_STALE_MS = 60_000

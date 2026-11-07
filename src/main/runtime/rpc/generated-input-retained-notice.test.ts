@@ -1,8 +1,8 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
-import { GENERATED_INPUT_METHODS } from './methods/generated-input'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
+import { GENERATED_INPUT_METHODS } from './methods/terminal/generated-input'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
 import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
 import {
@@ -12,7 +12,7 @@ import {
 import type * as GeneratedAgentInputNoticeModule from '../../../shared/generated-agent-input-notice'
 import { splitGeneratedInputText } from '../../../shared/generated-terminal-input'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 
 const { ROWS } = vi.hoisted(() => ({
   ROWS: [

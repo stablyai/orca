@@ -8,7 +8,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../shared/terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../shared/terminal/input/terminal-input'
 import { useAppStore } from '../store'
 import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
 

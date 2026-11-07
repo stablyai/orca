@@ -1,4 +1,5 @@
 import type { ModelManager } from './model-manager'
+import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { startSttDictation } from './stt-session-start'
 import { createSttSessionState, type SttSessionState } from './stt-session-state'
 import { prepareSttModelForDeletion, stopSttDictation } from './stt-session-stop'
@@ -17,37 +18,36 @@ export type SttEventSink = (event: SttEvent) => void
 export class SttService {
   private readonly state: SttSessionState
 
-  constructor(modelManager: ModelManager) {
-    this.state = createSttSessionState(modelManager)
+  constructor(modelManager: ModelManager, spawnWorker: SpawnSttWorkerProcess) {
+    this.state = createSttSessionState(modelManager, spawnWorker)
   }
 
   startDictation(
     modelId: string,
     sink: SttEventSink,
     hotwordsFilePath?: string,
-    owner = 'desktop'
+    owner = 'desktop',
+    language?: string
   ): Promise<void> {
-    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner)
+    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner, language)
   }
 
-  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
+  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
     if (this.state.stopping) {
-      return
+      return false
     }
     const currentOwner = this.state.activeOwner ?? this.state.startingOwner
     if (!currentOwner) {
-      return
+      return false
     }
     if (currentOwner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
     if (this.state.cloudSession) {
-      this.state.cloudSession.feedAudio(samples, sampleRate)
-      return
+      return this.state.cloudSession.feedAudio(samples, sampleRate)
     }
-    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
-      samples.buffer as ArrayBuffer
-    ])
+    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate })
+    return false
   }
 
   stopDictation(

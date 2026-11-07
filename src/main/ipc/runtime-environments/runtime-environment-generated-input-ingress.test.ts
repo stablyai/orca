@@ -13,15 +13,18 @@ vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn(), getAllWindows: () => [] },
   ipcMain: { handle: h.handle, on: vi.fn(), removeHandler: vi.fn(), removeAllListeners: vi.fn() }
 }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveEnvironment: () => ({
-    id: 'env',
-    pairingRevision: 1,
-    createdAt: 1,
-    runtimeId: 'host-runtime'
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveEnvironment: () => ({
+      id: 'env',
+      pairingRevision: 1,
+      createdAt: 1,
+      runtimeId: 'host-runtime'
+    })
   })
-}))
+)
 // Account preparation a test holds open: the text must already be held while it waits.
 vi.mock('../../wsl/orcad/wsl-orcad-account-env', () => ({
   withWslOrcadAccountEnv: async (args: { params: unknown }) => {

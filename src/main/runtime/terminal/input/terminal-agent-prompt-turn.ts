@@ -1,4 +1,4 @@
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
@@ -6,12 +6,12 @@ import type {
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import {
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 
 /** A written prompt's turn observation: outside the generated-input operation's deadline, inside

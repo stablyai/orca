@@ -2,7 +2,6 @@ import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../src/shared/agent-launch/s
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../transport/rpc-client'
 import {
-  clearMobileNativeChatInputStale,
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
@@ -25,14 +24,6 @@ function makeClient(accepted = true): Pick<RpcClient, 'sendRequest'> {
 describe('mobile native chat stale input markers', () => {
   beforeEach(() => {
     resetMobileNativeChatStaleInputForTests()
-  })
-
-  it('tracks each terminal independently', () => {
-    markMobileNativeChatInputStale('term-1')
-    expect(isMobileNativeChatInputStale('term-1')).toBe(true)
-    expect(isMobileNativeChatInputStale('term-2')).toBe(false)
-    clearMobileNativeChatInputStale('term-1')
-    expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
   it('writes nothing when the terminal is not marked', async () => {

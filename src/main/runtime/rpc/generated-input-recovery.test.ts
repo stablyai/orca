@@ -1,7 +1,7 @@
 import './unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { GeneratedAgentInputNotices } from '../generated-agent-input-notices'
-import { GENERATED_INPUT_METHODS } from './methods/generated-input'
+import { GENERATED_INPUT_METHODS } from './methods/terminal/generated-input'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
 import {
   createGeneratedInputNoticeFeed,

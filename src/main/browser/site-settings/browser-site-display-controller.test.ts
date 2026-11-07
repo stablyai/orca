@@ -9,7 +9,10 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../shared/browser-page-zoom'
 import { BrowserSiteDisplayController } from './browser-site-display-controller'
-import { configureBrowserSiteDisplayStore } from './browser-site-display-store'
+import {
+  configureBrowserSiteDisplayStore,
+  updateBrowserSiteDisplay
+} from './browser-site-display-store'
 
 type FakeGuest = Electron.WebContents &
   EventEmitter & { url: string; level: number; mediaSent: unknown[] }
@@ -138,47 +141,88 @@ describe('BrowserSiteDisplayController zoom', () => {
 })
 
 describe('BrowserSiteDisplayController color scheme', () => {
-  it('sets the site scheme as each page commits and clears it once on leaving', () => {
+  it('uses chat media for document guests without changing zoom, and upgrades browser registration', () => {
     const controller = new BrowserSiteDisplayController()
-    const guest = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(guest, null)
-    controller.setColorScheme(guest.id, 'dark')
+    const preview = fakeGuest('orca-preview://grant/theme.html')
+    preview.level = 1
+    controller.onGuestDocumentStart(preview, {
+      url: preview.url,
+      profileId: null,
+      colorScheme: 'dark'
+    })
+    controller.onMainFrameNavigationCommitted(preview.id)
+    expect(preview.mediaSent).toEqual(['dark', 'dark'])
+    expect(preview.level).toBe(1)
+    expect(preview.listenerCount('dom-ready')).toBe(0)
 
-    controller.zoomPage(guest.id, 'in')
-    commit(controller, guest, 'https://docs.example.com/')
-    commit(controller, guest, 'https://news.example.com/')
-    commit(controller, guest, 'https://github.com/x')
-
-    expect(guest.mediaSent).toEqual(['dark', '', 'dark'])
+    const local = fakeGuest('file:///chat-scratch/theme.html')
+    controller.onGuestDocumentStart(local, {
+      url: local.url,
+      profileId: 'work',
+      colorScheme: 'dark'
+    })
+    controller.onGuestRegistered(local, 'work')
+    controller.setColorScheme(local.id, 'light')
+    controller.setGuestColorSchemeFallback(local, 'light')
+    controller.setGuestColorSchemeFallback(local, 'dark')
+    expect(local.mediaSent.at(-1)).toBe('light')
+    expect(controller.getPageDisplay(local.id)?.colorScheme).toBe('light')
+    controller.setColorScheme(local.id, null)
+    expect(local.mediaSent.at(-1)).toBe('dark')
+    controller.setGuestColorSchemeFallback(local, undefined)
+    commit(controller, local, 'https://ordinary.example/')
+    expect(local.mediaSent.slice(-2)).toEqual(['dark', ''])
+    controller.onGuestRetired(preview.id)
+    expect(preview.debugger.isAttached()).toBe(false)
   })
 
-  it('gives a restored tab its scheme when its first load started before it registered', () => {
-    const controller = new BrowserSiteDisplayController()
-    const first = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(first, null)
-    controller.setColorScheme(first.id, 'light')
-
-    const restored = fakeGuest('')
-    controller.onGuestRegistered(restored, null)
-    restored.url = 'https://github.com/restored'
-    controller.onMainFrameNavigationCommitted(restored.id)
-
-    expect(restored.mediaSent).toEqual(['light'])
-  })
-
-  it('attaches again after DevTools detaches the debugger', () => {
-    const controller = new BrowserSiteDisplayController()
-    const guest = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(guest, null)
-    controller.setColorScheme(guest.id, 'dark')
-
-    guest.debugger.detach()
-    expect(guest.debugger.isAttached()).toBe(false)
-    commit(controller, guest, 'https://github.com/next')
-
-    expect(guest.debugger.isAttached()).toBe(true)
-    expect(guest.mediaSent.at(-1)).toBe('dark')
-  })
+  it.each([
+    { order: 'read-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
+    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
+    { order: 'read-first', profileId: 'default', colorScheme: 'dark', saved: 'light' },
+    { order: 'registration-first', profileId: 'default', colorScheme: 'dark', saved: 'light' }
+  ] as const)(
+    'keeps actual $profileId precedence across $order, reload and debugger loss',
+    ({ order, profileId, colorScheme, saved }) => {
+      const controller = new BrowserSiteDisplayController()
+      updateBrowserSiteDisplay('default', 'file://', { colorScheme: 'light' })
+      updateBrowserSiteDisplay('work', 'file://', { colorScheme: 'dark' })
+      const guest = fakeGuest('')
+      const document = {
+        url: 'file:///chat-scratch/chart.html',
+        profileId,
+        colorScheme
+      }
+      const rendererProfile = profileId === 'work' ? 'default' : 'work'
+      if (order === 'registration-first') {
+        controller.onGuestRegistered(guest, rendererProfile)
+      }
+      controller.onGuestDocumentStart(guest, document)
+      expect(guest.mediaSent.at(-1)).toBe(saved)
+      controller.onGuestRegistered(guest, rendererProfile)
+      expect(guest.mediaSent.at(-1)).toBe(saved)
+      guest.url = document.url
+      controller.onGuestRegistered(guest, rendererProfile)
+      expect(controller.getPageDisplay(guest.id)?.colorScheme).toBe(saved)
+      expect(guest.listenerCount('dom-ready')).toBe(1)
+      expect(guest.debugger.listenerCount('detach')).toBe(1)
+      guest.debugger.detach()
+      expect(guest.debugger.isAttached()).toBe(false)
+      const before = guest.mediaSent.length
+      controller.onGuestDocumentStart(guest, document)
+      expect(guest.mediaSent.slice(before)).toEqual([saved])
+      expect(guest.debugger.isAttached()).toBe(true)
+      controller.setColorScheme(guest.id, null)
+      expect(guest.mediaSent.at(-1)).toBe(colorScheme)
+      const replacement = fakeGuest('')
+      controller.onGuestDocumentStart(replacement, document)
+      expect(replacement.mediaSent).toEqual([colorScheme])
+      controller.onGuestRetired(guest.id)
+      controller.onGuestRetired(replacement.id)
+      expect(guest.listenerCount('dom-ready')).toBe(0)
+      expect(guest.debugger.listenerCount('detach')).toBe(0)
+    }
+  )
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))

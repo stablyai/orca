@@ -6,8 +6,8 @@ import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
   recognizeAgentProcess
-} from './agent-process-recognition'
-import { isShellProcess } from './shell-process-detection'
+} from './agent-status/process/agent-process-recognition'
+import { isShellProcess } from './agent-status/process/shell-process-detection'
 
 /** What could be read about the process consuming the PTY. Unknown (an old host, Windows) is never
  *  a refusal; a proven shell or another agent is. */

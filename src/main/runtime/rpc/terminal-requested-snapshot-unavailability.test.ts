@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 type SerializedBuffer = { data: string; cols: number; rows: number } | null
 type SnapshotStartPayload = Record<string, unknown>

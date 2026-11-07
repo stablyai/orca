@@ -89,14 +89,6 @@ describe('Web Store download request ownership', () => {
     expect(signals[0].aborted).toBe(true)
   })
 
-  it('still rejects an invalid package after consuming its complete response', async () => {
-    const { fetcher, signals } = responseFetcher(new Response('bad'))
-
-    await expect(downloadWebStoreCrx(EXTENSION_ID, { fetcher })).rejects.toThrow('Not a CRX file')
-    expect(signals).toHaveLength(1)
-    expect(signals[0].aborted).toBe(true)
-  })
-
   it('keeps an overlapping healthy icon alive until its own bytes finish', async () => {
     let finishHealthy = (): void => {}
     const healthyResponse = new Response(

@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { GeneratedInputNotices } from './GeneratedInputNotices'
 import { GeneratedInputNoticeList } from './generated-input-notice-list'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 
 const writeText = vi.hoisted(() => vi.fn(async () => {}))
 // Banner renders, for the population contract below.

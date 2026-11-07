@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { TerminalLayoutSnapshot } from './workspace-layout/terminal-tab-types'
 import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleForLeaf,

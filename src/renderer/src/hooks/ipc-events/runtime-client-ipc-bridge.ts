@@ -1,11 +1,7 @@
-import { isWebClientLocation } from '@/lib/web-client-location'
-import {
-  withEnvironmentGeneratedInputNotices,
-  subscribeLocalGeneratedInputNotices
-} from '@/runtime/generated-agent-input-notices'
+import * as generatedInputNotices from '@/runtime/generated-agent-input-notices'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -19,6 +15,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { hostsBrowserPagesFor } from '@/runtime/browser-client-host-request-answer'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -103,6 +100,14 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'notificationAttentionAcknowledged') {
+      void window.api.notifications
+        .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
+        .catch((error: unknown) =>
+          console.warn('[notifications] Remote acknowledgement failed', error)
+        )
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -215,9 +220,7 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
-  if (!isWebClientLocation()) {
-    unsubs.push(subscribeLocalGeneratedInputNotices())
-  }
+  unsubs.push(generatedInputNotices.subscribeWindowGeneratedInputNotices())
 
   setRuntimeEnvironmentCatalogRefresher(async () => {
     useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
@@ -270,10 +273,11 @@ export function registerRuntimeClientIpcBridge(
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
             sync: runtimeClientEventsSync.sync
           })
-        }
+        },
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
       )
       // Notices ride their own bounded stream from the runtime that owns them, beside these events.
-      return withEnvironmentGeneratedInputNotices(environmentId, subscription)
+      return generatedInputNotices.withEnvironmentGeneratedInputNotices(environmentId, subscription)
     },
     onEvent: handleRuntimeClientEvent
   })

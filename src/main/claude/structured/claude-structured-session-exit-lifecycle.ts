@@ -1,3 +1,4 @@
+import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   agentSessionFailureFact,
@@ -7,20 +8,26 @@ import {
   providerExitObserved,
   providerStartupFailureFact,
   startupAcquisitionRefusal
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
 import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
-import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { ClaudePluginInputError } from '../claude-plugin-ui'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
-import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
+import {
+  closeClaudePublishedSessionForDeps,
+  claudeCloseReport,
+  settleClaudeExitedSession
+} from './claude-structured-session-close'
+import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -54,8 +61,10 @@ export function observeClaudeSessionExit(
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)
-  // Run tree cleanup before recovery; an exit callback proves only root exit.
-  const cleanup = session.connection.close().catch(() => false)
+  // Register cleanup ownership before semantic publication can wake another provider write.
+  const cleanup = Promise.resolve()
+    .then(() => session.connection.close())
+    .catch(() => false)
   const closePromise =
     claudeStartDied(session) && providerExitObserved(error)
       ? withTimeout(cleanup, 2_000, false)
@@ -68,18 +77,44 @@ export function observeClaudeSessionExit(
     closePromise
   }
   lifecycle.exits.set(sessionId, exit)
-  exit.publication = closePromise
-    .then((proven) => {
-      // Observed root exit releases the lease even if tree cleanup remains unverified.
-      if (
-        claudeCloseReport(session.connection, proven, error) instanceof
-        AgentSessionAcquisitionExitUnprovenError
-      ) {
-        return undefined
-      }
-      return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)
-    })
-    .catch(() => undefined)
+  try {
+    if (error instanceof ClaudePluginInputError) {
+      const waiter = session.dispatchWaiters.find((entry) => entry.clientMessageId !== null)
+      // Delivery remains uncertain, but this connection no longer owes a running action.
+      retireClaudeDispatchWaiters(session)
+      lifecycle.emit(session, {
+        type: 'retiring',
+        sessionId,
+        providerSessionId: session.providerSessionId,
+        reason: error.message,
+        failure: error.failure,
+        fence: session.fence,
+        acquisitionGeneration: session.acquisitionGeneration,
+        observedAt,
+        ...(waiter?.clientMessageId
+          ? {
+              unopenedSend: {
+                clientMessageId: waiter.clientMessageId,
+                ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt })
+              }
+            }
+          : {})
+      })
+    }
+  } finally {
+    exit.publication = closePromise
+      .then((proven) => {
+        // Observed root exit releases the lease even if tree cleanup remains unverified.
+        if (
+          claudeCloseReport(session.connection, proven, error) instanceof
+          AgentSessionAcquisitionExitUnprovenError
+        ) {
+          return undefined
+        }
+        return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)
+      })
+      .catch(() => undefined)
+  }
 }
 
 /** Exited before the host-awaited open returned and before any turn; turns can settle without an Orca dispatch. */
@@ -122,15 +157,17 @@ export function settleClaudeUnexpectedExit(
       reason: exit.error.message,
       // A typed startup refusal or a spawn ENOENT keeps its next step; else provider exit vs host fault.
       failure:
-        startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
-          ? providerStartupFailureFact(exit.error)
-          : startupFailure
-            ? providerStartupFailureFact(startupFailure)
-            : providerExitObserved(exit.error)
-              ? agentSessionFailureFact('providerExited', {
-                  detail: providerDiagnosticOf(exit.error)
-                })
-              : agentSessionFailureFact('hostFault'),
+        exit.error instanceof ClaudePluginInputError
+          ? exit.error.failure
+          : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+            ? providerStartupFailureFact(exit.error)
+            : startupFailure
+              ? providerStartupFailureFact(startupFailure)
+              : providerExitObserved(exit.error)
+                ? agentSessionFailureFact('providerExited', {
+                    detail: providerDiagnosticOf(exit.error)
+                  })
+                : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'
@@ -183,4 +220,37 @@ export async function persistClaudeSessionHandle(
     leafUuid,
     fence: session.fence
   })
+}
+
+/** Complete the pending close for this exact connection after observing its root exit. */
+export function finishClaudeCloseAfterExit(input: {
+  sessions: Map<string, ClaudeSession>
+  exits: Map<string, ClaudeSessionExit>
+  closeExit: (sessionId: string) => Promise<boolean>
+  sessionId: string
+  connection: ClaudeStreamJsonConnection | null
+  deps: Parameters<typeof closeClaudePublishedSessionForDeps>[2]
+  afterClose: (close: () => Promise<boolean>) => Promise<boolean>
+}): void {
+  const { sessions, sessionId, deps } = input
+  const exit = input.exits.get(sessionId)
+  if (
+    sessions.get(sessionId)?.connection !== input.connection &&
+    exit?.connection !== input.connection
+  ) {
+    return
+  }
+  void input
+    .afterClose(() =>
+      exit
+        ? input.closeExit(sessionId)
+        : closeClaudePublishedSessionForDeps(sessions, sessionId, deps)
+    )
+    .catch((error: unknown) =>
+      deps.logger?.warn('finishing a Claude close after its process exited reported', {
+        scope: 'claude-close-after-exit',
+        sessionId,
+        error
+      })
+    )
 }

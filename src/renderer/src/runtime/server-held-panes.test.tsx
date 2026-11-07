@@ -6,8 +6,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { NewerDaemonReopenResult } from '../../../shared/newer-daemon-hold'
 import type {
   PaneStartStatus,
@@ -15,8 +15,8 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
-import { NewerDaemonHoldBanner } from '@/components/terminal-pane/NewerDaemonHoldBanner'
-import { newerDaemonHoldStore } from '@/components/terminal-pane/newer-daemon-hold-state'
+import { NewerDaemonHoldBanner } from '@/components/terminal-pane/session-restore/newer-daemon/NewerDaemonHoldBanner'
+import { newerDaemonHoldStore } from '@/components/terminal-pane/session-restore/newer-daemon/newer-daemon-hold-state'
 import {
   CAPABLE,
   ENV,

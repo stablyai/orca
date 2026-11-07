@@ -4,7 +4,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   NOW,
   createCleanupTestStore,
@@ -90,6 +90,53 @@ describe('workspace cleanup scan progress', () => {
       expect.objectContaining({ executionHostId: 'local' }),
       expect.objectContaining({ executionHostId: 'ssh:ssh-1' })
     ])
+  })
+
+  it('keeps Ignore and Stop ignoring across later streamed frames', async () => {
+    const pending = deferred<WorkspaceCleanupScanResult>()
+    let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+    const scan = vi.fn((_args, progressCallback) => {
+      onProgress = progressCallback
+      return pending.promise
+    })
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+    const first = makeCandidate({ worktreeId: 'repo1::/tmp/first' })
+    const frame = (count: number, worktreeId: string): void =>
+      onProgress?.({
+        scanId: 'scan-1',
+        scannedAt: NOW,
+        scannedWorktreeCount: count,
+        totalWorktreeCount: 3,
+        candidates: [makeCandidate({ worktreeId })],
+        errors: [],
+        candidateMode: 'append'
+      })
+    const firstBlockers = (): readonly string[] | undefined =>
+      store
+        .getState()
+        .workspaceCleanupScan?.candidates.find((c) => c.worktreeId === first.worktreeId)?.blockers
+
+    const scanPromise = store.getState().scanWorkspaceCleanup()
+    frame(1, first.worktreeId)
+    await vi.waitFor(() => expect(firstBlockers()).toEqual([]))
+
+    await store.getState().dismissWorkspaceCleanupCandidates([first])
+    frame(2, 'repo1::/tmp/second')
+    await vi.waitFor(() =>
+      expect(store.getState().workspaceCleanupScan?.candidates).toHaveLength(2)
+    )
+    expect(firstBlockers()).toEqual(['dismissed'])
+
+    await store.getState().restoreWorkspaceCleanupCandidates([first])
+    frame(3, 'repo1::/tmp/third')
+    await vi.waitFor(() =>
+      expect(store.getState().workspaceCleanupScan?.candidates).toHaveLength(3)
+    )
+    expect(firstBlockers()).toEqual([])
+
+    pending.resolve({ scannedAt: NOW, candidates: [], errors: [] })
+    await scanPromise
   })
 
   it('keeps append progress rows when terminal enrichment resolves out of order', async () => {

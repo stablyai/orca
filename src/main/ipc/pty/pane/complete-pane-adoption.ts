@@ -1,13 +1,17 @@
-import { readTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { readTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../../../runtime/terminal-model-query-authority'
 import { registerPty } from '../../../memory/pty-registry'
-import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { StablePaneSpawnContext, StablePaneOwner } from './stable-owner'
-import { persistAdmittedStablePaneBinding } from './stable-owner'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+
+import {
+  type StablePaneSpawnContext,
+  type StablePaneOwner,
+  persistAdmittedStablePaneBinding
+} from './stable-owner'
 import { attemptStablePaneAttach } from './stable-pane-attach'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import { admitPtySpawnOwnership, registerPersistedPtySpawn } from './spawn-registration'
@@ -19,7 +23,8 @@ import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
-import { provenSpawnResponse } from '../spawn-outcome'
+import '../spawn-outcome'
+import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { ptySizes } from '../delivery/visibility-state'
 import {
   resolveCommittedPtySize,

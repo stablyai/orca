@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
@@ -9,42 +9,25 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
-import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
-import { publishMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 import {
-  followLegacyGeneratedInputWrite,
   GeneratedInputIngress,
   type GeneratedInputReplyObserver
 } from '../runtime/generated-agent-input-notices-ingress'
-import { observeRemoteRuntimeRequestDispatch } from '../../shared/remote-runtime/requests/remote-runtime-request-dispatch-observation'
 import type { GeneratedInputNoticeOwner } from '../runtime/generated-agent-input-notices'
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { generatedInputNoticeOwnerOf } from './runtime-environments/runtime-environment-generated-input-notice-hosts'
+import {
+  noticeOriginOf,
+  remoteGeneratedInputIngress,
+  type RemoteGeneratedInputIngress
+} from './runtime-remote-generated-input-ingress'
+export type { RemoteGeneratedInputIngress } from './runtime-remote-generated-input-ingress'
 export { forwardGeneratedInputNoticesToHosts } from './runtime-environments/runtime-environment-generated-input-notice-hosts'
-
-/** A window's call for its accepted generated request, on its way to a paired host: the request
- *  itself, held as that window's pending record (with the host it runs on) before the request is
- *  prepared, one frame of an older host's write of it, or the ordinary status call choosing its
- *  route. The observer is told when the request's own frame actually leaves; `pairingRevision` is
- *  the pairing the request was first resolved to here, which every call of it is held to. */
-export type RemoteGeneratedInputIngress = (
-  event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
-  environment: KnownRuntimeEnvironment,
-  call: {
-    method: string
-    params?: unknown
-    generatedInputOperationId?: string
-    expectedEnvironmentPairingRevision?: number
-  }
-) => { observer: GeneratedInputReplyObserver | null; pairingRevision?: number } | null
-
-// The logical desktop window, stable across its renderer's reloads.
-const noticeOriginOf = (sender: WebContents): string => `desktop-window:${sender.id}`
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -78,6 +61,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGene
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
+  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+
+  // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
+  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
+    runtime.wakeWorkspaceVm(args.workspaceId)
+  )
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
@@ -95,8 +84,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGene
       }
       const result = runtime.syncWindowGraph(window.id, graph)
       // Only the authoritative window's accepted graph may publish its project catalog.
-      if (graph.projectSectionCatalog) {
+      if (
+        graph.projectSectionCatalog &&
         publishMobileProjectSections(graph.projectSectionCatalog)
+      ) {
+        // Why: phones re-read on main's reposChanged before this publish landed (#37067); every client version handles reposChanged.
+        runtime.notifyReposChangedForRemoteClients()
       }
       return result
     }
@@ -155,7 +148,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGene
       const channel = `runtime:subscription:${args.subscriptionId}`
       acceptGeneratedInput(event.sender, args.method, args.params)
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
         {
           id: args.subscriptionId,
           authToken: 'desktop-ipc',
@@ -164,7 +157,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGene
         },
         (response) => {
           if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
+            event.sender.send(channel, response)
           }
         },
         {
@@ -280,48 +273,5 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGene
       }
     }
   )
-  // A private copy is kept only for the window's current document, as local calls require.
-  return (event, environment, call) => {
-    if (event.senderFrame !== event.sender.mainFrame) {
-      return null
-    }
-    const origin = noticeOriginOf(event.sender)
-    const current = generatedInputNoticeOwnerOf(environment)
-    const id = call.generatedInputOperationId ?? retainedOperationIdOf(call.params)
-    // The renderer's own capture when it had one, else this first resolution; never a later one.
-    const pairingRevision = id
-      ? runtime.generatedInputNotices.pinRoute(id, origin, {
-          environmentId: environment.id,
-          pairingRevision: call.expectedEnvironmentPairingRevision ?? current.pairingRevision!
-        })
-      : undefined
-    const observer =
-      call.method === 'terminal.send' && call.generatedInputOperationId
-        ? followLegacyGeneratedInputWrite(
-            runtime.generatedInputNotices,
-            call.generatedInputOperationId,
-            origin
-          )
-        : acceptGeneratedInput(
-            event.sender,
-            call.method,
-            call.params,
-            pairingRevision === undefined ? current : { ...current, pairingRevision },
-            call.generatedInputOperationId
-          )
-    if (observer) {
-      observeRemoteRuntimeRequestDispatch(call.params, observer.dispatched)
-    }
-    return { observer, ...(pairingRevision === undefined ? {} : { pairingRevision }) }
-  }
-}
-
-function retainedOperationIdOf(params: unknown): string | undefined {
-  if (typeof params !== 'object' || params === null) {
-    return undefined
-  }
-  const operationId: unknown = Reflect.get(params, 'operationId')
-  return Reflect.get(params, 'retainNotice') === true && typeof operationId === 'string'
-    ? operationId
-    : undefined
+  return remoteGeneratedInputIngress(runtime, acceptGeneratedInput)
 }

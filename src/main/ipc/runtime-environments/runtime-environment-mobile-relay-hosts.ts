@@ -2,23 +2,23 @@ import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
 } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeEnvironmentStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
   MobileDesktopRelayHosts,
   MobileDesktopRelayHostWatch
 } from '../../runtime/mobile-desktop-relay/mobile-desktop-relay-hosts'
 import {
-  resolveManagedRuntimeEnvironment,
+  prepareManagedRuntimeRequest,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
 import { wslHostsGateOpen } from '../../wsl/host-lifecycle/wsl-host-gate'
@@ -36,10 +36,15 @@ import {
 } from './runtime-environment-transport-routing'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import {
+  isRuntimeEnvironmentManuallyDisconnected,
+  runtimeEnvironmentManualDisconnectCount
+} from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
+import { recipeVmServerState } from './runtime-environment-recipe-vm-wake'
+import { RECIPE_VM_PHONE_OPEN_HOLD_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
 
 const retirementListeners = new Set<(environmentId: string) => void>()
 
@@ -50,7 +55,11 @@ export function retireMobileDesktopRelayEnvironment(environmentId: string): void
 }
 
 // Why: a WSL host is this desktop's own distro; a phone reaches it only while it already runs.
-const PHONE_CALL_PREPARATION: ManagedRuntimeCallPreparation = { wslStart: 'never' }
+// A phone's open of a sleeping recipe VM is answered before the phone itself gives up.
+const PHONE_CALL_PREPARATION: ManagedRuntimeCallPreparation = {
+  wslStart: 'never',
+  recipeVmHoldMs: RECIPE_VM_PHONE_OPEN_HOLD_MS
+}
 
 /** Servers a phone may reach, each with its WSL host reach (null for any other server). */
 function listRelayableEnvironments(
@@ -127,7 +136,7 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         statusByEnvironmentId
       }
     },
-    resolve: async (environmentId) => {
+    resolve: async (environmentId, openingMethod, signal) => {
       if (
         !listRelayableEnvironments(userDataPath).some(
           ({ environment }) => environment.id === environmentId
@@ -135,15 +144,21 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
       ) {
         return null
       }
-      const environment = await resolveManagedRuntimeEnvironment(
+      const prepared = await prepareManagedRuntimeRequest(
         userDataPath,
         environmentId,
-        PHONE_CALL_PREPARATION
+        PHONE_CALL_PREPARATION,
+        openingMethod,
+        signal
       )
+      const { environment } = prepared
       return {
         environmentId,
         fence: relayHostFence(environment),
         pairingRevision: pairingRevision(environment),
+        ...(prepared.wokenPairingRevision === pairingRevision(environment)
+          ? { wokenByOpening: true as const }
+          : {}),
         pairing: getPreferredPairingOffer(environment)
       }
     },
@@ -164,6 +179,8 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
             : {})
         }
       ),
+    serverStateForOpening: (environmentId) => recipeVmServerState(userDataPath, environmentId),
+    userDisconnects: runtimeEnvironmentManualDisconnectCount,
     hostsBrowserPage: pairedRuntimeBrowserClientHostsPage,
     browserHostClientId: pairedRuntimeBrowserClientHostId,
     prepareBrowserHost: (host, enabled) =>

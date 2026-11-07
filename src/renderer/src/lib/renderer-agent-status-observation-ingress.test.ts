@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 
 const { setAgentStatusMock } = vi.hoisted(() => ({ setAgentStatusMock: vi.fn() }))
 
@@ -15,7 +15,7 @@ describe('renderer-side observation origins', () => {
   it('tags renderer-parsed OSC 9999 rows as osc-origin under the renderer authority', async () => {
     setAgentStatusMock.mockReset()
     const { createBackgroundAgentStatusConsumer } =
-      await import('./background-agent-status-consumer')
+      await import('./agent-session/launch/background/background-agent-status-consumer')
     const paneKey = 'tab-osc:99999999-9999-4999-8999-999999999999'
     const consumer = createBackgroundAgentStatusConsumer({
       paneKey,

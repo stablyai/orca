@@ -17,8 +17,8 @@ import {
   type CollectSleepingAgentSessionRecordsOptions
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/live-resume-anchor-record'
+import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/agent-session/lifecycle/live-resume-anchor-record'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,

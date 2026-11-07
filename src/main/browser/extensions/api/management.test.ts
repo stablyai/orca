@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 const mocks = vi.hoisted(() => {

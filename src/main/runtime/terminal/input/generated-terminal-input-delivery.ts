@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
-import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
+import { isAgentPromptStalledError } from './agent-prompt-submission-verification'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../shared/generated-agent-input-readiness'
 import type {
   GeneratedInputOutcome,

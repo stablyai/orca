@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PANE } from './server.test-fixtures'
 
-import '../../shared/hook-process-root-evidence'
+import '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
 import '../../wsl-guest/agent-hook-server'
 import '../../wsl-guest/relay-pane-root'
@@ -37,7 +37,9 @@ import {
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn()
+}))
 
 registerRootTestHarness()
 

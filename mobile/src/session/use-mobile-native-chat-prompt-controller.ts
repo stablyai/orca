@@ -1,7 +1,7 @@
 import { useMobileAsyncQuestionHides } from './native-chat/input/use-mobile-native-chat-prompt-dismiss'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { AskAnswerSelection } from '../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileNativeChatController } from './native-chat/mobile-native-chat-controller-contract'
 import type { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatAskDismiss } from './native-chat/input/use-mobile-native-chat-ask-dismiss'

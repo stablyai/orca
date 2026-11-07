@@ -1,15 +1,18 @@
 import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ForkSyncMode, GitForkSyncResult } from '../../../../../../shared/git-fork-sync'
+import type {
+  ForkSyncMode,
+  GitForkSyncResult
+} from '../../../../../../shared/git/remotes/git-fork-sync'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getRepoMainWorktreeId } from '../../../../../../shared/worktree/id'
 import { Button } from '../../../ui/button'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
-import { syncRuntimeGitForkDefaultBranch } from '../../../../runtime/runtime-git-sync-client'
+import { syncRuntimeGitForkDefaultBranch } from '../../../../runtime/source-control/git/runtime-git-sync-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
+import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords } from '../../search/settings-search-keywords'

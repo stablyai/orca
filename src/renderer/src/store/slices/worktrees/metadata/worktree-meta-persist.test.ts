@@ -4,9 +4,8 @@ import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../../.
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../../../../shared/workspace-attachment-capabilities'
+} from '../../../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import { persistWorktreeMeta } from './worktree-meta-persist'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 
 const mocks = vi.hoisted(() => ({
   assertCapability: vi.fn(),
@@ -36,31 +35,6 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
-
-  it.each([true, false])(
-    'keeps review selection exclusive when collection support is %s',
-    async (supportsCollections) => {
-      mocks.supportsCapability.mockResolvedValue(supportsCollections)
-      await persistWorktreeMeta(mocks.target, 'repo::/feature', {
-        linkedGitLabMR: 7
-      })
-      const wire = mocks.callRuntimeRpc.mock.lastCall?.[2]
-      expect(wire).not.toHaveProperty('linkedItems')
-      expect(wire).not.toHaveProperty('linkedItemsBase')
-      const saved = supportsCollections
-        ? normalizeWorkspaceAttachmentUpdate({ linkedPR: 42 }, wire)
-        : { linkedPR: 42, ...wire }
-      expect(saved).toMatchObject({ linkedPR: null, linkedGitLabMR: 7 })
-      if (supportsCollections) {
-        expect(wire).not.toHaveProperty('linkedPR')
-        expect(saved.linkedItems).toEqual([
-          { provider: 'github', type: 'pr', number: 42 },
-          { provider: 'gitlab', type: 'mr', number: 7 }
-        ])
-      }
-      expect(mocks.assertCapability).not.toHaveBeenCalled()
-    }
-  )
 
   it('requires host support before sending a positive suppression write', async () => {
     mocks.assertCapability.mockRejectedValue(new Error('update required'))

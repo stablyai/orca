@@ -1,4 +1,4 @@
-import type { RuntimeAutomationUpdateInput } from './runtime-automation-controller'
+import type { RuntimeAutomationUpdateInput } from './runtime-automation-run-context'
 
 export function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
   updates: RuntimeAutomationUpdateInput,

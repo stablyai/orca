@@ -7,9 +7,9 @@ import {
   finalReplayFrame,
   readRuntimeFixture
 } from '../../../main/runtime/agent-transcript-replay-test-harness'
-import { createAgentPromptSubmissionRuntime } from '../../../main/runtime/agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from '../../../main/runtime/terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../../../main/runtime/rpc/core'
-import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/generated-input'
+import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/terminal/generated-input'
 import type { OrcaRuntimeService } from '../../../main/runtime/orca-runtime'
 import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
 import {
@@ -19,7 +19,7 @@ import {
 import {
   GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-} from '../../../shared/terminal-runtime-capabilities'
+} from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuledScreen } from '../../../shared/screen-input-veto'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -95,12 +95,15 @@ vi.mock('../../../main/git/worktrees/catalog/worktree-listing', async (importOri
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ ptyIdsByTabId: {} }), subscribe: () => () => {} }
 }))
-vi.mock('./launch-agent-paste-timeout-notice', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  showGeneratedInputNotice: vi.fn(),
-  noticeGeneratedInputFailure: vi.fn()
-}))
-vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+vi.mock(
+  './agent-session/launch/prompt/launch-agent-paste-timeout-notice',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    showGeneratedInputNotice: vi.fn(),
+    noticeGeneratedInputFailure: vi.fn()
+  })
+)
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
   readPtyInputScreen: async () => f.grid,
   readPtyBracketedPasteMode: () => f.pasteMode
 }))
@@ -225,7 +228,7 @@ const { sendPromptWithGuardedPasteAndEnter } = await import('./active-agent-note
 const { sendFollowupPromptWhenAgentReady } = await import('./agent-followup-delivery')
 const { prepareTypedText } = await import('../../../shared/agent-input-dialog')
 const { showGeneratedInputNotice, noticeGeneratedInputFailure } =
-  await import('./launch-agent-paste-timeout-notice')
+  await import('./agent-session/launch/prompt/launch-agent-paste-timeout-notice')
 
 /** What this window shows (its runtime's notices and its host's, one per operation) and what a
  *  phone paired to the host shows. */

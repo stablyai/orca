@@ -11,7 +11,7 @@ import {
   observeRemoteRuntimeRequestDispatch
 } from './remote-runtime-request-dispatch-observation'
 import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../paired-e2ee-node-primitives'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../e2ee/node/paired-e2ee-node-primitives'
 import { GeneratedInputIngress } from '../../../main/runtime/generated-agent-input-notices-ingress'
 import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
 

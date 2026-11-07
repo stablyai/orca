@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
 import type {
@@ -10,7 +10,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,
   TerminalPreviewReplayChunk
-} from '../../../../shared/terminal-preview'
+} from '../../../../shared/terminal/replay/terminal-preview'
 
 type TerminalPreviewApi = typeof window.api.terminalPreview
 

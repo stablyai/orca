@@ -11,7 +11,7 @@ import {
   getPRCommentGroupRoot,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
 import {
   ConversationTabCommentCard,

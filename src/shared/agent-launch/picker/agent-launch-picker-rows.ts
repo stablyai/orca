@@ -1,3 +1,4 @@
+import type { AgentPickerEntry } from './agent-launch-picker'
 import type { GlobalSettings } from '../../global-settings-types'
 import {
   nativeChatPreferenceFor,
@@ -15,6 +16,8 @@ export type HostChatAnswer =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  /** The host is Windows, where this agent has no chat. */
+  | 'windows'
   | 'no-chats'
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
@@ -39,6 +42,7 @@ export type ChatUnavailableReason =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  | 'windows'
 
 export type NewTabAgentMenuRow = (
   | { kind: 'chat'; agent: TuiAgent }
@@ -125,4 +129,19 @@ export function buildNewTabAgentMenuRows(args: {
       ...(chatToo.has(agent) ? { chat: true as const } : {})
     }))
   ]
+}
+
+export function agentPickerHydrationQueue(
+  entries: readonly AgentPickerEntry[],
+  selected: () => TuiAgent | undefined
+): () => number | undefined {
+  const pending = new Set(entries.flatMap((entry, index) => (entry.surfaces.length ? [index] : [])))
+  return () => {
+    const preferred = entries.findIndex((entry) => entry.agent === selected())
+    const index = pending.has(preferred) ? preferred : pending.values().next().value
+    if (index !== undefined) {
+      pending.delete(index)
+    }
+    return index
+  }
 }

@@ -1,4 +1,4 @@
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { GeneratedInputNoticeOwner } from '../../runtime/generated-agent-input-notices'
 import {
   forwardGeneratedInputNotices,
@@ -6,7 +6,7 @@ import {
 } from '../../runtime/generated-agent-input-notice-forwarder'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { IpcMainInvokeEvent } from 'electron'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { RemoteGeneratedInputIngress } from '../runtime'
 import { createRuntimeEnvironmentMobileRelayHosts } from './runtime-environment-mobile-relay-hosts'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'

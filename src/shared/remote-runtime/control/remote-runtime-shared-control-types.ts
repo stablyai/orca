@@ -80,6 +80,7 @@ export type SharedControlSocketCloseCause =
   | 'socket_close'
   | 'socket_error'
   | 'protocol_error'
+  | 'ready_timeout'
   | 'local'
 
 export type SharedControlSocketClosed = (
@@ -121,6 +122,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   /** Each socket that becomes ready, including after every reconnect. */
   onReady?: () => void
   reconnectStableResetMs?: number
+  /** OPEN→ready bound before the socket is retired; defaults to 30s. */
+  readyDeadlineMs?: number
   /** Every socket close with its cause, e.g. for the diagnostics trace. */
   onSocketClosed?: (record: SharedControlSocketCloseRecord) => void
   liveness?: RemoteRuntimeSocketLivenessOptions

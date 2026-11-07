@@ -16,6 +16,8 @@ import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
 import { fetchMRFiles } from './mr-file-diffs'
 import { fetchMRApprovalState, fetchMRReviewers } from './mr-reviewers-and-approvals'
 import { fetchPipelineJobs } from './pipeline-job-graph'
+import { GitLabIncompletePaginationError } from './gitlab-paginated-list'
+import { gitLabRunTimes } from './gitlab-run-times'
 import {
   acquire,
   getGlabKnownHosts,
@@ -33,7 +35,15 @@ type GitLabRawIssue = Parameters<typeof mapIssueToWorkItem>[0] & {
   assignees?: { username?: string | null }[] | null
 }
 
-type GitLabRawPipeline = { id?: number; status?: string; web_url?: string | null }
+type GitLabRawPipeline = {
+  id?: number
+  status?: string
+  web_url?: string | null
+  sha?: string | null
+  ref?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+}
 
 type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
   description?: string | null
@@ -154,7 +164,13 @@ async function fetchMRDetails(
           pipelineId,
           connectionId,
           localGitOptions
-        ).catch(() => [])
+        ).catch((error: unknown) => {
+          // A partial job list must fail the read so Checks and the dialog keep what they showed.
+          if (error instanceof GitLabIncompletePaginationError) {
+            throw error
+          }
+          return []
+        })
       : undefined
   // Checks needs pipeline/discussion data without the dialog's optional review enrichment.
   const includeReviewDetails = options.includeReviewDetails !== false
@@ -188,7 +204,10 @@ async function fetchMRDetails(
             status: rawPipeline?.status ?? '',
             // The MR aggregate's own rule on this same reply, so both read one verdict.
             checkStatus: settleManualPipelineStatus(mrRaw, derivePipelineStatus(rawPipeline)),
-            webUrl: rawPipeline?.web_url ?? null
+            webUrl: rawPipeline?.web_url ?? null,
+            ...(rawPipeline?.sha ? { sha: rawPipeline.sha } : {}),
+            ...(rawPipeline?.ref ? { ref: rawPipeline.ref } : {}),
+            ...(rawPipeline ? gitLabRunTimes(rawPipeline) : {})
           }
         }
       : {}),

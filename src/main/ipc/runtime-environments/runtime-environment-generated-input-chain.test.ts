@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { GeneratedAgentInputNotices } from '../../runtime/generated-agent-input-notices'
-import { addEnvironmentFromPairingCode } from '../../../shared/runtime-environment-store'
-import { encodePairingOffer } from '../../../shared/pairing'
+import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/host-runtime-capabilities'
 import {
   closeSharedControlTestServers,
@@ -22,21 +22,21 @@ vi.mock('electron', () => ({
   ipcMain: { handle: h.handle, on: vi.fn(), removeHandler: vi.fn(), removeAllListeners: vi.fn() }
 }))
 
-// A managed host's resolution a test holds open, as one shared producer for every waiter.
+// A managed host's preparation a test holds open, as one shared producer for every waiter.
 const prep = vi.hoisted(() => ({ held: 0, hold: Promise.resolve(), entered: 0 }))
 vi.mock('./runtime-environment-managed-tunnel', async (importOriginal) => {
   const actual = await importOriginal<typeof ManagedTunnel>()
   return {
     ...actual,
-    resolveManagedRuntimeEnvironment: async (
-      ...args: Parameters<typeof actual.resolveManagedRuntimeEnvironment>
+    prepareManagedRuntimeRequest: async (
+      ...args: Parameters<typeof actual.prepareManagedRuntimeRequest>
     ) => {
       if (prep.held > 0) {
         prep.held -= 1
         prep.entered += 1
         await prep.hold
       }
-      return actual.resolveManagedRuntimeEnvironment(...args)
+      return actual.prepareManagedRuntimeRequest(...args)
     }
   }
 })

@@ -1,3 +1,4 @@
+import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
@@ -42,57 +43,78 @@ export function AntigravityProviderSignInArea(props: {
     ),
     disabled: antigravityChatSignInBlocked(props.install)
   })
-  const { alert, copy, copyLabel, ownFlow, url } = signIn
-  // A settled failure says only why; a running sign-in keeps its step beside a copy failure.
-  const line = alert && !ownFlow ? null : signIn.line
+  const { copy, copyLabel, ownFlow, url } = signIn
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium leading-none">
-            {translate('settings.chat.providers.antigravityAccount', 'Account')}
-          </p>
-          {/* Reserve line height so the host’s answer cannot shift layout. */}
-          <div
-            role="status"
-            className="mt-1 flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground"
-          >
-            {ownFlow ? <LoadingSpinner className="size-3 shrink-0" /> : null}
-            <span className="min-w-0 break-words">
-              {line}
-              {line && alert ? ' ' : null}
-              {alert && (
-                <span role="alert" className="text-destructive">
-                  {alert}
-                </span>
+      <AntigravityChatAuthForm
+        owner={props.owner}
+        disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
+        onSignIn={signIn.start}
+        signInError={signIn.alert}
+        hostLabel={props.label}
+        heading={
+          <div>
+            <p className="text-xs font-medium leading-none">
+              {translate('settings.chat.providers.antigravityAccount', 'Account')}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {translate(
+                'settings.chat.providers.antigravitySignInNeeded',
+                'Chats need an Antigravity sign-in, separate from your agy terminal account.'
               )}
-            </span>
+            </p>
           </div>
-        </div>
-        {ownFlow ? (
-          <div className="flex shrink-0 items-center gap-1">
-            {url && (
-              <Button size="xs" variant="ghost" onClick={() => void copy.copyText()}>
-                {copy.status === 'copied' ? <Check /> : <Copy />}
-                {copyLabel}
+        }
+      >
+        {(auth) => (
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              {/* Reserve line height so the host’s answer cannot shift layout. */}
+              <div
+                role="status"
+                className="mt-1 flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground"
+              >
+                {ownFlow ? <LoadingSpinner className="size-3 shrink-0" /> : null}
+                <span className="min-w-0 break-words">
+                  {!auth.alert ? signIn.lineForAuth(auth) : ownFlow ? signIn.line : null}
+                  {ownFlow && signIn.line && auth.alert ? ' ' : null}
+                  {auth.alert && (
+                    <span role="alert" className="text-destructive">
+                      {auth.alert}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+            {ownFlow ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {url && (
+                  <Button size="xs" variant="ghost" onClick={() => void copy.copyText()}>
+                    {copy.status === 'copied' ? <Check /> : <Copy />}
+                    {copyLabel}
+                  </Button>
+                )}
+                <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
+                  {translate('accounts.antigravity.chatCancel', 'Cancel')}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="xs"
+                // Account switching uses secondary styling once signed in.
+                variant={signIn.action === 'changeAccount' ? 'ghost' : 'outline'}
+                disabled={
+                  (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) ||
+                  auth.disabled
+                }
+                onClick={auth.start}
+              >
+                {signIn.actionLabel}
               </Button>
             )}
-            <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-              {translate('accounts.antigravity.chatCancel', 'Cancel')}
-            </Button>
           </div>
-        ) : (
-          <Button
-            size="xs"
-            // Account switching uses secondary styling once signed in.
-            variant={signIn.action === 'changeAccount' ? 'ghost' : 'outline'}
-            disabled={signIn.signInDisabled}
-            onClick={signIn.start}
-          >
-            {signIn.actionLabel}
-          </Button>
         )}
-      </div>
+      </AntigravityChatAuthForm>
       {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )

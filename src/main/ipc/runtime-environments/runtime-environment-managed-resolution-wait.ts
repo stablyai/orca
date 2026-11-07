@@ -1,20 +1,11 @@
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import {
-  resolveManagedRuntimeEnvironment,
-  type ManagedRuntimeCallPreparation
-} from './runtime-environment-managed-tunnel'
 
-/** One request's wait for a managed host's resolution: its signal detaches only this request,
- *  so its queue slot and payload are released while the resolution goes on for its other waiters. */
-export function resolveManagedEnvironmentFor(
-  userDataPath: string,
-  selector: string,
-  preparation: ManagedRuntimeCallPreparation | undefined,
+/** One request's wait for a managed host's preparation: its signal detaches only this request, so
+ *  its queue slot and payload are released while the preparation goes on for its other waiters. */
+export function waitForManagedPreparation<T>(
+  prepare: () => Promise<T>,
   signal: AbortSignal | undefined
-): ReturnType<typeof resolveManagedRuntimeEnvironment> {
+): Promise<T> {
   throwIfSignalAborted(signal)
-  return waitForPromiseWithSignal(
-    resolveManagedRuntimeEnvironment(userDataPath, selector, preparation),
-    signal
-  )
+  return waitForPromiseWithSignal(prepare(), signal)
 }

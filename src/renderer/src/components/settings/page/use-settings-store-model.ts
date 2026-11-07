@@ -4,8 +4,8 @@ import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/selectors'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
@@ -40,7 +40,7 @@ import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
   projectRemovalTargets
-} from '@/components/sidebar/removal-unsaved-files'
+} from '@/components/sidebar/workspace-actions/deletion/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)

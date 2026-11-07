@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
-import type * as RuntimeFileMutationClient from './runtime-file-mutation-client'
+import type * as RuntimeFileMutationClient from './files/mutations/runtime-file-mutation-client'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
-import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
+import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import {
@@ -112,7 +112,7 @@ vi.mock('./web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: hoisted.closeSessionTab
 }))
 
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileMutationClient>()),
   writeRuntimeFile: hoisted.writeRuntimeFile
 }))

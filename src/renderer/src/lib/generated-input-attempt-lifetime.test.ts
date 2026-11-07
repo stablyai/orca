@@ -4,7 +4,7 @@ import { GENERATED_INPUT_RUNTIME_CAPABILITY } from '../../../shared/generated-te
 import {
   GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-} from '../../../shared/terminal-runtime-capabilities'
+} from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

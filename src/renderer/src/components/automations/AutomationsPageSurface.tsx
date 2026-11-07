@@ -144,6 +144,7 @@ export function AutomationsPageSurface({
         canSave={presentation.canSaveDraft}
         createDestination={destination.createDestination.control}
         editDestination={destinationForm.editDestinationControl}
+        launchAuthority={destinationForm.editorSaveAuthority}
         notice={editorNotice}
         onNoticeRecover={(action) => {
           const host = editorNoticeHost ?? destination.editorRecoveryHost
@@ -233,6 +234,7 @@ export function AutomationsPageSurface({
         <AutomationRunDetailsPage
           automation={selected}
           run={selectedAutomationRunPage}
+          history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
           viewState={runPage.selectedAutomationRunPageViewState}

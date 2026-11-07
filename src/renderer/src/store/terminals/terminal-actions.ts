@@ -1,9 +1,12 @@
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig,
@@ -11,13 +14,16 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
   GeneratedTabTitleUpdate,
   TerminalTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
-import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import type {
+  NativeChatLaunchDraft,
+  NativeChatLaunchPrompt
+} from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type {
   TerminalTabCloseReason,

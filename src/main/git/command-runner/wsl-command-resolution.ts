@@ -8,8 +8,8 @@ import {
   buildWslLoginShellCommand,
   type WslCapturedLoginShellCommand
 } from '../../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git-output-locale'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git/commands/git-output-locale'
 import type { WslGitReadEnvironment } from '../wsl-git-read-environment'
 import {
   createWslProcessGroupTermination,

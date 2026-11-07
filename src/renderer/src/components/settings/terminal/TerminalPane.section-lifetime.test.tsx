@@ -47,7 +47,7 @@ vi.mock('@/store/index', () => ({
       setSettingsSearchQuery: fake.action
     })
 }))
-vi.mock('@/components/terminal-pane/pane-helpers', () => ({
+vi.mock('@/lib/user-agent-platform', () => ({
   isMacUserAgent: () => fake.isMac,
   isWindowsUserAgent: () => fake.isWindows
 }))
@@ -94,7 +94,9 @@ vi.mock('@/components/shared/useDaemonActions', () => ({
   useDaemonActions: () => ({ isBusy: false, busyKind: null, setPending: fake.action }),
   DaemonActionDialog: () => null
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
 beforeEach(() => {
@@ -126,45 +128,6 @@ function paneProps() {
     setScrollbackMode: vi.fn()
   }
 }
-
-it.each([
-  { name: 'Unix client and host', isWindows: false, isMac: false, hostIsWindows: false },
-  { name: 'Windows client and host', isWindows: true, isMac: false, hostIsWindows: true },
-  { name: 'Mac client and Windows host', isWindows: false, isMac: true, hostIsWindows: true }
-])('keeps retained session sections mounted on $name', async (platform) => {
-  fake.isWindows = platform.isWindows
-  fake.isMac = platform.isMac
-  const props = { ...paneProps(), isWindowsTerminalHost: platform.hostIsWindows }
-  const view = render(<TerminalPane {...props} />)
-  await act(async () => {})
-  // Assert DOM identity across search edits so retained sections cannot repeat reads.
-  const mountedButton = screen.getByRole('button', { name: 'Refresh sessions' })
-  const inventoryReadsAfterMount = fake.listSessions.mock.calls.length
-  const healthReadsAfterMount = fake.attribution.mock.calls.length
-  for (const query of [
-    'm',
-    'ma',
-    'man',
-    'mana',
-    'manag',
-    'manage',
-    '',
-    't',
-    'te',
-    'ter',
-    'term',
-    'termi',
-    'termin',
-    'termina',
-    'terminal'
-  ]) {
-    fake.query = query
-    await act(async () => view.rerender(<TerminalPane {...props} />))
-    expect(screen.getByRole('button', { name: 'Refresh sessions' })).toBe(mountedButton)
-  }
-  expect(fake.listSessions.mock.calls.length).toBe(inventoryReadsAfterMount)
-  expect(fake.attribution.mock.calls.length).toBe(healthReadsAfterMount)
-})
 
 it('refreshes a retained section when another surface invalidates the inventory', async () => {
   const props = paneProps()

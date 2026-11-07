@@ -3,6 +3,7 @@ import { getPtyIpc } from '../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput, type PtyWritePayload } from './write-input'
 import { followLocalGeneratedInputWrite } from '../../../runtime/generated-agent-input-notices-ingress'
+import { installPtyTerminalAttentionIpcHandler } from './terminal-attention'
 
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
@@ -56,6 +57,8 @@ export function installPtyWriteIpcHandlers(deps: {
           throw error
         })
   }
+  // Input from every client lands here; agent sleep reads it back with who else is viewing.
+  installPtyTerminalAttentionIpcHandler(deps)
 
   ipcMain.on('pty:write', (event, args: unknown) => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {

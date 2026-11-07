@@ -1,7 +1,7 @@
 import { registerWebviewDragPassthroughSurface } from './host-guest/webview-drag-passthrough'
 import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
 import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
-import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
+import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
 export type BrowserClientPageVisibleAttachment = {

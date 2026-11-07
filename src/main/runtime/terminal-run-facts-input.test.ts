@@ -1,17 +1,17 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
+import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-delivery'
 import { deliverGeneratedTerminalInput } from './terminal/input/generated-terminal-input-delivery'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

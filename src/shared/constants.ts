@@ -3,10 +3,11 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
+import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
@@ -21,7 +22,7 @@ import {
   defaultTerminalFontFamily,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
-} from './terminal-platform-defaults'
+} from './terminal/appearance/terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -111,7 +112,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     enabled: false,
     sttModel: '',
     modelsDir: '',
-    language: 'en',
+    dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],

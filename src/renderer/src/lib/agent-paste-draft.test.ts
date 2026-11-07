@@ -51,11 +51,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: testState.subscribeToPtyData
 }))
 
-vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer', () => ({
   replayPreHandlerPtyData: testState.replayPreHandlerPtyData
 }))
 
@@ -83,13 +83,13 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
-vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
   readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
   // A running agent's mounted xterm reports its current paste mode; no replayed byte is needed.
   readPtyBracketedPasteMode: () => true
 }))
 // The notice a producer reports; this window's runtime is absent here, so it shows directly.
-vi.mock('./launch-agent-paste-timeout-notice', () => {
+vi.mock('./agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => {
   const showGeneratedInputNotice = vi.fn()
   return {
     showGeneratedInputNotice,

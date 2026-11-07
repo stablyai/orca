@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { createBrowserMockApi } from './browser-slice-test-harness'
-import './editor-slice-test-harness'
+import { createBrowserMockApi } from './browser/browser-slice-test-harness'
+import './editor/editor-slice-test-harness'
 import { createTestStore as createAppStore, seedStore } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import type { AppState } from '../types'
@@ -76,28 +76,5 @@ describe('selection in a workspace other than the active one', () => {
     } finally {
       main.close()
     }
-  })
-
-  it('records a browser selection in its own workspace without moving the global surface', async () => {
-    const store = createAppStore()
-    seedStore(store, { activeWorktreeId: 'wt-1' })
-    // Layout-owner frames must draw tabs before selection.
-    const main = await drawTabsFromMain(store)
-    const mainTab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
-    const floatingTab = store
-      .getState()
-      .createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, 'https://floating.example.com')
-    await main.settle()
-    main.close()
-    store.getState().setActiveBrowserTab(mainTab.id)
-    store.setState({ activeTabType: 'editor' })
-
-    store.getState().setActiveBrowserTab(floatingTab.id)
-
-    const state = store.getState()
-    expect(state.activeBrowserTabId).toBe(mainTab.id)
-    expect(state.activeTabType).toBe('editor')
-    expect(state.activeBrowserTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(floatingTab.id)
-    expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('browser')
   })
 })

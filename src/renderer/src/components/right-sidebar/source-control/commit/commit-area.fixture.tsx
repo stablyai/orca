@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { CommitArea } from './commit-area'
-import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
+import { resolveCommitAreaPrimaryAction } from '../review/source-control-primary-action'
 
 function PublishState({ anotherWorkspace }: { anotherWorkspace: boolean }) {
   const primaryAction = resolveCommitAreaPrimaryAction({

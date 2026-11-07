@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { listWorktrees } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, createRuntime, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { TEST_REPO_ID, createRuntime, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('associates controller PTYs with mixed-case Windows and UNC cwd paths', async () => {

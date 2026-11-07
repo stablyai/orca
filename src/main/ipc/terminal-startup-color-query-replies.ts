@@ -1,5 +1,5 @@
-import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
-import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
+import { parsePtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
+import { normalizeColorQueryReplyColors } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import { recognizeAgentLaunchCommand } from '../../shared/agent-launch/startup/agent-command-line-intent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'

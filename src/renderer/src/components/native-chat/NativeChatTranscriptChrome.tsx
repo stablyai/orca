@@ -11,11 +11,9 @@ import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
-  useLocalImageSrc,
-  releaseLocalImageSrcByKey
-} from '@/components/editor/useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+  useLocalImageSrc
+} from '@/components/editor/document-images/useLocalImageSrc'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
@@ -81,24 +79,6 @@ function transcriptImageIdentity(
 // Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
-// Key release by value: equal rebuilt owner contexts must not revoke a URL still shown by img.
-function transcriptImageReleaseKey(
-  source: string | undefined,
-  filePath: string,
-  runtimeContext: RuntimeFileOperationArgs | null | undefined
-): string | null {
-  if (!runtimeContext) {
-    return null
-  }
-  return getLocalImageSrcCacheKey(
-    source,
-    filePath,
-    runtimeContext.connectionId,
-    runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
-  )
-}
-
 function TranscriptImagePreview({
   block,
   runtimeContext
@@ -142,16 +122,6 @@ function TranscriptImagePreview({
     }
     return observeTranscriptVisibility(element, setNear)
   }, [])
-  const releaseKey = transcriptImageReleaseKey(source, filePath, runtimeContext)
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
 
   const previewable = Boolean(source) && (external || runtimeContext !== null)
   const showPreview =
@@ -282,18 +252,25 @@ export function NativeChatAgentControls({
   markdown,
   timestamp,
   onScrollToTop,
+  action,
   className
 }: {
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
+  /** A row action of its own, drawn beside Copy (Fork). */
+  action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
   return (
     // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
-      {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. */}
-      <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
+          response has nothing to copy, so it has no Copy. */}
+      {markdown.length > 0 ? (
+        <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      ) : null}
+      {action}
       <button
         type="button"
         onClick={onScrollToTop}

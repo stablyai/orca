@@ -6,7 +6,7 @@ vi.mock('./use-bulk-tab-close-confirmation', () => ({ useBulkTabCloseConfirmatio
 
 import { useAppStore } from '../store'
 import { makeOpenFile, makeTab, makeUnifiedTab } from '../store/slices/store-session-test-harness'
-import { registerEditorFrameFlush } from './editor/editor-pending-flush'
+import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 
 const worktreeId = 'wt'
@@ -33,6 +33,9 @@ it('closes a terminal at once while a framed editor waits for its flush', async 
   })
   const closeTab = vi.fn()
   const closeFile = vi.fn()
+  const closeUnifiedTabs = vi
+    .spyOn(useAppStore.getState(), 'closeUnifiedTabs')
+    .mockImplementation(() => {})
   const { result } = renderHook(() =>
     useTerminalBulkCloseActions({
       activeWorktreeId: worktreeId,
@@ -49,6 +52,7 @@ it('closes a terminal at once while a framed editor waits for its flush', async 
 
   answer(true)
   await drainMicrotasks()
-  expect(closeFile).toHaveBeenCalledWith('doc')
+  expect(closeUnifiedTabs).toHaveBeenLastCalledWith(['doc'])
+  closeUnifiedTabs.mockRestore()
   expect(closeTab).toHaveBeenCalledTimes(1)
 })

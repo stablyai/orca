@@ -49,7 +49,9 @@ describe('account command specs', () => {
     const canonical = spec('account rm')
 
     expect(findCommandSpec(ACCOUNT_COMMAND_SPECS, ['account', 'remove'])).toBe(canonical)
-    expect(formatCommandHelp(canonical)).toContain('orca account rm --agent opencode|devin')
+    expect(formatCommandHelp(canonical)).toContain(
+      'orca account rm --agent claude|codex|opencode|devin|antigravity'
+    )
     expect(HANDLER_COMMAND_KEYS.has('account remove')).toBe(false)
   })
 

@@ -7,7 +7,7 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   subscribeRemoteRuntimeRequest,
@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../../../orcad/orcad-structured-chat-scenario'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
 import { envelope } from './wsl-orcad-chat-envelope'
 import { exerciseScriptedProviderChats } from './wsl-orcad-scripted-provider-chat'

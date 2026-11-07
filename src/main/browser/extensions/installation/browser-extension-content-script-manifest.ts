@@ -1,4 +1,4 @@
-import { BROWSER_EXTENSION_CONTENT_SCRIPT_FILE } from '../../../../shared/browser-extension-worker-api'
+import { BROWSER_EXTENSION_CONTENT_SCRIPT_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 
 type Manifest = Record<string, unknown>
 type ScriptEntry = { js: unknown[] }

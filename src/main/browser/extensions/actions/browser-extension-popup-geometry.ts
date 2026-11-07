@@ -1,4 +1,4 @@
-import type { BrowserExtensionAnchorRect } from '../../../../shared/browser-extension-toolbar-types'
+import type { BrowserExtensionAnchorRect } from '../../../../shared/browser/extensions/browser-extension-toolbar-types'
 
 type Rect = { x: number; y: number; width: number; height: number }
 type Size = { width: number; height: number }

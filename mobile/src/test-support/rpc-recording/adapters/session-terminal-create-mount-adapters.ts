@@ -82,8 +82,6 @@ export function sessionTerminalCreateMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            defaultTerminalHandlesToLiveInput: (handles: readonly string[]) =>
-              effect('default-live-input', { handles: [...handles] }),
             setActiveHandle: (update) => {
               activeHandle = typeof update === 'function' ? update(activeHandle) : update
             },

@@ -1,6 +1,18 @@
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences
+} from './automation-launch-types'
+export type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences,
+  AutomationArgumentEdit,
+  AutomationLaunchSourceEdits
+} from './automation-launch-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -88,11 +100,6 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
-export type AutomationLaunchSetupPatch = {
-  surface?: 'chat' | 'terminal'
-  arguments?: { kind: 'legacy-extras'; value: string }
-}
-
 export type Automation = {
   id: string
   /** Optional client request key used to make cross-authority creates retry-safe. */
@@ -102,7 +109,9 @@ export type Automation = {
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
   surface?: 'chat' | 'terminal'
-  launchSetup?: { surface?: 'chat' | 'terminal'; extraAgentArgs?: string }
+  launchSetup?: AutomationLaunchSetup
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
   /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
   extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for
@@ -125,6 +134,8 @@ export type Automation = {
   workspaceId: string | null
   baseBranch: string | null
   setupDecision?: SetupDecision
+  /** Hash of the setup content approved with `run`; a run whose branch content differs skips setup. Older automations omit it. */
+  setupTrustHash?: string
   reuseSession: boolean
   timezone: string
   rrule: string
@@ -172,7 +183,11 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** Setup was skipped: the new workspace's branch has different setup than the automation approved. */
+  setupSkippedReason?: AutomationRunSetupSkippedReason
 }
+
+export type AutomationRunSetupSkippedReason = 'setup-changed'
 
 /** A bounded history response; older hosts may continue returning `runs` only. */
 export type AutomationRunsPage = {
@@ -199,6 +214,7 @@ export type AutomationCreateInput = {
   workspaceId?: string | null
   baseBranch?: string | null
   setupDecision?: SetupDecision
+  setupTrustHash?: string
   reuseSession?: boolean
   timezone: string
   rrule: string
@@ -222,6 +238,7 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'workspaceId'
     | 'baseBranch'
     | 'setupDecision'
+    | 'setupTrustHash'
     | 'reuseSession'
     | 'timezone'
     | 'rrule'
@@ -255,6 +272,7 @@ export type AutomationDispatchResult = {
   errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
+  setupSkippedReason?: AutomationRunSetupSkippedReason
 }
 
 export type ExternalAutomationProvider = 'openclaw'

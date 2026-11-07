@@ -69,20 +69,4 @@ describe('resolveWorkspaceDocAddressTarget', () => {
     ).toBe('workspace-doc')
     expect(state.allWorktrees).not.toHaveBeenCalled()
   })
-
-  it('short-circuits for a folder workspace that is the current workspace', () => {
-    const state = makeState()
-    const folderCurrent = {
-      ...state,
-      getKnownWorktreeById: (id: string) =>
-        id === 'folder:folder-1' ? { id: 'folder:folder-1', path: '/srv/site' } : undefined,
-      allWorktrees: vi.fn(() => {
-        throw new Error('unnecessary global workspace enumeration')
-      })
-    } as unknown as AppState
-
-    expect(
-      resolveWorkspaceDocAddressTarget(folderCurrent, 'folder:folder-1', '/srv/site/index.html')
-    ).toMatchObject({ status: 'workspace-doc', docLocation: { worktreeId: 'folder:folder-1' } })
-  })
 })

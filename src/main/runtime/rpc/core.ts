@@ -1,25 +1,26 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { ZodError, type ZodType } from 'zod'
-import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult
-} from '../../../shared/mobile-relay-hosts-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
@@ -28,7 +29,11 @@ import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
-} from '../../../shared/device-key-registration-contract'
+} from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import type {
+  PairingCreateOfferParams,
+  PairingCreateOfferResult
+} from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {
@@ -38,6 +43,11 @@ export type DeviceSelfRpcContext = {
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
+
+// Mints new pairing credentials, so only the host owner's local transport provides it.
+export type PairingOffersRpcContext = {
+  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -145,6 +155,7 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {

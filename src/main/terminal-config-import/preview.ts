@@ -1,7 +1,7 @@
 import path from 'node:path'
 import type { WebContents } from 'electron'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TerminalConfigImportPreview } from '../../shared/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../shared/terminal/appearance/terminal-config-import-preview'
 import type { Store } from '../persistence/loading-store/store'
 import { validateImportSource } from '../configuration-import/import-source-validation'
 import { chooseTerminalConfigFile } from './choose-config-file'

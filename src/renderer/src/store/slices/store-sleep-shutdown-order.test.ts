@@ -2,7 +2,7 @@ import type { HostTerminalStop } from '../terminals/terminal-actions'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import { createTestStore, makeRuntimeOwnedWorktree, makeTab, seedStore } from './store-test-helpers'
 import {
   applySleepRuntimeRpcDefault,
@@ -28,12 +28,14 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: orderHarness.unregister
 }))
 
-vi.mock('@/components/terminal-pane/pty-shutdown-exit-deferral', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral', () => ({
   clearCommittedPtyShutdownSettlements: vi.fn(),
   hasCommittedPtyShutdownSettlement: vi.fn(() => false),
   markCommittedPtyShutdowns: vi.fn(),

@@ -1,5 +1,5 @@
 import { Loader2, Trash2 } from 'lucide-react'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../../ui/button'
 import {

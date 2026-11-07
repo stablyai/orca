@@ -4,12 +4,15 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
-import { prepareBrowserHistoryEntries, rankBrowserTopSites } from '@/lib/browser-history-match'
+import {
+  prepareBrowserHistoryEntries,
+  rankBrowserTopSites
+} from '@/lib/browser/history/browser-history-match'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-hover-attachments'
+import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 import { BrowserNewTabTile } from './browser-new-tab-tile'
 import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'

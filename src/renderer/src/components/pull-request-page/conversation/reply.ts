@@ -2,8 +2,8 @@ import { toast } from 'sonner'
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply
-} from '@/components/right-sidebar/pr-comments-ai-launch-ack'
-import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
+} from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
+import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
 import {
   addIssueCommentForRepo,
   addPRReviewCommentReplyForRepo

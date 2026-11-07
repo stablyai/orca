@@ -1,4 +1,4 @@
-import { isTerminalInputPaused } from '../../../runtime/terminal-input-admission'
+import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -7,13 +7,16 @@ import { isPtyWriteUnavailableError } from '../../../providers/pty-write-unavail
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
-import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
+import {
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,

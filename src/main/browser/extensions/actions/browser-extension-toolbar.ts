@@ -1,6 +1,6 @@
 import { webContents } from 'electron'
 import { noteBrowserExtensionUserGesture } from '../api/permissions'
-import type { BrowserExtensionActionResult } from '../../../../shared/browser-extension-types'
+import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL,
   BROWSER_EXTENSION_TOOLBAR_CHANGED_CHANNEL,
@@ -8,7 +8,7 @@ import {
   type BrowserExtensionPopupRequest,
   type BrowserExtensionToolbarAction,
   type BrowserExtensionToolbarState
-} from '../../../../shared/browser-extension-toolbar-types'
+} from '../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import { browserManager } from '../../browser-manager'
 import {
   emitBrowserExtensionEvent,
@@ -45,7 +45,7 @@ import { getBrowserExtensionMainWindow } from '../tabs-and-windows/browser-exten
 import {
   parseChromeExtensionUrl,
   resolveBrowserExtensionRequestedUrl
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 
 const TOOLBAR_CHANGED_DELAY_MS = 50
 const POPUP_REQUEST_TIMEOUT_MS = 3_000

@@ -5,7 +5,7 @@ import {
 import type { GeneratedInputEvidence } from '../../../../shared/generated-input-readiness-evaluation'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { isAgentForegroundWrapperProcess } from '../../../../shared/agent-process-recognition'
+import { isAgentForegroundWrapperProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { generatedInputAgentName } from '../../../../shared/generated-agent-input-notice'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'

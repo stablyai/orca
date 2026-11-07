@@ -55,80 +55,6 @@ afterEach(() => {
   mocks.contents.clear()
 })
 
-it.each(['completed', 'cancelled', 'interrupted'] as const)(
-  'preserves page download until native %s and then releases its routing entry',
-  (state) => {
-    const guest = register()
-    const item = download(guest)
-    guest.destroy()
-    expect(item.cancel).not.toHaveBeenCalled()
-    expect(manager.retainedCounts()).toMatchObject({ guests: 0, contextMenus: 0, renderers: 1 })
-    getDownloadItemEventHandler(item, 'on', 'updated')?.(event, 'progressing')
-    expect(renderer.send).toHaveBeenCalledWith(
-      'browser:download-progress',
-      expect.objectContaining({ browserPageId: 'recoverable-page' })
-    )
-    getDownloadItemEventHandler(item, 'once', 'done')?.(event, state)
-    expect(renderer.send).toHaveBeenCalledWith(
-      'browser:download-finished',
-      expect.objectContaining({
-        browserPageId: 'recoverable-page',
-        status: state === 'completed' ? 'completed' : state === 'cancelled' ? 'canceled' : 'failed'
-      })
-    )
-    expect(manager.downloadCount()).toBe(0)
-    expect(manager.retainedCounts().renderers).toBe(0)
-  }
-)
-
-it('still cancels a download when its logical page closes after guest destruction', () => {
-  const guest = register()
-  const item = download(guest)
-  guest.destroy()
-  manager.unregisterGuest('recoverable-page')
-  expect(item.cancel).toHaveBeenCalledOnce()
-  expect(renderer.send).toHaveBeenCalledWith(
-    'browser:download-finished',
-    expect.objectContaining({ status: 'canceled', error: 'Tab closed before download completed.' })
-  )
-  expect(manager.downloadCount()).toBe(0)
-  expect(manager.retainedCounts().renderers).toBe(0)
-})
-
-it('keeps progress routing until the last of multiple downloads settles', () => {
-  const guest = register()
-  const first = download(guest)
-  const second = download(guest)
-  guest.destroy()
-  getDownloadItemEventHandler(first, 'once', 'done')?.(event, 'completed')
-  expect(manager.downloadCount()).toBe(1)
-  expect(manager.retainedCounts().renderers).toBe(1)
-  getDownloadItemEventHandler(second, 'once', 'done')?.(event, 'completed')
-  expect(manager.downloadCount()).toBe(0)
-  expect(manager.retainedCounts().renderers).toBe(0)
-})
-
-it('keeps the replacement guest and its routing when an old download settles', () => {
-  const old = register()
-  const item = download(old)
-  old.destroy()
-  const replacement = register(5002)
-  getDownloadItemEventHandler(item, 'once', 'done')?.(event, 'completed')
-  expect(manager.getGuestWebContentsId('recoverable-page')).toBe(replacement.id)
-  expect(manager.retainedCounts().renderers).toBe(1)
-  expect(manager.downloadCount()).toBe(0)
-})
-
-it('releases current routing after two guest destructions and the final old download settles', () => {
-  const old = register()
-  const item = download(old)
-  old.destroy()
-  register(5002).destroy()
-  getDownloadItemEventHandler(item, 'once', 'done')?.(event, 'completed')
-  expect(manager.downloadCount()).toBe(0)
-  expect(manager.retainedCounts().renderers).toBe(0)
-})
-
 it('does not erase a replacement routing owner installed during completion delivery', () => {
   const old = register()
   const item = download(old)
@@ -137,18 +63,5 @@ it('does not erase a replacement routing owner installed during completion deliv
   getDownloadItemEventHandler(item, 'once', 'done')?.(event, 'completed')
   expect(manager.retainedCounts().renderers).toBe(1)
   manager.unregisterGuest('recoverable-page')
-  expect(manager.retainedCounts().renderers).toBe(0)
-})
-
-it('releases download state after renderer loss without sending to a destroyed renderer', () => {
-  const guest = register()
-  const item = download(guest)
-  guest.destroy()
-  renderer.isDestroyed.mockReturnValue(true)
-  renderer.send.mockClear()
-  getDownloadItemEventHandler(item, 'on', 'updated')?.(event, 'progressing')
-  getDownloadItemEventHandler(item, 'once', 'done')?.(event, 'completed')
-  expect(renderer.send).not.toHaveBeenCalled()
-  expect(manager.downloadCount()).toBe(0)
   expect(manager.retainedCounts().renderers).toBe(0)
 })

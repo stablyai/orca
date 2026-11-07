@@ -644,6 +644,20 @@
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
+        "PluginAuthor": {
+          "publisher": "Publisher",
+          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
+          "publisherByline": "Publisher: {{publisher}}",
+          "declaredByline": "Declared publisher: {{publisher}}",
+          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
+          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
+          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
+          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
+          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
+          "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
+          "samePublisher": "More listed as {{value0}}"
+        },
         "PluginDevelopmentSection": {
           "title": "Development"
         },
@@ -869,8 +883,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "ImportedWorktreesVisibilityLine": {
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
@@ -935,6 +947,8 @@
           "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
           "hideChildWorkspaces_one": "Hide {{count}} child workspace",
           "hideChildWorkspaces_other": "Hide {{count}} child workspaces",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "showChildWorkspaces_one": "Show {{count}} child workspace",
           "showChildWorkspaces_other": "Show {{count}} child workspaces"
         },
@@ -1278,6 +1292,7 @@
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
@@ -1324,6 +1339,7 @@
         "importFailedTryClosing": "Could not import cookies from {{browser}}. Try closing {{browser}} first.",
         "importFailedWithLog": "Could not import cookies from {{browser}}: {{detail}}. Details were written to {{logPath}}.",
         "invalidBrowserProfile": "Invalid browser profile name.",
+        "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "noCookies": "No cookies found in {{browser}}.",
         "noValidCookies": "No valid cookies found in {{browser}}.",
         "notAuthorized": "Not authorized",
@@ -1482,6 +1498,7 @@
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
         "monitoring": "Monitoring background tasks",
+        "outputFile": "Output: {{value0}}",
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",
         "stateBlocked": "blocked",
@@ -1593,11 +1610,14 @@
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+        "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in.",
+        "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
@@ -1628,6 +1648,7 @@
         "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
         "theAgent": "The agent",
         "thenSendAgain": "Then send your message again.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "usageLimitReached": "{{agent}} hit its usage limit.",
         "usageLimitReachedNamed": "{{agent}} hit its {{window}} limit.",
         "usageLimitResetsAt": "It resets at {{when}}.",
@@ -1639,6 +1660,7 @@
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "goalControl": {
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
@@ -1649,6 +1671,7 @@
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
+        "forkedFrom": "Forked from",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -1660,6 +1683,10 @@
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
         "stoppedBeforeStart": "Stopped manually"
+      },
+      "openedPullRequests": {
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -1927,7 +1954,15 @@
           "selectionVanishedCount_one": "{{count}} selected workspace no longer exists.",
           "selectionVanishedCount_other": "{{count}} selected workspaces no longer exist.",
           "selectionWithheldCount_one": "{{count}} selected workspace is hidden by the current filters and was deselected.",
-          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected."
+          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces"
+        },
+        "confirm": {
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?",
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces"
         },
         "scan": {
           "multipleErrorsCount_one": "Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.",

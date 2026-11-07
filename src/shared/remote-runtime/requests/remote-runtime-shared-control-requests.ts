@@ -8,7 +8,12 @@ import {
   type RemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
-import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
+  RuntimeRpcResponse
+} from '../../runtime-rpc-envelope'
+import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import { toRemoteRuntimeClientError } from '../control/remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from '../control/remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from '../control/remote-runtime-shared-control-types'
@@ -28,6 +33,8 @@ export function requestSharedControl<TResult>(args: {
   envelope?: RuntimeOrchestrationEnvelope
   /** Waits for the socket; `signal` withdraws this request's wait once the request is settled. */
   ensureReady: (signal: AbortSignal) => Promise<void>
+  /** Picks the params actually sent, e.g. the prefix of a batch that fits the host's request bound. */
+  prepareRequest?: RuntimeRequestPreparation
   send: (requestId: string) => void
   retireRequestId?: (requestId: string) => void
   signal?: AbortSignal
@@ -41,14 +48,21 @@ export function requestSharedControl<TResult>(args: {
     return Promise.reject(abortSignalReason(args.signal))
   }
   const requestId = randomUUID()
+  // The caller's preparation picks what is sent, at preparation and again at the handoff.
   const serialize = (params: unknown): string =>
-    serializeRemoteRuntimeRpcRequest({
-      requestId,
-      deviceToken: args.deviceToken,
-      method: args.method,
+    serializePreparedRemoteRuntimeRequest(
+      (selectedParams, envelope) =>
+        serializeRemoteRuntimeRpcRequest({
+          requestId,
+          deviceToken: args.deviceToken,
+          method: args.method,
+          params: selectedParams,
+          envelope
+        }),
       params,
-      envelope: args.envelope
-    })
+      args.envelope,
+      args.prepareRequest
+    )
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
     preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () => serialize(args.params))

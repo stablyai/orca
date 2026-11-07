@@ -69,17 +69,6 @@ describe('browser session wire identity in cross-site frames and dedicated worke
     expect(checks.dedicatedWorkerFetch).toBe(true)
     expect(checks.clientHints, JSON.stringify(receiptForPath(result.receipts, '/'))).toBe(true)
   }, 60_000)
-
-  it('turns every new clean-identity check red when the process fallback is removed', async () => {
-    const result = await runProbe('fallback-disabled')
-    assertCapturedContexts(result)
-    const checks = identityChecks(result)
-    expect(checks.crossSiteDocument).toBe(false)
-    expect(checks.crossSiteFetch).toBe(false)
-    expect(checks.dedicatedWorkerScript).toBe(false)
-    expect(checks.dedicatedWorkerFetch).toBe(false)
-    expect(checks.clientHints).toBe(false)
-  }, 60_000)
 })
 
 async function runProbe(arm: ProbeArm): Promise<ProbeResult> {

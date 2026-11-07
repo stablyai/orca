@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   GeneratedInputOutcome,

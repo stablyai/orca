@@ -29,6 +29,8 @@ export const worktreesApi = {
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
+  runApprovedSetup: (args) => ipcRenderer.invoke('worktrees:runApprovedSetup', args),
+
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: CreateWorktreeProgressEvent) =>
       callback(data)

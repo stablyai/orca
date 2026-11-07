@@ -4,9 +4,9 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { isShellProcess } from '../../../shared/shell-process-detection'
-import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
+import { noticeGeneratedInputFailure } from './agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import { acceptGeneratedInput } from './generated-paste-notice'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 

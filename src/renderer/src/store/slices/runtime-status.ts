@@ -3,8 +3,8 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+export type { RuntimeStatusSlice } from './runtime-status-types'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,

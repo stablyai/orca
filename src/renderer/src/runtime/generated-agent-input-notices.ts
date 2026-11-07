@@ -1,7 +1,7 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
 import {
   callRuntimeRpc,
@@ -61,6 +61,11 @@ export function retryLocalGeneratedInputNoticeRecovery(): void {
 }
 
 /** The local runtime is this renderer's own version, so it always speaks the notice protocol. */
+/** This window's own notice stream; a paired web client reads its host's instead. */
+export function subscribeWindowGeneratedInputNotices(): () => void {
+  return isWebClientLocation() ? () => {} : subscribeLocalGeneratedInputNotices()
+}
+
 export function subscribeLocalGeneratedInputNotices(): () => void {
   let feed: ReturnType<typeof feedFor> | undefined
   let stopped = false

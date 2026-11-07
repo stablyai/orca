@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import {
   admitsGeneratedInput,
@@ -17,10 +17,10 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import {
   readPtyBracketedPasteMode,
   readPtyInputScreen
-} from '@/components/terminal-pane/pty-buffer-serializer'
-import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
-import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
-import { acquireTerminalPtyInputTurn } from '@/components/terminal-pane/terminal-pty-input-transaction'
+} from '@/components/terminal-pane/snapshots/pty-buffer-serializer'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
+import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
+import { acquireTerminalPtyInputTurn } from '@/components/terminal-pane/input/paste/terminal-pty-input-transaction'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getRemoteRuntimePtyOwner,

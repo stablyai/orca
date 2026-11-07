@@ -21,7 +21,7 @@ import {
   beginHugeRepoWarningProbe,
   markHugeRepoWarningDismissed,
   type HugeRepoWarningProbe
-} from '@/lib/source-control-huge-repo-warning-dismissals'
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 
 export type HostTwinKind =
   | 'local+ssh'

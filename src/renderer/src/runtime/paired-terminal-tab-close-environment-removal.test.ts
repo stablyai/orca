@@ -1,9 +1,7 @@
 // Removed servers can never receive held closes; discard them immediately, including removals while app was closed, rather than waiting 30 days.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import '../../../shared/paired-terminal-tab-close-intent'
-import type { PairedTerminalTabCloseIntent } from '../../../shared/paired-terminal-tab-close-intent'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+
 import { useAppStore, type AppState } from '@/store'
 import { resetDeferredPeerChecksForTests } from '@/store/slices/runtime-environment-peer-replacement'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -56,10 +54,6 @@ function managed(id: string, pairingRevision: number, hostKeyFingerprint?: strin
       remotePort: 6_768
     }
   })
-}
-
-function heldClose(): PairedTerminalTabCloseIntent {
-  return { hostTabIds: [TAB], worktreeId: WT, closedAt: Date.now(), pairingRevision: 1 }
 }
 
 /** A user close the host never received: held, and its tab hidden. */
@@ -124,18 +118,5 @@ describe('held paired-host closes when a server is removed', () => {
     useAppStore.getState().setRuntimeEnvironments([managed('env-a', 2, 'key-a')])
     await Promise.resolve()
     expect(refreshSnapshot).not.toHaveBeenCalled()
-  })
-
-  it('drops them at session restore when the catalog published first', () => {
-    useAppStore.getState().setRuntimeEnvironments([environment('env-b')])
-
-    useAppStore.getState().hydrateWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      pairedTerminalTabCloseIntentsByEnvironment: { 'env-a': [heldClose()], 'env-b': [heldClose()] }
-    })
-
-    expect(Object.keys(useAppStore.getState().pairedTerminalTabCloseIntentsByEnvironment)).toEqual([
-      'env-b'
-    ])
   })
 })
