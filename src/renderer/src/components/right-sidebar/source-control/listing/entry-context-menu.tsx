@@ -1,3 +1,4 @@
+import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import React, { useCallback } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
@@ -7,7 +8,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
@@ -16,7 +16,7 @@ import {
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
@@ -50,11 +50,12 @@ export function SourceControlEntryContextMenu({
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
+  const scope = useSourceControlScope()
   // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
-  const runtimeEnvironmentId = useAppStore((s) =>
+  const runtimeEnvironmentId = useSourceControlState((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
   )
-  const revealOwner = useAppStore((s) =>
+  const revealOwner = useSourceControlState((s) =>
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
@@ -77,8 +78,12 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
+    if (scope && !hasWorkingTreeFile) {
+      onView?.()
+      return
+    }
     onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
+  }, [absolutePath, currentWorktreeId, hasWorkingTreeFile, onRevealInExplorer, onView, scope])
 
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {

@@ -12,7 +12,7 @@ import {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -23,7 +23,7 @@ import {
 } from '../agent-session/agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
-import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
+import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -116,7 +116,7 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
-    resumeFrom: ResumeSource.optional(),
+    ...SOURCE_FIELDS,
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z
@@ -317,7 +317,11 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
+export const SubscribeParams = OptionsParams.extend({
+  cursor: JournalCursor.optional(),
+  // Not strict: this host drops keys a newer client adds; a new value for a known key still needs a capability.
+  capabilities: z.object({ textAppend: z.literal(1).optional() }).optional()
+}).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

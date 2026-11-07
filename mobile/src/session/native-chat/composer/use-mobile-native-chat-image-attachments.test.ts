@@ -60,6 +60,8 @@ type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
 
 const textSend = (text: string, previews?: string[]) =>
   [text, previews, expect.any(Number), undefined, expect.any(Number)] as const
+const imageSend = (text: string, previews: string[]) =>
+  [...textSend(text, previews), { onHandBack: expect.any(Function) }] as const
 
 const SCOPE_A = 'h\0w\0tab-a'
 const SCOPE_B = 'h\0w\0tab-b'
@@ -268,7 +270,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       await sendPromise
     })
 
-    expect(baseSend).toHaveBeenCalledWith(...textSend('hi', ['file:///a.jpg']))
+    expect(baseSend).toHaveBeenCalledWith(...imageSend('hi', ['file:///a.jpg']))
     expect(hook!.attachments.map((a) => a.previewUri)).toEqual(['file:///b.jpg'])
   })
 
@@ -448,7 +450,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(4)
     expect(sendCalls[2]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
     expect(sendCalls[3]?.params).toMatchObject({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(1, ...textSend('hi', ['file:///a.jpg']))
+    expect(baseSend).toHaveBeenNthCalledWith(1, ...imageSend('hi', ['file:///a.jpg']))
     expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('hi again'))
   })
 

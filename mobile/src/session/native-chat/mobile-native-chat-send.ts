@@ -41,6 +41,8 @@ export type MobileNativeChatSendIntent = {
   usageLimitContinuationOfTurnItemId?: string
   delivery?: 'immediate'
   onCreated?: (clientMessageId: string) => void
+  /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
+  onHandBack?: () => void
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

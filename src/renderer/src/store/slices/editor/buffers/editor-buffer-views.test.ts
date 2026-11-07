@@ -4,11 +4,11 @@ import { useAppStore } from '@/store'
 import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
 import '../../../editor-buffer-record-lifecycle'
 
-import '../actions/editor-draft-state'
+import './editor-draft-state'
 
 import './editor-buffer-record'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

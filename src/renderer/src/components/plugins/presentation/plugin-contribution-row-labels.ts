@@ -31,3 +31,17 @@ export function statusBarContributionRows(titles: readonly string[]): PluginCont
     tone: 'default'
   }))
 }
+
+export function fontContributionRows(families: readonly string[]): PluginContribution[] {
+  const detail = translate(
+    'auto.components.settings.pluginContributions.font',
+    'Font for the terminal, editor or interface'
+  )
+  return families.map((title, index) => ({
+    key: `fonts:${index}`,
+    kind: 'fonts',
+    title,
+    detail,
+    tone: 'default'
+  }))
+}

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from '../browser-error'
 import {
+  isCdpProxyRejectedError,
   isTabClosedTransportError,
   pageUnavailableMessageForSession
 } from './agent-browser-bridge-process'
@@ -17,7 +18,9 @@ import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 import {
+  AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
   STALE_SESSION_CLOSE_TIMEOUT_MS,
+  type AgentBrowserCleanupOptions,
   type AgentBrowserExecOptions,
   type SessionState,
   type ResolvedBrowserCommandTarget
@@ -29,7 +32,7 @@ const ELEMENT_COMMANDS_WITHOUT_POINTER = new Set(['check', 'uncheck', 'select', 
 export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs {
   protected abstract destroySession(
     sessionName: string,
-    options?: { closeTimeoutMs?: number }
+    options?: AgentBrowserCleanupOptions
   ): Promise<void>
 
   protected abstract runAgentBrowserRaw(
@@ -156,10 +159,15 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     commandArgs: string[],
     execOptions?: AgentBrowserExecOptions
   ): Promise<string> {
+    const args = ['--session', sessionName]
     // Every invocation must pin CDP ownership or a restarted daemon may launch Chrome.
-    const args = ['--session', sessionName, '--cdp', String(session.proxy.getPort())]
+    // The endpoint carries the proxy token, so it goes through env: argv is visible to other users.
+    execOptions = {
+      ...execOptions,
+      envOverrides: { ...execOptions?.envOverrides, AGENT_BROWSER_CDP: session.cdpEndpoint }
+    }
     // A caller's own stdin (eval --stdin) cannot share the pipe with batch input.
-    if (!execOptions?.cliArgv && execOptions?.stdinText === undefined) {
+    if (!execOptions.cliArgv && execOptions.stdinText === undefined) {
       return this.runAgentBrowserRaw(sessionName, [...args, ...AGENT_BROWSER_BATCH_ARGS], {
         ...execOptions,
         stdinText: agentBrowserBatchInput(commandArgs)
@@ -259,6 +267,17 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       this.isSessionTargetClosed(sessionName, webContentsId)
     ) {
       return this.createPageUnavailableError(sessionName)
+    }
+    if (isCdpProxyRejectedError(message)) {
+      // The helper named a proxy endpoint this session no longer serves; start the next command fresh.
+      void this.destroySession(sessionName, {
+        closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
+        keepQueuedCommands: true
+      })
+      return new BrowserError(
+        'browser_error',
+        `The agent-browser helper was refused by Orca's browser proxy (${message}). The helper session was reset; retry the command.`
+      )
     }
     return new BrowserError(fallbackCode, message)
   }

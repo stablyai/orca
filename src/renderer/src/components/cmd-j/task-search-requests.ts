@@ -1,8 +1,12 @@
 import { useAppStore } from '@/store'
-import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/runtime-linear-client'
-import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import {
+  linearSearchIssuesForTarget,
+  linearStatusForTarget
+} from '@/runtime/linear/runtime-linear-client'
+import { jiraSearchIssuesForTarget } from '@/runtime/jira/runtime-jira-client'
+import { jiraStatusForTarget } from '@/runtime/jira/runtime-jira-project-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {

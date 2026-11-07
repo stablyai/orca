@@ -1,0 +1,4 @@
+# Grandfathered code React Compiler would run differently (<file>#<function>:<hazard>).
+# Generated; never hand-edit. Lower after a fix: pnpm check:react-compiler-compat-ratchet --prune
+1 src/renderer/src/components/browser-pane/host-guest/browser-page-mount-admission.ts#useAnyBrowserPageMountAdmission:void-read
+1 src/renderer/src/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention.ts#useSleepingSweepRetention:void-read

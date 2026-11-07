@@ -34,30 +34,32 @@ function progressRank(status: ResumeRunHostStatus | undefined): number {
   return phase === 'continued' || phase === 'refused' || phase === 'unconfirmed' ? 5 : 0
 }
 
-/** Clearing live fields cannot undo progress this action already showed. */
+/** Clearing live fields cannot undo progress this action already showed. `indices` limits the check to entries an update touched. */
 export function observeResumeRun(
   run: ResumeRun,
-  statusFor: (sessionId: string) => ResumeRunHostStatus | undefined
+  statusFor: (sessionId: string) => ResumeRunHostStatus | undefined,
+  indices: Iterable<number> = run.entries.keys()
 ): ResumeRun {
   if (!run.inFlight) {
     return run
   }
-  let changed = false
-  const entries = run.entries.map((entry) => {
-    const status = statusFor(entry.candidate.sessionId)
-    if (progressRank(status) <= progressRank(entry.observedStatus)) {
-      return entry
+  let entries: ResumeRun['entries'][number][] | null = null
+  for (const index of indices) {
+    const entry = run.entries[index]
+    const status = entry && statusFor(entry.candidate.sessionId)
+    if (!entry || progressRank(status) <= progressRank(entry.observedStatus)) {
+      continue
     }
-    changed = true
-    return {
+    entries ??= [...run.entries]
+    entries[index] = {
       ...entry,
       observedStatus: {
         restartResume: status?.restartResume,
         hostExecutionPhase: status?.hostExecutionPhase
       }
     }
-  })
-  return changed ? { ...run, entries } : run
+  }
+  return entries ? { ...run, entries } : run
 }
 
 export function resumeRunInFlight(run: ResumeRun | null): boolean {

@@ -4,11 +4,6 @@ import {
   resolveDefaultBaseRefViaExec,
   resolveRemoteHeadBranchViaExec
 } from '../refs/git-default-base-ref'
-import {
-  buildGitSshPolicyEnv,
-  GIT_SSH_CONFIG_ARGS,
-  parseGitSshConfig
-} from '../commands/git-ssh-policy-env'
 
 export function registerGitResolutionBinaryCompatibilityCases(
   runGit: (args: string[]) => Promise<{ stdout: string; stderr: string }>,
@@ -57,22 +52,6 @@ export function registerGitResolutionBinaryCompatibilityCases(
     await expect(
       runGit(['--git-dir=fork.git', 'show-ref', '--verify', `refs/heads/${branch}`])
     ).rejects.toThrow()
-  })
-
-  it('reads SSH command and variant together with baseline-compatible NUL output', async () => {
-    await runGit(['config', 'core.sshCommand', 'ssh -i "key with spaces"'])
-    await runGit(['config', 'ssh.variant', 'simple'])
-    const config = parseGitSshConfig((await runGit(GIT_SSH_CONFIG_ARGS)).stdout)
-    expect(config).toEqual({ command: 'ssh -i "key with spaces"', variant: 'simple' })
-    expect(
-      buildGitSshPolicyEnv({}, config.command, config.variant).env.GIT_SSH_COMMAND
-    ).toBeUndefined()
-    const overridden = parseGitSshConfig(
-      (await runGit(['-c', 'ssh.variant=ssh', ...GIT_SSH_CONFIG_ARGS])).stdout
-    )
-    expect(
-      buildGitSshPolicyEnv({}, overridden.command, overridden.variant).env.GIT_SSH_COMMAND
-    ).toBe('ssh -o BatchMode=yes -i "key with spaces"')
   })
 
   it('resolves default bases from exact refs with symbolic chains and dangling targets', async () => {

@@ -8,7 +8,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
 const ORCA_ANDROID_APK_URL = 'https://www.onorca.dev/download/android'

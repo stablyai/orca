@@ -62,6 +62,7 @@ function createTestEngine(
       hold: () => screen.push('+'),
       release: () => screen.push('-')
     },
+    feedSpeech: () => {},
     onMicrophoneData: (handler) => {
       microphone.push(handler)
       return {

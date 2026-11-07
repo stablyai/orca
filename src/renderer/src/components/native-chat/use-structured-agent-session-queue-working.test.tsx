@@ -34,7 +34,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 afterEach(() => {
   cleanup()

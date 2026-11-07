@@ -119,6 +119,12 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  hostContextLabel?: string
+  /** Workspaces nested under this folder; set only when it has any. */
+  lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
+  lineageGroupKey?: string
+  lineageCollapsed?: boolean
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */

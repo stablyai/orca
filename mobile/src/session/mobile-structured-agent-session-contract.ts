@@ -28,6 +28,7 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
+import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import type { AgentSessionRewindSurface } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { MobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
@@ -56,6 +57,7 @@ export type StructuredMobileSession = Omit<
       skills?: readonly AgentJournalSkillRef[],
       intent?: MobileNativeChatSendIntent
     ) => Promise<MobileNativeChatSendOutcome>
+    holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
     /** Undefined from a host too old to say. */
@@ -80,6 +82,8 @@ export type StructuredMobileSession = Omit<
 
 export type MobileStructuredAgentSessionArgs = {
   client: RpcClient | null
+  /** The paired host the route opened: its query cache holds the chat's last model lists. */
+  hostId?: string
   /** The route's paired host owns follow-up behavior even when another host executes the chat. */
   pairedHostClient: RpcClient | null
   sessionId: string | null

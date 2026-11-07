@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'

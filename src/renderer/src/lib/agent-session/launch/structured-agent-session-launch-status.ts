@@ -16,7 +16,10 @@ export function getStructuredAgentLaunchStatus(
   // A failed chat is not, nor an unconfirmed or retried blank one: a new launch opens its own chat.
   const identity = structuredLaunchIdentity(worktreeId, agent)
   const states = structuredLaunchesHoldingIdentity(
-    (candidate) => candidate === identity || candidate.startsWith(`${identity}:resume:`)
+    (candidate) =>
+      candidate === identity ||
+      candidate.startsWith(`${identity}:resume:`) ||
+      candidate.startsWith(`${identity}:fork:`)
   ).filter(
     (state) =>
       !state.operationEnded &&

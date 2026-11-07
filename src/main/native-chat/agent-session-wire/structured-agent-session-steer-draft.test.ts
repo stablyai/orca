@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
-} from './structured-agent-session-queued-message-rig.test-fixture'
+} from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import {
   hostTestMessage,
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
-import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+} from './host/testing/structured-agent-session-host-test-data'
+import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { openRigTurnFor } from './host/testing/structured-agent-session-queued-rig-turn.test-fixture'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {

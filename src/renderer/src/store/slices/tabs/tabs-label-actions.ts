@@ -1,4 +1,4 @@
-import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
+import { emitNativeChatToggled } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'

@@ -1,4 +1,4 @@
-import { createElement, useRef, useState } from 'react'
+import { createElement, useRef, useState, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -36,7 +36,7 @@ describe('legacy terminal close acknowledgments', () => {
     resetMobileNativeChatDraftStoreForTests()
   })
 
-  async function mount() {
+  async function mount(renameTarget: Terminal | null = null) {
     const client = new FakeSession('connected')
     const acknowledgments = new Map<string, (reply: RpcResponse) => void>()
     client.sendRequest.mockImplementation(
@@ -63,6 +63,7 @@ describe('legacy terminal close acknowledgments', () => {
     const tabTombstones = new Map<string, number>()
     const setSessionTabs = vi.fn()
     const setActiveSessionTabId = vi.fn()
+    const setRenameTarget = vi.fn<(update: SetStateAction<Terminal | null>) => void>()
     const tabSelection: Pick<
       MobileSessionContentCreateActionsModel,
       'sessionTabsRef' | 'activeSessionTabIdRef' | 'selectedSessionTabIdRef' | 'pendingSelectionRef'
@@ -101,8 +102,8 @@ describe('legacy terminal close acknowledgments', () => {
         ...tabSelection,
         closedTabTombstonesRef: { current: tabTombstones },
         setActiveSessionTabId,
-        renameTarget: null,
-        setRenameTarget: vi.fn(),
+        renameTarget,
+        setRenameTarget,
         terminalRefs: { current: new Map() },
         activeSessionTabTypeRef: { current: 'terminal' },
         pendingBrowserFocusPageIdRef: { current: null },
@@ -145,6 +146,7 @@ describe('legacy terminal close acknowledgments', () => {
       tabTombstones,
       setSessionTabs,
       setActiveSessionTabId,
+      setRenameTarget,
       tabSelection,
       requests: client.sendRequest,
       async acknowledge(
@@ -226,6 +228,30 @@ describe('legacy terminal close acknowledgments', () => {
     await harness.acknowledge(closed.id, rejected, false)
     expect(refs.selectedSessionTabIdRef.current).toBe(closed.id)
     expect(refs.pendingSelectionRef.current).toBe(pending)
+  })
+
+  it('keeps the rename sheet open on a refused rename and closes it once the desktop accepts', async () => {
+    const target = initial[1]!
+    const harness = await mount(target)
+    const refused = harness.read().actions.handleRenameTerminal('  build  ')
+    expect(harness.requests.mock.calls).toEqual([
+      ['terminal.rename', { terminal: 'b', title: 'build' }]
+    ])
+    await expect(harness.acknowledge('b', refused, false)).rejects.toThrow('Retry')
+    expect(harness.setRenameTarget).not.toHaveBeenCalled()
+    expect(harness.read().terminals[1]!.title).toBe('b')
+
+    const accepted = harness.read().actions.handleRenameTerminal('build')
+    await harness.acknowledge('b', accepted, true, { renamed: true })
+    expect(harness.read().terminals[1]!.title).toBe('build')
+    expect(harness.setRenameTarget).toHaveBeenCalledOnce()
+    const close = harness.setRenameTarget.mock.calls[0]![0]
+    if (typeof close !== 'function') {
+      throw new Error('Rename should close through an updater')
+    }
+    expect(close(target)).toBeNull()
+    // A sheet reopened for another terminal meanwhile stays open.
+    expect(close(initial[2]!)).toBe(initial[2])
   })
 
   it.each([

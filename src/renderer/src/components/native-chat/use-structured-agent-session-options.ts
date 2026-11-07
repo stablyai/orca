@@ -1,5 +1,5 @@
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -9,7 +9,10 @@ import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import {
+  createStructuredAgentSessionOptionsWriteOwner,
+  structuredAgentSessionOptionAvailability
+} from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
@@ -85,11 +88,15 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     interactionReadyRef.current = acceptsTurnPicks
     lockSnapshotRef.current = lockSnapshot
   })
-  const optionSnapshot = lockSnapshot(
-    structuredAgentSessionShownSnapshot(
-      optionView(optionState, launchSeedOptions, launch?.explicitOptions)
-    )
-  )
+  const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
+  const optionSnapshot = structuredAgentSessionOptionAvailability({
+    controller,
+    view: renderedView,
+    snapshot: lockSnapshot(structuredAgentSessionShownSnapshot(renderedView)),
+    ready: acceptsPicks,
+    providerStarting,
+    isCurrentContext
+  })
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
@@ -167,11 +174,12 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     () => ({
       getSnapshot: () => optionSnapshot,
       demandModelCatalog: hostCatalog.demandModelCatalog,
+      admits: writer.admits,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog]
+    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
   )
 
   return {
@@ -189,6 +197,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     sessionSupport,
     /** Undefined until this fence's options read answers. */
     rewind: support?.fence === fence ? support.rewind : undefined,
+    /** Undefined until this fence's options read answers, or from a host that predates forks. */
+    forkSupport: support?.fence === fence ? support.forkSupport : undefined,
     optionSnapshot,
     optionSurface,
     setStructuredOption,

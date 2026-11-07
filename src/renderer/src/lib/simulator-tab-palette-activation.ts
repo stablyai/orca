@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorkspace } from './worktree-activation'
+import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,

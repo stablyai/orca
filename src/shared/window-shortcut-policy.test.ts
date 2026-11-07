@@ -165,8 +165,8 @@ describe('resolveWindowShortcutAction', () => {
 
   it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
     const macWorktreePalette = {
-      code: 'KeyJ',
-      key: 'j',
+      code: 'KeyK',
+      key: 'k',
       meta: true,
       control: false,
       alt: false,
@@ -436,7 +436,7 @@ describe('resolveWindowShortcutAction', () => {
         { type: 'openNewWorkspace' }
       ],
       [
-        { code: 'KeyC', key: 'j', meta: true, alt: false, shift: false },
+        { code: 'KeyV', key: 'k', meta: true, alt: false, shift: false },
         { type: 'toggleWorktreePalette' }
       ]
     ]

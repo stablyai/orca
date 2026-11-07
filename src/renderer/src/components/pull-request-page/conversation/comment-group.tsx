@@ -21,6 +21,7 @@ import { ConversationCommentCard } from './comment-card'
 
 export function ConversationCommentGroup({
   group,
+  itemType,
   repoPath,
   repoId,
   sourceContext,
@@ -36,6 +37,7 @@ export function ConversationCommentGroup({
   onSubmitReply
 }: {
   group: PRCommentGroup
+  itemType: 'issue' | 'pr'
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
@@ -51,6 +53,7 @@ export function ConversationCommentGroup({
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
   const cardProps = {
+    itemType,
     repoPath,
     repoId,
     sourceContext,

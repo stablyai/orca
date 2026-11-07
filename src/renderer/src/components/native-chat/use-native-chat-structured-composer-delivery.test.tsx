@@ -8,7 +8,9 @@ import {
 } from './native-chat-composer-draft-store'
 import { ATTACHMENT, harness } from './use-native-chat-structured-composer-send.test-fixture'
 
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 afterEach(() => {
   cleanup()
   clearNativeChatComposerDraftsForTests()

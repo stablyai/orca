@@ -9,7 +9,7 @@ import { buildExecutionHostRegistry } from '../../../../shared/execution-host-re
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { PreflightStatus } from '../../../../preload/api/preflight-api'
 import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {

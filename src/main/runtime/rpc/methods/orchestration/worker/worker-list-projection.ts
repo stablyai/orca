@@ -8,14 +8,14 @@ import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestratio
 import {
   liveWorkerTerminalAutoReleaseAt,
   type WorkerTerminalListState
-} from '../../../../orchestration/worker-terminal-ownership'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import {
   chatAssigneeSessionId,
   type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
+} from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots,

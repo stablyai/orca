@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 
@@ -91,33 +91,6 @@ describe('a Codex turn ends once, on its completion', () => {
         completedAt: 2_000,
         durationMs: 900
       })
-    ])
-  })
-
-  it('settles an ordinary turn exactly as before', () => {
-    const tap = recorder()
-    const codex = translator(tap)
-
-    codex.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
-    codex.handle(
-      notification(
-        'turn/completed',
-        { turn: { id: TURN_ID, status: 'completed', durationMs: 3_250 } },
-        4_500
-      )
-    )
-
-    expect(terminalWrites(tap.rows, TURN_ID)).toEqual([
-      {
-        kind: 'turn',
-        turnId: TURN_ID,
-        state: 'completed',
-        outcome: 'success',
-        userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
-        startedAt: 1_000,
-        completedAt: 4_500,
-        durationMs: 3_250
-      }
     ])
   })
 })

@@ -18,6 +18,7 @@ import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import { useEligibleFolderParents } from './use-eligible-folder-parents'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import { selectWorktreeParent, showCrossStoreParentError } from './worktree-parent-selection'
@@ -136,19 +137,23 @@ export function WorktreeParentPickerPopover({
     const identity = clickedChild ? getWorktreeHostIdentity(clickedChild) : null
     return identity ? worktrees.find((row) => getWorktreeHostIdentity(row) === identity) : undefined
   }, [clickedChild, worktrees])
+  const folderParents = useEligibleFolderParents(child)
   const candidates = useMemo(
     () =>
       child
-        ? getEligibleWorktreeParents({
-            child,
-            worktrees,
-            lineageById,
-            worktreeMap,
-            repoMap,
-            parentIdentities
-          })
+        ? [
+            ...getEligibleWorktreeParents({
+              child,
+              worktrees,
+              lineageById,
+              worktreeMap,
+              repoMap,
+              parentIdentities
+            }),
+            ...folderParents
+          ]
         : [],
-    [child, lineageById, parentIdentities, repoMap, worktreeMap, worktrees]
+    [child, folderParents, lineageById, parentIdentities, repoMap, worktreeMap, worktrees]
   )
 
   useLayoutEffect(() => {

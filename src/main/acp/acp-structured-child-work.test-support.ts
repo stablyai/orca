@@ -4,7 +4,7 @@ import {
   makeStructuredAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
 } from '../../shared/agent-status/contracts/agent-status-subject'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-ownership'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 
 export function acpChildWorkStatusSink() {
   const server = new AgentHookServer()

@@ -1,7 +1,7 @@
+import * as z from 'zod'
 import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import { Identifier } from './structured-agent-session-identifiers'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
-import { z } from 'zod'
 import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
 import { measureUtf8ByteLength } from '../utf8-byte-limits'
 

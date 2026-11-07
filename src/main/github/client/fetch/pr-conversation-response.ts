@@ -16,6 +16,7 @@ const commentSchema = z.object({
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
   url: z.string(),
+  viewerDidAuthor: z.boolean().nullish().catch(undefined),
   reactionGroups: z
     .array(
       z.object({
@@ -88,6 +89,7 @@ function mapGraphQLComment(
     createdAt: comment.submittedAt ?? comment.createdAt,
     url: comment.url,
     isBot: comment.author?.__typename === 'Bot',
+    ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {}),
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
