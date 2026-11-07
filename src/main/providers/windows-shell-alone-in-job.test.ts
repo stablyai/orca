@@ -31,6 +31,18 @@ function alone(
   return { result, readConsole }
 }
 
+describe('isWindowsShellAloneInJob outside the job', () => {
+  it('counts a child that started outside the job as running work', async () => {
+    // Measured on Windows: the Store (MSIX) pwsh 7.6.9 job held only pwsh while claude.exe ran as its child.
+    const storePwsh =
+      'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe'
+    const table = [row(10, 1, 'pwsh.exe'), row(22, 10, 'claude.exe')]
+    await expect(
+      isWindowsShellAloneInJob(10, storePwsh, new Set([10]), async () => table)
+    ).resolves.toBe(false)
+  })
+})
+
 describe('isWindowsShellAloneInJob for adoption', () => {
   it('sets aside a member that left both the shell tree and the console', async () => {
     await expect(alone(LAUNCHER, [...IDLE, SSH_AGENT]).result).resolves.toBe(true)
