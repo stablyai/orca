@@ -186,9 +186,11 @@ function ChatUsageReset({
     if (busy || !result.reset) {
       return
     }
-    attempt.current ??= {
-      idempotencyKey: createBrowserUuid(),
-      expectedScope: result.reset.expectedScope
+    if (attempt.current == null) {
+      attempt.current = {
+        idempotencyKey: createBrowserUuid(),
+        expectedScope: result.reset.expectedScope
+      }
     }
     setBusy(true)
     setFailed(false)
