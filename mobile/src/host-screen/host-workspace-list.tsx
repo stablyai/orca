@@ -94,6 +94,7 @@ export function HostWorkspaceList({
     connState,
     lastConnectedAt,
     outage: isConnectionOutage(controller.connectionVerdict),
+    forceReconnect: hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null,
     // Group headers can stand with no rows under them; that list says "unreachable" in its body.
     hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0
   })
@@ -275,9 +276,7 @@ export function HostWorkspaceList({
                     hostName={hostDisplay.title}
                     offline={offlineBanner.offline}
                     asOf={offlineBanner.asOf}
-                    onRetry={
-                      hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null
-                    }
+                    onRetry={offlineBanner.retry}
                   />
                 </View>
               ) : null}

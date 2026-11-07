@@ -16,6 +16,7 @@ export function useHostOfflineBanner({
   connState,
   lastConnectedAt,
   outage,
+  forceReconnect,
   hasData
 }: {
   client: RpcClient | null
@@ -23,8 +24,10 @@ export function useHostOfflineBanner({
   lastConnectedAt: number | null
   /** The screen's verdict that the host can't be reached; the client keeps redialing either way. */
   outage: boolean
+  /** Rebuilds the connection where this document owns it; a page in the app shell can only nudge it. */
+  forceReconnect: (() => void) | null
   hasData: boolean
-}): { offline: boolean; asOf: number | null } | null {
+}): { offline: boolean; asOf: number | null; retry: (() => void) | null } | null {
   const state = useCalmConnectionState(connState, lastConnectedAt)
   const show = hasData && state !== 'connected' && state !== 'auth-failed'
   // Live data stopped at the last reply before the drop; held so reconnect attempts don't move it.
@@ -37,7 +40,12 @@ export function useHostOfflineBanner({
   } else if (!show && asOf !== null) {
     setAsOf(null)
   }
-  return show ? { offline: outage || state === 'disconnected', asOf } : null
+  if (!show) {
+    return null
+  }
+  // A nudge redials now instead of waiting out the reconnect backoff.
+  const retry = forceReconnect ?? (client ? () => client.notifyForeground('focus') : null)
+  return { offline: outage || state === 'disconnected', asOf, retry }
 }
 
 /**
