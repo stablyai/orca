@@ -4,7 +4,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   mutateJiraSavedFilters,
   readJiraSavedFilterState
-} from '@/runtime/runtime-jira-saved-filter-state'
+} from '@/runtime/jira/runtime-jira-saved-filter-state'
 import type {
   JiraSavedFilterMutation,
   JiraSavedFilter,

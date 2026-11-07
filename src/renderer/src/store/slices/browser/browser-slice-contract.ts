@@ -22,8 +22,8 @@ import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-t
 import type {
   BrowserPageConversionLeg,
   BrowserPageConversionTarget
-} from '../browser-page-conversion'
-import type { RecentlyClosedTabPosition } from '../recently-closed-tabs'
+} from './pages/browser-page-conversion'
+import type { RecentlyClosedTabPosition } from '../recently-closed-tab-position'
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
@@ -303,5 +303,3 @@ export type BrowserSlice = {
 type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
-
-export type { BrowserPageConversionLeg, BrowserPageConversionTarget, BrowserSessionProfile }

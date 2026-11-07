@@ -43,6 +43,7 @@ export function TerminalPaneSurface({
   const {
     activeAgentId,
     activePane,
+    activePaneRuntimeEnvironmentId,
     activePaneCanContinueInNewSession,
     activePaneCanResumeInChat,
     activePaneIsChatLeaf,
@@ -131,9 +132,7 @@ export function TerminalPaneSurface({
   )
   const errorReplacedByStartCard = useWslHostStartCardReplacesPaneError(
     worktreeId,
-    activePane
-      ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
-      : undefined
+    activePaneRuntimeEnvironmentId
   )
 
   return (
@@ -258,10 +257,7 @@ export function TerminalPaneSurface({
           />,
           activePane.container
         )}
-      <SessionRestoredBannerPortals
-        panes={managerRef.current?.getPanes() ?? []}
-        paneIds={sessionRestoredBannerPaneIds}
-      />
+      <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
       <TerminalContextMenu
         open={contextMenu.open}

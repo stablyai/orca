@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'

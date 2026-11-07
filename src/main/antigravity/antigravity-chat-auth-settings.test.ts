@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { resolveAntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   ANTIGRAVITY_LAUNCH_GATE,

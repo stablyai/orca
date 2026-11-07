@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
+import type * as RuntimeFileMutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn(), writeRuntimeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return {
     ...actual,

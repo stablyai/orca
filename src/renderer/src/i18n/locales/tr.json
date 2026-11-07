@@ -11286,7 +11286,11 @@
               "micDefault": "sistem varsayılanı",
               "dictationLanguageTitle": "Dikte dili",
               "dictationLanguageDescription": "Konuşma modeline hangi dili konuştuğunuzu söyleyin.",
-              "dictationLanguageKeyword": "dil"
+              "dictationLanguageKeyword": "dil",
+              "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
+              "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
+              "modelUnloadKeyword": "kaldır",
+              "modelMemoryKeyword": "bellek"
             }
           }
         },
@@ -14723,6 +14727,7 @@
             "openLog": "Logu Aç",
             "revealLog": "Logu Göster",
             "openWorkingDirectory": "Çalışma Dizinini Aç",
+            "revealArtifactsFolder": "Yapıt Klasörünü Göster",
             "copySessionId": "Oturum Kimliğini Kopyala",
             "copyLogPath": "Log Yolunu Kopyala",
             "messageCount": "{{value0}} mesaj",
@@ -17539,7 +17544,10 @@
           "reuseLiveSession": "Etkin oturumu yeniden kullan",
           "freshEachRun": "Her çalıştırmada yeni",
           "precheckEnabled": "Etkin, {{timeout}}",
-          "precheckNone": "Yok"
+          "precheckNone": "Yok",
+          "migrate": "Taşı",
+          "migrateNotice": "{{host}} yeni bir uzak ana bilgisayara yükseltildi. Çalışmaya devam etmesi için bu otomasyonu taşıyın.",
+          "needsMigration": "Taşınması gerekiyor"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -20629,6 +20637,13 @@
           "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
           "title": "Dikte dili",
           "auto": "Otomatik algıla"
+        },
+        "modelUnload": {
+          "title": "Konuşma modelini bellekten kaldır",
+          "description": "Dikteyi bitirdikten sonra yerel modelin bellekte ne kadar kalacağı. Yüklü olduğu sürece dikte hemen başlar; \"Hemen\" belleği boşaltır, bu yüzden her dikte modelin yüklenmesini bekler.",
+          "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
+          "never": "Asla",
+          "immediately": "Hemen"
         }
       }
     },
@@ -22998,6 +23013,7 @@
       "noRunnableHost": "Bu otomasyonun çalışacağı bir sunucu yok.",
       "wslMoveInProgress": "Bu otomasyonun projesi WSL ana makinesine taşınıyor. Bu nedenle Orca bu çalıştırmayı atladı. Taşıma tamamlandığında çalıştırmalar devam edecek.",
       "wslMoveOwnedByHost": "Bu otomasyonun projesi artık WSL ana makinesinde çalışıyor ve bu otomasyon da orada ana makine tarafından çalıştırılıyor. Orca artık bu yerel kopyayı çalıştırmıyor.",
+      "managedHostServer": "{{host}} üzerine taşınması gerekiyor",
       "missedGraceWindow": "Orca'nın bir sonraki kontrolünde bu çalıştırma, kaçırılan çalıştırmalar için tanınan tolerans süresini aşmıştı.",
       "targetMissing": "Otomasyon sunucusu artık kayıtlı olmadığından bu otomasyonun çalışacağı bir yer yok.",
       "targetReplaced": "Otomasyon sunucusu kaldırılıp yeniden kaydedildiği için bu otomasyonun çalıştırılmadan önce yeniden ilişkilendirilmesi gerekiyor.",

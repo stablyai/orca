@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type * as I18nModule from '@/i18n/i18n'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())

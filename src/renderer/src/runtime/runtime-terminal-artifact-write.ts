@@ -10,7 +10,7 @@ import {
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { assertRemoteWriteFitsOneRequest } from './runtime-file-mutation-client'
+import { assertRemoteWriteFitsOneRequest } from './files/mutations/runtime-file-mutation-client'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

@@ -10,7 +10,7 @@ import {
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
-import { destroyWorkspaceWebviews } from '../store/slices/browser-webview-cleanup'
+import { destroyWorkspaceWebviews } from '../store/slices/browser/cleanup/browser-webview-cleanup'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalCloseController } from './use-terminal-close-actions'
 import { useBulkTabCloseConfirmation } from './use-bulk-tab-close-confirmation'

@@ -1,6 +1,6 @@
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { SourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
+import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   mutationInFlight: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))

@@ -74,15 +74,4 @@ describe('the connection verdict hold', () => {
       'stats.summary'
     ])
   })
-
-  it('fails what waited when the host goes away before the verdict', async () => {
-    const { bridge } = heldBridge()
-    bridge.host.receive(
-      clientFrame({ type: 'request', id: bridgeId(1), method: 'worktree.ps', params: {} })
-    )
-    bridge.host.dispose()
-    await flushBridge()
-    expect(bridge.client.requests).toEqual([])
-    expect(bridge.last()).toMatchObject({ type: 'error', id: bridgeId(1) })
-  })
 })

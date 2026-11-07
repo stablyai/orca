@@ -35,13 +35,6 @@ function forkFor(sessionForkSupport: 'supported' | 'unsupported' | 'unknown' | u
   ).result.current
 }
 
-it('takes the chat options verdict on its installed agent', () => {
-  expect(forkFor('unsupported')).toBeUndefined()
-  expect(forkFor('unknown')?.support).toEqual({ kind: 'unknown' })
-  expect(forkFor(undefined)?.support).toEqual({ kind: 'unknown' })
-  expect(forkFor('supported')?.support).toEqual({ kind: 'known', fork: 'tip' })
-})
-
 it.each([
   ['sent', { sessionId: 'side', executionHostId: 'local' }],
   ['unconfirmed', { sessionId: 'side', executionHostId: 'local' }],

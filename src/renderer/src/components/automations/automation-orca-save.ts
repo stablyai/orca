@@ -47,7 +47,6 @@ export async function saveOrcaAutomation(
     draft,
     editingAutomationId,
     editingRowKey,
-    editingDestination,
     draftAtOpen,
     setEditorNotice,
     setEditorNoticeHost,
@@ -60,7 +59,8 @@ export async function saveOrcaAutomation(
     rowRecoveryHost,
     createDestination
   } = destination
-  const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
+  const { dialogRepos, editHostResolution, automationDialogTarget, editingDestination } =
+    destinationForm
 
   // Fence the destination before hook probes/trust prompts or any other transaction side effect.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null

@@ -10647,7 +10647,11 @@
               "micDefault": "システムのデフォルト",
               "dictationLanguageTitle": "音声入力の言語",
               "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
-              "dictationLanguageKeyword": "言語"
+              "dictationLanguageKeyword": "言語",
+              "modelUnloadTitle": "音声モデルの解放",
+              "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
+              "modelUnloadKeyword": "解放",
+              "modelMemoryKeyword": "メモリ"
             }
           }
         },
@@ -14083,6 +14087,7 @@
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
             "openWorkingDirectory": "作業ディレクトリを開く",
+            "revealArtifactsFolder": "成果物フォルダを表示",
             "copySessionId": "セッション ID をコピー",
             "copyLogPath": "ログパスをコピー",
             "messageCount": "{{value0}} 件のメッセージ",
@@ -16901,7 +16906,10 @@
           "reuseLiveSession": "実行中のセッションを再利用",
           "freshEachRun": "実行ごとに新規作成",
           "precheckEnabled": "有効、{{timeout}}",
-          "precheckNone": "なし"
+          "precheckNone": "なし",
+          "migrate": "移行",
+          "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
+          "needsMigration": "移行が必要"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -19946,6 +19954,13 @@
           "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
           "title": "音声入力の言語",
           "auto": "自動検出"
+        },
+        "modelUnload": {
+          "title": "音声モデルの解放",
+          "description": "音声入力を終えたあと、ローカルモデルをメモリに残しておく時間です。読み込まれている間は音声入力がすぐに始まります。「すぐに」を選ぶとメモリを解放し、毎回モデルの読み込みを待ってから音声入力が始まります。",
+          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
+          "never": "しない",
+          "immediately": "すぐに"
         }
       }
     },
@@ -22764,6 +22779,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",

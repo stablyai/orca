@@ -12,7 +12,7 @@ import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree
 import type { AppState } from '@/store/types'
 import { getWorktreeMapFromState, selectRepoByIdForActiveWorkspace } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'

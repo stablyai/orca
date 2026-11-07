@@ -3,7 +3,7 @@ import { CSV_MAX_PAGE_BYTES } from './csv-byte-index'
 import { CsvPagedPreview } from './csv-paged-preview'
 
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), read: vi.fn(), request: vi.fn(), close: vi.fn() }))
-vi.mock('@/runtime/runtime-file-range-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-range-client', () => ({
   statRuntimeReadTarget: mocks.stat,
   readRuntimeFileRange: mocks.read
 }))

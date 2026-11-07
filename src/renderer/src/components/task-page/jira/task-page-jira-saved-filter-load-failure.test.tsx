@@ -21,7 +21,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   assertRuntimeEnvironmentCapability: runtime.capability,
   callRuntimeRpc: runtime.rpc
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-client', () => ({
   jiraListIssuesForTarget: runtime.list,
   jiraSearchIssues: runtime.search,
   jiraGetProjectStatusOrder: runtime.statusOrder

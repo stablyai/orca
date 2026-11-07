@@ -10904,7 +10904,11 @@
               "micDefault": "valor predeterminado del sistema",
               "dictationLanguageTitle": "Idioma de dictado",
               "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
-              "dictationLanguageKeyword": "idioma"
+              "dictationLanguageKeyword": "idioma",
+              "modelUnloadTitle": "Descargar modelo de voz",
+              "modelUnloadDescription": "Elige cuándo se descarga de la memoria el modelo de voz local.",
+              "modelUnloadKeyword": "descargar",
+              "modelMemoryKeyword": "memoria"
             }
           }
         },
@@ -14451,6 +14455,7 @@
             "openLog": "Abrir registro",
             "revealLog": "Mostrar registro en carpeta",
             "openWorkingDirectory": "Abrir directorio de trabajo",
+            "revealArtifactsFolder": "Mostrar carpeta de artefactos",
             "copySessionId": "Copiar ID de sesión",
             "copyLogPath": "Copiar ruta de registro",
             "messageCount": "{{value0}} mens.",
@@ -17318,7 +17323,10 @@
           "reuseLiveSession": "Reutilizar sesión activa",
           "freshEachRun": "Nueva en cada ejecución",
           "precheckEnabled": "Activada, {{timeout}}",
-          "precheckNone": "Ninguna"
+          "precheckNone": "Ninguna",
+          "migrate": "Migrar",
+          "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
+          "needsMigration": "Requiere migración"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
@@ -20454,6 +20462,13 @@
           "description": "El idioma que hablas. Con Detectar automáticamente, el modelo lo deduce cada vez.",
           "title": "Idioma de dictado",
           "auto": "Detectar automáticamente"
+        },
+        "modelUnload": {
+          "title": "Descargar modelo de voz",
+          "description": "Cuánto tiempo permanece el modelo local en memoria después de dictar. Mientras está cargado, el dictado empieza al instante; «Inmediatamente» libera la memoria, así que cada dictado espera a que el modelo se cargue.",
+          "cloud": "Los modelos en la nube se ejecutan en los servidores del proveedor, así que aquí no queda nada cargado.",
+          "never": "Nunca",
+          "immediately": "Inmediatamente"
         }
       }
     },
@@ -23454,6 +23469,7 @@
       "noRunnableHost": "Esta automatización no tiene host donde ejecutarse.",
       "wslMoveInProgress": "El proyecto de esta automatización se está moviendo a su host WSL, por lo que Orca omitió esta ejecución. Las ejecuciones se reanudarán cuando termine el traslado.",
       "wslMoveOwnedByHost": "El proyecto de esta automatización ahora se ejecuta en su host WSL, que ejecuta allí esta automatización. Orca ya no ejecuta esta copia local.",
+      "managedHostServer": "Requiere migración a {{host}}",
       "missedGraceWindow": "Cuando Orca volvió a comprobarlo, ya había vencido el período de gracia para recuperar esta ejecución omitida.",
       "targetMissing": "El host de la automatización ya no está registrado, por lo que esta automatización no tiene dónde ejecutarse.",
       "targetReplaced": "El host de la automatización se eliminó y se volvió a registrar, por lo que hay que volver a vincular esta automatización antes de poder ejecutarla.",

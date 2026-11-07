@@ -1,9 +1,10 @@
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../../shared/runtime-session-contracts'
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
+
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
 import {
   createMobileDriverOverlayCollapseState,

@@ -1318,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone.",
+      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone. Mettez à jour Orca sur l'ordinateur pour dicter depuis plusieurs appareils à la fois.",
       "cloudModelNeedsKey": "Nécessite une clé OpenAI",
       "deleteFailed": "Impossible de supprimer le modèle",
       "desktopUpdateRequired": "Mettez à jour l'application Orca sur l'ordinateur appairé pour utiliser les paramètres vocaux du mobile.",
       "downloadFailed": "Impossible de démarrer le téléchargement",
       "loadFailed": "Impossible de charger les modèles de dictée",
+      "modelBusy": "Un autre appareil dicte avec un modèle vocal différent. Réessayez quand il aura terminé.",
       "repairRequired": "Appairez à nouveau ce téléphone avec l'ordinateur pour utiliser la dictée.",
       "serverUpdateRequired": "Mettez à jour Orca sur ce serveur pour utiliser la dictée vocale.",
+      "sessionLimit": "Trop d'appareils dictent sur cet ordinateur. Réessayez quand l'un d'eux aura terminé.",
       "sessionLost": "La dictée a perdu sa connexion à l'ordinateur. Réessayez.",
       "updateFailed": "Impossible de mettre à jour les paramètres de dictée"
     }
@@ -4171,6 +4173,7 @@
       "noRunnableHost": "Cette automatisation n’a pas d’hôte sur lequel s’exécuter.",
       "wslMoveInProgress": "Le projet de cette automatisation est en cours de déplacement vers son hôte WSL. Orca a donc ignoré cette exécution. Les exécutions reprendront à la fin du déplacement.",
       "wslMoveOwnedByHost": "Le projet de cette automatisation s’exécute désormais sur son hôte WSL, qui y exécute cette automatisation. Orca n’exécute plus cette copie locale.",
+      "managedHostServer": "Migration vers {{host}} requise",
       "missedGraceWindow": "Lors de la vérification suivante par Orca, la marge de rattrapage de cette exécution manquée était déjà dépassée.",
       "targetMissing": "L’hôte de l’automatisation n’est plus enregistré. Cette automatisation n’a donc plus d’hôte sur lequel s’exécuter.",
       "targetReplaced": "L’hôte de l’automatisation a été supprimé puis réenregistré. Cette automatisation doit donc être rattachée à nouveau avant de pouvoir s’exécuter.",

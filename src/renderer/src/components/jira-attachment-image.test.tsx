@@ -8,7 +8,7 @@ const { acquire, release, listeners } = vi.hoisted(() => ({
   release: vi.fn(),
   listeners: new Set<(environmentId: string | null) => void>()
 }))
-vi.mock('@/runtime/runtime-jira-image-cache', () => ({
+vi.mock('@/runtime/jira/runtime-jira-image-cache', () => ({
   acquireJiraImageUrl: acquire,
   hasCachedJiraImage: () => false,
   onJiraImageCacheInvalidated: (listener: (environmentId: string | null) => void) => {

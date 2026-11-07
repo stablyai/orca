@@ -11601,7 +11601,11 @@
               "micDefault": "system default",
               "dictationLanguageTitle": "Dictation Language",
               "dictationLanguageDescription": "Tell the speech model which language you speak.",
-              "dictationLanguageKeyword": "language"
+              "dictationLanguageKeyword": "language",
+              "modelUnloadTitle": "Unload Speech Model",
+              "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
+              "modelUnloadKeyword": "unload",
+              "modelMemoryKeyword": "memory"
             }
           }
         },
@@ -15105,6 +15109,7 @@
             "openLog": "Open Log",
             "revealLog": "Reveal Log",
             "openWorkingDirectory": "Open Working Directory",
+            "revealArtifactsFolder": "Reveal Artifacts Folder",
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
@@ -17951,7 +17956,10 @@
           "reuseLiveSession": "Reuse live session",
           "freshEachRun": "Fresh each run",
           "precheckEnabled": "Enabled, {{timeout}}",
-          "precheckNone": "None"
+          "precheckNone": "None",
+          "migrate": "Migrate",
+          "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
+          "needsMigration": "Needs migration"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -19736,6 +19744,7 @@
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+        "antigravitySystemNotSignedIn": "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
@@ -21243,6 +21252,13 @@
           "description": "The language you speak. Auto-detect lets the model work it out each time.",
           "title": "Dictation Language",
           "auto": "Auto-detect"
+        },
+        "modelUnload": {
+          "title": "Unload Speech Model",
+          "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
+          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
+          "never": "Never",
+          "immediately": "Immediately"
         }
       }
     },
@@ -23781,6 +23797,7 @@
       "noRunnableHost": "This automation has no host to run on.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
       "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",

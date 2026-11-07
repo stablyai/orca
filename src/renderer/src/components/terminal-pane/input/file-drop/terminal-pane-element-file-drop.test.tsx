@@ -52,7 +52,7 @@ vi.mock('@/store/index', () => ({
     { getState: () => mocks.state }
   )
 }))
-vi.mock('@/runtime/runtime-file-import-client', () => ({
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))

@@ -5,10 +5,10 @@ const mocks = vi.hoisted(() => ({
   runtimePathsExist: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-path-existence-batch', () => ({
+vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
   runtimePathsExist: mocks.runtimePathsExist
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))

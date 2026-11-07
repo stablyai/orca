@@ -1,4 +1,4 @@
-import { closedEditorTabOrder } from '../actions/recently-closed-editor-tabs'
+import { closedEditorTabOrder } from '../closing/recently-closed-editor-tabs'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { EditorSet, EditorGet } from '../types/editor-set-get'

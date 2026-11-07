@@ -7,15 +7,15 @@ import {
 import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
 import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
 import {
   cancelRuntimeGenerateCommitMessage,
   generateRuntimeCommitMessage
-} from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGenerateCommitMessageOverrides } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGenerateCommitMessageOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import {
   createRunningCommitMessageGenerationRecord,
