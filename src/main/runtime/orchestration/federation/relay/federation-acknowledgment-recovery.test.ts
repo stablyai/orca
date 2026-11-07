@@ -1,5 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration-runtime-capabilities'
+import { createIdleSyncHarness } from '../synchronization/federation-sync-test-harness'
 import { FederationAcknowledgmentRecovery } from './federation-acknowledgment-recovery'
+
+function requestField(params: unknown, key: string): unknown {
+  return typeof params === 'object' && params !== null
+    ? Object.fromEntries(Object.entries(params))[key]
+    : undefined
+}
+
+function relayItem(sequence: number) {
+  return {
+    dispatch_id: 'dispatch_remote',
+    direction: 'to_home' as const,
+    sequence,
+    message_id: `message_${sequence}`,
+    kind: 'status',
+    payload: JSON.stringify({ subject: 'Progress', body: `Update ${sequence}`, type: 'status' })
+  }
+}
 
 describe('FederationAcknowledgmentRecovery', () => {
   beforeEach(() => {
@@ -67,27 +86,58 @@ describe('FederationAcknowledgmentRecovery', () => {
     recovery.reset()
   })
 
-  it('keeps the base cadence while a large backlog acknowledges a few pages per sync', async () => {
-    const pending = [{ dispatchId: 'backlog', rowId: 1 }]
-    let acknowledged = 0
-    const attempts: number[] = []
-    const recovery = new FederationAcknowledgmentRecovery({
-      findNextAfter: (afterRowId) => pending.find((row) => row.rowId > afterRowId),
-      acknowledgedThrough: () => acknowledged,
-      sync: async () => {
-        attempts.push(Date.now())
-        acknowledged = Math.min(acknowledged + 300, 700)
-        if (acknowledged === 700) {
-          pending.length = 0
+  it('drains a large terminal backlog through real syncs without backing off', async () => {
+    const backlog = 700
+    const { runtime, remoteCall } = createIdleSyncHarness(backlog, 3)
+    const db = runtime.getOrchestrationDb()
+    const duplicate = db.insertMessage({ from: 'term_worker', to: 'term_home', subject: 'Replay' })
+    db.importFederatedRelayItem = () => ({ message: duplicate, duplicate: true })
+    const acknowledged = (): number =>
+      db.getFederatedDispatch('dispatch_remote')?.to_home_acknowledged_sequence ?? 0
+    let remoteAcknowledged = 0
+    const pulls: number[] = []
+    remoteCall.mockImplementation(async (_environmentId, method, params) => {
+      if (method === 'status.get') {
+        return {
+          runtimeId: 'remote_epoch_1',
+          capabilities: [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
         }
       }
+      if (method === 'orchestration.federationPull') {
+        pulls.push(Date.now())
+        const from = remoteAcknowledged
+        const count = Math.min(Number(requestField(params, 'limit')), backlog - from)
+        return {
+          runtimeEpoch: 'remote_epoch_1',
+          items: Array.from({ length: count }, (_, index) => relayItem(from + index + 1))
+        }
+      }
+      if (method === 'orchestration.federationAck') {
+        remoteAcknowledged = Number(requestField(params, 'throughSequence'))
+        return { acknowledgedThrough: remoteAcknowledged }
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+    const syncs: number[] = []
+    const recovery = new FederationAcknowledgmentRecovery({
+      findNextAfter: (afterRowId) =>
+        afterRowId < 1 && acknowledged() < backlog
+          ? { dispatchId: 'dispatch_remote', rowId: 1 }
+          : undefined,
+      sync: (dispatchId) => {
+        syncs.push(Date.now())
+        return runtime.syncOrchestrationFederatedDispatch(dispatchId)
+      },
+      acknowledgedThrough: () => acknowledged()
     })
 
     recovery.ensure()
     await vi.advanceTimersByTimeAsync(10_000)
 
-    expect(attempts).toEqual([0, 1_000, 2_000])
-    expect(pending).toHaveLength(0)
+    expect(acknowledged()).toBe(backlog)
+    // Each sync settles six pages; the backlog needs three syncs, one second apart.
+    expect(syncs).toEqual([0, 1_000, 2_000])
+    expect(pulls.length).toBeGreaterThan(syncs.length)
     recovery.reset()
   })
 })
