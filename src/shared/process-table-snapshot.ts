@@ -5,6 +5,8 @@ export type ProcessTableRow = {
   pgid?: number
   /** Terminal foreground process group id (`0`/`-1` means no controlling tty). */
   tpgid?: number
+  /** Session id; a Docker container sharing the pts number runs in its own session. */
+  sid?: number
   /** Controlling terminal name, when the host process table provides it. */
   tty?: string
   /** Opaque host process start marker (Linux /proc ticks or host ps marker). */
@@ -35,7 +37,7 @@ export const CHEAP_PS_ARGS = (
  * never correlate reused PIDs across captures. */
 export const SHELL_FOREGROUND_PS_ARGS = [
   '-axo',
-  'pid=,ppid=,pgid=,tpgid=,stat=,command='
+  'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command='
 ] as readonly string[]
 
 /** The name inside ps's `(comm)`, printed when argv was unreadable (another user's process, an exiting one, or a
@@ -58,8 +60,8 @@ export function parseShellForegroundRows(
       .trim()
       .match(
         options?.strict
-          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+))?$/
-          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/
+          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\S+)(?:\s+(.+))?$/
+          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\S+)\s+(.+)$/
       )
     const pid = match ? Number(match[1]) : 0
     if (
@@ -68,7 +70,7 @@ export function parseShellForegroundRows(
       (!match ||
         !Number.isSafeInteger(pid) ||
         pid <= 0 ||
-        ![2, 3, 4].every((i) => Number.isSafeInteger(Number(match[i]))) ||
+        ![2, 3, 4, 5].every((i) => Number.isSafeInteger(Number(match[i]))) ||
         Number(match[2]) < 0 ||
         Number(match[3]) < 0 ||
         Number(match[4]) < -1)
@@ -81,8 +83,9 @@ export function parseShellForegroundRows(
         ppid: Number(match[2]),
         pgid: Number(match[3]),
         tpgid: Number(match[4]),
-        stat: match[5],
-        command: match[6] ?? ''
+        sid: Number(match[5]),
+        stat: match[6],
+        command: match[7] ?? ''
       })
     }
   }

@@ -169,10 +169,14 @@ export async function observePtyForeground(
     if (before !== after) {
       continue
     }
-    if (rows.some((row) => row.tpgid !== before)) {
+    // A Docker container sharing the pts number runs in its own session on a different
+    // devpts instance; its TPGID is irrelevant to this terminal. Only rows in the root's
+    // own session can report a different foreground group on this terminal (#39488).
+    const sessionRows = root?.sid !== undefined ? rows.filter((row) => row.sid === root.sid) : rows
+    if (sessionRows.some((row) => row.tpgid !== before)) {
       continue
     }
-    const sample = resolvePtyForegroundMembers(rows, before)
+    const sample = resolvePtyForegroundMembers(sessionRows, before)
     return {
       ...sample,
       source: group === undefined ? 'posix-process-table' : 'pty-master',

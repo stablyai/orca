@@ -92,7 +92,8 @@ export async function readPtyTerminalRows(
     return null
   }
   const stdout = await readTerminalPs(
-    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', normalized],
+    // sid groups the rows by session: a Docker container sharing the pts number runs in its own.
+    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=', '-t', normalized],
     timeoutMs
   )
   try {
