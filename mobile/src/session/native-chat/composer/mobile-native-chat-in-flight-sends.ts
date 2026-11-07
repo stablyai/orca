@@ -10,8 +10,10 @@ import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
 import type {
   MobileNativeChatInFlightSend,
-  MobileNativeChatSavedFile
+  MobileNativeChatSavedFile,
+  MobileNativeChatSavedImage
 } from './mobile-native-chat-saved-drafts'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 // Sends cleared from the box before their outcome was known. `held` marks one a live hold is waiting on;
 // the rest came back with the page and wait for their chat to open.
@@ -53,8 +55,8 @@ export function beginMobileNativeChatInFlightSend(
   extra: {
     clientMessageId?: string
     command?: boolean
-    // Only the chips this send took, not ones attached while it was on its way.
-    carried?: MobileNativeChatSendIntent['carried']
+    // Its chips (only those this send took); a queued message also brings its own skills and id, so it is saved once.
+    intent?: MobileNativeChatSendIntent
   } = {}
 ): string | null {
   const destination = origin.draftDestination
@@ -63,20 +65,25 @@ export function beginMobileNativeChatInFlightSend(
   }
   const scope = destination.scope
   const inputs = readMobileNativeChatDraftInputs(scope)
-  const id = createUuidV4()
+  const queued = extra.intent?.queued
+  const carried = queued ?? extra.intent?.carried
+  const id = queued?.id ?? createUuidV4()
   inFlightSends.set(id, {
     scope,
     held: true,
+    // Only the composer's chips: a queued message's own chips were never in the box.
     carriedIds: new Set(
-      [...(extra.carried?.images ?? []), ...(extra.carried?.files ?? [])].map((chip) => chip.id)
+      [...(extra.intent?.carried?.images ?? []), ...(extra.intent?.carried?.files ?? [])].map(
+        (chip) => chip.id
+      )
     ),
     send: {
       id,
       kind,
       text,
-      skills: inputs.skills,
-      images: (extra.carried?.images ?? []).map(({ path }) => ({ path })),
-      files: savedMobileNativeChatFiles(extra.carried?.files ?? []),
+      skills: queued?.skills ?? inputs.skills,
+      images: (carried?.images ?? []).map(({ path }) => ({ path })),
+      files: savedMobileNativeChatFiles(carried?.files ?? []),
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
       ...(extra.clientMessageId === undefined ? {} : { clientMessageId: extra.clientMessageId }),
       ...(extra.command ? { command: true } : {}),
@@ -155,6 +162,19 @@ export function savedMobileNativeChatFiles(
   return files.flatMap(({ name, mime, byteLength, path }) =>
     path === null ? [] : [{ name, mime, byteLength, path }]
   )
+}
+
+// Phone previews die with the page; a restored image chip shows its file name instead.
+export function restoredImages(
+  images: readonly MobileNativeChatSavedImage[]
+): PendingNativeChatImage[] {
+  return images.map(({ path }) => ({ id: createUuidV4(), path, previewUri: '' }))
+}
+
+export function restoredFiles(
+  files: readonly MobileNativeChatSavedFile[]
+): PendingNativeChatFile[] {
+  return files.map((file) => ({ ...file, id: createUuidV4() }))
 }
 
 export function readMobileNativeChatInFlightSend(

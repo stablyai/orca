@@ -12,6 +12,7 @@ import {
   buildAgentTuiClearInputForText
 } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
+import type { AgentJournalSkillRef } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
@@ -50,6 +51,15 @@ export type MobileNativeChatSendIntent = {
   carried?: {
     images: readonly PendingNativeChatImage[]
     files: readonly PendingNativeChatFile[]
+  }
+  /** A message the phone queued offline: it carries its own inputs and the send never touches the composer. */
+  // Spelled out, not taken from the queue module: this type is read by programs that must not load the page's storage.
+  queued?: {
+    id: string
+    images: readonly PendingNativeChatImage[]
+    files: readonly PendingNativeChatFile[]
+    skills: readonly AgentJournalSkillRef[]
+    skillOrigin: string | null
   }
 }
 
