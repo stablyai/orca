@@ -1921,6 +1921,10 @@
     }
   },
   "session": {
+    "terminalPasswordMask": {
+      "showInput": "Show input",
+      "hideInput": "Hide input"
+    },
     "browserTabActionSheet": {
       "title": "Browser",
       "forward": "Forward",
