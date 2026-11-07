@@ -6,6 +6,15 @@ export type GpuCrashFallbackOptions = {
 
 const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-failed'])
 
+export const GPU_FALLBACK_PLATFORMS = ['win32', 'linux'] as const
+export type GpuFallbackPlatform = (typeof GPU_FALLBACK_PLATFORMS)[number]
+
+const GPU_FALLBACK_PLATFORM_SET = new Set<string>(GPU_FALLBACK_PLATFORMS)
+
+export function isGpuFallbackPlatform(platform: unknown): platform is GpuFallbackPlatform {
+  return typeof platform === 'string' && GPU_FALLBACK_PLATFORM_SET.has(platform)
+}
+
 export const DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS = 30_000
 export const DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD = 3
 
@@ -74,7 +83,7 @@ export function isGpuFallbackCrashCandidate({
   reason: string
 }): boolean {
   return (
-    platform === 'win32' &&
+    isGpuFallbackPlatform(platform) &&
     isGpuChildProcessType(processType) &&
     GPU_FALLBACK_CRASH_REASONS.has(reason)
   )

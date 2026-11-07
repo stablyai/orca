@@ -1,5 +1,9 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  isGpuFallbackPlatform,
+  type GpuFallbackPlatform
+} from '../crash-reporting/gpu-crash-fallback-decision'
 
 /** Read a tiny build-scoped marker before ready, when hardware acceleration must be disabled and the settings Store is unavailable. */
 
@@ -12,7 +16,9 @@ export type GpuFallbackEnvironment = {
   platform: NodeJS.Platform
 }
 
-export type WindowsGpuFallbackEnvironment = GpuFallbackEnvironment & { platform: 'win32' }
+export type GpuFallbackCapableEnvironment = GpuFallbackEnvironment & {
+  platform: GpuFallbackPlatform
+}
 
 export type GpuFallbackMarker = {
   schemeVersion: number
@@ -21,7 +27,7 @@ export type GpuFallbackMarker = {
   userConfirmed: boolean
   appVersion: string
   electronVersion: string
-  platform: 'win32'
+  platform: GpuFallbackPlatform
 }
 
 function markerPath(userDataPath: string): string {
@@ -44,7 +50,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       typeof parsed.userConfirmed !== 'boolean' ||
       typeof parsed.appVersion !== 'string' ||
       typeof parsed.electronVersion !== 'string' ||
-      parsed.platform !== 'win32'
+      !isGpuFallbackPlatform(parsed.platform)
     ) {
       return null
     }
@@ -64,7 +70,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
 export function writeGpuFallbackMarker(
   userDataPath: string,
   info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean },
-  environment: WindowsGpuFallbackEnvironment
+  environment: GpuFallbackCapableEnvironment
 ): void {
   const marker: GpuFallbackMarker = {
     schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
@@ -73,7 +79,7 @@ export function writeGpuFallbackMarker(
     userConfirmed: info.userConfirmed,
     appVersion: environment.appVersion,
     electronVersion: environment.electronVersion,
-    platform: 'win32'
+    platform: environment.platform
   }
   writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
 }
@@ -98,7 +104,6 @@ export function readActiveGpuFallbackMarker(
     return null
   }
   if (
-    environment.platform !== 'win32' ||
     marker.platform !== environment.platform ||
     marker.appVersion !== environment.appVersion ||
     marker.electronVersion !== environment.electronVersion
