@@ -12,7 +12,7 @@ const HOST_DICTATION_ERROR_MESSAGES: ReadonlyMap<string, string> = new Map([
   ],
   [
     'dictation_model_busy',
-    'Another device is dictating with a different voice model. Try again when it finishes.'
+    'Another device is dictating with a different speech model. Try again when it finishes.'
   ],
   ['dictation_requires_mobile_client', 'Re-pair this phone with the computer to use dictation.'],
   ['dictation_owner_mismatch', DICTATION_SESSION_LOST_MESSAGE],

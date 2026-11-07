@@ -1285,7 +1285,7 @@
       "desktopUpdateRequired": "Die gekoppelte Orca-Desktop-App aktualisieren, um die Spracheingabeeinstellungen auf dem Smartphone zu nutzen.",
       "downloadFailed": "Download konnte nicht gestartet werden",
       "loadFailed": "Diktatmodelle konnten nicht geladen werden",
-      "modelBusy": "Ein anderes Gerät diktiert mit einem anderen Sprachmodell. Erneut versuchen, sobald es fertig ist.",
+      "modelBusy": "Ein anderes Gerät diktiert mit einem anderen Spracherkennungsmodell. Erneut versuchen, sobald es fertig ist.",
       "repairRequired": "Dieses Smartphone erneut mit dem Computer koppeln, um das Diktat zu nutzen.",
       "serverUpdateRequired": "Orca auf diesem Server aktualisieren, um das Diktat zu nutzen.",
       "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",

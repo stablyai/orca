@@ -40,10 +40,12 @@ export class SttService {
     if (session.cloud) {
       return session.cloud.feedAudio(samples, sampleRate)
     }
+    // postMessage copies the whole backing buffer, not just this view.
+    const whole = samples.byteOffset === 0 && samples.byteLength === samples.buffer.byteLength
     session.engine?.worker.postMessage({
       type: 'feed',
       streamId: session.streamId,
-      samples,
+      samples: whole ? samples : samples.slice(),
       sampleRate
     })
     return false
