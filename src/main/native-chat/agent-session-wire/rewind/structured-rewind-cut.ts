@@ -123,10 +123,12 @@ function lastListedTurn(
   return last
 }
 
-export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): string {
-  return savedRewindKeys(
-    [journal.inputOrder.inputForItem(itemId)].flatMap((input) => (input ? [input] : []))
-  ).providerKey(itemId)
+export async function providerItemIdOf(
+  journal: AgentSessionJournal,
+  itemId: string
+): Promise<string> {
+  const { submission } = await journal.reads.input({ kind: 'input-for-item', itemId })
+  return savedRewindKeys(submission ? [submission] : []).providerKey(itemId)
 }
 
 /** The main conversation turn a row belongs to: its own Codex key on the main thread, else the turn

@@ -59,14 +59,14 @@ export async function stopEndsWork(
   )
   const working =
     (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) || work.working()
-  return working && (ending.cause === 'user-close' || !defersToPersonsStop(session, work))
+  return working && (ending.cause === 'user-close' || !(await defersToPersonsStop(session, work)))
 }
 
 /** Host Stops must not overwrite personal cancellation or lift its still-active queue pause. */
-function defersToPersonsStop(
+async function defersToPersonsStop(
   session: StructuredAgentSessionHostSession,
   work: StructuredAgentSessionCurrentWork
-): boolean {
+): Promise<boolean> {
   const { journal } = session
   const live = work.activeTurnId()
   if (live !== null) {
@@ -74,7 +74,7 @@ function defersToPersonsStop(
   }
   const inForce = journal.queuedMessages.userStopInForce()
   return (
-    (inForce !== null && !sentSinceStop(journal, inForce)) ||
+    (inForce !== null && !(await sentSinceStop(journal, inForce))) ||
     journal.stopMarks.personStopDecides(null)
   )
 }

@@ -27,7 +27,7 @@ export type ChatStopTarget = {
 }
 
 /** Late/empty Stops are accepted no-ops and must not withdraw or interrupt newer work. */
-export function captureChatStopTarget(
+export async function captureChatStopTarget(
   ctx: AgentSessionTurnContext,
   input: {
     child: StructuredAgentSessionProviderChild | null
@@ -37,15 +37,15 @@ export function captureChatStopTarget(
     stoppedSend?: boolean
     withdrawsContinue?: boolean
   }
-): ChatStopTarget | null {
+): Promise<ChatStopTarget | null> {
   const { child, turnId } = input
-  const reached = stopReachesUnrecordedWork(ctx, turnId)
+  const reached = await stopReachesUnrecordedWork(ctx, turnId)
   if (reached === 'late') {
     return null
   }
-  const queued = ctx.journal.inputOrder
-    .recoverableSubmissions()
-    .some(isQueuedAgentJournalSubmission)
+  const queued = (
+    await ctx.journal.reads.input({ kind: 'recoverable-submissions' })
+  ).submissions.some(isQueuedAgentJournalSubmission)
   const target = {
     child,
     turnId: structuredAgentSessionStoppedTurnId(

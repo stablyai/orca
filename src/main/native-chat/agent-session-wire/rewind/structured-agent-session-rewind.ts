@@ -139,7 +139,7 @@ export async function rewindStructuredAgentSession(
             operationId: clientOperationId,
             callerKey: caller.callerKey,
             itemId: params.itemId,
-            providerItemId: providerItemIdOf(ctx.journal, params.itemId),
+            providerItemId: await providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
             ...(fork?.ok ? { providerFork: fork.fork } : {}),

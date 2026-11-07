@@ -187,7 +187,7 @@ export function mutateWithChatStop<TValue>(
     }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)
-    const target = captureChatStopTarget(ctx, {
+    const target = await captureChatStopTarget(ctx, {
       child: context.sessions.get(ctx.sessionId)?.child ?? null,
       ...named,
       endsSession: true,

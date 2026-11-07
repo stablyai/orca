@@ -19,10 +19,10 @@ export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMes
 }
 
 /** Distinguish unrecorded work, repeated Stop without later sends, and late Stops naming ended turns. */
-export function stopReachesUnrecordedWork(
+export async function stopReachesUnrecordedWork(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   namedTurnId: string | undefined
-): 'unrecorded' | 'repeat' | 'late' {
+): Promise<'unrecorded' | 'repeat' | 'late'> {
   const work = contextStructuredAgentSessionCurrentWork(ctx)
   if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, work, namedTurnId)) {
     return 'late'
@@ -33,16 +33,16 @@ export function stopReachesUnrecordedWork(
     return 'unrecorded'
   }
   // This interrupt may return later sends to waiting, so it must hold them.
-  return sentSinceStop(ctx.journal, inForce) ||
+  return (await sentSinceStop(ctx.journal, inForce)) ||
     structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live)
     ? 'unrecorded'
     : 'repeat'
 }
 
 /** Include nonrefused later sends even if unknown; missing sequence is legacy data. */
-export function sentSinceStop(
-  journal: Pick<AgentSessionJournal, 'inputOrder'>,
+export async function sentSinceStop(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   inForce: { sequence: number }
-): boolean {
-  return journal.inputOrder.sentAfter(inForce.sequence)
+): Promise<boolean> {
+  return (await journal.reads.input({ kind: 'sent-after', sequence: inForce.sequence })).answer
 }
