@@ -2,6 +2,8 @@ import { useAppStore } from '../store'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getActiveEntityIdForTabType,
+  getNextTerminalCycleTab,
+  isTerminalCycleType,
   getNextTabAcrossAllTypes,
   getNextTabWithinActiveType,
   getPreviousRecentTab,
@@ -265,28 +267,28 @@ export function handleSwitchRecentTab(): boolean {
   return true
 }
 
-/** Ctrl+PageUp/PageDown cycle visible terminal tabs only. */
+/** Ctrl+PageUp/PageDown cycle terminals and native chats in visible order. */
 export function handleSwitchTerminalTab(direction: number): boolean {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
   if (!worktreeId) {
     return false
   }
-  // Reuse visible order so terminal-only cycling follows drag order too.
+  // Keep terminal hydration detection separate: native chats are self-backed.
   const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
-  const terminalTabs = shouldUseWorktreeTerminalFallback(
+  const useFallback = shouldUseWorktreeTerminalFallback(
     store,
     worktreeId,
     activeGroupNavTabs,
     activeGroupTerminalTabs,
     worktreeTerminalTabs
   )
-    ? worktreeTerminalTabs
-    : activeGroupTerminalTabs
-  if (terminalTabs.length === 0) {
-    return false
+  const cycleTabs = activeGroupNavTabs.filter((entry) => isTerminalCycleType(entry.type))
+  if (useFallback) {
+    const visibleTerminalIds = new Set(activeGroupTerminalTabs.map((tab) => tab.id))
+    cycleTabs.push(...worktreeTerminalTabs.filter((tab) => !visibleTerminalIds.has(tab.id)))
   }
   // Prefiltered terminal navigation must use the active entity’s domain, never a stale background terminal ID under structured focus.
   const activeTab = store.getActiveTab(worktreeId)
@@ -297,20 +299,22 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     store.activeBrowserTabId,
     activeTab?.contentType === 'agent-session' ? activeTab.entityId : null
   )
-  // From another tab type, forward navigation starts at the first terminal rather than skipping it.
-  const idx = terminalTabs.findIndex((t) => t.id === currentId)
-  // A sole terminal no-ops only when already focused; other active types must still jump to it.
-  if (terminalTabs.length === 1 && idx === 0) {
+  const next = getNextTerminalCycleTab(
+    cycleTabs,
+    {
+      type: store.activeTabType,
+      id: currentId ?? '',
+      // A runtime-only selection leaves the previous unified group selection behind.
+      tabId:
+        activeTab?.contentType === store.activeTabType && activeTab.entityId === currentId
+          ? activeTab.id
+          : undefined
+    },
+    direction
+  )
+  if (!next) {
     return false
   }
-  const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
-  const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
-  // Skip redundant activation writes to avoid unnecessary active-tab subscriber work.
-  if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
-    return false
-  }
-  store.setActiveTab(next.id)
-  store.setActiveTabType('terminal', worktreeId)
-  activateCycledTabOnOwner(worktreeId, next)
+  activateCyclableTab(store, next)
   return true
 }

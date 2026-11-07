@@ -2,8 +2,8 @@ import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionLifecycleEvent,
   AgentSessionDispatchOutcome
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { ReaderPauseHolds } from '../jsonl-rpc/reader-pause-holds'
@@ -17,7 +17,7 @@ import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
 import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
@@ -130,7 +130,8 @@ export class PiRpcSession {
     this.dialogs = new PiRpcDialogCallbacks(
       this.lane,
       (frame) => this.connection.send(frame),
-      (error) => this.fail(error)
+      (error) => this.fail(error),
+      resolvedLaunch.backgroundWork?.directory ?? null
     )
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
@@ -266,7 +267,7 @@ export class PiRpcSession {
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
     const cause = (this.failure ??= error)
-    this.dialogs.cancelAll()
+    this.dialogs.close()
     this.turns.end()
     // The lane is sealed once finalized, so the end event travels with the final transfer.
     this.lane.finalize({

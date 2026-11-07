@@ -13,14 +13,14 @@ import type { openCodexAppServerConnection } from '../codex/app-server/codex-app
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
 import { AgentHookServer } from '../agent-hooks/server'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
@@ -87,7 +87,7 @@ describe('structured Codex child work through the production runtime', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root!, 'codex-not-installed'), prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink: {

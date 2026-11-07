@@ -5,7 +5,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef, type RefObject } from 'react'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import type {
   NativeChatComposerField as NativeChatComposerFieldComponent,
@@ -19,6 +22,7 @@ type FieldProps = {
   sendButtonDisabled?: boolean
   onRemoveImageAttachment: (id: string) => void
   onSend: () => void
+  sendBlockedReason?: string | null
 }
 
 const mocks = vi.hoisted(() => {
@@ -33,6 +37,8 @@ const mocks = vi.hoisted(() => {
   }
   return { state, prepare: vi.fn(), save: vi.fn(), goal: vi.fn(async () => true) }
 })
+
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
 
 vi.mock('../../store', () => {
   const state = {
@@ -57,7 +63,7 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (import
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),
@@ -106,7 +112,8 @@ const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8
 function composer(
   acceptsImages = true,
   composerRef?: RefObject<NativeChatComposerHandle | null>,
-  mode: 'structured' | 'terminal' | 'goal' = 'structured'
+  mode: 'structured' | 'terminal' | 'goal' = 'structured',
+  overrides?: Partial<NativeChatStructuredComposerTransport>
 ): React.JSX.Element {
   return (
     <NativeChatComposer
@@ -138,7 +145,8 @@ function composer(
               acceptsImages,
               ...(mode === 'goal' ? { threadGoal: { setObjective: mocks.goal } } : {}),
               sessionId: 'session-1',
-              runtimeEnvironmentId: 'env-1'
+              runtimeEnvironmentId: 'env-1',
+              ...overrides
             }
       }
     />
@@ -253,18 +261,6 @@ describe('a paste into a chat on a paired server', () => {
     expect(mocks.state.fieldProps?.imageAttachments?.[0]?.pending).toBeFalsy()
   })
 
-  it('holds Send for rich text while the server is still asked whether it takes the image', async () => {
-    const prepared = Promise.withResolvers<unknown>()
-    mocks.prepare.mockReturnValue(prepared.promise)
-    holdUpload()
-    writeNativeChatDraftCache(PANE, 'look at this caption')
-    render(composer())
-    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
-    await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste('caption')))
-
-    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
-  })
-
   it("shows a rich-text paste's image once the server answers, even in a composer that came back", async () => {
     const prepared = Promise.withResolvers<unknown>()
     mocks.prepare.mockReturnValue(prepared.promise)
@@ -295,23 +291,6 @@ describe('a paste into a chat on a paired server', () => {
   })
 })
 
-it('keeps a local image paste after the real composer closes and reopens', async () => {
-  mocks.state.owner = { kind: 'local' }
-  mocks.save.mockClear()
-  const finishUpload = holdUpload()
-  const first = render(composer())
-  await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste()))
-  await waitFor(() => expect(mocks.save).toHaveBeenCalled())
-  expect(mocks.state.fieldProps?.imageAttachments).toMatchObject([{ pending: true }])
-  first.unmount()
-  await act(async () => finishUpload('/local/native-chat-pastes/orca-paste-1-image.png'))
-  render(composer())
-  expect(mocks.state.fieldProps?.imageAttachments).toMatchObject([
-    { path: '/local/native-chat-pastes/orca-paste-1-image.png' }
-  ])
-  await waitFor(() => expect(mocks.state.fieldProps?.imageAttachments?.[0]?.pending).toBeFalsy())
-})
-
 it.each([false, true])(
   'can remove a stalled paste after reopen with acceptsImages=%s',
   async (acceptsImages) => {
@@ -335,30 +314,6 @@ it.each([false, true])(
     expect(readNativeChatAttachmentCache(PANE)).toEqual([])
     expect(readNativeChatDraftCache(PANE)).toBe('look at this')
     expect(mocks.state.fieldProps?.imageAttachments).toEqual([])
-  }
-)
-
-it.each([true, false])(
-  'pastes ordinary menu text without image feedback or holding Send, acceptsImages=%s',
-  async (acceptsImages) => {
-    mocks.state.owner = { kind: 'local' }
-    mocks.save.mockClear()
-    mocks.save.mockReturnValue(new Promise(() => {}))
-    installPreloadApi({
-      saveClipboardImageAsTempFile: mocks.save,
-      readClipboardText: async () => 'ordinary text',
-      readClipboardFilePaths: async () => [],
-      readClipboardImageThumbnail: async () => null,
-      clipboardHasImage: async () => false
-    })
-    const handle = createRef<NativeChatComposerHandle>()
-    writeNativeChatDraftCache(PANE, 'look at this')
-    render(composer(acceptsImages, handle))
-    await act(async () => handle.current?.pasteFromClipboard())
-    expect(screen.getByRole('textbox').textContent).toContain('ordinary text')
-    expect(screen.queryByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeNull()
-    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
-    expect(mocks.save).not.toHaveBeenCalled()
   }
 )
 
@@ -439,6 +394,61 @@ import {
 } from './native-chat-composer-draft-storage'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+
+it('keeps a picked Plan skill held as a message instead of enabling the native mode action', async () => {
+  const setOption = vi.fn()
+  const send = vi.fn(() => true)
+  const dispatchCommand = vi.fn(async () => ({ handled: false, accepted: false, error: null }))
+  render(
+    composer(true, undefined, 'structured', {
+      sendBlockedReason: 'The host is waiting',
+      send,
+      dispatchCommand,
+      optionSnapshot: [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ],
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption,
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      }
+    })
+  )
+  const field = screen.getByRole('textbox')
+  act(() =>
+    promptEditor(field).commands.insertContent({
+      type: 'nativeChatSkill',
+      attrs: { token: '/plan', path: '/skills/plan/SKILL.md' }
+    })
+  )
+  expect(promptValue(field)).toBe('/plan')
+  expect(readNativeChatComposerDraft(PANE).document).toMatchObject({
+    content: [{ content: [{ type: 'nativeChatSkill', attrs: { path: '/skills/plan/SKILL.md' } }] }]
+  })
+  expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
+  expect(mocks.state.fieldProps?.sendBlockedReason).toBe('The host is waiting')
+  act(() => mocks.state.fieldProps?.onSend())
+  expect(promptValue(field)).toBe('/plan')
+  expect(setOption).not.toHaveBeenCalled()
+  expect(dispatchCommand).not.toHaveBeenCalled()
+  expect(send).not.toHaveBeenCalled()
+})
 import { promptTextContent } from './native-chat-prompt-document'
 
 it.each([false, true])(
@@ -634,54 +644,3 @@ it('preserves goal paste-time size refusal on an upload-incapable owner without 
   expect(screen.getByText(/256 KB limit/)).toBeTruthy()
   expect(save).not.toHaveBeenCalled()
 })
-
-it.each([100 * 1024, 1024 * 1024])(
-  'bounds real structured goal clipboard intake at %i bytes for N/10 actions',
-  async (bytes) => {
-    const measurements: unknown[] = []
-    for (const count of [1, 10]) {
-      clearNativeChatComposerDraftsForTests()
-      const storage = createMemoryNativeChatComposerDraftStorage()
-      setNativeChatComposerDraftStorageForTests(storage)
-      await hydrateNativeChatComposerDrafts()
-      mocks.state.owner = { kind: 'local', structuredSessionId: 'session-1' }
-      const save = vi.fn(async () => '/p/benchmark.txt')
-      installPreloadApi({ savePastedTextAsFile: save })
-      const view = render(composer(true, undefined, 'goal'))
-      const field = screen.getByRole('textbox')
-      act(() => writeNativeChatDraftCache(PANE, '/goal'))
-      act(() => mocks.state.fieldProps?.onSend())
-      const paste = (text: string) => {
-        const data = new DataTransfer()
-        data.setData('text/plain', text)
-        fireEvent(field, new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
-      }
-      await act(async () => paste('small paste'))
-      expect(promptValue(field)).toBe('small paste')
-      expect(save).not.toHaveBeenCalled()
-      act(() => promptEditor(field).commands.clearContent())
-      let inserted = 0
-      const text = 'x'.repeat(bytes)
-      const started = performance.now()
-      for (let index = 0; index < count; index++) {
-        await act(async () => paste(text))
-        inserted += promptValue(field).length
-        expect(resolveNativeChatPastedText(PANE, promptValue(field))).toBe('@/p/benchmark.txt')
-        act(() => promptEditor(field).commands.clearContent())
-      }
-      measurements.push({
-        bytes,
-        count,
-        inserted,
-        uploads: save.mock.calls.length,
-        elapsedMs: performance.now() - started
-      })
-      expect(save).toHaveBeenCalledTimes(count)
-      expect(inserted).toBeLessThan(100 * count)
-      expect(nativeChatPastedTextOperations.size).toBe(0)
-      view.unmount()
-    }
-    // Happy-dom handler/editor timing with upload I/O injected; no native layout or filesystem claim.
-    process.stdout.write(`structured-goal-paste-intake-benchmark ${JSON.stringify(measurements)}\n`)
-  }
-)

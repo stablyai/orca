@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import { claudeListedModelLabel } from '../../../../shared/claude-model-list-probe'
 
 export type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
 
@@ -39,45 +40,69 @@ export function isCompleteClaudeModelListing(value: unknown): boolean {
   )
 }
 
+function listedRow(row: Record<string, unknown>, id: string, label: string): ListedModel {
+  const description = text(row.description)
+  const supportsFastMode =
+    typeof row.supportsFastMode === 'boolean' ? row.supportsFastMode : undefined
+  const supportsAutoMode =
+    typeof row.supportsAutoMode === 'boolean' ? row.supportsAutoMode : undefined
+  return {
+    id,
+    label,
+    ...(description ? { description } : {}),
+    isDefault: false,
+    efforts: listedEfforts(row),
+    ...(row.supportsEffort !== false &&
+    (row.supportsEffort !== true ||
+      !Array.isArray(row.supportedEffortLevels) ||
+      row.supportedEffortLevels.some((value) => text(value) === null))
+      ? { effortsKnown: false as const }
+      : {}),
+    ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
+    ...(supportsAutoMode !== undefined ? { supportsAutoMode } : {}),
+    resolvedModel: text(row.resolvedModel)
+  }
+}
+
+// Rows are keyed by the versioned model each entry runs, so a pick saves the
+// same id the CLI reports after a turn. An alias that no row is keyed by stays
+// selectable after them; the `default` entry only marks the default row.
 export function listedModels(value: unknown): ListedModel[] {
   const response = record(value)
-  const rows = Array.isArray(response?.models)
-    ? response.models.map(record).filter((row): row is Record<string, unknown> => row !== null)
-    : []
-  const defaultRow = rows.find((row) => text(row.value) === 'default')
-  const defaultResolvedModel = text(defaultRow?.resolvedModel)
-  const seen = new Set<string>()
-  return rows.flatMap((row) => {
-    const id = text(row.value)
-    if (!id || id === 'default' || row.disabled === true || seen.has(id)) {
-      return []
+  const rows = (Array.isArray(response?.models) ? response.models : [])
+    .map(record)
+    .filter(
+      (row): row is Record<string, unknown> =>
+        row !== null && text(row.value) !== null && row.disabled !== true
+    )
+  const defaultResolvedModel = text(rows.find((row) => row.value === 'default')?.resolvedModel)
+  const primary: ListedModel[] = []
+  for (const row of [
+    ...rows.filter((row) => row.value !== 'default'),
+    ...rows.filter((row) => row.value === 'default')
+  ]) {
+    const value = text(row.value)!
+    const id = text(row.resolvedModel) ?? value
+    if (id === 'default' || primary.some((model) => model.id === id)) {
+      continue
     }
-    seen.add(id)
-    const resolvedModel = text(row.resolvedModel)
-    const description = text(row.description)
-    const supportsFastMode =
-      typeof row.supportsFastMode === 'boolean' ? row.supportsFastMode : undefined
-    const supportsAutoMode =
-      typeof row.supportsAutoMode === 'boolean' ? row.supportsAutoMode : undefined
-    return [
-      {
-        id,
-        label: text(row.displayName) ?? id,
-        ...(description ? { description } : {}),
-        isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
-        efforts: listedEfforts(row),
-        ...(row.supportsEffort !== false &&
-        (row.supportsEffort !== true ||
-          !Array.isArray(row.supportedEffortLevels) ||
-          row.supportedEffortLevels.some((value) => text(value) === null))
-          ? { effortsKnown: false as const }
-          : {}),
-        ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
-        ...(supportsAutoMode !== undefined ? { supportsAutoMode } : {}),
-        resolvedModel
-      }
-    ]
-  })
+    const label = id === value ? (text(row.displayName) ?? id) : claudeListedModelLabel(id)
+    primary.push(listedRow(row, id, label))
+  }
+  const aliases: ListedModel[] = []
+  for (const row of rows) {
+    const value = text(row.value)!
+    if (value === 'default' || [...primary, ...aliases].some((model) => model.id === value)) {
+      continue
+    }
+    aliases.push(listedRow(row, value, `${text(row.displayName) ?? value} alias`))
+  }
+  return [
+    ...primary.map((model) =>
+      model.id === defaultResolvedModel ? { ...model, isDefault: true } : model
+    ),
+    ...aliases
+  ]
 }
 
 export function matchListedModel(

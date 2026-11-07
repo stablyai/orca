@@ -4,6 +4,8 @@ import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { HOST_HANDLER_GROUPS } from './host-handler-groups'
+import { WORKTREE_HANDLER_GROUPS } from './worktree-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -86,19 +88,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },
-  {
-    name: 'worktree',
-    keys: [
-      'worktree ps',
-      'worktree list',
-      'worktree show',
-      'worktree current',
-      'worktree create',
-      'worktree set',
-      'worktree rm'
-    ],
-    load: async () => (await import('./handlers/worktree.js')).WORKTREE_HANDLERS
-  },
+  ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
@@ -213,6 +203,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
   },
   {
+    name: 'chat',
+    keys: ['chat rename'],
+    load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
+  },
+  {
     name: 'connector',
     keys: [
       'connector start',
@@ -245,36 +240,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS
   },
-  {
-    name: 'environment',
-    keys: [
-      'host name',
-      'host list',
-      'environment add',
-      'environment list',
-      'environment show',
-      'environment rm'
-    ],
-    load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
-  },
-  {
-    name: 'managed-server',
-    keys: [
-      'environment status',
-      'environment update',
-      'environment rollback',
-      'environment recover',
-      'environment stop',
-      'environment cancel-stop',
-      'environment forget'
-    ],
-    load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
-  },
-  {
-    name: 'vm',
-    keys: ['vm recipe doctor'],
-    load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
-  },
+  ...HOST_HANDLER_GROUPS,
   {
     name: 'skill-sharing',
     keys: ['skills installed', 'skills share'],

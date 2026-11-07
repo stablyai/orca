@@ -23,6 +23,9 @@ vi.mock('electron', () => ({
   webContents: { fromFrame: fromFrameMock }
 }))
 
+vi.mock('../../browser-passwords/browser-password-vaults', () => ({
+  forgetBrowserPasswordVault: () => true
+}))
 vi.mock('../browser-manager', () => ({
   browserManager: {
     getRendererContextForGuest: getRendererContextForGuestMock,

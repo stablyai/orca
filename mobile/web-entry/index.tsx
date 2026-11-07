@@ -36,6 +36,7 @@ import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blu
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/client-context.web'
+import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
 
@@ -61,9 +62,11 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
     }, [])
     return (
       <RpcClientProvider client={client}>
-        <RouteScreenPaintProvider report={reportRouteScreenPaint}>
-          {children}
-        </RouteScreenPaintProvider>
+        <OrcaQueryProvider>
+          <RouteScreenPaintProvider report={reportRouteScreenPaint}>
+            {children}
+          </RouteScreenPaintProvider>
+        </OrcaQueryProvider>
       </RpcClientProvider>
     )
   }

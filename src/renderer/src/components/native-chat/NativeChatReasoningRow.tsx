@@ -1,4 +1,3 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
@@ -28,16 +27,12 @@ function translatedHeadline(headline: NativeChatReasoningHeadline): string {
 export function NativeChatReasoningRow({
   message,
   markdown,
-  turnIsWorking = false,
-  onLinkClick,
-  allowFileUriLinks
+  turnIsWorking = false
 }: {
   message: Pick<NativeChatMessage, 'id' | 'role' | 'state' | 'completedAt' | 'timestamp'>
   markdown: string
   /** The row's own turn (or subagent) is still running; an open row there has not ended. */
   turnIsWorking?: boolean
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }): React.JSX.Element | null {
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
@@ -65,12 +60,7 @@ export function NativeChatReasoningRow({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent animation="height" data-native-chat-member-detail>
-          <NativeChatReasoningBody
-            rowKey={disclosureKey}
-            markdown={markdown}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
-          />
+          <NativeChatReasoningBody rowKey={disclosureKey} markdown={markdown} />
         </CollapsibleContent>
       </Collapsible>
     </div>

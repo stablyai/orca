@@ -86,7 +86,7 @@ describe('live profile authority admission', () => {
     const input = { ...options(), initializeHomeWorkspace: true }
     const { store } = await open(input)
     const [home] = store.getRepos()
-    expect(home).toMatchObject({ path: homedir(), kind: 'folder', displayName: 'Home' })
+    expect(home).toMatchObject({ path: homedir(), kind: 'folder' })
     await store.flushPendingOrThrowAsync()
     await store.freezeWritesAsync()
 

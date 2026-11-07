@@ -2,7 +2,7 @@
 // Main has no local registry for remote: ids; cover every liveness reply so that final recovery hop cannot drop refusal.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -56,7 +56,9 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
@@ -225,7 +227,6 @@ function createManager() {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),
@@ -406,7 +407,8 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
         removeEventListener: vi.fn()
       }
 
-      const { connectPanePty } = await import('@/components/terminal-pane/pty-connection')
+      const { connectPanePty } =
+        await import('@/components/terminal-pane/pty-connection/connect-pane-pty')
       const { _resetTerminalPaneRecoveryForTests } =
         await import('@/components/terminal-pane/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()

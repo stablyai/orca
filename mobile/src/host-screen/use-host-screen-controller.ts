@@ -62,7 +62,7 @@ export function useHostScreenController({
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const now = useNow(30_000)
-  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
+  const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
@@ -142,6 +142,7 @@ export function useHostScreenController({
     displayWorktrees,
     hostContextOf,
     hostPlatform,
+    hostInstallationId,
     state
   })
   const { collapsedGroups, projectOrderBy } = sectionsResult

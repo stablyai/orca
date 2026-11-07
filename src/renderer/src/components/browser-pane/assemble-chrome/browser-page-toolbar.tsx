@@ -7,6 +7,7 @@ import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { BrowserExtensionToolbar } from './browser-extension-toolbar'
@@ -29,7 +30,7 @@ import type {
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
+} from '@/lib/browser/history/browser-page-conversion-history'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import type { GrabIntent } from '../describe-page/browser-page-types'
 
@@ -200,6 +201,9 @@ export function BrowserPageToolbar({
           onReload={() => runReloadTrigger('reload')}
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
+      }
+      passwordControl={
+        <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
       }
       importControl={(compact) => (
         <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />

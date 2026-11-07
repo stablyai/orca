@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -16,7 +16,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/s
 import {
   resolveWslHostAgentLaunchInputs,
   resolveWslHostAgentResumeInputs
-} from '../../wsl-host-agent-terminal-launch'
+} from './wsl-host-agent-terminal-launch'
 import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime

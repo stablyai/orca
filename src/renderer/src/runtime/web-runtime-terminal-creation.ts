@@ -2,15 +2,21 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
-} from '../lib/agent-launch-prompt-delivery'
+} from '../lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
+import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
+import { useAppStore } from '../store'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
+  CreateWebRuntimeSessionTerminalOnHostArgs,
+  CreatedWebRuntimeSessionTerminal,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
+
+type TerminalCreateOptions = { notifyFailure?: boolean; userAct?: boolean }
 
 /**
  * Toast host failure here because no mirrored pane can show it; callers reporting themselves use
@@ -19,13 +25,38 @@ import type {
  */
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
-  options: { notifyFailure?: boolean; userAct?: boolean } = {}
+  options: TerminalCreateOptions = {}
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  return await createWebRuntimeTerminal(args, options, () =>
+    createWebRuntimeSessionTerminalResult({
+      ...args,
+      environmentId: resolveWebRuntimeSessionEnvironmentId(
+        args.environmentId,
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId
+      )
+    })
+  )
+}
+
+export async function createWebRuntimeSessionTerminalOnHost(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs,
+  options: TerminalCreateOptions = {}
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  return await createWebRuntimeTerminal(args, options, () =>
+    createWebRuntimeSessionTerminalResult(args)
+  )
+}
+
+async function createWebRuntimeTerminal(
+  args: CreateWebRuntimeSessionTerminalArgs,
+  options: TerminalCreateOptions,
+  create: () => Promise<CreatedWebRuntimeSessionTerminal>
 ): Promise<WebRuntimeTerminalCreateOutcome> {
   if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
     // The start already told the user why; the host is still stopped.
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
   }
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await create()
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&
@@ -39,49 +70,38 @@ export async function createWebRuntimeSessionTerminal(
   return created.outcome
 }
 
-export async function createWebRuntimeAgentSessionTerminal(
-  args: CreateWebRuntimeSessionTerminalArgs & {
+/** Deliver only after the selected create route has settled its startup recipe. */
+export async function deliverCreatedWebRuntimeAgentSessionPrompt(
+  created: CreatedWebRuntimeSessionTerminal,
+  args: {
     agent: TuiAgent
-    promptAfterReady: string
-    submitPrompt: boolean
-    forcePromptPaste: boolean
+    promptAfterReady?: string
+    submitPrompt?: boolean
+    forcePromptPaste?: boolean
+    launchDraft?: string
   }
-): Promise<{
-  outcome: WebRuntimeTerminalCreateOutcome
-  promptDelivered: boolean
-}> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
-  if (created.outcome.status === 'failed' || !created.hostTabId) {
-    return { outcome: created.outcome, promptDelivered: false }
+): Promise<boolean> {
+  if (created.outcome.status === 'failed') {
+    return false
   }
-
-  const promptDelivered = await deliverLaunchPromptToAgentTab({
-    tabId: toWebTerminalSurfaceTabId(created.hostTabId),
-    content: args.promptAfterReady,
-    agent: args.agent,
-    submit: args.submitPrompt,
-    forcePaste: args.forcePromptPaste
-  }).catch(() => false)
-  return { outcome: created.outcome, promptDelivered }
-}
-
-/** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
-export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
-  args: CreateWebRuntimeSessionTerminalArgs & {
-    agent: TuiAgent
-    launchDraft: string
+  if (args.promptAfterReady !== undefined) {
+    if (!created.hostTabId) {
+      return false
+    }
+    return await deliverLaunchPromptToAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      content: args.promptAfterReady,
+      agent: args.agent,
+      submit: args.submitPrompt === true,
+      forcePaste: args.forcePromptPaste === true
+    }).catch(() => false)
   }
-): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; promptDelivered: boolean }> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
-  if (created.outcome.status !== 'failed' && created.hostTabId) {
+  if (args.launchDraft !== undefined && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),
       agent: args.agent,
       text: args.launchDraft
     })
   }
-  return {
-    outcome: created.outcome,
-    promptDelivered: created.outcome.status === 'created'
-  }
+  return true
 }

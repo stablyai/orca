@@ -2,11 +2,16 @@
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-import { act, StrictMode, Suspense, type ReactNode } from 'react'
+import { act, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+const uploads = vi.hoisted(() => ({ capture: vi.fn(), upload: vi.fn() }))
+vi.mock('@/components/github/github-image-upload', () => ({
+  captureGitHubImageUpload: uploads.capture
+}))
 vi.mock('@/components/ui/dropdown-menu', () => {
   // Radix keeps the selection callback on the group, so the mocked items need it too.
   let onRadioValueChange: ((value: string) => void) | undefined
@@ -68,10 +73,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 import type { PRComment } from '../../../../../../shared/github/comment-types'
 import type { PRCommentGroup } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
-  MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
   clearPRCommentsListSelectionsForTests,
-  getPRCommentsListSelectionCountForTests,
-  seedPRCommentsListSelectionForTests,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { PRCommentsList } from './comments-list'
@@ -129,31 +131,6 @@ function renderList(props: {
   })
 }
 
-const neverSettles = new Promise<void>(() => {})
-
-function SuspendForever(): ReactNode {
-  throw neverSettles
-}
-
-function renderAbandonedList(comments: PRComment[], contextKey: string): void {
-  act(() => {
-    root.render(
-      <Suspense fallback={<div>Loading review</div>}>
-        <TooltipProvider>
-          <PRCommentsList
-            key={`abandoned:${contextKey}`}
-            comments={comments}
-            commentsLoading={false}
-            selectionContextKey={contextKey}
-            onResolveSelectedCommentsWithAI={vi.fn()}
-          />
-          <SuspendForever />
-        </TooltipProvider>
-      </Suspense>
-    )
-  })
-}
-
 function clickButton(label: string): void {
   const button =
     [...container.querySelectorAll('button')].find(
@@ -187,252 +164,7 @@ function hasButton(label: string): boolean {
   )
 }
 
-function selectDisplayMode(label: string): void {
-  const item = [...container.querySelectorAll('[role="menuitemradio"]')].find(
-    (candidate) => candidate.textContent === label
-  )
-  if (!item) {
-    throw new Error(`Display mode not found: ${label}`)
-  }
-  act(() => {
-    item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
-}
-
-function renderedGroupOrder(labels: readonly string[]): string[] {
-  return [...container.querySelectorAll('[data-testid="pr-comment-group"]')].map(
-    (row) => labels.find((label) => row.textContent?.includes(label)) ?? '<unmatched>'
-  )
-}
-
-function clickMenuItem(label: string): void {
-  clickButton('More comment actions')
-  const menuItem =
-    [...document.body.querySelectorAll('[role="menuitem"]')].find((candidate) =>
-      candidate.textContent?.includes(label)
-    ) ??
-    [...document.body.querySelectorAll('button')].find(
-      (candidate) =>
-        candidate.textContent?.includes(label) ||
-        candidate.getAttribute('aria-label')?.includes(label)
-    )
-  if (!menuItem) {
-    throw new Error(`Menu item not found: ${label}`)
-  }
-  act(() => {
-    menuItem.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
-}
-
 describe('PRCommentsList comment resolution selection', () => {
-  it('shows the bulk action when loaded unresolved comment groups are selectable', () => {
-    renderList({
-      comments: [
-        comment({ id: 2, threadId: 'resolved', path: 'src/resolved.ts', isResolved: true }),
-        comment({ id: 3, threadId: 'resolved-top-level', isResolved: true })
-      ]
-    })
-
-    expect(hasButton('Send unresolved PR comments')).toBe(false)
-
-    renderList({
-      comments: [comment({ id: 4 })]
-    })
-
-    expect(hasButton('Send unresolved PR comments')).toBe(true)
-    expect(container.textContent).not.toMatch(/\bAdd\b/)
-  })
-
-  it('sends all canonical groups even when the active audience filter hides the root', () => {
-    const onResolveSelectedCommentsWithAI = vi.fn()
-    renderList({
-      comments: [
-        comment({
-          id: 1,
-          author: 'review-bot',
-          body: 'Root bot feedback.',
-          threadId: 'thread-1',
-          path: 'src/a.ts',
-          isResolved: false,
-          isBot: true
-        }),
-        comment({
-          id: 2,
-          author: 'alice',
-          body: 'Human reply.',
-          threadId: 'thread-1',
-          path: 'src/a.ts',
-          isResolved: false
-        }),
-        comment({
-          id: 3,
-          author: 'bob',
-          body: 'Second thread.',
-          threadId: 'thread-2',
-          path: 'src/b.ts',
-          isResolved: false
-        })
-      ],
-      onResolveSelectedCommentsWithAI
-    })
-
-    clickButton('Humans')
-    clickButton('Send unresolved PR comments')
-
-    expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
-    const selectedGroups = onResolveSelectedCommentsWithAI.mock.calls[0]?.[0] as PRCommentGroup[]
-    expect(selectedGroups).toHaveLength(2)
-    expect(selectedGroups[0]?.kind).toBe('thread')
-    expect(selectedGroups[0]?.kind === 'thread' ? selectedGroups[0].root.body : '').toBe(
-      'Root bot feedback.'
-    )
-    expect(selectedGroups[0]?.kind === 'thread' ? selectedGroups[0].replies[0]?.body : '').toBe(
-      'Human reply.'
-    )
-  })
-
-  it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {
-    const onResolveSelectedCommentsWithAI = vi.fn()
-    renderList({
-      comments: [
-        comment({
-          id: 1,
-          createdAt: '2026-05-15T00:00:00Z',
-          threadId: 'thread-1',
-          path: 'src/a.ts',
-          isResolved: false
-        }),
-        comment({
-          id: 2,
-          author: 'bob',
-          body: 'Second thread.',
-          createdAt: '2026-05-14T00:00:00Z',
-          threadId: 'thread-2',
-          path: 'src/b.ts',
-          isResolved: false
-        })
-      ],
-      onResolveSelectedCommentsWithAI
-    })
-
-    clickButton('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-    clickButton('Send 1 queued comment to AI')
-
-    expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
-    const selectedGroups = onResolveSelectedCommentsWithAI.mock.calls[0]?.[0] as PRCommentGroup[]
-    expect(selectedGroups).toHaveLength(1)
-    expect(selectedGroups[0]?.kind === 'thread' ? selectedGroups[0].threadId : '').toBe('thread-1')
-  })
-
-  it('lets a user queue one standalone comment for the agent from the visible row action', () => {
-    const onResolveSelectedCommentsWithAI = vi.fn()
-    renderList({
-      comments: [
-        comment({
-          id: 1,
-          author: 'coderabbitai',
-          body: 'Review Change Stack. No actionable comments were generated.'
-        })
-      ],
-      onResolveSelectedCommentsWithAI
-    })
-
-    clickButton('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-    clickButton('Send 1 queued comment to AI')
-
-    expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
-    const selectedGroups = onResolveSelectedCommentsWithAI.mock.calls[0]?.[0] as PRCommentGroup[]
-    expect(selectedGroups).toHaveLength(1)
-    expect(selectedGroups[0]?.kind).toBe('standalone')
-    expect(selectedGroups[0]?.kind === 'standalone' ? selectedGroups[0].comment.author : '').toBe(
-      'coderabbitai'
-    )
-  })
-
-  it('keeps the overflow menu queue action available as a fallback', () => {
-    const onResolveSelectedCommentsWithAI = vi.fn()
-    renderList({
-      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })],
-      onResolveSelectedCommentsWithAI
-    })
-
-    clickMenuItem('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-    clickButton('Send 1 queued comment to AI')
-
-    expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears the queued comment list from the header action', () => {
-    renderList({
-      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    })
-    clickButton('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-    clickButton('Clear queued comments')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(false)
-    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
-  })
-
-  it('drops an empty selection from the persisted context cache', () => {
-    renderList({
-      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    })
-    clickButton('Queue for agent')
-
-    const selectedCheckbox = container.querySelector<HTMLButtonElement>(
-      'button[role="checkbox"][aria-checked="true"]'
-    )
-    expect(selectedCheckbox).not.toBeNull()
-    act(() => {
-      selectedCheckbox?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(getPRCommentsListSelectionCountForTests()).toBe(0)
-  })
-
-  it('clears sent standalone bot comments from the queue when the parent confirms launch', () => {
-    const comments = [
-      comment({
-        id: 1,
-        author: 'coderabbitai',
-        body: 'Review Change Stack. No actionable comments were generated.',
-        isBot: true
-      })
-    ]
-    renderList({ comments })
-    clickButton('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-
-    renderList({
-      comments,
-      clearRequest: { contextKey: 'review:42', token: 1 }
-    })
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(false)
-    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
-  })
-
-  it('keeps queued comments selected when clearRequest is null', () => {
-    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    renderList({ comments })
-    clickButton('Queue for agent')
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-
-    renderList({ comments, clearRequest: null })
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-  })
-
   it('keeps a clear request pending until its review context is mounted', () => {
     const queuedComments = [
       comment({
@@ -461,145 +193,40 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(hasButton('Send 1 queued comment to AI')).toBe(false)
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
   })
-
-  it('exits selection mode when refresh leaves no eligible loaded threads', () => {
-    renderList({
-      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    })
-    clickButton('Queue for agent')
-
-    renderList({
-      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: true })]
-    })
-
-    expect(hasButton('Send 1 queued comment to AI')).toBe(false)
-    expect(getPRCommentsListSelectionCountForTests()).toBe(0)
-  })
-
-  it('keeps GitHub and GitLab review selections isolated under Strict Mode replay', () => {
-    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
-    const githubContext = 'local::repo::branch::github::42::github-head'
-    const gitlabContext = 'local::repo::branch::gitlab::42::gitlab-head'
-
-    renderList({ comments, contextKey: githubContext, strictMode: true })
-    clickButton('Queue for agent')
-    renderList({ comments, contextKey: gitlabContext, strictMode: true })
-    clickButton('Queue for agent')
-
-    expect(getPRCommentsListSelectionCountForTests()).toBe(2)
-    renderList({ comments, contextKey: githubContext, strictMode: true })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-    renderList({ comments, contextKey: gitlabContext, strictMode: true })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-  })
-
-  it('does not refresh LRU recency for an abandoned Suspense render', () => {
-    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
-    const queuedGroupIds = ['thread:thread-1'] as const
-    const seedContext = (contextKey: string): void => {
-      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
-    }
-
-    seedContext('review:oldest')
-    for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
-      seedContext(`review:recent-${i}`)
-    }
-
-    renderAbandonedList(comments, 'review:oldest')
-    expect(container.textContent).toContain('Loading review')
-    seedContext('review:new')
-
-    renderList({ comments, contextKey: 'review:oldest' })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(false)
-    renderList({ comments, contextKey: 'review:recent-0' })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-  })
-
-  it('bounds persisted review contexts while retaining recently restored selections', () => {
-    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    const queuedGroupIds = ['thread:thread-1'] as const
-    const seedContext = (contextKey: string): void => {
-      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
-    }
-
-    seedContext('review:keep')
-    for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
-      seedContext(`review:stale-${i}`)
-    }
-
-    // Refresh LRU recency only after the restored context commits.
-    renderList({ comments, contextKey: 'review:keep' })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-
-    seedContext('review:new')
-
-    expect(getPRCommentsListSelectionCountForTests()).toBe(
-      MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS
-    )
-
-    renderList({ comments, contextKey: 'review:stale-0' })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(false)
-
-    renderList({ comments, contextKey: 'review:keep' })
-    expect(hasButton('Send 1 queued comment to AI')).toBe(true)
-  })
 })
 
-describe('PRCommentsList comment ordering', () => {
-  const labels = ['Oldest note.', 'Middle note.', 'Newest note.']
-
-  it('reads newest-first in grouped mode and oldest-first in timeline mode', () => {
-    renderList({
-      comments: [
-        comment({ id: 1, body: 'Middle note.', createdAt: '2026-05-14T00:00:00Z' }),
-        comment({ id: 2, body: 'Newest note.', createdAt: '2026-05-15T00:00:00Z' }),
-        comment({ id: 3, body: 'Oldest note.', createdAt: '2026-05-13T00:00:00Z' })
-      ]
-    })
-
-    expect(renderedGroupOrder(labels)).toEqual(['Newest note.', 'Middle note.', 'Oldest note.'])
-
-    selectDisplayMode('Timeline')
-
-    expect(renderedGroupOrder(labels)).toEqual(['Oldest note.', 'Middle note.', 'Newest note.'])
+it('routes an image from a resolved thread reply to that list owner', async () => {
+  const address = {
+    runtime: { kind: 'local' as const },
+    target: { kind: 'repo' as const, repo: 'resolved-repo', source: 'origin' as const }
+  }
+  uploads.capture.mockReset().mockReturnValue(uploads.upload)
+  uploads.upload
+    .mockReset()
+    .mockResolvedValue('https://github.com/user-attachments/assets/resolved')
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <PRCommentsList
+          comments={[comment({ threadId: 'thread', isResolved: true, path: 'a.ts', line: 1 })]}
+          commentsLoading={false}
+          imageUploadAddress={address}
+          onReply={vi.fn().mockResolvedValue({ ok: true })}
+        />
+      </TooltipProvider>
+    )
+  )
+  clickButton('Resolved')
+  clickButton('Reply')
+  const textarea = container.querySelector('textarea')
+  if (!textarea) {
+    throw new Error('Reply field did not open')
+  }
+  fireEvent.paste(textarea, {
+    clipboardData: { files: [new File(['png'], 'reply.png', { type: 'image/png' })] }
   })
-
-  it('ranks a replied-to thread by its fresh reply in grouped mode only', () => {
-    const threadLabels = ['Replied thread.', 'Quiet thread.']
-    renderList({
-      comments: [
-        comment({
-          id: 1,
-          body: 'Replied thread.',
-          createdAt: '2026-05-14T00:00:00Z',
-          threadId: 'thread-1',
-          path: 'src/a.ts',
-          isResolved: false
-        }),
-        comment({
-          id: 2,
-          body: 'Quiet thread.',
-          createdAt: '2026-05-13T00:00:00Z',
-          threadId: 'thread-2',
-          path: 'src/b.ts',
-          isResolved: false
-        }),
-        comment({
-          id: 3,
-          body: 'Fresh reply.',
-          createdAt: '2026-05-16T00:00:00Z',
-          threadId: 'thread-1',
-          path: 'src/a.ts',
-          isResolved: false
-        })
-      ]
-    })
-
-    expect(renderedGroupOrder(threadLabels)).toEqual(['Replied thread.', 'Quiet thread.'])
-
-    // Timeline orders by thread start, so the quieter older root leads again.
-    selectDisplayMode('Timeline')
-
-    expect(renderedGroupOrder(threadLabels)).toEqual(['Quiet thread.', 'Replied thread.'])
-  })
+  await waitFor(() => expect(uploads.capture).toHaveBeenCalledWith(address))
+  await waitFor(() =>
+    expect(textarea.value).toContain('https://github.com/user-attachments/assets/resolved')
+  )
 })

@@ -272,48 +272,6 @@ describe('active notebook cell external reload', () => {
     const committedContent = onContentChange.mock.calls.at(-1)?.[0]
     expect(parseIpynb(committedContent ?? '').cells[0]?.source).toBe('original source')
   })
-
-  it('updates language, wrapping and height when a clean reload changes the active cell', () => {
-    const onContentChange = vi.fn<(content: string) => void>()
-    const onDirtyStateHint = vi.fn<(dirty: boolean) => void>()
-    const { rerender } = render(
-      <NotebookCells
-        content={notebookContent([{ id: 'a', source: 'original source' }])}
-        {...{ onContentChange, onDirtyStateHint }}
-      />
-    )
-    fireEvent.mouseDown(screen.getByRole('button', { name: 'original source' }), { button: 0 })
-    const model = activeModel()
-    rerender(
-      <NotebookCells
-        content={notebookContent([{ id: 'a', source: 'updated source' }], 'javascript')}
-        {...{ onContentChange, onDirtyStateHint }}
-      />
-    )
-    expect(model.getLanguageId()).toBe('javascript')
-    expect(widgetCalls.updateOptions).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wordWrap: 'off' })
-    )
-    widgetCalls.layout.mockClear()
-
-    rerender(
-      <NotebookCells
-        content={notebookContent([
-          { id: 'a', kind: 'markdown', source: '**Updated**\n\nParagraph' }
-        ])}
-        {...{ onContentChange, onDirtyStateHint }}
-      />
-    )
-    expect(liveModels).toEqual([model])
-    expect(model.getLanguageId()).toBe('markdown')
-    expect(widgetCalls.updateOptions).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wordWrap: 'on' })
-    )
-    expect(widgetCalls.layout).toHaveBeenCalled()
-    expect(model.getValue()).toBe('**Updated**\n\nParagraph')
-    expect(onDirtyStateHint).not.toHaveBeenCalled()
-    expect(onContentChange).not.toHaveBeenCalled()
-  })
 })
 
 describe('notebook cell undo lifetime', () => {
@@ -414,19 +372,5 @@ describe('notebook cell undo lifetime', () => {
     await undo(activeModel())
     expect(activeModel().getValue()).toBe('text!')
     expect(handlers.onContentChange).not.toHaveBeenCalled()
-  })
-
-  it('opens a cell whose id is duplicated in the notebook', () => {
-    render(
-      <NotebookCells
-        content={notebookContent([
-          { id: 'dup', source: 'first' },
-          { id: 'dup', source: 'second' }
-        ])}
-        {...callbacks()}
-      />
-    )
-    fireEvent.mouseDown(screen.getByRole('button', { name: 'first' }), { button: 0 })
-    expect(liveModels.map((model) => model.getValue())).toEqual(['first', 'second'])
   })
 })

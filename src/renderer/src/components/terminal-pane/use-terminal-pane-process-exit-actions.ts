@@ -7,7 +7,7 @@ import {
   selectReadyAccountRestartPtyIds
 } from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { connectPanePty } from './pty-connection'
+import { connectPanePty } from './pty-connection/connect-pane-pty'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
@@ -197,7 +197,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleCloseExitedPane = useCallback(
     (paneId: number) => {
       clearPaneProcessExit(paneId)
-      executeClosePane(paneId)
+      executeClosePane(paneId, 'user')
     },
     [clearPaneProcessExit, executeClosePane]
   )

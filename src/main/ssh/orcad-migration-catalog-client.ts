@@ -27,6 +27,7 @@ import {
   type OrcadMigrationBlobChunkResult,
   type OrcadMigrationBlobDescriptor
 } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { orcadMigrationManifestBlobs } from '../../shared/orcad-migration/orcad-migration-automation-run-history'
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
@@ -226,11 +227,16 @@ async function request(
   const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
   // Validation-size limits can exceed sealed-frame capacity; reject before the host closes the socket.
   assertOrcadMigrationRequestFits(params)
+  const imports = operation === 'stage' || operation === 'commit'
   const carriesExtraAgentArgs =
-    (operation === 'stage' || operation === 'commit') &&
+    imports &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
+  // An older host would drop the blob a manifest names and import without its rows.
+  const requiredBlobs = imports
+    ? [...expectedBlobs, ...orcadMigrationManifestBlobs(manifest)]
+    : expectedBlobs
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
@@ -242,7 +248,7 @@ async function request(
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
       if (
-        (operation === 'stage' || operation === 'commit') &&
+        imports &&
         (manifest.payload.dormantState?.automations ?? []).some((automation) =>
           hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
         ) &&
@@ -252,7 +258,7 @@ async function request(
           'Update Orca on the destination host to keep automation agent launch settings.'
         )
       }
-      const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
+      const unsupported = findUnsupportedMigrationBlobKind(requiredBlobs, capabilities)
       if (unsupported) {
         throw new Error(orcadMigrationBlobKindUnsupportedBlocker(unsupported))
       }

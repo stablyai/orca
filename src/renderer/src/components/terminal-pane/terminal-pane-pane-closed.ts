@@ -15,6 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
+import { clearTerminalFontSizeOverride } from './appearance/terminal-font-size-overrides'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
@@ -31,7 +32,6 @@ export function createTerminalPaneClosedHandler(
       paneCwdRef,
       paneTransportsRef,
       panePtyBindingsRef,
-      paneFontSizesRef,
       replayingPanesRef,
       clearRuntimePaneTitle,
       syncPanePtyLayoutBinding,
@@ -134,7 +134,9 @@ export function createTerminalPaneClosedHandler(
       paneTransportsRef.current.delete(paneId)
     }
     clearRuntimePaneTitle(tabId, paneId)
-    paneFontSizesRef.current.delete(paneId)
+    if (leafId && closedPane?.reason === 'close') {
+      clearTerminalFontSizeOverride(leafId)
+    }
     replayingPanesRef.current.delete(paneId)
     refs.restoredViewportBlankingPanesRef.current.delete(paneId)
     setPaneTitles((current) => {

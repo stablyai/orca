@@ -1,3 +1,8 @@
+import { splitPaneTitle } from './orchestration/mailbox/senders/sender-pane-title'
+import {
+  senderDispatchLaunch,
+  senderDispatchLaunchReader
+} from './orchestration/mailbox/senders/sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
 import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
@@ -6,13 +11,10 @@ import {
   type ConversationNameTab
 } from '../../shared/agent-status/presentation/agent-row-conversation-name'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
-import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
-  observeOrchestrationSender,
-  orchestrationSenderAgent,
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
@@ -21,14 +23,17 @@ import {
   type SenderNamingLayout,
   type SenderNamingSources,
   type TerminalSenderNaming
-} from './orchestration/orchestration-sender-name'
-import { agentMessageSender, type SenderSnapshot } from './orchestration/agent-message-sender'
+} from './orchestration/mailbox/senders/orchestration-sender-name'
+import {
+  agentMessageSender,
+  observeSenderSnapshot
+} from './orchestration/mailbox/senders/agent-message-sender'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
-} from './orchestration/structured-session-lineage'
-import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
-import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
+import { terminalHostConnectionMatches } from './orchestration/workers/transcripts/worker-provider-session'
+import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null
@@ -44,6 +49,8 @@ type RuntimeSenderNameDeps = {
         launchToken?: string | null
       }
     | undefined
+  getHostScope?: (handle: string) => string | null
+  getProcessIncarnation?: (handle: string) => string | null
   getTerminalPaneKey: (handle: string) => string | null
   /** The workspace session this host mirrors. */
   getWorkspaceSession: (worktreeId: string) => MirroredTabs | null | undefined
@@ -62,6 +69,8 @@ type AgentRowNamingSource = Pick<
 >
 
 export class RuntimeOrchestrationSenderNames {
+  private readonly launchInstallation: { database: OrchestrationDb | null } = { database: null }
+
   constructor(private readonly deps: RuntimeSenderNameDeps) {}
 
   /** A sender recorded on a message, named now. `reportedDispatchId`: the dispatch the sender's
@@ -91,20 +100,28 @@ export class RuntimeOrchestrationSenderNames {
   }
 
   /** Name and agent share one current chat or terminal observation. */
-  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string): SenderSnapshot {
-    const sources = this.namingSources()
-    const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
-    return {
-      name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
-      agent: orchestrationSenderAgent(sources, observation)
-    }
+  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string) {
+    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId)
+  }
+
+  snapshotReader(): typeof this.snapshotOf {
+    const readLaunch = senderDispatchLaunchReader(this.deps.getDb, this.launchInstallation)
+    return (party, reportedDispatchId) =>
+      observeSenderSnapshot(
+        party,
+        this.namingSources(readAgentSessionRecordStore(), readLaunch()),
+        reportedDispatchId
+      )
   }
 
   private namingSources(
-    records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+    records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
+    dispatchLaunch?: SenderNamingSources['dispatchLaunch']
   ): SenderNamingSources {
     const terminals = new Map<string, TerminalSenderNaming | null>()
+    const db = this.deps.getDb()
     return {
+      dispatchLaunch: dispatchLaunch ?? (db ? senderDispatchLaunch(db) : undefined),
       ...this.chatSources(undefined, records),
       db: this.deps.getDb(),
       terminal: (handle) => {
@@ -272,7 +289,9 @@ export class RuntimeOrchestrationSenderNames {
       ),
       agent: status?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? null,
       providerSessionId: status?.providerSession?.id,
-      paneKey
+      paneKey,
+      hostScope: this.deps.getHostScope?.(handle),
+      processIncarnation: this.deps.getProcessIncarnation?.(handle)
     }
   }
 
@@ -304,16 +323,4 @@ export class RuntimeOrchestrationSenderNames {
         )
     }
   }
-}
-
-/** Split-tab titles name the focused pane; other split panes need user titles. Single-pane tabs use their own tab titles. */
-function splitPaneTitle(
-  layout: SenderNamingLayout | undefined,
-  paneKey: string | null
-): string | null | undefined {
-  if (layout?.root?.type !== 'split') {
-    return undefined
-  }
-  const leafId = paneKey ? parsePaneKey(paneKey)?.leafId : undefined
-  return (leafId && layout.titlesByLeafId?.[leafId]) || null
 }

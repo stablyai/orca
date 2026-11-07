@@ -3,7 +3,7 @@ import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairing/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/device-registry'
+import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import {
   getDefaultPairingAddress,
@@ -12,9 +12,16 @@ import {
   type NetworkInterface
 } from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
-import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import {
+  encodeMobilePairingQr,
+  type MobilePairingQrResult
+} from '../runtime/rpc/server/pairing/mobile-pairing-qr'
+import {
+  MOBILE_PAIRING_OFFER_TTL_MS,
+  RUNTIME_PAIRING_OFFER_TTL_MS
+} from '../runtime/rpc/server/pairing/pairing-offer-expiry'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,
@@ -104,7 +111,8 @@ export function registerMobileHandlers(
         address: ip,
         connectionMode: args?.connectionMode,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`
+        name: `Mobile ${new Date().toLocaleDateString()}`,
+        offerTtlMs: MOBILE_PAIRING_OFFER_TTL_MS
       })
       if (!offer.available) {
         // Preserve relay mint failures instead of silently presenting a LAN offer under the Relay label.
@@ -127,7 +135,8 @@ export function registerMobileHandlers(
         // Unadvertised loopback fallback points at the scanning device; omit it from UI endpoints.
         endpoint: ip ? offer.endpoint : null,
         deviceId: offer.deviceId,
-        connectionMode: offer.connectionMode
+        connectionMode: offer.connectionMode,
+        expiresAt: offer.offerExpiresAt
       }
     }
   )
@@ -171,7 +180,8 @@ export function registerMobileHandlers(
         name: `Runtime ${new Date().toLocaleDateString()}`,
         scope: 'runtime',
         // Persist local reach so local authentication cannot expose the next launch to the LAN.
-        reach: thisComputerOnly ? 'this-computer' : 'network'
+        reach: thisComputerOnly ? 'this-computer' : 'network',
+        offerTtlMs: RUNTIME_PAIRING_OFFER_TTL_MS
       })
       if (!offer.available) {
         return { available: false as const }
@@ -182,7 +192,8 @@ export function registerMobileHandlers(
         pairingUrl: offer.pairingUrl,
         webClientUrl: offer.webClientUrl,
         endpoint: offer.endpoint,
-        deviceId: offer.deviceId
+        deviceId: offer.deviceId,
+        expiresAt: offer.offerExpiresAt
       }
     }
   )

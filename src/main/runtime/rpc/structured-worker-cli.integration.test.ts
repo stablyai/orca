@@ -8,28 +8,37 @@ import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import * as versionProbe from '../../agent-launch/preflight/agent-cli-version-probe'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
-import { OrchestrationDb } from '../orchestration/db'
-import { storeRepo } from '../runtime-store-partial-fixture'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
-import { chatTabCommandsSettled } from '../session-layout-apply.test-fixture'
+import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
+import { storeRepo } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   AuthorityRuntime,
   authorityProfile,
   root,
   savedIds
-} from '../structured-agent-session-tab-authority.test-support'
+} from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
-import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
-import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'
-import { AGENT_LAUNCH_METHODS } from './methods/agent-launch'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
-import { STATUS_METHODS } from './methods/status'
-import { WORKTREE_METHODS } from './methods/worktree'
-import { REPO_METHODS } from './methods/repo'
+import {
+  fakeCodex,
+  resetProviderFaults
+} from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { releaseStructuredWorkerSession } from './methods/orchestration/structured-workers/orchestration-structured-worker-session'
+import { AGENT_LAUNCH_METHODS } from './methods/agent-launch/agent-launch'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+import { STATUS_METHODS } from './methods/host-management/status'
+import { WORKTREE_METHODS } from './methods/workspaces/worktree'
+import { REPO_METHODS } from './methods/projects/repo'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { idOf, isRecord, resultOf } from './orchestration-session-caller-test-fixture'
@@ -51,12 +60,14 @@ let codex: ReturnType<typeof fakeCodex>
 let socket: UnixSocketTransport | undefined
 let runId: string
 let finishTurns = true
+let rejectNextTurn = false
 const dispatches: string[] = []
 const requests: RpcRequest[] = []
 
 beforeEach(async () => {
   resetProviderFaults()
   finishTurns = true
+  rejectNextTurn = false
   rig = await authorityProfile([])
   await mkdir(join(root, 'codex-home'))
   rig.profile.updateSettings({
@@ -79,6 +90,10 @@ beforeEach(async () => {
     const connection = await codex.openConnection(...args)
     const request = connection.request.bind(connection)
     connection.request = async (method, params) => {
+      if (method === 'turn/start' && rejectNextTurn) {
+        rejectNextTurn = false
+        throw new CodexAppServerRequestError('turn/start', -32000, 'Task refused', 'Task refused')
+      }
       const response = await request(method, params)
       if (
         method === 'turn/start' &&
@@ -248,7 +263,7 @@ async function launch() {
   return { result, sessionId }
 }
 
-async function start() {
+async function start(retryOf?: string) {
   const receipt = await cli([
     'orchestration',
     'worker-start',
@@ -258,8 +273,9 @@ async function start() {
     `id:${rig.workspace}`,
     '--agent',
     'codex',
-    '--spec',
-    'Reply once then wait'
+    ...(retryOf
+      ? ['--task', db.getDispatchContextById(retryOf)!.task_id, '--retry-of', retryOf]
+      : ['--spec', 'Reply once then wait'])
   ])
   expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
   const result = resultOf(receipt.output)
@@ -365,6 +381,89 @@ function settle(worker: Awaited<ReturnType<typeof start>>) {
     ownership_state: 'owned'
   })
 }
+
+it.each(['worker-release', 'retry-of'] as const)(
+  'keeps a refused first task inspectable across identity reload until %s releases it',
+  async (cleanup) => {
+    const coordinator = await launch()
+    rejectNextTurn = true
+    const receipt = await cli([
+      'orchestration',
+      'worker-start',
+      '--run',
+      runId,
+      '--worktree',
+      `id:${rig.workspace}`,
+      '--agent',
+      'codex',
+      '--spec',
+      'Refused fixture task'
+    ])
+    expect(receipt.code, receipt.stdout + receipt.stderr).toBe(1)
+    const result = resultOf(receipt.output)
+    expect(result).toMatchObject({ state: 'failed' })
+    if (typeof result.dispatchId !== 'string') {
+      throw new Error('failed start did not return its dispatch')
+    }
+    const dispatchId = result.dispatchId
+    dispatches.push(dispatchId)
+    const worker = db.getWorkerDispatch(dispatchId)!
+    const handle = worker.agent_terminal_handle!
+    const identity = structuredWorkerIdentities.get(handle)!
+    expect(identity).toBeTruthy()
+    await chatTabCommandsSettled()
+    visible(identity.sessionId, true)
+    expect(host.hasSession(identity.sessionId)).toBe(false)
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'not_requested'
+    })
+    expect(db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'failed' })
+    expect(db.getDispatchContextById(dispatchId)?.capability_revoked_at).not.toBeNull()
+    expect(db.getTask(db.getDispatchContextById(dispatchId)!.task_id)?.status).toBe('failed')
+    const snapshot = await host.journalSnapshot(identity.sessionId)
+    expect(snapshot.submissions).toMatchObject([{ dispatchState: 'rejected' }])
+    expect(JSON.stringify(snapshot)).toContain('Refused fixture task')
+    structuredWorkerIdentities.clear()
+    expect(resolveStructuredWorkerIdentity(handle, db)).toMatchObject({
+      sessionId: identity.sessionId,
+      handle,
+      paneKey: identity.paneKey
+    })
+    const read = await cli([
+      'orchestration',
+      'worker-read',
+      '--dispatch',
+      dispatchId,
+      '--source',
+      'transcript'
+    ])
+    expect(read.code, read.stdout + read.stderr).toBe(0)
+    expect(resultOf(read.output)).toMatchObject({
+      dispatchId,
+      status: { worker: 'failed' },
+      transcript: {
+        messages: [{ role: 'user', from: { orchestration: { dispatchId } } }]
+      }
+    })
+    if (cleanup === 'worker-release') {
+      const released = await cli(['orchestration', 'worker-release', '--dispatch', dispatchId])
+      expect(released.code, released.stdout + released.stderr).toBe(0)
+      expect(resultOf(released.output)).toMatchObject({ state: 'released' })
+    } else {
+      const retry = await start(dispatchId)
+      expect(retry.dispatchId).not.toBe(dispatchId)
+      await vi.waitFor(() =>
+        expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+      )
+    }
+    await chatTabCommandsSettled()
+    await rig.profile.flushPendingOrThrowAsync()
+    visible(identity.sessionId, false)
+    visible(coordinator.sessionId, true)
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('released')
+  }
+)
 
 it.each(['worker-stop', 'worker-release'] as const)(
   '%s waits for provider proof before CLI success and exact raw/saved retirement',

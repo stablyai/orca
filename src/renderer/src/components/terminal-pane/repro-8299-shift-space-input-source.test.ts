@@ -1,11 +1,14 @@
 /** Bound macOS Shift+Space switches input source without PTY bytes, including companion key events; unbound chords retain ordinary space input (#8299). */
 import { describe, expect, it } from 'vitest'
-import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
+import { createTerminalNativeOnlyShortcutTracker } from './input/keyboard/terminal-native-only-shortcut'
 import {
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
-} from './terminal-shortcut-policy'
-import { shouldBypassXtermKeyboardEvent, type XtermBypassEvent } from './xterm-bypass-policy'
+} from './input/keyboard/terminal-shortcut-policy'
+import {
+  shouldBypassXtermKeyboardEvent,
+  type XtermBypassEvent
+} from './input/keyboard/xterm-bypass-policy'
 
 function shortcutEvent(
   partial: Partial<TerminalShortcutEvent> & Pick<TerminalShortcutEvent, 'key'>

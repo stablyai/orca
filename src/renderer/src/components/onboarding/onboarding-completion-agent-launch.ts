@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store'
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-tab-shortcuts'
-import { agentTabLaunchStore } from '@/lib/launch-agent-execution-context'
+import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { launchAgentInNewTabWithOutcome } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
-import { activateAndRevealWorkspaceWithOutcome } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
 
 export async function launchOnboardingCompletionAgent(

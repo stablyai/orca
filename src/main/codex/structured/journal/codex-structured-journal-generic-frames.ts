@@ -1,8 +1,8 @@
 import {
   unhandledProviderFrameJournalItem,
   type UnhandledProviderFrameJournalItem
-} from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   type CodexJournalTranslationAdmission,
   type CodexJournalTranslatorDeps,

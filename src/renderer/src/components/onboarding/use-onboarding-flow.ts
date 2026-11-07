@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
-import { selectKnownWorktreeById } from '@/store/selectors'
+import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
@@ -39,9 +39,7 @@ export function useOnboardingFlow(
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
-  const selectedWorkspaceId = useAppStore((s) =>
-    selectKnownWorktreeById(s, s.activeWorktreeId) ? s.activeWorktreeId : null
-  )
+  const selectedWorkspaceId = useAppStore(selectOnboardingWorkspaceId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -115,7 +113,6 @@ export function useOnboardingFlow(
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
-      // Count changed picks, excluding repeated clicks on the current agent.
       const prev = selectedAgentRef.current
       setSelectedAgent(value)
       if (value === null || value === prev) {
@@ -323,6 +320,7 @@ export function useOnboardingFlow(
     hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
+    refreshDetectedAgents,
     next,
     setUpLater,
     dismissOnboarding,

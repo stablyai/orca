@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
       "defaultSurfaceSetAllChat": "すべてチャットにする",
       "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
-      "sameAsChoice": "{{agent}} と同じ · {{choice}}"
+      "sameAsChoice": "{{agent}} と同じ · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat はまだ Windows では利用できないため、このホストでは {{value0}} がターミナルで開きます。macOS または Linux ホストでのチャットは引き続き利用できます。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -499,7 +500,7 @@
         "parakeetV2": "英語のみ。v3 と同程度の精度で、より高速。句読点と大文字・小文字に対応。",
         "zipformerBilingual": "中国語 + 英語の混在に対応。低遅延のリアルタイムストリーミング。",
         "paraformerBilingual": "中国語（標準中国語 + 方言）+ 英語。なまりや地域ごとの中国語に強い。",
-        "zipformerStreamingEn": "英語のみ。2,000 万パラメーターの軽量モデル。速度とサイズのバランスが良好。",
+        "zipformerStreamingEnRetired": "提供を終了しました。文の冒頭が抜け落ちます。削除して空き容量を確保してください。",
         "zipformerStreamingZh": "中国語のみ。1,400 万パラメーターの超軽量モデル。リソースの少ないデバイスに最適。",
         "zipformerStreamingKo": "韓国語のみ。低遅延のリアルタイムストリーミング。",
         "parakeetJa": "日本語のみ。3.5 万時間以上の自然な音声で学習。句読点に対応。",
@@ -705,7 +706,9 @@
         "cb4d287238": "サーバー名",
         "3affe7de3a": "このブラウザが到達できる Orca サーバーからペアリング URL を貼り付けます。",
         "e3bcd082ac": "Orca に接続",
-        "mobileScopeRejected": "この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。"
+        "mobileScopeRejected": "この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。",
+        "replaceSavedServer": "このリンクは「{{name}}」({{endpoint}}) とは別のサーバーに接続します。下のエンドポイントを信頼できる場合にのみ接続してください。",
+        "keepSavedServer": "保存済みサーバーを維持"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。",
@@ -744,7 +747,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca はこのページからのペアリングを拒否しました。このページが別のマシン上の平文 http であるため、ネットワーク経路上の誰でも置き換えてペアリングコードを奪う可能性があります。https で、このコンピュータの localhost で、または SSH トンネル経由で Web クライアントを開いてください。それでも許可するには、サーバーの管理者が ORCA_ALLOW_INSECURE_WEB_PAIRING=1 を指定して Orca を再起動できます。",
         "deviceDowngraded": "この Orca サーバーはこのブラウザのサインインキーをサポートしなくなりました (ダウングレードされた可能性があります)。サーバーを更新するか、このブラウザを再度ペアリングしてください。",
-        "unauthorized": "未認証です。この Web クライアントを再度ペアリングしてください。"
+        "unauthorized": "未認証です。この Web クライアントを再度ペアリングしてください。",
+        "unauthorizedNewLink": "未認証です。新規ペアリングリンクを依頼してください。"
       }
     },
     "store": {
@@ -1857,6 +1861,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "レビュアー",
         "02cbe2de44": "パイプライン",
+        "itemLoadFailed": "この項目を読み込めませんでした。更新して再試行してください。",
         "be3d291837": "ファイル",
         "c996e2962c": "会話",
         "b3c156dd51": "更新",
@@ -2517,7 +2522,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "レビュー待ち",
         "7698af5263": "私の",
         "94f0339621": "私に割り当てられた Issue",
         "c2268a9982": "全て",
@@ -2612,6 +2616,8 @@
         "loadGitHubWorkFailed": "GitHub の作業項目を読み込めませんでした。",
         "gitlabViewIssues": "Issue",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "全員",
+        "gitlabInvolvementReviewing": "レビュー担当",
         "gitlabViewTodos": "自分の ToDo",
         "startWorkspaceFromMr": "MR {{number}} からワークスペースを開始",
         "startWorkspaceFromIssue": "Issue {{number}} からワークスペースを開始",
@@ -3214,7 +3220,6 @@
             "e8b3741ff7": "無視済み",
             "a9957007eb": "{{value0}} を無視する",
             "bef0adef9b": "ブランチ",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} を選択",
             "b771c92598": "選択したものを削除",
             "7eee951968": "作業場の安全性の確認",
@@ -3223,7 +3228,6 @@
             "b2c1331844": "非アクティブなワークスペースの削除",
             "7f451a3e2c": "クリーンアップの提案を無視できませんでした",
             "662b8ec3f8": "ワークスペースのクリーンアップスキャンに失敗しました",
-            "4d0b72481c": "無視",
             "9cc26c019d": "削除",
             "0e2d235c63": "非アクティブなワークスペースのスキャン準備完了",
             "4a35c08764": "レビュー",
@@ -3231,9 +3235,6 @@
             "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
             "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
             "86ba852118": "{{value0}}、{{value1}} 件が失敗",
-            "deletingCount": "削除中のワークスペース: {{value0}}",
-            "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
-            "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
             "deleteButtonCount": "{{value0}} を削除",
             "archivedStatus": "アーカイブ済み",
             "74f6c16279": "戻る"
@@ -3248,7 +3249,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "コミット",
             "contextLabel": "コンテキスト",
             "flagsLabel": "フラグ",
             "collapseDetails": "詳細を折りたたむ",
@@ -3736,7 +3736,8 @@
             "agentsLoading": "Agent を読み込んでいます",
             "cliTag": "(CLI)",
             "terminalListNeedsServerUpdate": "ターミナル Agent を一覧表示するには、このサーバーの Orca を更新してください",
-            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした"
+            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした",
+            "chatNotOnWindows": "Windows ではまだチャットを利用できません"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -5402,8 +5403,6 @@
           "expandAriaLabel": "{{repo}} の非表示のワークツリー一覧を展開",
           "hiding_one": "{{count}} 件のワークツリーを非表示中",
           "hiding_other": "{{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_one": "{{repo}} の {{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_other": "{{repo}} の {{count}} 件のワークツリーを非表示中",
           "keepHiddenAriaLabel_one": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenAriaLabel_other": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenTooltip": "非表示のままにする（プロジェクトメニューから再表示できます）",
@@ -5522,7 +5521,6 @@
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "ローカル設定を保存する",
           "3933401d28": "設定する",
           "31b8b01a45": "設定",
           "4a98f907ae": "再試行",
@@ -5537,7 +5535,15 @@
           "5bfd5c8779": "セットアップスクリプトを閉じる",
           "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。"
+          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
+          "reviewSetupScript": "セットアップスクリプトを確認"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "セットアップスクリプトを確認",
+          "description": "保存すると、Orca が {{repo}} のワークツリーを作成するたびに実行されます。",
+          "setupScript": "セットアップスクリプト",
+          "archiveScript": "アーカイブスクリプト",
+          "save": "ローカル設定を保存する"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "キャンセル",
@@ -7653,7 +7659,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "コーディング Agent が Orca CLI コマンドを使用してアクティブなモバイルエミュレータを制御できるようにします。",
           "f2f8d97bb6": "Agent モバイルエミュレータ制御",
-          "143961d031": "デフォルトのデバイス",
           "8aec2f99a0": "エミュレータの利用可能性を更新する",
           "ae1612c58c": "可用性",
           "f9af91ea26": "新規モバイルエミュレータ 操作を表示し、Agent がアクティブなエミュレータに接続できるようにします。",
@@ -7666,9 +7671,7 @@
           "d704fb5023": "設定が必要",
           "06b06429c6": "Android SDK と iOS シミュレーターのサポートを確認しています。",
           "6d1483d4a0": "1 つのエミュレータデバイスが検出されました。",
-          "0a452d4d3b": "{{value0}} エミュレータデバイスが検出されました。",
-          "f62a1bb759": "Orca は、デバイスが検出された後、エミュレータデバイスを自動選択します。",
-          "b2fd62ea75": "新規エミュレータタブと Agent 接続コマンドのデフォルトデバイス。自動選択では、すでに実行中のデバイスが優先されます。"
+          "0a452d4d3b": "{{value0}} エミュレータデバイスが検出されました。"
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "インターフェースが見つかりません"
@@ -7699,7 +7702,8 @@
           "copyPairingCode": "ペアリングコードをコピーする",
           "diagnosticsCopied": "診断がコピーされました",
           "diagnosticsCopyFailed": "診断情報のコピーに失敗しました",
-          "5e2c7a1f84": "スマートフォンでターミナルを使用している間、Orca はスマートフォンの画面に合わせてターミナルを縮小します。アプリを閉じるか別のアプリに切り替えるときに、アプリをスマートフォンサイズのままにするか (インタラクティブ CLI ツールがリフローしないように)、サイズを変更してデスクトップに戻るかを制御します。バナーの [復元] または [すべて復元] を使用すると、いつでも手動でサイズを変更できます。"
+          "5e2c7a1f84": "スマートフォンでターミナルを使用している間、Orca はスマートフォンの画面に合わせてターミナルを縮小します。アプリを閉じるか別のアプリに切り替えるときに、アプリをスマートフォンサイズのままにするか (インタラクティブ CLI ツールがリフローしないように)、サイズを変更してデスクトップに戻るかを制御します。バナーの [復元] または [すべて復元] を使用すると、いつでも手動でサイズを変更できます。",
+          "codeRefreshesAutomatically": "コードは自動的に更新されます。コピーしたコードは最大10分間有効です。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "アプリストア",
@@ -8207,7 +8211,9 @@
           "browserLinkLabel": "ブラウザー用リンク",
           "accessLinkLabel": "アクセスリンク",
           "accessLinkHelp": "もう一方の Orca の「サーバーを追加」に貼り付けます。",
-          "staleAddressCreate": "接続アドレスが変わりました。{{address}} 用の新しいリンクを作成してください。"
+          "staleAddressCreate": "接続アドレスが変わりました。{{address}} 用の新しいリンクを作成してください。",
+          "linkExpired": "リンクの有効期限が切れました",
+          "unusedLinkExpires": "未使用のリンクは {{time}} に期限切れになります"
         },
         "Settings": {
           "3bf149e873": "プロジェクト設定 > {{value0}}",
@@ -8490,8 +8496,8 @@
           "editingPrefix": "編集中",
           "reconnectOnLaunch": "起動時に再接続",
           "reconnectOnLaunchHelp": "オフにすると、Orca は起動時にこのホストと、それを経由する Orca サーバーを、接続するまで切断したままにします。",
-          "allowRemoteCliControl": "このホストの orca CLI による Orca の操作を許可する",
-          "allowRemoteCliControlHelp": "新しいホストではデフォルトでオンです。このホストで実行される orca コマンドが、このホストのワークスペース内に限り、接続中のみ、このデスクトップの Orca ブラウザのタブを開いて操作できるようにし、このホストで古い Orca が起動したターミナルが自身の監督下の作業についてオーケストレーションコマンド（check、inbox、send、ask、reply）を実行できるようにします。ファイル、クリップボード、Cookie は読み取れません。オフの場合、このホスト自身の Orca サーバーにのみアクセスします。",
+          "allowRemoteCliControl": "このホストにワークスペース内の Orca ブラウザのタブの操作を許可する",
+          "allowRemoteCliControlHelp": "新しいホストではデフォルトでオンです。このホストの Agent と orca コマンドは、このホストのワークスペース内に限り、接続中のみ、このデスクトップの Orca ブラウザのタブを開いて読み取り、操作できます。操作中のタブにはホスト名が表示されます。このホストで古い Orca が起動したターミナルで orca オーケストレーションコマンドを実行する場合も、この設定をオンにする必要があります。ファイル、クリップボード、Cookie は読み取れません。",
           "addHost": "ホストを追加",
           "proxyConnectionReuse": "1 つのプロキシ接続を再利用",
           "proxyConnectionReuseHelp": "低速な ProxyCommand や ProxyJump ホスト経由の接続が速くなります。ssh_config がホスト固有の Match や %h ルールに依存していない場合にのみ有効にしてください。"
@@ -10620,7 +10626,10 @@
               "micInput": "入力",
               "micDevice": "デバイス",
               "micAirpods": "エアポッド",
-              "micDefault": "システムのデフォルト"
+              "micDefault": "システムのデフォルト",
+              "dictationLanguageTitle": "音声入力の言語",
+              "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
+              "dictationLanguageKeyword": "言語"
             }
           }
         },
@@ -11289,7 +11298,7 @@
             "terminalRun": "ターミナルでコマンドを実行 (SSH を含む)"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
-          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行ができます。",
+          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
           "uiWarning": "ビューを描画するため、公開元のコードを Orca 内で実行します。Orca はアクセスできる範囲を表示し、有効にする前に確認します。"
         },
         "PluginConsentProvenance": {
@@ -12730,7 +12739,8 @@
           "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
           "manyDescription": "確認するまで更新されません。",
           "review": "確認",
-          "dismiss": "閉じる"
+          "dismiss": "閉じる",
+          "movedInstalled": "確認するまでオフのままです。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",
@@ -14857,8 +14867,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "カスタムコマンド",
-            "4b2fc4b80c": "考える努力",
-            "be8917699e": "モデル",
             "560d4feb00": "カスタム",
             "29d119fe95": "Agent",
             "f9382b48a1": "AI 著者を有効にする",
@@ -15263,7 +15271,6 @@
                 "06e10d7356": "エミュレータをシャットダウンする",
                 "e7a0d1897e": "ホーム",
                 "6bd8dff42a": "回転",
-                "3d836b879c": "エミュレータの選択",
                 "81b3571a07": "接続",
                 "868c0f2938": "処理中…"
               }
@@ -16241,9 +16248,14 @@
           "55127a3706": "ディクテーションが失敗しました: {{value0}}",
           "bb7f599ee7": "設定を開く",
           "2d5b9fabf9": "マイクへのアクセスが拒否されました。システム設定でアクセスを許可し、Orca を再起動。",
+          "noModel": "音声モデルが選択されていません。設定 > 音声 からダウンロードしてください。",
+          "disabled": "音声ディクテーションは無効です。設定 > 音声 で有効にしてください。",
+          "notReady": "音声モデルの準備ができていません。設定 > 音声 からダウンロードしてください。",
+          "unknownModel": "選択したモデルは使用できなくなりました。設定 > 音声 で別のモデルを選択してください。",
           "5d2c3e7ae3": "音声が検出されませんでした。",
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
-          "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。"
+          "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
+          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "ディクテーションを停止する",
@@ -16251,7 +16263,8 @@
           "f082d0cb9d": "処理中…",
           "3de5a129e7": "聞き取り中",
           "4977162383": "音量が大きすぎます",
-          "25f2b7a6a5": "発話中"
+          "25f2b7a6a5": "発話中",
+          "loadingModel": "音声モデルを読み込み中…"
         }
       },
       "dashboard": {
@@ -16478,6 +16491,8 @@
               "25349b66fc": "新規 Markdown ファイル",
               "784812ca24": "アクティブなワークスペースでブラウザタブを開きます。",
               "892bfa9339": "新規ブラウザタブ",
+              "splitChatRight": "右の分割チャット",
+              "splitChatDown": "チャットを下に分割",
               "verbs": {
                 "newBrowser": "新規ブラウザ",
                 "newBrowserTab": "新規ブラウザタブ",
@@ -16491,6 +16506,10 @@
                 "newTerminal": "新規ターミナル",
                 "newTerminalTab": "新規ターミナルタブ",
                 "newShell": "新規シェル",
+                "splitChatRight": "チャットを右に分割",
+                "splitChatDown": "チャットを分割する",
+                "chatPaneRight": "チャットペイン右",
+                "chatPaneBelow": "下のチャットペイン",
                 "terminalTab": "ターミナルタブ",
                 "createWorktree": "ワークツリーを作成する",
                 "addWorktree": "ワークツリーを追加",
@@ -16500,18 +16519,8 @@
                 "removeWorktree": "ワークツリーを削除する",
                 "trashWorktree": "ワークツリーをゴミ箱へ移動",
                 "addQuickCommand": "クイックコマンドを追加",
-                "newQuickCommand": "新規クイックコマンド",
-                "splitChatRight": "チャットを右に分割",
-                "newChatRight": "右に新しいチャット",
-                "chatPaneRight": "チャットペイン右",
-                "splitChatDown": "チャットを分割する",
-                "newChatBelow": "下に新しいチャット",
-                "chatPaneBelow": "下のチャットペイン"
-              },
-              "splitChatRight": "右の分割チャット",
-              "splitChatRightDescription": "右側の分割ペインで新しいチャットを開きます。",
-              "splitChatDown": "チャットを下に分割",
-              "splitChatDownDescription": "下の分割ペインで新しいチャットを開きます。"
+                "newQuickCommand": "新規クイックコマンド"
+              }
             }
           },
           "palette": {
@@ -16989,6 +16998,8 @@
           "noRunUsageYet": "まだ実行の使用量がありません",
           "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
+          "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+          "retryFullOutput": "再試行",
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
@@ -18269,6 +18280,9 @@
           "cancel": "キャンセル",
           "add": "カタログを追加",
           "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },
@@ -18658,8 +18672,12 @@
         "notDoneGoalChangeIncomplete": "目標の変更を完了できませんでした。チャットを確認してください。"
       },
       "composer": {
+        "planMode": "計画",
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "previewQueue": "キューに入れる",
+        "previewSteer": "今すぐ送信",
+        "previewSteerQueued": "次を今すぐ送信",
         "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
@@ -18952,8 +18970,6 @@
       },
       "turnDiff": {
         "partial": "部分的な差分",
-        "showDiff": "差分を表示",
-        "hideDiff": "差分を非表示",
         "changedFiles_other": "変更されたファイル {{count}} 個"
       },
       "receipt": {
@@ -19395,7 +19411,15 @@
         "hostUnavailable": "添付ファイルのホストを利用できません。再接続して再試行してください。",
         "connectionChanged": "接続が変更されました。添付ファイルを閉じてから開き直してください。",
         "readFailed": "ホスト上の添付ファイルを読み取れません。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。"
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "コピーできませんでした",
+        "copyIdentity": "{{value0}} をコピー",
+        "folder": "フォルダー",
+        "mainCheckout": "メインチェックアウト",
+        "worktree": "ワークツリー"
+      },
+      "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。"
     },
     "tab": {
       "bar": {
@@ -19443,9 +19467,7 @@
         "browse": {
           "noSizes": "ワークスペースのサイズはまだ測定されていません。",
           "noSizesDescription": "サイズは、ディスク使用量が測定された後に表示されます。",
-          "measureSizes": "スキャン",
           "measureSizesTitle": "スキャンワークスペースのサイズ",
-          "measureSizesDescription": "ディスク使用量をスキャンして、サイズ別にワークスペースを比較、並べ替え、フィルター処理します。",
           "sizeOnDisk": "ディスク上のサイズ: {{value0}}",
           "checkingGitRow": "gitのステータスを確認する",
           "searchPlaceholder": "名前、リポジトリ、ブランチ、パス、ホストを検索します",
@@ -19814,6 +19836,15 @@
         "idleStopSearchTimeout": "タイムアウト",
         "idleStopSearchKeepAlive": "キープアライブ",
         "idleStopNever": "しない"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} は対応する言語しか文字起こしできないため、この設定は使われません。",
+          "unsupported": "{{model}} は{{language}}に対応していないため、言語を自動で判定します。",
+          "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
+          "title": "音声入力の言語",
+          "auto": "自動検出"
+        }
       }
     },
     "agentChildRow": {
@@ -19955,7 +19986,10 @@
       "workerAutoClose": {
         "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "keepOpen": "開いたままにする"
+        "keepOpen": "開いたままにする",
+        "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "temporaryBadge": "一時的"
       }
     },
     "wslHostMark": {
@@ -20555,10 +20589,8 @@
       "offTerminal": "ターミナルのほうが好みですか？ターミナルは引き続き完全にサポートされます。チャットを選ぶまで、Agent はこれまでどおりターミナルで開きます。",
       "onIntro": "チャット UI は実験的機能を卒業し、Orca の標準機能になりました。Agent はこれまでどおりチャットとして開き、リッチなメッセージ、ビジュアル、画像を表示できます。",
       "onTerminal": "ターミナルも引き続き完全にサポートされます。どの Agent もいつでもターミナルに戻せます。",
-      "changeInSettings": "<link>設定 → Agent</link> でいつでも変更できます。",
       "stayInTerminal": "ターミナルのまま使う",
       "cta": "チャット UI を使う",
-      "saveFailed": "チャット UI をオンにできませんでした。設定 → Agent でチャットを選んでください。",
       "demoTabTitle": "ログインの説明",
       "demoPrompt": "ログインの仕組みを図にして",
       "demoReply": "ログインは {{file}} から始まります。ブラウザが /login に送信し、サーバーがパスワードを確認してセッションを作成し、アプリにリダイレクトします。流れは次のとおりです:",
@@ -21922,7 +21954,8 @@
     "rowActions": "{{name}} の操作"
   },
   "browserTab": {
-    "agentDriving": "Agent がこのページを使用中です"
+    "agentDriving": "Agent がこのページを使用中です",
+    "controlledByHost": "{{host}} が操作中"
   },
   "quitAndStopAllSessions": {
     "title": "完全に終了",
@@ -22951,5 +22984,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL ディストリビューション {{distro}} が停止しているため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。",
     "terminalUnverifiable": "WSL ディストリビューション {{distro}} が実行中か確認できなかったため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。"
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} がブラウザのタブを操作しています",
+    "description": "この SSH ホストの Agent は、ホストのワークスペース内の Orca ブラウザのタブを開いて操作できます。操作中のタブにはホスト名が表示されます。この設定は 設定 > SSH で変更できます。",
+    "stop": "停止",
+    "disallow": "許可しない",
+    "stopped": "Orca を再起動するまで、{{host}} はブラウザのタブを操作しません。",
+    "disallowed": "{{host}} はブラウザのタブを操作できなくなりました。設定 > SSH で再度オンにできます。",
+    "failed": "{{host}} を停止できませんでした。設定 > SSH でブラウザの操作をオフにしてください。"
   }
 }

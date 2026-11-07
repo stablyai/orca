@@ -3,8 +3,11 @@ import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/loca
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  AdoptProvisionedRootArgs
+  AdoptProvisionedRootArgs,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
+import { runApprovedCreatedWorktreeSetup } from '../../../runtime/created-worktree-approved-setup'
 import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
@@ -29,7 +32,7 @@ import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lifecycle-commands'
+import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
@@ -132,6 +135,15 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         })
       })
     }
+  )
+
+  ipcMain.handle(
+    'worktrees:runApprovedSetup',
+    (_event, args: RunApprovedWorktreeSetupArgs): Promise<RunApprovedWorktreeSetupResult> =>
+      // A click on the trust prompt is the user's act, so it may start the repo's WSL distro.
+      runApprovedCreatedWorktreeSetup(runtime, `id:${args.worktreeId}`, args.approvedSetupHash, {
+        wslUserAct: true
+      })
   )
 
   ipcMain.handle(

@@ -12,12 +12,12 @@ import {
   openProviderTimelineRig,
   providerTurnItemId
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import '../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import '../../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import '../../native-chat/agent-session-timeline/provider-timeline-history'
-import '../../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import '../../native-chat/agent-session-wire/termination/testing/structured-agent-session-observed-exit.test-fixture'
+import '../../native-chat/agent-session-wire/termination/structured-agent-session-unfinished-work'
+import '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import './acp-history-scaling-counts.test-fixture'
 import './acp-history-scaling-operations.test-fixture'
 import './acp-history-catch-up'
@@ -32,8 +32,8 @@ import { matchAcpHistoryTurns } from './acp-history-turn-matching'
 import { acpNamedTextKey } from '../acp-turn-messages'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import '../acp-dialects/grok-dialect'
-import '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 
 afterEach(closeProviderTimelineRigs)
 const scope: AcpHistoryScope = {
@@ -149,4 +149,36 @@ it('preserves regressing floors, future exact reservations, ties and non-consumi
   expect(result.kind.has('O')).toBe(false)
   expect(result.kind.has('Z')).toBe(false)
   expect([...items.values()]).toEqual(before)
+})
+
+it('imports a whole historical turn with more than 128 still-open message segments', () => {
+  const frames = [user('long-turn', 'Review the repository')]
+  for (let index = 0; index < 160; index += 1) {
+    frames.push(
+      frame({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: `answer-${index}`,
+        content: { type: 'text', text: 'Retained segment' }
+      })
+    )
+  }
+  frames.push(
+    frame({
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'answer-0',
+      content: { type: 'text', text: ' and its late tail' }
+    })
+  )
+  const turn = acpHistoryTurns(frames, scope.identity)[0]
+  if (!turn || turn.turn === null) {
+    throw new Error('Missing identified historical turn')
+  }
+  const items = translateHistoryTurn(scope, { ...turn, turn: turn.turn })
+  const answers = items.flatMap((item) =>
+    item.body.kind === 'message' && item.body.role === 'assistant' ? [item.body] : []
+  )
+  expect(answers).toHaveLength(160)
+  expect(answers[0]).toMatchObject({
+    blocks: [{ type: 'text', text: 'Retained segment and its late tail' }]
+  })
 })

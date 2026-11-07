@@ -48,6 +48,8 @@ type KillAllTerminalSurfaceDependencies = {
   closeSurface: (
     tabId: string,
     options: {
+      /** Kill-all is the user's own command (daemon actions, quit and stop all). */
+      reason: 'user'
       force: true
       localPtyTeardownOwnedExternally: true
       precomputedRetirementPlan: TerminalTabRetirementPlan
@@ -226,6 +228,7 @@ export async function runKillAllTerminalSurfaces(
       let closeFailed = false
       try {
         deps.closeSurface(targetId, {
+          reason: 'user',
           force: true,
           localPtyTeardownOwnedExternally: true,
           precomputedRetirementPlan: retirementPlan,

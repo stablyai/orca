@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
@@ -117,13 +117,16 @@ export function MobileNativeChatSessionOptionPickers({
   const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
+  // Aliases of listed models wait behind a toggle, as compact pickers do without search.
+  const [moreModelsShown, setMoreModelsShown] = useState(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
-  const { snapshot, pendingId } = controller
+  const { pendingId } = controller
+  const snapshot = controller.snapshot.filter((descriptor) => descriptor.id !== 'interactionMode')
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
@@ -160,10 +163,10 @@ export function MobileNativeChatSessionOptionPickers({
   }, [showWorkingNotice])
 
   const options = sortNativeChatSessionOptions(snapshot)
-  if (!model && !permission) {
+  if (!model && !permission && options.length === 0) {
     return null
   }
-  const home = model ?? permission!
+  const home = model ?? permission ?? options[0]!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // Structured picks and permission mode affect the next send, not the running turn.
@@ -247,7 +250,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          setMoreModelsShown(false)
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
@@ -302,6 +308,10 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
+                  moreChoices: {
+                    shown: moreModelsShown,
+                    onToggle: () => setMoreModelsShown((shown) => !shown)
+                  },
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t

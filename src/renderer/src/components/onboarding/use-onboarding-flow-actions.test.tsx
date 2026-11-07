@@ -41,11 +41,15 @@ const {
 })
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => state.activeWorkspaceExecutionHostId
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTabWithOutcome: launch }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspaceWithOutcome: reveal }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: launch
+}))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorkspaceWithOutcome: reveal
+}))
 vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({ groupId: 'group', focusIntent })
 }))

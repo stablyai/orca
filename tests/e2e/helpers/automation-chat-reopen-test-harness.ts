@@ -5,7 +5,7 @@ import {
   authorityProfile,
   openAuthorityRuntime,
   root
-} from '../../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { editPersistedTestAgentSessionStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   codexProviderHandle,

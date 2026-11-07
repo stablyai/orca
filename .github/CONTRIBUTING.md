@@ -4,6 +4,7 @@ Thanks for contributing to Orca.
 
 ## Before You Start
 
+- Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
 - Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
 - Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
 - For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
@@ -148,7 +149,7 @@ needed. Things to know:
   dependencies the package never declared and hides missing-dependency bugs; `pnpm install` warns
   when it finds one.
 - Native addons are never rebuilt in place in a shared slot: each CPU gets its own build
-  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build-entry.cjs)), so
+  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build/node-addons/native-build-entry.cjs)), so
   cross-arch packaging is safe for other worktrees.
 - `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0` opts out. Keep it set
   in your shell: `pnpm run` re-checks the install and relinks a worktree whose layout no longer

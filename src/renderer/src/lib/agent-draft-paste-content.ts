@@ -3,14 +3,14 @@ import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
 } from '../../../shared/utf8-byte-limits'
-import '@/components/terminal-pane/terminal-bracketed-paste'
+import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
 } from '../../../shared/terminal/input/terminal-bracketed-paste-text'
-import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/input/paste/terminal-pty-input-transaction'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 

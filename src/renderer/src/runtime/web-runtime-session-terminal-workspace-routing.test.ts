@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
+import {
+  createWebRuntimeSessionTerminal,
+  createWebRuntimeSessionTerminalOnHost
+} from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -63,7 +66,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -101,7 +104,11 @@ describe('web-runtime-session terminal workspace routing', () => {
     resetTerminalCreateEnvironment()
   })
 
-  it('hands the workspace host selection back when the host never accepted the create', async () => {
+  it('routes an owned create to its host and restores selection when that host refuses', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      settings: { activeRuntimeEnvironmentId: 'another-host' }
+    })
     const selection: MutableSelection = {
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
@@ -110,13 +117,16 @@ describe('web-runtime-session terminal workspace routing', () => {
     const runtimeCall = vi.fn().mockRejectedValue(new Error('selector_not_found'))
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
-    const outcome = await createWebRuntimeSessionTerminal({
+    const outcome = await createWebRuntimeSessionTerminalOnHost({
       worktreeId: WORKTREE_ID,
       environmentId: ENVIRONMENT_ID,
       activate: true
     })
 
     expect(outcome.status).toBe('failed')
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: ENVIRONMENT_ID, method: 'session.tabs.createTerminal' })
+    )
     expect(mocks.setActiveWorktree.mock.calls).toEqual([
       [WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID],
       [WORKTREE_ID, 'local']

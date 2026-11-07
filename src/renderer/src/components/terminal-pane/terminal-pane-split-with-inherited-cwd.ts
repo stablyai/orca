@@ -6,7 +6,7 @@ import {
   notifyHostTabSplitRefused,
   readHostPublishedSplitSourcePtyId
 } from '@/runtime/web-runtime-split-source-pty'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
