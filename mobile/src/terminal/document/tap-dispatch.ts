@@ -3,7 +3,10 @@ import { cancelSelect, enterSelect } from './selection-mode'
 import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
-import { queuedNormalBufferScrollReachesRow } from './normal-buffer-smooth-scroll'
+import {
+  queuedNormalBufferScrollReachesRow,
+  releaseWouldCoastARow
+} from './normal-buffer-smooth-scroll'
 import { notifyTerminalSurfaceTap } from './surface-tap'
 import {
   eventTargetInRoot,
@@ -219,7 +222,9 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
       scope.selMode !== 'select' &&
       Date.now() - scope.tapCandidate.t <= TAP_MAX_MS &&
       // Release can precede a queued row-scroll frame; cancelled-out movement remains a tap.
-      !queuedNormalBufferScrollReachesRow(scope)
+      !queuedNormalBufferScrollReachesRow(scope) &&
+      // A release whose coast carries a row is a flick, not a tap.
+      !releaseWouldCoastARow(scope)
     ) {
       notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)
     }
