@@ -38,6 +38,8 @@ export function useHostModelCatalogUpgrade(args: {
   newLaunch: boolean
   /** Where the launch runs: the host names no default its config could replace. */
   worktree?: string
+  /** The chat has a turn or a send, so its answers are its own account's, which a new chat may no longer pin. */
+  hasTurn?: boolean
   fence: number | null
   /** The chat's running turn: one running proves its start, which the host re-checks against. */
   turnId?: string | null
@@ -70,9 +72,11 @@ export function useHostModelCatalogUpgrade(args: {
     worktree
   } = args
   const receiver = useRef(args.receiveCatalog)
+  const recordsNewChat = useRef(newLaunch && args.hasTurn !== true)
   useEffect(() => {
     receiver.current = args.receiveCatalog
-  }, [args.receiveCatalog])
+    recordsNewChat.current = newLaunch && args.hasTurn !== true
+  }, [args.receiveCatalog, newLaunch, args.hasTurn])
   const waitKey = `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${sessionId}`
   const [verdict, setVerdict] = useState<{
     key: string
@@ -134,7 +138,7 @@ export function useHostModelCatalogUpgrade(args: {
           : { key: waitKey, unavailable: next }
       })
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      if (catalog && newLaunch) {
+      if (catalog && recordsNewChat.current) {
         recordHostModelCatalogSnapshot(target, agent, worktree ?? '', catalog)
       }
       receiver.current(catalog, settled ? 'settled' : event)
