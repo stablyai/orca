@@ -12,7 +12,11 @@ type CachedBranchChanges = {
   entries: GitBranchChangeEntry[]
   /** Worktree `.gitattributes` files that shape the listed paths' numstat (for example `-diff`). */
   attributePaths: string[]
+  storedAtMs: number
 }
+
+// The system gitattributes file has no known path to stamp; bound how long an edit to it can go unseen.
+const MAX_REUSE_AGE_MS = 5 * 60_000
 
 // Statting more attribute files than this approaches the cost of the diff it would skip.
 const MAX_ATTRIBUTE_STAMP_PATHS = 8192
@@ -79,7 +83,7 @@ export async function loadBranchChangesThroughCache(
   const key = JSON.stringify([pairScope, worktreePath, gitChangeListArgs(mergeBase, headOid)])
 
   const cached = settledBranchChangeListCache.peek(key)
-  if (cached) {
+  if (cached && performance.now() - cached.storedAtMs < MAX_REUSE_AGE_MS) {
     const reused = settledBranchChangeListCache.get(
       key,
       await stampAttributes(cached.attributePaths)
@@ -106,7 +110,7 @@ export async function loadBranchChangesThroughCache(
     settledBranchChangeListCache.set(
       key,
       { ...stamp, capturedAtMs: readStartedAtMs },
-      { entries, attributePaths },
+      { entries, attributePaths, storedAtMs: performance.now() },
       readGeneration
     )
   }
