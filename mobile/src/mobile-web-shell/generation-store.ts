@@ -291,14 +291,17 @@ export function createGenerationStore(options: {
     }
     // Interrupted downloads may belong to a host this launch never opens, so visit every host's tmp tree.
     for (const host of await listHostDirectories()) {
-      const waiting = await readWaitingStage(fs, host.name, stagingRoot(host.name))
+      // Unreadable (undefined) is not corrupt: leave that tree for a later launch rather than fail every read.
+      const waiting = await readWaitingStage(fs, host.name, stagingRoot(host.name)).catch(
+        () => undefined
+      )
       if (waiting === null) {
         await fs.delete(stagingRoot(host.name))
-        continue
+      } else if (waiting !== undefined) {
+        // Deferred commits live in memory and a page is often open when the app dies, so the next open commits the stage instead.
+        issuedHandles.add(waiting)
+        deferred.defer(waiting)
       }
-      // Deferred commits live in memory and a page is often open when the app dies, so the next open commits the stage instead.
-      issuedHandles.add(waiting)
-      deferred.defer(waiting)
     }
     swept = true
   }
