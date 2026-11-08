@@ -108,10 +108,9 @@ function slotFor(key: string): Slot {
   return slot
 }
 
-/** The page's copy, once the row has been read; null before then. */
+/** The page's copy: what was read, plus typing kept in memory while the store can't be read. */
 export function readAutomationEditorDraft(key: string): AutomationDraftEdits | null {
-  const slot = slotFor(key)
-  return slot.row.state() === 'loaded' ? slot.edits : null
+  return slotFor(key).edits
 }
 
 /** Opens the row for an editor: reads it if it hasn't been, and hands saved edits to `onRestore`. */
