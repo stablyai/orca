@@ -77,4 +77,17 @@ describe('programStatusHookYieldEndsAt', () => {
       )
     }
   })
+
+  it('never yields a hook-owned OpenCode session to service-wide OpenCode OSC 7501 reports', () => {
+    for (const hookAgentType of ['opencode', 'opencode2'] as const) {
+      const settledHook = row({ state: 'done', agentType: hookAgentType })
+      expect(
+        programStatusHookYieldEndsAt(
+          settledHook,
+          report({ state: 'working', agentType: 'opencode', toolInput: '2 sessions working' }),
+          NOW + SILENCE + 1
+        )
+      ).toBe(Infinity)
+    }
+  })
 })

@@ -6,6 +6,11 @@ import type { EnrichedAgentHookEventPayload } from '../server-types'
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
+/** Whether the agent type belongs to the OpenCode family (`opencode` or `opencode2`). */
+function isOpenCodeAgent(agentType: string | undefined): boolean {
+  return agentType === 'opencode' || agentType === 'opencode2'
+}
+
 /** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -14,6 +19,13 @@ export function programStatusHookYieldEndsAt(
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
+  }
+  // OpenCode's TUI emits service-wide OSC 7501 across all sessions in a shared server; once Orca's per-session hook plugin owns the pane, OSC 7501 must not override it.
+  if (
+    isOpenCodeAgent(previous.payload.agentType) &&
+    (payload.agentType === undefined || isOpenCodeAgent(payload.agentType))
+  ) {
+    return Infinity
   }
   const sameAgent =
     payload.agentType === undefined || payload.agentType === previous.payload.agentType
