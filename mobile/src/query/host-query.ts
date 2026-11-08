@@ -119,7 +119,10 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   const live =
     fetch &&
     (() =>
-      fetch(hostReadClient(client), target, input, undefined, { live: true, previousFromStore: false }))
+      fetch(hostReadClient(client), target, input, undefined, {
+        live: true,
+        previousFromStore: false
+      }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
   }
