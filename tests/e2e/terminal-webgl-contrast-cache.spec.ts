@@ -93,7 +93,8 @@ async function colors(
   return { brightest, redChroma }
 }
 
-test('dim WebGL text follows a changed contrast ratio without changing another pane', async ({
+// The Linux headful project enables SwiftShader; its headless project disables WebGL.
+test('@headful dim WebGL text follows a changed contrast ratio without changing another pane', async ({
   orcaPage,
   registerPostElectronShutdownCleanup
 }, testInfo) => {
@@ -118,7 +119,7 @@ test('dim WebGL text follows a changed contrast ratio without changing another p
   ).toBeLessThan(70)
 })
 
-test('OSC palette changes keep WebGL contrast colors isolated between panes', async ({
+test('@headful OSC palette changes keep WebGL contrast colors isolated between panes', async ({
   orcaPage,
   registerPostElectronShutdownCleanup
 }, testInfo) => {
