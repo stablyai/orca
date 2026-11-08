@@ -103,6 +103,8 @@ export function useSharedNow(intervalMs = 30_000): number {
       }
       if (clock.listeners.size === 0) {
         if (isAppActive()) {
+          // A clock stopped less than one interval ago still holds its old time; refresh it on remount.
+          tick(clock)
           startTimer()
         }
         clock.stopWatchingApp = subscribeToAppState(() => {
