@@ -14,6 +14,7 @@ import {
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
 import { readStatusPorcelain } from './status-porcelain-stream'
+import { waitForIndexLockRelease } from './status-index-lock-wait'
 import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
@@ -122,6 +123,8 @@ async function runGetStatus(
   let readError: string | undefined
   const limit = resolveGitStatusLimit(options.limit)
 
+  // Inside the shared lease, so callers arriving during the wait join this read.
+  await waitForIndexLockRelease(worktreePath, options)
   const conflictPromise = detectConflictOperation(worktreePath, options)
   const statusReadPromise = readStatusPorcelain(worktreePath, options, limit)
   const conflictOperation = await conflictPromise
