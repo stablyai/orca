@@ -5,6 +5,7 @@ import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
 import { readJournalDomainHistoryPage } from './journal-domain-history-page'
+import { JOURNAL_DOMAIN_MAINTENANCE_SCHEMA } from './journal-domain-maintenance-schema'
 
 const databases: Database.Database[] = []
 const maintainers: JournalSqlBackgroundMaintenance[] = []
@@ -21,6 +22,8 @@ afterEach(async () => {
 
 const fixture = () => {
   const value = messageFixture()
+  // Temporary until the maintenance DDL joins the central numbered migration list.
+  value.db.exec(JOURNAL_DOMAIN_MAINTENANCE_SCHEMA)
   databases.push(value.db)
   return value
 }
@@ -44,19 +47,23 @@ it('compacts expired replay holes atomically while retaining current bodies, rec
   expect(db.prepare('SELECT sequence FROM journal_events WHERE sequence=11').get()).toEqual({
     sequence: 11
   })
-  let nextDueAt: number | null = 0
-  while (nextDueAt !== null && nextDueAt <= 86400100) {
+  let more = true
+  while (more) {
     db.exec('BEGIN IMMEDIATE')
     const result = applyJournalSqlMaintenance(db, { kind: 'event-tail-prune', now: 86400100 })
     db.exec('COMMIT')
-    if (!result || typeof result !== 'object' || !('kind' in result)) {
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('kind' in result) ||
+      result.kind !== 'event-tail'
+    ) {
       throw new Error('expected event-tail result')
     }
-    nextDueAt = result.nextDueAt
+    more = result.more
   }
   expect(retained()).toBe(65)
   expect(db.prepare('SELECT sequence FROM journal_events').all()).toEqual([{ sequence: 12 }])
-  expect(nextDueAt).toBe(172800000)
   expect(item('orca:assistant')).toMatchObject({
     revision: 1,
     body: { blocks: [{ type: 'text', text: 'the current body' }] }
@@ -76,14 +83,17 @@ it('expires replay during continuous activity even while conversion and sweeps w
   const maintenance = new JournalSqlBackgroundMaintenance(
     {
       maintain: async (operation) => {
-        if (operation.kind === 'projection-sweep') {
-          return false
-        }
         db.exec('BEGIN IMMEDIATE')
         try {
           const result = applyJournalSqlMaintenance(db, operation)
           db.exec('COMMIT')
-          if (result && typeof result === 'object' && 'kind' in result && result.deleted) {
+          if (
+            result &&
+            typeof result === 'object' &&
+            'kind' in result &&
+            result.kind === 'event-tail' &&
+            result.deleted
+          ) {
             pruned.resolve()
           }
           return result
@@ -104,7 +114,8 @@ it('expires replay during continuous activity even while conversion and sweeps w
   await maintenance.start()
   const release = activity.hold()
   const sweeping = maintenance.requestSweep()
-  await vi.advanceTimersByTimeAsync(86400000)
+  vi.setSystemTime(86400100)
+  await vi.advanceTimersByTimeAsync(60_000)
   await pruned.promise
   expect(db.prepare('SELECT sequence FROM journal_events').all()).toEqual([])
   expect(db.prepare('SELECT retained_sequence FROM journal_chat_state').get()).toEqual({
@@ -113,8 +124,9 @@ it('expires replay during continuous activity even while conversion and sweeps w
   expect(item('orca:assistant')).toMatchObject({
     body: { blocks: [{ type: 'text', text: 'still visible after compaction' }] }
   })
-  release()
+  maintenance.stop()
   await sweeping
+  release()
 })
 
 it('resets old cursors at the replay count and metadata budgets while preserving current content', async () => {
