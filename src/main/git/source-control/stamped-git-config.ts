@@ -155,12 +155,13 @@ async function resolveConfigLocations(
   }
   const gitDir = await resolveGitDir(hostWorktreePath, options)
   // A folder inside a repository has no gitdir of its own, so its repo config path is unknown.
+  let commonDir: string
   try {
     await access(gitDir)
+    commonDir = await resolveGitCommonDir(gitDir)
   } catch {
     return null
   }
-  const commonDir = await resolveGitCommonDir(gitDir)
   const { home, xdgConfigHome } = gitHomeDirectories()
   const candidates = [
     path.join(commonDir, 'config'),
