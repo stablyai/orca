@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSourceControlState } from '../panel/worktree-scope'
 import {
@@ -12,7 +11,7 @@ import {
 } from '@/lib/git-graph-tab'
 import { toSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from '../listing/split-open'
 import { useTranslate } from '@/i18n/use-translate'
-import { COMMITS_HEADER_ICON_BUTTON_CLASS } from './commits-header-icon-button'
+import { CommitsHeaderIconButton } from './commits-header-icon-button'
 
 export function GitGraphOpenButton({
   worktreeId,
@@ -50,11 +49,7 @@ export function GitGraphOpenButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className={COMMITS_HEADER_ICON_BUTTON_CLASS}
+          <CommitsHeaderIconButton
             disabled={support !== true}
             aria-label={t('gitGraph.title', 'Git Graph')}
             onClick={(event) => {
@@ -67,7 +62,7 @@ export function GitGraphOpenButton({
             }}
           >
             <ArrowUpRight className="size-3.5" />
-          </Button>
+          </CommitsHeaderIconButton>
         </span>
       </TooltipTrigger>
       {support !== null && (
