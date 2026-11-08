@@ -1,3 +1,4 @@
+import { queuedMessageEditLeaseHolds } from './queued-messages/queued-message-edit-leases'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -332,4 +333,3 @@ function recoveryJournal(session: JournalWriterSession): JournalRecoveryJournal 
     itemBody: (itemId) => session.state.items.get(itemId)?.body ?? null
   }
 }
-import { queuedMessageEditLeaseHolds } from './queued-messages/queued-message-edit-leases'

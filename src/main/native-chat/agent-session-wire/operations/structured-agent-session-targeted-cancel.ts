@@ -75,8 +75,9 @@ export async function runTargetedCancel(
       const raised = pending?.ok ? pending.item.turnScope : undefined
       const raisedTurnId =
         raised?.kind === 'turn'
-          ? (readAgentJournalTurn(ctx.journal.itemBody(raised.turnItemId) ?? undefined)?.turnId ??
-            null)
+          ? (readAgentJournalTurn(
+              (await ctx.journal.reads.itemBody(raised.turnItemId)) ?? undefined
+            )?.turnId ?? null)
           : null
       await noteStructuredAgentSessionStopUnconfirmed(
         ctx,

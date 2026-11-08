@@ -20,6 +20,7 @@ export function mutationTurnContext<TValue>(
     journal,
     fence,
     ...(request.currentWork ? { currentWork: request.currentWork } : {}),
+    ...(request.readWork ? { readWork: request.readWork } : {}),
     adapter: request.adapter,
     agents: request.agents,
     agent: record.provider,

@@ -1,6 +1,8 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import { readJournalSqlObserver } from './journal-sql-observer-read'
+import { readJournalSqlWork } from './journal-sql-work-read'
+import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalMessageItem,
@@ -52,6 +54,7 @@ export type JournalSqlPointRead = {
   sessionId: string
   operation:
     | { kind: 'observer'; input: JournalObserverRead }
+    | { kind: 'work'; input: JournalSqlWorkRead }
     | { kind: 'status-indicators'; input: JournalStatusIndicatorRead }
     | { kind: 'status-state'; currentFence?: number | null }
     | { kind: 'usage-limit-cut' }
@@ -76,6 +79,7 @@ export type JournalSqlPointRead = {
 
 export type JournalSqlPointReadResult =
   | { kind: 'observer'; observation: JournalObserverResult }
+  | { kind: 'work'; answer: JournalSqlWorkResult }
   | { kind: 'status-indicators'; indicators: JournalStatusIndicators }
   | { kind: 'status-state'; status: JournalStatusState }
   | { kind: 'usage-limit-cut'; cut: NativeChatUsageLimitCut | null }
@@ -133,6 +137,11 @@ function read(
     )
   }
   switch (operation.kind) {
+    case 'work':
+      return {
+        kind: 'work',
+        answer: readJournalSqlWork(new JournalSqlStatusContext(scope), operation.input)
+      }
     case 'observer':
       return {
         kind: 'observer',

@@ -1,7 +1,7 @@
 import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
 import type { StatusFeedSession } from '../agent-session-wire/observations/structured-agent-session-status-feed-deps'
-import type { JournalWorkAuthority } from './journal-observer-read'
+import type { JournalWorkAuthority, JournalCurrentWorkAuthority } from './journal-observer-read'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -302,6 +302,67 @@ it('discards row-free authority changes before publishing an asynchronous observ
   expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
     authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
+  })
+})
+
+it('rechecks row-free owner death before answering an attempt-end action read', async () => {
+  const { journal } = await fixture()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'approval' },
+    {
+      kind: 'approval',
+      title: 'Approve',
+      detail: null,
+      options: [],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  await journal.appendSubmission({
+    clientMessageId: 'send',
+    payloadFingerprint: 'fp',
+    fence: 1,
+    body: { kind: 'message', role: 'user', blocks: [] }
+  })
+  let ended = false
+  const capture = (): JournalCurrentWorkAuthority => ({
+    handle: journal.observationHandle(),
+    record: {
+      currentFence: 1,
+      ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+    },
+    child: ended ? null : { fence: 1, heldSends: ['send'] },
+    ended: ended ? { fence: 1, rootGone: true, cause: 'exit' } : undefined,
+    handingOver: [],
+    continuingUnadmitted: [],
+    finalizing: [],
+    openedThrough: journal.openingCursor(),
+    operationalRevision: ended ? 1 : 0
+  })
+  expect(await journal.readWork(capture, { kind: 'item', itemId: 'orca:approval' })).toEqual({
+    kind: 'item',
+    current: true
+  })
+  expect(
+    await journal.readWork(capture, { kind: 'attempt-ended', clientMessageId: 'send' })
+  ).toEqual({ kind: 'attempt-ended', ended: false })
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const read = journal.reads.work.bind(journal.reads)
+  vi.spyOn(journal.reads, 'work').mockImplementationOnce(async (input) => {
+    const result = await read(input)
+    reached.resolve()
+    await release.promise
+    return result
+  })
+  const pending = journal.readWork(capture, { kind: 'attempt-ended', clientMessageId: 'send' })
+  await reached.promise
+  ended = true
+  release.resolve()
+  expect(await pending).toEqual({ kind: 'attempt-ended', ended: true })
+  expect(await journal.readWork(capture, { kind: 'item', itemId: 'orca:approval' })).toEqual({
+    kind: 'item',
+    current: false
   })
 })
 

@@ -1,3 +1,4 @@
+import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -32,6 +33,8 @@ import { SqlJournalQueuedMessages, type JournalSqlQueueWrite } from './journal-s
 import { SqlJournalReopenMarks } from './journal-sql-reopen-marks'
 import { SqlJournalStopMarks } from './journal-sql-stop-marks'
 import { SqlJournalAppends } from './journal-sql-appends'
+import type { JournalCurrentWorkAuthority } from './journal-observer-read'
+import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -262,6 +265,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   /** Pure readers can join preceding commands without allowing another command between reads. */
   readInOrder<T>(read: (reads: JournalSqlReads) => T | Promise<T>): Promise<T> {
     return this.admit(() => read(this.reads))
+  }
+
+  readWork<K extends JournalWorkRead['kind']>(
+    capture: () => JournalCurrentWorkAuthority,
+    operation: Extract<JournalWorkRead, { kind: K }>
+  ): Promise<JournalWorkAnswer<K>> {
+    return readJournalSqlWorkAnswer(this, capture, operation)
   }
 
   /** Refuse admission now; already admitted work retains its ownership until it drains. */

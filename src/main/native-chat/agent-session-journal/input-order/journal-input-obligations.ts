@@ -1,3 +1,4 @@
+import { journalInputAttemptEndedFromFacts } from './journal-input-attempt-ended'
 import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalIndexStorageFactory } from '../journal-index-storage'
 import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
@@ -11,7 +12,6 @@ import type {
   AgentJournalSubmission,
   AgentJournalStatusItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../../codex/app-server/codex-structured-thread-facts'
 import type { JournalInputSource } from './journal-input-source-schema'
@@ -234,23 +234,13 @@ export function journalInputAttemptEnded(
   send: AgentJournalSubmission,
   work: JournalInputWork | null
 ): boolean {
-  if (isQueuedAgentJournalSubmission(send)) {
-    return false
-  }
-  const original = {
-    ...send,
+  return journalInputAttemptEndedFromFacts(send, work, {
     fence:
       state.inputs.handovers.get(send.clientMessageId)?.fence ??
       state.inputs.sources.get(send.clientMessageId)?.fence ??
-      send.fence
-  }
-  if (!work?.allowsObservation() || work.owesSend(original)) {
-    return false
-  }
-  if (work.generationEnded(original) || (send.dispatchState === 'unknown' && send.recovered)) {
-    return true
-  }
-  return state.inputs.ended.has(send.clientMessageId)
+      send.fence,
+    ended: state.inputs.ended.has(send.clientMessageId)
+  })
 }
 
 export function refreshJournalInputCandidate(state: JournalReducerState, id: string): void {

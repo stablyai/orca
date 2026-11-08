@@ -18,6 +18,7 @@ import type { StructuredAgentSessionStartClaim } from '../startup/structured-age
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -96,6 +97,12 @@ export function runStructuredAgentSessionMutation<TValue>(
       hostStructuredAgentSessionCurrentWork(
         { store: context.deps.store, sessions: context.sessions },
         envelope.sessionId
+      ),
+    readWork: (operation) =>
+      readHostStructuredAgentSessionWork(
+        { store: context.deps.store, sessions: context.sessions },
+        envelope.sessionId,
+        operation
       ),
     prepareSession,
     publish: (journal) => context.publish(envelope.sessionId, journal),

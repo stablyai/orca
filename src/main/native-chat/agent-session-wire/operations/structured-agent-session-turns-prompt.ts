@@ -24,7 +24,10 @@ import {
 } from '../providers/structured-agent-session-adapter-errors'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import {
+  readContextStructuredAgentSessionWork,
+  readContextStructuredAgentSessionTurnScope
+} from '../observations/structured-agent-session-read-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export type AgentSessionPromptRequest = {
@@ -96,8 +99,11 @@ export async function performPrompt(
     return held ? { ok: true, value: held } : validated
   }
   const { prompt } = validated
-  const work = contextStructuredAgentSessionCurrentWork(ctx)
-  if (!work.isCurrentItem(input.itemId)) {
+  const work = await readContextStructuredAgentSessionWork(ctx, {
+    kind: 'item',
+    itemId: input.itemId
+  })
+  if (!work.current) {
     // Never deliver an old agent’s prompt answer to its replacement.
     return invalid(
       'promptOwnerEnded',
@@ -141,7 +147,10 @@ export async function performPrompt(
             expectedRevision: input.expectedRevision,
             kind: input.kind,
             resolution,
-            options: { fence: ctx.fence, turnScope: work.turnScope() }
+            options: {
+              fence: ctx.fence,
+              turnScope: await readContextStructuredAgentSessionTurnScope(ctx)
+            }
           },
           // Commit answer identity before telling the provider.
           ctx.operationReceipt
@@ -166,7 +175,7 @@ export async function performPrompt(
           surface: 'row'
         })
       },
-      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+      { fence: ctx.fence, turnScope: await readContextStructuredAgentSessionTurnScope(ctx) }
     )
   }
   const appended = committed.item

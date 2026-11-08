@@ -16,6 +16,7 @@ import {
 import type { AgentSessionRefusalReason } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -40,6 +41,7 @@ export type AgentSessionTurnContext = {
   fence: number
   /** Read fresh: child exit may change current work mid-operation. */
   currentWork?: () => StructuredAgentSessionCurrentWork | null
+  readWork?: JournalWorkReader
   adapter: StructuredAgentSessionAdapter
   /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
   agents: StructuredAgentRegistry

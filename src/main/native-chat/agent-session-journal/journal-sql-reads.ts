@@ -1,4 +1,5 @@
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
+import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -12,6 +13,7 @@ import type {
 
 export type JournalSqlReads = AgentSessionJournalReads & {
   observer(input: JournalObserverRead): Promise<JournalObserverResult>
+  work(input: JournalSqlWorkRead): Promise<JournalSqlWorkResult>
   /** The saved latest Stop, without the host's settlement overlay. */
   latestStop(): Promise<JournalLatestStop | null>
   latestAcceptedSendUnopened(): Promise<boolean>
@@ -59,6 +61,7 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    work: async (input) => (await read({ kind: 'work', input })).answer,
     observer: async (input) => (await read({ kind: 'observer', input })).observation,
     latestStop: async () => (await read({ kind: 'latest-stop' })).stop,
     latestAcceptedSendUnopened: async () =>

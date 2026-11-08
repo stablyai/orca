@@ -30,6 +30,7 @@ import {
   sendSettlementReading
 } from '../../delivery/structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../../observations/structured-agent-session-read-work'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusFeed } from '../../observations/structured-agent-session-status-feed'
 import type { StructuredAgentSessionStatusSubscriber as StatusSubscriber } from '../../observations/structured-agent-session-status-feed-deps'
@@ -323,7 +324,10 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
-    return sendSettlementReading(journal, () => this.currentWork(sessionId, journal))
+    const host = { store: this.deps().store, sessions: this.sessions }
+    return sendSettlementReading(journal, (operation) =>
+      readHostStructuredAgentSessionWork(host, sessionId, operation)
+    )
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

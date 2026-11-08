@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 
 import {
   validateJournalPendingPrompt,
@@ -45,9 +45,11 @@ export async function validatePendingPrompt(
 }
 
 /** Ended-generation prompts have no live owner. */
-export function isEndedGenerationPrompt(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+export async function isEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'readWork'>,
   pending: Extract<PendingPromptValidation, { ok: true }>
-): boolean {
-  return !contextStructuredAgentSessionCurrentWork(ctx).isCurrentItem(pending.item.itemId)
+): Promise<boolean> {
+  return !(
+    await readContextStructuredAgentSessionWork(ctx, { kind: 'item', itemId: pending.item.itemId })
+  ).current
 }

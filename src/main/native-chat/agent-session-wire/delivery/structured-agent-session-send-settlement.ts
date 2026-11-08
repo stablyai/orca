@@ -1,5 +1,6 @@
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -8,8 +9,8 @@ import { isStructuredAgentSessionCommandTurnId } from '../operations/structured-
 
 /** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
 export type SendSettlementJournal = Pick<AgentSessionJournal['reads'], 'submission' | 'cursor'> & {
-  attemptEnded?: (clientMessageId: string) => boolean
-  activeTurnId: () => string | null
+  attemptEnded?: (clientMessageId: string) => boolean | Promise<boolean>
+  activeTurnId: () => string | null | Promise<string | null>
   queuedSend?: (
     clientMessageId: string
   ) => AgentSessionSendResult | null | Promise<AgentSessionSendResult | null>
@@ -56,7 +57,7 @@ async function settledSend(
   if (row && 'queued' in row) {
     return row.queued.state === 'withdrawn' ||
       row.queued.state === 'returned' ||
-      (until === 'handed-over-or-behind-command' && runningCommand(journal))
+      (until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
       ? { cursor: await journal.cursor(), value: row }
       : 'pending'
   }
@@ -66,20 +67,21 @@ async function settledSend(
     return 'missing'
   }
   const ended =
-    submission.dispatchState === 'pending' && journal.attemptEnded?.(submission.clientMessageId)
+    submission.dispatchState === 'pending' &&
+    (await journal.attemptEnded?.(submission.clientMessageId))
   const observed = ended ? { ...submission, dispatchState: 'unknown' as const } : submission
   const waiting =
     until === 'answered'
       ? submission.dispatchState === 'pending' && !ended
       : isQueuedAgentJournalSubmission(submission) &&
-        !(until === 'handed-over-or-behind-command' && runningCommand(journal))
+        !(until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
   return waiting
     ? 'pending'
     : { cursor: await journal.cursor(), value: { clientMessageId, submission: observed } }
 }
 
-function runningCommand(journal: SendSettlementJournal): boolean {
-  const turnId = journal.activeTurnId()
+async function runningCommand(journal: SendSettlementJournal): Promise<boolean> {
+  const turnId = await journal.activeTurnId()
   return turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
 }
 
@@ -219,14 +221,15 @@ export class StructuredAgentSessionSendSettlement {
 
 /** Canonical attempt-end evidence completes unanswered waits without changing delivery truth. */
 export function sendSettlementReading(
-  journal: AgentSessionJournal,
-  work: () => StructuredAgentSessionCurrentWork
+  journal: AgentSessionJournal | SqlAgentSessionJournal,
+  readWork: JournalWorkReader
 ): SendSettlementJournal {
   return {
     submission: (id) => journal.reads.submission(id),
-    attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
+    attemptEnded: async (id) =>
+      (await readWork({ kind: 'attempt-ended', clientMessageId: id })).ended,
     cursor: () => journal.reads.cursor(),
-    activeTurnId: () => work().activeTurnId(),
+    activeTurnId: async () => (await readWork({ kind: 'turn' })).activeTurn?.turnId ?? null,
     queuedSend: (id) => queuedSendAnswer(journal, id)
   }
 }

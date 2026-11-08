@@ -19,7 +19,10 @@ import {
 } from './structured-agent-session-prompt-state'
 import { cardCancelNotSavedRefusal, stopNotSaved } from './structured-agent-session-stop-acceptance'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import {
+  readContextStructuredAgentSessionWork,
+  readContextStructuredAgentSessionTurnScope
+} from '../observations/structured-agent-session-read-work'
 
 type CancelOutcome = TurnOutcome<AgentSessionCancelResult>
 type PendingPrompt = Extract<PendingPromptValidation, { ok: true }>
@@ -40,7 +43,7 @@ export async function cancelStructuredAgentSessionPrompt(
     sessionId: ctx.sessionId,
     prompt: validated.prompt
   })
-  if (isEndedGenerationPrompt(ctx, validated)) {
+  if (await isEndedGenerationPrompt(ctx, validated)) {
     return cancelEndedGenerationPrompt(ctx, input, validated, route ? null : routes.interrupt)
   }
   if (!route) {
@@ -52,7 +55,7 @@ export async function cancelStructuredAgentSessionPrompt(
   }
   // Recheck after handover: dismiss stale/background prompts without stopping an unrelated live turn.
   // Save dismissal with the receipt unless Stop already committed it.
-  if (route.kind === 'dismiss' || !raisedByLiveTurn(ctx, validated)) {
+  if (route.kind === 'dismiss' || !(await raisedByLiveTurn(ctx, validated))) {
     const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
   }
@@ -72,7 +75,8 @@ async function cancelEndedGenerationPrompt(
   pending: PendingPrompt,
   interrupt: (() => Promise<CancelOutcome>) | null
 ): Promise<CancelOutcome> {
-  const liveTurnId = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
+  const liveTurnId =
+    (await readContextStructuredAgentSessionWork(ctx, { kind: 'turn' })).activeTurn?.turnId ?? null
   const interrupted =
     interrupt && input.turnId !== undefined && input.turnId === liveTurnId
       ? await interrupt()
@@ -99,8 +103,11 @@ async function cancelEndedGenerationPrompt(
   )
 }
 
-function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt): boolean {
-  const live = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+async function raisedByLiveTurn(
+  ctx: AgentSessionTurnContext,
+  pending: PendingPrompt
+): Promise<boolean> {
+  const live = await readContextStructuredAgentSessionTurnScope(ctx)
   const raised = pending.item.turnScope
   return live.kind === 'turn' && raised?.kind === 'turn' && raised.turnItemId === live.turnItemId
 }
@@ -138,7 +145,7 @@ async function dismissPrompt(
         },
         options: {
           fence: ctx.fence,
-          turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+          turnScope: await readContextStructuredAgentSessionTurnScope(ctx)
         }
       },
       receipt
@@ -171,7 +178,7 @@ async function dismissPrompt(
             surface: 'row'
           })
         },
-        { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+        { fence: ctx.fence, turnScope: await readContextStructuredAgentSessionTurnScope(ctx) }
       )
     }
   }

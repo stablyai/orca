@@ -28,6 +28,11 @@ export type JournalWorkAuthority = {
   stop: JournalLatestStop | null
 }
 
+export type JournalCurrentWorkAuthority = Omit<
+  JournalWorkAuthority,
+  'stop' | 'stopRevision' | 'reopenFloor'
+>
+
 export type JournalObserverRead = {
   authority: JournalWorkAuthority
   start: number
@@ -60,7 +65,21 @@ export type JournalObserverResult = {
 
 /** Copy the finite authority contract; compare live sets independently of insertion order. */
 export function copyJournalWorkAuthority(authority: JournalWorkAuthority): JournalWorkAuthority {
-  const { record, ended, replaced, child, openedThrough, reopenFloor } = authority
+  return {
+    ...copyJournalCurrentWorkAuthority(authority),
+    reopenFloor: authority.reopenFloor && {
+      epoch: authority.reopenFloor.epoch,
+      sequence: authority.reopenFloor.sequence
+    },
+    stopRevision: authority.stopRevision,
+    stop: structuredClone(authority.stop)
+  }
+}
+
+export function copyJournalCurrentWorkAuthority(
+  authority: JournalCurrentWorkAuthority
+): JournalCurrentWorkAuthority {
+  const { record, ended, replaced, child, openedThrough } = authority
   return {
     handle: authority.handle,
     record:
@@ -87,9 +106,6 @@ export function copyJournalWorkAuthority(authority: JournalWorkAuthority): Journ
     continuingUnadmitted: [...authority.continuingUnadmitted].sort(),
     finalizing: [...authority.finalizing].sort(),
     openedThrough: { epoch: openedThrough.epoch, sequence: openedThrough.sequence },
-    reopenFloor: reopenFloor && { epoch: reopenFloor.epoch, sequence: reopenFloor.sequence },
-    operationalRevision: authority.operationalRevision,
-    stopRevision: authority.stopRevision,
-    stop: structuredClone(authority.stop)
+    operationalRevision: authority.operationalRevision
   }
 }

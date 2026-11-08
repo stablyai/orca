@@ -58,6 +58,12 @@ export class JournalSqlStatusContext {
   }
 
   submission = (id: string) => this.values.get<AgentJournalSubmission>('submissions', id)
+  inputAttempt = (id: string) => ({
+    fence:
+      this.values.get<{ fence: number }>('inputs.handovers', id)?.fence ??
+      this.values.get<{ fence: number }>('inputs.sources', id)?.fence,
+    ended: this.values.has('inputs.ended', id)
+  })
   inputOrdinal = (id: string) => {
     let ordinal = this.ordinals.get(id)
     if (ordinal === undefined) {
