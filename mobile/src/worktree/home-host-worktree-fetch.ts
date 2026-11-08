@@ -3,11 +3,11 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import '../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
+  homeAgentEntries,
   markHomeWorktreeCatalogUnavailable,
   type HomeWorktreeSummary,
   type HostWorktreeInfo
 } from './home-worktree-info'
-import { selectHomeAttentionWorktrees } from './home-jump-back-in'
 import { pickResumeWorktree } from './resume-worktree'
 import { isWorktreeActive } from './workspace-list-sections'
 import { WorktreeCatalogSnapshotClient } from './worktree-catalog-snapshot-client'
@@ -59,7 +59,7 @@ export function fetchHomeHostWorktreeInfo(
           markUnavailable()
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and the resume pick through their own guards, plus the host-typed `agents` that name Jump back in rows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and the resume pick through their own guards, plus the host-typed `agents` the Agents list shows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
         const worktrees = rows as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
         // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
@@ -73,7 +73,7 @@ export function fetchHomeHostWorktreeInfo(
             totalWorktrees: listed.length,
             activeCount: listed.filter(isWorktreeActive).length,
             lastActiveWorktree: lastActive,
-            attention: selectHomeAttentionWorktrees(listed),
+            agents: homeAgentEntries(listed),
             countsProvenAt: Date.now()
           }
         }))

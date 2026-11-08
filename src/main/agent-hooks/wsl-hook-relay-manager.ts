@@ -1,6 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
-  runWslRelayGuestInstall,
+  installWslRelayGuestFromHome,
   maybeRerunWslRelayGuestInstall
 } from './wsl-hook-relay-guest-install'
 import { buildWslRelaySpawnEnv, launchWslRelayWithInstall } from './wsl-hook-relay-launch'
@@ -17,13 +17,10 @@ import {
 import { wireWslRelayLink } from './wsl-hook-relay-link'
 import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
-import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../ssh/protocol/ssh-multiplexer-transport-writer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
-import {
-  sanitizeWslHookInstanceKey,
-  WSL_HOOK_FS_METHODS,
-  wslHookRelayEndpointFilePath
-} from '../../shared/wsl-hook-relay-contract'
+import { sanitizeWslHookInstanceKey } from '../../shared/wsl-hook-relay-contract'
 import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual
@@ -260,23 +257,7 @@ export class WslHookRelayManager {
         })
       }
     })
-    const homeResult = (await mux.request(WSL_HOOK_FS_METHODS.home)) as {
-      ok?: boolean
-      home?: string
-      portFallback?: boolean
-      boundPort?: number
-    }
-    if (homeResult?.ok !== true || typeof homeResult.home !== 'string') {
-      throw new Error(`relay for '${state.distro}' returned no home dir`)
-    }
-    if (homeResult.portFallback === true) {
-      this.deps.warn(
-        `[agent-hooks] WSL hook relay (${state.distro}): preferred port occupied in guest; bound ${homeResult.boundPort ?? 'unknown'} (endpoint-file re-coordination)`
-      )
-    }
-    state.guestHome = homeResult.home
-    state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
-    await runWslRelayGuestInstall(this.deps, state, mux, homeResult.home)
+    await installWslRelayGuestFromHome(this.deps, state, mux, instanceKey)
     if (state.phase === 'failed' || state.mux !== mux) {
       return
     }

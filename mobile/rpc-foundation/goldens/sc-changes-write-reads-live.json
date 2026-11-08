@@ -203,6 +203,38 @@
         }
       }
     },
+    "22bf66c852bb": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 3001,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "334b41f87c41": {
       "name": "worktree.show#1",
       "ordinal": 6,
@@ -380,32 +412,6 @@
       "ordinal": 17,
       "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
-    "891438a18444": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "92a577a15fcc": {
       "name": "git.status#1",
       "ordinal": 5,
@@ -562,9 +568,14 @@
         "startedAt": 3001
       }
     },
-    "ade0dae5eee8": {
+    "b06ca46466ca": {
+      "name": "git.status#3",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "b823fdc0d205": {
       "name": "settings.get#1",
-      "ordinal": 1,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -584,20 +595,9 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 3001,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
-    },
-    "b06ca46466ca": {
-      "name": "git.status#3",
-      "ordinal": 14,
-      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "bf019629baab": {
       "name": "repo.list#1",
@@ -673,11 +673,6 @@
         }
       }
     },
-    "e539e80d06e9": {
-      "name": "runtime.clientEvents.subscribe#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -685,6 +680,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "eef1ee3c2773": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "f0a6f14b92e4": {
       "name": "source-control.status-load-success",
@@ -699,7 +699,7 @@
         "id": "post-write-status",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "6f4a5d6a5a86",
             "1934c215114a",
@@ -709,7 +709,7 @@
             "a6d51875b1b0"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -734,7 +734,7 @@
         "id": "superseded-revalidation-ignored",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "6f4a5d6a5a86",
             "1934c215114a",
@@ -744,7 +744,7 @@
             "a6d51875b1b0"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -769,7 +769,7 @@
         "id": "cleanup",
         "observation": {
           "sender": [
-            "ade0dae5eee8",
+            "22bf66c852bb",
             "962f91336a50",
             "334b41f87c41",
             "bf019629baab",
@@ -781,7 +781,7 @@
             "1a6e003b2d53"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",

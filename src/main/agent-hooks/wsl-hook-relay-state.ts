@@ -1,4 +1,4 @@
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 
 export type WslRelayDistroState = {
   distro: string

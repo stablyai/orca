@@ -101,6 +101,44 @@ describe('ACP caller-owned waits', () => {
     await expect(pending).resolves.toEqual({ stopReason: 'end_turn' })
   })
 
+  it.each([
+    { kind: 'new', expected: { kind: 'new', sessionId: 'session-1' } },
+    { kind: 'load', expected: { kind: 'load', sessionId: 'saved-session' } },
+    { kind: 'resume', expected: { kind: 'resume', sessionId: 'saved-session' } }
+  ] as const)(
+    'opens a slow $kind session on its real answers, regardless of the peer default',
+    async ({ kind, expected }) => {
+      vi.useFakeTimers()
+      const { agent, runtime } = fixture({ peer: { requestTimeoutMs: 20 } })
+      agent.on('initialize', (frame) => {
+        setTimeout(
+          () =>
+            agent.reply(frame, {
+              protocolVersion: 1,
+              agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} } }
+            }),
+          75_000
+        )
+      })
+      agent.on(`session/${kind}`, (frame) => {
+        setTimeout(
+          () => agent.reply(frame, kind === 'new' ? { sessionId: 'session-1' } : {}),
+          310_000
+        )
+      })
+      const started = expect(
+        runtime.start({
+          ...startOptions,
+          ...(kind === 'new' ? {} : { sessionId: 'saved-session', resumePreference: kind })
+        })
+      ).resolves.toMatchObject(expected)
+      await vi.advanceTimersByTimeAsync(385_000)
+      await started
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+      await expect(runtime.prompt([...prompt])).resolves.toEqual({ stopReason: 'end_turn' })
+    }
+  )
+
   it('keeps a handler answer that finishes saving after its owner withdraws requests', async () => {
     const withdrawal = new AbortController()
     const planEntered = deferred<void>()

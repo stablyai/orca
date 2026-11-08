@@ -34,7 +34,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
-  // Only for families the desktop sends no change signal for.
+  // Reads a stale answer on foreground: one with no change signal, or one an event marked while hidden.
   refetchOnWindowFocus?: boolean
   // For a screen that offers its own Retry, so a lost read is reported instead of sent again.
   retry?: false
@@ -177,7 +177,13 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   host: { hostId: string; client: RpcClient | null },
   target: HostQueryTarget,
   input: TInput,
-  options?: { enabled?: boolean; subscribed?: boolean; refetchInterval?: number | false }
+  options?: {
+    enabled?: boolean
+    subscribed?: boolean
+    refetchInterval?: number | false
+    // Replaces the family's own, e.g. once the host is known to signal every change.
+    staleTime?: number
+  }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
@@ -194,6 +200,7 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({
     ...queryOptions,
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
     refetchInterval: options?.refetchInterval
   })

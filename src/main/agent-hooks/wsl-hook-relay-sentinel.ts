@@ -1,7 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
-import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/protocol/relay-handshake'
+import type { MultiplexerTransport } from '../ssh/protocol/ssh-multiplexer-transport-writer'
 
 export const MAX_STARTUP_BUFFER_BYTES = 64 * 1024
 
