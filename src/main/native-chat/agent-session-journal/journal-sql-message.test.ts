@@ -4,6 +4,7 @@ import { message, messageFixture, target } from './journal-sql-message.test-fixt
 import { commitJournalSqlMessages, prepareJournalSqlMessages } from './journal-sql-message-commit'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { applyJournalDomainItem } from './journal-domain-item'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 
 const databases: Database.Database[] = []
 const fixture = () => {
@@ -15,6 +16,48 @@ afterEach(() => {
   for (const db of databases.splice(0)) {
     db.close()
   }
+})
+
+it('admits revision zero and moves the same item without changing its admission ordinal', () => {
+  const { db, item } = fixture()
+  const admitted = {
+    itemId: 'orca:send',
+    revision: 0,
+    sequence: 11,
+    observedAt: 100,
+    turnScope: { kind: 'thread' as const },
+    body: { kind: 'message' as const, role: 'user' as const, blocks: [] }
+  }
+  db.exec('BEGIN')
+  writeJournalDomainCurrentItem(db, target, {
+    item: admitted,
+    ordinal: 11,
+    hidden: false,
+    ownerFence: 1
+  })
+  expect(item('orca:send')).toEqual(admitted)
+  writeJournalDomainCurrentItem(db, target, {
+    item: {
+      ...admitted,
+      sequence: 20,
+      observedAt: 200,
+      turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+    },
+    previous: { item: admitted, ordinal: 11, hidden: false },
+    ordinal: 11,
+    hidden: false,
+    ownerFence: 1
+  })
+  db.exec('COMMIT')
+  expect(item('orca:send')).toMatchObject({
+    revision: 0,
+    sequence: 20,
+    observedAt: 200,
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
+  expect(db.prepare("SELECT ordinal FROM journal_items WHERE item_id='orca:send'").get()).toEqual({
+    ordinal: 11
+  })
 })
 
 it('publishes exact committed snapshots and their final body in order', async () => {
