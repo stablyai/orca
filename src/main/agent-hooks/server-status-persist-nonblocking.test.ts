@@ -51,6 +51,41 @@ describe('last-status persistence stays off the main thread', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
+  it('throttles writes for a burst of hooks from the same launch', async () => {
+    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
+    const tool = (name: string): Promise<Response> =>
+      postHookEvent(
+        server,
+        buildBody({ hook_event_name: name, tool_name: 'Bash' }, { launchToken: 'launch-a' })
+      )
+
+    expect((await tool('PreToolUse')).status).toBe(204)
+    const afterFirst = write.mock.calls.length
+    for (let i = 0; i < 10; i++) {
+      expect((await tool(i % 2 ? 'PreToolUse' : 'PostToolUse')).status).toBe(204)
+    }
+    expect(write.mock.calls.length).toBe(afterFirst)
+
+    // The deferred write still captures the newest event.
+    expect((await prompt('latest')).status).toBe(204)
+    server.flushStatusPersistSync()
+    expect(readPrompt()).toBe('latest')
+  })
+
+  it('still writes immediately when a pane gets a new launch', async () => {
+    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
+    const launch = (launchToken: string): Promise<Response> =>
+      postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: launchToken }, { launchToken })
+      )
+
+    expect((await launch('launch-a')).status).toBe(204)
+    const afterFirst = write.mock.calls.length
+    expect((await launch('launch-b')).status).toBe(204)
+    expect(write.mock.calls.length).toBe(afterFirst + 1)
+  })
+
   it('keeps answering queued hooks and preserves the quit flush while a rename is held open', async () => {
     const actualRename = await vi.importActual<FsPromisesModule>('node:fs/promises')
     let releaseRename: () => void = () => {}
