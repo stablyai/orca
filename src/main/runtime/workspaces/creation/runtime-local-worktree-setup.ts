@@ -15,8 +15,12 @@ import {
 } from '../../../workspace-hooks/effective-hook-config'
 import {
   checkCreatedWorktreeSetupTrust,
-  defaultTabsWithoutCommands
+  defaultTabsWithoutCommands,
+  folderSharedSetupLacksApproval
 } from '../../../workspace-hooks/created-worktree-setup-trust'
+import type { HookWorkspaceIdentity } from '../../../workspace-hooks/setup-hook-env-vars'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
@@ -28,13 +32,18 @@ export function resolveRuntimeSetupDecision(
 }
 
 export async function prepareRuntimeLocalWorktreeSetup(args: {
-  request: RuntimeManagedWorktreeCreateArgs
+  request: Pick<
+    RuntimeManagedWorktreeCreateArgs,
+    'runHooks' | 'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'
+  >
   repo: Repo
   worktreePath: string
   settings: ReturnType<RuntimeStore['getSettings']>
   runtimeTarget: { wslDistro?: string } | undefined
   shouldUseSetupRunner: boolean
   warning?: string
+  /** Required for folder workspaces, whose shared directory can't name the workspace. */
+  identity?: HookWorkspaceIdentity
 }): Promise<{
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
@@ -48,7 +57,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
-  const yamlHooks = loadHooks(worktreePath)
+  const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktreePath))
   const hooks = getEffectiveHooks(repo, worktreePath)
   const effectiveDecision = resolveRuntimeSetupDecision(request)
   const setupTrustMismatch = checkCreatedWorktreeSetupTrust(
@@ -57,11 +66,19 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     effectiveDecision,
     request
   )
+  const lacksFolderApproval =
+    isFolderRepo(repo) &&
+    folderSharedSetupLacksApproval(repo, yamlHooks, effectiveDecision, request)
   // Only the approved content may run; the client re-prompts with the branch's.
-  const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision
+  const runDecision = setupTrustMismatch || lacksFolderApproval ? 'skip' : effectiveDecision
   if (setupTrustMismatch) {
     // Automations have no prompt to re-ask; the host log is their record of the skip.
     console.warn(`[hooks] setup skipped for ${worktreePath}: it differs from the approved content`)
+  }
+  if (lacksFolderApproval) {
+    const skipped =
+      'orca.yaml setup skipped for this folder workspace because it was not approved; pass --setup run to run it.'
+    warning = warning ? `${warning} Also ${skipped}` : skipped
   }
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
@@ -92,14 +109,21 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
           hooks.scripts.setup,
           args.runtimeTarget,
           resolveSetupRunnerShell(settings),
-          yamlHooks?.setupAgentStartupPolicy
+          yamlHooks?.setupAgentStartupPolicy,
+          args.identity
         )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
+        if (isFolderRepo(repo)) {
+          const failed = `Setup did not run: Orca could not write its setup file in ${worktreePath}.`
+          warning = warning ? `${warning} Also ${failed}` : failed
+        }
       }
     } else {
       didStartInProcessSetupHook = true
-      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget).then((result) => {
+      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget, {
+        identity: args.identity
+      }).then((result) => {
         if (!result.success) {
           console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
         }

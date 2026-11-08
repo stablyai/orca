@@ -120,11 +120,11 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   const currentYamlHooks = checkedHooksContextKey === selectedRepoHookContextKey ? yamlHooks : null
 
   const setupConfig = useMemo(
-    () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
-    [currentYamlHooks, selectedRepo, selectedRepoIsGit]
+    () => (selectedRepo ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
+    [currentYamlHooks, selectedRepo]
   )
   const isSetupCheckPending =
-    selectedRepoIsGit &&
+    Boolean(selectedRepo) &&
     Boolean(selectedRepoHookContextKey) &&
     checkedHooksContextKey !== selectedRepoHookContextKey
   const {

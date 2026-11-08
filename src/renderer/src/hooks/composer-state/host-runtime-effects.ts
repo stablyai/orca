@@ -19,7 +19,6 @@ type HostRuntimeEffectsInput = Pick<
   | 'selectedRepoConnectionIdRef'
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
-  | 'selectedRepoIsGit'
   | 'selectedRepoSshStatus'
   | 'setTuiAgent'
   | 'settings'
@@ -66,7 +65,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     selectedRepoConnectionIdRef,
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
-    selectedRepoIsGit,
     selectedRepoSshStatus,
     setTuiAgent,
     settings,
@@ -114,7 +112,8 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   ])
 
   useEffect(() => {
-    if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
+    // Folder projects have setup scripts too; hosts without folder setup report none for them.
+    if (!repoId || !selectedRepoHookContextKey) {
       return
     }
 
@@ -139,7 +138,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     loadHookCheckForRepo,
     repoId,
     selectedRepoHookContextKey,
-    selectedRepoIsGit,
     runtimeEnvironmentId
   ])
 

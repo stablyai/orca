@@ -246,7 +246,7 @@ export function getRepositoryPaneSearchEntries(
       ]
     },
     ...(isFolder
-      ? []
+      ? getRepositoryGitHooksSearchEntries(repo, t)
       : [
           ...getRepositoryGitAuthorSearchEntries(repo, t),
           ...getRepositoryGitHooksSearchEntries(repo, t)

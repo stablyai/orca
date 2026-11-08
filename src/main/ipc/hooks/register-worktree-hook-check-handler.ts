@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -23,10 +23,6 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           mayNeedUpdate: false
         }
       }
-      if (isFolderRepo(repo)) {
-        return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
-      }
-
       if (getRepoDialableSshTargetId(repo)) {
         return {
           status: 'error',
@@ -53,7 +49,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       }
 
       const has = hasHooksFile(repo.path)
-      const hooks = has ? loadHooks(repo.path) : null
+      const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
       // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {

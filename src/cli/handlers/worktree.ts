@@ -1,3 +1,4 @@
+import { warnIfFolderSetupUnsupported } from './folder-setup-support-warning'
 import { withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
@@ -208,6 +209,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       callNamingParentEnvironment<RuntimeWorktreeCreateResult>(client, 'worktree.create', create)
     )
     printHookWarning(result.result, json)
+    await warnIfFolderSetupUnsupported(
+      client,
+      result.result.worktree?.id,
+      setupDecision === 'run' || flags.get('run-hooks') === true,
+      json
+    )
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },

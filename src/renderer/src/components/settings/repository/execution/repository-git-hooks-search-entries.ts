@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../../../shared/repo-types'
+import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -134,42 +135,46 @@ export function getRepositoryGitHooksSearchEntries(
         )
       ]
     },
-    {
-      title: t(
-        'auto.components.settings.repository.search.d86ea12d16',
-        'Custom GitHub Issue Command'
-      ),
-      description: t(
-        'auto.components.settings.repository.search.d42d1e49c0',
-        'File-based linked-issue command configured via orca.yaml and optional local override.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.2011a6a4f2',
-          'github issue command'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.66b584bd6c',
-          'issue command'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.ec70364df2',
-          'workflow'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.9dc60d7f6d',
-          'github'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.603c68b68c',
-          'orca.yaml'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.bc7e504b8e',
-          '.orca/issue-command'
-        )
-      ]
-    }
+    ...(isFolderRepo(repo)
+      ? []
+      : [
+          {
+            title: t(
+              'auto.components.settings.repository.search.d86ea12d16',
+              'Custom GitHub Issue Command'
+            ),
+            description: t(
+              'auto.components.settings.repository.search.d42d1e49c0',
+              'File-based linked-issue command configured via orca.yaml and optional local override.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.2011a6a4f2',
+                'github issue command'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.66b584bd6c',
+                'issue command'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.ec70364df2',
+                'workflow'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.9dc60d7f6d',
+                'github'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.603c68b68c',
+                'orca.yaml'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.bc7e504b8e',
+                '.orca/issue-command'
+              )
+            ]
+          }
+        ])
   ]
 }

@@ -77,7 +77,6 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       let submitResolvedSetupDecision = resolvedSetupDecision
 
       if (
-        selectedRepoIsGit &&
         setupPolicy === 'ask' &&
         selectedRepoHookContextKey &&
         checkedHooksContextKey !== selectedRepoHookContextKey
@@ -99,34 +98,33 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitResolvedSetupDecision = submitSetup.resolvedSetupDecision
       }
 
-      if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
+      if (submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
         setAdvancedOpen(true)
         return null
       }
 
-      const effectiveSetupDecision: SetupDecision = selectedRepoIsGit
-        ? (submitResolvedSetupDecision ?? 'inherit')
-        : 'skip'
+      // Folder projects inherit too; a host without folder setup ignores it for them.
+      const effectiveSetupDecision: SetupDecision = submitResolvedSetupDecision ?? 'inherit'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
         ? getLinkedWorkItemProvider(submitLinkedWorkItem)
         : null
-      const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
-        ? {
-            executionHostId: selectedRepoExecutionHostId ?? undefined,
-            issueCommand:
-              enableIssueAutomation &&
-              submitLinkedIssueNumber !== null &&
-              canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
-              selectedRepoExecutionHostId &&
-              selectedRepoHookContextKey
-                ? {
-                    provider: submitLinkedWorkItemProvider,
-                    issueNumber: submitLinkedIssueNumber,
-                    artifactUrl: submitLinkedWorkItem?.url ?? null
-                  }
-                : undefined
-          }
-        : undefined
+      // Setup trust applies to folder projects too; the issue command needs a Git repo.
+      const hookPreparation: WorktreeCreationRequest['hookPreparation'] = {
+        executionHostId: selectedRepoExecutionHostId ?? undefined,
+        issueCommand:
+          selectedRepoIsGit &&
+          enableIssueAutomation &&
+          submitLinkedIssueNumber !== null &&
+          canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
+          selectedRepoExecutionHostId &&
+          selectedRepoHookContextKey
+            ? {
+                provider: submitLinkedWorkItemProvider,
+                issueNumber: submitLinkedIssueNumber,
+                artifactUrl: submitLinkedWorkItem?.url ?? null
+              }
+            : undefined
+      }
 
       const linkedLinearIssue =
         submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
