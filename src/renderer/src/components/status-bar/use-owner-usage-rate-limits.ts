@@ -194,8 +194,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   }, [remoteOwner, owned])
 
   const rateLimits = useMemo(
-    () => resolveOwnerUsageRateLimits(local, ownerState),
-    [local, ownerState]
+    () => resolveOwnerUsageRateLimits(local, ownerState, t),
+    [local, ownerState, t]
   )
   return {
     rateLimits,
