@@ -11,6 +11,7 @@ import {
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { journalItemStatusMetadata } from './journal-item-status-metadata'
+import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlValueLocation, StoredJournalSqlValue } from './journal-sql-value-codec'
@@ -45,6 +46,12 @@ function journalSqlItemSubagentColumns(item: AgentJournalRenderItem) {
     block ? subagentFoldKey(block) : null,
     names.length > 0 ? JSON.stringify(names) : null
   ]
+}
+
+/** Agent linkage facts a Claude identity snapshot selects by index. */
+function journalSqlItemProducerColumns(item: AgentJournalRenderItem) {
+  const facts = claudeAgentRowFacts(item)
+  return [facts?.agentId ?? null, facts?.parentRef ?? null, facts?.attempt ?? null]
 }
 
 /** Item incarnations keep original log pointers; only values without a saved outcome stay inline. */
@@ -222,8 +229,9 @@ export class JournalSqlItemValues {
       (session_id, epoch, entry_key, incarnation, ordinal, sequence, sequence_index,
        revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size,
        message_role, command_entry, lifecycle_state, assistant_prose, turn_scope_kind,
-       live_work, subagent_row, subagent_group_key, subagent_names)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       live_work, subagent_row, subagent_group_key, subagent_names,
+       producer_agent_id, producer_parent_ref, producer_attempt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id, epoch, entry_key) DO UPDATE SET
       incarnation=excluded.incarnation, ordinal=excluded.ordinal, sequence=excluded.sequence,
       sequence_index=excluded.sequence_index, revision=excluded.revision, kind=excluded.kind,
@@ -233,7 +241,9 @@ export class JournalSqlItemValues {
       message_role=excluded.message_role, command_entry=excluded.command_entry,
       lifecycle_state=excluded.lifecycle_state, assistant_prose=excluded.assistant_prose,
       turn_scope_kind=excluded.turn_scope_kind, live_work=excluded.live_work, subagent_row=excluded.subagent_row,
-      subagent_group_key=excluded.subagent_group_key, subagent_names=excluded.subagent_names`)
+      subagent_group_key=excluded.subagent_group_key, subagent_names=excluded.subagent_names,
+      producer_agent_id=excluded.producer_agent_id, producer_parent_ref=excluded.producer_parent_ref,
+      producer_attempt=excluded.producer_attempt`)
       .run(
         ...this.scope.prefix,
         location.key,
@@ -241,7 +251,8 @@ export class JournalSqlItemValues {
         ordinal,
         ...journalSqlItemMetadata(item, bytes),
         Number(lostLiveWorkJournalBody(item.body) !== null),
-        ...journalSqlItemSubagentColumns(item)
+        ...journalSqlItemSubagentColumns(item),
+        ...journalSqlItemProducerColumns(item)
       )
   }
 }

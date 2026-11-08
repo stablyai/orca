@@ -1,12 +1,54 @@
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
-import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
+import { isBoundedClaudeTaskId } from './claude-background-task-frames'
 
 type Reading = {
   canonicalByToolUse: Map<string, string>
   attemptByAgent: Map<string, number>
   subagents: Set<string>
+}
+
+/** The saved identity facts a Claude acquisition reads once, before translating. */
+export type ClaudeJournaledIdentities = {
+  canonicalByToolUse: [toolUseId: string, agentId: string][]
+  attemptByAgent: [agentId: string, attempt: number][]
+  subagents: string[]
+}
+
+/** One row's contribution, stored beside it so a snapshot never decodes bodies. */
+export function claudeAgentRowFacts({
+  agentId,
+  providerParentRef,
+  producerKind,
+  attempt
+}: AgentJournalProducerLinkage): {
+  agentId: string
+  parentRef: string | null
+  attempt: number
+} | null {
+  if (producerKind !== 'agent' || agentId === undefined) {
+    return null
+  }
+  // Provisional self-stamps do not establish aliases.
+  const aliases =
+    providerParentRef !== undefined &&
+    agentId !== providerParentRef &&
+    isBoundedClaudeTaskId(agentId) &&
+    isBoundedClaudeTaskId(providerParentRef)
+  return { agentId, parentRef: aliases ? providerParentRef : null, attempt: attempt ?? 1 }
+}
+
+/** Visit visible items in insertion order, as the memory journal does. */
+export function readClaudeJournaledIdentities(
+  visit: StructuredAgentSessionLinkageJournal['visitItemsWithLinkage']
+): ClaudeJournaledIdentities {
+  const reading = read({ visitItemsWithLinkage: visit })
+  return {
+    canonicalByToolUse: [...reading.canonicalByToolUse],
+    attemptByAgent: [...reading.attemptByAgent],
+    subagents: [...reading.subagents]
+  }
 }
 
 /** Cache per bound journal epoch; reads before binding must not populate the cache. */
@@ -39,7 +81,9 @@ export class ClaudeJournaledSubagents {
   }
 }
 
-function read(journal: StructuredAgentSessionLinkageJournal): Reading {
+function read(
+  journal: Pick<StructuredAgentSessionLinkageJournal, 'visitItemsWithLinkage'>
+): Reading {
   const reading: Reading = {
     canonicalByToolUse: new Map(),
     attemptByAgent: new Map(),
@@ -56,24 +100,16 @@ function read(journal: StructuredAgentSessionLinkageJournal): Reading {
   return reading
 }
 
-function readAgentRow(
-  reading: Reading,
-  { agentId, providerParentRef, producerKind, attempt }: AgentJournalProducerLinkage
-): void {
-  if (producerKind !== 'agent' || agentId === undefined) {
+function readAgentRow(reading: Reading, linkage: AgentJournalProducerLinkage): void {
+  const facts = claudeAgentRowFacts(linkage)
+  if (!facts) {
     return
   }
   reading.attemptByAgent.set(
-    agentId,
-    Math.max(attempt ?? 1, reading.attemptByAgent.get(agentId) ?? 1)
+    facts.agentId,
+    Math.max(facts.attempt, reading.attemptByAgent.get(facts.agentId) ?? 1)
   )
-  // Provisional self-stamps do not establish aliases.
-  if (
-    providerParentRef !== undefined &&
-    agentId !== providerParentRef &&
-    isBoundedClaudeTaskId(agentId) &&
-    isBoundedClaudeTaskId(providerParentRef)
-  ) {
-    reading.canonicalByToolUse.set(providerParentRef, agentId)
+  if (facts.parentRef !== null) {
+    reading.canonicalByToolUse.set(facts.parentRef, facts.agentId)
   }
 }

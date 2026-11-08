@@ -7,7 +7,10 @@ const STATUS_COLUMNS = [
   ['command_entry', 'INTEGER NOT NULL DEFAULT 0'],
   ['lifecycle_state', 'TEXT'],
   ['assistant_prose', 'INTEGER NOT NULL DEFAULT 0'],
-  ['turn_scope_kind', 'TEXT']
+  ['turn_scope_kind', 'TEXT'],
+  ['producer_agent_id', 'TEXT'],
+  ['producer_parent_ref', 'TEXT'],
+  ['producer_attempt', 'INTEGER']
 ] as const
 
 function normalizedIndex(sql: string): string {

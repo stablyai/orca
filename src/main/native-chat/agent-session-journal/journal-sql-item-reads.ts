@@ -21,6 +21,8 @@ import { JournalSqlReadValues } from './journal-sql-read-values'
 import { readJournalSqlInput } from './journal-sql-input-reads'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
+import type { ClaudeJournaledIdentities } from '../../claude/claude-subagent-journaled-identities'
+import { readJournalSqlClaudeIdentities } from './journal-sql-claude-identities'
 
 /** Item reads by type and position; each names the rows it decodes, as projection reads do. */
 export type JournalSqlItemRead =
@@ -34,6 +36,7 @@ export type JournalSqlItemRead =
   | { kind: 'running-turn' }
   | { kind: 'context-usage' }
   | { kind: 'thread-goal-source' }
+  | { kind: 'claude-identities' }
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
   | { kind: 'continuation-context' }
@@ -44,6 +47,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'running-turn'; running: { item: AgentJournalRenderItem; turnId: string } | null }
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
+  | { kind: 'claude-identities'; identities: ClaudeJournaledIdentities }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | { kind: 'continuation-context'; context: JournalContinuationContext }
@@ -157,6 +161,8 @@ export function readJournalSqlItems(
       }
       return { kind: 'context-usage', usage: latestStructuredAgentContextFacts(turns.toReversed()) }
     }
+    case 'claude-identities':
+      return { kind: 'claude-identities', identities: readJournalSqlClaudeIdentities(scope) }
     case 'thread-goal-source': {
       // The newest transition wins; on equal sequence the earlier-written row, as a fold scan keeps it.
       const rows = scope.db

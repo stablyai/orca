@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS journal_proj_items (
   lifecycle_state TEXT,
   assistant_prose INTEGER NOT NULL DEFAULT 0,
   turn_scope_kind TEXT,
+  producer_agent_id TEXT,
+  producer_parent_ref TEXT,
+  producer_attempt INTEGER,
   PRIMARY KEY (session_id, epoch, entry_key)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_items_position
@@ -69,6 +72,14 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_kind
 CREATE INDEX IF NOT EXISTS journal_proj_items_unsettled
   ON journal_proj_items(session_id, epoch, ordinal)
   WHERE lifecycle_state IN ('running','pending') OR live_work=1;
+CREATE INDEX IF NOT EXISTS journal_proj_items_parent_alias
+  ON journal_proj_items(session_id, epoch, producer_parent_ref, ordinal DESC)
+  WHERE producer_parent_ref IS NOT NULL;
+CREATE INDEX IF NOT EXISTS journal_proj_items_agent_attempt
+  ON journal_proj_items(session_id, epoch, producer_agent_id, producer_attempt DESC)
+  WHERE producer_agent_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS journal_proj_items_roster
+  ON journal_proj_items(session_id, epoch, ordinal) WHERE subagent_names IS NOT NULL;
 CREATE INDEX IF NOT EXISTS journal_proj_items_turn_scope
   ON journal_proj_items(session_id, epoch, turn_item_id, kind) WHERE turn_item_id IS NOT NULL;
 `

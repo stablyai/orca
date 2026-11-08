@@ -109,6 +109,7 @@ export function journalSqlReads(
     lastProviderActivityAt: async (fence) => (await read({ kind: 'provider-activity', fence })).at,
     runningTurn: async () => (await read({ kind: 'running-turn' })).running,
     threadGoalSource: async () => (await read({ kind: 'thread-goal-source' })).source,
+    claudeIdentities: async () => (await read({ kind: 'claude-identities' })).identities,
     contextUsage: async () => (await read({ kind: 'context-usage' })).usage,
     visitItems: async (filter, visit) => {
       let afterOrdinal = -1

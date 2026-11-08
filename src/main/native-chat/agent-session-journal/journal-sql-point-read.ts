@@ -179,6 +179,7 @@ function read(
     case 'running-turn':
     case 'context-usage':
     case 'thread-goal-source':
+    case 'claude-identities':
     case 'named-turn':
     case 'message-options':
     case 'continuation-context':

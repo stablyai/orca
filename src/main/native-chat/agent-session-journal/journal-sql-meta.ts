@@ -5,7 +5,7 @@ import { AgentSessionJournalError } from './writing/journal-write-guards'
 import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
 
 /** Bumped whenever a projection table's meaning changes; a different version reconverts. */
-export const JOURNAL_SQL_PROJECTION_VERSION = 2
+export const JOURNAL_SQL_PROJECTION_VERSION = 3
 
 export function journalSqlMetaSchema(): string {
   return `CREATE TABLE IF NOT EXISTS journal_proj_meta (
