@@ -12,6 +12,7 @@ const VALUE_FLAGS = ['--prompt', '--session', '-s', '--server']
 const PROBE_NEUTRAL_FLAGS = new Set(['--auto', '--standalone'])
 // Provider/model ids only; anything a shell could expand stays on the command line.
 const LITERAL_MODEL = /^[A-Za-z0-9._/:@#+-]+$/
+const SHELL_OPERATOR = /[;|&<>]/
 
 export type OpenCodeRootModelRewrite = {
   /** The command without its root model option, with `--standalone` so a private server reads the overlay. */
@@ -35,9 +36,24 @@ export function planOpenCodeRootModelRewrite(
   if (!OPENCODE_EXECUTABLE.test(getCommandTokenPathBasename(tokens[executable] ?? ''))) {
     return null
   }
+  // One plain command only: a newline or operator would let the scan rewrite a different command.
+  const gaps = spans.map((span, index) =>
+    command.slice(index ? spans[index - 1].end : 0, span.start)
+  )
+  if (
+    gaps.some((gap, index) => !(index ? /^[ \t]+$/ : /^[ \t]*$/).test(gap)) ||
+    !/^[ \t]*$/.test(command.slice(spans.at(-1)?.end ?? 0)) ||
+    spans.some((span, index) => {
+      const raw = command.slice(span.start, span.end)
+      return index !== executable - 1 && !/^['"]/.test(raw) && SHELL_OPERATOR.test(raw)
+    })
+  ) {
+    return null
+  }
   const removals: { start: number; end: number }[] = []
   let model: string | undefined
   let probeNeutral = true
+  let standaloneOption = false
   for (let index = executable + 1; index < tokens.length; index += 1) {
     const token = tokens[index]
     // A positional (subcommand or directory) ends the root options; its own flags are not ours.
@@ -63,10 +79,12 @@ export function planOpenCodeRootModelRewrite(
         return null
       }
       model = value
-      removals.push({ start: spans[index].start, end: spans[valueIndex].end })
+      // Cut from the previous token's end so its own trailing (escaped) characters stay intact.
+      removals.push({ start: spans[index - 1].end, end: spans[valueIndex].end })
       index = valueIndex
       continue
     }
+    standaloneOption ||= token === '--standalone'
     if (VALUE_FLAGS.includes(token)) {
       probeNeutral &&= token === '--prompt'
       index += 1
@@ -79,12 +97,11 @@ export function planOpenCodeRootModelRewrite(
   }
   let stripped = command
   for (const removal of removals.toReversed()) {
-    stripped = `${stripped.slice(0, removal.start).trimEnd()}${stripped.slice(removal.end)}`
+    stripped = `${stripped.slice(0, removal.start)}${stripped.slice(removal.end)}`
   }
-  const standalone = withOpenCodeStandaloneServer(stripped, shell)
-  const reparsed = tokenizeStartupCommand(standalone, shell)
+  const standalone = standaloneOption ? stripped : withOpenCodeStandaloneServer(stripped, shell)
   // Without its own server the overlay never reaches the TUI, so the flag must stay.
-  if (!reparsed.ok || !reparsed.tokens.includes('--standalone')) {
+  if (standalone === stripped && !standaloneOption) {
     return null
   }
   return {

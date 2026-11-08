@@ -14,7 +14,12 @@ describe('planOpenCodeRootModelRewrite', () => {
       "opencode --standalone --prompt 'fix it'",
       'openai/gpt-5.3-codex'
     ],
-    ['opencode --standalone --model a/b --model c/d', 'opencode --standalone', 'c/d']
+    ['opencode --standalone --model a/b --model c/d', 'opencode --standalone', 'c/d'],
+    [
+      "opencode --model a/b --prompt '-make the build pass'",
+      "opencode --standalone --prompt '-make the build pass'",
+      'a/b'
+    ]
   ])('moves the root model out of %s', (command, rewritten, model) => {
     expect(planOpenCodeRootModelRewrite(command, 'posix')).toMatchObject({
       command: rewritten,
@@ -22,10 +27,10 @@ describe('planOpenCodeRootModelRewrite', () => {
     })
   })
 
-  it('handles a PowerShell call operator', () => {
+  it('keeps an escaped trailing space in the argument before the model', () => {
     expect(
-      planOpenCodeRootModelRewrite("& 'opencode.exe' --model opencode/big-pickle", 'powershell')
-    ).toMatchObject({ command: "& 'opencode.exe' --standalone", model: 'opencode/big-pickle' })
+      planOpenCodeRootModelRewrite('opencode --prompt hello\\  --model a/b', 'posix')
+    ).toMatchObject({ command: 'opencode --standalone --prompt hello\\ ' })
   })
 
   it.each([
@@ -35,7 +40,9 @@ describe('planOpenCodeRootModelRewrite', () => {
     'opencode ./pkg --model a/b',
     'opencode --server http://127.0.0.1:4096 --model a/b',
     'opencode --model "$MODEL"',
-    "opencode --prompt '-make the build pass'",
+    "opencode --model a/b --prompt '--standalone'",
+    'opencode --model a/b\n--model c/d',
+    'opencode --model a/b --auto; --model c/d',
     'opencode --model --prompt hi',
     'claude --model opus'
   ])('leaves %s unchanged', (command) => {

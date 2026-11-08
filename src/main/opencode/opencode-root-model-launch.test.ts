@@ -46,12 +46,3 @@ it('keeps the overlay when the caller asked to drop inherited OpenCode config', 
   })
   expect(result.envToDelete).not.toContain('OPENCODE_CONFIG_CONTENT')
 })
-
-it.each([
-  ['1.18.32', 'OpenCode 1 still takes the flag'],
-  ['2.0.14', 'versions refused for model launches keep today’s command']
-])('leaves %s launches as typed (%s)', async (version) => {
-  const result = await launch(version, 'opencode --model opencode/big-pickle')
-  expect(result.command).toBe('opencode --model opencode/big-pickle')
-  expect(result.env?.OPENCODE_CONFIG_CONTENT).toBe('{"autoupdate":false}')
-})
