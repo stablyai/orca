@@ -21,9 +21,10 @@ import {
   replaySnapshotCoveredStatelessQueries
 } from './terminal-multiplex-yielded-queries'
 
+const SUPERSEDE_UNAVAILABLE_BACKOFF_MS = 10_000
+
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
-  const { runtime, streams } = state
-  const { linkEstimate } = state
+  const { runtime, streams, linkEstimate } = state
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
     ackLinkHasRoomForHistory(state, stream)
   // Draining alt-screen frames a newer screen supersedes only delays echo; a viewport snapshot is cheaper.
@@ -59,8 +60,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         return
       }
       if (!serialized && cause === 'superseded') {
-        // Nothing was dropped, so the backlog still drains; stop retrying an unavailable snapshot.
-        stream.ackSupersedeSnapshotNotBefore = Number.POSITIVE_INFINITY
+        // Nothing was dropped, so the backlog still drains; back off instead of serializing per ACK.
+        stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_UNAVAILABLE_BACKOFF_MS
         return
       }
       if (!serialized) {

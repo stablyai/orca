@@ -122,11 +122,15 @@ describe('terminal multiplex adaptive ACK window', () => {
   })
 
   it('leaves normal-screen output on the legacy window', async () => {
-    expect(await measureEchoLatencyMs(false)).toBeGreaterThan(12_000)
+    const latency = await measureEchoLatencyMs(false)
+    expect(latency).toBeGreaterThan(12_000)
+    expect(latency).toBeLessThan(25_000)
   })
 
   it('restores the legacy window when the kill switch is set', async () => {
     vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '0')
-    expect(await measureEchoLatencyMs(true)).toBeGreaterThan(12_000)
+    const latency = await measureEchoLatencyMs(true)
+    expect(latency).toBeGreaterThan(12_000)
+    expect(latency).toBeLessThan(25_000)
   })
 })

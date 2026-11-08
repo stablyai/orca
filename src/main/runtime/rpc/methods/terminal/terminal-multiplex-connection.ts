@@ -18,7 +18,7 @@ import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/st
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
 export type MultiplexEmit = (result: unknown) => void
-/** `superseded` is optional: when no snapshot can be serialized the backlog drains instead. */
+/** A `superseded` snapshot may fail without detaching; the backlog drains instead. */
 export type TerminalAckRecoveryCause = 'overflow' | 'superseded'
 
 export type TerminalMultiplexConnectionBase = {

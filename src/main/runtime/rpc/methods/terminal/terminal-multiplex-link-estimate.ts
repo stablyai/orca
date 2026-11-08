@@ -1,7 +1,7 @@
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
 const ESTIMATE_WINDOW_MS = 10_000
-// Below ~32 Mbit/s a 2MB window queues over half a second ahead of echo; faster links keep legacy windows.
+// Rate is ACK-measured, so it covers client parse speed too; below ~32 Mbit/s a 2MB window queues >0.5s ahead of echo.
 const PACED_LINK_MAX_BYTES_PER_MS = 4 * 1024
 const PACED_WINDOW_MIN_BYTES = 64 * 1024
 const MAX_SEND_RECORDS_PER_STREAM = 1024
