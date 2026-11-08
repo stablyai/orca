@@ -161,6 +161,7 @@ export function useMobileSessionTerminalSubscription(
           const data = result as Record<string, unknown>
           diagnostics.firstStreamEvent(handle, seq, data.type)
           if (data.type === 'end' || data.type === 'error') {
+            resume.ended(data.type)
             lifetime.end()
             return
           }

@@ -664,6 +664,15 @@ describe('a terminal resuming its stream', () => {
     expect(resumeParams(harness, 2)).toEqual({ streamToken: 'token-2', units: 6 })
   })
 
+  it('takes a snapshot when its document reloads before the resume is answered', () => {
+    const { harness } = appliedStream()
+    act(() => harness.fields.unsubscribeTerminal(HANDLE))
+    harness.subscribe()
+    harness.documentReady()
+    expect(harness.fields.client.subscribe).toHaveBeenCalledTimes(3)
+    expect(resumeParams(harness, 2)).toBeUndefined()
+  })
+
   it('cancels its stream when the connection drops and resubscribes from where it stopped', () => {
     const { harness } = appliedStream()
     harness.setConnState('connected')

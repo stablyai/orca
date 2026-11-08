@@ -116,6 +116,12 @@ export function createTerminalStreamResumeCursor(
     invalidate(): void {
       streamToken = null
     },
+    ended(type: 'end' | 'error'): void {
+      // An error can follow output the transport dropped, so the count may skip a frame the xterm never got.
+      if (type === 'error') {
+        streamToken = null
+      }
+    },
     /** Keeps the position for the next subscribe when the xterm still shows this stream's output. */
     stop(stillShown: boolean): void {
       state.setCatchingUp(handle, false)

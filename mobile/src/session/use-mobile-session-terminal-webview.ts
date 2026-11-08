@@ -128,7 +128,10 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         wasAlreadyReady,
         handle === activeHandleRef.current
       )
-      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+      // A pending resume would only append to the reloaded, empty buffer.
+      const showedOutput =
+        initializedHandlesRef.current.has(handle) || terminalResume.isCatchingUp(handle)
+      if (wasAlreadyReady && showedOutput) {
         // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
         terminalResume.forget(handle)
