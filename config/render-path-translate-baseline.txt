@@ -161,7 +161,6 @@
 8 src/renderer/src/components/floating-terminal/FloatingTerminalOrchestrationDialog.tsx
 4 src/renderer/src/components/floating-terminal/FloatingTerminalToggleButton.tsx
 8 src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx
-8 src/renderer/src/components/github-item-dialog/inspect-pull-request/checks-tab-header.tsx
 13 src/renderer/src/components/github/CommentCodeContext.tsx
 3 src/renderer/src/components/github/CommentReactions.tsx
 1 src/renderer/src/components/github/GitHubMarkdownComposer.tsx
@@ -361,7 +360,6 @@
 20 src/renderer/src/components/stats/UsageOverviewPane.tsx
 3 src/renderer/src/components/stats/share-card-utils.tsx
 23 src/renderer/src/components/stats/usage-overview-sections.tsx
-2 src/renderer/src/components/tab-bar/EditorFileTab.tsx
 1 src/renderer/src/components/tab-group/TabGroupDropOverlay.tsx
 3 src/renderer/src/components/tab-group/TabGroupPaneActionsMenu.tsx
 1 src/renderer/src/components/tab-group/TabGroupPanel.tsx
