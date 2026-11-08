@@ -102,7 +102,6 @@ describe('orca cli worktree awareness', () => {
       callMock.mockReset()
       process.exitCode = priorExitCode
 
-      queueNoFolderAtSelector(callMock)
       callMock.mockRejectedValueOnce(
         new RuntimeRpcFailureError({
           id: 'req_missing_parent',

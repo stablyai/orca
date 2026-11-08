@@ -127,24 +127,24 @@ describe('path: selectors on folder workspaces', () => {
     }
   )
 
-  it('reports an ambiguous parent with its own choices, not as the child', async () => {
+  it('sends a path:/name: parent to the runtime parent resolver as typed, with its ambiguity code', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const choices = {
-      selector: 'path:/work/hub',
+      selector: 'name:Hub',
       candidates: [
-        { kind: 'worktree', hostId: 'local', path: '/work/hub', selector: 'identity:wt2:local:a' },
-        { kind: 'folder workspace', hostId: 'local', path: '/work/hub', selector: 'folder:hub-a' }
+        { kind: 'folder workspace', hostId: 'local', path: '/work/hub', selector: 'folder:hub-a' },
+        { kind: 'folder workspace', hostId: 'local', path: '/work/hub', selector: 'folder:hub-b' }
       ],
       nextSteps: ['Run `orca worktree ps --json` to compare the choices.']
     }
-    callMock.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
-      if (method === 'worktree.show' && params?.worktree === 'path:/work/hub') {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.set') {
         throw new RuntimeRpcFailureError({
-          id: 'req_show',
+          id: 'req_set',
           ok: false,
           error: {
-            code: 'selector_ambiguous',
-            message: 'More than one workspace matches.',
+            code: 'LINEAGE_PARENT_AMBIGUOUS',
+            message: 'More than one workspace matches "name:Hub".',
             data: choices
           },
           _meta: { runtimeId: 'runtime-1' }
@@ -154,19 +154,16 @@ describe('path: selectors on folder workspaces', () => {
     })
 
     await main(
-      [
-        'worktree',
-        'set',
-        '--worktree',
-        'id:repo::/c',
-        '--parent-worktree',
-        'path:/work/hub',
-        '--json'
-      ],
+      ['worktree', 'set', '--worktree', 'id:repo::/c', '--parent-worktree', 'name:Hub', '--json'],
       '/tmp'
     )
 
+    expect(callMock).not.toHaveBeenCalledWith('worktree.show', expect.anything())
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ parentWorktree: 'name:Hub', matchFolderWorkspaces: true })
+    )
     const { error } = JSON.parse(String(log.mock.calls.at(-1)?.[0]))
-    expect(error.data).toEqual(choices)
+    expect(error).toMatchObject({ code: 'LINEAGE_PARENT_AMBIGUOUS', data: choices })
   })
 })

@@ -5,11 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
-import {
-  ambiguousWorkspaceChoices,
-  namesItsChoices,
-  selectorAmbiguityRecovery
-} from './selector-ambiguity-recovery'
+import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 import { readableWslDistroCliRefusal } from './wsl-distro-cli-refusal'
@@ -31,13 +27,14 @@ type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown
 const STALE_HANDLE_SERVER_HINT =
   'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
 
-function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
-  const code = cliErrorCode(error)
+function contextRecovery(
+  code: string | undefined,
+  context: CliErrorContext
+): ContextRecovery | undefined {
   if (code === 'selector_not_found' && context.worktreeSelector) {
     return worktreeSelectorRecovery(context.worktreeSelector)
   }
-  // The runtime's own choices name the selector that failed, which may be a parent, not --worktree.
-  if (code === 'selector_ambiguous' && !namesItsChoices(errorData(error))) {
+  if (code === 'selector_ambiguous') {
     return selectorAmbiguityRecovery({
       repo: context.repoSelector,
       worktree: context.worktreeSelector,
@@ -73,7 +70,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   const message = readableWslDistroCliRefusal(
     error instanceof Error ? error.message : String(error)
   )
-  const selector = contextRecovery(error, context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   const workspaceChoices =
     error instanceof RuntimeClientError &&
     !(error instanceof RuntimeRpcFailureError) &&
@@ -151,7 +148,7 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
 const JSON_LINES_COMMANDS = new Set(['plugin dev watch'])
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  const selector = contextRecovery(error, context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   const concise = context.conciseOrchestration
   if (json) {
     const response = cliErrorJsonResponse(error, context, selector)
@@ -310,7 +307,7 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   if (sidecarExit) {
     return sidecarExit
   }
-  const selector = contextRecovery(error, context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   // Error-specific recovery takes precedence over the generic fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return mergeContextRecovery(error.data, selector)

@@ -182,6 +182,28 @@ describe('explicit create parents named by path:', () => {
     })
   })
 
+  it('accept a folder spanning local and SSH repos, which no single host owns', async () => {
+    const localRepo: Repo = {
+      ...folderProject,
+      id: 'repo-local',
+      path: '/work/hub/app',
+      kind: 'git'
+    }
+    const remoteRepo: Repo = { ...sshRepo, projectGroupId: 'group-1' }
+    const runtime = createRuntime(
+      [folder({ id: 'hub-a' })],
+      [{ ...localRepo, projectGroupId: 'group-1' }, remoteRepo]
+    )
+
+    await expect(show(runtime, 'name:Hub')).rejects.toThrow('selector_ambiguous')
+    await expect(
+      runtime.resolveLineageForWorktreeCreate(
+        { parentWorktree: 'name:Hub', matchFolderWorkspaces: true },
+        sshRepo
+      )
+    ).resolves.toMatchObject({ kind: 'lineage', parent: { workspaceKey: 'folder:hub-a' } })
+  })
+
   it('report an ambiguous parent as ambiguous, not missing', async () => {
     const runtime = createRuntime([folder({ id: 'hub-a' }), folder({ id: 'hub-b' })])
 
