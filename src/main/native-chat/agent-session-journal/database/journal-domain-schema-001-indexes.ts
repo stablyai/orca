@@ -1,4 +1,8 @@
 export const JOURNAL_DOMAIN_SCHEMA_001_INDEXES = `
+CREATE INDEX journal_submission_entered_phase ON journal_submission_attempts(session_id,epoch,entered_phase_ordinal,message_id)
+  WHERE current=1 AND entered_phase_ordinal IS NOT NULL;
+CREATE INDEX journal_submission_sending_phase ON journal_submission_attempts(session_id,epoch,sending_phase_ordinal,message_id)
+  WHERE current=1 AND sending_phase_ordinal IS NOT NULL;
 CREATE INDEX idx_agent_session_clear_successor ON agent_session_records(
   CASE WHEN json_valid(record_json) THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END);
 CREATE INDEX agent_session_command_receipts_session ON agent_session_command_receipts(session_id);

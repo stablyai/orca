@@ -69,6 +69,8 @@ export type JournalDomainSubmissionAttempt = {
   sequence: number
   index: number
   ordinal: number
+  sendingPhaseOrdinal: number | null
+  enteredPhaseOrdinal: number | null
   candidate: boolean
   admittedPersonal: boolean
   submission: AgentJournalSubmission
@@ -149,7 +151,7 @@ export function readJournalDomainSubmissionAttempt(
   includeAdmissionBody = true
 ): JournalDomainSubmissionAttempt | null {
   const row = db
-    .prepare(`SELECT attempt_sequence,attempt_index,ordinal,candidate,admitted_personal,payload_json,
+    .prepare(`SELECT attempt_sequence,attempt_index,ordinal,sending_phase_ordinal,entered_phase_ordinal,candidate,admitted_personal,payload_json,
     CASE WHEN ? THEN admission_body_json END AS admission_body_json,admission_family_id,facts_json
     FROM journal_submission_attempts WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
     .get(Number(includeAdmissionBody), target.sessionId, target.epoch, messageId)
@@ -161,6 +163,10 @@ export function readJournalDomainSubmissionAttempt(
     sequence: Number(row.attempt_sequence),
     index: Number(row.attempt_index),
     ordinal: Number(row.ordinal),
+    sendingPhaseOrdinal:
+      row.sending_phase_ordinal == null ? null : Number(row.sending_phase_ordinal),
+    enteredPhaseOrdinal:
+      row.entered_phase_ordinal == null ? null : Number(row.entered_phase_ordinal),
     candidate: Boolean(row.candidate),
     admittedPersonal: Boolean(row.admitted_personal),
     submission: JSON.parse(String(row.payload_json)),

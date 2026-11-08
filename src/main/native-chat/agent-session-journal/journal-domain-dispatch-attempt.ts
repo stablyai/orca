@@ -1,4 +1,6 @@
 import type Database from '../../sqlite/sync-database'
+import { journalDomainSendingPhaseOrdinal } from './journal-domain-sending-phase'
+import { journalDomainEnteredPhaseOrdinal } from './journal-domain-entered-phase'
 import {
   JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
   journalDomainSubmissionColumns
@@ -26,13 +28,20 @@ export function writeJournalDomainDispatchAttempt(
   attempt: JournalDomainSubmissionAttempt
 ): void {
   const { submission: next, candidate, handover } = attempt
-  db.prepare(`UPDATE journal_submission_attempts SET candidate=?,payload_json=?,
+  db.prepare(`UPDATE journal_submission_attempts SET candidate=?,payload_json=?,sending_phase_ordinal=?,entered_phase_ordinal=?,
       ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       handover_fence=?,facts_json=?,
       admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
       WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     Number(candidate),
     JSON.stringify(next),
+    journalDomainSendingPhaseOrdinal(
+      db,
+      target,
+      attempt.sendingPhaseOrdinal,
+      next.dispatchState === 'pending'
+    ),
+    journalDomainEnteredPhaseOrdinal(db, target, attempt.enteredPhaseOrdinal, next),
     ...journalDomainSubmissionColumns(next, attempt.carries),
     handover?.fence ?? null,
     journalDomainSubmissionFactsJson(attempt),

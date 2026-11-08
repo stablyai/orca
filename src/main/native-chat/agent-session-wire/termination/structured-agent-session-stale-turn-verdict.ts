@@ -114,7 +114,7 @@ export function runningTurnLifecycleRevisions(
 export function provenUnverifiableTurnRevisions(
   items: readonly AgentJournalRenderItem[],
   evidence: AgentSessionDeathEvidence | null | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks' | 'lastProviderActivityAt'>,
+  journal: Parameters<typeof lastProvenTurnLiveAt>[0],
   /** Replacement covers all owners it held; death covers only its named owner. */
   replaced?: AgentSessionReplacedRuntime
 ): JournalLifecycleMutationInput[] {

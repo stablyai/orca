@@ -1,3 +1,5 @@
+import { journalInputOrder } from './input-order/journal-input-order'
+import { memoryJournalMap } from './journal-memory-collections'
 import { readAnsweredTurn } from './projection/journal-dispatch-reducer'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -26,7 +28,9 @@ export function restoredJournalDomainSubmission(
   state: JournalReducerState,
   submission: AgentJournalSubmission,
   ordinal: number,
-  admittedPersonal: boolean
+  admittedPersonal: boolean,
+  sendingPhaseOrdinal: number | null,
+  enteredPhaseOrdinal: number | null
 ): JournalDomainImportAttempt {
   const id = submission.clientMessageId
   const source = state.inputs.sources.get(id)
@@ -41,6 +45,8 @@ export function restoredJournalDomainSubmission(
     sequence: journalInputSourceSequence(source) ?? submission.submittedSequence ?? 0,
     index: source?.kind === 'outcome-admission' ? (source.item.sequenceIndex ?? 0) : 0,
     ordinal,
+    sendingPhaseOrdinal,
+    enteredPhaseOrdinal,
     candidate: state.inputs.candidates.has(id),
     admittedPersonal,
     echoObserved: state.inputs.echoes.has(agentJournalSubmissionKey(id)),
@@ -103,9 +109,9 @@ export function insertJournalDomainImportedSubmission(
 ): void {
   const { submission, admission, handover } = attempt
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
-    attempt_sequence,attempt_index,current,item_id,ordinal,candidate,admitted_personal,payload_json,echo_observed,
+    attempt_sequence,attempt_index,current,item_id,ordinal,candidate,sending_phase_ordinal,entered_phase_ordinal,admitted_personal,payload_json,echo_observed,
     admission_body_json,admission_family_id,handover_fence,facts_json,${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.join(',')})
-    VALUES(${Array.from({ length: 16 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')}) ON CONFLICT DO NOTHING`).run(
+    VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')}) ON CONFLICT DO NOTHING`).run(
     target.sessionId,
     target.epoch,
     submission.clientMessageId,
@@ -115,6 +121,8 @@ export function insertJournalDomainImportedSubmission(
     agentJournalSubmissionKey(submission.clientMessageId),
     attempt.ordinal,
     Number(attempt.candidate),
+    attempt.sendingPhaseOrdinal,
+    attempt.enteredPhaseOrdinal,
     Number(attempt.admittedPersonal),
     JSON.stringify(submission),
     Number(attempt.echoObserved),
@@ -123,5 +131,35 @@ export function insertJournalDomainImportedSubmission(
     handover?.fence ?? null,
     journalDomainSubmissionFactsJson(attempt),
     ...journalDomainSubmissionColumns(submission, attempt.carries)
+  )
+}
+
+/** Source phase Maps have independent insertion orders, including restored normalization. */
+export function restoredJournalDomainSubmissions(
+  state: JournalReducerState,
+  personal: (submission: AgentJournalSubmission) => boolean
+): JournalDomainImportAttempt[] {
+  const order = journalInputOrder(state)
+  const sendingPhase = new Map(
+    [...order.sendingSubmissions()].map((submission, index) => [
+      submission.clientMessageId,
+      index + 1
+    ])
+  )
+  const enteredPhase = new Map(
+    [...order.enteredSubmissions()].map((submission, index) => [
+      submission.clientMessageId,
+      index + 1
+    ])
+  )
+  return [...memoryJournalMap(state.submissions).values()].map((submission) =>
+    restoredJournalDomainSubmission(
+      state,
+      submission,
+      order.inputOrdinal(submission.clientMessageId),
+      personal(submission),
+      sendingPhase.get(submission.clientMessageId) ?? null,
+      enteredPhase.get(submission.clientMessageId) ?? null
+    )
   )
 }

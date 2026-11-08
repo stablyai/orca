@@ -41,6 +41,7 @@ export function exitJournalDouble(fields: {
   itemFence?: (itemId: string) => number | undefined
   submissions?: () => readonly Partial<AgentJournalSubmission>[]
 }): StructuredAgentSessionChildExitSession['journal'] {
+  const appendPlanned = plannedBatchThrough(fields.appendLifecycleBatch)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a settlement reads only these members; the rest of the journal is unreachable from it.
   const journal = {
     cursor: () => NO_CURSOR,
@@ -50,16 +51,10 @@ export function exitJournalDouble(fields: {
     statusRead: () => ({ items: fields.items() }),
     submissions: fields.submissions ?? (() => []),
     inputOrder: { recoverableSubmissions: fields.submissions ?? (() => []) },
-    stopMarks: { latest: () => null, personStopDecides: () => false },
-    appendPlannedLifecycleBatch: plannedBatchThrough(fields.appendLifecycleBatch)
+    stopMarks: { latest: () => null, personStopDecides: () => false }
   } as unknown as StructuredAgentSessionChildExitSession['journal']
-  journal.settleStaleState = (input) =>
-    settleJournalStaleState(journal, { appendPlanned: journal.appendPlannedLifecycleBatch }, input)
+  journal.settleStaleState = (input) => settleJournalStaleState(journal, { appendPlanned }, input)
   journal.settleDeadGeneration = (input) =>
-    settleJournalDeadGeneration(
-      journal,
-      { appendPlanned: journal.appendPlannedLifecycleBatch },
-      input
-    )
+    settleJournalDeadGeneration(journal, { appendPlanned }, input)
   return journal
 }

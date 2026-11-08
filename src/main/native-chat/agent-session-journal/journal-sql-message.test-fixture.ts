@@ -121,6 +121,8 @@ export function messageFixture(db = new Database(':memory:')) {
       sequence: 1,
       index: 0,
       ordinal: 1,
+      sendingPhaseOrdinal: submission.dispatchState === 'pending' ? 1 : null,
+      enteredPhaseOrdinal: submission.dispatchState === 'pending' ? 1 : null,
       candidate: true,
       admittedPersonal: true,
       echoObserved: false,

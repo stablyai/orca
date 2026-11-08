@@ -182,6 +182,8 @@ CREATE TABLE journal_submission_attempts (
   covers_stopped_history INTEGER NOT NULL DEFAULT 0,
   fingerprint TEXT NOT NULL,
   dispatch_state TEXT NOT NULL,
+  sending_phase_ordinal INTEGER,
+  entered_phase_ordinal INTEGER,
   dispatch_fence INTEGER NOT NULL DEFAULT 0,
   signed_out INTEGER NOT NULL DEFAULT 0 CHECK(signed_out IN (0,1)),
   recovered INTEGER NOT NULL DEFAULT 0 CHECK(recovered IN (0,1)),

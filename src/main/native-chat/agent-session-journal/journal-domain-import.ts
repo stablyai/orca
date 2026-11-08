@@ -1,6 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import {
-  restoredJournalDomainSubmission,
+  restoredJournalDomainSubmissions,
   type JournalDomainImportAttempt
 } from './journal-domain-import-submissions'
 export type { JournalDomainImportAttempt } from './journal-domain-import-submissions'
@@ -228,18 +228,7 @@ function* importPages(
       ...(echoes.has(providerItemId) ? { echo: { value: echoes.get(providerItemId) } } : {})
     }))
   )
-  const order = journalInputOrder(state)
-  yield* paged(
-    'attempts',
-    [...memoryJournalMap(state.submissions).values()].map((submission) =>
-      restoredJournalDomainSubmission(
-        state,
-        submission,
-        order.inputOrdinal(submission.clientMessageId),
-        personal(submission)
-      )
-    )
-  )
+  yield* paged('attempts', restoredJournalDomainSubmissions(state, personal))
   yield* paged(
     'removed-turns',
     [...memoryJournalSet(state.removedTurnIds)].map((turnId) => ({ turnId }))

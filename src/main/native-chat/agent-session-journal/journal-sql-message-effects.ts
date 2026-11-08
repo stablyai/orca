@@ -84,7 +84,7 @@ export function acceptJournalSqlMessageEcho(
   }
   delete accepted.recovered
   const facts: JournalDomainSubmissionStoredFacts = JSON.parse(String(stored.facts_json))
-  db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,
+  db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,sending_phase_ordinal=NULL,entered_phase_ordinal=NULL,
       ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       echo_observed=1,admission_body_json=NULL
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(

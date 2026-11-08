@@ -86,12 +86,14 @@ it('observes only the turn body admitted by the complete lifecycle row', async (
         {
           kind: 'item',
           identity: identity('turn'),
-          body: { kind: 'turn', turnId: 't', state: 'interrupted' }
+          body: { kind: 'turn', turnId: 't', state: 'interrupted' },
+          turnScope: { kind: 'thread' }
         },
         {
           kind: 'item',
           identity: identity('turn'),
-          body: { kind: 'turn', turnId: 't', state: 'running' }
+          body: { kind: 'turn', turnId: 't', state: 'running' },
+          turnScope: { kind: 'thread' }
         }
       ]
     }
@@ -106,7 +108,8 @@ it('observes only the turn body admitted by the complete lifecycle row', async (
         {
           kind: 'item',
           identity: identity('turn'),
-          body: { kind: 'turn', turnId: 't', state: 'interrupted' }
+          body: { kind: 'turn', turnId: 't', state: 'interrupted' },
+          turnScope: { kind: 'thread' }
         },
         { kind: 'tombstone', identity: identity('turn') }
       ]
