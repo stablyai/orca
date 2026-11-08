@@ -290,7 +290,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           ) => {
             detectedListener = listener
             return () => {}
-          }
+          },
+          onTargetRemoved: () => () => {}
         }
       })
     )

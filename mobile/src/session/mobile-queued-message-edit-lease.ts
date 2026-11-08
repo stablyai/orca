@@ -2,7 +2,7 @@ import {
   startQueuedEditLease,
   type QueuedEditLeaseLoss
 } from '../../../src/shared/queued-message-edit-lease'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 

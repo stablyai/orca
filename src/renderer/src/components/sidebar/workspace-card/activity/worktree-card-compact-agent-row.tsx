@@ -25,6 +25,7 @@ import {
   type ProgramStatusPresentation
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -38,7 +39,8 @@ export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
   lastAssistantMessageOverride?: string,
-  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
+  t?: Translate
 ): string {
   // Program-reported blocks need user attention before other row details.
   if (presentation.attention) {
@@ -52,7 +54,7 @@ export function getCompactAgentSecondary(
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   if (stoppingLabel) {
     return stoppingLabel
   }
@@ -127,6 +129,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
+  const t = useTranslate()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -155,12 +158,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation)
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(
     agent,
     dotState,
     primary,
-    secondary
+    secondary,
+    t
   )
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''

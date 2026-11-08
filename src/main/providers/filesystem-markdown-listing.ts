@@ -1,6 +1,6 @@
 import type { IFilesystemProvider } from './filesystem-provider-contract'
-import { markdownDocumentsFromRelativePaths } from '../../shared/markdown-document-paths'
-import { FileInventoryBudget } from '../../shared/file-inventory-budget'
+import { markdownDocumentsFromRelativePaths } from '../../shared/file-listing/markdown-document-paths'
+import { FileInventoryBudget } from '../../shared/file-listing/file-inventory-budget'
 
 type MarkdownListingProvider =
   | Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>>

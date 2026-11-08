@@ -3,9 +3,12 @@ import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/hos
 import type { SshTarget } from '../../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import {
+  getManagedOrcadCrashLoopBrake,
+  wakeManagedOrcadUnlessCrashLooping
+} from './orcad-managed-crash-loop'
 
 export type OrcadManagedServing =
   | { state: 'serving' }
@@ -76,7 +79,13 @@ export function ensureManagedOrcadServing(
   const answeredAt = input.answeredAt?.(id) ?? null
   const answerAge = answeredAt === null ? null : now() - answeredAt
   // Clock rollback must not extend the proof window.
-  if (answerAge !== null && answerAge >= 0 && answerAge < LIVE_ANSWER_PROOF_MS) {
+  if (
+    answeredAt !== null &&
+    answerAge !== null &&
+    answerAge >= 0 &&
+    answerAge < LIVE_ANSWER_PROOF_MS
+  ) {
+    getManagedOrcadCrashLoopBrake().noteServing(id, answeredAt)
     return Promise.resolve({ state: 'serving' })
   }
   const next: ServingCheck = { ...transport, check: checkAndStart(input) }
@@ -92,20 +101,28 @@ export function ensureManagedOrcadServing(
   return next.check
 }
 
+/** An explicit Connect must not reuse a cached verdict from before it. */
+export function forgetManagedOrcadServingVerdict(environmentId: string): void {
+  checks.delete(environmentId)
+}
+
 export function resetManagedOrcadServingForTests(): void {
   checks.clear()
 }
 
 async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadManagedServing> {
   if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
+    getManagedOrcadCrashLoopBrake().noteServing(input.environment.id)
     return { state: 'serving' }
   }
   let starting = false
+  // Braked hosts publish why they were not started.
+  const braked = getManagedOrcadCrashLoopBrake().engaged(input.environment.id)
   const serving = await wakeIfStopped(input, () => {
     starting = true
     startListener?.starting(input.target)
   })
-  if (starting) {
+  if (starting || braked) {
     startListener?.settled(input.target, input.environment.id, serving)
   }
   return serving
@@ -118,10 +135,15 @@ async function wakeIfStopped(
   const label = input.target.label
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
-    const wake = await wakeStoppedManagedOrcad(
+    const wake = await wakeManagedOrcadUnlessCrashLooping(
+      input.environment.id,
+      label,
       managedOrcadSlot(context, input.remotePort),
       onStarting
     )
+    if (wake.outcome === 'crash-loop') {
+      return { state: 'unverifiable', detail: wake.detail }
+    }
     if (wake.outcome === 'started') {
       const idle = wake.readiness.health?.previousIdleStop
       const cause = idle
@@ -134,6 +156,7 @@ async function wakeIfStopped(
     if (wake.outcome === 'serving') {
       // A live PID alone does not prove the server answers.
       if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
+        getManagedOrcadCrashLoopBrake().noteServing(input.environment.id)
         return { state: 'serving' }
       }
       const detail = 'This host’s Orca server process is live but is not answering.'

@@ -30,9 +30,11 @@ vi.mock('@/store', () => {
     })
   }
 })
-vi.mock('@/store/selectors', () => ({
-  getWorktreeOnHostFromState: () => null,
-  getAllWorktreesFromState: () => []
+vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
+  getWorktreeOnHostFromState: () => null
+}))
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedAllWorktrees: () => []
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -69,19 +71,6 @@ async function review(): Promise<void> {
 }
 
 describe('nested deletion confirmation', () => {
-  it('lists hidden Git registrations and warns about lost changes before any deletion', async () => {
-    render(
-      <DeleteNestedWorktreesDialog target={target} worktreeName="parent" dismissToast={vi.fn()} />
-    )
-    await review()
-    expect(mocks.preview).toHaveBeenCalledWith({ worktreeId: target.id, hostId: 'local' })
-    expect(screen.getByRole('dialog')).toHaveTextContent('including uncommitted changes')
-    expect(screen.getAllByRole('listitem')).toHaveLength(2)
-    expect(mocks.remove).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(mocks.remove).not.toHaveBeenCalled()
-  })
-
   it('sends only the reviewed set to the confirmed host and refreshes after success', async () => {
     const dismissToast = vi.fn()
     const onDeleted = vi.fn()

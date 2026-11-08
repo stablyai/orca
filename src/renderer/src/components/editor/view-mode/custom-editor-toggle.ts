@@ -4,7 +4,7 @@ import {
   useCustomEditorViewStore,
   type ActivePluginCustomEditor,
   type CustomEditorViewChoice
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 import {
   isCustomEditorToggleValue,
   type CustomEditorToggleValue,

@@ -145,6 +145,14 @@ async function expectSettingsCommandValue(
   await expect(container.getByRole('textbox', { name })).toHaveValue(value, { timeout: 10_000 })
 }
 
+async function saveReviewedSetupScript(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Review setup script' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review setup script' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Save local setup' }).click()
+  await expect(dialog).toBeHidden()
+}
+
 test.describe('Setup script import prompt', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -161,7 +169,7 @@ test.describe('Setup script import prompt', () => {
       )
     ).toBeVisible({ timeout: 15_000 })
 
-    await orcaPage.getByRole('button', { name: 'Save local setup' }).click()
+    await saveReviewedSetupScript(orcaPage)
 
     await expect(
       orcaPage.getByText('2 unsupported fields skipped. Saved the setup command.')
@@ -190,7 +198,7 @@ test.describe('Setup script import prompt', () => {
       )
     ).toBeVisible({ timeout: 15_000 })
 
-    await orcaPage.getByRole('button', { name: 'Save local setup' }).click()
+    await saveReviewedSetupScript(orcaPage)
 
     await expect(
       orcaPage.getByRole('button', { name: "project's settings", exact: true })

@@ -1,6 +1,7 @@
 import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelFrame,
+  encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
 } from '../../../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
@@ -42,6 +43,18 @@ export class BrowserNetworkTunnelFrameSender {
       this.onRejected?.()
     }
     return accepted
+  }
+
+  /** Grants stream credit; zero (consumption withheld to shrink a grown window) sends nothing. */
+  sendWindowUpdate(streamId: number, credit: number): boolean {
+    return (
+      credit === 0 ||
+      this.send(
+        BrowserNetworkTunnelOpcode.WindowUpdate,
+        streamId,
+        encodeBrowserNetworkTunnelWindowUpdate(credit)
+      )
+    )
   }
 
   sendError(streamId: number, code: string): boolean {

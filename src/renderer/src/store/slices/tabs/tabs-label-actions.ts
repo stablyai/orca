@@ -1,8 +1,8 @@
-import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
+import { emitNativeChatToggled } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
+import { findTabAndWorktree, patchTab, updateGroup } from './tab-group-state'
 import {
   applyTabOrderSortValues,
   dedupeTabOrder,

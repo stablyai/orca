@@ -34,8 +34,11 @@ const darkColors = {
 
   // --primary: the filled primary-action surface.
   surfaceBright: '#e5e5e5',
+  // A list screen's floating create (+) button: the accent, as on Home, since a pale disc glares on the dark page.
+  createActionFill: '#3276f2',
+  onCreateActionFill: '#ffffff',
 
-  accentBlue: '#3b82f6',
+  accentBlue: '#3276f2',
   // White text preserves contrast on saturated accent fills.
   onAccent: '#ffffff',
 
@@ -103,8 +106,10 @@ const lightColors: MobilePalette = {
   textMuted: '#696969',
 
   surfaceBright: '#171717',
+  createActionFill: '#171717',
+  onCreateActionFill: '#ffffff',
 
-  accentBlue: '#2563eb',
+  accentBlue: '#225be3',
   onAccent: '#ffffff',
 
   statusGreen: '#147638',

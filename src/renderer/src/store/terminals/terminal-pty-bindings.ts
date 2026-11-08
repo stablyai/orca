@@ -3,7 +3,7 @@ import {
   parseRemoteRuntimePtyId,
   toRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
+import { isTerminalTabPresent } from './terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   consumePendingActivationSpawn,

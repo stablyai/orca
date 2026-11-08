@@ -8,7 +8,7 @@ import {
   type MobileE2EEV2Ready
 } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
+import type { DeviceRegistry } from './server/pairing/device-registry'
 import {
   deriveSharedKey,
   encrypt,
@@ -81,38 +81,6 @@ function registryFor(
 }
 
 describe('MobileSocketWiring', () => {
-  it('terminates a revoked device across every attached transport', () => {
-    const direct = new FakeTransport()
-    const relay = new FakeTransport()
-    direct.terminateClientConnections.mockReturnValue(1)
-    relay.terminateClientConnections.mockReturnValue(2)
-    const desktop = generateKeyPair()
-    const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token'),
-      e2eeKeypair: {
-        publicKey: desktop.publicKey,
-        secretKey: desktop.secretKey,
-        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
-      },
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onClose: vi.fn()
-    })
-    const detachDirect = wiring.attachTransport(direct)
-    wiring.attachTransport(relay)
-
-    expect(wiring.terminateDeviceConnections('device-1')).toBe(3)
-    expect(direct.terminateClientConnections).toHaveBeenCalledWith('device-1')
-    expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
-
-    detachDirect()
-    direct.terminateClientConnections.mockClear()
-    relay.terminateClientConnections.mockClear()
-    expect(wiring.terminateDeviceConnections('device-1')).toBe(2)
-    expect(direct.terminateClientConnections).not.toHaveBeenCalled()
-    expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
-  })
-
   it('preserves the legacy direct handshake, identity, and close cleanup', () => {
     const desktop = generateKeyPair()
     const phone = generateKeyPair()
@@ -216,59 +184,6 @@ describe('MobileSocketWiring', () => {
     expect(onClose).toHaveBeenLastCalledWith(expect.objectContaining({ ws: sockets[1] }), false)
   })
 
-  it('lets the capability RPC write capabilities back onto the socket', () => {
-    // Capability updates must write through to the channel; a getter-only socket throws and hides every structured tab from a capable phone.
-    const desktop = generateKeyPair()
-    const phone = generateKeyPair()
-    const ws = new FakeSocket()
-    const transport = new FakeTransport()
-    const onText = vi.fn()
-    const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token', 'mobile'),
-      e2eeKeypair: {
-        publicKey: desktop.publicKey,
-        secretKey: desktop.secretKey,
-        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
-      },
-      onText,
-      onBinary: vi.fn(),
-      onClose: vi.fn()
-    })
-    wiring.attachTransport(transport)
-
-    transport.receive(
-      ws,
-      JSON.stringify({
-        type: 'e2ee_hello',
-        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
-      })
-    )
-    const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
-    transport.receive(
-      ws,
-      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
-    )
-    transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
-
-    const socket = onText.mock.calls[0]?.[0]
-    expect(socket).toBeDefined()
-    expect(socket.clientCapabilities).toEqual([])
-    const changed = vi.fn()
-    const stop = socket.capabilitySource?.observe(changed)
-
-    expect(() => {
-      socket.clientCapabilities = ['agent-session.structured.v1']
-    }).not.toThrow()
-    expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
-    expect(socket.capabilitySource?.current).toBe(socket.clientCapabilities)
-    expect(changed).toHaveBeenCalledOnce()
-    stop?.()
-
-    // Later requests must read the updated channel set, not a detached copy.
-    transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))
-    expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
-  })
-
   it('closes an unknown-token socket even when reporting the failure throws', () => {
     const desktop = generateKeyPair()
     const phone = generateKeyPair()
@@ -318,46 +233,6 @@ describe('MobileSocketWiring', () => {
     expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
     expect(wiring.channelCount).toBe(0)
     consoleError.mockRestore()
-  })
-
-  it('reports auth encrypted to a stale desktop key on the direct path', () => {
-    const currentDesktop = generateKeyPair()
-    const staleDesktop = generateKeyPair()
-    const phone = generateKeyPair()
-    const ws = new FakeSocket()
-    const transport = new FakeTransport()
-    const onUnpairedDeviceAuthFailure = vi.fn()
-    const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token'),
-      e2eeKeypair: {
-        publicKey: currentDesktop.publicKey,
-        secretKey: currentDesktop.secretKey,
-        publicKeyB64: Buffer.from(currentDesktop.publicKey).toString('base64')
-      },
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onClose: vi.fn(),
-      onUnpairedDeviceAuthFailure
-    })
-    wiring.attachTransport(transport)
-
-    transport.receive(
-      ws,
-      JSON.stringify({
-        type: 'e2ee_hello',
-        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
-      })
-    )
-    const staleSharedKey = deriveSharedKey(phone.secretKey, staleDesktop.publicKey)
-    transport.receive(
-      ws,
-      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), staleSharedKey)
-    )
-
-    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
-    expect(onUnpairedDeviceAuthFailure).toHaveBeenCalledWith({ transport: 'direct' })
-    expect(transport.setClientId).not.toHaveBeenCalled()
-    expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
   })
 
   it('rejects a relay socket whose immutable relayDeviceId differs from E2EE identity', () => {

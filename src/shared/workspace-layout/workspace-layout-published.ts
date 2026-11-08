@@ -109,7 +109,12 @@ export function publishEditorView(editorView: LayoutEditorView): LayoutEditorVie
       filePath: file.filePath,
       relativePath: file.relativePath,
       language: file.language,
-      ...pickStoredFields(file, ['runtimeEnvironmentId', 'externalSshTargetId', 'readOnly'])
+      ...pickStoredFields(file, [
+        'worktreeId',
+        'runtimeEnvironmentId',
+        'externalSshTargetId',
+        'readOnly'
+      ])
     }
   }
 }

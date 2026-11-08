@@ -4,6 +4,7 @@ import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
+  getNextTerminalCycleTab,
   getNextTabWithinActiveType,
   getPreviousRecentTab,
   type TabCycleType,
@@ -14,8 +15,8 @@ import {
   selectEmptyFloatingWorkspacePanelVisible,
   selectFloatingVisibleTabCount,
   type EmptyFloatingWorkspacePanelState
-} from '@/store/floating-workspace-panel-selector'
-import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+} from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { resolveBrowserWorkspaceOwner } from './browser/workspace/browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
@@ -174,26 +175,6 @@ export function activateFloatingWorkspaceCyclableTab(
   }
 }
 
-function getNextFloatingWorkspaceTerminalTab(
-  visibleTabs: readonly TypeCyclableTab[],
-  active: TypeCyclableTab,
-  direction: number
-): TypeCyclableTab | null {
-  const terminalTabs = visibleTabs.filter((tab) => tab.type === 'terminal')
-  if (terminalTabs.length === 0) {
-    return null
-  }
-  const currentIndex = terminalTabs.findIndex((tab) => tab.id === active.id)
-  if (terminalTabs.length === 1 && currentIndex === 0 && active.type === 'terminal') {
-    return null
-  }
-  const normalizedCurrentIndex =
-    currentIndex === -1 && direction > 0 ? -1 : currentIndex === -1 ? 0 : currentIndex
-  return terminalTabs[
-    (normalizedCurrentIndex + direction + terminalTabs.length) % terminalTabs.length
-  ]
-}
-
 export function isFloatingWorkspacePanelFocused(
   doc: Pick<Document, 'activeElement'> | null = typeof document === 'undefined' ? null : document
 ): boolean {
@@ -283,7 +264,7 @@ export function switchFloatingWorkspaceTab(
 
   const next =
     mode === 'terminal'
-      ? getNextFloatingWorkspaceTerminalTab(visibleTabs, active, direction)
+      ? getNextTerminalCycleTab(visibleTabs, active, direction)
       : mode === 'all-types'
         ? getNextTabAcrossAllTypes({
             tabs: visibleTabs,

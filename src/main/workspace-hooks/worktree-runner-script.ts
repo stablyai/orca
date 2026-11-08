@@ -1,10 +1,10 @@
 import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/agent-launch/startup/setup-agent-startup-policy'
 import {
   nativeWindowsPathToPosixShellPath,
   type SetupRunnerShell
-} from '../../shared/setup-runner-command'
+} from '../../shared/agent-launch/startup/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
@@ -26,7 +26,7 @@ import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 

@@ -7,6 +7,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { IssueInfo } from '../../../../../../shared/github/pull-request-types'
 
 export type WorktreeTaskState = {
@@ -33,8 +34,8 @@ const ICONS: Record<TaskStateKind, LucideIcon> = {
   cancelled: CircleX
 }
 
-function stateLabel(value: string): string {
-  return translate(
+function stateLabel(value: string, t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.WorktreeCardMetadataStatusBadges.af2b07bda5',
     'State: {{value0}}',
     {
@@ -71,23 +72,20 @@ function present(kind: TaskStateKind, label: string): WorktreeTaskState {
   return { Icon: ICONS[kind], tone: TONES[kind], label }
 }
 
-export function getIssueTaskState(state: IssueInfo['state'] | undefined): WorktreeTaskState | null {
+export function getIssueTaskState(
+  state: IssueInfo['state'] | undefined,
+  t: Translate = translate
+): WorktreeTaskState | null {
   if (state === 'closed') {
     return present(
       'done',
-      translate(
-        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def',
-        'State: Closed'
-      )
+      t('auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def', 'State: Closed')
     )
   }
   if (state === 'open') {
     return present(
       'open',
-      translate(
-        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1',
-        'State: Open'
-      )
+      t('auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1', 'State: Open')
     )
   }
   return null
@@ -95,9 +93,10 @@ export function getIssueTaskState(state: IssueInfo['state'] | undefined): Worktr
 
 export function getLinearTaskState(
   stateName: string | undefined,
-  stateType?: string
+  stateType?: string,
+  t?: Translate
 ): WorktreeTaskState | null {
   return stateName
-    ? present(classifyLinearState(stateName, stateType), stateLabel(stateName))
+    ? present(classifyLinearState(stateName, stateType), stateLabel(stateName, t))
     : null
 }

@@ -1,4 +1,4 @@
-import type { RemoteDispatchAttachmentRow } from '../../types'
+import type { RemoteDispatchAttachmentRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'

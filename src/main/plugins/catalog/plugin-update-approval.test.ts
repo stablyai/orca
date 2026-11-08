@@ -62,6 +62,7 @@ async function runUpdate(options: {
   repositoryMoved?: boolean
   dev?: boolean
   disabledDuringInstall?: boolean
+  enableIfData?: boolean
 }) {
   const previous = discovered(options.before, 'sha-old', options.dev)
   const next = discovered(options.after, 'sha-new')
@@ -93,7 +94,8 @@ async function runUpdate(options: {
       }
       return installed()
     },
-    approve
+    approve,
+    ...(options.enableIfData ? { enableIfData: {} } : {})
   })
   return { outcome, approve, consents, next }
 
@@ -139,6 +141,23 @@ describe('catalog update approval', () => {
       const { outcome, approve } = await runUpdate({ before, after })
       expect(outcome).toMatchObject({ ok: true, needsReview: true })
       expect(approve).not.toHaveBeenCalled()
+    })
+  }
+
+  for (const [type, sample] of Object.entries(SAMPLES)) {
+    it(`never carries or one-click grants approval when a ${type} plugin moves repository`, async () => {
+      const before = sample()
+      const after = { ...sample(), version: '1.1.0' }
+      for (const enableIfData of [false, true]) {
+        const { outcome, approve } = await runUpdate({
+          before,
+          after,
+          repositoryMoved: true,
+          enableIfData
+        })
+        expect(outcome).toMatchObject({ ok: true, needsReview: true })
+        expect(approve).not.toHaveBeenCalled()
+      }
     })
   }
 

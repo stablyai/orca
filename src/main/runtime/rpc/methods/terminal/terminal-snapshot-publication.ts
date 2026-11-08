@@ -6,7 +6,7 @@ import {
 import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
-} from '../../../scrollback-limits'
+} from '../../../terminal/output/mobile-scrollback-limits'
 import { terminalStreamByteLengthExceeds } from '../../terminal-stream-byte-length'
 import {
   iterateTerminalStreamTextPayloads,

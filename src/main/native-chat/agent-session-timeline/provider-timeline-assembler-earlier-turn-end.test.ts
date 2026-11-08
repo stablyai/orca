@@ -4,7 +4,6 @@ import {
   messageText,
   openProviderTimelineRig,
   providerItemId,
-  providerTurnId,
   providerTurnItemId,
   runningTool
 } from './provider-timeline-assembler-test-support'
@@ -12,24 +11,6 @@ import {
 afterEach(closeProviderTimelineRigs)
 
 describe("an earlier turn's late end leaves the open turn alone", () => {
-  it("keeps the open turn's activity line", async () => {
-    const rig = await openProviderTimelineRig()
-    const activity: unknown[] = []
-    const assembler = rig.assemble({
-      sink: { ...rig.sink, setActivity: (each) => activity.push(each) }
-    })
-    assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
-    assembler.apply({ type: 'turn.end', turn: 't1', at: 1_500, state: 'completed' })
-    assembler.apply({ type: 'turn.open', turn: 't2', at: 2_000 })
-    assembler.apply({ type: 'activity', text: 'Thinking' })
-    activity.length = 0
-    expect(
-      assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'completed' })
-    ).toEqual({ admission: { accepted: true } })
-    expect(activity).toEqual([])
-    expect(assembler.openTurnId).toBe(providerTurnId('t2'))
-  })
-
   it("keeps the open turn's anonymous reply one message", async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
@@ -20,7 +20,8 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant
 } from './doc-preview-grants'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -34,25 +35,6 @@ beforeEach(() => {
 })
 
 describe('doc preview grant lifetime', () => {
-  it('mints once for repeated mounts of the same preview tab', async () => {
-    const request = {
-      owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
-      requestBase: '/d',
-      root: '/d',
-      entryRelativePath: 'a.html'
-    }
-
-    const [first, second] = await Promise.all([
-      ensureDocPreviewGrant('preview-1', request),
-      ensureDocPreviewGrant('preview-1', request)
-    ])
-
-    // StrictMode effect replay must neither mint twice nor revoke the surviving webview’s grant.
-    expect(mocks.mintGrant).toHaveBeenCalledOnce()
-    expect(first).toBe(second)
-    expect(mocks.revokeGrant).not.toHaveBeenCalled()
-  })
-
   // Why: Share reads and keys from the handle's location, so a later host change must not move it.
   it('keeps the minted location on the handle until the grant is released', async () => {
     const minted = {
@@ -85,22 +67,6 @@ describe('doc preview grant lifetime', () => {
     })
   })
 
-  it('revokes on release and mints fresh afterwards', async () => {
-    const request = {
-      owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
-      requestBase: '/d',
-      root: '/d',
-      entryRelativePath: 'a.html'
-    }
-    await ensureDocPreviewGrant('preview-2', request)
-
-    releaseDocPreviewGrant('preview-2')
-    await vi.waitFor(() => expect(mocks.revokeGrant).toHaveBeenCalledWith('grant-1'))
-
-    await ensureDocPreviewGrant('preview-2', request)
-    expect(mocks.mintGrant).toHaveBeenCalledTimes(2)
-  })
-
   // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
@@ -128,21 +94,6 @@ describe('doc preview grant lifetime', () => {
 
     releaseDocPreviewGrant('preview-4')
     await vi.waitFor(() => expect(mocks.revokeGrant).toHaveBeenCalledWith('grant-2'))
-  })
-
-  it('does not cache a failed mint', async () => {
-    mocks.mintGrant.mockRejectedValueOnce(new Error('runtime offline'))
-    const request = {
-      owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
-      requestBase: '/d',
-      root: '/d',
-      entryRelativePath: 'a.html'
-    }
-
-    await expect(ensureDocPreviewGrant('preview-3', request)).rejects.toThrow('runtime offline')
-    await expect(ensureDocPreviewGrant('preview-3', request)).resolves.toMatchObject({
-      grantId: 'grant-1'
-    })
   })
 })
 

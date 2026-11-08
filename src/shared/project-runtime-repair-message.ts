@@ -2,7 +2,7 @@
 import type {
   ProjectExecutionRuntimeRepair,
   ProjectExecutionRuntimeRepairReason
-} from './project-execution-runtime'
+} from './execution-host/project-execution-runtime'
 
 /** A launch refused, before any spawn, because its project's runtime needs repair. */
 export const PROJECT_RUNTIME_REPAIR_REQUIRED_CODE = 'project_runtime_repair_required'

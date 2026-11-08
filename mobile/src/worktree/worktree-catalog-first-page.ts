@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from './workspace-list-types'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
 import { admitWorktreeCatalogResponse } from './worktree-catalog-snapshot-client'

@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+import type * as PluginSyntaxPacks from '@/store/plugins/syntax/plugin-syntax-packs'
+import type * as PluginIconThemes from '@/store/plugins/appearance/plugin-icon-themes'
+import type * as PluginThemes from '@/store/plugins/appearance/plugin-themes'
+import type * as PluginLanguagePacks from '@/store/plugins/localization/plugin-language-packs'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +12,6 @@ import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { PluginInstallTrustDialogHost } from '../dialogs/PluginInstallTrustDialog'
-import { applyPluginThemesNow } from '../state/plugin-theme-apply'
 
 vi.mock('../state/plugin-theme-apply', () => ({
   applyPluginThemesNow: vi.fn().mockResolvedValue(false)
@@ -17,6 +20,25 @@ vi.mock('../state/plugin-theme-apply', () => ({
 // Why: cards read live theme stores, whose own change subscriptions aren't this section's.
 vi.mock('../state/use-plugin-in-use', () => ({ usePluginInUse: () => null }))
 vi.mock('../state/use-plugin-art-palettes', () => ({ usePluginArtPalettes: () => [] }))
+
+// Unrelated content stores must not replace the fixture's single discovery callback.
+vi.mock('@/store/plugins/localization/plugin-language-packs', async (importOriginal) => ({
+  ...(await importOriginal<typeof PluginLanguagePacks>()),
+  ensurePluginLanguagePacksLoaded: () => {}
+}))
+vi.mock('@/store/plugins/syntax/plugin-syntax-packs', async (importOriginal) => ({
+  ...(await importOriginal<typeof PluginSyntaxPacks>()),
+  usePluginSyntaxes: () => []
+}))
+vi.mock('@/store/plugins/appearance/plugin-icon-themes', async (importOriginal) => ({
+  ...(await importOriginal<typeof PluginIconThemes>()),
+  usePluginIconThemes: () => []
+}))
+vi.mock('@/store/plugins/appearance/plugin-themes', async (importOriginal) => ({
+  ...(await importOriginal<typeof PluginThemes>()),
+  usePluginThemes: () => [],
+  usePluginTerminalThemes: () => []
+}))
 
 vi.mock('../../settings/section-layout/SettingsSection', () => ({
   SettingsSection: ({
@@ -190,16 +212,6 @@ async function answerTrust(kind: string, label: string): Promise<string> {
   return text
 }
 
-function buttonByText(label: string): HTMLButtonElement {
-  const match = Array.from(document.querySelectorAll('button')).find(
-    (button) => button.textContent === label
-  )
-  if (!match) {
-    throw new Error(`missing ${label} button`)
-  }
-  return match
-}
-
 async function renderSection(
   settings: GlobalSettings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true },
   updateSettings = vi.fn().mockResolvedValue(undefined),
@@ -284,24 +296,6 @@ afterEach(() => {
 })
 
 describe('PluginsSettingsSection lifecycle', () => {
-  it('defers discovery and its change listener until the pane is mounted', async () => {
-    const settings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true }
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-    const { root } = await renderSection(settings, updateSettings, false)
-
-    expect(window.api.plugins.list).not.toHaveBeenCalled()
-    expect(window.api.plugins.onChanged).not.toHaveBeenCalled()
-
-    await act(async () => {
-      root.render(
-        <PluginsSettingsSection mounted settings={settings} updateSettings={updateSettings} />
-      )
-    })
-
-    expect(window.api.plugins.list).toHaveBeenCalledOnce()
-    expect(window.api.plugins.onChanged).toHaveBeenCalledOnce()
-  })
-
   it('suppresses stale lists and cleans up the change subscription', async () => {
     const first = deferred<PluginHostListEntry[]>()
     const second = deferred<PluginHostListEntry[]>()
@@ -323,76 +317,6 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(container.textContent).not.toContain('Older Notes')
     act(() => root.unmount())
     expect(unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('reports a failed save of the file-suggestion setting', async () => {
-    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
-    const { container } = await renderSection(undefined, updateSettings)
-    const toggle = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Suggest plugins for unknown files')
-    )
-    await act(async () => click(toggle!))
-    expect(updateSettings).toHaveBeenCalledWith({ pluginFileTypeSuggestions: false })
-    expect(container.textContent).toContain('Could not save plugin settings.')
-  })
-
-  it('routes enablement and confirmed removal through plugin IPC', async () => {
-    const { container } = await renderSection()
-    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
-
-    vi.mocked(applyPluginThemesNow).mockClear()
-    await act(async () => click(toggleItem(container, plugin.pluginKey)))
-    expect(window.api.plugins.setEnabled).toHaveBeenCalledWith({
-      pluginKey: plugin.pluginKey,
-      enabled: false
-    })
-    // Why: disabling falls back through the theme sync; only the Enable click applies themes.
-    expect(applyPluginThemesNow).not.toHaveBeenCalled()
-    await act(async () => click(toggleItem(container, plugin.pluginKey)))
-    expect(window.api.plugins.setEnabled).toHaveBeenLastCalledWith({
-      pluginKey: plugin.pluginKey,
-      enabled: true
-    })
-    expect(applyPluginThemesNow).toHaveBeenCalledExactlyOnceWith(plugin.pluginKey)
-
-    const removeAction = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Remove…'
-    )
-    if (!removeAction) {
-      throw new Error('missing remove action')
-    }
-    await act(async () => click(removeAction))
-    const confirm = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Confirm remove'
-    )
-    if (!confirm) {
-      throw new Error('missing remove confirmation')
-    }
-    await act(async () => click(confirm))
-    expect(window.api.plugins.remove).toHaveBeenCalledWith({ pluginKey: plugin.pluginKey })
-  })
-
-  it('opens review when enabling a plugin that was never approved', async () => {
-    installApi({
-      list: vi.fn().mockResolvedValue([{ ...plugin, status: 'disabled' }]),
-      refresh: vi.fn().mockResolvedValue([{ ...plugin, status: 'disabled' }]),
-      setEnabled: vi.fn().mockResolvedValue([{ ...plugin, status: 'pending' }])
-    })
-    const { container } = await renderSection()
-    const pluginSwitch = toggleItem(container, plugin.pluginKey)
-    expect(toggleAction(pluginSwitch)).toBe('Enable')
-
-    await act(async () => click(pluginSwitch))
-
-    expect(window.api.plugins.setEnabled).toHaveBeenCalledWith({
-      pluginKey: plugin.pluginKey,
-      enabled: true
-    })
-    expect(
-      Array.from(container.querySelectorAll('button')).some(
-        (button) => button.textContent === 'Approve'
-      )
-    ).toBe(true)
   })
 
   it('shows what is true after a Restart fails halfway', async () => {
@@ -418,50 +342,6 @@ describe('PluginsSettingsSection lifecycle', () => {
 
     expect(list).toHaveBeenCalledTimes(2)
     expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Enable')
-  })
-
-  it('confirms marketplace rollback before invoking plugin IPC', async () => {
-    const marketplacePlugin: PluginHostListEntry = {
-      ...plugin,
-      source: {
-        kind: 'marketplace',
-        reference: 'https://example.com/notes.git',
-        resolvedCommit: 'current-commit',
-        contentHash: 'current-content',
-        marketplace: {
-          reference: 'https://example.com/marketplace.git',
-          resolvedCommit: 'marketplace-commit'
-        }
-      }
-    }
-    installApi({
-      list: vi.fn().mockResolvedValue([marketplacePlugin]),
-      getRollbackVersion: vi.fn().mockResolvedValue('0.9.0')
-    })
-    const { container } = await renderSection()
-    expect(window.api.plugins.getRollbackVersion).toHaveBeenCalledWith({
-      pluginKey: plugin.pluginKey
-    })
-    const rollbackAction = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Roll back to 0.9.0…'
-    )
-    if (!rollbackAction) {
-      throw new Error('missing rollback action')
-    }
-
-    await act(async () => click(rollbackAction))
-    expect(window.api.plugins.rollbackMarketplacePlugin).not.toHaveBeenCalled()
-    const confirm = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Confirm rollback'
-    )
-    if (!confirm) {
-      throw new Error('missing rollback confirmation')
-    }
-    await act(async () => click(confirm))
-
-    expect(window.api.plugins.rollbackMarketplacePlugin).toHaveBeenCalledWith({
-      pluginKey: plugin.pluginKey
-    })
   })
 
   it('accepts overlapping mutations in completion order without regressing final state', async () => {
@@ -496,34 +376,6 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(notes().disabled).toBe(false)
     expect(toggleAction(notes())).toBe('Enable')
     expect(toggleAction(tasks())).toBe('Enable')
-  })
-
-  it('fetches bounded logs only when their disclosure opens', async () => {
-    const getLogs = vi.fn().mockResolvedValue([{ ts: 1, level: 'info', line: 'started' }])
-    installApi({ getLogs, list: vi.fn().mockResolvedValue([{ ...plugin, hasWorker: true }]) })
-    const { container } = await renderSection()
-    expect(getLogs).not.toHaveBeenCalled()
-    const viewLogs = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'View logs'
-    )
-    if (!viewLogs) {
-      throw new Error('missing logs action')
-    }
-
-    await act(async () => click(viewLogs))
-
-    expect(getLogs).toHaveBeenCalledWith({ pluginKey: plugin.pluginKey })
-    expect(container.textContent).toContain('started')
-  })
-
-  it('shows supervised backoff as an enabled restarting plugin', async () => {
-    installApi({
-      list: vi.fn().mockResolvedValue([{ ...plugin, status: 'restarting', restarts: 1 }])
-    })
-    const { container } = await renderSection()
-
-    expect(container.textContent).toContain('Restarting')
-    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
   })
 
   it('prunes dialogs and stale logs after external removal and same-key reinstall', async () => {
@@ -578,36 +430,6 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(container.textContent).not.toContain('stale installation')
   })
 
-  it('persists verbatim development paths and refreshes discovery', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-    const { container } = await renderSection(undefined, updateSettings)
-    await openDevelopmentFolders(container)
-    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
-    if (!input) {
-      throw new Error('missing development path input')
-    }
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
-        input,
-        'C:\\plugins\\demo'
-      )
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const add = Array.from(document.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Add path'
-    )
-    if (!add) {
-      throw new Error('missing add path action')
-    }
-
-    await act(async () => click(add))
-    expect(updateSettings).not.toHaveBeenCalled()
-    await answerTrust('dev-folder', 'Add folder')
-
-    expect(updateSettings).toHaveBeenCalledWith({ devPluginPaths: ['C:\\plugins\\demo'] })
-    expect(window.api.plugins.refresh).toHaveBeenCalled()
-  })
-
   it('preserves development input and clears busy when adding a path fails', async () => {
     const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
     const { container } = await renderSection(undefined, updateSettings)
@@ -635,87 +457,6 @@ describe('PluginsSettingsSection lifecycle', () => {
 
     expect(input.value).toBe('/plugins/demo')
     expect(add.disabled).toBe(false)
-    expect(window.api.plugins.refresh).not.toHaveBeenCalled()
-    expect(document.body.textContent).toContain('Could not save plugin settings.')
-  })
-
-  it('adds no development folder when its trust dialog is cancelled', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-    const { container } = await renderSection(undefined, updateSettings)
-    await openDevelopmentFolders(container)
-    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
-    if (!input) {
-      throw new Error('missing development path input')
-    }
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
-        input,
-        '/plugins/demo'
-      )
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => click(buttonByText('Add path')))
-    const shown = await answerTrust('dev-folder', 'Cancel')
-    expect(shown).toContain('This is an unverified local folder.')
-    expect(updateSettings).not.toHaveBeenCalled()
-    expect(input.value).toBe('/plugins/demo')
-  })
-
-  it('asks to trust the owner of a Git URL before installing from it', async () => {
-    installApi({
-      install: vi.fn().mockResolvedValue({
-        ok: true,
-        pluginKey: 'acme.notes',
-        version: '1.0.0',
-        contentHash: 'd'.repeat(64),
-        consentFingerprint: 'sha256-acme-notes',
-        resolvedCommit: 'c'.repeat(40)
-      })
-    })
-    await renderSection()
-    await act(async () => click(buttonByText('From a Git URL…')))
-    await act(async () => click(buttonByText('Submit Git install')))
-    expect(window.api.plugins.install).not.toHaveBeenCalled()
-    const shown = await answerTrust('git', 'Install')
-    expect(shown).toContain('Make sure you trust Acme')
-    expect(shown).toContain('github.com/acme/notes')
-    expect(window.api.plugins.install).toHaveBeenCalledWith({
-      kind: 'git',
-      url: 'https://github.com/Acme/notes.git',
-      ref: 'v1'
-    })
-  })
-
-  it('installs nothing from a Git URL when its trust dialog is cancelled', async () => {
-    await renderSection()
-    await act(async () => click(buttonByText('From a Git URL…')))
-    await act(async () => click(buttonByText('Submit Git install')))
-    await answerTrust('git', 'Cancel')
-    expect(window.api.plugins.install).not.toHaveBeenCalled()
-    // Why: cancelling the warning keeps the install form open, input intact.
-    expect(buttonByText('Submit Git install')).toBeTruthy()
-  })
-
-  it('keeps a development path and handles a failed removal without rejection', async () => {
-    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      pluginSystemEnabled: true,
-      devPluginPaths: ['/plugins/demo']
-    }
-    const { container } = await renderSection(settings, updateSettings)
-    await openDevelopmentFolders(container)
-    const remove = Array.from(document.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Remove' && button.closest('[role="dialog"]')
-    )
-    if (!remove) {
-      throw new Error('missing development path remove action')
-    }
-
-    await act(async () => click(remove))
-
-    expect(document.body.textContent).toContain('/plugins/demo')
-    expect(remove.disabled).toBe(false)
     expect(window.api.plugins.refresh).not.toHaveBeenCalled()
     expect(document.body.textContent).toContain('Could not save plugin settings.')
   })

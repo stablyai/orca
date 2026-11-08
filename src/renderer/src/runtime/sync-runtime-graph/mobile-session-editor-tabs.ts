@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionMarkdownTab
 } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { editorRowHost } from '../../../../shared/session-tab-file-host'
+import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import {
   getMobileMarkdownSourceFile,

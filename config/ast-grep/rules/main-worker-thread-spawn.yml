@@ -1,0 +1,31 @@
+# Main-process workers must cap their code range; only the spawn helper constructs them.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: main-worker-thread-spawn
+language: typescript
+severity: error
+message: A default Worker reserves V8's full CodeRange (~600 MB of address space on x64) and crashes `ulimit -v` hosts (#37538). Use spawnWorkerThread() from src/main/worker-threads/worker-thread-spawn.ts.
+files:
+  - src/main/**
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - src/main/worker-threads/worker-thread-spawn.ts
+rule:
+  any:
+    - pattern: new Worker($$$)
+    - pattern: new $NS.Worker($$$)
+---
+id: main-worker-thread-spawn-tsx
+language: tsx
+severity: error
+message: A default Worker reserves V8's full CodeRange (~600 MB of address space on x64) and crashes `ulimit -v` hosts (#37538). Use spawnWorkerThread() from src/main/worker-threads/worker-thread-spawn.ts.
+files:
+  - src/main/**
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - src/main/worker-threads/worker-thread-spawn.ts
+rule:
+  any:
+    - pattern: new Worker($$$)
+    - pattern: new $NS.Worker($$$)
