@@ -16,7 +16,7 @@ import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
 import { useAppStore } from '@/store'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow, worktreeCopyPushTarget } from '@/lib/worktree-git-copy'
 
 async function runSequencerRecovery(run: () => Promise<void>, refresh: () => void) {
   try {
@@ -135,6 +135,7 @@ export function SequencerRecoveryControls({
             target,
             connectionId: copy.connectionId,
             ownerHostId: copy.hostId,
+            pushTarget: worktreeCopyPushTarget(state, worktreeId, copy.hostId),
             deps: state,
             request: { shouldApply }
           }).catch(() => {})

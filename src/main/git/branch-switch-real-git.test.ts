@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -58,20 +58,39 @@ afterEach(async () => {
 })
 
 describe('switchBranchGuarded', () => {
-  it('does not report detachment as landed when HEAD.lock leaves the named branch at the same OID', async () => {
-    const oid = await git('rev-parse', 'HEAD')
-    await writeFile(join(directory, '.git', 'HEAD.lock'), '')
-    try {
-      await switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
-      throw new Error('Expected checkout to fail')
-    } catch (error) {
-      expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
-      expect(String(error)).toContain('HEAD.lock')
-      expect(String(error)).not.toContain('Command failed:')
-      expect(String(error)).not.toContain('\n')
+  it.each([false, true])(
+    'keeps the checkout refusal when the landed HEAD read fails: %s',
+    async (missingHead) => {
+      const oid = await git('rev-parse', 'HEAD')
+      await writeFile(join(directory, '.git', 'HEAD.lock'), '')
+      const dependencies = deps(null, oid)
+      const checkout = dependencies.checkout
+      dependencies.checkout = async (...args) => {
+        try {
+          return await checkout(...args)
+        } catch (error) {
+          if (missingHead) {
+            await rename(join(directory, '.git', 'HEAD'), join(directory, '.git', 'saved-HEAD'))
+          }
+          throw error
+        }
+      }
+      try {
+        await switchBranchGuarded(directory, { commitId: oid }, {}, dependencies)
+        throw new Error('Expected checkout to fail')
+      } catch (error) {
+        expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
+        expect(String(error)).toContain('HEAD.lock')
+        expect(String(error)).not.toContain('Command failed:')
+        expect(String(error)).not.toContain('\n')
+      } finally {
+        if (missingHead) {
+          await rename(join(directory, '.git', 'saved-HEAD'), join(directory, '.git', 'HEAD'))
+        }
+      }
+      expect(await currentBranch()).toBe('main')
     }
-    expect(await currentBranch()).toBe('main')
-  })
+  )
   it('leaves a reachable detached commit and actually checks out the branch', async () => {
     await git('checkout', '--detach', '-q')
     const result = await switchBranchGuarded(directory, 'feature', {}, deps())

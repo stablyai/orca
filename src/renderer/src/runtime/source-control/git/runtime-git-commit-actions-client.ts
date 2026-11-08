@@ -111,5 +111,5 @@ export async function sequencerContinueRuntimeGit(
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), operation },
     { timeoutMs: 30_000 }
   )
-  return 'outcome' in result ? result : undefined
+  return typeof result === 'object' && result !== null && 'outcome' in result ? result : undefined
 }

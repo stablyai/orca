@@ -282,12 +282,7 @@ export async function switchBranchGuarded(
       // Git can exit non-zero after HEAD already moved (a file it could not replace, a failing
       // post-checkout hook); that switch landed and must be recorded.
       const landedTarget = commitTarget
-        ? (
-            await gitExecFileAsync(
-              ['rev-parse', 'HEAD'],
-              gitOptionsForWorktree(worktreePath, options)
-            )
-          ).stdout.trim()
+        ? await readBranchSwitchHead(worktreePath, options)
         : await readCurrentBranch(worktreePath, options)
       if (
         (creating && previousBranch === branch) ||

@@ -20,7 +20,7 @@ export function conflictOperationLabel(
         'Cherry-picking'
       )
     case 'revert':
-      return translate('gitGraph.reverting', 'Reverting')
+      return t('gitGraph.reverting', 'Reverting')
     case 'unknown':
       return ''
   }

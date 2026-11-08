@@ -26,7 +26,9 @@ export function createGitCommitActionsApi(): Pick<
           operation
         }
       )
-      return 'outcome' in result ? result : undefined
+      return typeof result === 'object' && result !== null && 'outcome' in result
+        ? result
+        : undefined
     },
     sequencerAbort: async ({ worktreePath, operation }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)

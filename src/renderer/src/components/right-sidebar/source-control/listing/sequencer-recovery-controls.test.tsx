@@ -5,6 +5,8 @@ import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { SequencerRecoveryControls } from './sequencer-recovery-controls'
 import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
+import { local } from '@/components/editor/git-graph/git-graph-workspace.test-fixtures'
+import type * as WorktreeGitCopy from '@/lib/worktree-git-copy'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 
 const { status, continued } = vi.hoisted(() => ({ status: vi.fn(), continued: vi.fn() }))
@@ -22,11 +24,12 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => async () => true
 }))
 vi.mock('./use-worktree-context', () => ({
-  useSourceControlWorktreeContext: () => ({ activeWorktreeId: 'wt', worktreePath: '/repo' })
+  useSourceControlWorktreeContext: () => ({ activeWorktreeId: 'r::/repo', worktreePath: '/repo' })
 }))
-vi.mock('@/lib/worktree-git-copy', () => ({
+vi.mock('@/lib/worktree-git-copy', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeGitCopy>()),
   resolveWorktreeGitCopyNow: () => ({
-    worktreeId: 'wt',
+    worktreeId: 'r::/repo',
     hostId: useAppStore.getState().activeWorkspaceExecutionHostId,
     transport: { kind: 'local' },
     connectionId: undefined
@@ -38,14 +41,34 @@ it('fences late recovery status while invalidating the original graph after navi
   const pending = Promise.withResolvers<GitStatusResult>()
   const fetching = Promise.withResolvers<void>()
   let accepted: GitStatusResult = { entries: [], head: 'host-A', conflictOperation: 'cherry-pick' }
+  const refreshed = Promise.withResolvers<void>()
+  let requestedPublishTarget: unknown
+  let acceptedUpstream: unknown
   useAppStore.setState({
-    activeWorktreeId: 'wt',
+    worktreesByRepo: {
+      r: [
+        { ...local, pushTarget: { remoteName: 'publish-a', branchName: 'topic-a' } },
+        {
+          ...local,
+          hostId: 'ssh:B',
+          pushTarget: { remoteName: 'publish-b', branchName: 'topic-b' }
+        }
+      ]
+    },
+    activeWorktreeId: 'r::/repo',
     activeWorkspaceExecutionHostId: 'local',
     setGitStatus: (_id, result) => {
       accepted = result
     },
     updateWorktreeGitIdentity: () => {},
-    fetchUpstreamStatus: async () => null
+    fetchUpstreamStatus: async (_id, _path, _connectionId, pushTarget) => {
+      requestedPublishTarget = pushTarget
+      return { hasUpstream: true, ahead: 2, behind: 0 }
+    },
+    setUpstreamStatus: (_id, upstream) => {
+      acceptedUpstream = upstream
+      refreshed.resolve()
+    }
   })
   status.mockImplementation(() => {
     fetching.resolve()
@@ -64,7 +87,7 @@ it('fences late recovery status while invalidating the original graph after navi
   try {
     await act(async () =>
       root.render(
-        <SequencerRecoveryControls worktreeId="wt" operation="cherry-pick" disabled={false} />
+        <SequencerRecoveryControls worktreeId="r::/repo" operation="cherry-pick" disabled={false} />
       )
     )
     await act(async () => {
@@ -95,8 +118,23 @@ it('fences late recovery status while invalidating the original graph after navi
       recovering.resolve()
       await recovering.promise
     })
-    expect(invalidatedWorktree).toBe('wt')
+    expect(invalidatedWorktree).toBe('r::/repo')
     expect(accepted).toEqual({ entries: [], head: 'host-B', conflictOperation: 'revert' })
+
+    status.mockResolvedValue({
+      entries: [],
+      head: 'host-B-clean',
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: true, ahead: 99, behind: 0 }
+    })
+    continued.mockResolvedValue(undefined)
+    await act(async () => useAppStore.setState({ activeWorktreeId: 'r::/repo' }))
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button')!.click()
+      await refreshed.promise
+    })
+    expect(requestedPublishTarget).toEqual({ remoteName: 'publish-b', branchName: 'topic-b' })
+    expect(acceptedUpstream).toEqual({ hasUpstream: true, ahead: 2, behind: 0 })
   } finally {
     window.removeEventListener(GIT_GRAPH_REFRESH_EVENT, onGraphRefresh)
     await act(async () => root.unmount())
