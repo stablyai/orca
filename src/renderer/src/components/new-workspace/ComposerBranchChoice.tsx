@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -25,16 +25,17 @@ export function ComposerBranchChoice({
   onOpenSelectedBranchWorkspace,
   disabled
 }: Props) {
+  const t = useTranslate()
   const id = useId()
   const branchNameInputRef = useRef<HTMLInputElement>(null)
   const showOpenWorkspace = reuseSelectedBranch && Boolean(onOpenSelectedBranchWorkspace)
   return (
     <fieldset className="min-w-0 space-y-2" disabled={disabled}>
       <legend className="text-xs font-medium text-muted-foreground">
-        {translate('workspace.branchChoice.title', 'Branch for this worktree')}
+        {t('workspace.branchChoice.title', 'Branch for this worktree')}
       </legend>
       <RadioGroup
-        aria-label={translate('workspace.branchChoice.title', 'Branch for this worktree')}
+        aria-label={t('workspace.branchChoice.title', 'Branch for this worktree')}
         value={reuseSelectedBranch ? 'existing' : 'new'}
         onValueChange={(value) => onReuseSelectedBranchChange(value === 'existing')}
         disabled={disabled}
@@ -59,7 +60,7 @@ export function ComposerBranchChoice({
             <span className="min-w-0 space-y-1">
               <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span id={`${id}-existing`} className="shrink-0 text-xs font-medium">
-                  {translate('workspace.branchChoice.existing', 'Existing branch')}
+                  {t('workspace.branchChoice.existing', 'Existing branch')}
                 </span>
                 {existingBranchName ? (
                   <span
@@ -74,7 +75,7 @@ export function ComposerBranchChoice({
                 id={`${id}-existing-description`}
                 className="block text-xs text-muted-foreground"
               >
-                {translate('workspace.branchChoice.existingHint', 'New commits go on this branch.')}
+                {t('workspace.branchChoice.existingHint', 'New commits go on this branch.')}
               </span>
             </span>
           </label>
@@ -86,7 +87,7 @@ export function ComposerBranchChoice({
                 size="xs"
                 onClick={onOpenSelectedBranchWorkspace}
               >
-                {translate(
+                {t(
                   'auto.components.NewWorkspaceComposerCard.openExistingWorkspace',
                   'Open existing workspace'
                 )}
@@ -111,17 +112,17 @@ export function ComposerBranchChoice({
             />
             <span className="min-w-0 space-y-1">
               <span id={`${id}-new`} className="block text-xs font-medium">
-                {translate('workspace.branchChoice.new', 'New branch')}
+                {t('workspace.branchChoice.new', 'New branch')}
               </span>
               <span id={`${id}-new-description`} className="block text-xs text-muted-foreground">
-                {translate('workspace.branchChoice.newHint', 'Create a new local branch')}
+                {t('workspace.branchChoice.newHint', 'Create a new local branch')}
               </span>
             </span>
           </label>
           {!reuseSelectedBranch ? (
             <div className="space-y-1 px-3 pb-3 pl-9">
               <label htmlFor={`${id}-name`} className="text-xs font-medium">
-                {translate('workspace.branchChoice.newName', 'New branch name')}
+                {t('workspace.branchChoice.newName', 'New branch name')}
               </label>
               <Input
                 id={`${id}-name`}
@@ -131,7 +132,7 @@ export function ComposerBranchChoice({
                 autoFocus
                 value={branchNameOverride ?? ''}
                 onChange={(event) => onBranchNameOverrideChange(event.target.value)}
-                placeholder={translate('workspace.branchChoice.automaticName', 'Automatic name')}
+                placeholder={t('workspace.branchChoice.automaticName', 'Automatic name')}
                 autoCapitalize="none"
                 spellCheck={false}
               />
