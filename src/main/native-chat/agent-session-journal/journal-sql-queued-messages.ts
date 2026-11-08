@@ -21,11 +21,16 @@ import { JournalSqlReducer } from './journal-sql-reducer'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import { JournalRowWriter, type JournalOperationReceipt } from './writing/journal-row-writer'
+import {
+  queuedMessageEditLeaseHolds,
+  type QueuedMessageEditLease
+} from './queued-messages/queued-message-edit-leases'
+import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
 
 /** Host-memory facts a queue read needs, sent as data like the writer's facts. */
 export type JournalSqlQueueFacts = {
   reopenFloor: AgentJournalCursor | null
-  editHeld?: readonly string[]
+  editLeases?: readonly QueuedMessageEditLease[]
   mail?: readonly (readonly [string, boolean])[]
 }
 
@@ -33,6 +38,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'list' }
   | { kind: 'get'; messageId: string }
   | { kind: 'revision' }
+  | { kind: 'cleared-through' }
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
@@ -43,6 +49,7 @@ export type JournalSqlQueueReadResult =
   | { kind: 'list'; cards: QueuedMessageRow[] }
   | { kind: 'get'; card: QueuedMessageRow | null }
   | { kind: 'revision'; revision: string }
+  | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   /** The next card is mail from a sender whose availability the host has not answered. */
   | { kind: 'mail-needed'; from: AgentMessageSource }
@@ -73,7 +80,7 @@ export function readJournalSqlQueue(
   const scope = read.asSnapshot()
   const reducer = new JournalSqlReducer(scope, scope.epoch)
   const { facts } = operation
-  const held = new Set(facts.editHeld ?? [])
+  const held = queuedMessageEditLeaseHolds(facts.editLeases ?? [])
   const database: JournalTransactionalDatabase = {
     db: scope.db,
     readOnly: true,
@@ -99,7 +106,7 @@ export function readJournalSqlQueue(
     }),
     committed: () => {},
     claimAttachments: refuse,
-    editHeld: (messageId) => held.has(messageId)
+    editHeld: (messageId) => held(queue.get(messageId))
   })
   queue.mailUnavailable = (card) => {
     const from = card.body.from
@@ -122,6 +129,8 @@ export function readJournalSqlQueue(
       return { kind: 'get', card: card(queue.get(operation.messageId)) }
     case 'revision':
       return { kind: 'revision', revision: queue.revision() }
+    case 'cleared-through':
+      return { kind: 'cleared-through', sequence: queue.clearedThrough() }
     case 'next-input-card':
       try {
         return {
@@ -199,20 +208,21 @@ export type JournalSqlQueueWrite =
 export class SqlJournalQueuedMessages {
   /** Mail the orchestration owner cannot confirm now; the host installs it once. */
   mailUnavailable: ((from: AgentMessageSource) => boolean) | undefined
-  /** Cards an edit lease holds back from automatic drain; the host installs its lease owner. */
-  editHeld: (() => readonly string[]) | undefined
+  readonly editLeases: SqlQueuedMessageEditLeases
 
   constructor(
     private readonly port: JournalSqlQueuePort,
     private readonly reopenFloor: () => AgentJournalCursor | null
-  ) {}
+  ) {
+    this.editLeases = new SqlQueuedMessageEditLeases((id) => this.get(id))
+  }
 
   /** The host facts every queue read and write carries. */
   facts(mail?: readonly (readonly [string, boolean])[]): JournalSqlQueueFacts {
-    const editHeld = this.editHeld?.()
+    const editLeases = this.editLeases.snapshot()
     return {
       reopenFloor: this.reopenFloor(),
-      ...(editHeld?.length ? { editHeld } : {}),
+      ...(editLeases.length ? { editLeases } : {}),
       ...(mail?.length ? { mail } : {})
     }
   }
@@ -235,6 +245,10 @@ export class SqlJournalQueuedMessages {
 
   async revision(): Promise<string> {
     return (await this.read({ kind: 'revision' }, 'revision')).revision
+  }
+
+  async clearedThrough(): Promise<number> {
+    return (await this.read({ kind: 'cleared-through' }, 'cleared-through')).sequence
   }
 
   async nextInputCard(automatic = true, steer = false): Promise<QueuedMessageRow | null> {
@@ -271,11 +285,13 @@ export class SqlJournalQueuedMessages {
     return this.port.write({ kind: 'queue-insert', input }, receipt) as Promise<QueuedMessageRow>
   }
 
-  update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
-    return this.port.write({
+  async update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
+    const result = (await this.port.write({
       kind: 'queue-update',
       input
-    }) as Promise<AgentSessionQueuedMessageUpdateResult>
+    })) as AgentSessionQueuedMessageUpdateResult
+    this.editLeases.retire(input.messageId)
+    return result
   }
 
   async hold(input: {

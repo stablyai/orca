@@ -8,6 +8,7 @@ import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attac
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalStopSettle } from './queued-messages/queued-message-pause-marks'
+import type { QueuedMessageEditLease } from './queued-messages/queued-message-edit-leases'
 
 export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'store' }>
 
@@ -16,7 +17,7 @@ export type JournalWriterHostFacts = {
   identity: AgentSessionJournalIdentity
   /** This handle's unmarked reopen boundary. */
   reopenFloor?: AgentJournalCursor | null
-  editHeld?: readonly string[]
+  editLeases?: readonly QueuedMessageEditLease[]
   /** Orchestration senders (by `journalMailSenderKey`) and whether their mail is unavailable now. */
   mail?: readonly (readonly [string, boolean])[]
   /** The handover answer, asked only after the writer validated the consumed card. */

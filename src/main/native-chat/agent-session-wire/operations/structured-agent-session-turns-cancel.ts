@@ -79,7 +79,7 @@ export async function performCancel(
   input: PerformCancelInput
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   if (input.prompt) {
-    const validated = validatePendingPrompt(ctx, input.prompt)
+    const validated = await validatePendingPrompt(ctx, input.prompt)
     if (!validated.ok) {
       return answerCancelOfSettledPrompt(ctx, { ...input, prompt: input.prompt }, validated)
     }

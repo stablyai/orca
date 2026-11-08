@@ -4,10 +4,11 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { CommandReceiptRead } from '../../agent-session-journal/writing/command-receipt-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import type { SqlJournalQueuedMessages } from '../../agent-session-journal/journal-sql-queued-messages'
 
 type SendAnswerJournal = {
   reads: Pick<AgentSessionJournal['reads'], 'input' | 'submission'>
-  queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+  queuedMessages: Pick<AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages, 'get'>
 }
 
 /** A card whose row is gone answers from its latest handoff, found by key, never by a history scan. */
@@ -32,7 +33,7 @@ export async function queuedSendAnswer(
   journal: SendAnswerJournal,
   clientMessageId: string
 ): Promise<AgentSessionSendResult | null> {
-  const draft = journal.queuedMessages.get(clientMessageId)
+  const draft = await journal.queuedMessages.get(clientMessageId)
   if (draft) {
     const consumed =
       draft.state === 'dispatched' && draft.consumedAs !== null
@@ -77,7 +78,10 @@ export type StructuredSendAnswer =
 async function submissionAnswer(
   journal: {
     reads: Pick<AgentSessionJournal['reads'], 'item' | 'submission' | 'input'>
-    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'inputState'>
+    queuedMessages: Pick<
+      AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages,
+      'clearedThrough'
+    >
   },
   submission: AgentJournalSubmission
 ): Promise<StructuredSendAnswer> {
@@ -94,7 +98,7 @@ async function submissionAnswer(
       // A proven rejection is placed at its settlement row; journal order, never clocks.
       const at = (await journal.reads.item(agentJournalSubmissionKey(submission.clientMessageId)))
         ?.sequence
-      const cleared = journal.queuedMessages.inputState().queuePauseMarks.cleared?.sequence ?? 0
+      const cleared = await journal.queuedMessages.clearedThrough()
       const accepted = (await journal.reads.input({ kind: 'latest-accepted-handover' })).sequence
       return {
         kind: 'rejected',
@@ -112,13 +116,16 @@ async function submissionAnswer(
 export async function structuredSendAnswer(
   journal: {
     reads: Pick<AgentSessionJournal['reads'], 'item' | 'submission' | 'input'>
-    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get' | 'inputState'>
+    queuedMessages: Pick<
+      AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages,
+      'get' | 'clearedThrough'
+    >
   },
   readReceipt: (operationId: string) => CommandReceiptRead,
   sessionId: string,
   operationId: string
 ): Promise<StructuredSendAnswer> {
-  const card = journal.queuedMessages.get(operationId)
+  const card = await journal.queuedMessages.get(operationId)
   if (card) {
     if (card.state === 'withdrawn') {
       return { kind: 'withdrawn' }

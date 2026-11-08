@@ -78,7 +78,7 @@ export class JournalWriterSession {
       stateDirectory,
       transaction: (run, _streamed, committed) => this.savepoint(run, committed)
     }
-    const held = new Set(facts.editHeld ?? [])
+    const held = queuedMessageEditLeaseHolds(facts.editLeases ?? [])
     this.collaborators = createJournalStoreCollaborators({
       notifyCommitted: () => undefined,
       identity: facts.identity,
@@ -100,7 +100,7 @@ export class JournalWriterSession {
         appendItem: (...args) => this.collaborators.itemAppender.append(...args)
       }),
       enqueue: (build, receipt) => this.collaborators.rowWriter.enqueue(build, receipt),
-      editHeld: (messageId) => held.has(messageId),
+      editHeld: (messageId) => held(this.collaborators.queuedMessages.get(messageId)),
       goalAttachments: this.goalAttachments
     })
     this.collaborators.queuedMessages.mailUnavailable = (card) =>
@@ -332,3 +332,4 @@ function recoveryJournal(session: JournalWriterSession): JournalRecoveryJournal 
     itemBody: (itemId) => session.state.items.get(itemId)?.body ?? null
   }
 }
+import { queuedMessageEditLeaseHolds } from './queued-messages/queued-message-edit-leases'

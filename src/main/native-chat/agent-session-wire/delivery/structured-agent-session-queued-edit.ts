@@ -39,7 +39,7 @@ export function updateQueuedStructuredAgentMessage(
     run: async (ctx) => {
       const queued = ctx.journal.queuedMessages
       const decision = queuedMessageUpdateDecision(
-        queued.get(fields.messageId),
+        await queued.get(fields.messageId),
         ctx.sessionId,
         fields,
         queuedImageCards !== false
@@ -101,11 +101,14 @@ export function holdQueuedStructuredAgentMessageEdit(
       // Renewal adds no hold; avoid publication that would keep an unattended editor’s agent alive.
       return queued.editLeases.renew(key, messageId)
     }
-    const row = queued.get(messageId)
+    const row = await queued.get(messageId)
     const result: AgentSessionQueuedMessageEditHoldResult =
       row && queuedMessageEditableText(row.body) === null
         ? { status: 'not-editable' }
-        : queued.editLeases.acquire(key, { messageId, fingerprint: params.expectedBodyFingerprint })
+        : await queued.editLeases.acquire(key, {
+            messageId,
+            fingerprint: params.expectedBodyFingerprint
+          })
     republish(context, sessionId, session.journal)
     return result
   })

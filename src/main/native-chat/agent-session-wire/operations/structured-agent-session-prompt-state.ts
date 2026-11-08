@@ -10,22 +10,22 @@ import {
 } from '../../agent-session-journal/writing/journal-prompt-mutation'
 export type { PendingPromptValidation } from '../../agent-session-journal/writing/journal-prompt-mutation'
 
-export function settledPrompt(
+export async function settledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   itemId: string
-): { item: AgentJournalRenderItem; prompt: PendingPromptBody } | null {
-  const item = ctx.journal.itemsRead().items.find((entry) => entry.itemId === itemId)
+): Promise<{ item: AgentJournalRenderItem; prompt: PendingPromptBody } | null> {
+  const item = await ctx.journal.reads.item(itemId)
   const prompt = item?.body.kind === 'approval' || item?.body.kind === 'question' ? item.body : null
   return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
 }
 
 /** Repeated Cancel of a cancelled prompt succeeds without effects. */
-export function answerCancelOfSettledPrompt(
+export async function answerCancelOfSettledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   input: { turnId?: string; prompt: { itemId: string } },
   refused: Extract<PendingPromptValidation, { ok: false }>
-): TurnOutcome<AgentSessionCancelResult> {
-  return settledPrompt(ctx, input.prompt.itemId)?.prompt.resolution.state === 'cancelled'
+): Promise<TurnOutcome<AgentSessionCancelResult>> {
+  return (await settledPrompt(ctx, input.prompt.itemId))?.prompt.resolution.state === 'cancelled'
     ? {
         ok: true,
         value: { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled: false }
@@ -33,12 +33,12 @@ export function answerCancelOfSettledPrompt(
     : refused
 }
 
-export function validatePendingPrompt(
+export async function validatePendingPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'sessionId'>,
   input: { itemId: string; expectedRevision: number; kind?: 'approval' | 'question' }
-): PendingPromptValidation {
+): Promise<PendingPromptValidation> {
   return validateJournalPendingPrompt(
-    ctx.journal.itemsRead().items.find((entry) => entry.itemId === input.itemId) ?? undefined,
+    (await ctx.journal.reads.item(input.itemId)) ?? undefined,
     ctx.sessionId,
     input
   )

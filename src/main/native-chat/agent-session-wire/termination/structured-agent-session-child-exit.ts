@@ -23,12 +23,11 @@ import type { StructuredAgentSessionSinkBarrier } from '../journal-ingress/struc
 import {
   settleStructuredAgentSessionLeftovers,
   type StructuredAgentSessionExitSettlement,
-  type StructuredAgentSessionLeftoverStore
+  type StructuredAgentSessionLeftoverStore,
+  type StructuredAgentSessionLeftoverSettlementInput
 } from './structured-agent-session-leftover-settlement'
-import type { StaleStructuredAgentSessionStateJournal } from './structured-agent-session-stale-state-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  type DeadGenerationJournal,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
@@ -51,7 +50,7 @@ export type StructuredAgentSessionChildExit = {
 export type StructuredAgentSessionChildExitSession = Pick<
   StructuredAgentSessionHostSession,
   'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal }
+> & { journal: StructuredAgentSessionLeftoverSettlementInput['journal'] }
 
 export type StructuredAgentSessionGenerationEnded = (
   sessionId: string,

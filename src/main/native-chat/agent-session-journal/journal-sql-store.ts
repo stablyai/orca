@@ -266,6 +266,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   /** Refuse admission now; already admitted work retains its ownership until it drains. */
   close(): Promise<void> {
+    this.queuedMessages.editLeases.dispose()
     this.closed = true
     return this.admitted.then(() => undefined)
   }

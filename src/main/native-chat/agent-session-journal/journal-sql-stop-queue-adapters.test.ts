@@ -66,6 +66,46 @@ async function reopen(root: string, database: JournalSqlDatabase, journal: SqlAg
 
 const ids = (cards: readonly { messageId: string }[]) => cards.map((card) => card.messageId)
 
+it('holds automatic SQL delivery for an editor and invalidates the hold when its card changes', async () => {
+  const { root, database, journal } = await fixture()
+  const queue = journal.queuedMessages
+  const card = await queue.insert({ messageId: 'A', body: message('A') })
+  const editor = { callerKey: 'desktop', editId: 'edit-A' }
+  expect(await queue.editLeases.acquire(editor, card)).toMatchObject({ status: 'held' })
+  expect(await queue.nextInputCard()).toBeNull()
+  expect((await queue.nextInputCard(false))?.messageId).toBe('A')
+  await expect(
+    journal.appendSubmission(
+      {
+        clientMessageId: 'send-A',
+        payloadFingerprint: card.fingerprint,
+        body: card.body,
+        fence: 1
+      },
+      { messageId: 'A', expect: 'waiting', yieldsToPause: true }
+    )
+  ).rejects.toMatchObject({ name: 'QueuedMessageNotConsumableError' })
+
+  // A write can race a previously captured lease; the worker compares the current card identity.
+  const facts = queue.facts()
+  await queue.update({ messageId: 'A', expectedBodyFingerprint: card.fingerprint, text: 'edited' })
+  const read = await journal.reads.queue({
+    kind: 'next-input-card',
+    automatic: true,
+    steer: false,
+    facts
+  })
+  expect(read).toMatchObject({ kind: 'next-input-card', card: { messageId: 'A' } })
+  expect(await queue.editLeases.renew(editor, 'A')).toEqual({ status: 'expired' })
+
+  const edited = (await queue.get('A'))!
+  expect(await queue.editLeases.acquire(editor, edited)).toMatchObject({ status: 'held' })
+  const restarted = await reopen(root, database, journal)
+  expect(await restarted.journal.queuedMessages.editLeases.renew(editor, 'A')).toEqual({
+    status: 'expired'
+  })
+})
+
 it('keeps one ordered queue in SQL and pauses cards from before a reopen until resumed', async () => {
   const { root, database, journal } = await fixture()
   const queue = journal.queuedMessages

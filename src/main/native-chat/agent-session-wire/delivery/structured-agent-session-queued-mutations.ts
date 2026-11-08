@@ -47,11 +47,11 @@ function invalid(message: string): {
   return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
 }
 
-function submissionFor(
+async function submissionFor(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
-): AgentJournalSubmission | undefined {
-  return ctx.journal.submission(clientMessageId)
+): Promise<AgentJournalSubmission | undefined> {
+  return ctx.journal.reads.submission(clientMessageId)
 }
 
 function submissionRowReceipt(
@@ -107,7 +107,7 @@ export function sendQueuedStructuredAgentMessage(
       if (hold === 'prompt') {
         return invalid('Answer the pending request before sending this message.')
       }
-      const row = ctx.journal.queuedMessages.get(messageId)
+      const row = await ctx.journal.queuedMessages.get(messageId)
       if (!row) {
         return invalid('No queued message by that id.')
       }
@@ -115,7 +115,8 @@ export function sendQueuedStructuredAgentMessage(
         return invalid('This queued message was withdrawn.')
       }
       if (row.state === 'dispatched') {
-        const submission = row.consumedAs === null ? undefined : submissionFor(ctx, row.consumedAs)
+        const submission =
+          row.consumedAs === null ? undefined : await submissionFor(ctx, row.consumedAs)
         return submission
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
@@ -214,7 +215,7 @@ export function deleteQueuedStructuredAgentMessage(
             }
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionQueuedMessageDeleteResult>> => {
-      const row = ctx.journal.queuedMessages.get(messageId)
+      const row = await ctx.journal.queuedMessages.get(messageId)
       if (!row) {
         return { ok: true, value: { deleted: false, messageId, disposition: 'missing' } }
       }

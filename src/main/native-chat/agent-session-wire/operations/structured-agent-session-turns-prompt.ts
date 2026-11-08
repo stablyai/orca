@@ -70,11 +70,11 @@ function readPromptChoice(
     : { response: { kind: 'answers', answers }, selectedOptionId }
 }
 
-function resolvedWithSameChoice(
+async function resolvedWithSameChoice(
   ctx: AgentSessionTurnContext,
   input: AgentSessionPromptRequest
-): AgentSessionPromptResult | null {
-  const settled = settledPrompt(ctx, input.itemId)
+): Promise<AgentSessionPromptResult | null> {
+  const settled = await settledPrompt(ctx, input.itemId)
   if (settled?.prompt.kind !== input.kind || settled.prompt.resolution.state !== 'resolved') {
     return null
   }
@@ -89,10 +89,10 @@ export async function performPrompt(
   ctx: AgentSessionTurnContext,
   input: AgentSessionPromptRequest
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
-  const validated = validatePendingPrompt(ctx, input)
+  const validated = await validatePendingPrompt(ctx, input)
   if (!validated.ok) {
     // A retry after a lost reply has a new operation ID; resolved prompt state proves acceptance.
-    const held = resolvedWithSameChoice(ctx, input)
+    const held = await resolvedWithSameChoice(ctx, input)
     return held ? { ok: true, value: held } : validated
   }
   const { prompt } = validated

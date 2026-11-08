@@ -60,7 +60,7 @@ export async function runTargetedCancel(
     })
     return { ok: true, value: { ...named, cancelled } }
   }
-  const pending = prompt ? validatePendingPrompt(ctx, prompt) : undefined
+  const pending = prompt ? await validatePendingPrompt(ctx, prompt) : undefined
   if (!pending || pending.ok) {
     const accepted = await acceptStopTarget(ctx)
     if (!accepted.ok) {

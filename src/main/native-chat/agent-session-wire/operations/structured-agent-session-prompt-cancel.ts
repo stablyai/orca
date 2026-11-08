@@ -32,7 +32,7 @@ export async function cancelStructuredAgentSessionPrompt(
     interrupt: () => Promise<CancelOutcome>
   }
 ): Promise<CancelOutcome> {
-  const validated = validatePendingPrompt(ctx, input.prompt)
+  const validated = await validatePendingPrompt(ctx, input.prompt)
   if (!validated.ok) {
     return answerCancelOfSettledPrompt(ctx, input, validated)
   }
@@ -81,7 +81,7 @@ async function cancelEndedGenerationPrompt(
     return interrupted
   }
   // Recheck whether provider cancellation already settled the prompt.
-  const still = validatePendingPrompt(ctx, {
+  const still = await validatePendingPrompt(ctx, {
     itemId: pending.item.itemId,
     expectedRevision: pending.item.revision
   })

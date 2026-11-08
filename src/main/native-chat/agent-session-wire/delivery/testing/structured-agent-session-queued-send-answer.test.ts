@@ -90,7 +90,7 @@ async function answer(
     },
     queuedMessages: {
       get: (id) => state.queue.cards.get(id) ?? null,
-      inputState: () => state
+      clearedThrough: () => state.queuePauseMarks.cleared?.sequence ?? 0
     }
   }
   // Following sends never walks the conversation's history.

@@ -76,6 +76,8 @@ export class JournalQueuedMessages {
     return this.legacy.displayState()
   }
 
+  clearedThrough = (): number => this.inputState().queuePauseMarks.cleared?.sequence ?? 0
+
   revision(): string {
     const state = this.inputState()
     return `${state.epoch}:${state.queue.revision}:${journalInputOrder(state).cardVersion(state)}:${this.legacy.key()}`
@@ -294,10 +296,8 @@ export class JournalQueuedMessages {
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
-    return journalUserStopInForce(
-      state.queuePauseMarks,
-      journalInputOrder(state).latestPersonAcceptedSequence()
-    )
+    const order = journalInputOrder(state)
+    return journalUserStopInForce(state.queuePauseMarks, order.latestPersonAcceptedSequence())
   }
 
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */

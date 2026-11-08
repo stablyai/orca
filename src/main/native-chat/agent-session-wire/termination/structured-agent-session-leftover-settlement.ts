@@ -26,7 +26,7 @@ export type StructuredAgentSessionLeftoverSettlementInput = {
   sessionId: string
   journal: DeadGenerationJournal &
     StaleStructuredAgentSessionStateJournal &
-    Pick<AgentSessionJournal, 'settleDeadGeneration'>
+    Pick<AgentSessionJournal, 'settleStaleState' | 'settleDeadGeneration'>
   exit?: StructuredAgentSessionExitSettlement
   /** Observed root exit ends the generation even if lease release failed. */
   ended?: StructuredAgentSessionWorkEvidence['ended']
