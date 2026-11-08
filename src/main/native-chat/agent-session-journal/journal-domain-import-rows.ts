@@ -1,5 +1,8 @@
 import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
-import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
+import {
+  journalDomainItemLifecycleColumns,
+  journalDomainItemReadColumns
+} from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
@@ -53,8 +56,8 @@ export function insertJournalDomainImportPage(
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
         subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
         queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-        placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const {
         ordinal,
         ownerFence,
@@ -95,7 +98,8 @@ export function insertJournalDomainImportPage(
           queueFailureWitnessedThrough,
           queueFailureReportTurnItemId,
           journalDomainItemPlacement(item),
-          ...journalDomainItemReadColumns(item)
+          ...journalDomainItemReadColumns(item),
+          ...journalDomainItemLifecycleColumns(item)
         )
         if (Number(result.changes) > 0) {
           writeJournalDomainItemNames(
@@ -153,6 +157,15 @@ export function insertJournalDomainImportPage(
         }
       }
       break
+    case 'settlements': {
+      const insert =
+        db.prepare(`INSERT INTO journal_settlements(session_id,epoch,settlement_id,ordinal)
+        VALUES(?,?,?,?) ON CONFLICT DO NOTHING`)
+      for (const { settlementId, ordinal } of page.rows) {
+        insert.run(...prefix, settlementId, ordinal)
+      }
+      break
+    }
     case 'activity': {
       const insert =
         db.prepare(`INSERT INTO journal_provider_activity(session_id,epoch,fence,last_activity_at)

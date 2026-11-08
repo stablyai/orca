@@ -109,9 +109,21 @@ CREATE TABLE journal_items (
   producer_attempt INTEGER,
   prompt INTEGER NOT NULL DEFAULT 0,
   signed_out INTEGER NOT NULL DEFAULT 0,
+  lifecycle_state TEXT,
+  live_work INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(session_id, epoch, item_id)
 );
 CREATE INDEX journal_items_ordinal ON journal_items(session_id,epoch,ordinal);
+CREATE INDEX journal_items_unsettled ON journal_items(session_id,epoch,ordinal,item_id)
+  WHERE lifecycle_state IN ('running','pending') OR live_work=1;
+CREATE TABLE journal_settlements (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  settlement_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY(session_id, epoch, settlement_id)
+) WITHOUT ROWID;
+CREATE INDEX journal_settlements_ordinal ON journal_settlements(session_id,epoch,ordinal);
 CREATE TABLE journal_item_subagent_names (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

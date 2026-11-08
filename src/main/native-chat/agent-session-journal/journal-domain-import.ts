@@ -77,6 +77,7 @@ export type JournalDomainImportPage =
   | { kind: 'activity'; rows: { fence: number; lastActivityAt: number }[] }
   | { kind: 'queue-clear-members'; rows: { messageId: string }[] }
   | { kind: 'removed-turns'; rows: { turnId: string }[] }
+  | { kind: 'settlements'; rows: { settlementId: string; ordinal: number }[] }
 
 export type JournalDomainImportHeader = {
   sessionId: string
@@ -235,6 +236,13 @@ function* importPages(
     [...memoryJournalSet(state.removedTurnIds)].map((turnId) => ({ turnId }))
   )
   yield* paged('receipts', [...memoryJournalMap(state.receipts).values()])
+  yield* paged(
+    'settlements',
+    [...memoryJournalSet(state.appliedSettlementIds)].map((settlementId, index) => ({
+      settlementId,
+      ordinal: index + 1
+    }))
+  )
   yield* paged('cards', [...cards.values()])
   yield* paged(
     'queue-clear-members',

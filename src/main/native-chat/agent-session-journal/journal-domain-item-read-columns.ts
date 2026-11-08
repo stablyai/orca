@@ -6,6 +6,14 @@ import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
+import { journalItemLifecycleState } from './journal-item-status-metadata'
+import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
+
+export function journalDomainItemLifecycleColumns(
+  item: AgentJournalRenderItem
+): readonly [lifecycleState: string | null, liveWork: number] {
+  return [journalItemLifecycleState(item.body), Number(lostLiveWorkJournalBody(item.body) !== null)]
+}
 
 /** Bound in item-read column order by the one item/import upsert. */
 export type JournalDomainItemReadColumns = readonly [

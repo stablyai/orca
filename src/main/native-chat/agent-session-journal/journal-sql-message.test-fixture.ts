@@ -1,4 +1,7 @@
-import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
+import {
+  journalDomainItemLifecycleColumns,
+  journalDomainItemReadColumns
+} from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import Database from '../../sqlite/sync-database'
 import type {
@@ -61,7 +64,7 @@ export function messageFixture(db = new Database(':memory:')) {
     const metadata = journalDomainHistoryMetadata(item, payload)
     db.prepare(`INSERT INTO journal_items
     (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,
-     root,subagent_row,subagent_group_key,turn_marker,wire_bytes,placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+     root,subagent_row,subagent_group_key,turn_marker,wire_bytes,placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       target.sessionId,
       target.epoch,
       item.itemId,
@@ -77,7 +80,8 @@ export function messageFixture(db = new Database(':memory:')) {
       metadata.turnMarker,
       metadata.wireBytes,
       journalDomainItemPlacement(item),
-      ...journalDomainItemReadColumns(item)
+      ...journalDomainItemReadColumns(item),
+      ...journalDomainItemLifecycleColumns(item)
     )
     writeJournalDomainItemNames(
       db,

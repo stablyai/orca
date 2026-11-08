@@ -67,6 +67,7 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
     db.prepare(`INSERT INTO journal_send_receipts VALUES(?,?,'send','accepted receipt')`).run(
       ...prefix
     )
+    db.prepare(`INSERT INTO journal_settlements VALUES(?,?,'settlement',1)`).run(...prefix)
     db.prepare(
       `INSERT INTO journal_queue_cards VALUES(?,?,'queued',1,'waiting',1,NULL,'domain body')`
     ).run(...prefix)
@@ -113,6 +114,15 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
   expect(
     db.prepare("SELECT payload_json FROM journal_send_receipts WHERE session_id='chat'").all()
   ).toEqual([{ payload_json: 'accepted receipt' }])
+  expect(
+    db
+      .prepare('SELECT session_id,epoch,settlement_id FROM journal_settlements ORDER BY session_id')
+      .all()
+  ).toEqual([
+    { session_id: 'chat', epoch: 'epoch', settlement_id: 'settlement' },
+    { session_id: 'failed', epoch: 'epoch', settlement_id: 'settlement' },
+    { session_id: 'incomplete', epoch: 'epoch', settlement_id: 'settlement' }
+  ])
   expect(
     db
       .prepare(

@@ -106,6 +106,68 @@ function domainRows(db: Database.Database) {
   }
 }
 
+it('imports settlement identity order and live lifecycle facts, discarding both on an unready restart', () => {
+  const { db, reader, originalFilename } = savedChat(false)
+  const { db: source } = openJournalDatabase(originalFilename)
+  runJournalTransaction(source, () => {
+    for (const [index, settlementId] of ['older', 'newer', 'older'].entries()) {
+      insertJournalRow(source, 'session', {
+        v: 4,
+        epoch: 'epoch',
+        seq: 25 + index,
+        ts: 110 + index,
+        fence: 1,
+        kind: 'lifecycle-batch',
+        settlementId,
+        mutations:
+          index === 1
+            ? [{ kind: 'tombstone', itemId: 'removed', revision: 1 }]
+            : [
+                {
+                  kind: 'item',
+                  itemId: 'tool',
+                  revision: index + 1,
+                  body: {
+                    kind: 'tool-call',
+                    callId: 'tool',
+                    name: 'read',
+                    input: {},
+                    state: index === 0 ? 'running' : 'completed'
+                  }
+                }
+              ]
+      })
+    }
+  })
+  source.close()
+  const imported = prepareJournalDomainImport(reader, 'session')!
+  for (const page of imported.pages) {
+    maintain(db, { kind: 'import-page', target: imported, page })
+  }
+  expect(
+    db.prepare('SELECT settlement_id,ordinal FROM journal_settlements ORDER BY ordinal').all()
+  ).toEqual([
+    { settlement_id: 'older', ordinal: 1 },
+    { settlement_id: 'newer', ordinal: 2 }
+  ])
+  expect(
+    db
+      .prepare("SELECT item_id,lifecycle_state,live_work FROM journal_items WHERE item_id='tool'")
+      .get()
+  ).toEqual({ item_id: 'tool', lifecycle_state: 'running', live_work: 0 })
+  maintain(db, { kind: 'import-discard', sessionId: 'session' })
+  expect(db.prepare('SELECT settlement_id FROM journal_settlements').all()).toEqual([])
+  expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
+  const resumed = prepareJournalDomainImport(reader, 'session')!
+  for (const page of resumed.pages) {
+    maintain(db, { kind: 'import-page', target: resumed, page })
+  }
+  maintain(db, { kind: 'import-finish', header: resumed })
+  expect(
+    db.prepare('SELECT settlement_id FROM journal_settlements ORDER BY ordinal').all()
+  ).toEqual([{ settlement_id: 'older' }, { settlement_id: 'newer' }])
+})
+
 it('imports a frozen saved chat as typed domain rows, ready last, and resumes after interruption', () => {
   const { db, reader } = savedChat(false)
   reader.exec('BEGIN')

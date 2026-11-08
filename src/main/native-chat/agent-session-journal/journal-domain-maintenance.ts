@@ -25,6 +25,7 @@ const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly s
     payload: ['payload_json']
   },
   { name: 'journal_send_receipts', key: 'message_id', payload: ['payload_json'] },
+  { name: 'journal_settlements', key: 'settlement_id' },
   { name: 'journal_queue_cards', key: 'message_id', payload: ['payload_json'] },
   { name: 'journal_queue_clear_members', key: 'message_id' },
   { name: 'journal_edit_leases', key: 'owner_id,caller_key,edit_id' },
