@@ -27,12 +27,12 @@ function forward(
   spliceObject = ''
 ): Promise<Response> {
   const headers = new Headers(request.headers)
-  for (const name of INTERNAL_HEADERS) headers.delete(name)
+  for (const name of INTERNAL_HEADERS) { headers.delete(name) }
   headers.set('x-edge-origin', new URL(request.url).origin)
   headers.set('x-edge-place', requestPlace(request))
-  for (const [name, value] of Object.entries(extra)) headers.set(name, value)
+  for (const [name, value] of Object.entries(extra)) { headers.set(name, value) }
   const init = new Request(request.url, { method: 'GET', headers })
-  if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init)
+  if (target === 'splice') { return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init) }
   return env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId)).fetch(init)
 }
 
@@ -42,20 +42,20 @@ async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Res
   let label = String(response.status)
   if (response.status === 200 || response.status === 409) {
     const outcome = ((await response.clone().json().catch(() => ({}))) as { outcome?: unknown }).outcome
-    if (typeof outcome === 'string') label = outcome
+    if (typeof outcome === 'string') { label = outcome }
   }
   metric(env, 'admin', 1, `${op}:${label}`, [], '', requestPlace(request))
   return response
 }
 
 async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise<Response> {
-  if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') return reject(404)
+  if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') { return reject(404) }
   const verified = await verifyAdminRequest(env, request, op)
-  if (!verified) return reject(401)
+  if (!verified) { return reject(401) }
   const host = (relayHostId: string) => env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId))
   if (op === 'assign') {
     const body = AssignBodySchema.safeParse(verified.body)
-    if (!body.success) return reject(400)
+    if (!body.success) { return reject(400) }
     try {
       const id = env.HOST_RELAY.idFromName(body.data.relayHostId)
       const stub = body.data.locationHint ? env.HOST_RELAY.get(id, { locationHint: body.data.locationHint }) : env.HOST_RELAY.get(id)
@@ -68,12 +68,12 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
   }
   if (op === 'export') {
     const body = ExportBodySchema.safeParse(verified.body)
-    if (!body.success) return reject(400)
+    if (!body.success) { return reject(400) }
     const result = await host(body.data.relayHostId).adminExport()
     return Response.json(result, { status: result.outcome === 'exported' ? 200 : 409 })
   }
   const body = EraseBodySchema.safeParse(verified.body)
-  if (!body.success) return reject(400)
+  if (!body.success) { return reject(400) }
   const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId)
   return Response.json({ outcome }, { status: outcome === 'erased' ? 200 : 409 })
 }
@@ -86,9 +86,9 @@ export default {
     if (url.pathname === '/health') {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
-    if (url.search) return reject(400)
+    if (url.search) { return reject(400) }
     const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
-    if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
+    if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
@@ -98,7 +98,7 @@ export default {
     if (abortSplice && env.SPIKE_ADMIN === '1') {
       const connId = decodeURIComponent(abortSplice[1])
       const parsed = parseConnId(connId)
-      if (!parsed) return reject(429)
+      if (!parsed) { return reject(429) }
       // Resets the whole slot object: every splice currently in that slot.
       return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
@@ -130,15 +130,15 @@ export default {
         return Response.json({ colo: cf?.colo ?? 'local', ms })
       }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
-      if (info) return forward(env, request, info[1], { 'x-edge-kind': 'info' })
+      if (info) { return forward(env, request, info[1], { 'x-edge-kind': 'info' }) }
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
     if (url.pathname === '/v1/host/control') {
-      if (!isUpgrade) return reject(426)
+      if (!isUpgrade) { return reject(426) }
       const token = readBearer(request.headers.get('authorization'))
       const claims = token ? await verifyRelayJwt(env, token) : null
-      if (!claims) return reject(401)
+      if (!claims) { return reject(401) }
       return forward(env, request, claims.relayHostId, {
         'x-edge-kind': 'control',
         'x-edge-claims': JSON.stringify(claims)
@@ -147,10 +147,10 @@ export default {
 
     const phone = url.pathname.match(/^\/v1\/connect\/([^/]+)$/)
     if (phone) {
-      if (!(await admitPreAuth(env, request, 'phone'))) return reject(429)
-      if (!isUpgrade) return reject(426)
+      if (!(await admitPreAuth(env, request, 'phone'))) { return reject(429) }
+      if (!isUpgrade) { return reject(426) }
       // 429 for malformed ids matches the GCE cells.
-      if (!HOST_ID.test(phone[1])) return reject(429)
+      if (!HOST_ID.test(phone[1])) { return reject(429) }
       // The host object picks the least-busy slot of its splice pool, so concurrent phones land in
       // different objects (isolation) and reuse existing ones (no object creation per connect).
       const host = env.HOST_RELAY.get(env.HOST_RELAY.idFromName(phone[1]))
@@ -167,11 +167,11 @@ export default {
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
-      if (!(await admitPreAuth(env, request, 'data'))) return reject(429)
-      if (!isUpgrade) return reject(426)
+      if (!(await admitPreAuth(env, request, 'data'))) { return reject(429) }
+      if (!isUpgrade) { return reject(426) }
       const connId = decodeURIComponent(data[1])
       const parsed = parseConnId(connId)
-      if (!parsed) return reject(429)
+      if (!parsed) { return reject(429) }
       return forward(env, request, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     return reject(404)

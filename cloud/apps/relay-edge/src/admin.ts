@@ -57,7 +57,7 @@ export const EraseBodySchema = z.object({ userId: z.string().min(1), relayHostId
 async function sha256B64url(bytes: ArrayBuffer): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
   let binary = ''
-  for (const byte of digest) binary += String.fromCharCode(byte)
+  for (const byte of digest) { binary += String.fromCharCode(byte) }
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -67,14 +67,14 @@ export async function verifyAdminRequest(
   request: Request,
   op: AdminOp
 ): Promise<{ body: unknown } | null> {
-  if (!env.ADMIN_SIGNING_KEY || !env.ADMIN_ISSUER) return null
+  if (!env.ADMIN_SIGNING_KEY || !env.ADMIN_ISSUER) { return null }
   const auth = request.headers.get('authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!token) return null
-  const declared = Number(request.headers.get('content-length') ?? NaN)
-  if (!(declared >= 0 && declared <= ADMIN_BODY_MAX)) return null
+  if (!token) { return null }
+  const declared = Number(request.headers.get('content-length') ?? Number.NaN)
+  if (!(declared >= 0 && declared <= ADMIN_BODY_MAX)) { return null }
   const raw = await request.arrayBuffer()
-  if (raw.byteLength > ADMIN_BODY_MAX) return null
+  if (raw.byteLength > ADMIN_BODY_MAX) { return null }
   // The director signs every op; the erasure job, with its own key and issuer, only `erase`.
   const signers = [{ key: env.ADMIN_SIGNING_KEY, issuer: env.ADMIN_ISSUER }]
   if (op === 'erase' && env.ERASE_SIGNING_KEY && env.ERASE_SIGNING_KEY.length >= 32 && env.ERASE_ISSUER) {
@@ -82,7 +82,7 @@ export async function verifyAdminRequest(
   }
   for (const signer of signers) {
     const verified = await verifyWith(token, signer.key, signer.issuer, op, raw)
-    if (verified) return verified
+    if (verified) { return verified }
   }
   return null
 }
@@ -95,8 +95,8 @@ async function verifyWith(token: string, key: string, issuer: string, op: AdminO
       issuer,
       maxTokenAge: '2m'
     })
-    if (payload.purpose !== ADMIN_PURPOSE || payload.op !== op) return null
-    if (payload.bodySha256 !== (await sha256B64url(raw))) return null
+    if (payload.purpose !== ADMIN_PURPOSE || payload.op !== op) { return null }
+    if (payload.bodySha256 !== (await sha256B64url(raw))) { return null }
     return { body: JSON.parse(new TextDecoder().decode(raw)) }
   } catch {
     return null

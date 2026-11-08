@@ -17,7 +17,7 @@ export function parseArgs(defaults: Record<string, string>): Record<string, stri
   const argv = process.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
     const m = argv[i].match(/^--([^=]+)(?:=(.*))?$/)
-    if (!m) continue
+    if (!m) { continue }
     out[m[1]] = m[2] ?? (argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'true')
   }
   return out
@@ -30,12 +30,12 @@ export function setEventFile(path: string | null): void {
 // One JSON line per event, to stdout (unless quiet) and the --out file.
 export function emit(event: Record<string, unknown>, quiet = false): void {
   const line = JSON.stringify({ t: new Date().toISOString(), ...event })
-  if (!quiet) console.log(line)
-  if (eventFile) appendFileSync(eventFile, line + '\n')
+  if (!quiet) { console.log(line) }
+  if (eventFile) { appendFileSync(eventFile, `${line}\n`) }
 }
 
 export function pct(values: number[], p: number): number {
-  if (values.length === 0) return NaN
+  if (values.length === 0) { return Number.NaN }
   const s = [...values].sort((a, b) => a - b)
   return s[Math.min(s.length - 1, Math.floor(p * s.length))]
 }
@@ -46,7 +46,7 @@ export type SpikeKeys = { privateJwk: JWK; publicJwk: JWK; phoneToken: string; p
 const KEYS_PATH = new URL('./.keys.json', import.meta.url) // gitignored
 
 export async function loadOrCreateKeys(): Promise<SpikeKeys> {
-  if (existsSync(KEYS_PATH)) return JSON.parse(readFileSync(KEYS_PATH, 'utf8')) as SpikeKeys
+  if (existsSync(KEYS_PATH)) { return JSON.parse(readFileSync(KEYS_PATH, 'utf8')) as SpikeKeys }
   const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true })
   const phoneToken = randomBytes(32).toString('base64url')
   const keys: SpikeKeys = {
@@ -121,7 +121,7 @@ export async function startHost(opts: {
   }
 
   const connect = async (attempt: number): Promise<void> => {
-    if (stopped) return
+    if (stopped) { return }
     const started = Date.now()
     const relayJwt = await mintJwt(opts.keys, relayHostId, userId)
     const c: RelayControlClient = new RelayControlClient({
@@ -137,10 +137,10 @@ export async function startHost(opts: {
       onDrain: () => {},
       onClose: (code) => {
         // Only a session that came up counts as a drop; failed attempts are retried by retry().
-        if (client !== c || stopped || !up) return
+        if (client !== c || stopped || !up) { return }
         up = false
         opts.onEvent({ kind: 'host_drop', host: opts.index, code })
-        if (opts.reconnect) void retry(0)
+        if (opts.reconnect) { void retry(0) }
       },
       createSocket: (url, token) =>
         new WebSocket(url, {
@@ -167,13 +167,13 @@ export async function startHost(opts: {
 
   // Desktop-like: immediate first retry, then jittered exponential backoff capped at 30 s.
   const retry = async (attempt: number): Promise<void> => {
-    if (stopped) return
-    if (attempt > 0) await sleep(Math.random() * Math.min(30_000, 1000 * 2 ** attempt))
+    if (stopped) { return }
+    if (attempt > 0) { await sleep(Math.random() * Math.min(30_000, 1000 * 2 ** attempt)) }
     try {
       await connect(attempt)
     } catch (e) {
       opts.onEvent({ kind: 'host_connect_fail', host: opts.index, error: (e as Error).message })
-      if (opts.reconnect) return retry(attempt + 1)
+      if (opts.reconnect) { return retry(attempt + 1) }
     }
   }
   await retry(0)
@@ -194,8 +194,8 @@ export function parseMix(mix: string): { size: number; w: number }[] {
 function pickSize(mix: { size: number; w: number }[]): number {
   const total = mix.reduce((s, m) => s + m.w, 0)
   let r = Math.random() * total
-  for (const m of mix) if ((r -= m.w) <= 0) return m.size
-  return mix[mix.length - 1].size
+  for (const m of mix) { if ((r -= m.w) <= 0) { return m.size } }
+  return mix.at(-1).size
 }
 
 export function startPhone(opts: {
@@ -224,7 +224,7 @@ export function startPhone(opts: {
       stats.helloMs = Date.now() - started
       // Real phones start their E2EE handshake right away; the shipped host transport drops a data
       // socket that receives nothing within attachDeadlineMs (10 s). Send one frame like it.
-      if (parsed.ok === true) sendFrame()
+      if (parsed.ok === true) { sendFrame() }
       opts.onHello(parsed.ok === true, stats.helloMs, parsed)
       if (parsed.ok === true && opts.framesPerSec > 0) {
         timer = setInterval(() => sendFrame(), 1000 / opts.framesPerSec)
@@ -234,15 +234,15 @@ export function startPhone(opts: {
     stats.received++
     const buf = binary ? (raw as Buffer) : Buffer.from(raw.toString())
     const sentAt = Number(buf.subarray(0, 13).toString())
-    if (Number.isFinite(sentAt) && sentAt > 0) stats.rtts.push(Date.now() - sentAt)
+    if (Number.isFinite(sentAt) && sentAt > 0) { stats.rtts.push(Date.now() - sentAt) }
   })
   ws.on('close', (code, reason) => {
-    if (timer) clearInterval(timer)
+    if (timer) { clearInterval(timer) }
     opts.onClose(code, reason.toString())
   })
   ws.on('error', () => {})
   const sendFrame = (): void => {
-    if (ws.readyState !== WebSocket.OPEN) return
+    if (ws.readyState !== WebSocket.OPEN) { return }
     const size = Math.max(16, pickSize(opts.mix))
     const head = String(Date.now()).padStart(13, '0')
     const binary = Math.random() < opts.binaryShare
@@ -255,7 +255,7 @@ export function startPhone(opts: {
     stats,
     ws,
     close: () => {
-      if (timer) clearInterval(timer)
+      if (timer) { clearInterval(timer) }
       ws.close(1000)
     }
   }

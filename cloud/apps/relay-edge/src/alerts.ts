@@ -5,7 +5,7 @@
 // Secrets (set from stdin, never in config or logs): AE_READ_TOKEN (Account Analytics: Read),
 // ALERT_WEBHOOK_URL (Slack-compatible incoming webhook: POST {text}).
 
-export interface AlertsEnv {
+export type AlertsEnv = {
   ACCOUNT_ID: string
   DATASET: string
   ENVIRONMENT: string
@@ -90,7 +90,7 @@ async function query(env: AlertsEnv, sql: string): Promise<Counts> {
     headers: { authorization: `Bearer ${env.AE_READ_TOKEN}` },
     body: sql
   })
-  if (!response.ok) throw new Error(`analytics query failed: ${response.status}`)
+  if (!response.ok) { throw new Error(`analytics query failed: ${response.status}`) }
   const row = ((await response.json()) as { data: Record<string, unknown>[] }).data[0] ?? {}
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [k, Number(v) || 0]))
 }
@@ -122,11 +122,11 @@ export async function evaluate(env: AlertsEnv, scheduledTime: number): Promise<s
   const hourly = new Date(scheduledTime).getUTCMinutes() < 5
   const fired: string[] = []
   for (const rule of RULES) {
-    if (!rule.breach(now, minVolume, before)) continue
+    if (!rule.breach(now, minVolume, before)) { continue }
     const started = !rule.breach(before, minVolume)
-    if (started || hourly) fired.push(`${started ? 'FIRING' : 'STILL FIRING'} ${rule.id}: ${rule.describe(now)}`)
+    if (started || hourly) { fired.push(`${started ? 'FIRING' : 'STILL FIRING'} ${rule.id}: ${rule.describe(now)}`) }
   }
-  for (const text of fired) await post(env, text)
+  for (const text of fired) { await post(env, text) }
   return fired
 }
 

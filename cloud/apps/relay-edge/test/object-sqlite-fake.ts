@@ -6,7 +6,7 @@ import { ObjectSqliteDatabase, type ObjectSql } from '../src/object-database'
 export function nodeObjectSql(db = new DatabaseSync(':memory:')): ObjectSql {
   return {
     exec(text, ...params) {
-      if (/^\s*(BEGIN|SAVEPOINT|COMMIT|ROLLBACK|RELEASE)\b/i.test(text)) throw new Error('use storage.transaction()')
+      if (/^\s*(BEGIN|SAVEPOINT|COMMIT|ROLLBACK|RELEASE)\b/i.test(text)) { throw new Error('use storage.transaction()') }
       const statement = db.prepare(text)
       const bound = params as never[]
       const rows = statement.columns().length > 0 ? (statement.all(...bound) as Record<string, unknown>[]) : (statement.run(...bound), [])
@@ -20,7 +20,7 @@ export function openObjectDatabaseOnNodeSqlite(): ObjectSqliteDatabase {
   const sql = nodeObjectSql(db)
   let open = false
   const database = new ObjectSqliteDatabase(sql, async (operation) => {
-    if (open) throw new Error('nested storage transaction')
+    if (open) { throw new Error('nested storage transaction') }
     open = true
     db.exec('BEGIN')
     try {

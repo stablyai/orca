@@ -39,7 +39,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('base64url')
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   const end = Date.now() + ms
   while (Date.now() < end) {
-    if (cond()) return true
+    if (cond()) { return true }
     await sleep(25)
   }
   return cond()
@@ -106,7 +106,7 @@ function phone(relayHostId: string, credential: string) {
   const state = { hello: null as Record<string, unknown> | null, closed: null as number | null, reason: '' }
   ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
   ws.on('message', (raw) => {
-    if (state.hello === null) state.hello = JSON.parse(raw.toString())
+    if (state.hello === null) { state.hello = JSON.parse(raw.toString()) }
   })
   ws.on('close', (code, reason) => {
     state.closed = code
@@ -180,9 +180,9 @@ async function main(): Promise<void> {
   try {
     for (let i = 0; ; i++) {
       try {
-        if ((await fetch(`${ORIGIN}/health`)).ok) break
+        if ((await fetch(`${ORIGIN}/health`)).ok) { break }
       } catch {}
-      if (i > 120) throw new Error(`wrangler dev did not start:\n${devLog}`)
+      if (i > 120) { throw new Error(`wrangler dev did not start:\n${devLog}`) }
       await sleep(500)
     }
     await run(host, privateKey, seat, () => jwksHits)
@@ -201,7 +201,7 @@ async function main(): Promise<void> {
   }
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) { process.exitCode = 1 }
 }
 
 async function run(
@@ -237,7 +237,7 @@ async function run(
   // E2: invite-create through the shipped client's strict parser.
   const invite = await main.client.createInvite('device-a').catch((e: Error) => e)
   record('E2 invite-create returns a strict invite-created', !(invite instanceof Error) && typeof invite.inviteToken === 'string', invite instanceof Error ? invite.message : `expiresIn=${Math.round((invite.expiresAt - Date.now()) / 1000)}s max=${invite.maxAttempts}`)
-  if (invite instanceof Error) return
+  if (invite instanceof Error) { return }
 
   // E2: phone connects with the invite; shipped phone parser accepts relay-hello(invite).
   const invitePhone = await phoneOutcome(host.relayHostId, invite.inviteToken)

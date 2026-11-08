@@ -9,7 +9,7 @@ it('object store schema matches the relay schema', async () => {
   const expected = await relayObjectStoreSchema()
   if (process.env.UPDATE_OBJECT_STORE_SCHEMA === '1') {
     const body = `// GENERATED from the relay's SQLite schema (sqlite_master) by test/object-store-schema.test.ts.\n// Do not edit; regenerate with UPDATE_OBJECT_STORE_SCHEMA=1.\nexport const OBJECT_STORE_SCHEMA: readonly string[] = ${JSON.stringify(expected, null, 2)}\n`
-    if (readFileSync(FILE, 'utf8') !== body) writeFileSync(FILE, body)
+    if (readFileSync(FILE, 'utf8') !== body) { writeFileSync(FILE, body) }
     return
   }
   expect([...OBJECT_STORE_SCHEMA]).toEqual(expected)
@@ -23,7 +23,7 @@ it('object tables change only with a schema version bump', async () => {
   const { OBJECT_DDL, OBJECT_SCHEMA_VERSION, MIGRATIONS } = await import('../src/object-store')
   const ddlSha256 = createHash('sha256').update(JSON.stringify(OBJECT_DDL)).digest('hex')
   expect({ version: OBJECT_SCHEMA_VERSION, ddlSha256 }).toEqual(PINNED)
-  for (let v = 2; v <= OBJECT_SCHEMA_VERSION; v++) expect(MIGRATIONS[v], `migration to v${v}`).toBeDefined()
+  for (let v = 2; v <= OBJECT_SCHEMA_VERSION; v++) { expect(MIGRATIONS[v], `migration to v${v}`).toBeDefined() }
 })
 
 it('stamps fresh objects, keeps pre-version ones, refuses objects newer than the code', async () => {
@@ -38,7 +38,7 @@ it('stamps fresh objects, keeps pre-version ones, refuses objects newer than the
   expect(fresh.exec("SELECT count(*) AS n FROM sqlite_master WHERE name = 'edge_assignment'").toArray()[0]?.n).toBe(1)
   // An object from before versioning: its rows survive.
   const legacy = nodeObjectSql(new DatabaseSync(':memory:'))
-  for (const statement of OBJECT_STORE_SCHEMA) legacy.exec(statement)
+  for (const statement of OBJECT_STORE_SCHEMA) { legacy.exec(statement) }
   legacy.exec("CREATE TABLE edge_assignment (id INTEGER PRIMARY KEY CHECK (id = 1), user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL, cell_id TEXT NOT NULL, assignment_epoch INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
   legacy.exec("INSERT INTO edge_assignment VALUES (1, 'u', 'h', 'edge', 3, 1)")
   openSchema(legacy)

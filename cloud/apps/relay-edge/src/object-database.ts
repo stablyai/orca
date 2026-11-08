@@ -8,7 +8,7 @@ import type { RelayDatabase, RelayLockOptions, SqlRow } from '../../relay/src/da
 import { OBJECT_STORE_SCHEMA } from './object-store-schema.generated'
 
 // The subset of SqlStorage this needs (a node:sqlite fake implements it in tests).
-export interface ObjectSql {
+export type ObjectSql = {
   exec(sql: string, ...params: unknown[]): { toArray(): Record<string, unknown>[] }
 }
 export type RunTransaction = <T>(operation: () => Promise<T>) => Promise<T>
@@ -28,13 +28,13 @@ export class ObjectSqliteDatabase implements RelayDatabase {
 
   // Idempotent: CREATE ... IF NOT EXISTS.
   applySchema(): void {
-    for (const statement of OBJECT_STORE_SCHEMA) this.sql.exec(statement)
+    for (const statement of OBJECT_STORE_SCHEMA) { this.sql.exec(statement) }
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const bound = params.map((value) => (value === undefined ? null : typeof value === 'boolean' ? Number(value) : value))
     const rows = this.sql.exec(sql, ...bound).toArray()
-    if (returnsRows(sql)) return rows as SqlRow[]
+    if (returnsRows(sql)) { return rows as SqlRow[] }
     const changes = Number(this.sql.exec('SELECT changes() AS c').toArray()[0]?.c ?? 0)
     return [{ changes }]
   }
@@ -45,7 +45,7 @@ export class ObjectSqliteDatabase implements RelayDatabase {
   }
 
   async transaction<T>(operation: (transaction: RelayDatabase) => Promise<T>): Promise<T> {
-    if (this.inTransaction) return operation(this)
+    if (this.inTransaction) { return operation(this) }
     return this.runTransaction(async () => {
       this.inTransaction = true
       try {

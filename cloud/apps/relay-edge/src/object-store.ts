@@ -87,7 +87,7 @@ export class ObjectStore implements AssignmentSource {
 
   assignment(): StoredAssignment | null {
     const row = this.sql.exec('SELECT user_id, relay_host_id, cell_id, assignment_epoch FROM edge_assignment WHERE id = 1').toArray()[0]
-    if (!row) return null
+    if (!row) { return null }
     return {
       userId: String(row.user_id),
       relayHostId: String(row.relay_host_id),
@@ -103,7 +103,7 @@ export class ObjectStore implements AssignmentSource {
 
   async verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean> {
     const a = this.assignment()
-    if (this.frozen()) return false
+    if (this.frozen()) { return false }
     return a !== null && a.userId === userId && a.relayHostId === relayHostId && a.cellId === this.cellId && a.assignmentEpoch === assignmentEpoch
   }
 
@@ -118,8 +118,8 @@ export class ObjectStore implements AssignmentSource {
   async applyAssignment(body: AssignBody, now = Date.now()): Promise<AssignResult> {
     return this.runTransaction(async () => {
       const current = this.assignment()
-      if (current && current.relayHostId !== body.relayHostId) throw new Error('edge_assignment_host_mismatch')
-      if (current && body.assignmentEpoch < current.assignmentEpoch) return { outcome: 'stale', assignmentEpoch: current.assignmentEpoch }
+      if (current && current.relayHostId !== body.relayHostId) { throw new Error('edge_assignment_host_mismatch') }
+      if (current && body.assignmentEpoch < current.assignmentEpoch) { return { outcome: 'stale', assignmentEpoch: current.assignmentEpoch } }
       if (current && body.assignmentEpoch === current.assignmentEpoch) {
         // A retried push. Same epoch must mean the same placement.
         if (current.cellId !== body.cellId || current.userId !== body.userId) {
@@ -127,7 +127,7 @@ export class ObjectStore implements AssignmentSource {
         }
         // The move's first push may have landed without the director committing; its retry
         // carries the snapshot again. The director never re-pushes once the host is live here.
-        if (body.cellId === this.cellId && body.devices) this.replaceHostData(body.devices)
+        if (body.cellId === this.cellId && body.devices) { this.replaceHostData(body.devices) }
         this.sql.exec('DELETE FROM edge_move')
         return { outcome: 'unchanged', assignmentEpoch: current.assignmentEpoch }
       }
@@ -142,7 +142,7 @@ export class ObjectStore implements AssignmentSource {
         body.assignmentEpoch,
         now
       )
-      if (body.cellId === this.cellId && body.devices) this.replaceHostData(body.devices)
+      if (body.cellId === this.cellId && body.devices) { this.replaceHostData(body.devices) }
       this.sql.exec('DELETE FROM edge_move')
       return { outcome: 'applied', assignmentEpoch: body.assignmentEpoch }
     })
@@ -159,7 +159,7 @@ export class ObjectStore implements AssignmentSource {
   }
 
   private replaceHostData(devices: DeviceRow[]): void {
-    for (const table of HOST_DATA_TABLES) this.sql.exec(`DELETE FROM ${table}`)
+    for (const table of HOST_DATA_TABLES) { this.sql.exec(`DELETE FROM ${table}`) }
     const marks = DEVICE_COLUMNS.map(() => '?').join(', ')
     for (const device of devices) {
       this.sql.exec(`INSERT INTO relay_devices (${DEVICE_COLUMNS.join(', ')}) VALUES (${marks})`, ...DEVICE_COLUMNS.map((c) => device[c]))
@@ -173,7 +173,7 @@ export class ObjectStore implements AssignmentSource {
       .toArray()
       .map((row) => {
         const out: Record<string, unknown> = {}
-        for (const c of DEVICE_COLUMNS) out[c] = row[c] === null || typeof row[c] === 'string' ? row[c] : Number(row[c])
+        for (const c of DEVICE_COLUMNS) { out[c] = row[c] === null || typeof row[c] === 'string' ? row[c] : Number(row[c]) }
         return out as DeviceRow
       })
   }
@@ -193,15 +193,15 @@ export class ObjectStore implements AssignmentSource {
 export function openSchema(sql: ObjectSql): void {
   sql.exec(META_DDL)
   const stored = Number(sql.exec('SELECT schema_version FROM edge_meta WHERE id = 1').toArray()[0]?.schema_version ?? 0)
-  if (stored === OBJECT_SCHEMA_VERSION) return
-  if (stored > OBJECT_SCHEMA_VERSION) throw new Error('edge_object_schema_newer')
+  if (stored === OBJECT_SCHEMA_VERSION) { return }
+  if (stored > OBJECT_SCHEMA_VERSION) { throw new Error('edge_object_schema_newer') }
   if (stored === 0) {
-    for (const statement of OBJECT_DDL) sql.exec(statement)
+    for (const statement of OBJECT_DDL) { sql.exec(statement) }
   } else {
     for (let v = stored + 1; v <= OBJECT_SCHEMA_VERSION; v++) {
       const step = MIGRATIONS[v]
-      if (!step) throw new Error(`edge_object_schema_no_migration_${v}`)
-      for (const statement of step) sql.exec(statement)
+      if (!step) { throw new Error(`edge_object_schema_no_migration_${v}`) }
+      for (const statement of step) { sql.exec(statement) }
     }
   }
   sql.exec('INSERT INTO edge_meta (id, schema_version) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET schema_version = excluded.schema_version', OBJECT_SCHEMA_VERSION)

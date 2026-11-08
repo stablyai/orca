@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one local harness that starts wrangler dev once and runs every check in order against it. */
 // Local de-risk harness: starts `wrangler dev`, then drives the SHIPPED desktop relay client code
 // and the shipped phone protocol parsers against the edge Worker. Local keys only.
 import { spawn, execSync, type ChildProcess } from 'node:child_process'
@@ -8,6 +9,7 @@ import { join } from 'node:path'
 import { SignJWT, exportJWK, generateKeyPair } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
+import type { Socket } from 'node:net'
 import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
 import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
 import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
@@ -77,9 +79,9 @@ async function main(): Promise<void> {
   try {
     for (let i = 0; ; i++) {
       try {
-        if ((await fetch(`${ORIGIN}/health`)).ok) break
+        if ((await fetch(`${ORIGIN}/health`)).ok) { break }
       } catch {}
-      if (i > 120) throw new Error(`wrangler dev did not start:\n${devLog}`)
+      if (i > 120) { throw new Error(`wrangler dev did not start:\n${devLog}`) }
       await sleep(500)
     }
     await runTests({ jwt, keypair, identity, relayHostId, phoneToken }, () => devLog)
@@ -90,7 +92,7 @@ async function main(): Promise<void> {
   }
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) { process.exitCode = 1 }
 }
 
 type Ctx = {
@@ -106,7 +108,7 @@ function makeControl(
   cellUrl: string,
   extra: { previousGeneration?: number; controlResumeSecret?: string } = {}
 ) {
-  const events = { pings: 0, closes: [] as number[], opens: [] as any[] }
+  const events = { pings: 0, closes: [] as number[], opens: [] as unknown[] }
   let transport: CloudRelayTransport | null = null
   const client = new RelayControlClient({
     cellUrl,
@@ -134,7 +136,7 @@ function makeControl(
         maxPayload: 64 * 1024
       })
       ws.on('message', (raw, bin) => {
-        if (!bin && JSON.parse(raw.toString()).type === 'ping') events.pings++
+        if (!bin && JSON.parse(raw.toString()).type === 'ping') { events.pings++ }
       })
       return ws
     }
@@ -197,7 +199,7 @@ function openPhone(ctx: Ctx, origin = ORIGIN) {
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   const end = Date.now() + ms
   while (Date.now() < end) {
-    if (cond()) return true
+    if (cond()) { return true }
     await sleep(20)
   }
   return cond()
@@ -224,7 +226,7 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
   const ackOk = !(ack instanceof Error) && ack.generation === 1
   record('R5/R11 shipped desktop control client: hello, box challenge, HMAC proof, strict ack', ackOk,
     ack instanceof Error ? ack.message : `generation=${ack.generation}`)
-  if (ack instanceof Error) return
+  if (ack instanceof Error) { return }
 
   // Origin binding: the edge echoes the dialed origin, so another hostname also proves.
   {
@@ -251,7 +253,7 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
   const conn = main.events.opens[0]
   record('R5 conn-open strict parse + connId routes data socket to the object',
     Boolean(conn) && conn.connId.startsWith(`${ctx.relayHostId}.`), conn ? `connId=${conn.connId}` : 'no conn-open')
-  record('R5 shipped phone parser accepts relay-hello', helloOk && parsedHello.success && (phone.hello as any).ok === true,
+  record('R5 shipped phone parser accepts relay-hello', helloOk && parsedHello.success && (phone.hello as { ok?: unknown } | null)?.ok === true,
     JSON.stringify(phone.hello))
 
   // Splice: small text + binary echo, type preserved.
@@ -309,21 +311,21 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     await waitFor(() => healthy.hello !== null, 5000)
     const slow = openPhone(ctx)
     await waitFor(() => slow.hello !== null, 5000)
-    const tcp = (slow.ws as any)._socket as import('node:net').Socket
+    const tcp = (slow.ws as unknown as { _socket: Socket })._socket
     tcp.pause()
     const before = workerdRssMb()
     const pingsBefore = main.events.pings
-    const hostSocket = [...((transport as any).socketsByConnectionId as Map<string, WebSocket>).values()].at(-1)!
+    const hostSocket = [...(transport as unknown as { socketsByConnectionId: Map<string, WebSocket> }).socketsByConnectionId.values()].at(-1)!
     const frame = Buffer.alloc(1024 * 1024, 9)
     let sent = 0
     let healthyEchoes = 0
     for (; sent < 256; sent++) {
-      if (hostSocket.readyState !== WebSocket.OPEN) break
+      if (hostSocket.readyState !== WebSocket.OPEN) { break }
       hostSocket.send(frame, { binary: true })
       if (sent % 16 === 0) {
         const tag = `healthy-${sent}`
         healthy.ws.send(tag)
-        if (await waitFor(() => healthy.inbox.some((m) => m.data === tag), 3000)) healthyEchoes++
+        if (await waitFor(() => healthy.inbox.some((m) => m.data === tag), 3000)) { healthyEchoes++ }
       }
     }
     await sleep(PING_MS * 2 + 500)
@@ -349,7 +351,7 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     {
       const reader = openPhone(ctx)
       await waitFor(() => reader.hello !== null, 5000)
-      const hs = [...((transport as any).socketsByConnectionId as Map<string, WebSocket>).values()].at(-1)!
+      const hs = [...(transport as unknown as { socketsByConnectionId: Map<string, WebSocket> }).socketsByConnectionId.values()].at(-1)!
       for (let i = 0; i < 48 && hs.readyState === WebSocket.OPEN; i++) {
         hs.send(frame, { binary: true })
         await sleep(120)
@@ -377,13 +379,13 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
         extra.push(openPhone(ctx))
         await waitFor(() => extra.at(-1)!.hello !== null || extra.at(-1)!.closed !== null, 5000)
       }
-      const okCount = extra.filter((p) => (p.hello as any)?.ok === true).length
+      const okCount = extra.filter((p) => (p.hello as { ok?: unknown } | null)?.ok === true).length
       const over = openPhone(ctx)
       await waitFor(() => over.closed !== null, 5000)
       record('R4 splice object reset drops only that phone; control + other splice live; budget reclaimed + enforced',
         victimDropped && healthyOk && main.client.isLive() && okCount === 6 && over.closed === 4429,
         `victimClose=${victim.closed} healthyEcho=${healthyOk} control=${main.client.isLive()} newPhonesOk=${okCount}/6 ninthClose=${over.closed}`)
-      for (const p of extra) p.ws.close()
+      for (const p of extra) { p.ws.close() }
     }
     healthy.ws.close()
     await sleep(500)
@@ -398,11 +400,11 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     const ids = main.events.opens.slice(opensBefore).map((o: { connId: string }) => o.connId)
     const slotOf = (id: string) => id.match(new RegExp(`^${ctx.relayHostId}\\.([0-7])\\.[0-9a-f-]{36}$`))?.[1]
     const slots = ids.map(slotOf)
-    const ok = batch.every((p) => (p.hello as any)?.ok === true)
+    const ok = batch.every((p) => (p.hello as { ok?: unknown } | null)?.ok === true)
     record('Pool: concurrent phones land in distinct pooled slots (connId <host>.<slot>.<uuid>)',
       ok && ids.length === 4 && slots.every((s) => s !== undefined) && new Set(slots).size === 4,
-      `slots=${slots.join(',')} hellos=${batch.map((p) => (p.hello as any)?.ok).join(',')}`)
-    for (const p of batch) p.ws.close()
+      `slots=${slots.join(',')} hellos=${batch.map((p) => (p.hello as { ok?: unknown } | null)?.ok).join(',')}`)
+    for (const p of batch) { p.ws.close() }
     await sleep(500)
   }
 

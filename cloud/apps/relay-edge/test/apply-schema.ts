@@ -5,7 +5,7 @@ import pg from 'pg'
 import { relayPostgresSchemaStatements } from '../../relay/src/database/database'
 
 const url = process.argv[2]
-if (!url) throw new Error('usage: apply-schema.ts <postgres-url>')
+if (!url) { throw new Error('usage: apply-schema.ts <postgres-url>') }
 const client = new pg.Client({ connectionString: url })
 await client.connect()
 let applied = 0
@@ -17,7 +17,7 @@ for (const statement of relayPostgresSchemaStatements()) {
     // Migrations re-add objects the base schema already created; production skips them by catalog
     // pre-check, a fresh test database just ignores the duplicates.
     const code = String((error as { code?: unknown }).code)
-    if (!['42710', '42P07', '42701', '42P16'].includes(code)) throw error
+    if (!['42710', '42P07', '42701', '42P16'].includes(code)) { throw error }
   }
 }
 await client.end()

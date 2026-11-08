@@ -10,24 +10,24 @@ import { metric, requestPlace } from './metrics'
 // keyed by their /64, which one subscriber usually holds whole.
 export function sourceKey(request: Request): string {
   const ip = request.headers.get('cf-connecting-ip')?.trim() ?? ''
-  if (!ip.includes(':')) return ip || 'unknown'
+  if (!ip.includes(':')) { return ip || 'unknown' }
   const [head, tail = ''] = ip.split('::')
   const left = head ? head.split(':') : []
   const right = ip.includes('::') && tail ? tail.split(':') : []
   const groups = ip.includes('::') ? [...left, ...new Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left
-  return groups
+  return `${groups
     .slice(0, 4)
     .map((g) => g.toLowerCase().replace(/^0+(?=.)/, ''))
-    .join(':') + '::/64'
+    .join(':')  }::/64`
 }
 
 // Counted per source per colo by the Rate Limiting binding. Fails open: a limiter outage must not
 // refuse live users. Without a binding (local spike runs) nothing is limited.
 export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data'): Promise<boolean> {
-  if (!env.PREAUTH_LIMITER) return true
+  if (!env.PREAUTH_LIMITER) { return true }
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request)}` })
-    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request))
+    if (!success) { metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request)) }
     return success
   } catch {
     return true

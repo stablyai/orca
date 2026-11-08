@@ -7,12 +7,12 @@ import { jwksOf, loadOrCreateKeys, resumeHashesOf } from './lib'
 
 const keys = await loadOrCreateKeys()
 const cmd = process.argv[2] ?? 'jwks'
-if (cmd === 'jwks') process.stdout.write(jwksOf(keys))
-else if (cmd === 'resume-hashes') process.stdout.write(resumeHashesOf(keys))
+if (cmd === 'jwks') { process.stdout.write(jwksOf(keys)) }
+else if (cmd === 'resume-hashes') { process.stdout.write(resumeHashesOf(keys)) }
 else if (cmd === 'dev-vars') {
   writeFileSync(
     new URL('../.dev.vars', import.meta.url),
-    [`RELAY_JWKS='${jwksOf(keys)}'`, `SPIKE_RESUME_TOKEN_HASHES=${resumeHashesOf(keys)}`, 'SPIKE_ADMIN=1'].join('\n') + '\n'
+    `${[`RELAY_JWKS='${jwksOf(keys)}'`, `SPIKE_RESUME_TOKEN_HASHES=${resumeHashesOf(keys)}`, 'SPIKE_ADMIN=1'].join('\n')  }\n`
   )
   console.log('wrote .dev.vars')
 } else {

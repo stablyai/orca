@@ -27,7 +27,7 @@ export type MetricEvent =
 const HEARTBEAT_SAMPLE = 0.1
 
 export function metric(env: Env, event: MetricEvent, value = 1, label = '', extra: number[] = [], reason = '', place = ''): void {
-  if ((event === 'alarm_lag_ms' || event === 'pong_rtt_ms') && Math.random() >= HEARTBEAT_SAMPLE) return
+  if ((event === 'alarm_lag_ms' || event === 'pong_rtt_ms') && Math.random() >= HEARTBEAT_SAMPLE) { return }
   try {
     env.METRICS?.writeDataPoint({
       indexes: [event],

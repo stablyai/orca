@@ -26,7 +26,7 @@ export async function relayObjectStoreSchema(): Promise<string[]> {
       [...OBJECT_STORE_TABLES]
     )
     const created = new Set(rows.filter((r) => r.type === 'table').map((r) => r.name))
-    for (const table of OBJECT_STORE_TABLES) if (!created.has(table)) throw new Error(`object_store_schema_missing_${table}`)
+    for (const table of OBJECT_STORE_TABLES) { if (!created.has(table)) { throw new Error(`object_store_schema_missing_${table}`) } }
     return rows.map((r) =>
       String(r.sql)
         .replace(/^CREATE TABLE (?!IF NOT EXISTS)/i, 'CREATE TABLE IF NOT EXISTS ')

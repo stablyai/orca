@@ -27,7 +27,7 @@ function returnsRows(sql: string): boolean {
 }
 
 function lockedStatement(sql: string, options: RelayLockOptions): string {
-  if (options.lockClauseInStatement) return sql
+  if (options.lockClauseInStatement) { return sql }
   return `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`
 }
 
@@ -47,7 +47,7 @@ const TRANSIENT_STATES = new Set([
 ])
 
 export function isEdgeDatabaseTransientError(error: unknown): boolean {
-  if (error instanceof EdgeDatabaseError) return true
+  if (error instanceof EdgeDatabaseError) { return true }
   const code = sqlState(error)
   if (TRANSIENT_STATES.has(code) || code === 'ECONNRESET' || code === 'EPIPE' || code === 'ECONNREFUSED') {
     return true
@@ -80,7 +80,7 @@ class EdgeTransaction implements RelayDatabase {
     try {
       return await run(this.client, lockedStatement(sql, options), params)
     } catch (error) {
-      if (options.failIfUnavailable && sqlState(error) === '55P03') throw new Error('database_lock_unavailable')
+      if (options.failIfUnavailable && sqlState(error) === '55P03') { throw new Error('database_lock_unavailable') }
       throw error
     }
   }
@@ -145,7 +145,7 @@ export class EdgePostgresDatabase implements RelayDatabase {
     try {
       return await this.query(lockedStatement(sql, options), params)
     } catch (error) {
-      if (options.failIfUnavailable && sqlState(error) === '55P03') throw new Error('database_lock_unavailable')
+      if (options.failIfUnavailable && sqlState(error) === '55P03') { throw new Error('database_lock_unavailable') }
       throw error
     }
   }
@@ -168,8 +168,8 @@ export class EdgePostgresDatabase implements RelayDatabase {
         await client.query('COMMIT')
         return result
       } catch (error) {
-        if (begun) await client.query('ROLLBACK').catch(() => {})
-        if (!retryableTransactionError(error) || attempt >= TRANSACTION_ATTEMPTS) throw error
+        if (begun) { await client.query('ROLLBACK').catch(() => {}) }
+        if (!retryableTransactionError(error) || attempt >= TRANSACTION_ATTEMPTS) { throw error }
       } finally {
         await client.end().catch(() => {})
       }

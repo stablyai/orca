@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one end-to-end round trip (director, cell, edge, shipped clients); each step depends on the previous one's state. */
 // Phase 2 round trip with the real pieces: the director and a GCE-style cell (the relay app from
 // the director branch, as child processes on one Postgres), the deployed phase-2 edge Worker, and
 // the SHIPPED desktop control client and phone parser. A host pairs a phone on the cell, moves to
@@ -47,7 +48,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('base64url')
 const b64url = (b: Uint8Array) => Buffer.from(b).toString('base64url')
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   const end = Date.now() + ms
-  while (Date.now() < end && !cond()) await sleep(25)
+  while (Date.now() < end && !cond()) { await sleep(25) }
   return cond()
 }
 
@@ -94,7 +95,7 @@ async function heartbeat(): Promise<void> {
     })
   })
     .then(async (r) => {
-      if (!r.ok) console.log(`heartbeat ${r.status} ${await r.text()}`)
+      if (!r.ok) { console.log(`heartbeat ${r.status} ${await r.text()}`) }
     })
     .catch((e: Error) => console.log(`heartbeat error ${e.message}`))
 }
@@ -129,13 +130,13 @@ function relay(role: 'director' | 'cell', extra: Record<string, string> = {}): {
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
-  for (const stream of [child.stdout, child.stderr]) stream?.on('data', (d) => log.push(String(d)))
+  for (const stream of [child.stdout, child.stderr]) { stream?.on('data', (d) => log.push(String(d))) }
   children.push(child)
   return { child, log }
 }
 
 async function stop(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null) return
+  if (child.exitCode !== null) { return }
   child.kill('SIGKILL')
   await new Promise((r) => child.once('exit', r))
 }
@@ -144,7 +145,7 @@ async function ready(url: string, log: string[], marker?: string): Promise<void>
   const end = Date.now() + 30_000
   while (Date.now() < end) {
     const up = await fetch(`${url}/health`).then((r) => r.ok, () => false)
-    if (up && (!marker || log.join('').includes(marker))) return
+    if (up && (!marker || log.join('').includes(marker))) { return }
     await sleep(200)
   }
   throw new Error(`not ready: ${url}\n${log.join('').slice(-2000)}`)
@@ -217,7 +218,7 @@ async function phone(cellUrl: string, credential: string) {
   const state = { hello: null as Record<string, unknown> | null, closed: null as number | null }
   ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
   ws.on('message', (raw) => {
-    if (state.hello === null) state.hello = JSON.parse(raw.toString())
+    if (state.hello === null) { state.hello = JSON.parse(raw.toString()) }
   })
   ws.on('close', (code) => (state.closed = code))
   ws.on('error', () => {})
@@ -271,7 +272,7 @@ async function main(): Promise<void> {
     // 1. On the GCE cell: pair phone A.
     const first = await assign()
     const e1 = Number(first.body.assignmentEpoch)
-    if (first.status !== 200) console.log(JSON.stringify(first.body), d.log.join('').slice(-3000))
+    if (first.status !== 200) { console.log(JSON.stringify(first.body), d.log.join('').slice(-3000)) }
     record('1 director places the host on the cell', first.status === 200 && first.body.cellUrl === CELL, JSON.stringify({ status: first.status, cellUrl: first.body.cellUrl, epoch: e1 }))
     const onCell = await online(CELL, e1)
     const tokenA = await pair(onCell, CELL, 'phone-a')
@@ -348,17 +349,17 @@ async function main(): Promise<void> {
   } finally {
     clearInterval(beat)
     await db.end().catch(() => undefined)
-    for (const child of children) await stop(child)
+    for (const child of children) { await stop(child) }
     jwks.close()
   }
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) { process.exitCode = 1 }
 }
 
 main().catch((error) => {
   console.error(error)
   process.exitCode = 1
-  for (const child of children) child.kill('SIGKILL')
+  for (const child of children) { child.kill('SIGKILL') }
   process.exit(1)
 })

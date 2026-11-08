@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the per-host Durable Object is one state machine: control lifecycle, phone admission, splice slots, alarms and the signed admin calls all read and write the same socket attachments and storage, so splitting it would spread each invariant across files. Pure helpers live in edge-backend, object-store and preauth. */
 // One Durable Object per relay host. Owns the host control socket, the session (generation,
 // resume secret, orphan grace), the host's connection bookkeeping and its credential commands.
 // Phone connections and their host data sockets live in a pool of SpliceRelay objects (one per
@@ -127,7 +128,7 @@ export class HostRelay extends DurableObject<Env> {
     const result = await this.store.applyAssignment(body)
     if (result.outcome === 'applied' && body.cellId !== this.config.cellId) {
       // Moved away: like an old cell, send the desktop and its phones back to the director.
-      for (const ws of this.ctx.getWebSockets('control')) this.close(ws, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
+      for (const ws of this.ctx.getWebSockets('control')) { this.close(ws, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved') }
       await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
     }
     // Arms the daily sweep for objects that have not been woken since it existed.
@@ -140,7 +141,7 @@ export class HostRelay extends DurableObject<Env> {
   async adminExport(): Promise<
     { outcome: 'busy' } | { outcome: 'exported'; assignment: StoredAssignment | null; devices: DeviceRow[] }
   > {
-    if (this.ctx.getWebSockets('control').length > 0) return { outcome: 'busy' }
+    if (this.ctx.getWebSockets('control').length > 0) { return { outcome: 'busy' } }
     const devices = this.store.freezeForExport()
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
     await this.reschedule()
@@ -151,8 +152,8 @@ export class HostRelay extends DurableObject<Env> {
   async adminErase(userId: string): Promise<{ outcome: 'erased' | 'busy' | 'mismatch' }> {
     const assignment = this.store.assignment()
     // Another account now holds this machine's object; its move on wiped the earlier account's data.
-    if (assignment && assignment.userId !== userId) return { outcome: 'mismatch' }
-    if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) return { outcome: 'busy' }
+    if (assignment && assignment.userId !== userId) { return { outcome: 'mismatch' } }
+    if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) { return { outcome: 'busy' } }
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
     this.storeCache = null
@@ -174,7 +175,7 @@ export class HostRelay extends DurableObject<Env> {
         conns: Object.keys(await this.conns()).length
       })
     }
-    if (kind !== 'control') return new Response(null, { status: 404 })
+    if (kind !== 'control') { return new Response(null, { status: 404 }) }
     const origin = request.headers.get('x-edge-origin') ?? ''
     const claims = JSON.parse(request.headers.get('x-edge-claims') ?? 'null') as EdgeClaims
     const pair = new WebSocketPair()
@@ -195,7 +196,7 @@ export class HostRelay extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const a = this.attachment(ws)
-    if (!a) return
+    if (!a) { return }
     return this.onControl(ws, a, message)
   }
 
@@ -215,7 +216,7 @@ export class HostRelay extends DurableObject<Env> {
       return
     }
     if (typeof message !== 'string') {
-      if (a.phase !== 'active') this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'binary hello')
+      if (a.phase !== 'active') { this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'binary hello') }
       return
     }
     let parsed: Record<string, unknown>
@@ -226,27 +227,27 @@ export class HostRelay extends DurableObject<Env> {
       return
     }
     const { type, ...body } = parsed
-    if (a.phase === 'hello') return this.onHostHello(ws, a, type, body)
+    if (a.phase === 'hello') { return this.onHostHello(ws, a, type, body) }
     // The client waits for the challenge; nothing else is valid until then.
-    if (a.phase === 'checking') return
-    if (a.phase === 'proof') return this.onHostProof(ws, a, type, body)
+    if (a.phase === 'checking') { return }
+    if (a.phase === 'proof') { return this.onHostProof(ws, a, type, body) }
     if (type === 'pong') {
       a.lastPongAt = Date.now()
-      if (typeof body.t === 'number') metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t, '', [], '', a.place)
+      if (typeof body.t === 'number') { metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t, '', [], '', a.place) }
       this.attach(ws, a)
       return
     }
-    if (type === 'auth-refresh') return this.onAuthRefresh(ws, body)
+    if (type === 'auth-refresh') { return this.onAuthRefresh(ws, body) }
     return this.onCommand(ws, a, type, body)
   }
 
   private async onAuthRefresh(ws: WebSocket, body: Record<string, unknown>): Promise<void> {
     const parsed = AuthRefreshSchema.safeParse(body)
-    if (!parsed.success) return
+    if (!parsed.success) { return }
     const claims = await verifyRelayJwt(this.env, parsed.data.relayJwt)
     // Re-read after the await: the attachment may have moved on (pongs, pings) meanwhile.
     const current = this.attachment(ws)
-    if (!current || current.k !== 'control') return
+    if (!current || current.k !== 'control') { return }
     const same =
       claims &&
       claims.userId === current.claims.userId &&
@@ -257,7 +258,7 @@ export class HostRelay extends DurableObject<Env> {
       this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'refresh identity changed')
       return
     }
-    if (claims.exp > current.claims.exp) current.claims = claims
+    if (claims.exp > current.claims.exp) { current.claims = claims }
     this.attach(ws, current)
     await this.reschedule()
   }
@@ -266,12 +267,12 @@ export class HostRelay extends DurableObject<Env> {
   // (host-session-registry acceptControlCommandUnfenced), through the shared credential store.
   // Edge hosts write no activity leases (design: R10); bases and token expiry cover erasure.
   private async onCommand(ws: WebSocket, a: ControlAttachment, type: unknown, body: Record<string, unknown>): Promise<void> {
-    if (typeof type !== 'string') return
+    if (typeof type !== 'string') { return }
     const identity = { userId: a.claims.userId, relayHostId: a.claims.relayHostId }
     const generation = a.generation ?? 0
     try {
       if (type === 'invite-create') {
-        if (!this.authActive(a)) throw new Error('authorization_expired')
+        if (!this.authActive(a)) { throw new Error('authorization_expired') }
         const request = InviteCreateSchema.parse(body)
         const invite = await this.backend.createInvite(identity, request.relayDeviceId)
         this.send(ws, { type: 'invite-created', reqId: request.reqId, ...invite })
@@ -361,7 +362,7 @@ export class HostRelay extends DurableObject<Env> {
       return
     }
     const current = this.attachment(ws)
-    if (!current || current.k !== 'control' || current.phase !== 'checking') return
+    if (!current || current.k !== 'control' || current.phase !== 'checking') { return }
     const rebind = await this.canRebind(ws, current.claims, hello.data.previousGeneration, hello.data.controlResumeSecret)
     const issuedAt = Date.now()
     const expiresAt = issuedAt + 10_000
@@ -415,9 +416,9 @@ export class HostRelay extends DurableObject<Env> {
     previousGeneration: number | undefined,
     secret: string | undefined
   ): Promise<boolean> {
-    if (secret === undefined) return false
+    if (secret === undefined) { return false }
     const stored = await this.ctx.storage.get<Session>('session')
-    if (!stored) return false
+    if (!stored) { return false }
     const now = Date.now()
     const withinGrace =
       this.otherActiveControls(ws).length > 0 ||
@@ -463,11 +464,11 @@ export class HostRelay extends DurableObject<Env> {
     if (rebind) {
       generation = stored!.generation
       resumeSecret = a.hello!.controlResumeSecret!
-      for (const old of otherControls) this.close(old, RELAY_CLOSE_CODE.PEER_DROPPED, 'control rebound')
+      for (const old of otherControls) { this.close(old, RELAY_CLOSE_CODE.PEER_DROPPED, 'control rebound') }
     } else {
       generation = (stored?.generation ?? 0) + 1
       resumeSecret = b64url(nacl.randomBytes(32))
-      for (const old of otherControls) this.close(old, RELAY_CLOSE_CODE.PEER_DROPPED, 'replaced by a newer generation')
+      for (const old of otherControls) { this.close(old, RELAY_CLOSE_CODE.PEER_DROPPED, 'replaced by a newer generation') }
       await this.closeSplices(() => true, RELAY_CLOSE_CODE.PEER_DROPPED, 'host control replaced')
     }
     // A new control replaces whatever the last one said on its way out.
@@ -494,7 +495,7 @@ export class HostRelay extends DurableObject<Env> {
     const activeConnIds: string[] = []
     const pendingConns: Record<string, unknown>[] = []
     for (const [connId, c] of Object.entries(await this.conns())) {
-      if (c.phase === 'active') activeConnIds.push(connId)
+      if (c.phase === 'active') { activeConnIds.push(connId) }
       if (c.phase === 'pending' && c.connTicket && c.generation === generation) {
         pendingConns.push({
           connId,
@@ -519,7 +520,7 @@ export class HostRelay extends DurableObject<Env> {
   private activeControl(): { ws: WebSocket; a: ControlAttachment } | null {
     for (const ws of this.ctx.getWebSockets('control')) {
       const a = this.attachment(ws)
-      if (a?.k === 'control' && a.phase === 'active') return { ws, a }
+      if (a?.k === 'control' && a.phase === 'active') { return { ws, a } }
     }
     return null
   }
@@ -532,15 +533,15 @@ export class HostRelay extends DurableObject<Env> {
   // Object backend: null for a host the director has not pushed (never, or wiped since), so the
   // Worker answers the phone without this object or a splice object writing any storage.
   async allocateConnId(relayHostId: string): Promise<string | null> {
-    if (this.config.backend === 'object' && !this.pushed()) return null
+    if (this.config.backend === 'object' && !this.pushed()) { return null }
     const now = Date.now()
     this.recentPicks = this.recentPicks.filter((p) => now - p.at < 15_000)
     const load = new Array<number>(SPLICE_SLOTS).fill(0)
     for (const connId of Object.keys(await this.conns())) {
       const parsed = parseConnId(connId)
-      if (parsed) load[parsed.slot]++
+      if (parsed) { load[parsed.slot]++ }
     }
-    for (const p of this.recentPicks) load[p.slot]++
+    for (const p of this.recentPicks) { load[p.slot]++ }
     const min = Math.min(...load)
     const candidates = load.flatMap((n, slot) => (n === min ? [slot] : []))
     const slot = candidates[Math.floor(Math.random() * candidates.length)]
@@ -551,7 +552,7 @@ export class HostRelay extends DurableObject<Env> {
   // Read-only: an object nobody pushed has no tables, and this must not create them.
   private pushed(): boolean {
     const sql = this.ctx.storage.sql
-    if (sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'edge_assignment'").toArray().length === 0) return false
+    if (sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'edge_assignment'").toArray().length === 0) { return false }
     return sql.exec('SELECT 1 FROM edge_assignment WHERE id = 1').toArray().length > 0
   }
 
@@ -563,17 +564,17 @@ export class HostRelay extends DurableObject<Env> {
   // another cell, else 4404; a full host is 4429. Database failures answer 4503, never 4401.
   async authorizePhone(connId: string, credentialToken: string): Promise<AuthorizeResult> {
     const hostId = parseConnId(connId)?.relayHostId
-    if (!hostId) return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL }
+    if (!hostId) { return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL } }
     let reservation: CredentialReservation | null
     try {
       const found = await this.backend.lookupResume(hostId, credentialToken)
-      if (found.outcome === 'refused') return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL }
+      if (found.outcome === 'refused') { return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL } }
       reservation =
         found.outcome === 'resume' ? found.reservation : await this.backend.reserveCredential(hostId, credentialToken)
     } catch {
       return { ok: false, code: RELAY_CLOSE_CODE.DRAINING }
     }
-    if (!reservation) return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL }
+    if (!reservation) { return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL } }
     const control = this.activeControl()
     const seated =
       control !== null &&
@@ -595,7 +596,7 @@ export class HostRelay extends DurableObject<Env> {
     }
     const picked = parseConnId(connId)
     const pickIndex = this.recentPicks.findIndex((p) => p.slot === picked?.slot)
-    if (pickIndex >= 0) this.recentPicks.splice(pickIndex, 1)
+    if (pickIndex !== -1) { this.recentPicks.splice(pickIndex, 1) }
     const connTicket = b64url(nacl.randomBytes(32))
     const generation = control.a.generation!
     conns[connId] = { phase: 'pending', generation, connTicket, reservation }
@@ -619,7 +620,7 @@ export class HostRelay extends DurableObject<Env> {
       // As the cells: an unreadable row sends the phone to its director rather than pinning it.
       elsewhere = true
     }
-    if (elsewhere) return { ok: false, code: RELAY_CLOSE_CODE.WRONG_CELL }
+    if (elsewhere) { return { ok: false, code: RELAY_CLOSE_CODE.WRONG_CELL } }
     const session = await this.ctx.storage.get<Session>('session')
     const remembered =
       session?.closeReason && session.closeReason.expiresAt > Date.now() ? session.closeReason.reason : undefined
@@ -668,7 +669,7 @@ export class HostRelay extends DurableObject<Env> {
   async spliceClosed(connId: string): Promise<void> {
     const conns = await this.conns()
     const conn = conns[connId]
-    if (!conn) return
+    if (!conn) { return }
     delete conns[connId]
     await this.ctx.storage.put('conns', conns)
     await this.releaseConn(connId, conn)
@@ -677,8 +678,9 @@ export class HostRelay extends DurableObject<Env> {
   // Best effort, as the cells: a pending phone's invite reservation goes back (cooldown), an
   // attached one's basis is deactivated; credential cleanup on the directors covers misses.
   private async releaseConn(connId: string, conn: Conn): Promise<void> {
-    if (conn.phase === 'pending') await this.backend.failReservation(conn.reservation).catch(() => {})
-    else await this.backend.deactivateBasis(connId).catch(() => {})
+    const release =
+      conn.phase === 'pending' ? this.backend.failReservation(conn.reservation) : this.backend.deactivateBasis(connId)
+    await release.catch(() => {})
   }
 
   private async conns(): Promise<Record<string, Conn>> {
@@ -708,10 +710,10 @@ export class HostRelay extends DurableObject<Env> {
   private async closeSplices(filter: (c: Conn) => boolean, code: number, reason: string): Promise<void> {
     const conns = await this.conns()
     const ids = Object.keys(conns).filter((id) => filter(conns[id]))
-    if (ids.length === 0) return
+    if (ids.length === 0) { return }
     await Promise.all(ids.map((id) => this.splice(id).closeSplice(id, code, reason).catch(() => {})))
     const closed = ids.map((id) => [id, conns[id]] as const)
-    for (const id of ids) delete conns[id]
+    for (const id of ids) { delete conns[id] }
     await this.ctx.storage.put('conns', conns)
     await Promise.all(closed.map(([id, conn]) => this.releaseConn(id, conn)))
   }
@@ -720,10 +722,10 @@ export class HostRelay extends DurableObject<Env> {
 
   private async onSocketGone(ws: WebSocket, code: number, reason: string): Promise<void> {
     const a = this.attachment(ws)
-    if (!a) return
+    if (!a) { return }
     // During webSocketClose the closing socket is still listed; clear it first so it can't count as live.
     this.attach(ws, null)
-    if (a.k === 'control' && a.phase === 'active') metric(this.env, 'control_close', 1, String(code), [], '', a.place)
+    if (a.k === 'control' && a.phase === 'active') { metric(this.env, 'control_close', 1, String(code), [], '', a.place) }
     if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
       const session = await this.ctx.storage.get<Session>('session')
       if (session && session.generation === a.generation) {
@@ -744,7 +746,7 @@ export class HostRelay extends DurableObject<Env> {
     const now = Date.now()
     for (const ws of this.ctx.getWebSockets()) {
       const a = this.attachment(ws)
-      if (!a) continue
+      if (!a) { continue }
       if (a.k === 'control' && a.phase === 'active') {
         if (now - (a.lastPongAt ?? now) > this.config.silenceTimeoutMs) {
           this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
@@ -764,7 +766,7 @@ export class HostRelay extends DurableObject<Env> {
           continue
         }
         if (now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
-          if (a.lastPingAt) metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)), '', [], '', a.place)
+          if (a.lastPingAt) { metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)), '', [], '', a.place) }
           this.send(ws, { type: 'ping', t: now })
           a.lastPingAt = now
           this.attach(ws, a)
@@ -772,8 +774,8 @@ export class HostRelay extends DurableObject<Env> {
         continue
       }
       if (now >= a.deadline) {
-        if (a.phase === 'checking') this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable')
-        else this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, a.phase === 'proof' ? 'invalid host proof' : 'first frame timeout')
+        if (a.phase === 'checking') { this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable') }
+        else { this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, a.phase === 'proof' ? 'invalid host proof' : 'first frame timeout') }
         await this.onSocketGone(ws, 1006, '')
       }
     }
@@ -784,7 +786,7 @@ export class HostRelay extends DurableObject<Env> {
     }
     if (this.config.backend === 'object') {
       const sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)
-      if (sweepAt !== undefined && sweepAt <= now && (await this.sweep(now)) === 'wiped') return
+      if (sweepAt !== undefined && sweepAt <= now && (await this.sweep(now)) === 'wiped') { return }
     }
     await this.reschedule()
   }
@@ -814,20 +816,20 @@ export class HostRelay extends DurableObject<Env> {
     let next = NO_DEADLINE
     for (const ws of this.ctx.getWebSockets()) {
       const a = this.attachment(ws)
-      if (!a) continue
-      if (a.k === 'control' && a.phase === 'active') {
-        next = Math.min(
-          next,
-          (a.lastPingAt ?? 0) + this.config.pingIntervalMs,
-          a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs + 1,
-          (a.leaseExpiresAt ?? NO_DEADLINE - 1) + 1
-        )
-      } else {
-        next = Math.min(next, a.deadline)
-      }
+      if (!a) { continue }
+      next = Math.min(
+        next,
+        ...(a.k === 'control' && a.phase === 'active'
+          ? [
+              (a.lastPingAt ?? 0) + this.config.pingIntervalMs,
+              a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs + 1,
+              (a.leaseExpiresAt ?? NO_DEADLINE - 1) + 1
+            ]
+          : [a.deadline])
+      )
     }
     const session = await this.ctx.storage.get<Session>('session')
-    if (session?.orphanedAt != null) next = Math.min(next, session.orphanedAt + this.config.orphanGraceMs)
+    if (session?.orphanedAt != null) { next = Math.min(next, session.orphanedAt + this.config.orphanGraceMs) }
     if (this.config.backend === 'object') {
       // The sweep keeps an alarm armed on every object with storage, so idle ones still get cleaned.
       let sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)

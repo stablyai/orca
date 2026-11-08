@@ -30,7 +30,7 @@ export type ResumeLookup =
   | { outcome: 'refused' }
   | { outcome: 'resume'; reservation: CredentialReservation }
 
-export interface EdgeBackend {
+export type EdgeBackend = {
   // Hello: does the assignment row place this host on the edge at this epoch?
   verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean>
   // Missing seat: does the assignment row name another cell (4409) or this one/none (4404)?
@@ -58,7 +58,7 @@ export interface EdgeBackend {
 }
 
 // Where the hello check and the missing-seat answer read the host's assignment from.
-export interface AssignmentSource {
+export type AssignmentSource = {
   verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean>
   assignedElsewhere(userId: string, relayHostId: string): Promise<boolean>
 }
@@ -151,8 +151,8 @@ class SpikeBackend implements EdgeBackend {
     const hash = createHash('sha256').update(token).digest('base64url')
     for (const entry of (this.env.SPIKE_RESUME_TOKEN_HASHES ?? '').split(',')) {
       const [kind, relayDeviceId, expected] = entry.split(':')
-      if (!expected || expected.length !== hash.length) continue
-      if (!timingSafeEqual(Buffer.from(hash), Buffer.from(expected))) continue
+      if (!expected || expected.length !== hash.length) { continue }
+      if (!timingSafeEqual(Buffer.from(hash), Buffer.from(expected))) { continue }
       const now = Date.now()
       return {
         outcome: 'resume',
@@ -209,9 +209,9 @@ class SpikeBackend implements EdgeBackend {
 // `objectStore` is the HostRelay's own store (object backend); other backends ignore it.
 export function edgeBackend(env: Env, objectStore?: { database: RelayDatabase; assignments: AssignmentSource }): EdgeBackend {
   const config = edgeConfig(env)
-  if (config.backend === 'spike') return new SpikeBackend(env)
+  if (config.backend === 'spike') { return new SpikeBackend(env) }
   if (config.backend === 'object') {
-    if (!objectStore) throw new Error('relay_edge_object_store_missing')
+    if (!objectStore) { throw new Error('relay_edge_object_store_missing') }
     return new StoreBackend(objectStore.database, objectStore.assignments)
   }
   const database = new EdgePostgresDatabase(env.HYPERDRIVE!.connectionString, (ms, outcome) => metric(env, 'db_op', ms, outcome))
@@ -221,8 +221,8 @@ export function edgeBackend(env: Env, objectStore?: { database: RelayDatabase; a
 // Control command failures, as the cells report them (host-session-registry controlErrorCode):
 // intentional store codes and slugs pass through; anything else could carry the database URL.
 export function controlErrorCode(error: unknown): string {
-  if (error instanceof RelayStoreError) return error.code
+  if (error instanceof RelayStoreError) { return error.code }
   const message = error instanceof Error ? error.message : ''
-  if (/^[a-z0-9_]{1,64}$/.test(message) && message !== 'database_unavailable') return message
+  if (/^[a-z0-9_]{1,64}$/.test(message) && message !== 'database_unavailable') { return message }
   return isEdgeDatabaseTransientError(error) ? 'database_transient' : 'control_operation_failed'
 }

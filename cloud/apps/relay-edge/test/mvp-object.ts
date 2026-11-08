@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one end-to-end suite against a running Worker; the checks share keys, hosts and sockets in order. */
 // Phase 2 checks: the edge on the object backend (credential store on each HostRelay's own SQLite,
 // assignments pushed by the director over signed admin calls). No Postgres. Drives the SHIPPED
 // desktop control client and the shipped phone hello parser in local workerd.
@@ -41,7 +42,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('base64url')
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   const end = Date.now() + ms
   while (Date.now() < end) {
-    if (cond()) return true
+    if (cond()) { return true }
     await sleep(25)
   }
   return cond()
@@ -108,7 +109,7 @@ function phone(relayHostId: string, credential: string) {
   const state = { hello: null as Record<string, unknown> | null, closed: null as number | null, reason: '' }
   ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
   ws.on('message', (raw) => {
-    if (state.hello === null) state.hello = JSON.parse(raw.toString())
+    if (state.hello === null) { state.hello = JSON.parse(raw.toString()) }
   })
   ws.on('close', (code, reason) => {
     state.closed = code
@@ -152,11 +153,11 @@ async function mainRemote(): Promise<void> {
   record('E11 phone for an unpushed host: relay-hello{ok:false,4409}, close 4409', stray.state.hello?.code === 4409 && stray.state.closed === 4409, `close=${stray.state.closed}`)
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed (${ORIGIN})`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) { process.exitCode = 1 }
 }
 
 async function main(): Promise<void> {
-  if (REMOTE) return mainRemote()
+  if (REMOTE) { return mainRemote() }
   const host = newHost()
   const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true })
   const jwk = { ...(await exportJWK(publicKey)), kid: 'mvp', alg: 'ES256', use: 'sig' }
@@ -198,9 +199,9 @@ async function main(): Promise<void> {
   try {
     for (let i = 0; ; i++) {
       try {
-        if ((await fetch(`${ORIGIN}/health`)).ok) break
+        if ((await fetch(`${ORIGIN}/health`)).ok) { break }
       } catch {}
-      if (i > 120) throw new Error(`wrangler dev did not start:\n${devLog}`)
+      if (i > 120) { throw new Error(`wrangler dev did not start:\n${devLog}`) }
       await sleep(500)
     }
     await run(host, privateKey, () => jwksHits)
@@ -218,7 +219,7 @@ async function main(): Promise<void> {
   }
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) { process.exitCode = 1 }
 }
 
 async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = false): Promise<void> {
@@ -277,7 +278,7 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
   // E2 on object storage: invite, install, resume, confirm (shipped strict parsers).
   const invite = await main.client.createInvite('device-a').catch((e: Error) => e)
   record('E2 invite-create returns a strict invite-created', !(invite instanceof Error) && typeof invite.inviteToken === 'string', invite instanceof Error ? invite.message : `max=${invite.maxAttempts}`)
-  if (invite instanceof Error) return
+  if (invite instanceof Error) { return }
   const invitePhone = await phoneOutcome(id, invite.inviteToken)
   const inviteConnId = main.events.opens.at(-1)?.connId ?? ''
   record('E2 invite phone admitted, relay-hello(invite) strict-parses', RelayPhoneHelloSchema.safeParse(invitePhone.state.hello).success && invitePhone.state.hello?.credentialKind === 'invite', JSON.stringify(invitePhone.state.hello))
@@ -401,7 +402,7 @@ async function preAuthCheck(stateDir: string): Promise<void> {
   )
   const id = newHost().relayHostId
   const statuses: number[] = []
-  for (let i = 0; i < 70; i++) statuses.push((await fetch(`${ORIGIN}/v1/connect/${id}`)).status)
+  for (let i = 0; i < 70; i++) { statuses.push((await fetch(`${ORIGIN}/v1/connect/${id}`)).status) }
   const data = (await fetch(`${ORIGIN}/v1/host/data/x`)).status
   record(
     'E11 unauthenticated phone upgrades past the per-source limit get 429; data sockets count apart',

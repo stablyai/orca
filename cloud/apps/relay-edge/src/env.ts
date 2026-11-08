@@ -1,7 +1,7 @@
 import type { HostRelay } from './host-relay'
 import type { SpliceRelay } from './splice-relay'
 
-export interface Env {
+export type Env = {
   HOST_RELAY: DurableObjectNamespace<HostRelay>
   SPLICE_RELAY: DurableObjectNamespace<SpliceRelay>
   // Pooled connection to the relay's Postgres (credentials, invites, devices, assignments).
@@ -69,7 +69,7 @@ const configs = new WeakMap<object, EdgeConfig>()
 
 function positiveInt(name: string, value: string | undefined): number {
   const parsed = Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`relay_edge_config_${name}`)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) { throw new Error(`relay_edge_config_${name}`) }
   return parsed
 }
 
@@ -77,22 +77,22 @@ function positiveInt(name: string, value: string | undefined): number {
 // running with a silently wrong backend: the spike backend skips credential and epoch checks.
 export function edgeConfig(env: Env): EdgeConfig {
   const cached = configs.get(env)
-  if (cached) return cached
+  if (cached) { return cached }
   const backend = env.EDGE_BACKEND ?? 'postgres'
-  if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
+  if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') { throw new Error('relay_edge_config_backend') }
   // Phase 2: assignments arrive only through signed director pushes.
   if (backend === 'object' && (!env.ADMIN_SIGNING_KEY || env.ADMIN_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
     throw new Error('relay_edge_config_admin')
   }
-  if (backend === 'postgres' && !env.HYPERDRIVE) throw new Error('relay_edge_config_hyperdrive')
+  if (backend === 'postgres' && !env.HYPERDRIVE) { throw new Error('relay_edge_config_hyperdrive') }
   if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
     throw new Error('relay_edge_config_spike_backend_outside_spike')
   }
   // The abort routes reset objects (drop every socket); only the spike backend may turn them on.
-  if (env.SPIKE_ADMIN === '1' && backend !== 'spike') throw new Error('relay_edge_config_spike_admin_outside_spike')
-  if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
-  if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
-  if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
+  if (env.SPIKE_ADMIN === '1' && backend !== 'spike') { throw new Error('relay_edge_config_spike_admin_outside_spike') }
+  if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) { throw new Error('relay_edge_config_jwks') }
+  if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) { throw new Error('relay_edge_config_issuer') }
+  if (!env.RELAY_JWT_AUDIENCE) { throw new Error('relay_edge_config_audience') }
   const config: EdgeConfig = {
     backend,
     cellId: env.EDGE_CELL_ID || 'edge',
@@ -103,7 +103,7 @@ export function edgeConfig(env: Env): EdgeConfig {
     leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000))
   }
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
-  if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')
+  if (config.pingIntervalMs >= config.silenceTimeoutMs) { throw new Error('relay_edge_config_ping_interval') }
   configs.set(env, config)
   return config
 }
