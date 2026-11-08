@@ -120,6 +120,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
+  'selector_ambiguous',
   'run_not_found',
   'run_home_unreachable',
   'run_required',

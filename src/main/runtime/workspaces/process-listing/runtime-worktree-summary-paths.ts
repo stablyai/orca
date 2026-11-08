@@ -2,21 +2,29 @@ import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktr
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { worktreePathComparisonKey } from '../../../workspaces/catalog/worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from '../catalog/runtime-worktree-path-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
-type ResolvedWorktreePath = { id: string; repoId: string; path: string }
 type RuntimeWorktreeSummaryPathCandidate = { summary: RuntimeWorktreePsSummary; order: number }
+/** One candidate per host, first registration first. */
+type RuntimeWorktreeSummaryPathCandidates = RuntimeWorktreeSummaryPathCandidate[]
 
 export type RuntimeWorktreeSummaryPathIndex = {
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
-  posixAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
-  posixRelative: Map<string, RuntimeWorktreeSummaryPathCandidate>
-  windows: Map<string, RuntimeWorktreeSummaryPathCandidate>
-  windowsAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  posixAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidates>
+  posixRelative: Map<string, RuntimeWorktreeSummaryPathCandidates>
+  windows: Map<string, RuntimeWorktreeSummaryPathCandidates>
+  windowsAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidates>
+}
+
+/** Same-id rows on different hosts are separate rows. */
+export function runtimeWorktreePsRowKey(
+  row: Pick<RuntimeWorktreePsSummary, 'worktreeId' | 'hostId'>
+): string {
+  return `${row.hostId ?? ''}\0${row.worktreeId}`
 }
 
 export function buildRuntimeWorktreeSummaryPathIndex(
   summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
-  resolvedWorktrees: readonly ResolvedWorktreePath[],
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 ): RuntimeWorktreeSummaryPathIndex {
   const index: RuntimeWorktreeSummaryPathIndex = {
@@ -26,29 +34,29 @@ export function buildRuntimeWorktreeSummaryPathIndex(
     windows: new Map(),
     windowsAbsolute: new Map()
   }
-  for (const [order, worktree] of resolvedWorktrees.entries()) {
-    const summary = summaries.get(worktree.id)
-    if (!summary) {
+  let order = 0
+  for (const summary of summaries.values()) {
+    if (summary.workspaceKind === 'folder-workspace') {
       continue
     }
-    const platform = platformByRepoId.get(worktree.repoId) ?? process.platform
-    const candidate = { summary, order }
-    if (isPosixAbsoluteRuntimeWorktreePath(worktree.path)) {
-      setFirstRuntimeWorktreePathCandidate(
+    const platform = platformByRepoId.get(summary.repoId) ?? process.platform
+    const candidate = { summary, order: order++ }
+    if (isPosixAbsoluteRuntimeWorktreePath(summary.path)) {
+      addRuntimeWorktreePathCandidate(
         index.posixAbsolute,
-        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        runtimeWorktreeSummaryPathKey(summary.repoId, summary.path, platform),
         candidate
       )
       continue
     }
-    const windowsKey = runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, 'win32')
-    setFirstRuntimeWorktreePathCandidate(index.windows, windowsKey, candidate)
-    if (isWindowsAbsolutePathLike(worktree.path)) {
-      setFirstRuntimeWorktreePathCandidate(index.windowsAbsolute, windowsKey, candidate)
+    const windowsKey = runtimeWorktreeSummaryPathKey(summary.repoId, summary.path, 'win32')
+    addRuntimeWorktreePathCandidate(index.windows, windowsKey, candidate)
+    if (isWindowsAbsolutePathLike(summary.path)) {
+      addRuntimeWorktreePathCandidate(index.windowsAbsolute, windowsKey, candidate)
     } else if (platform !== 'win32') {
-      setFirstRuntimeWorktreePathCandidate(
+      addRuntimeWorktreePathCandidate(
         index.posixRelative,
-        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        runtimeWorktreeSummaryPathKey(summary.repoId, summary.path, platform),
         candidate
       )
     }
@@ -56,19 +64,45 @@ export function buildRuntimeWorktreeSummaryPathIndex(
   return index
 }
 
-export type RuntimeWorktreePsSummaryLookup = (worktreeId: string) => RuntimeWorktreePsSummary | null
+/** `hostId` is the activity's own host evidence; omit it when the evidence names no host. */
+export type RuntimeWorktreePsSummaryLookup = (
+  worktreeId: string,
+  hostId?: ExecutionHostId
+) => RuntimeWorktreePsSummary | null
+
+/** A raw id attaches to its only row; among same-id rows only the provable host copy, else none. */
+function pickHostCopy<T extends { summary: RuntimeWorktreePsSummary }>(
+  candidates: readonly T[] | undefined,
+  hostId: ExecutionHostId | undefined
+): T | null | undefined {
+  if (!candidates || candidates.length === 0) {
+    return undefined
+  }
+  if (candidates.length === 1) {
+    return candidates[0]
+  }
+  const matches = hostId
+    ? candidates.filter((candidate) => candidate.summary.hostId === hostId)
+    : []
+  return matches.length === 1 ? matches[0] : null
+}
 
 export function createRuntimeWorktreePsSummaryLookup(
   summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
   pathIndex: RuntimeWorktreeSummaryPathIndex
 ): RuntimeWorktreePsSummaryLookup {
-  const missingIds = new Set<string>()
-  return (worktreeId) => {
-    const exact = summaries.get(worktreeId)
-    if (exact) {
-      return exact
+  const byId = new Map<string, { summary: RuntimeWorktreePsSummary }[]>()
+  for (const summary of summaries.values()) {
+    byId.set(summary.worktreeId, [...(byId.get(summary.worktreeId) ?? []), { summary }])
+  }
+  const missing = new Set<string>()
+  return (worktreeId, hostId) => {
+    const exact = pickHostCopy(byId.get(worktreeId), hostId)
+    if (exact !== undefined) {
+      return exact?.summary ?? null
     }
-    if (missingIds.has(worktreeId)) {
+    const missKey = `${hostId ?? ''}\0${worktreeId}`
+    if (missing.has(missKey)) {
       return null
     }
     const parsed = parseRuntimeWorktreeId(worktreeId)
@@ -80,12 +114,13 @@ export function createRuntimeWorktreePsSummaryLookup(
       pathIndex,
       parsed.repoId,
       parsed.worktreePath,
-      platform
+      platform,
+      hostId
     )
     if (indexed) {
       return indexed
     }
-    missingIds.add(worktreeId)
+    missing.add(missKey)
     return null
   }
 }
@@ -94,22 +129,26 @@ export function findRuntimeWorktreeSummaryByPath(
   index: RuntimeWorktreeSummaryPathIndex,
   repoId: string,
   worktreePath: string,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  hostId?: ExecutionHostId
 ): RuntimeWorktreePsSummary | null {
   if (isPosixAbsoluteRuntimeWorktreePath(worktreePath)) {
     return (
-      index.posixAbsolute.get(runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform))
-        ?.summary ?? null
+      pickHostCopy(
+        index.posixAbsolute.get(runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)),
+        hostId
+      )?.summary ?? null
     )
   }
   const windowsKey = runtimeWorktreeSummaryPathKey(repoId, worktreePath, 'win32')
   if (platform === 'win32' || isWindowsAbsolutePathLike(worktreePath)) {
-    return index.windows.get(windowsKey)?.summary ?? null
+    return pickHostCopy(index.windows.get(windowsKey), hostId)?.summary ?? null
   }
-  const posixCandidate = index.posixRelative.get(
-    runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
+  const posixCandidate = pickHostCopy(
+    index.posixRelative.get(runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)),
+    hostId
   )
-  const windowsCandidate = index.windowsAbsolute.get(windowsKey)
+  const windowsCandidate = pickHostCopy(index.windowsAbsolute.get(windowsKey), hostId)
   // Malformed paths can match both indexes; preserve the pairwise scan's first-match order.
   if (!posixCandidate) {
     return windowsCandidate?.summary ?? null
@@ -120,13 +159,16 @@ export function findRuntimeWorktreeSummaryByPath(
   return windowsCandidate.summary
 }
 
-function setFirstRuntimeWorktreePathCandidate(
-  candidates: Map<string, RuntimeWorktreeSummaryPathCandidate>,
+function addRuntimeWorktreePathCandidate(
+  candidates: Map<string, RuntimeWorktreeSummaryPathCandidates>,
   key: string,
   candidate: RuntimeWorktreeSummaryPathCandidate
 ): void {
-  if (!candidates.has(key)) {
-    candidates.set(key, candidate)
+  const existing = candidates.get(key)
+  if (!existing) {
+    candidates.set(key, [candidate])
+  } else if (!existing.some((entry) => entry.summary.hostId === candidate.summary.hostId)) {
+    existing.push(candidate)
   }
 }
 

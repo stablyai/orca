@@ -1,3 +1,4 @@
+export type { WorkspaceSelectorOptions } from '../workspaces/catalog/workspace-selector-candidates'
 import type { LegacyWorkerTerminalSurface } from '../orchestration/terminal-authority/legacy-worker-terminal-surface'
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as MarkPtyLivenessUnverifiable } from '../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as StopTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop'

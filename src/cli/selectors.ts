@@ -1,5 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
 import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
+import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
 import {
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
@@ -73,7 +74,10 @@ export async function normalizeWorktreeSelectorForCaller(
   client: RuntimeClient
 ): Promise<string> {
   const normalized = normalizeWorktreeSelector(selector, cwd)
-  return resolveCallerDistroPathSelector(normalized, cwd, client)
+  return resolveFolderWorkspaceSelector(
+    await resolveCallerDistroPathSelector(normalized, cwd, client),
+    client
+  )
 }
 
 export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {

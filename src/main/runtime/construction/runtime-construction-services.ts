@@ -287,7 +287,7 @@ export abstract class RuntimeConstructionServices {
   ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(
     selector: string,
-    options?: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId }
+    options?: Calls.WorkspaceSelectorOptions
   ): Promise<ResolvedWorktree>
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],

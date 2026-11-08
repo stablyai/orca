@@ -130,10 +130,13 @@ Per-worktree visibility rules still apply.
 
 Selectors:
 
-- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`, `identity:<identityKey>`
+- `folder:<folderId>` names a folder workspace. `path:` and `name:` also match folder workspaces, so `--worktree path:<folderPath>` reaches the folder; `branch:`, `issue:` and `identity:` match worktrees only. `ORCA worktree ps --json` lists folder workspaces; `worktree list` does not.
+- When several workspaces match, the error lists each choice's kind, host, path and exact selector; pass one of those. A folder id that two folder workspaces share can't be selected; the error says how to repair it.
+- For a workspace in another environment, add `--environment <id>` to the command, as with any other selector.
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
-- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`.
+- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`. On both, `path:` and `name:` record a folder workspace parent when they match one.
 
 Lineage rules:
 

@@ -27,7 +27,7 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector,
+  WorktreeShow,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
@@ -88,9 +88,11 @@ export const WORKTREE_METHODS = [
   defineMethod({
     name: 'worktree.show',
     permission: 'workspace',
-    params: WorktreeSelector,
+    params: WorktreeShow,
     handler: async (params, { runtime }) => ({
-      worktree: await runtime.showManagedWorktree(params.worktree)
+      worktree: await runtime.showManagedWorktree(params.worktree, undefined, {
+        matchFolders: params.matchFolderWorkspaces === true
+      })
     })
   }),
   WORKTREE_SLEEP_METHOD,

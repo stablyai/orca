@@ -90,6 +90,10 @@ export function assertFolderParentSetSupported(
   }
 }
 
+// Hosts whose selector RPCs accept `matchFolderWorkspaces`, letting path: and name: also match folder workspaces.
+export const WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY =
+  'workspace-selector.folder-match.v1' as const
+
 // Hosts that run an existing worktree's setup once the user approves that worktree's content.
 export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
   'worktree.run-approved-setup.v1' as const
@@ -117,5 +121,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY,
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY,
   WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY,
+  WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY,
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY
 ] as const
