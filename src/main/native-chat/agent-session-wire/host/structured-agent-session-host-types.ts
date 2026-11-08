@@ -62,6 +62,7 @@ import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
+  clientKind?: 'mobile' | 'runtime'
   readsOptionsWithoutModel?: boolean
 }
 
