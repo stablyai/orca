@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import type { GitRuntimeOptions } from '../git-runtime-options'
@@ -15,40 +15,98 @@ const MAX_ENTRIES_PER_STORE = 128
 export const commitPairMergeBases: CommitPairStore<string> = new Map()
 export const commitPairDivergences: CommitPairStore<{ ahead: number; behind: number }> = new Map()
 
-// Shallow boundaries, grafts and replace refs rewrite parents of unchanged OIDs; packed/reftable refs can hold replace refs.
-const HISTORY_REWRITE_INPUTS = [
-  'shallow',
-  path.join('info', 'grafts'),
-  path.join('refs', 'replace'),
-  'packed-refs',
-  path.join('reftable', 'tables.list')
+// These move replace refs, grafts or the object store away from the common dir this scope stats.
+const GRAPH_RELOCATING_ENV = [
+  'GIT_REPLACE_REF_BASE',
+  'GIT_GRAFT_FILE',
+  'GIT_DIR',
+  'GIT_COMMON_DIR',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_SHALLOW_FILE'
 ]
+// Replace refs and grafts are rare and their effect depends on per-worktree config, so their presence disables caching.
+const GRAPH_REWRITE_PATHS = [path.join('refs', 'replace'), path.join('info', 'grafts'), 'reftable']
+// Bounds the one-off packed-refs scan per change; larger ref stores just skip caching.
+const MAX_PACKED_REFS_SCAN_BYTES = 8 * 1024 * 1024
+const MAX_SCANNED_PACKED_REFS = 64
+/** Common dir -> packed-refs stamp last proven to hold no replace refs. */
+const packedRefsWithoutReplaceRefs = new Map<string, string>()
 
-/** Read without spawning Git; null when the object store or its history inputs cannot be proven stable. */
+/** Read without spawning Git; null when replace refs or grafts could apply, or inputs are not provably stable. */
 export async function readCommitPairScope(
   worktreePath: string,
   options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
 ): Promise<CommitPairScope | null> {
   const capturedAtMs = Date.now()
+  if (GRAPH_RELOCATING_ENV.some((name) => process.env[name])) {
+    return null
+  }
   try {
     const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
     if (!hostWorktreePath) {
       return null
     }
     const commonDir = await resolveGitCommonDir(await resolveGitDir(hostWorktreePath, options))
-    const [objects, ...components] = await Promise.all([
+    const [objects, rewritePathsPresent, shallow, packedRefs] = await Promise.all([
       stat(path.join(commonDir, 'objects')),
-      ...HISTORY_REWRITE_INPUTS.map((input) => readFileStampComponent(path.join(commonDir, input)))
+      Promise.all(GRAPH_REWRITE_PATHS.map((input) => pathExists(path.join(commonDir, input)))),
+      readFileStampComponent(path.join(commonDir, 'shallow')),
+      readFileStampComponent(path.join(commonDir, 'packed-refs'))
     ])
-    if (!objects.isDirectory()) {
+    if (!objects.isDirectory() || rewritePathsPresent.some(Boolean)) {
       return null
     }
-    const value = JSON.stringify([commonDir, ...components.map((component) => component.text)])
-    const newestMtimeMs = Math.max(...components.map((component) => component.mtimeMs))
+    const value = JSON.stringify([commonDir, shallow.text])
+    const newestMtimeMs = Math.max(shallow.mtimeMs, packedRefs.mtimeMs)
     // A rewrite inside the mtime bucket could leave the stamp unchanged.
-    return canProveUnchangedByStamp({ value, newestMtimeMs, capturedAtMs }) ? value : null
+    if (!canProveUnchangedByStamp({ value, newestMtimeMs, capturedAtMs })) {
+      return null
+    }
+    if (
+      Number.isFinite(packedRefs.mtimeMs) &&
+      !(await isPackedRefsFreeOfReplaceRefs(commonDir, packedRefs.text))
+    ) {
+      return null
+    }
+    return value
   } catch {
     return null
+  }
+}
+
+async function isPackedRefsFreeOfReplaceRefs(commonDir: string, stamp: string): Promise<boolean> {
+  if (packedRefsWithoutReplaceRefs.get(commonDir) === stamp) {
+    return true
+  }
+  const packedRefsPath = path.join(commonDir, 'packed-refs')
+  if ((await stat(packedRefsPath)).size > MAX_PACKED_REFS_SCAN_BYTES) {
+    return false
+  }
+  // Lines are `<oid> <refname>`; a false positive only skips caching.
+  if ((await readFile(packedRefsPath, 'utf-8')).includes(' refs/replace/')) {
+    return false
+  }
+  packedRefsWithoutReplaceRefs.delete(commonDir)
+  packedRefsWithoutReplaceRefs.set(commonDir, stamp)
+  if (packedRefsWithoutReplaceRefs.size > MAX_SCANNED_PACKED_REFS) {
+    const oldest = packedRefsWithoutReplaceRefs.keys().next()
+    if (!oldest.done) {
+      packedRefsWithoutReplaceRefs.delete(oldest.value)
+    }
+  }
+  return true
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return false
+    }
+    throw error
   }
 }
 
