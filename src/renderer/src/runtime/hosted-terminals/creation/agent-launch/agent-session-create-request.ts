@@ -13,7 +13,7 @@ import {
   runtimeEnvironmentSupportsCapability,
   runtimeEnvironmentSupportsCapabilities
 } from '../../../rpc/compatibility/runtime-capability-proof'
-import { toRuntimeWorktreeSelector } from '../../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
 
 export async function agentSessionCreateCapabilities(environmentId: string) {
   const [complete, choices] = await runtimeEnvironmentSupportsCapabilities(environmentId, [

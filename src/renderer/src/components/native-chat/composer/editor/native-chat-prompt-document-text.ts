@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react'
 import type { AgentJournalSkillRef } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentReferenceToken } from '../../../../../../shared/orchestration-agent-reference'
+import { agentReferenceToken } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   imageReferenceToken,
   splitImageReferences

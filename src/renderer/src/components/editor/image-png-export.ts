@@ -4,7 +4,7 @@ import {
   assertClipboardImageDimensionsWithinLimit
 } from '../../../../shared/clipboard-image'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
-import { svgMarkupDataUri } from '../../../../shared/svg-document'
+import { svgMarkupDataUri } from '../../../../shared/file-preview/svg-document'
 import { blobToBase64, convertImageBlobToPng } from '../../lib/image-blob-png'
 
 const PREFERRED_PIXEL_RATIO = 2

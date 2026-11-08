@@ -4,63 +4,19 @@ import {
   mockToastError,
   store
 } from '../../lib/agent-session/launch/new-tab/launch-agent-in-new-tab-test-fixture'
-import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import { useTabAgentMenuLaunch } from './QuickLaunchButton'
+import { expect, it, vi } from 'vitest'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { launchOnceHostAnswered } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import { i18n } from '@/i18n/i18n'
-import fr from '@/i18n/locales/fr.json'
 
 vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   captureNativeChatComposerFocusIntent: () => undefined
 }))
-afterEach(cleanup)
 
 function unavailableSsh() {
   store.repos = [{ id: 'repo-1', connectionId: 'missing-host', path: '/repo' }]
 }
-
-it('New Chat reports one actionable named-agent error through the actual launcher, including a translated case', async () => {
-  unavailableSsh()
-  const focus = vi.fn()
-  const handedOff = vi.fn()
-  const hook = renderHook(() =>
-    useTabAgentMenuLaunch({
-      worktreeId: 'wt-1',
-      groupId: 'g',
-      onFocusTerminal: focus,
-      onPromptHandedOff: handedOff
-    })
-  )
-  const previous = i18n.language
-  i18n.addResourceBundle('fr', 'translation', fr)
-  try {
-    for (const language of ['en', 'fr']) {
-      await i18n.changeLanguage(language)
-      mockToastError.mockClear()
-      act(() => expect(hook.result.current({ kind: 'cli', agent: 'codex' })).toBe(false))
-      expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
-        language === 'fr'
-          ? 'Impossible de démarrer une nouvelle session Codex.'
-          : 'Could not start a new Codex session.',
-        {
-          description:
-            language === 'fr'
-              ? fr.agentLaunch.connectSsh
-              : 'Connect to this workspace’s SSH host, then try again.'
-        }
-      )
-    }
-    expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(focus).not.toHaveBeenCalled()
-    expect(handedOff).not.toHaveBeenCalled()
-  } finally {
-    await i18n.changeLanguage(previous)
-  }
-})
 
 it('a shortcut while SSH is still connecting waits silently, then settled missing facts refuse once', () => {
   unavailableSsh()

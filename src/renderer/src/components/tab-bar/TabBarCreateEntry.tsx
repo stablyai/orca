@@ -29,7 +29,7 @@ import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import { isQuickOpenQueryTooLarge } from '../quick-open-search'
+import { isQuickOpenQueryTooLarge } from '../../../../shared/quick-open/quick-open-path-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
 import { focusTabEntryMenuItemAtEdge } from './tab-create-entry-keyboard-focus'
@@ -40,6 +40,7 @@ import {
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
+import { useTranslate } from '@/i18n/use-translate'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
   return <TabBarCreateEntrySession key={String(props.menuOpen)} {...props} />
@@ -62,6 +63,7 @@ function TabBarCreateEntrySession({
   terminalPending,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -190,7 +192,7 @@ function TabBarCreateEntrySession({
     statusOption != null &&
     (statusOption.classification.kind === 'empty' || statusOption.classification.kind === 'blocked')
       ? statusOption.classification.message
-      : getTabEntryOmniboxPlaceholder()
+      : getTabEntryOmniboxPlaceholder(t)
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -339,10 +341,10 @@ function TabBarCreateEntrySession({
               ? resultOptionDomId(activeSelectedIndex)
               : undefined
           }
-          aria-label={getTabEntryOmniboxPlaceholder()}
+          aria-label={getTabEntryOmniboxPlaceholder(t)}
           aria-invalid={error ? true : undefined}
           aria-errormessage={error ? 'tab-create-entry-error' : undefined}
-          placeholder={getTabEntryOmniboxPlaceholder()}
+          placeholder={getTabEntryOmniboxPlaceholder(t)}
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>

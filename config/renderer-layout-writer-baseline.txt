@@ -31,13 +31,13 @@
 1 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-recovery-surface.ts
 2 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-topology.ts
 3 src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-projection.ts
-3 src/renderer/src/runtime/structured-agent-session-tab-retirement.ts
+3 src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement.ts
 10 src/renderer/src/runtime/sync-runtime-graph/mobile-session-group-projection.ts
 2 src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots.ts
 2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts
-13 src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts
-1 src/renderer/src/runtime/web-runtime-session-snapshot.ts
-3 src/renderer/src/runtime/web-session-client-owned-tab-placement.ts
+13 src/renderer/src/runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot.ts
+3 src/renderer/src/runtime/web-session-tabs-sync/placement/web-session-client-owned-tab-placement.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/agent-status-primitives.ts
 8 src/renderer/src/runtime/web-session-tabs-sync/apply-active-state.ts
 18 src/renderer/src/runtime/web-session-tabs-sync/apply-final-patch.ts

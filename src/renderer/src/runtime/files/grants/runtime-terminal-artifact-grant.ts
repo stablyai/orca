@@ -1,19 +1,19 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
   TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
   TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/terminal/runtime-terminal-file-path'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { isRenewableTerminalFileGrantRefusal } from '../../../../../shared/terminal-file-grant-refusal'
+import { isRenewableTerminalFileGrantRefusal } from '../../../../../shared/file-access/terminal-file-grant-refusal'
 
 export type TerminalArtifactGrantTarget = {
   target: RuntimeClientTarget & { kind: 'environment' }

@@ -2,7 +2,7 @@ import type { OrcaRuntimeWithWaitForLeafPtyId as WaitForLeafPtyIdMethods } from 
 import { OrcaRuntimeWithWaitForMobileTerminalSurface } from '../terminal/view/mobile-terminal-surface'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-session-contracts'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals extends OrcaRuntimeWithWaitForMobileTerminalSurface {

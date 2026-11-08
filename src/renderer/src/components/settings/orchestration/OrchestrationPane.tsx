@@ -21,7 +21,7 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamplesSection'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { resolveNestedWorkerMaxDepth } from '../../../../../shared/nested-worker-depth'
+import { resolveNestedWorkerMaxDepth } from '../../../../../shared/orchestration/workers/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { NumberField } from '../form-controls/SettingsFormControls'
 import {

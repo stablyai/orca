@@ -4,6 +4,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { rowTitle } from './tab-agent-row-presentation'
+import { useTranslate } from '@/i18n/use-translate'
 
 const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
 
@@ -25,9 +26,10 @@ export function TabAgentSurfaceChoiceRow({
   runLaunch: (row: NewTabAgentMenuRow) => boolean | void | Promise<boolean>
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const otherButton = useRef<HTMLButtonElement>(null)
   const releaseTarget = useRef<{ event: PointerEvent; target: EventTarget } | null>(null)
-  const title = rowTitle(row, label)
+  const title = rowTitle(row, label, t)
   return (
     <DropdownMenuItem
       variant="launch"
@@ -70,8 +72,8 @@ export function TabAgentSurfaceChoiceRow({
     >
       <span
         role="button"
-        aria-disabled={!!terminalPendingReason(terminalPending, row) || undefined}
-        aria-description={terminalPendingReason(terminalPending, row)}
+        aria-disabled={!!terminalPendingReason(terminalPending, row, t) || undefined}
+        aria-description={terminalPendingReason(terminalPending, row, t)}
         className="contents"
       >
         {children}
@@ -79,8 +81,8 @@ export function TabAgentSurfaceChoiceRow({
       <AgentSurfaceLaunchButton
         ref={otherButton}
         surface={other.kind === 'chat' ? 'chat' : 'terminal'}
-        title={rowTitle(other, label)}
-        reason={terminalPendingReason(terminalPending, other)}
+        title={rowTitle(other, label, t)}
+        reason={terminalPendingReason(terminalPending, other, t)}
         className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start the row's surface instead.

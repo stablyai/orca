@@ -8,7 +8,7 @@ import {
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,

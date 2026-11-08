@@ -35,7 +35,6 @@ export function registerPtyConnectionLocalStartupCommandDeliveryTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -110,7 +109,6 @@ export function registerPtyConnectionTerminalPasteStartupCommandDeliveryTests():
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

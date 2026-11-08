@@ -2,7 +2,7 @@ import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat
 import {
   selectVisibleAgentOrchestration,
   type VisibleOrchestrationState
-} from '@/runtime/visible-agent-orchestration'
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import type { AppState } from '@/store/types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/migration-unsupported-agent-entry'

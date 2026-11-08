@@ -23,7 +23,7 @@ import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-st
 import type {
   TaskSourceContext,
   WorkspaceRunContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

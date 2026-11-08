@@ -4,7 +4,7 @@ import type { Server, Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 
 import { RelayControlClient } from './relay-control-client'
 

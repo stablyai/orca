@@ -34,7 +34,6 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
 
   describe('connectPanePty process-exit retirement', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

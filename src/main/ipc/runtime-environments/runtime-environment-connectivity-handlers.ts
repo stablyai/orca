@@ -2,7 +2,7 @@ import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
-import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,

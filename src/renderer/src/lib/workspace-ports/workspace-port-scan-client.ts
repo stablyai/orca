@@ -4,7 +4,7 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortHostScanResult,

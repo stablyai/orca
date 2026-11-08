@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../shared/mobile-bridge-frame-bytes'
 import { SIDEBAR_INPUTS_PAGE_MAX_BYTES } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'

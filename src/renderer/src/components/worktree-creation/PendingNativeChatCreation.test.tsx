@@ -39,7 +39,7 @@ import {
 } from '@/components/native-chat/composer/focus/native-chat-composer-mount'
 
 const modelCatalog = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: modelCatalog
 }))
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({

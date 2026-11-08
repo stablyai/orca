@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type {
   AgentPickerDraft,
@@ -86,6 +86,7 @@ export function AgentLaunchSetupButton({
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
+  const t = useTranslate()
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
   const setup = useAgentPickerSetup({
@@ -185,7 +186,7 @@ export function AgentLaunchSetupButton({
       ) : null}
     </div>
   )
-  const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
+  const label = t('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
   if (submenu && renderAnchor) {
     return (
       <AgentLaunchSetupSubmenu
@@ -209,7 +210,7 @@ export function AgentLaunchSetupButton({
           variant="ghost"
           size="icon-xs"
           disabled={disabled}
-          aria-label={translate('agentPicker.configure', 'Configure {{agent}}', {
+          aria-label={t('agentPicker.configure', 'Configure {{agent}}', {
             agent: entry.label
           })}
           onClick={(event) => event.stopPropagation()}
@@ -235,7 +236,7 @@ export function AgentLaunchSetupButton({
         sticky="always"
         align="start"
         sideOffset={6}
-        aria-label={translate('agentPicker.configure', 'Configure {{agent}}', {
+        aria-label={t('agentPicker.configure', 'Configure {{agent}}', {
           agent: entry.label
         })}
         // Why: base popovers sit below menus (z-60), so this menu-launched panel would render under the menu's shadow; sharing the menu layer stacks it by open order, like a submenu.

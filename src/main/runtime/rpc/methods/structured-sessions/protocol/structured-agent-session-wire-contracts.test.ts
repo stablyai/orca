@@ -30,7 +30,6 @@ import {
   hostTestOperationId
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import '../attachments/structured-agent-session-queued-image-capability'
-import '../../../unused-default-rpc-methods.test-fixture'
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)

@@ -1,5 +1,5 @@
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/workers/reports/worker-report-admission'

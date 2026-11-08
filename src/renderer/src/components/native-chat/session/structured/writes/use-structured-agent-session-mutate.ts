@@ -15,11 +15,9 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../../../../s
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import {
-  callStructuredAgentSession,
-  supportsStructuredAgentSessionQuietRepeatedStop
-} from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { supportsStructuredAgentSessionQuietRepeatedStop } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   joinStructuredAgentSessionStop,

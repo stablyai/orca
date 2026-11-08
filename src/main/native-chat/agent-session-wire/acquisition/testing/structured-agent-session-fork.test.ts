@@ -1,3 +1,8 @@
+import { prepareStructuredAgentSessionCreateForWorktree } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
+import { usableJournalHistoryOrigin } from '../../../agent-session-journal/context-epochs/journal-history-origin'
+import { catchUpCodexThread } from '../../../../codex/structured/threads/codex-structured-thread-catch-up'
+import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
 import { copyAcpConversation } from '../../../../acp/acp-conversation-copy'
 import { acpLaunchSpecFor } from '../../../../acp/acp-launch-specs'
 import type { AcpStructuredConnection } from '../../../../acp/acp-structured-connection'
@@ -88,29 +93,29 @@ function source(agent: 'claude' | 'codex' = 'codex') {
         }
       },
       {
-        itemId: 'ended-root',
+        itemId: 'legacy:codex:source:ended-root',
         sequence: 2,
         revision: 1,
         observedAt: 2,
         body: { kind: 'turn', turnId: 'completed-turn', state: 'completed' }
       },
       {
-        itemId: 'selected-response',
+        itemId: 'legacy:codex:source:selected-response',
         sequence: 3,
         revision: 1,
         observedAt: 3,
-        turnScope: { kind: 'turn', turnItemId: 'ended-root' },
+        turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:ended-root' },
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
       },
       {
-        itemId: 'running-root',
+        itemId: 'legacy:codex:source:running-root',
         sequence: 3,
         revision: 1,
         observedAt: 3,
         body: { kind: 'turn', turnId: 'active-turn', state: 'running' }
       },
       {
-        itemId: 'ended-child',
+        itemId: 'legacy:codex:source:ended-child',
         sequence: 4,
         revision: 1,
         observedAt: 4,
@@ -163,7 +168,15 @@ function source(agent: 'claude' | 'codex' = 'codex') {
             .map((row) => JSON.stringify(row))
             .join('\n')}\n`
         )
-        return { sessionId: COPY, filePath }
+        return {
+          sessionId: COPY,
+          filePath,
+          coverage: {
+            unit: agent === 'claude' ? 'claude-entry' : 'codex-turn',
+            ids: agent === 'claude' ? ['prompt', 'answer'] : ['completed-turn']
+          },
+          ...(agent === 'claude' ? { resumeCursor: 'answer' } : {})
+        }
       }
       await writeFile(
         filePath,
@@ -181,7 +194,11 @@ function source(agent: 'claude' | 'codex' = 'codex') {
           .map((row) => JSON.stringify(row))
           .join('\n')}\n`
       )
-      return { sessionId: COPY, filePath }
+      return {
+        sessionId: COPY,
+        filePath,
+        coverage: { unit: 'codex-turn' as const, ids: ['completed-turn'] }
+      }
     }
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these source/store/adapter facets; destination founding uses the real rig host below.
@@ -204,7 +221,10 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     sessionId: `${agent}_independent_child`,
     agent,
     worktree: 'id:workspace-1',
-    forkFrom: { sessionId: record.sessionId, throughItemId: 'selected-response' },
+    forkFrom: {
+      sessionId: record.sessionId,
+      throughItemId: 'legacy:codex:source:selected-response'
+    },
     now: rig.clock.now,
     randomUuid: () => '00000000-0000-0000-0000-000000000123'
   })
@@ -212,7 +232,7 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     prepareStructuredAgentSessionFork({
       host,
       sessionId: record.sessionId,
-      throughItemId: 'selected-response',
+      throughItemId: 'legacy:codex:source:selected-response',
       agent,
       location: record.location,
       envelope: intent.envelope
@@ -229,10 +249,157 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     },
     tip: () => {
       capability = 'tip'
-      snapshot.items = snapshot.items.filter((item) => item.itemId !== 'running-root')
+      snapshot.items = snapshot.items.filter(
+        (item) => item.itemId !== 'legacy:codex:source:running-root'
+      )
     }
   }
 }
+
+it('copies the selected retained root, founds its relationship, and replays before source discovery', async () => {
+  const test = source()
+  const unchanged = structuredClone(test.record)
+  const params = await test.prepare()
+  expect(test.copy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      providerSessionId: SOURCE,
+      checkpoint: expect.objectContaining({ turnId: 'completed-turn' })
+    })
+  )
+  expect(test.record).toEqual(unchanged)
+  const result = await rig.host.create({ callerKey: 'device-1' }, params)
+  if (!result.ok) {
+    throw new Error(JSON.stringify(result))
+  }
+  expect(result).toMatchObject({
+    ok: true,
+    value: {
+      page: {
+        items: [
+          expect.objectContaining({
+            body: expect.objectContaining({
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Remember the nonce 57319' }]
+            })
+          }),
+          expect.objectContaining({
+            body: expect.objectContaining({ kind: 'turn', turnId: 'completed-turn' })
+          }),
+          expect.objectContaining({
+            body: expect.objectContaining({
+              role: 'assistant',
+              blocks: [{ type: 'text', text: 'Remembered' }]
+            })
+          }),
+          expect.objectContaining({
+            body: expect.objectContaining({
+              presentation: 'forked-from',
+              forkedFrom: { sessionId: 'source-chat' }
+            })
+          })
+        ]
+      }
+    }
+  })
+  expect(rig.store.getRecord(test.intent.envelope.sessionId)).toMatchObject({
+    accountHome: test.record.accountHome,
+    permissionMode: 'accept-edits',
+    forkedFrom: {
+      sessionId: 'source-chat',
+      itemId: 'legacy:codex:source:selected-response',
+      childBoundary: { kind: 'item' }
+    },
+    options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
+    launchArgs: ['--no-daemon'],
+    providerHandleChain: [
+      expect.objectContaining({
+        origin: 'adopted',
+        handle: {
+          transport: 'codex-app-server',
+          agent: 'codex',
+          nativeId: '019e6b26-18e2-7103-b7a0-7ba6bb071124'
+        }
+      })
+    ]
+  })
+
+  const sessionId = test.intent.envelope.sessionId
+  const origin = {
+    version: 1,
+    kind: 'native_copy',
+    providerHandle: { kind: 'codex', threadId: COPY },
+    agent: 'codex',
+    unit: 'codex-turn',
+    ids: ['completed-turn']
+  }
+  expect(
+    usableJournalHistoryOrigin(
+      rig.host.collaboratorsForTests().sessions.get(sessionId)!.journal.historyOrigin()
+    )
+  ).toEqual(origin)
+
+  setStructuredAgentSessionHost(rig.host)
+  const runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'resolveStructuredAgentSessionLocation').mockResolvedValue(test.record.location)
+  const replay = await prepareStructuredAgentSessionCreateForWorktree({
+    ...test.intent,
+    runtime,
+    ensureHost: async () => rig.host,
+    caller: { callerKey: 'device-1' },
+    atRest: true
+  })
+  expect(await rig.host.create({ callerKey: 'device-1' }, replay.attachParams)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  await rig.restart()
+  expect(await rig.host.create({ callerKey: 'device-1' }, replay.attachParams)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  const journal = rig.host.collaboratorsForTests().sessions.get(sessionId)!.journal
+  expect(usableJournalHistoryOrigin(journal.historyOrigin())).toEqual(origin)
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  deferred.bind({
+    journal,
+    fence: rig.store.getRecord(sessionId)!.lease.runtimeFence,
+    publish: () => {}
+  })
+  try {
+    await catchUpCodexThread({
+      sessionId,
+      threadId: COPY,
+      sink: deferred.sink,
+      connection: { request: async () => ({ data: [], nextCursor: null }) },
+      returnedTurns: [
+        ['completed-turn', 'copied'],
+        ['new-cli-turn', 'new CLI']
+      ].map(([id, text]) => ({
+        id,
+        status: 'completed',
+        items: [
+          {
+            type: 'userMessage',
+            id: `${id}-user`,
+            content: [{ type: 'text', text: `${text} prompt` }]
+          },
+          { type: 'agentMessage', id: `${id}-answer`, text: `${text} answer` }
+        ]
+      }))
+    })
+    expect(
+      journal
+        .snapshot()
+        .items.flatMap((item) =>
+          item.body.kind === 'message'
+            ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+    ).toEqual(['Remember the nonce 57319', 'Remembered', 'new CLI prompt', 'new CLI answer'])
+  } finally {
+    deferred.close()
+  }
+})
 
 it('keeps captured Codex options over native imported effort through reload and send', async () => {
   const test = source('codex')
@@ -372,7 +539,7 @@ it('keeps an earlier immutable response available while an unrelated later turn 
       sequence: 5,
       revision: 1,
       observedAt: 5,
-      turnScope: { kind: 'turn', turnItemId: 'running-root' },
+      turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:running-root' },
       body: {
         kind: 'message',
         role: 'assistant',
@@ -381,7 +548,9 @@ it('keeps an earlier immutable response available while an unrelated later turn 
     })
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
@@ -400,7 +569,9 @@ it('keeps a checkpoint copy valid across a same-root source relaunch', async () 
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('refuses a tip copy after its source head relaunches', async () => {

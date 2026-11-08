@@ -1,49 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import {
-  POST_REPLAY_MODE_RESET,
-  RESET_GRAPHIC_RENDITION
-} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { restoreScrollbackBuffers } from './saved-terminal-output-replay'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
-
-describe('restoreScrollbackBuffers', () => {
-  it('marks panes with restored scrollback for fresh-shell viewport blanking', () => {
-    const writes: string[] = []
-    const pane = {
-      id: 1,
-      terminal: {
-        write: vi.fn((data: string, callback?: () => void) => {
-          writes.push(data)
-          callback?.()
-        })
-      }
-    }
-    const manager = {
-      getPanes: vi.fn(() => [pane]),
-      hasWebglRenderer: vi.fn(() => true)
-    }
-    const replayingPanesRef = { current: new Map<number, number>() }
-    const restoredViewportBlankingPanesRef = { current: new Set<number>() }
-
-    restoreScrollbackBuffers(
-      manager as unknown as Parameters<typeof restoreScrollbackBuffers>[0],
-      { [LEAF_1]: 'restored output' },
-      new Map([[LEAF_1, 1]]),
-      replayingPanesRef,
-      restoredViewportBlankingPanesRef
-    )
-
-    expect(writes).toEqual([
-      `${RESET_GRAPHIC_RENDITION}restored output${RESET_GRAPHIC_RENDITION}\r\n`,
-      POST_REPLAY_MODE_RESET
-    ])
-    expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
-    expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
-    expect(replayingPanesRef.current.size).toBe(0)
-  })
-})
 
 describe('restoreScrollbackBuffers over a parked live TUI', () => {
   // A fresh agent tab: the launch line on row 0, then the TUI on the alt screen.

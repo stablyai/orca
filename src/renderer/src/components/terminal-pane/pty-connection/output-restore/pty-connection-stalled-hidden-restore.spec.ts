@@ -22,6 +22,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -40,7 +41,6 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -799,6 +799,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         clearBufferCallback.current = callback as (request: { ptyId: string }) => void
         return vi.fn()
       })
+      // The serializer subscribes to window.api once per module load.
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks11 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')

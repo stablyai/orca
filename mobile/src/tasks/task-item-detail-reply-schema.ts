@@ -8,7 +8,7 @@ import {
   prStringList,
   prText,
   prRepoIdentity
-} from '../session/github-pr-entity-reply-schema'
+} from '../source-control/review/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
   detailCheckListSchema,

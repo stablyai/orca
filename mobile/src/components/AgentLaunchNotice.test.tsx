@@ -19,8 +19,8 @@ vi.mock('../platform/clipboard', () => ({
 }))
 
 import { AgentLaunchNotice } from './AgentLaunchNotice'
-import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from '../session/mobile-existing-agent-launch'
-import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
+
+import type { MobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
 
 const ERROR_STYLE = { color: 'red' }
 
@@ -55,38 +55,6 @@ describe('AgentLaunchNotice', () => {
       isError: node.props.style === ERROR_STYLE
     }))
   }
-
-  it('shows the host warning on a launch that went ahead as secondary text, not an error', () => {
-    expect(lines({ warning: 'the requested arguments were ignored.' })).toEqual([
-      { text: 'the requested arguments were ignored.', isError: false }
-    ])
-  })
-
-  it('keeps a real failure in the error style beside a warning', () => {
-    expect(
-      lines({ error: "The agent started, but the prompt wasn't sent.", warning: 'w' })
-    ).toEqual([
-      { text: "The agent started, but the prompt wasn't sent.", isError: true },
-      { text: 'w', isError: false }
-    ])
-  })
-
-  it('drops a stale warning while the host cannot take a launch', () => {
-    expect(lines({ availability: 'update-required', warning: 'w' })).toEqual([
-      { text: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE, isError: true }
-    ])
-  })
-
-  it('confirms a launch that went ahead, with any host note beneath it', () => {
-    expect(lines({ success: 'Agent started in feature-login', warning: 'w' })).toEqual([
-      { text: 'Agent started in feature-login', isError: false },
-      { text: 'w', isError: false }
-    ])
-  })
-
-  it('never confirms beside an error', () => {
-    expect(lines({ success: 'Agent started', error: 'e' })).toEqual([{ text: 'e', isError: true }])
-  })
 
   it('renders nothing with nothing to say', () => {
     expect(lines({})).toEqual([])

@@ -10,8 +10,8 @@ import {
 import { defineHostQuery, useHostQuery } from '../query/host-query'
 import { hostQueryKey } from '../query/host-query-key'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import type { RpcClient } from '../transport/rpc-client'
-import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { readRuntimeStatusProbe } from '../transport/connection/runtime-status-probe'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
 

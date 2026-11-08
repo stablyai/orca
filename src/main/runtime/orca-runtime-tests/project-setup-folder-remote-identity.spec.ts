@@ -10,7 +10,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 import { tmpdir } from 'node:os'
 import { store } from './orca-runtime-test-fixtures.spec'
 import type { Repo } from '../../../shared/repo-types'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 function createRuntime(repos: Repo[]): OrcaRuntimeService {
   const runtimeStore: RuntimeStore = {

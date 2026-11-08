@@ -1,6 +1,6 @@
 // Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -12,7 +12,7 @@ import { spawnInAdmittedPane } from './runtime-pane-admission'
 import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/pty-first-size'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { randomUUID } from 'node:crypto'
-import { paneStartFailure } from '../../pane-start-statuses'
+import { paneStartFailure } from '../surface/pane-start-statuses'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 
 export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: string }

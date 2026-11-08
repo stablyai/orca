@@ -26,7 +26,7 @@ import {
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
-} from '../../../../../shared/automation-host-filter'
+} from '../../../../../shared/automations/ownership/automation-host-filter'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,

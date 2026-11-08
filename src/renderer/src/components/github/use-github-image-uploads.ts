@@ -1,7 +1,7 @@
 import { useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { captureGitHubImageUpload, type GitHubImageUploadAddress } from './github-image-upload'
 
 export type GitHubImageIntake = {
@@ -11,6 +11,7 @@ export type GitHubImageIntake = {
 }
 
 export function useGitHubImageUploads(options: GitHubImageIntake) {
+  const t = useTranslate()
   const latest = useRef(options)
   const pending = useRef(0)
   const tail = useRef(Promise.resolve())
@@ -55,7 +56,7 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
               if (mounted.current) {
                 replace()
                 toast.error(
-                  translate('github.imageUploadFailed', 'Could not attach image: {{message}}', {
+                  t('github.imageUploadFailed', 'Could not attach image: {{message}}', {
                     message:
                       error instanceof Error ? error.message : 'Paste the image again to retry.'
                   })
@@ -74,7 +75,7 @@ export function useGitHubImageUploads(options: GitHubImageIntake) {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate('github.imageUploadError', 'GitHub could not upload this image.')
+          : t('github.imageUploadError', 'GitHub could not upload this image.')
       )
     }
     return true

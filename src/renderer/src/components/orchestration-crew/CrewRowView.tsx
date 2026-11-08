@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
 import { CrewRowMenu } from './CrewRowMenu'
@@ -53,6 +53,7 @@ export const CrewRowView = memo(function CrewRowView({
   expanded: boolean
   toggleDisclosure: (key: string) => void
 }) {
+  const t = useTranslate()
   // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
   const open = () => {
@@ -79,7 +80,7 @@ export const CrewRowView = memo(function CrewRowView({
       >
         {/* Screen readers hear the action and agent first, then the row's status, task and message. */}
         <span className="sr-only">
-          {translate('components.orchestrationCrew.mentionAgent', 'Mention {{name}}:', {
+          {t('components.orchestrationCrew.mentionAgent', 'Mention {{name}}:', {
             name: row.label
           })}
         </span>
@@ -92,13 +93,13 @@ export const CrewRowView = memo(function CrewRowView({
           )}
         >
           {row.pendingQuestion
-            ? `${translate('components.orchestrationCrew.waitingPrefix', 'Waiting for you · ')}${row.pendingQuestion.preview}`
+            ? `${t('components.orchestrationCrew.waitingPrefix', 'Waiting for you · ')}${row.pendingQuestion.preview}`
             : (row.latest?.preview ?? '')}
         </span>
       </button>
       <div className="flex shrink-0 items-center">
         <IconButton
-          label={translate(
+          label={t(
             'components.orchestrationCrew.showDetails',
             "Show {{name}}'s task and latest message",
             { name: row.label }
@@ -109,7 +110,7 @@ export const CrewRowView = memo(function CrewRowView({
           {expanded ? <ChevronDown /> : <ChevronRight />}
         </IconButton>
         <IconButton
-          label={translate('components.orchestrationCrew.open', 'Open {{name}}', {
+          label={t('components.orchestrationCrew.open', 'Open {{name}}', {
             name: row.label
           })}
           onClick={open}
@@ -123,7 +124,7 @@ export const CrewRowView = memo(function CrewRowView({
       <Time className="justify-self-end pr-1" at={row.pendingQuestion?.at ?? row.latest?.at} />
       {!row.sendAddress ? (
         <p className="col-span-2 pt-1 text-xs text-muted-foreground">
-          {translate('components.orchestrationCrew.sendingUnavailable', 'Sending unavailable')}
+          {t('components.orchestrationCrew.sendingUnavailable', 'Sending unavailable')}
         </p>
       ) : null}
       {expanded ? (

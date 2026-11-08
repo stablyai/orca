@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
-import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationHostFilter } from '../../../../shared/automations/ownership/automation-host-filter'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { StableAutomationCatalogRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
 import type {
   AutomationCatalogSshMirrorInput,

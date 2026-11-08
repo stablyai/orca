@@ -1,5 +1,4 @@
 import '../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'

@@ -1,4 +1,4 @@
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   startQueuedEditLease as startSharedQueuedEditLease,

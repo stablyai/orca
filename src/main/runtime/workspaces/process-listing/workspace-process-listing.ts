@@ -1,5 +1,5 @@
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
-import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -89,11 +89,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
-      buildRuntimeWorktreeSummaryPathIndex(summaries, resolvedWorktrees, platformByRepoId)
+      buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
     )
     const session = this.store?.getWorkspaceSession?.()
     const countedPtyIds = new Set<string>()
-    const terminalTitleEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
+    const terminalTitleEvidenceByRow = applyRuntimeWorktreePsTerminalActivity({
       freshPtyLiveness,
       countedPtyIds,
       leaves: this.leaves.values(),
@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     })
     attachRuntimeWorktreeAgentRows({
       summaries,
-      terminalTitleEvidenceByWorktreeId,
+      terminalTitleEvidenceByRow,
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary,

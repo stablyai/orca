@@ -5,7 +5,7 @@ import {
   focusRuntimeTerminalSurface,
   registerRuntimeTerminalTab
 } from './mounted-terminal-tab-registry'
-import '../../sync-runtime-graph-test-harness'
+import '../../sync-runtime-graph/testing/sync-runtime-graph-test-harness'
 
 const TAB_ID = 'duplicate-tab'
 const WORKTREE_A = 'registry-worktree-a'
