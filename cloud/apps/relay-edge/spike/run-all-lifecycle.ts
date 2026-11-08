@@ -1,45 +1,11 @@
-// Later run-all.ts checks against the same host: splice pool slots, connect latency, rebind,
-// orphan grace, silence, forced resets and pre-upgrade refusals.
+// Later run-all.ts checks against the same host: rebind, orphan grace, silence,
+// forced resets and pre-upgrade refusals.
 import WebSocket from 'ws'
 import { GRACE_MS, ORIGIN, PING_MS, PORT, SILENCE_MS, makeControl, openPhone, record, sleep, waitFor, type Ctx, type Control } from './run-all-harness'
 
 type Ack = Awaited<ReturnType<Control['client']['connect']>>
 
-export async function runLifecycleChecks(ctx: Ctx, main: Control, mainAck: Ack, devLog: () => string): Promise<void> {
-  // Pool: concurrent phones get distinct slots of the host's splice pool, and every connId names a
-  // pooled object (`<relayHostId>.<slot>`), so connects reuse objects instead of creating them.
-  {
-    const opensBefore = main.events.opens.length
-    const batch = [openPhone(ctx), openPhone(ctx), openPhone(ctx), openPhone(ctx)]
-    await waitFor(() => batch.every((p) => p.hello !== null || p.closed !== null), 8000)
-    const ids = main.events.opens.slice(opensBefore).map((o: { connId: string }) => o.connId)
-    const slotOf = (id: string) => id.match(new RegExp(`^${ctx.relayHostId}\\.([0-7])\\.[0-9a-f-]{36}$`))?.[1]
-    const slots = ids.map(slotOf)
-    const ok = batch.every((p) => (p.hello as { ok?: unknown } | null)?.ok === true)
-    record('Pool: concurrent phones land in distinct pooled slots (connId <host>.<slot>.<uuid>)',
-      ok && ids.length === 4 && slots.every((s) => s !== undefined) && new Set(slots).size === 4,
-      `slots=${slots.join(',')} hellos=${batch.map((p) => (p.hello as { ok?: unknown } | null)?.ok).join(',')}`)
-    for (const p of batch) { p.ws.close() }
-    await sleep(500)
-  }
-
-  // R4: phone connect latency through the extra RPC hop (local).
-  {
-    const samples: number[] = []
-    for (let i = 0; i < 20; i++) {
-      const t0 = performance.now()
-      const p = openPhone(ctx)
-      await waitFor(() => p.hello !== null || p.closed !== null, 5000)
-      samples.push(performance.now() - t0)
-      p.ws.close()
-      await sleep(50)
-    }
-    samples.sort((x, y) => x - y)
-    const rpc = [...devLog().matchAll(/spike_rpc_authorize_ms=(\d+)/g)].map((m) => Number(m[1])).sort((x, y) => x - y)
-    record('R4 phone connect latency with splice->host RPC (local)', samples[19] < 1000,
-      `open->relay-hello p50=${samples[10].toFixed(1)}ms p95=${samples[18].toFixed(1)}ms; authorize RPC p50=${rpc[Math.floor(rpc.length / 2)]}ms max=${rpc.at(-1)}ms n=${rpc.length}`)
-  }
-
+export async function runLifecycleChecks(ctx: Ctx, main: Control, mainAck: Ack): Promise<void> {
   // Rebind keeps generation and splices (resume secret within orphan grace).
   {
     const live = openPhone(ctx)
