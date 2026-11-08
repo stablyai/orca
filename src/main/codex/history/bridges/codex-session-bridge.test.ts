@@ -191,10 +191,6 @@ describe('linkMissingCodexSessionRollouts across sources', () => {
     expect(targets.every((target) => lstatSync(target).isSymbolicLink())).toBe(true)
 
     vi.mocked(link).mockReset()
-    vi.mocked(link).mockImplementation(async (...args) => {
-      const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
-      return actual.link(...args)
-    })
     await pass()
     expect(targets.some((target) => lstatSync(target).isSymbolicLink())).toBe(false)
   })

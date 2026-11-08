@@ -56,7 +56,7 @@ export async function linkMissingCodexSessionRollouts(args: {
       args.collectThreads === true,
       args.shouldStop ?? (() => false),
       pass
-    ).visit([])
+    ).visit([], [...sourceRoots.keys()])
   }
   return pass
 }
@@ -76,18 +76,20 @@ class RolloutLinkWalk {
     private readonly pass: CodexSessionLinkPass
   ) {}
 
-  async visit(relativeParts: readonly string[]): Promise<void> {
+  async visit(relativeParts: readonly string[], sourceIndexes: readonly number[]): Promise<void> {
     if (this.shouldStop()) {
       return
     }
     // Rollout name to the sources holding it, in caller priority order.
     const rollouts = new Map<string, number[]>()
-    const subdirectories = new Set<string>()
-    for (let sourceIndex = 0; sourceIndex < this.sourceRoots.length; sourceIndex += 1) {
+    const subdirectories = new Map<string, number[]>()
+    for (const sourceIndex of sourceIndexes) {
       const entries = await this.readSourceDirectory(sourceIndex, relativeParts)
       for (const entry of entries ?? []) {
         if (entry.isDirectory()) {
-          subdirectories.add(entry.name)
+          const childSourceIndexes = subdirectories.get(entry.name) ?? []
+          childSourceIndexes.push(sourceIndex)
+          subdirectories.set(entry.name, childSourceIndexes)
         } else if (entry.isFile() && isCodexRolloutFileName(entry.name)) {
           rollouts.set(entry.name, [...(rollouts.get(entry.name) ?? []), sourceIndex])
         }
@@ -97,8 +99,8 @@ class RolloutLinkWalk {
     if (rollouts.size > 0) {
       await this.linkDirectory(relativeParts, rollouts)
     }
-    for (const name of subdirectories) {
-      await this.visit([...relativeParts, name])
+    for (const [name, childSourceIndexes] of subdirectories) {
+      await this.visit([...relativeParts, name], childSourceIndexes)
     }
   }
 
