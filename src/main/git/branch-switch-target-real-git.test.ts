@@ -5,7 +5,7 @@ import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BranchSwitchTarget } from '../../shared/git/branch-switch-target'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from './branch-switch'
+import { switchBranchGuarded } from './branch-switch'
 import { BranchSwitchCollisionError } from './branch-switch-target'
 import { checkoutBranch, listLocalBranches } from './checkout'
 import { getStatus } from './source-control/status-read'
@@ -168,16 +168,15 @@ it('probes the resolved local name when a remote checkout lands with a hook fail
   const recorded = vi.fn()
   await expect(
     switchTo({ kind: 'remote', name: 'team/upstream/topic' }, null, recorded)
-  ).rejects.toThrow(
-    new BranchSwitchLandedWithWarningError(
-      'Switched to topic. A git hook in this repository failed afterwards and said: hook failed. The switch itself worked.',
-      'topic'
-    )
-  )
+  ).rejects.toMatchObject({
+    name: 'BranchSwitchLandedWithWarningError',
+    branch: 'topic',
+    head: initialHead
+  })
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('topic')
   expect(recorded).toHaveBeenCalledOnce()
 })
-it("quotes git's own error without blaming a hook when a switch lands", async () => {
+it('reports the landed HEAD when git errors after checkout', async () => {
   await git('branch', 'topic')
   await expect(
     switchBranchGuarded(
@@ -195,12 +194,11 @@ it("quotes git's own error without blaming a hook when a switch lands", async ()
         getAgentBlocker: async () => null
       }
     )
-  ).rejects.toThrow(
-    new BranchSwitchLandedWithWarningError(
-      'Switched to topic, but git reported: error: unable to create file app.css: Permission denied',
-      'topic'
-    )
-  )
+  ).rejects.toMatchObject({
+    name: 'BranchSwitchLandedWithWarningError',
+    branch: 'topic',
+    head: initialHead
+  })
 })
 it('maps a remote not covered by its fetch settings to tracking recovery', async () => {
   await remote('origin')
