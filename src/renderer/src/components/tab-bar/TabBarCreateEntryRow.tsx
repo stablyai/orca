@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   FilePlus,
   FileText,
@@ -89,9 +89,13 @@ export function EntryActionRow({
   const agentOption = option.kind === 'agent' ? option.option : null
   const disabled = rowDisabled || agentOption?.disabled === true
   const setupEntry = onUseAgent ? agentOption?.pickerEntry : undefined
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const focusSearchInput = () =>
+    buttonRef.current?.closest('form')?.querySelector('input')?.focus({ preventScroll: true })
 
   const button = (
     <button
+      ref={buttonRef}
       type="button"
       id={id}
       role="option"
@@ -99,7 +103,9 @@ export function EntryActionRow({
       disabled={disabled}
       className={cn(
         // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
-        'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 font-normal outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 font-normal outline-none disabled:cursor-not-allowed',
+        // The launch-row trigger already dims a disabled setup row.
+        !setupEntry && 'disabled:opacity-50',
         setupEntry
           ? // The submenu row owns the highlight so it spans the › segment.
             cn(
@@ -155,6 +161,7 @@ export function EntryActionRow({
         open={setupOpen}
         onOpenChange={onSetupOpenChange}
         onUse={onUseAgent}
+        returnFocus={focusSearchInput}
         renderAnchor={(trigger) => (
           // Why role none: the search input drives these listbox options; the › carries the submenu semantics.
           <div
@@ -173,7 +180,7 @@ export function EntryActionRow({
             }}
             onFocus={(event) => {
               if (event.target === event.currentTarget) {
-                event.currentTarget.closest('form')?.querySelector('input')?.focus()
+                focusSearchInput()
               }
             }}
             onClick={(event) => {

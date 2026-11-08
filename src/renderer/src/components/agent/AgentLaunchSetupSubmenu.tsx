@@ -14,6 +14,7 @@ export function AgentLaunchSetupSubmenu({
   renderAnchor,
   disabled,
   label,
+  returnFocus,
   children
 }: {
   open: boolean
@@ -21,9 +22,13 @@ export function AgentLaunchSetupSubmenu({
   renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   label: string
-  children: ReactNode
+  /** Caller owns keyboard focus (a search input): hover-open leaves it there and closing returns it. */
+  returnFocus?: () => void
+  children: (focusPanel: boolean) => ReactNode
 }) {
   const trigger = useRef<HTMLDivElement>(null)
+  const segment = useRef<HTMLButtonElement>(null)
+  const [focusPanel, setFocusPanel] = useState(true)
   const content = useRef<HTMLDivElement>(null)
   const [sideOffset, setSideOffset] = useState(4)
   useLayoutEffect(() => {
@@ -52,13 +57,18 @@ export function AgentLaunchSetupSubmenu({
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
       preventScroll: true
     })
-  const close = (returnFocus: 'row' | 'segment') => {
+  const openExplicitly = () => {
+    setFocusPanel(true)
+    onOpenChange(true)
+    focusSearch()
+  }
+  const close = (target: 'row' | 'segment') => {
     onOpenChange(false)
-    const target =
-      returnFocus === 'row'
-        ? trigger.current
-        : trigger.current?.querySelector<HTMLButtonElement>('button')
-    target?.focus()
+    if (returnFocus) {
+      returnFocus()
+    } else {
+      ;(target === 'row' ? trigger.current : segment.current)?.focus()
+    }
   }
   return (
     <DropdownMenuSub
@@ -77,8 +87,7 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
-          const segment = event.currentTarget.querySelector('button')
-          if (event.target instanceof Node && segment?.contains(event.target)) {
+          if (event.target instanceof Node && segment.current?.contains(event.target)) {
             event.preventDefault()
           }
         }}
@@ -87,8 +96,7 @@ export function AgentLaunchSetupSubmenu({
         }}
         onPointerUpCapture={(event) => {
           segmentRelease.current =
-            event.target instanceof Node &&
-            !!event.currentTarget.querySelector('button')?.contains(event.target)
+            event.target instanceof Node && !!segment.current?.contains(event.target)
         }}
         onClickCapture={(event) => {
           if (segmentRelease.current && event.target === event.currentTarget) {
@@ -103,13 +111,13 @@ export function AgentLaunchSetupSubmenu({
         onKeyDown={(event) => {
           if (!disabled && event.target === event.currentTarget && event.key === 'ArrowRight') {
             event.preventDefault()
-            onOpenChange(true)
-            focusSearch()
+            openExplicitly()
           }
         }}
       >
         {renderAnchor(
           <Button
+            ref={segment}
             variant="menu-segment"
             size="icon-sm"
             // Why: stretch to the row so compact omnibox rows keep their height.
@@ -120,7 +128,8 @@ export function AgentLaunchSetupSubmenu({
             aria-expanded={open}
             disabled={disabled}
             onPointerEnter={(event) => {
-              if (!disabled && event.pointerType === 'mouse') {
+              if (!disabled && event.pointerType === 'mouse' && !open) {
+                setFocusPanel(!returnFocus)
                 onOpenChange(true)
               }
             }}
@@ -128,8 +137,7 @@ export function AgentLaunchSetupSubmenu({
             onClick={(event) => {
               event.stopPropagation()
               trigger.current?.focus()
-              onOpenChange(true)
-              focusSearch()
+              openExplicitly()
             }}
             onKeyDown={(event) => {
               event.stopPropagation()
@@ -168,6 +176,10 @@ export function AgentLaunchSetupSubmenu({
         onFocusOutside={(event) => {
           const row = trigger.current?.closest('[data-agent-launch-row]')
           const menu = trigger.current?.closest('[data-slot="dropdown-menu-content"]')
+          if (returnFocus && event.target === menu) {
+            // Radix focuses the root menu when the pointer leaves the row; keep typing in the caller's input.
+            returnFocus()
+          }
           // Nested option menus and pointer grace may move focus outside this portal.
           if (
             !(
@@ -211,7 +223,7 @@ export function AgentLaunchSetupSubmenu({
           }
         }}
       >
-        {children}
+        {children(focusPanel)}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

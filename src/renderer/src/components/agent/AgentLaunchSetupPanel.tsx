@@ -52,6 +52,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  autoFocus = true,
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
@@ -196,7 +197,7 @@ export function AgentLaunchSetupPanel({
         }}
       >
         <CommandInput
-          autoFocus
+          autoFocus={autoFocus}
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}

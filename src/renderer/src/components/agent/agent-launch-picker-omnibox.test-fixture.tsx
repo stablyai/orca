@@ -15,10 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 
-export async function verifyOmniboxPresetIdentity(
-  root: Root,
-  launch: (...args: unknown[]) => void
-) {
+function mountOmniboxEntries(root: Root, launch: (...args: unknown[]) => void) {
   const previous = useAppStore.getState()
   const worktree = makeWorktree({
     repoId: 'repo1',
@@ -70,17 +67,52 @@ export async function verifyOmniboxPresetIdentity(
     )
     await waitFor(() => expect(document.querySelector('input')).not.toBeNull())
   }
+  const restore = () =>
+    act(() => {
+      root.render(<div />)
+      useAppStore.setState(previous, true)
+    })
+  return { showEntries, restore }
+}
+
+const configureButton = () =>
+  document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')
+
+async function waitForConfigure() {
+  await waitFor(() => expect(configureButton()).not.toBeNull())
+  await waitFor(() => expect(configureButton()).toHaveProperty('disabled', false))
+  return configureButton()!
+}
+
+export async function verifyOmniboxSetupKeepsSearchFocus(
+  root: Root,
+  launch: (...args: unknown[]) => void
+) {
+  const { showEntries, restore } = mountOmniboxEntries(root, launch)
+  try {
+    await showEntries(true)
+    const input = document.querySelector('input')!
+    fireEvent.change(input, { target: { value: 'Astra low' } })
+    input.focus()
+    fireEvent.pointerOver(await waitForConfigure(), { pointerType: 'mouse' })
+    await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
+    expect(document.activeElement).toBe(input)
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(document.querySelector('textarea')).toBeNull())
+    expect(document.activeElement).toBe(input)
+    expect(launch).not.toHaveBeenCalled()
+  } finally {
+    restore()
+  }
+}
+
+export async function verifyOmniboxPresetIdentity(
+  root: Root,
+  launch: (...args: unknown[]) => void
+) {
+  const { showEntries, restore } = mountOmniboxEntries(root, launch)
   const configure = async () => {
-    await waitFor(() =>
-      expect(document.querySelector('button[aria-label="Configure Codex"]')).not.toBeNull()
-    )
-    await waitFor(() =>
-      expect(document.querySelector('button[aria-label="Configure Codex"]')).toHaveProperty(
-        'disabled',
-        false
-      )
-    )
-    fireEvent.click(document.querySelector('button[aria-label="Configure Codex"]')!)
+    fireEvent.click(await waitForConfigure())
     await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
   }
   const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
@@ -111,9 +143,6 @@ export async function verifyOmniboxPresetIdentity(
     expect(document.body.textContent).toContain('private/preset')
     expect(launch).not.toHaveBeenCalled()
   } finally {
-    act(() => {
-      root.render(<div />)
-      useAppStore.setState(previous, true)
-    })
+    restore()
   }
 }

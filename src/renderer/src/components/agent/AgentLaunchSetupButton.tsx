@@ -23,6 +23,7 @@ export type AgentLaunchSetupPanelProps = {
   getDraft: () => AgentPickerDraft | undefined
   mode?: 'launch' | 'select'
   disabled?: boolean
+  autoFocus?: boolean
   onDraftChange: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }
@@ -40,6 +41,7 @@ export function AgentLaunchSetupButton({
   disabled,
   open: controlledOpen,
   onOpenChange,
+  returnFocus,
   onUse
 }: {
   entry: AgentPickerEntry
@@ -54,6 +56,7 @@ export function AgentLaunchSetupButton({
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  returnFocus?: () => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const [localOpen, setOpen] = useState(false)
@@ -78,7 +81,7 @@ export function AgentLaunchSetupButton({
     }
     onOpenChange?.(next)
   }
-  const panel = (
+  const panel = (autoFocus: boolean) => (
     <div className="min-h-0 overflow-y-auto scrollbar-sleek">
       {setup.ready ? (
         <AgentLaunchSetupPanel
@@ -87,6 +90,7 @@ export function AgentLaunchSetupButton({
           draft={setup.draft}
           getDraft={setup.getDraft}
           disabled={disabled}
+          autoFocus={autoFocus}
           onDraftChange={setup.change}
           onUse={(draft) => {
             const options = { ...draft, surface: setup.draft.surface }
@@ -111,6 +115,7 @@ export function AgentLaunchSetupButton({
       renderAnchor={renderAnchor}
       disabled={disabled}
       label={translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })}
+      returnFocus={returnFocus}
     >
       {panel}
     </AgentLaunchSetupSubmenu>
