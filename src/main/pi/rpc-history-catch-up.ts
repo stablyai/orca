@@ -106,7 +106,7 @@ export async function catchUpPiSession(input: {
       leaf = { entry: answer.leafId }
       return createPiHistoryImportPlan({
         sessionFile: input.sessionFile,
-        epoch: history.epoch,
+        epoch: history.cursor().epoch,
         reads: history.reads,
         path: branch.path.filter((entry) => !view.accounted.has(entry.id)),
         rewound: branch.rewound,

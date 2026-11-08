@@ -9,7 +9,6 @@ import type {
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 import { StructuredAgentSessionSinkSnapshots } from './structured-agent-session-sink-snapshots'
-import type { StructuredAgentSessionTransitionJournal } from './structured-agent-session-transition'
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number
@@ -100,11 +99,9 @@ export class StructuredAgentSessionSinkQueue {
     failed: this.failure !== null
   })
 
-  journalEpoch = (): string | null => this.target?.journal.epoch ?? null
+  journalEpoch = (): string | null => this.target?.journal.cursor().epoch ?? null
 
   journalHistory = (): StructuredAgentSessionHistoryJournal | null => this.target?.journal ?? null
-
-  journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
 
   observeSettledTurns = (listener: (turnItemIds: readonly string[]) => void): (() => void) => {
     const registered = (turnItemIds: readonly string[]) => listener(turnItemIds)

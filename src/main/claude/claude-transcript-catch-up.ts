@@ -106,7 +106,7 @@ export async function catchUpClaudeTranscript(input: {
       const staging = createClaudeTranscriptImportPlan({
         sessionId: input.sessionId,
         providerSessionId: input.providerSessionId,
-        epoch: history.epoch,
+        epoch: history.cursor().epoch,
         items,
         rewound: planned.hasRows ? tail.rewound : null,
         check
