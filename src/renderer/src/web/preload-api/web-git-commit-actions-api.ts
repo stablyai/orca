@@ -6,9 +6,17 @@ import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 
 export function createGitCommitActionsApi(): Pick<
   PreloadApi['git'],
-  'cherryPick' | 'revert' | 'sequencerAbort' | 'sequencerContinue'
+  'createBranch' | 'cherryPick' | 'revert' | 'sequencerAbort' | 'sequencerContinue'
 > {
   return {
+    createBranch: async ({ worktreePath, name, startPoint }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.createBranch', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        name,
+        startPoint
+      })
+    },
     sequencerContinue: async ({ worktreePath, operation }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       const result = await callRuntimeResult<GitCommitActionResult | { ok: boolean }>(

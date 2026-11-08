@@ -56,6 +56,12 @@ export type GitOperationApi = {
     message: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
+  createBranch: (args: {
+    worktreePath: string
+    name: string
+    startPoint: string
+    connectionId?: string
+  }) => Promise<GitCommitActionResult>
   cherryPick: (args: {
     worktreePath: string
     commitId: string

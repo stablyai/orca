@@ -86,6 +86,11 @@ export const GitSequencer = WorktreeSelector.extend({
   operation: z.enum(['cherry-pick', 'revert'])
 })
 
+export const GitCreateBranch = WorktreeSelector.extend({
+  name: z.string().min(1),
+  startPoint: FullGitObjectId
+})
+
 export const GitCommitAction = WorktreeSelector.extend({ commitId: FullGitObjectId })
 
 export const GitHistoryRefName = z

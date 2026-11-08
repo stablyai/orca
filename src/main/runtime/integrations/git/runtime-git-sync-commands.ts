@@ -133,6 +133,11 @@ export class RuntimeGitSyncCommands {
     return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
   }
 
+  async createRuntimeGitBranch(worktreeSelector: string, name: string, startPoint: string) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).createBranch(target.worktree.path, name, startPoint)
+  }
+
   async cherryPickRuntimeGit(worktreeSelector: string, commitId: string) {
     return this.applyRuntimeCommit(worktreeSelector, 'cherry-pick', commitId)
   }

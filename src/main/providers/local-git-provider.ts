@@ -1,3 +1,4 @@
+import { createBranch } from '../git/create-branch'
 import { applyCommit, recoverSequencer } from '../git/commit-actions'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
@@ -76,6 +77,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    createBranch: (worktreePath, name, startPoint) =>
+      createBranch(worktreePath, name, startPoint, interactive),
     applyCommit: (worktreePath, operation, commitId) =>
       applyCommit(worktreePath, operation, commitId, interactive),
     recoverSequencer: (worktreePath, operation, action) =>

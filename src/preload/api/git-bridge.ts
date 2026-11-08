@@ -150,6 +150,12 @@ export const gitApi = {
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  createBranch: (args: {
+    worktreePath: string
+    name: string
+    startPoint: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:createBranch', args),
   cherryPick: (args: {
     worktreePath: string
     commitId: string

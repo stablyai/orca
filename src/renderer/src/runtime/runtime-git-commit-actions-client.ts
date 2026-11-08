@@ -2,9 +2,39 @@ import type {
   GitCommitAction,
   GitCommitActionResult
 } from '../../../shared/git/commands/git-commit-action'
-import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import {
+  resolveLocalWorktreePath,
+  type RuntimeGitContext
+} from './source-control/git/runtime-git-client-context'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+
+export async function createRuntimeGitBranch(
+  context: RuntimeGitContext,
+  name: string,
+  startPoint: string,
+  beforeSend?: () => void
+): Promise<GitCommitActionResult> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    beforeSend?.()
+    return window.api.git.createBranch({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId,
+      name,
+      startPoint
+    })
+  }
+  return callRuntimeRpc(
+    context.target,
+    'git.createBranch',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      name,
+      startPoint
+    },
+    { timeoutMs: 30_000, beforeSend }
+  )
+}
 
 export async function cherryPickRuntimeGit(
   context: RuntimeGitContext,

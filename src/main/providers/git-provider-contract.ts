@@ -45,6 +45,11 @@ export type IGitProvider = {
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  createBranch(
+    worktreePath: string,
+    name: string,
+    startPoint: string
+  ): Promise<GitCommitActionResult>
   applyCommit(
     worktreePath: string,
     operation: GitCommitAction,

@@ -1,7 +1,18 @@
 import { defineMethod } from '../../../core'
-import { GitCommitAction, GitSequencer } from '../../../../../../shared/rpc-contract/git-params'
+import {
+  GitCommitAction,
+  GitSequencer,
+  GitCreateBranch
+} from '../../../../../../shared/rpc-contract/git-params'
 
 export const GIT_COMMIT_ACTION_METHODS = [
+  defineMethod({
+    name: 'git.createBranch',
+    permission: 'workspace',
+    params: GitCreateBranch,
+    handler: async (params, { runtime }) =>
+      runtime.createRuntimeGitBranch(params.worktree, params.name, params.startPoint)
+  }),
   defineMethod({
     name: 'git.sequencerContinue',
     permission: 'workspace',

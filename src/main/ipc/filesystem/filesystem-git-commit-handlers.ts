@@ -1,5 +1,6 @@
 import type { GitCommitAction } from '../../../shared/git/commands/git-commit-action'
 import { applyCommit, recoverSequencer } from '../../git/commit-actions'
+import { createBranch } from '../../git/create-branch'
 import { ipcMain } from 'electron'
 import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -10,6 +11,20 @@ import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
+  ipcMain.handle(
+    'git:createBranch',
+    async (
+      _event,
+      args: { worktreePath: string; name: string; startPoint: string; connectionId?: string }
+    ) => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return createBranch(worktreePath, args.name, args.startPoint, {
+        ...getLocalGitOptionsForRegisteredWorktree(store, args.worktreePath, worktreePath),
+        admissionTier: 'interactive'
+      })
+    }
+  )
   for (const action of ['abort', 'continue'] as const) {
     const method = action === 'abort' ? 'sequencerAbort' : 'sequencerContinue'
     ipcMain.handle(

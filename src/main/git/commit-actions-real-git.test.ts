@@ -1,3 +1,4 @@
+import { createBranch } from './create-branch'
 import { detectConflictOperation } from './source-control/git-conflict-operation'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -42,6 +43,22 @@ afterEach(async () => {
 })
 
 describe('commit actions', () => {
+  it('creates a branch at the selected commit without switching HEAD or enabling tracking', async () => {
+    await git('config', 'branch.autoSetupMerge', 'always')
+    expect(await createBranch(directory, 'saved-topic', topic)).toEqual({
+      outcome: 'landed',
+      branch: 'saved-topic',
+      commitId: topic
+    })
+    expect(await git('rev-parse', 'saved-topic')).toBe(topic)
+    expect(await git('branch', '--show-current')).toBe('main')
+    expect(await git('for-each-ref', '--format=%(upstream)', 'refs/heads/saved-topic')).toBe('')
+    await expect(createBranch(directory, '@', topic)).rejects.toThrow(
+      'This branch name is invalid. Choose a different name.'
+    )
+    expect(await git('branch', '--show-current')).toBe('main')
+  })
+
   it('cherry-picks a root commit onto a clean unborn branch', async () => {
     const root = await git('rev-list', '--max-parents=0', 'HEAD')
     await git('checkout', '--orphan', 'unborn')
