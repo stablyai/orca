@@ -129,6 +129,7 @@ describe('terminal multiplex adaptive ACK window', () => {
   })
 
   it('keeps alternate-screen echo near the link delay while a TUI floods a slow link', async () => {
+    vi.stubEnv('ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG', '1')
     expect(await measureEchoLatencyMs(true)).toBeLessThan(2_000)
   })
 
@@ -139,12 +140,14 @@ describe('terminal multiplex adaptive ACK window', () => {
   })
 
   it('never paces a low-RTT link, even when its client is slow', async () => {
+    vi.stubEnv('ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG', '1')
     const paced = await measureEchoLatencyMs(true, LAN_WITH_SLOW_CLIENT)
     vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '0')
     expect(paced).toBe(await measureEchoLatencyMs(true, LAN_WITH_SLOW_CLIENT))
   })
 
   it('restores the legacy window when the kill switch is set', async () => {
+    vi.stubEnv('ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG', '1')
     vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '0')
     const latency = await measureEchoLatencyMs(true)
     expect(latency).toBeGreaterThan(12_000)

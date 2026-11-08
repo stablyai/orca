@@ -21,6 +21,12 @@ const UNSUPERSEDABLE_MARKERS = [
 // A marker split at the send boundary leaves at most this many characters in the sent frame.
 const SENT_TAIL_CHARS = Math.max(...UNSUPERSEDABLE_MARKERS.map((marker) => marker.length)) - 1
 
+// Opt-in: every recovery snapshot still makes current clients replay their reattach reset (cursor shape and
+// visibility, focus reporting), which is visible when it fires routinely; enable once clients can skip it.
+export function isAltBacklogSupersedeEnabled(): boolean {
+  return process.env.ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG === '1'
+}
+
 /** End of the text the client has already been sent; null when it was a span whose raw text is unknown. */
 export function supersedableSentTail(
   previousTail: string | null,
@@ -32,9 +38,10 @@ export function supersedableSentTail(
   const text = decodeTerminalStreamText(
     chunk.bytes.subarray(Math.max(0, chunk.bytes.byteLength - 4 * SENT_TAIL_CHARS))
   )
-  return ((text.length < SENT_TAIL_CHARS ? (previousTail ?? '') : '') + text).slice(
-    -SENT_TAIL_CHARS
-  )
+  if (text.length < SENT_TAIL_CHARS && previousTail === null) {
+    return null
+  }
+  return ((text.length < SENT_TAIL_CHARS ? previousTail : '') + text).slice(-SENT_TAIL_CHARS)
 }
 
 /** True when a screen-only alt snapshot fully replaces these frames: plain text that never switches screen, rings a

@@ -16,7 +16,10 @@ import {
   pacedAckWindowBytes
 } from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
-import { framesAreSupersedable } from './terminal-multiplex-supersedable-frames'
+import {
+  framesAreSupersedable,
+  isAltBacklogSupersedeEnabled
+} from './terminal-multiplex-supersedable-frames'
 import {
   markYieldedQueriesDiscardedInFrames,
   replaySnapshotCoveredStatelessQueries
@@ -34,6 +37,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
   const snapshotSupersedesBacklog = (stream: TerminalMultiplexStream): boolean => {
     const paced = pacedAckWindowBytes(state, stream)
     if (
+      !isAltBacklogSupersedeEnabled() ||
       paced === null ||
       stream.ackPendingOutputBytes <= paced ||
       linkEstimate.now() < stream.ackSupersedeSnapshotNotBefore
@@ -142,6 +146,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         stream.ackRecoveryHistoryOwed = !carriesHistory
       }
       stream.ackPendingOutputOverflowed = false
+      // A snapshot can end inside an escape (pendingEscapeTailAnsi), so the sent tail is unknown until text follows.
+      stream.ackSentOutputTail = null
       replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
