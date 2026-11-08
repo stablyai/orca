@@ -38,7 +38,7 @@ import { AgentSessionContinuationDialog } from '@/components/agent-session-conti
 import { AiVaultScanIssueBanners } from '../scanning/AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from '../session-actions/ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from '../search/use-ai-vault-search'
-import { withAiVaultHistoryPreviews } from '../search/ai-vault-search-session'
+import { useAiVaultPanelSearchSessions } from '../search/ai-vault-search-session'
 import { aiVaultSearchScopeIdentity } from '../search/ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
@@ -174,14 +174,10 @@ export default function AiVaultPanel({
   )
   const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope, searchSort)
   const { searching, searchHits } = search
-  const searchSessions = useMemo(
-    () => withAiVaultHistoryPreviews(search.sessions, history),
-    [history, search.sessions]
+  const { listMode, stale, sessions, resolverSessions } = useAiVaultPanelSearchSessions(
+    search,
+    history
   )
-  // Until this query's first reply, older hits stay dimmed or, with none, title matches fill the wait.
-  const waitingForHits = searching && search.loading && !search.answered
-  const searchTitles = waitingForHits && search.hits.length === 0
-  const sessions = searching && !searchTitles ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     includeAntigravityIdeSessions: true,
@@ -197,9 +193,9 @@ export default function AiVaultPanel({
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
-        sessions
+        sessions: resolverSessions
       }),
-    [allWorktrees, projectHostSetupProjection, repos, sessions]
+    [allWorktrees, projectHostSetupProjection, repos, resolverSessions]
   )
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   const {
@@ -208,7 +204,7 @@ export default function AiVaultPanel({
     getSessionResumeActions,
     getSessionResumeInChat
   } = useAiVaultPanelSessionResume({
-    sessions,
+    sessions: resolverSessions,
     repos,
     allWorktrees,
     workspaceId: effectiveActiveWorktreeId,
@@ -228,7 +224,6 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
-  const listMode = searching ? (searchTitles ? 'search-titles' : 'search-hits') : 'browse'
   const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
     query,
     agents,
@@ -334,7 +329,7 @@ export default function AiVaultPanel({
           <AiVaultSessionVirtualList
             key={searching ? 'search' : 'history'}
             resultsKey={searching ? search.resultsKey : undefined}
-            stale={waitingForHits && search.hits.length > 0}
+            stale={stale}
             searchHits={searching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}
             groups={groups}
