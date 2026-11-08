@@ -100,7 +100,7 @@ export function SessionLinkControl({
       >
         <DialogContent surface="security" scrollable className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('components.sessionLink.workTogether', 'Work together…')}</DialogTitle>
+            <DialogTitle>{t('components.sessionLink.title', 'Work together')}</DialogTitle>
             <DialogDescription>
               {t(
                 'components.sessionLink.description',

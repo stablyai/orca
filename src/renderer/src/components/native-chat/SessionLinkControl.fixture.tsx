@@ -187,7 +187,20 @@ export const fromTabs = defineFixture({
         dialogOnly
       />
     </div>
-  )
+  ),
+  interact: async () => {
+    for (let i = 0; i < 20; i++) {
+      const story = document.querySelector<HTMLTextAreaElement>('textarea')
+      if (story) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+        setter?.call(story, 'Checkout flow · slice 2')
+        story.dispatchEvent(new Event('input', { bubbles: true }))
+        return
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+    throw new Error('Collaboration story field did not render')
+  }
 })
 
 export const ownerDecisionNarrow = defineFixture({

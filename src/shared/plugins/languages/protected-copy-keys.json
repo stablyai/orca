@@ -820,6 +820,7 @@
     "components.sessionLink.story",
     "components.sessionLink.storyPlaceholder",
     "components.sessionLink.swap",
+    "components.sessionLink.title",
     "components.sessionLink.turnLimit",
     "components.sessionLink.turns",
     "components.sessionLink.untilAccepted",

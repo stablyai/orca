@@ -21446,6 +21446,7 @@
       "paused": "Paused",
       "endedShort": "Ended",
       "waitingShort": "Waiting",
+      "title": "Work together",
       "workTogether": "Work together…",
       "description": "Connect two existing local chats. You control the story, permissions and continuation.",
       "retry": "Retry the unconfirmed action",
