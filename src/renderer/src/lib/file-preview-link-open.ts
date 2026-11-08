@@ -22,7 +22,7 @@ export type FileBrowserLinkTarget = {
   placementWorkspaceId?: string
 }
 
-function resolveFileBrowserLinkExecutionHostId(
+export function resolveFileBrowserLinkExecutionHostId(
   state: AppState,
   worktreeId: string
 ): ExecutionHostId | null {

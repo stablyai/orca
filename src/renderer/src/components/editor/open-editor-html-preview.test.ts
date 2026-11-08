@@ -159,6 +159,39 @@ it('refuses a remote file whose owner changes while its editor flushes', async (
   }
 })
 
+it('refuses an unstamped child file whose workspace owner changes during flush', async () => {
+  const file = seedEditorPlacementConsumers({
+    mode: 'edit',
+    filePath: '/repo/report.html',
+    relativePath: 'report.html',
+    language: 'html',
+    runtimeEnvironmentId: undefined
+  })
+  const flush = Promise.withResolvers<boolean>()
+  const unregister = registerEditorFrameFlush(file.id, () => flush.promise)
+  try {
+    const opening = openEditorHtmlPreview(file.id, 'x-source-tab')
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) => ({
+        ...repo,
+        connectionId: 'replacement-owner',
+        executionHostId: 'ssh:replacement-owner'
+      })),
+      worktreesByRepo: {
+        repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
+          ...worktree,
+          hostId: 'ssh:replacement-owner'
+        }))
+      }
+    }))
+    flush.resolve(true)
+    await opening
+    expect(useAppStore.getState().browserTabsByWorktree[EDITOR_PLACEMENT] ?? []).toEqual([])
+  } finally {
+    unregister()
+  }
+})
+
 async function previewWhileFlushing(changeIntent: () => void): Promise<void> {
   const flush = Promise.withResolvers<boolean>()
   const unregister = registerEditorFrameFlush('report', () => flush.promise)

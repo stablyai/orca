@@ -5,6 +5,7 @@ import {
   editorViewTab
 } from '@/store/slices/editor/tabs/editor-view-placement'
 import { openFileInBrowserTab } from '@/lib/file-preview'
+import { resolveFileBrowserLinkExecutionHostId } from '@/lib/file-preview-link-open'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { beginLinkOpenRequest, subscribeLinkOpenRequests } from '@/lib/link-open-request'
@@ -25,6 +26,12 @@ export async function openEditorHtmlPreview(
     initial.groupsByWorktree[source.worktreeId]?.find((group) => group.id === source.groupId)
       ?.activeTabId !== source.id
   ) {
+    return
+  }
+  const fileExecutionHostId =
+    editorViewPlacement(initial, file, source.id).executionHostId ??
+    resolveFileBrowserLinkExecutionHostId(initial, file.worktreeId)
+  if (!fileExecutionHostId) {
     return
   }
   initial.focusGroup(source.worktreeId, source.groupId)
@@ -65,7 +72,6 @@ export async function openEditorHtmlPreview(
     if (
       !reveal.canReveal() ||
       !(await flushEditorFrames(initial, file.id)) ||
-      !isCurrentRequest() ||
       !reveal.canReveal()
     ) {
       return
@@ -76,13 +82,11 @@ export async function openEditorHtmlPreview(
       return
     }
     const placement = editorViewPlacement(state, currentFile, source.id)
-    const initialHostId = editorViewPlacement(initial, file, source.id).executionHostId
     if (
-      initialHostId &&
       !createBrowserLinkHostMatcher(
         state,
         currentFile.worktreeId,
-        initialHostId
+        fileExecutionHostId
       )(placement.executionHostId)
     ) {
       return
@@ -91,7 +95,7 @@ export async function openEditorHtmlPreview(
       const plan = openFileInBrowserTab({
         filePath: currentFile.filePath,
         worktreeId: currentFile.worktreeId,
-        fileExecutionHostId: placement.executionHostId,
+        fileExecutionHostId,
         placementWorkspaceId: placement.placementWorkspaceId,
         linkContext: {
           linkIntent: captureLinkOpenIntent(state, placement.placementWorkspaceId, source.id, {
