@@ -22,7 +22,7 @@ import {
   type RemoteRuntimeSubscription
 } from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
-import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
+import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
@@ -195,7 +195,7 @@ export async function subscribeRuntimeEnvironment(
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
-    onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
+    onEvent: decodeRuntimeEnvironmentSubscriptionEvents(method, rawCallbacks.onEvent, isCurrent)
   }
   crewAttempt?.assertCurrent()
   const environment = crewAttempt

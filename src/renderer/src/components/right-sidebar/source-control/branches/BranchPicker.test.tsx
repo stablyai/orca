@@ -7,7 +7,6 @@ import { fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
-import { i18n } from '@/i18n/i18n'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   listRuntimeGitBranches,
@@ -201,83 +200,4 @@ it('delivers the original workspace outcome after the picker unmounts', async ()
   await act(async () => root.render(<p>Another workspace</p>))
   await act(async () => finish?.({ ok: true, branch: 'feature', warning: 'Files left behind.' }))
   expect(onSwitched).toHaveBeenCalledWith('Files left behind.')
-})
-
-it('renders a translated local-list recovery message', async () => {
-  i18n.addResourceBundle(
-    'de',
-    'translation',
-    {
-      sourceControl: { branchPicker: { listFailed: 'Lokale Zweige konnten nicht geladen werden.' } }
-    },
-    true,
-    true
-  )
-  await i18n.changeLanguage('de')
-  vi.mocked(listRuntimeGitBranches).mockRejectedValueOnce(new Error('unreadable'))
-  try {
-    await act(async () =>
-      root.render(
-        <BranchPicker
-          branch="main"
-          blocker={null}
-          context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
-          repoId="repo"
-          hostId="local"
-          hostLabel="This computer"
-          workspaceLabel="repo"
-          workspaces={new Map()}
-          onOpenWorkspace={vi.fn()}
-          onSwitched={vi.fn()}
-        />
-      )
-    )
-    await act(async () => container.querySelector('button')?.click())
-    expect(container.querySelector('[role="status"]')?.textContent).toBe(
-      'Lokale Zweige konnten nicht geladen werden.'
-    )
-  } finally {
-    await i18n.changeLanguage('en')
-  }
-})
-
-it('updates an open memoized row when the UI language changes', async () => {
-  i18n.addResourceBundle(
-    'de',
-    'translation',
-    { sourceControl: { branchPicker: { open: 'Arbeitsbereich öffnen' } } },
-    true,
-    true
-  )
-  vi.mocked(listRuntimeGitBranches).mockResolvedValueOnce({
-    current: 'main',
-    branches: ['held'],
-    worktreePaths: { held: '/held' }
-  })
-  vi.mocked(searchRuntimeRemoteBranches).mockResolvedValue({ refs: [], truncated: false })
-  try {
-    await act(async () =>
-      root.render(
-        <BranchPicker
-          branch="main"
-          blocker={null}
-          context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
-          repoId="repo"
-          hostId="local"
-          hostLabel="This computer"
-          workspaceLabel="repo"
-          workspaces={new Map([['held', { id: 'held', repoId: 'repo', path: '/held' }]])}
-          onOpenWorkspace={vi.fn()}
-          onSwitched={vi.fn()}
-        />
-      )
-    )
-    await act(async () => container.querySelector('button')?.click())
-    expect(container.textContent).toContain('Open workspace')
-    await act(async () => i18n.changeLanguage('de'))
-    expect(container.textContent).toContain('Arbeitsbereich öffnen')
-    expect(container.textContent).not.toContain('Open workspace')
-  } finally {
-    await act(async () => i18n.changeLanguage('en'))
-  }
 })

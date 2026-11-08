@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   mobileNativeChatHostPreference,
   QUEUE_FOLLOW_UPS_PREFERENCE

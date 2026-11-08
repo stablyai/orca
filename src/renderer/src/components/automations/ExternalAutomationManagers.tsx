@@ -8,7 +8,7 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import type {
   ExternalAutomationScope,
   ScopedExternalAutomationManager

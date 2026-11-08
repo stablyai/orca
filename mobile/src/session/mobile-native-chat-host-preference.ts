@@ -1,12 +1,12 @@
 import {
   nativeChatCiResultLinesRead,
   nativeChatQueueFollowUpsRead
-} from '../transport/settings-read-operations'
-import type { RpcClient } from '../transport/rpc-client'
+} from './mobile-native-chat-host-preference-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   subscribeSharedClientEvents,
   type SharedClientEvent
-} from '../transport/shared-client-events'
+} from '../transport/connection/shared-client-events'
 import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 
 /** A desktop chat setting the host pushes live: its read, its change event and its ready-snapshot field. */

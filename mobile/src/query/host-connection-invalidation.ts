@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
-import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
-import type { RpcClient } from '../transport/rpc-client'
+import { createHostConnectRefetchGate } from '../transport/hosts/host-connect-refetch-gate'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostScopeKey } from './host-query-key'
 
 type Watch = { holders: number; stop: () => void }

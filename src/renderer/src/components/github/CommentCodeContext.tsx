@@ -15,7 +15,7 @@ import {
 } from '@/components/comment-code-context-state'
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { getPRFileContentsRenderLimit } from '@/components/github/pr-file-diff-mapping'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type {
   GitHubOwnerRepo,

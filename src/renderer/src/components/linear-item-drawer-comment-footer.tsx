@@ -15,7 +15,7 @@ import { useAppStore } from '@/store'
 import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { LinearLocalComment } from '@/components/linear-item-drawer-types'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 

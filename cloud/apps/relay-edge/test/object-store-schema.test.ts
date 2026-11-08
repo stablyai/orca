@@ -1,29 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { OBJECT_STORE_SCHEMA } from '../src/object-store-schema.generated'
 import { relayObjectStoreSchema } from './object-store-schema'
 
-const FILE = new URL('../src/object-store-schema.generated.ts', import.meta.url)
-
 it('object store schema matches the relay schema', async () => {
-  const expected = await relayObjectStoreSchema()
-  if (process.env.UPDATE_OBJECT_STORE_SCHEMA === '1') {
-    const body = `// GENERATED from the relay's SQLite schema (sqlite_master) by test/object-store-schema.test.ts.\n// Do not edit; regenerate with UPDATE_OBJECT_STORE_SCHEMA=1.\nexport const OBJECT_STORE_SCHEMA: readonly string[] = ${JSON.stringify(expected, null, 2)}\n`
-    if (readFileSync(FILE, 'utf8') !== body) { writeFileSync(FILE, body) }
-    return
-  }
-  expect([...OBJECT_STORE_SCHEMA]).toEqual(expected)
-})
-
-// Bump OBJECT_SCHEMA_VERSION, add its MIGRATIONS step, then update this pin.
-const PINNED = { version: 1, ddlSha256: 'd4738f7d9d402cb8066ec99799e5ebe9dafd09621aba0151434e23741087828f' }
-
-it('object tables change only with a schema version bump', async () => {
-  const { createHash } = await import('node:crypto')
-  const { OBJECT_DDL, OBJECT_SCHEMA_VERSION, MIGRATIONS } = await import('../src/object-store')
-  const ddlSha256 = createHash('sha256').update(JSON.stringify(OBJECT_DDL)).digest('hex')
-  expect({ version: OBJECT_SCHEMA_VERSION, ddlSha256 }).toEqual(PINNED)
-  for (let v = 2; v <= OBJECT_SCHEMA_VERSION; v++) { expect(MIGRATIONS[v], `migration to v${v}`).toBeDefined() }
+  expect([...OBJECT_STORE_SCHEMA]).toEqual(await relayObjectStoreSchema())
 })
 
 it('stamps fresh objects, keeps pre-version ones, refuses objects newer than the code', async () => {

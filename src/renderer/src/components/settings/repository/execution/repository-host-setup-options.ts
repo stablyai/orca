@@ -2,7 +2,7 @@ import {
   getExecutionHostLabel,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type {
   ProjectHostSetup,
   ProjectHostSetupState
@@ -10,7 +10,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getHostSetupUnavailableDetail } from '@/lib/project-host-setup-options'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 
 export type SetupHostOption = {
   id: ExecutionHostId

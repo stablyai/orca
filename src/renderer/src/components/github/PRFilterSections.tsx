@@ -6,7 +6,7 @@ import {
   type PickerOption
 } from '@/components/github/PRFilterPickers'
 import { cn } from '@/lib/utils'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

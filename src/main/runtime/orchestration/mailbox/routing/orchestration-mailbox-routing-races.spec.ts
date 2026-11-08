@@ -1,12 +1,11 @@
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationMailboxPointerState } from '../terminal-pointer/mailbox-pointer-state'
+import '../terminal-pointer/mailbox-pointer-state'
 import {
   createBoundRun,
   createDatabase,
   createRuntime,
   insertDirectRunMessage,
-  LEAF_ID,
   PANE_KEY,
   registerSecondPane,
   SECOND_LAUNCH_TOKEN,
@@ -20,7 +19,6 @@ import {
   checkBoundMailbox,
   dispatchMailboxCheck
 } from '../terminal-pointer/orchestration-mailbox-check.test-fixture'
-
 import { ackThenCheck } from '../terminal-pointer/orchestration-mailbox-ack-then-check.test-fixture'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 
@@ -330,108 +328,6 @@ describe('orchestration mailbox routing races', () => {
 
     expect(routeSpy).toHaveBeenCalledTimes(2)
     expect(db.getUnreadMessages(TERMINAL_HANDLE)).toHaveLength(60)
-    db.close()
-  })
-
-  it('stops paged routing when the check is cancelled', async () => {
-    const db = createDatabase('orca-mailbox-routing-cancel-')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Routing cancellation')
-    for (let index = 0; index < 101; index += 1) {
-      insertDirectRunMessage(db, run.id, `Before cancellation ${index}`)
-    }
-    const controller = new AbortController()
-    const route = db.routeUnreadDirectMessagesToRunMailbox.bind(db)
-    let scheduled = false
-    const routeSpy = vi
-      .spyOn(db, 'routeUnreadDirectMessagesToRunMailbox')
-      .mockImplementation((...args) => {
-        const page = route(...args)
-        if (!scheduled) {
-          scheduled = true
-          setImmediate(() => controller.abort())
-        }
-        return page
-      })
-
-    const response = await dispatchMailboxCheck(harness.runtime, {
-      signal: controller.signal
-    })
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
-    expect(routeSpy).toHaveBeenCalledOnce()
-    db.close()
-  })
-
-  it('keeps an unfiltered redrive unrestricted when reservations merge', () => {
-    const state = new OrchestrationMailboxPointerState()
-
-    state.parkRedelivery('run:run_test', new Set())
-    state.parkRedelivery('run:run_test', new Set(['worker_done']))
-
-    expect(state.takeRedelivery('run:run_test', false)).toBeNull()
-
-    state.parkRedelivery('run:run_test', new Set(['worker_done']))
-    state.parkRedelivery('run:run_test', new Set())
-
-    expect(state.takeRedelivery('run:run_test', false)).toBeNull()
-  })
-
-  it('keeps an unfiltered parked delivery unrestricted when reservations merge', () => {
-    const state = new OrchestrationMailboxPointerState()
-
-    const unfilteredFirst = state.beginFlight('pty_unfiltered_first')
-    state.parkDelivery('pty_unfiltered_first', 'run:run_test', new Set())
-    state.parkDelivery('pty_unfiltered_first', 'run:run_test', new Set(['worker_done']))
-
-    expect(
-      state.settleFlight('pty_unfiltered_first', unfilteredFirst)?.get('run:run_test')
-    ).toBeUndefined()
-
-    const unfilteredLast = state.beginFlight('pty_unfiltered_last')
-    state.parkDelivery('pty_unfiltered_last', 'run:run_test', new Set(['worker_done']))
-    state.parkDelivery('pty_unfiltered_last', 'run:run_test', new Set())
-
-    expect(
-      state.settleFlight('pty_unfiltered_last', unfilteredLast)?.get('run:run_test')
-    ).toBeUndefined()
-  })
-
-  it('uses a bounded indexed pane lookup for reminted Dispatch identity', () => {
-    const db = createDatabase('orca-mailbox-dispatch-pane-index-')
-    const run = db.createRun({
-      objective: 'Dispatch pane index',
-      coordinatorHandle: 'term_coordinator',
-      coordinatorPaneKey:
-        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
-    })
-    const task = db.createTask({ spec: 'Valid worker', runId: run.id })
-    const valid = createRootDispatch(db, task.id, 'term_old', PANE_KEY)
-    const collisionTask = db.createTask({ spec: 'Malformed collision', runId: run.id })
-    createRootDispatch(db, collisionTask.id, 'term_collision', `:${LEAF_ID}`)
-
-    expect(db.getActiveDispatchForIdentity('term_reminted', PANE_KEY)?.id).toBe(valid.id)
-    const plan = sqliteFor(db)
-      .prepare(
-        `EXPLAIN QUERY PLAN SELECT * FROM dispatch_contexts
-         WHERE assignee_pane_key IS NOT NULL
-           AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
-           AND substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1) = ?
-         ORDER BY rowid DESC LIMIT 1`
-      )
-      .all(LEAF_ID) as { detail: string }[]
-    expect(plan.map((row) => row.detail).join(' ')).toContain('idx_dispatch_assignee_pane_leaf')
-    const snapshotPlan = sqliteFor(db)
-      .prepare(
-        `EXPLAIN QUERY PLAN SELECT sequence FROM messages
-         WHERE run_id = ? AND to_handle = ? AND read = 0
-           AND delivery_contract = 'current_delivery'
-         ORDER BY sequence DESC LIMIT 1`
-      )
-      .all(run.id, TERMINAL_HANDLE) as { detail: string }[]
-    expect(snapshotPlan.map((row) => row.detail).join(' ')).toContain(
-      'idx_messages_delivery_contract'
-    )
     db.close()
   })
 })

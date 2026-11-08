@@ -17,7 +17,7 @@ import {
   resolveRuntimeNavigationTarget
 } from '../../../../../shared/runtime-navigation'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { workspaceKindForWorktreeId } from '../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchPaneVerdict } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import {

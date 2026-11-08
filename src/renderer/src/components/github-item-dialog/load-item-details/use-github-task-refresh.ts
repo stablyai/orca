@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
-import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
+import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/work-items/task-source-runtime-capabilities'
 import { githubTaskExecutionIdentity, captureGitHubTaskTarget } from '@/lib/github-task-target'
 import {
   useCallback,
@@ -18,7 +18,7 @@ import { useAppStore } from '@/store'
 
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 import { workItemDetailsCache } from './work-item-details-cache'
 import {

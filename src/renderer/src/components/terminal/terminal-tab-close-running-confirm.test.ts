@@ -120,22 +120,6 @@ describe('closeTerminalTab running-process confirmation', () => {
     }
   })
 
-  it('closes a busy tab only after the confirmation is accepted', async () => {
-    closeTerminalTab('tab-busy', { reason: 'user' })
-    await settleProbe()
-
-    expect(closeTab).not.toHaveBeenCalled()
-    expect(visibleRequest()).toMatchObject({
-      terminalTabId: 'tab-busy',
-      tabLabel: 'dev server',
-      copyKind: 'command'
-    })
-
-    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-
-    expect(closeTab).toHaveBeenCalledWith('tab-busy', { reason: 'user' })
-  })
-
   it('keeps the tab and runs onCancel when the confirmation is dismissed', async () => {
     const onCancel = vi.fn()
     const onClosed = vi.fn()

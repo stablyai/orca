@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileViewPatch, WorkspaceViewSettings } from '../worktree/workspace-view-settings'
 import { hostViewSettingsWrite } from './host-screen-operations'
 import { readHostMethodReply, setCollapsedWrite } from './host-sidebar-feed-operations'

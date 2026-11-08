@@ -1,4 +1,4 @@
-import { compareQueuedRows } from '../input-order/journal-input-card-index'
+import { compareQueuedRows } from '../input-order/journal-queued-row-index'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission

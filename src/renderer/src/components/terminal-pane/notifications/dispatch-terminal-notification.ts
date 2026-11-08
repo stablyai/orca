@@ -20,7 +20,7 @@ import type {
 import {
   isCoordinatorOnlyNews,
   withApprovalTitle
-} from '../../../../../shared/dispatched-worker-attention'
+} from '../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { canonicalOrchestrationForRow } from '../../../runtime/agent-orchestration/visible-agent-orchestration'
 import { isSupersededAgentCompletionSnapshot } from '../agent-completion/agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'

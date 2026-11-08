@@ -5,10 +5,10 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import {
-  journalQueueStopHolds,
   failedQueueTurnSequence,
   type DerivedQueuePause
 } from '../queued-messages/queued-message-pause'
+import { journalQueueStopHolds } from '../queued-messages/queued-message-pause-marks'
 import {
   JournalInputPlaceIndex,
   mergeInputPlaces,

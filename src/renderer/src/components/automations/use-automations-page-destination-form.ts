@@ -1,5 +1,5 @@
 import { resolveAutomationEditDestination } from './automation-orca-save-operations'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automations/ownership/automation-list-scope'
 import {
   recordedAutomationRunContext,
   isSameAutomationWorkspace

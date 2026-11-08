@@ -6,7 +6,7 @@ import type { NativeChatLaunchSeed } from '../drafts/native-chat-launch-seed'
 import type { NativeChatStructuredComposerTransport } from './submit/native-chat-structured-composer-transport'
 import type { NativeChatComposerNotice } from './controls/native-chat-composer-notice'
 import type { NativeChatRecallSource } from '../drafts/native-chat-sent-prompt-history'
-import type { OrchestrationAgentReference } from '../../../../../shared/orchestration-agent-reference'
+import type { OrchestrationAgentReference } from '../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */

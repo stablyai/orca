@@ -5,8 +5,8 @@ import type {
   MobileWebBundleManifestReply
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleCompatManifest } from '../transport/web-bundle/mobile-web-bundle-compat'
-import { runRpcOperation } from '../transport/rpc-operation'
-import type { RpcClient } from '../transport/rpc-client'
+import { runRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { GenerationStore, StagedGeneration } from './generation-store'
 import type { createShellPageDeadline } from './shell-page-deadline'
 import {

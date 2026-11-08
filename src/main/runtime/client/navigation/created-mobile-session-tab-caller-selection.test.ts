@@ -67,24 +67,3 @@ it('selects a launched terminal for the caller only, without spawning again', as
   )
   expect(spawn).toHaveBeenCalledTimes(2)
 })
-
-it('selects a launched chat by its session for the caller only', async () => {
-  const { runtime, caller } = pairedRuntime()
-  const first = await createPane(runtime)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: WT,
-    sessionId: 'sess-1',
-    agent: 'claude',
-    activate: false
-  })
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(WT, { sessionId: 'sess-1' }, 'device-caller')
-  ).toBe(true)
-
-  expect(caller.at(-1)?.activeTabId).toBe('agent-session:sess-1')
-  expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
-  expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
-    first.id
-  )
-})

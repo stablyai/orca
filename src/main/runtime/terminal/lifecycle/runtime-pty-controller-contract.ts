@@ -12,7 +12,7 @@ import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus,
   SpawnIntent
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding

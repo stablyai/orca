@@ -1,4 +1,5 @@
-import type { Automation, AutomationDispatchResult } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationDispatchResult } from '../../shared/automations/history/automation-run'
 import type { Repo } from '../../shared/repo-types'
 import { checkCreatedWorktreeSetupTrust } from '../workspace-hooks/created-worktree-setup-trust'
 import { loadHooks } from '../workspace-hooks/hooks'

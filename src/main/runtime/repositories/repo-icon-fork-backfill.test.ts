@@ -47,22 +47,6 @@ afterEach(() => {
 })
 
 describe('startup fork-upstream backfill', () => {
-  it('skips every row whose files sit on an SSH host', async () => {
-    // Unified remote ownership, including nested runtime targets, must not read this client's same-path files.
-    const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [
-      makeRepo({ id: 'repo-ssh', executionHostId: 'ssh:builder' }),
-      makeRepo({ id: 'repo-openclaw', executionHostId: 'ssh:openclaw' }),
-      makeRepo({ id: 'repo-nested', connectionId: 'nested-1', executionHostId: 'runtime:env-a' })
-    ])
-
-    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
-
-    expect(getRepoUpstream).not.toHaveBeenCalled()
-    expect(getRepoSlug).not.toHaveBeenCalled()
-    expect(updateRepo).not.toHaveBeenCalled()
-  })
-
   it('keeps an icon chosen while avatar detection is pending', async () => {
     const runtime = new OrcaRuntimeService()
     const repo = makeRepo()

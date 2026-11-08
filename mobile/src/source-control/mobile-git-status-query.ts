@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { translate } from '../i18n/mobile-i18n'
 import { defineHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   gitStatusHostPayloadSchema,
   type MobileGitStatusHostPayload

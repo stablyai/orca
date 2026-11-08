@@ -111,7 +111,7 @@ export function adapter(
 
 // Isolate discovery to test folders; a large real home otherwise outlasts the menu wait.
 export const discoverWithoutUserHome: ClaudeAtRestCommandsDeps['discover'] = async (args) => {
-  const { discoverSkills } = await import('../../../../skills/discovery')
+  const { discoverSkills } = await import('../../../../skills/discovery/skill-native-discovery')
   return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
 }
 

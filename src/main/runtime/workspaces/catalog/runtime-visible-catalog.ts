@@ -11,7 +11,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import {
   visibleFolderWorkspaces,

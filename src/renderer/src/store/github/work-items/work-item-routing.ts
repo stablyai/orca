@@ -10,7 +10,7 @@ import type {
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,

@@ -1,4 +1,8 @@
 import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
+import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
@@ -41,6 +45,21 @@ export type IGitProvider = {
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  createBranch(
+    worktreePath: string,
+    name: string,
+    startPoint: string
+  ): Promise<GitCommitActionResult>
+  applyCommit(
+    worktreePath: string,
+    operation: GitCommitAction,
+    commitId: string
+  ): Promise<GitCommitActionResult>
+  recoverSequencer(
+    worktreePath: string,
+    operation: GitCommitAction,
+    action: 'abort' | 'continue'
+  ): Promise<GitCommitActionResult | void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
@@ -72,7 +91,8 @@ export type IGitProvider = {
   checkoutBranch(
     worktreePath: string,
     branch: string,
-    creation?: BranchSwitchCreation
+    creation?: BranchSwitchCreation,
+    detached?: boolean
   ): Promise<{ skippedPaths: string[] }>
   listLocalBranches(worktreePath: string): Promise<RuntimeGitLocalBranches>
   getBranchCompare(

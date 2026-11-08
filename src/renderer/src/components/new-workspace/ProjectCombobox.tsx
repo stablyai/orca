@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderPlus } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ export default function ProjectCombobox({
 }: ProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
@@ -170,6 +171,17 @@ export default function ProjectCombobox({
                     setOpen(true)
                   }}
                   onFocus={() => setOpen(true)}
+                  onBlur={(event) => {
+                    const next = event.relatedTarget
+                    // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.
+                    if (
+                      next instanceof Element &&
+                      !isWithinComboboxRoot(next, ROOT_ATTRIBUTE) &&
+                      !contentRef.current?.contains(next)
+                    ) {
+                      close()
+                    }
+                  }}
                   onKeyDown={handleKeyDown}
                   className={cn(
                     'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
@@ -217,6 +229,7 @@ export default function ProjectCombobox({
       {/* Closing must remove the selector before a nested dialog takes focus. */}
       {open ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           sideOffset={4}
           // Use an opaque nonfading surface so dialog fields cannot show through during animation; match the primitive’s arbitrary background specificity.
