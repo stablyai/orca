@@ -107,6 +107,8 @@ export function createHostQueryPersistence(
   // The last data written per key and what it was stored as, so unchanged data keeps one stored object.
   const lastStored = new Map<string, { readonly source: unknown; readonly stored: unknown }>()
   const restoring = new Set<string>()
+  // Keys the boot read just found empty: the screen's first observer doesn't read them again.
+  const missedAtBoot = new Set<string>()
   const triedOnMiss = new WeakSet<Query>()
 
   function storedData(queryHash: string, data: unknown, persist: HostQueryPersist<unknown>) {
@@ -196,7 +198,11 @@ export function createHostQueryPersistence(
     }
     // An observed key with no data, such as one past its gcTime, reads its record once beside the fetch.
     if (event.type === 'observerAdded') {
-      if (query.state.data === undefined && !triedOnMiss.has(query)) {
+      if (
+        query.state.data === undefined &&
+        !triedOnMiss.has(query) &&
+        !missedAtBoot.delete(query.queryHash)
+      ) {
         triedOnMiss.add(query)
         void restoreOne(query.queryKey, persist)
       }
@@ -228,7 +234,14 @@ export function createHostQueryPersistence(
           orcaQueryStoreKey(`${familyPrefix(family, persist)}-${hashKey(queryKey)}`)
         )
       )
-      await Promise.all(empty.map(({ queryKey, persist }) => restoreOne(queryKey, persist)))
+      await Promise.all(
+        empty.map(async ({ queryKey, persist }) => {
+          await restoreOne(queryKey, persist)
+          if (queryClient.getQueryData(queryKey) === undefined) {
+            missedAtBoot.add(hashKey(queryKey))
+          }
+        })
+      )
     },
     flush: () => storage.flush()
   }
