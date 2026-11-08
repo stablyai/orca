@@ -8,14 +8,9 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
-import type {
-  FileWithMtime,
-  ResumableSessionParseState,
-  SessionAccumulator
-} from '../../session-scanner-types'
+import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import {
-  accumulatorSessionIdentity,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
@@ -179,27 +174,6 @@ export async function finalizeClaudeSessionParseState(
   // A rename (custom-title) or Claude's generated name is the session's own; prompts and metadata are stand-ins.
   const titleKind = snapshot.accumulator.title || snapshot.generatedTitle ? 'named' : 'fallback'
   return finalizeSession(snapshot.accumulator, platform, { ...options, titleKind })
-}
-
-export function createClaudeSessionResumeState(
-  file: FileWithMtime,
-  messages?: TranscriptMessageSink
-): ResumableSessionParseState {
-  return claudeResumeStateFromParseState(createClaudeSessionParseState(file, messages))
-}
-
-function claudeResumeStateFromParseState(
-  state: ClaudeSessionParseState
-): ResumableSessionParseState {
-  return {
-    consumeLine: (line) => consumeClaudeSessionLine(state, line),
-    identity: () => accumulatorSessionIdentity(state.accumulator),
-    clone: () => claudeResumeStateFromParseState(cloneClaudeSessionParseState(state)),
-    touchFile: (file) => {
-      state.accumulator.modifiedAt = file.modifiedAt
-    },
-    finalize: (platform, options) => finalizeClaudeSessionParseState(state, platform, options)
-  }
 }
 
 export async function parseClaudeSessionFile(

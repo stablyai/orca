@@ -27,6 +27,28 @@ export type SessionParseResumePoint = {
   prefixHash: Hash | null
 }
 
+/**
+ * Persisted parse checkpoint for transcripts whose parser can snapshot its fold state.
+ * The heavy runtime pieces of a resume point (state, channel, prefixHash) stay in memory;
+ * this envelope carries exactly what a restart needs to rebuild them. `snapshot` is
+ * opaque here and validated by the owning parser's own schema before use.
+ */
+export type SessionParseCheckpoint = {
+  // The parser that owns `snapshot`; a mismatch forces a full parse.
+  parserKind: string
+  // Parser-owned layout version; an unsupported version forces a full parse.
+  snapshotVersion: number
+  // Complete-line boundary the snapshot state corresponds to (never a display-only offset).
+  byteOffset: number
+  // Transcript observation when the snapshot was taken.
+  mtimeMs: number
+  sizeBytes: number | null
+  fileIdentity: { dev: number; ino: number } | null
+  // Budget skips accumulated through this boundary; replacements revisit those records.
+  skippedRecords: SkippedTranscriptRecord[]
+  snapshot: unknown
+}
+
 export type SessionParseCacheEntry = {
   mtimeMs: number
   sizeBytes: number | null
@@ -37,6 +59,8 @@ export type SessionParseCacheEntry = {
   // Retain the transcript-only result so sidecar changes do not force a reparse.
   foldSession?: AiVaultSession | null
   resume: SessionParseResumePoint | null
+  // Survives restarts when the parser can snapshot; paired with the runtime resume point.
+  checkpoint?: SessionParseCheckpoint | null
   // Diagnostics outlive the heavy parser state, including across restarts.
   skippedRecords?: SkippedTranscriptRecord[]
   // Parser identity is runtime-only; persisted sessions carry their agent.
@@ -145,7 +169,8 @@ export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry 
   if (persisted === undefined) {
     return undefined
   }
-  // Parser state is runtime-only; changed files need a full parse after restart.
+  // Parser state is runtime-only; the persisted checkpoint (when the parser snapshots)
+  // lets a restart rebuild it instead of paying a full parse for grown files.
   const restored: SessionParseCacheEntry = { ...persisted, resume: null }
   placeRow(path, restored)
   return restored
@@ -243,6 +268,7 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     previous.platform !== entry.platform ||
     previous.session !== entry.session ||
     previous.skippedRecords !== entry.skippedRecords ||
+    previous.checkpoint !== entry.checkpoint ||
     !sameSidecar(previous.sidecar, entry.sidecar)
   placeRow(path, entry)
   if (changed) {
@@ -252,7 +278,9 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
       platform: entry.platform,
       session: entry.session,
       skippedRecords: entry.skippedRecords,
-      ...(entry.sidecar === undefined ? {} : { sidecar: entry.sidecar })
+      ...(entry.sidecar === undefined ? {} : { sidecar: entry.sidecar }),
+      // Advance the persisted checkpoint even when the session view is unchanged.
+      ...(entry.checkpoint ? { checkpoint: entry.checkpoint } : {})
     })
   }
 }

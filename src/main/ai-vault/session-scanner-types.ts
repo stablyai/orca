@@ -120,6 +120,12 @@ export type ResumableSessionParseState = {
     platform: NodeJS.Platform,
     options?: ResumableParseFinalizeOptions
   ): Promise<AiVaultSession | null> | AiVaultSession | null
+  /**
+   * Pure-data checkpoint of this state at the last complete-line boundary; null when the
+   * parser cannot snapshot. The payload is opaque here and validated by the owning parser
+   * on restore; runtime objects (channels, sinks, hashes) never enter the snapshot.
+   */
+  snapshotResume?(): { parserKind: string; snapshotVersion: number; snapshot: unknown } | null
 }
 
 export type SessionAccumulator = {

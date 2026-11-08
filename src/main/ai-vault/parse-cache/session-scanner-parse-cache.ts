@@ -5,7 +5,7 @@ import { createAntigravitySessionResumeState } from '../scanners/antigravity/ses
 import { createCodexSessionResumeState } from '../scanners/codex/session-scanner-codex-parser'
 import { createDroidSessionResumeState } from '../scanners/droid/session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from '../scanners/session-scanner-graph-parsers'
-import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-primary-parsers'
+import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-claude-checkpoint'
 import { createCodebuddySessionResumeState } from '../scanners/codebuddy/session-scanner-codebuddy-parser'
 import { createGeminiJsonlSessionResumeState } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from '../scanners/copilot/session-scanner-copilot-parser'
@@ -22,6 +22,7 @@ import {
   type SessionParseCacheEntry
 } from './session-parse-cache-store'
 import type { TranscriptMessageSink } from '../transcripts/session-transcript-consumers'
+import { checkpointResumeFor, sessionParseCheckpointOf } from './session-parse-checkpoint-restore'
 import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   mergeSkippedTranscriptRecords,
@@ -198,10 +199,16 @@ async function parseCachedInLane(
   }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
+    // A runtime resume point wins; after a restart the persisted checkpoint rebuilds one.
+    const resume =
+      entry?.platform === platform
+        ? (entry.resume ??
+          (entry.checkpoint ? checkpointResumeFor(candidate, entry.checkpoint) : null))
+        : null
     const read = await readResumableTranscript({
       candidate,
       platform,
-      resume: entry?.platform === platform ? entry.resume : null,
+      resume,
       stateFactory,
       stats,
       signal,
@@ -216,7 +223,8 @@ async function parseCachedInLane(
       // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
-      resume: read.resume
+      resume: read.resume,
+      checkpoint: sessionParseCheckpointOf(candidate, read.resume)
     })
     return enriched.session
   }
@@ -241,6 +249,8 @@ async function parseCachedInLane(
     sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
     resume: null,
+    // Whole reads replace the document; no earlier boundary may be trusted afterwards.
+    checkpoint: null,
     skippedRecords
   })
   return enriched.session
