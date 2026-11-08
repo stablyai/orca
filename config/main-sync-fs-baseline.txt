@@ -478,7 +478,6 @@
 5 src/main/runtime/mobile-cloud-relay/relay-region-preference.ts
 2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
-1 src/main/runtime/push/notifications/mobile-notification-dismissal-store.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
 2 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 1 src/main/runtime/rpc/server/network-source-policy-store.ts
@@ -502,6 +501,8 @@
 1 src/main/speech/stt-worker-model-config.ts
 2 src/main/speech/stt-worker-paths.ts
 2 src/main/sqlite/harden-database-files.ts
+1 src/main/sqlite/keyed-json-row-cache.ts
+5 src/main/sqlite/legacy-json-source.ts
 1 src/main/sqlite/sync-database.ts
 2 src/main/sqlite/versioned-cache-database.ts
 1 src/main/ssh/authentication/ssh-auth-resolution.ts
