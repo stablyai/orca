@@ -78,10 +78,6 @@ export function useMobileStructuredSends(args: {
     holds.setConnected(connected)
   }, [connected, holds])
   const savedInFlightVersion = useMobileNativeChatSavedInFlightVersion()
-  const confirmRecordedRef = useRef(confirmRecorded)
-  useLayoutEffect(() => {
-    confirmRecordedRef.current = confirmRecorded
-  }, [confirmRecorded])
 
   // Capture chat ownership before asynchronous replies can cross a tab switch.
   const keep = useCallback(
@@ -166,29 +162,27 @@ export function useMobileStructuredSends(args: {
     },
     [queuedMessages, submissions]
   )
-  const recordedRef = useRef(recorded)
-  useLayoutEffect(() => {
-    recordedRef.current = recorded
-  }, [recorded])
 
-  // Before a send returns to the box, ask the host: its record can sit past the pages loaded here.
+  // Before a send returns to the box, ask its chat's host: the record can sit past the pages loaded here.
   const handBackUnlessRecorded = useCallback(
-    (clientMessageId: string, inFlightIds: () => string[], handBack: () => void): void => {
-      const confirm = confirmRecordedRef.current
+    (
+      confirm: typeof confirmRecorded,
+      clientMessageId: string,
+      inFlightIds: () => string[],
+      handBack: () => void
+    ): void => {
       if (!confirm) {
         handBack()
         return
       }
       void confirm(clientMessageId).then((onHost) => {
-        if (onHost || recordedRef.current([clientMessageId]).size > 0) {
+        if (onHost) {
           for (const id of inFlightIds()) {
             settleMobileNativeChatInFlightSend(id)
           }
           forget(new Set([clientMessageId]))
-        } else if (!mountedRef.current) {
-          // The saved copy waits for the chat's next open instead.
-          releaseMobileNativeChatInFlightSends(inFlightIds())
         } else {
+          // Even after the chat closed: the hand-back it captured keeps a queued send's place.
           handBack()
         }
       })
@@ -214,6 +208,7 @@ export function useMobileStructuredSends(args: {
       }
       holds.hold(clientMessageId, () =>
         handBackUnlessRecorded(
+          confirmRecorded,
           clientMessageId,
           () => mobileNativeChatInFlightSendIds(new Set([clientMessageId])),
           () => {
@@ -226,7 +221,7 @@ export function useMobileStructuredSends(args: {
         )
       )
     },
-    [forget, handBackUnlessRecorded, holds, isHeld]
+    [confirmRecorded, forget, handBackUnlessRecorded, holds, isHeld]
   )
 
   // Sends saved before the page last closed wait like live ones once their chat opens.
@@ -244,6 +239,7 @@ export function useMobileStructuredSends(args: {
       }
       holds.hold(clientMessageId, () =>
         handBackUnlessRecorded(
+          confirmRecorded,
           clientMessageId,
           () => [send.id],
           () => {
@@ -257,7 +253,15 @@ export function useMobileStructuredSends(args: {
         )
       )
     }
-  }, [handBackUnlessRecorded, holds, onSendError, recorded, savedInFlightVersion, sessionId])
+  }, [
+    confirmRecorded,
+    handBackUnlessRecorded,
+    holds,
+    onSendError,
+    recorded,
+    savedInFlightVersion,
+    sessionId
+  ])
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS
   useEffect(() => {

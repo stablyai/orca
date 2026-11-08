@@ -5,7 +5,7 @@ import type { StructuredSendAnswer } from '../../../../../native-chat/agent-sess
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 
-/** Recorded means the chat holds it in any state, as a loaded submission row or card would show. */
+/** Recorded in any state, as a loaded row or card settles a send; a rejection stays in history, as a live reply's does. */
 function sendRecorded(answer: StructuredSendAnswer): boolean {
   switch (answer.kind) {
     case 'waiting':
