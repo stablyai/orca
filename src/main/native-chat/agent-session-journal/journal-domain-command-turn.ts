@@ -21,7 +21,10 @@ import {
   type JournalDomainSubmissionTarget
 } from './journal-domain-submission-records'
 import { readJournalDomainDispatchItem } from './journal-domain-dispatch-placement'
-import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
+import {
+  nextJournalDomainItemOrdinal,
+  writeJournalDomainCurrentItem
+} from './journal-domain-current-item'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { spendJournalSqlCommandCards } from './journal-sql-message-effects'
@@ -177,7 +180,7 @@ export function applyJournalDomainCommandTurn(
           ...writeJournalDomainCurrentItem(db, target, {
             item: stored ? journalItemRevisionValue(stored.item, next) : next,
             ...(stored ? { previous: stored } : {}),
-            ordinal: stored?.ordinal ?? sequence + sequenceIndex,
+            ordinal: stored?.ordinal ?? nextJournalDomainItemOrdinal(db, target),
             hidden: stored?.hidden ?? false,
             ownerFence: stored?.ownerFence ?? dispatch.fence,
             executionOwner: stored?.executionOwner,

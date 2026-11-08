@@ -20,6 +20,8 @@ import {
 import { applyJournalDomainItem } from './journal-domain-item'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
@@ -303,17 +305,17 @@ it('exports visible rows and sends after the newest clear across bounded query p
   expect(context.submissions.map((entry) => entry.clientMessageId)).toEqual(['after', 'rejected'])
 })
 
-it('visits every item after a grouped import, new writes and placement revisions', () => {
+it('visits every item after a grouped import, placement revisions and command rejection', () => {
   const { db, read } = chat()
   db.prepare('DELETE FROM journal_chat_state').run()
   runJournalTransaction(db, () => {
     insertJournalDomainImportPage(db, target, {
       kind: 'items',
-      rows: Array.from({ length: 5 }, (_, index) => ({
+      rows: Array.from({ length: 200 }, (_, index) => ({
         ordinal: index + 1,
         ownerFence: 1,
         executionOwner: null,
-        hidden: index === 4,
+        hidden: index === 199,
         item: row(`imported-${index}`, 2, user(`imported-${index}`), { sequenceIndex: index }),
         turnItemId: null,
         originalStopNoteJson: null,
@@ -358,7 +360,7 @@ it('visits every item after a grouped import, new writes and placement revisions
         kind: 'submission',
         input: {
           clientMessageId: 'admitted',
-          body: user('admitted'),
+          body: { ...user('admitted'), command: { name: 'compact' } },
           payloadFingerprint: 'admitted',
           fence: 1,
           handoverRecorded: true
@@ -400,18 +402,58 @@ it('visits every item after a grouped import, new writes and placement revisions
       },
       13
     )
+    applyJournalDomainCommandTurn(
+      db,
+      target,
+      {
+        kind: 'command-open',
+        input: {
+          clientMessageId: 'admitted',
+          fence: 1,
+          turnScope: { kind: 'thread' },
+          submittedAt: 11
+        }
+      },
+      14
+    )
+    applyJournalDomainCommandTurn(
+      db,
+      target,
+      {
+        kind: 'command-settle',
+        input: {
+          dispatch: {
+            clientMessageId: 'admitted',
+            state: 'rejected',
+            fence: 1,
+            ...agentSessionFailureWords({ kind: 'notSignedIn' }, { surface: 'rejection' })
+          },
+          failureBody: { kind: 'status', text: 'Command failed', tone: 'error' }
+        }
+      },
+      15
+    )
   })
   expect(
-    db.prepare(`SELECT item_id,ordinal FROM journal_items WHERE ordinal>=5 ORDER BY ordinal`).all()
+    db
+      .prepare(`SELECT item_id,ordinal FROM journal_items WHERE ordinal>=200 ORDER BY ordinal`)
+      .all()
   ).toEqual([
-    { item_id: 'imported-4', ordinal: 5 },
-    { item_id: 'orca:new', ordinal: 6 },
-    { item_id: 'orca:admitted', ordinal: 7 }
+    { item_id: 'imported-199', ordinal: 200 },
+    { item_id: 'orca:new', ordinal: 201 },
+    { item_id: 'orca:admitted', ordinal: 202 },
+    { item_id: 'orca:command-turn%3Aadmitted', ordinal: 203 },
+    { item_id: 'orca:command-result%3Aadmitted', ordinal: 204 }
   ])
   const seen: string[] = []
   let afterOrdinal = -1
   for (;;) {
-    const page = read({ kind: 'items-by-kind', kinds: ['message'], afterOrdinal, limit: 1 })
+    const page = read({
+      kind: 'items-by-kind',
+      kinds: ['message', 'status'],
+      afterOrdinal,
+      limit: 1
+    })
     seen.push(...page.items.map((item) => item.itemId))
     if (page.nextOrdinal === null) {
       break
@@ -419,11 +461,9 @@ it('visits every item after a grouped import, new writes and placement revisions
     afterOrdinal = page.nextOrdinal
   }
   expect(seen).toEqual([
-    'imported-0',
-    'imported-1',
-    'imported-2',
-    'imported-3',
+    ...Array.from({ length: 199 }, (_, index) => `imported-${index}`),
     'orca:new',
-    'orca:admitted'
+    'orca:admitted',
+    'orca:command-result%3Aadmitted'
   ])
 })
