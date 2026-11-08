@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   parsePullRequestEventItemId,
+  pullRequestEventCommitUrl,
+  pullRequestEventPullRequestUrl,
   pullRequestEventShortSha
 } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../settings/chat/native-chat-ci-result-lines-setting-target'
@@ -54,13 +56,11 @@ export function NativeChatPullRequestEventLine({
           {failing
             ? t('components.native-chat.ciResultLine.failingLead', 'CI failing on')
             : t('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
-          <LineLink
-            href={`https://${event.forgeHost}/${event.owner}/${event.repo}/pull/${event.number}`}
-          >{`${event.repo}#${event.number}`}</LineLink>{' '}
+          <LineLink href={pullRequestEventPullRequestUrl(event)}>
+            {`${event.repo}#${event.number}`}
+          </LineLink>{' '}
           {t('components.native-chat.ciResultLine.at', 'at')}{' '}
-          <LineLink
-            href={`https://${event.forgeHost}/${event.owner}/${event.repo}/commit/${event.headSha}`}
-          >
+          <LineLink href={pullRequestEventCommitUrl(event)}>
             {pullRequestEventShortSha(event.headSha)}
           </LineLink>
         </span>

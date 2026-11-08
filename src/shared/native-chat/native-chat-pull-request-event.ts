@@ -56,6 +56,14 @@ export function pullRequestEventShortSha(headSha: string): string {
   return headSha.slice(0, 7)
 }
 
+export function pullRequestEventPullRequestUrl(event: PullRequestEventIdentity): string {
+  return `https://${event.forgeHost}/${event.owner}/${event.repo}/pull/${event.number}`
+}
+
+export function pullRequestEventCommitUrl(event: PullRequestEventIdentity): string {
+  return `https://${event.forgeHost}/${event.owner}/${event.repo}/commit/${event.headSha}`
+}
+
 /** The text every client shows; newer desktops redraw it with links from the item's identity. */
 export function pullRequestEventText(
   verdict: PullRequestEventVerdict,
@@ -92,4 +100,12 @@ export function withoutPullRequestEventRows(rows: {
     }
   })
   return { messages, turnKeys }
+}
+
+/** Messages without CI lines; the same array when there's nothing to drop, so identity checks hold. */
+export function withoutPullRequestEventMessages<Messages extends readonly NativeChatMessage[]>(
+  messages: Messages
+): Messages | NativeChatMessage[] {
+  const kept = messages.filter((message) => !isPullRequestEventMessage(message))
+  return kept.length === messages.length ? messages : kept
 }

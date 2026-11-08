@@ -1,7 +1,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { mobileNativeChatFollowUpPreference } from './mobile-native-chat-follow-up-preference'
+import {
+  mobileNativeChatHostPreference,
+  QUEUE_FOLLOW_UPS_PREFERENCE
+} from './mobile-native-chat-host-preference'
 import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileNativeChatCiResultLines } from './use-mobile-native-chat-ci-result-lines'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import type { RpcClient } from '../transport/rpc-client'
@@ -66,12 +70,14 @@ function connection() {
     }
   }
 }
-const reply = (queueFollowUps: boolean): RpcResponse => ({
+const settingsReply = (settings: Record<string, unknown>): RpcResponse => ({
   id: 'r',
   ok: true,
-  result: { settings: { nativeChatQueueFollowUps: queueFollowUps } },
+  result: { settings },
   _meta: { runtimeId: 'r' }
 })
+const reply = (queueFollowUps: boolean): RpcResponse =>
+  settingsReply({ nativeChatQueueFollowUps: queueFollowUps })
 
 const renderers = new Set<ReactTestRenderer>()
 afterEach(() => {
@@ -255,8 +261,188 @@ it('keeps known OFF across real direct/relay migrations and failed reads, while 
   await act(async () => mounted.unmount())
   // Late callbacks after last unsubscribe cannot replace the retained same-host value.
   directAgain.emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
-  expect(mobileNativeChatFollowUpPreference(logical).getSnapshot()).toBe(false)
+  expect(mobileNativeChatHostPreference(logical, QUEUE_FOLLOW_UPS_PREFERENCE).getSnapshot()).toBe(
+    false
+  )
   expect(directAgain.states.size).toBe(1) // Only the logical transport's own state listener remains.
   logical.close()
   expect(directAgain.states.size).toBe(0)
+})
+
+it('re-renders only the consumers of the preference and desktop that changed', async () => {
+  const a = connection(),
+    b = connection()
+  const renders = new Map<string, number>()
+  const values = new Map<string, boolean>()
+  const count = (id: string, value: boolean) => {
+    values.set(id, value)
+    renders.set(id, (renders.get(id) ?? 0) + 1)
+  }
+  function CiLines({ id, client }: { id: string; client: RpcClient }) {
+    count(id, useMobileNativeChatCiResultLines(client, true))
+    return null
+  }
+  function FollowUps({ id, client }: { id: string; client: RpcClient }) {
+    count(id, useMobileNativeChatQueueFollowUps(client, true, id, client, true))
+    return null
+  }
+  await act(async () => {
+    renderers.add(
+      create(
+        <>
+          <CiLines id="ci-a" client={a.client} />
+          <FollowUps id="follow-ups-a" client={a.client} />
+          <CiLines id="ci-b" client={b.client} />
+        </>
+      )
+    )
+  })
+  await act(async () => {})
+  // B executes the chat and reports CI lines on; A, the paired desktop, hasn't reported.
+  await act(async () => b.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true }))
+  expect(values).toEqual(
+    new Map([
+      ['ci-a', false],
+      ['follow-ups-a', true],
+      ['ci-b', true]
+    ])
+  )
+  const settled = new Map(renders)
+  await act(async () => a.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true }))
+  expect(values.get('ci-a')).toBe(true)
+  expect(renders).toEqual(new Map([...settled, ['ci-a', settled.get('ci-a')! + 1]]))
+  await act(async () => a.emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false }))
+  expect(values.get('follow-ups-a')).toBe(false)
+  expect(renders).toEqual(
+    new Map([
+      ...settled,
+      ['ci-a', settled.get('ci-a')! + 1],
+      ['follow-ups-a', settled.get('follow-ups-a')! + 1]
+    ])
+  )
+  const beforeOther = new Map(renders)
+  await act(async () => b.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: false }))
+  expect(values.get('ci-b')).toBe(false)
+  expect(renders.get('ci-a')).toBe(beforeOther.get('ci-a'))
+  expect(renders.get('follow-ups-a')).toBe(beforeOther.get('follow-ups-a'))
+})
+
+it('shows CI lines from the last value the paired desktop reported, hidden until it reports one', async () => {
+  const desktop = connection()
+  const values: boolean[] = []
+  function Chat() {
+    values.push(useMobileNativeChatCiResultLines(desktop.client, true))
+    return null
+  }
+  let chat!: ReactTestRenderer
+  function NoDesktop() {
+    values.push(useMobileNativeChatCiResultLines(null, true))
+    return null
+  }
+  await act(async () => {
+    renderers.add(create(<NoDesktop />))
+  })
+  expect(values.at(-1)).toBe(false)
+  await act(async () => {
+    chat = create(<Chat />)
+    renderers.add(chat)
+  })
+  // An older desktop omits the field from both its ready snapshot and its settings.
+  await act(async () => desktop.emit({ type: 'ready', subscriptionId: 'old', snapshot: {} }))
+  await act(async () => desktop.replies.at(-1)!(settingsReply({ nativeChatQueueFollowUps: true })))
+  expect(values.at(-1)).toBe(false)
+  await act(async () =>
+    desktop.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true })
+  )
+  expect(values.at(-1)).toBe(true)
+  await act(async () => desktop.change('disconnected'))
+  // Draw again while disconnected: a phone resume must not blink the line out.
+  await act(async () => chat.update(<Chat />))
+  expect(values.at(-1)).toBe(true)
+  await act(async () => desktop.change('connected'))
+  await act(async () =>
+    desktop.emit({
+      type: 'ready',
+      subscriptionId: 'new',
+      snapshot: { nativeChatCiResultLines: false }
+    })
+  )
+  expect(values.at(-1)).toBe(false)
+})
+
+it('keeps a pending follow-ups read when a CI change lands on a joined stream', async () => {
+  const desktop = connection()
+  const values = new Map<string, boolean>()
+  function FollowUps() {
+    values.set(
+      'follow-ups',
+      useMobileNativeChatQueueFollowUps(desktop.client, true, 'f', desktop.client, true)
+    )
+    return null
+  }
+  function CiLines() {
+    values.set('ci', useMobileNativeChatCiResultLines(desktop.client, true))
+    return null
+  }
+  const first = create(<FollowUps />)
+  renderers.add(first)
+  await act(async () => {})
+  // A legacy ready re-reads follow-ups; that read is still out when a later chat joins the stream.
+  await act(async () => desktop.emit({ type: 'ready', subscriptionId: 'legacy' }))
+  const followUpsRead = desktop.replies.at(-1)!
+  await act(async () =>
+    first.update(
+      <>
+        <FollowUps />
+        <CiLines />
+      </>
+    )
+  )
+  const ciRead = desktop.replies.at(-1)!
+  await act(async () =>
+    desktop.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true })
+  )
+  await act(async () =>
+    followUpsRead(
+      settingsReply({ nativeChatQueueFollowUps: false, nativeChatCiResultLines: false })
+    )
+  )
+  await act(async () =>
+    ciRead(settingsReply({ nativeChatQueueFollowUps: true, nativeChatCiResultLines: false }))
+  )
+  expect(values).toEqual(
+    new Map([
+      ['follow-ups', false],
+      ['ci', true]
+    ])
+  )
+})
+
+it('reads the CI setting per desktop connection, not per open chat', async () => {
+  const one = connection(),
+    many = connection()
+  function Chat({ client }: { client: RpcClient }) {
+    useMobileNativeChatCiResultLines(client, true)
+    return null
+  }
+  await act(async () => {
+    renderers.add(
+      create(
+        <>
+          <Chat client={one.client} />
+          {Array.from({ length: 10 }, (_, index) => (
+            <Chat key={index} client={many.client} />
+          ))}
+        </>
+      )
+    )
+  })
+  await act(async () => {})
+  for (const desktop of [one, many]) {
+    await act(async () => desktop.emit({ type: 'ready', subscriptionId: 'legacy' }))
+  }
+  // One read on connect and one for the snapshot-less ready, however many chats are open.
+  expect(one.client.sendRequest).toHaveBeenCalledTimes(2)
+  expect(many.client.sendRequest).toHaveBeenCalledTimes(2)
+  expect(many.client.subscribe).toHaveBeenCalledTimes(1)
 })

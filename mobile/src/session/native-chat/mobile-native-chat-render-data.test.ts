@@ -295,7 +295,7 @@ describe('foldMobileNativeChatMessages', () => {
     ])
   })
 
-  it('leaves CI result lines out of the transcript', () => {
+  it('keeps CI result lines for the display filter, which owns hiding them', () => {
     const ciLine: NativeChatMessage = {
       id: 'orca:pr-event:github.com/acme/repo#3:8d5f74b:1',
       role: 'system',
@@ -315,8 +315,11 @@ describe('foldMobileNativeChatMessages', () => {
       ciLine,
       assistant('a2', 'Pushed the fix')
     ])
-    expect(folded.map((message) => message.id)).toEqual(['a1', 'a2'])
-    expect(JSON.stringify(folded)).not.toContain('CI failing on repo#3 at 8d5f74b')
+    expect(folded.map((message) => message.id)).toEqual([
+      'a1',
+      'orca:pr-event:github.com/acme/repo#3:8d5f74b:1',
+      'a2'
+    ])
   })
 })
 

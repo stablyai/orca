@@ -20,6 +20,7 @@ export type RuntimeClientEvent =
     }
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
+  | { type: 'nativeChatCiResultLinesChanged'; ciResultLines: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
   | {
@@ -73,6 +74,7 @@ export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
         nativeChatQueueFollowUps?: boolean
+        nativeChatCiResultLines?: boolean
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
       }

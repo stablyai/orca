@@ -117,17 +117,20 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
-// Missing reports let the caller preserve the older host's existing preference source.
-const followUpBehaviorReader: RpcCompatibleReader<unknown, 'follow-up-behavior', boolean | null> = (
-  raw
-) => {
-  const settings = raw == null ? undefined : settingsMember(raw)
-  const value = settings == null ? undefined : settingsField(settings, 'nativeChatQueueFollowUps')
-  return {
-    compatible: true,
-    variant: 'follow-up-behavior',
-    value: typeof value === 'boolean' ? value : null,
-    salvage: { droppedPaths: [], droppedCount: 0 }
+// Missing reports let the caller tell an older host's absence from a reported value.
+function reportedBooleanSettingReader<Variant extends string>(
+  key: string,
+  variant: Variant
+): RpcCompatibleReader<unknown, Variant, boolean | null> {
+  return (raw) => {
+    const settings = raw == null ? undefined : settingsMember(raw)
+    const value = settings == null ? undefined : settingsField(settings, key)
+    return {
+      compatible: true,
+      variant,
+      value: typeof value === 'boolean' ? value : null,
+      salvage: { droppedPaths: [], droppedCount: 0 }
+    }
   }
 }
 
@@ -137,7 +140,17 @@ export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: followUpBehaviorReader
+    read: reportedBooleanSettingReader('nativeChatQueueFollowUps', 'follow-up-behavior')
+  })
+)
+
+export const nativeChatCiResultLinesRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.native-chat-ci-result-lines-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: reportedBooleanSettingReader('nativeChatCiResultLines', 'ci-result-lines')
   })
 )
 
