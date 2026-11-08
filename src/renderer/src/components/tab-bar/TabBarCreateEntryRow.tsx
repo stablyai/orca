@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   FilePlus,
   FileText,
@@ -51,11 +51,31 @@ export function useEntrySetupSubmenu(): (optionId: string) => {
   onHover: () => void
 } {
   const [openId, setOpenId] = useState<string | null>(null)
+  const closeTimer = useRef<number | null>(null)
+  const cancelClose = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
+  useEffect(() => cancelClose, [])
   return (optionId) => ({
     setupOpen: openId === optionId,
-    onSetupOpenChange: (open) =>
-      setOpenId((current) => (open ? optionId : current === optionId ? null : current)),
-    onHover: () => setOpenId((current) => (current === optionId ? current : null))
+    onSetupOpenChange: (open) => {
+      cancelClose()
+      setOpenId((current) => (open ? optionId : current === optionId ? null : current))
+    },
+    onHover: () => {
+      if (openId === optionId) {
+        cancelClose()
+      } else if (openId !== null && closeTimer.current === null) {
+        // Why: like Radix's submenu pointer grace, crossing another row on the way to the panel must not close it.
+        closeTimer.current = window.setTimeout(() => {
+          closeTimer.current = null
+          setOpenId((current) => (current === openId ? null : current))
+        }, 300)
+      }
+    }
   })
 }
 
@@ -148,51 +168,51 @@ export function EntryActionRow({
 
   const row =
     agentOption && setupEntry && onUseAgent ? (
-      <AgentLaunchSetupButton
-        entry={setupEntry}
-        seed={agentOption.setup}
-        preset={agentOption.preset}
-        draftId={
-          agentOption.preset
-            ? `${agentOption.preset.model}:${agentOption.preset.effort ?? ''}`
-            : undefined
-        }
-        disabled={disabled}
-        open={setupOpen}
-        onOpenChange={onSetupOpenChange}
-        onUse={onUseAgent}
-        returnFocus={focusSearchInput}
-        renderAnchor={(trigger) => (
-          // Why role none: the search input drives these listbox options; the › carries the submenu semantics.
-          <div
-            role="none"
-            data-agent-launch-row
-            className={cn('group/setup-row flex', selected && 'bg-black/8 dark:bg-white/14')}
-            // Why: hovering must not move focus off the search input, as Radix menu items do.
-            onPointerMove={(event) => {
-              event.preventDefault()
-              onHover?.()
-            }}
-            onPointerLeave={(event) => {
-              if (event.currentTarget.getAttribute('data-state') !== 'open') {
+      // Why: the portaled panel is a React child here, so moves inside it keep this row's setup open.
+      <div role="none" onPointerMove={onHover}>
+        <AgentLaunchSetupButton
+          entry={setupEntry}
+          seed={agentOption.setup}
+          preset={agentOption.preset}
+          draftId={
+            agentOption.preset
+              ? `${agentOption.preset.model}:${agentOption.preset.effort ?? ''}`
+              : undefined
+          }
+          disabled={disabled}
+          open={setupOpen}
+          onOpenChange={onSetupOpenChange}
+          onUse={onUseAgent}
+          returnFocus={focusSearchInput}
+          renderAnchor={(trigger) => (
+            // Why role none: the search input drives these listbox options; the › carries the submenu semantics.
+            <div
+              role="none"
+              data-agent-launch-row
+              className={cn('group/setup-row flex', selected && 'bg-black/8 dark:bg-white/14')}
+              // Why: hovering must not move focus off the search input, as Radix menu items do.
+              onPointerMove={(event) => event.preventDefault()}
+              onPointerLeave={(event) => {
+                if (event.currentTarget.getAttribute('data-state') !== 'open') {
+                  event.preventDefault()
+                }
+              }}
+              onFocus={(event) => {
+                if (event.target === event.currentTarget) {
+                  focusSearchInput()
+                }
+              }}
+              onClick={(event) => {
+                // The option button launches; only the › opens setup.
                 event.preventDefault()
-              }
-            }}
-            onFocus={(event) => {
-              if (event.target === event.currentTarget) {
-                focusSearchInput()
-              }
-            }}
-            onClick={(event) => {
-              // The option button launches; only the › opens setup.
-              event.preventDefault()
-            }}
-          >
-            {button}
-            {trigger}
-          </div>
-        )}
-      />
+              }}
+            >
+              {button}
+              {trigger}
+            </div>
+          )}
+        />
+      </div>
     ) : (
       button
     )
