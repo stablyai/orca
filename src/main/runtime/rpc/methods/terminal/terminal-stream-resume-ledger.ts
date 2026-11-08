@@ -76,13 +76,8 @@ export class TerminalStreamResumeLedger {
 
   /** Output the client missed after receiving `units`, or null unless that is a recorded point the ring still holds. */
   readGap(units: number, currentSeq: number): TerminalResumeGap | null {
-    let point: ResumePoint | undefined
-    for (let index = this.points.length - 1; index >= this.head; index -= 1) {
-      if (this.points[index]!.units === units) {
-        point = this.points[index]
-        break
-      }
-    }
+    const index = this.points.findLastIndex((candidate) => candidate.units === units)
+    const point = index >= this.head ? this.points[index] : undefined
     if (!point) {
       return null
     }
@@ -102,7 +97,7 @@ export class TerminalStreamResumeLedger {
   }
 
   private addPoint(point: PublishedOutputPoint): void {
-    if (this.points.length > this.head && this.points.at(-1)!.units === this.units) {
+    if (this.points.at(-1)?.units === this.units) {
       this.points.pop()
     }
     this.points.push({ ...point, units: this.units })

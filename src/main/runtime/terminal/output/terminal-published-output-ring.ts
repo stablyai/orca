@@ -76,13 +76,10 @@ export class TerminalPublishedOutputRing {
 
   /** The point a client reaches by receiving output through `seq`: the grid that output was written for. */
   pointAt(seq: number): PublishedOutputPoint {
-    let chunk: (typeof this.chunks)[number] | undefined
-    for (let index = this.chunks.length - 1; index >= this.head; index -= 1) {
-      if (this.chunks[index]!.seq - this.chunks[index]!.rawLength < seq) {
-        chunk = this.chunks[index]
-        break
-      }
-    }
+    const index = this.chunks.findLastIndex(
+      (candidate) => candidate.seq - candidate.rawLength < seq
+    )
+    const chunk = index >= this.head ? this.chunks[index] : undefined
     const size = chunk && seq <= chunk.seq ? chunk.size : this.currentSize()
     return { seq, epoch: this.epoch, size }
   }
