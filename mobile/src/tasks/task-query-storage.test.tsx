@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type Dispatch, type SetStateAction } from 'react'
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -105,7 +105,7 @@ describe('Tasks lists kept on the phone', () => {
     ])
     const relaunched = await relaunch(store)
 
-    const setItems = vi.fn<(items: TaskItem[]) => void>()
+    const setItems = vi.fn<Dispatch<SetStateAction<TaskItem[]>>>()
     const setError = vi.fn()
     const shown: { rowsReadAt?: number | null } = {}
     function Probe() {
