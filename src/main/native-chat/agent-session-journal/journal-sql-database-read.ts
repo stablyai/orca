@@ -14,6 +14,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
+  | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
 
@@ -22,6 +23,11 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | {
+      kind: 'retired-heads'
+      heads: { sessionId: string; epoch: string }[]
+      through: string | null
+    }
   | {
       kind: 'attachment-claims'
       claims: { rowid: number; uploadId: string; sessionId: string }[]
@@ -72,6 +78,31 @@ function read(
                 WHERE session_id>? ORDER BY session_id LIMIT 32`)
               .all(operation.after)
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
+    }
+    case 'retired-heads': {
+      const through =
+        operation.through ??
+        db
+          .prepare('SELECT session_id FROM journal_chat_state ORDER BY session_id DESC LIMIT 1')
+          .get()?.session_id
+      if (through === undefined) {
+        return { kind: 'retired-heads', heads: [], through: null }
+      }
+      const rows =
+        operation.after === null
+          ? db
+              .prepare(`SELECT session_id,epoch FROM journal_chat_state
+                WHERE session_id<=? ORDER BY session_id LIMIT 16`)
+              .all(through)
+          : db
+              .prepare(`SELECT session_id,epoch FROM journal_chat_state
+                WHERE session_id>? AND session_id<=? ORDER BY session_id LIMIT 16`)
+              .all(operation.after, through)
+      return {
+        kind: 'retired-heads',
+        heads: rows.map((row) => ({ sessionId: String(row.session_id), epoch: String(row.epoch) })),
+        through: String(through)
+      }
     }
     case 'attachment-claims':
       return {
