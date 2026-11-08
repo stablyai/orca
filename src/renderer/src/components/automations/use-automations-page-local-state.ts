@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import type { AutomationDraft } from './AutomationEditorDialog'

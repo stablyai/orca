@@ -12,7 +12,7 @@ import {
   dispatchTaskToWorker,
   listAvailableWorkerTerminals
 } from './dispatch/coordinator-task-dispatch'
-import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../../shared/nested-worker-depth'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../../shared/orchestration/workers/nested-worker-depth'
 
 export type CoordinatorOptions = {
   spec: string

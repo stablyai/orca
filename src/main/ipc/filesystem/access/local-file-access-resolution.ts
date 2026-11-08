@@ -1,14 +1,14 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import type { RuntimeStore } from '../../../runtime/runtime-store-contract'
-import type { LocalFileAccess } from '../../../../shared/local-file-access'
+import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
+import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 import {
   PATH_ACCESS_DENIED_MESSAGE,
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
 } from './filesystem-auth'
 import { isDescendantOrEqual } from './filesystem-path-containment'
-import { filePreviewForPath } from '../../../../shared/file-preview-kind'
+import { filePreviewForPath } from '../../../../shared/file-preview/file-preview-kind'
 import { getDefaultFloatingWorkspacePath } from '../../floating-workspace-directory'
 import {
   isDeviceNamespacePath,

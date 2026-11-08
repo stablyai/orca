@@ -1,8 +1,9 @@
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { buildSections } from '../worktree/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { createElement, useEffect } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, type create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../src/shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
@@ -16,7 +17,7 @@ import type { Repo } from '../../../src/shared/repo-types'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostViewSettings } from './use-host-view-settings'
 import { useHostScreenState } from './use-host-screen-state'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
@@ -24,7 +25,7 @@ import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
-vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
+vi.mock('../transport/hosts/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 vi.mock('../storage/mirrored-storage-keys', () => ({
   readMirroredKeyOrStore: async () => JSON.stringify({ hostId: 'host', worktreeId: 'b::/b' })
@@ -147,7 +148,7 @@ describe('mobile personal project actions', () => {
       return null
     }
     await act(async () => {
-      tree = create(createElement(Probe))
+      tree = createWithQueryClient(createElement(Probe))
     })
     await act(async () => {
       await held.actions?.openWorktreeSession(rows[0])
@@ -251,7 +252,7 @@ it('clears personal summaries on a client switch without changing an empty view'
     return null
   }
   await act(async () => {
-    tree = create(createElement(Probe))
+    tree = createWithQueryClient(createElement(Probe))
   })
   expect(held.state?.viewRef.current).toBe(held.initial)
   await act(async () => {

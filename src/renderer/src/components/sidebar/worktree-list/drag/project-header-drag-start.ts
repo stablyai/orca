@@ -1,3 +1,7 @@
+import {
+  getRootProjectHeaderDragKeys,
+  measureRootProjectHeaderDragRects
+} from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import {
@@ -19,6 +23,7 @@ export function createProjectHeaderDragSession(args: {
   >
   repo: Repo
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  rootProjectHeaderKeys?: readonly string[]
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -30,6 +35,14 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
+  const rootProjectHeaderHostId = args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
+    ? args.event.currentTarget.dataset.rootProjectHeaderHost
+    : undefined
+  const rootProjectHeaderKeys = getRootProjectHeaderDragKeys(
+    args.rootProjectHeaderKeys,
+    `repo:${args.repo.id}`,
+    rootProjectHeaderHostId
+  )
   const membershipBucketKey = getProjectHeaderDragBucketKey(args.repo)
   const renderedBucketKey = args.event.currentTarget.getAttribute('data-repo-header-bucket')
   const candidates = [
@@ -41,11 +54,14 @@ export function createProjectHeaderDragSession(args: {
     ? candidates.find((key) => key === renderedBucketKey)
     : candidates.length === 1
       ? candidates[0]
-      : undefined
+      : rootProjectHeaderKeys
+        ? membershipBucketKey
+        : undefined
   if (!bucketKey) {
     return null
   }
-  const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
+  const sidebarRepoHeaderIds =
+    rootProjectHeaderKeys ?? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   // A lone project cannot move within its bucket; preserve the collapse click instead.
   if (sidebarRepoHeaderIds.length <= 1) {
     return null
@@ -63,7 +79,18 @@ export function createProjectHeaderDragSession(args: {
     fixedPinTier: bucketKey !== membershipBucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,
-    headerRects: measureProjectHeaderDragRects(container, bucketKey),
+    rootProjectHeaderKeys,
+    rootProjectHeaderHostId,
+    headerRects: rootProjectHeaderKeys
+      ? measureRootProjectHeaderDragRects(
+          container,
+          rootProjectHeaderKeys,
+          rootProjectHeaderHostId
+        ).map((rect) => ({
+          ...rect,
+          repoId: rect.key
+        }))
+      : measureProjectHeaderDragRects(container, bucketKey),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

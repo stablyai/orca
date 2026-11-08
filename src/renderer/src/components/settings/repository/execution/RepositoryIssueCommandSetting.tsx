@@ -1,5 +1,6 @@
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const ARTIFACT_URL_TEMPLATE_TOKEN = '{{artifact_url}}'
 
@@ -20,11 +21,12 @@ export function RepositoryIssueCommandSetting({
   issueCommandStoppedDistro: string | null
   commitIssueCommand: () => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryHooksSection.13394103bd',
             'Custom GitHub Issue Command'
           )}
@@ -32,7 +34,7 @@ export function RepositoryIssueCommandSetting({
         <p className="text-xs text-muted-foreground">
           <Trans
             i18n={i18n}
-            defaults={translate(
+            defaults={t(
               'auto.components.settings.RepositoryHooksSection.issueCommandDescription',
               'Optional override. Use <artifactUrl>{{artifact_url}}</artifactUrl> for the linked issue or PR URL.',
               { artifact_url: ARTIFACT_URL_TEMPLATE_TOKEN }
@@ -44,14 +46,14 @@ export function RepositoryIssueCommandSetting({
       </div>
       <textarea
         value={issueCommandDraft}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.RepositoryHooksSection.13394103bd',
           'Custom GitHub Issue Command'
         )}
         readOnly={issueCommandReadOnly}
         onChange={(event) => setIssueCommandDraft(event.target.value)}
         onBlur={() => void commitIssueCommand()}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.RepositoryHooksSection.4084720f47',
           'Complete {{artifact_url}}',
           { artifact_url: ARTIFACT_URL_TEMPLATE_TOKEN }
@@ -65,11 +67,11 @@ export function RepositoryIssueCommandSetting({
           i18n={i18n}
           defaults={
             hasSharedIssueCommand
-              ? translate(
+              ? t(
                   'auto.components.settings.RepositoryHooksSection.issueCommandSharedDefault',
                   'Leave blank to use the repo default from <yaml>orca.yaml</yaml>.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.RepositoryHooksSection.issueCommandOptionalDefault',
                   'Leave blank to use the repo default from <yaml>orca.yaml</yaml> when one exists.'
                 )
@@ -79,7 +81,7 @@ export function RepositoryIssueCommandSetting({
       </p>
       {issueCommandStoppedDistro ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryHooksSection.issueCommandWslStopped',
             'WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command.',
             { distro: issueCommandStoppedDistro }

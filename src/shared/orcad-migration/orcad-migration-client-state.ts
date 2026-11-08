@@ -1,4 +1,4 @@
-import type { PersistedAutomationHostFilter } from '../automation-host-filter'
+import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PersistedMobileClientTabSelections } from '../persisted-state-types'
 import type {
   ManualRepoOrderEntry,

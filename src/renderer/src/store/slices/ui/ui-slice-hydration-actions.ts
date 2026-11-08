@@ -1,7 +1,7 @@
 import { newerPersonalProjectOrder } from '../../../../../shared/personal-project-order'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -17,9 +17,9 @@ import { normalizeContextualTourIds } from '../../../../../shared/contextual-tou
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeWorktreeCardProperties,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
@@ -33,7 +33,7 @@ import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../sha
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
-import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
@@ -44,7 +44,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../../lib/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -54,7 +54,7 @@ import {
   type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../persisted-ui-write-baseline'
+} from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,

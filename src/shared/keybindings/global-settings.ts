@@ -7,6 +7,8 @@ export type KeybindingGlobalSettings = {
   keybindings?: KeybindingOverrides
   /** Profile-owned defaults; legacy profiles keep their shortcuts without writing the shared file. */
   tabSwitchKeybindingSeed?: 'pending' | 'done' | 'legacy'
-  /** The Mac search/clear rollout cohort, independent of the shared shortcut choices. */
+  /** The original Mac search/clear rollout cohort. */
   searchKeybindingSeed?: 'pending' | 'done' | 'legacy'
+  /** The later Windows/Linux rollout must not reuse the Mac cohort. */
+  nonMacSearchKeybindingSeed?: 'pending' | 'done' | 'legacy'
 }

@@ -3,12 +3,12 @@ import {
   createRejectedNativeFileDropPayload,
   NATIVE_FILE_DROP_MAX_PATHS,
   type NativeFileDropRejectedPayload
-} from '../../../shared/native-file-drop'
+} from '../../../shared/file-import/native-file-drop'
 import {
   OS_FILE_DROP_OWNER_ATTRIBUTE,
   type DroppedPathConsumer,
   type PreparedDroppedPaths
-} from '../../../shared/native-file-drop-preparation'
+} from '../../../shared/file-import/native-file-drop-preparation'
 import { prepareOsFileDropPaths } from '../lib/os-file-drop-preparation'
 import { hasOsFileDragTypes } from '../lib/os-file-drop-cancellation-guard'
 import {

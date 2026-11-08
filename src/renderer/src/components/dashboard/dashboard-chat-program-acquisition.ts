@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { holdChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { resolveChatProgramContext } from '@/lib/host-chat-program'
 import {

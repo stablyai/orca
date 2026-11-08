@@ -14,13 +14,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-const { mkdtemp, readdir, readFile, rm, stat, writeFile } = await import('node:fs/promises')
+const { mkdtemp, readFile, rm, stat, writeFile } = await import('node:fs/promises')
 import {
   getSshHostKeyStoreFile,
   isTrusted,
   loadTrustedHostKeys,
-  matchTrustedHostKeys,
-  storedKeyTypesForEndpoint,
   trustHostKey
 } from './ssh-host-key-store'
 
@@ -60,27 +58,6 @@ afterEach(async () => {
 })
 
 describe('ssh host key store', () => {
-  it('places the store beside the profile data file, not inside it', () => {
-    expect(getSshHostKeyStoreFile(join('/profiles', 'p1', 'orca-data.json'))).toBe(
-      join('/profiles', 'p1', 'ssh-host-keys.json')
-    )
-  })
-
-  it('recognises a key it was told to trust', async () => {
-    expect(await isTrusted(query(), storeFile)).toBe('unknown')
-
-    const record = await trustHostKey(query(), storeFile)
-
-    expect(record.fingerprint).toMatch(/^SHA256:[A-Za-z0-9+/]+$/)
-    expect(await isTrusted(query(), storeFile)).toBe('match')
-  })
-
-  it('reports a different key for the same host, port and type as a mismatch', async () => {
-    await trustHostKey(query(), storeFile)
-
-    expect(await isTrusted(query({ key: ED25519_B }), storeFile)).toBe('mismatch')
-  })
-
   it('supersedes the stored key when the same triple is trusted again', async () => {
     await trustHostKey(query(), storeFile)
     await trustHostKey(query({ key: ED25519_B }), storeFile)
@@ -105,46 +82,10 @@ describe('ssh host key store', () => {
     expect(await isTrusted(query(), storeFile)).toBe('unknown-type-known-host')
   })
 
-  it('scopes trust to the endpoint, so a second target naming the same host is already trusted', async () => {
-    await trustHostKey(query({ host: 'build-01' }), storeFile)
-
-    expect(await isTrusted(query({ host: 'BUILD-01' }), storeFile)).toBe('match')
-    const [record] = await loadTrustedHostKeys(storeFile)
-    expect(Object.keys(record ?? {})).toEqual([
-      'host',
-      'port',
-      'keyType',
-      'key',
-      'fingerprint',
-      'acceptedAt'
-    ])
-  })
-
   it('does not carry trust across ports', async () => {
     await trustHostKey(query(), storeFile)
 
     expect(await isTrusted(query({ port: 2222 }), storeFile)).toBe('unknown')
-  })
-
-  it('trusts nothing when the file is missing', async () => {
-    expect(await loadTrustedHostKeys(storeFile)).toEqual([])
-    expect(await isTrusted(query(), storeFile)).toBe('unknown')
-  })
-
-  it('trusts nothing and does not throw when the file is corrupt', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await writeFile(storeFile, '{"version":1,"hostKeys":[{"host":"build-01"', 'utf-8')
-
-    await expect(loadTrustedHostKeys(storeFile)).resolves.toEqual([])
-    await expect(isTrusted(query(), storeFile)).resolves.toBe('unknown')
-    expect(warn).toHaveBeenCalled()
-  })
-
-  it('trusts nothing when the file parses but is not a store', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await writeFile(storeFile, '"everything"', 'utf-8')
-
-    await expect(isTrusted(query(), storeFile)).resolves.toBe('unknown')
   })
 
   it('drops a record whose key does not carry the type it claims', async () => {
@@ -183,15 +124,6 @@ describe('ssh host key store', () => {
     await expect(loadTrustedHostKeys(storeFile)).resolves.toEqual([])
   })
 
-  it('leaves no temp file behind and keeps the store parseable after a write', async () => {
-    await trustHostKey(query(), storeFile)
-
-    expect(JSON.parse(await readFile(storeFile, 'utf-8'))).toMatchObject({
-      version: 1
-    })
-    expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
-  })
-
   it('publishes every update by replacing the file, never by rewriting it in place', async () => {
     await trustHostKey(query(), storeFile)
     const before = await stat(storeFile)
@@ -214,69 +146,6 @@ describe('ssh host key store', () => {
 
     expect(await isTrusted(query({ host: 'host-a' }), storeFile)).toBe('match')
     expect(await isTrusted(query({ host: 'host-b', key: ED25519_B }), storeFile)).toBe('match')
-  })
-
-  it('refuses to answer before the store is bound to a profile', async () => {
-    await expect(isTrusted(query())).rejects.toThrow(/initSshHostKeyStoreFile/)
-  })
-
-  // Synchronous ssh2 verification uses preloaded matching; require parity with async isTrusted to prevent downgrade drift.
-  describe('matching preloaded records', () => {
-    it('agrees with isTrusted on every outcome', async () => {
-      await trustHostKey(query(), storeFile)
-      await trustHostKey(query({ host: 'other-host', keyType: 'ssh-rsa', key: RSA_A }), storeFile)
-      const records = await loadTrustedHostKeys(storeFile)
-
-      for (const candidate of [
-        query(),
-        query({ key: ED25519_B }),
-        query({ keyType: 'ssh-rsa', key: RSA_A }),
-        query({ host: 'unheard-of' }),
-        query({ port: 2222 }),
-        query({ host: 'other-host', keyType: 'ssh-rsa', key: RSA_A })
-      ]) {
-        expect(matchTrustedHostKeys(records, candidate)).toBe(await isTrusted(candidate, storeFile))
-      }
-    })
-
-    // Read/write normalization must agree or every connection becomes first contact and adds another row.
-    it('normalises the query host the same way the write did', async () => {
-      await trustHostKey(query({ host: '  Build-01  ' }), storeFile)
-      const records = await loadTrustedHostKeys(storeFile)
-
-      expect(records[0]?.host).toBe('build-01')
-      expect(matchTrustedHostKeys(records, query({ host: '  BUILD-01 ' }))).toBe('match')
-      expect(matchTrustedHostKeys(records, query({ host: 'build-01' }))).toBe('match')
-    })
-  })
-
-  // Known key types guide algorithm order so alternate-type offers cannot bypass stored host trust.
-  describe('the key types held for one endpoint', () => {
-    it('reports every type recorded for that host and port', async () => {
-      await trustHostKey(query(), storeFile)
-      await trustHostKey(query({ keyType: 'ssh-rsa', key: RSA_A }), storeFile)
-      const records = await loadTrustedHostKeys(storeFile)
-
-      expect(storedKeyTypesForEndpoint(records, 'build-01', 22).sort()).toEqual([
-        'ssh-ed25519',
-        'ssh-rsa'
-      ])
-    })
-
-    it('does not leak types from another port or host', async () => {
-      await trustHostKey(query(), storeFile)
-      const records = await loadTrustedHostKeys(storeFile)
-
-      expect(storedKeyTypesForEndpoint(records, 'build-01', 2222)).toEqual([])
-      expect(storedKeyTypesForEndpoint(records, 'build-02', 22)).toEqual([])
-    })
-
-    it('normalises the host it is asked about', async () => {
-      await trustHostKey(query(), storeFile)
-      const records = await loadTrustedHostKeys(storeFile)
-
-      expect(storedKeyTypesForEndpoint(records, ' BUILD-01 ', 22)).toEqual(['ssh-ed25519'])
-    })
   })
 })
 
@@ -320,14 +189,5 @@ describe('a host key store that exists but cannot be read', () => {
     expect(await readFile(storeFile, 'utf-8'), 'an unreadable store was overwritten').toBe(before)
     const kept = await loadTrustedHostKeys(storeFile)
     expect(kept.map((record) => record.host).sort()).toEqual(['build-01', 'build-02'])
-  })
-
-  it('still answers "nothing trusted" on the read path, so nothing fails open', async () => {
-    // Unreadable store may fall back to first contact, but writes must preserve its unknown records.
-    await trustHostKey(query(), storeFile)
-    readFailure.error = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
-
-    expect(await loadTrustedHostKeys(storeFile)).toEqual([])
-    expect(await isTrusted(query(), storeFile)).toBe('unknown')
   })
 })

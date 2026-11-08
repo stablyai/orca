@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
-      "reconnecting": "再接続中…",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -353,6 +352,13 @@
       "resume": "再開",
       "resumeSending": "キュー内のメッセージの送信を再開",
       "title": "キュー内のメッセージ"
+    },
+    "offlineQueue": {
+      "failed": "送信できませんでした — 「送信」をタップして再試行",
+      "waitingFor": "{{host}} に再接続すると送信されます",
+      "waiting": "デスクトップに再接続すると送信されます",
+      "behind": "待機中 — 前のメッセージに対応が必要です",
+      "closed": "Orca が閉じる前に送信されませんでした"
     },
     "receipt": {
       "cancelled": "キャンセル",
@@ -1303,10 +1309,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
       "loadFolderFailed": "フォルダーを読み込めませんでした",
+      "loadedOfTotal": "{{total}} 件中 {{loaded}} 件",
       "loading": "読み込み中…",
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
+      "searchAll": "すべて検索",
+      "searchAllIn": "{{folder}} をすべて検索",
+      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
+      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
+      "showMore": "さらに {{rows}} 件を表示",
       "unavailable": "モバイルでは利用不可"
     },
     "fileExplorerRowActions": {
@@ -1380,6 +1392,13 @@
       "openFailed": "この PDF を開けませんでした",
       "opening": "PDF を開いています…",
       "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} の編集以降、デスクトップで変更されました",
+      "copyMyEdits": "自分の編集をコピー",
+      "discard": "破棄",
+      "restore": "復元",
+      "unsavedFrom": "{{time}} の未保存の編集"
     }
   },
   "home": {

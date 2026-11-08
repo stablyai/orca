@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isLongSkillDescription } from './skill-description-length'
 
 /** Descriptions include long trigger documentation; disclose the rest after the opening lines. */
@@ -12,6 +12,7 @@ export function SkillDescriptionDisclosure({
   description: string | null | undefined
   className?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState(false)
   if (!description) {
     return null
@@ -36,8 +37,8 @@ export function SkillDescriptionDisclosure({
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded
-            ? translate('auto.components.skills.description.showLess', 'Show less')
-            : translate('auto.components.skills.description.showMore', 'Show more')}
+            ? t('auto.components.skills.description.showLess', 'Show less')
+            : t('auto.components.skills.description.showMore', 'Show more')}
         </Button>
       ) : null}
     </div>

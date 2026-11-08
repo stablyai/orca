@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { PaneForegroundAgentEntry } from '../../../store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '../../../store/slices/agent-status/pane-foreground-agent'
 
 export type PaneAgentSessionIdState = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>

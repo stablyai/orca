@@ -11,7 +11,7 @@ import {
   type MobileWebBundleRangeResult
 } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 
-import { resetBundledMobileWebBundleCacheForTests } from '../../../bundled-mobile-web-bundle'
+import { resetBundledMobileWebBundleCacheForTests } from './bundled-mobile-web-bundle'
 
 import type { RpcResponse } from '../../core'
 import type { RpcDispatcher } from '../../dispatcher'

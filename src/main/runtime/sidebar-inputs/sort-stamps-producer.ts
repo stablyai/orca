@@ -29,8 +29,6 @@ import {
   type SortStampsStore
 } from './sort-stamp-records'
 
-export type { SortStampsStore } from './sort-stamp-records'
-
 /** What the startup reconcile asks of the host, once its hook rows and PTYs have settled. */
 export type StoredTierEvidence = {
   /** This machine's own workspace; unknown provenance is not local authority. */

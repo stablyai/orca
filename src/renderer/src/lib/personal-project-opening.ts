@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import type { WorktreeActivationOptions } from './workspace/activation/worktree-activation-surface-selection'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { resolveProjectPreferenceKey } from '../../../shared/project-preference-identity'
 import { writePersonalProjectPreference } from '@/runtime/personal-project-order-client'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'

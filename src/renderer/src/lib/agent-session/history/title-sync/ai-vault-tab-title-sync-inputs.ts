@@ -11,7 +11,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 function providerSessionEqual(
   left: AgentProviderSessionMetadata | undefined,

@@ -1,7 +1,7 @@
 import {
   hostStatusProbe,
   readProbedHostCapabilities
-} from '../transport/host-status-probe-operations'
+} from '../transport/connection/host-status-probe-operations'
 import { randomUUID } from 'expo-crypto'
 import { z } from 'zod'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'

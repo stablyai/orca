@@ -1,6 +1,6 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizePersonalProjectOrder } from '../../../shared/personal-project-order'
-import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,

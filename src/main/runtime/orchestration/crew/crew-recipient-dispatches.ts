@@ -1,4 +1,4 @@
-import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   dispatchAssigneeCoordinatorKey,
   selectRunBoundDispatchRecipient

@@ -1,8 +1,8 @@
 import { useHostProjectOrder } from './use-host-project-order'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import { useCallback, useEffect, useRef } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import {
   applyDesktopViewSettings,
@@ -20,7 +20,7 @@ import {
   hostViewSettingsRead,
   hostViewSettingsWrite
 } from './host-screen-operations'
-import { hostListSettingsRead } from '../transport/settings-read-operations'
+import { hostListSettingsRead } from './host-list-settings-operations'
 import type {
   AgentActivityDisplayMode,
   WorktreeCardProperty
@@ -45,16 +45,20 @@ export function useHostViewSettings(args: {
   projectCatalog?: ServedProjectSections | null
 }) {
   const { client, connState, state } = args
-  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
+  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef, rememberView } = state
 
   const localEditsRef = useRef(0)
   const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
   const pendingChanges = pendingViewChanges?.controls ?? null
 
-  const applyViewState = useCallback((next: MobileViewState) => {
-    viewRef.current = next
-    setView(next)
-  }, [])
+  const applyViewState = useCallback(
+    (next: MobileViewState) => {
+      viewRef.current = next
+      setView(next)
+      rememberView(next)
+    },
+    [rememberView]
+  )
 
   useEffect(() => {
     if (viewRef.current.personalProjectOrder === undefined) {

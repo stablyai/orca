@@ -7,7 +7,7 @@ import {
   type BundledSkillInstall
 } from '@/hooks/use-bundled-skill-install'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function BundledSkillInstallStatus(props: {
   install: Pick<BundledSkillInstall, 'state' | 'retry'>
@@ -16,6 +16,7 @@ export function BundledSkillInstallStatus(props: {
   attention?: { retry: () => void; message?: string }
   unsupported?: BundledSkillUnsupportedReason
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const previewAttention =
     props.attention && (props.install.state.kind === 'idle' || props.install.state.kind === 'done')
   const state = props.unsupported
@@ -25,7 +26,7 @@ export function BundledSkillInstallStatus(props: {
           kind: 'failed' as const,
           message:
             props.attention?.message ??
-            translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+            t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
         }
       : props.install.state
   const retry = previewAttention ? props.attention?.retry : props.install.retry
@@ -36,11 +37,11 @@ export function BundledSkillInstallStatus(props: {
     return (
       <p className={cn('text-xs leading-snug text-muted-foreground', props.className)}>
         {state.reason === 'connect-host'
-          ? translate(
+          ? t(
               'auto.components.settings.BundledSkillInstallStatus.connectHost',
               'Connect to this SSH host to install its skills.'
             )
-          : translate(
+          : t(
               'auto.components.settings.BundledSkillInstallStatus.updateServer',
               'Update Orca on the server to install its skills.'
             )}
@@ -49,7 +50,7 @@ export function BundledSkillInstallStatus(props: {
   }
   const problem = bundledSkillInstallNeedsAttention(state)
   const message =
-    state.kind === 'failed' ? state.message : skillInstallResultLine(state.result, state.changes)
+    state.kind === 'failed' ? state.message : skillInstallResultLine(state.result, state.changes, t)
   return (
     <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
       <p
@@ -63,7 +64,7 @@ export function BundledSkillInstallStatus(props: {
       {problem ? (
         <Button type="button" variant="ghost" size={props.buttonSize ?? 'sm'} onClick={retry}>
           <RefreshCw className="size-3.5" />
-          {translate('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')}
+          {t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')}
         </Button>
       ) : null}
     </div>

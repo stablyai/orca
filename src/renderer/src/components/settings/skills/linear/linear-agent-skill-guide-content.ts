@@ -1,5 +1,6 @@
 import { GitBranch, KeyRound, EyeOff, Slash, type LucideIcon } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type LinearGuideNote = {
   id: string
@@ -8,16 +9,16 @@ export type LinearGuideNote = {
   body: string
 }
 
-export function getLinearGuideNotes(): LinearGuideNote[] {
+export function getLinearGuideNotes(t: Translate = translate): LinearGuideNote[] {
   return [
     {
       id: 'linked-worktree',
       icon: GitBranch,
-      title: translate(
+      title: t(
         'auto.components.settings.LinearAgentSkillGuide.noteLinkedTitle',
         'Start from a Linear issue'
       ),
-      body: translate(
+      body: t(
         'auto.components.settings.LinearAgentSkillGuide.noteLinkedBody',
         'Ticket actions work best in a worktree created from Tasks so the issue stays linked as context.'
       )
@@ -25,11 +26,11 @@ export function getLinearGuideNotes(): LinearGuideNote[] {
     {
       id: 'slash-command',
       icon: Slash,
-      title: translate(
+      title: t(
         'auto.components.settings.LinearAgentSkillGuide.noteSlashTitle',
         'Mention /orca-linear'
       ),
-      body: translate(
+      body: t(
         'auto.components.settings.LinearAgentSkillGuide.noteSlashBody',
         'In chat, use /orca-linear (or ask in plain language) so the agent loads the skill for that turn.'
       )
@@ -37,11 +38,11 @@ export function getLinearGuideNotes(): LinearGuideNote[] {
     {
       id: 'keys',
       icon: KeyRound,
-      title: translate(
+      title: t(
         'auto.components.settings.LinearAgentSkillGuide.noteKeysTitle',
         'Keys follow the runtime'
       ),
-      body: translate(
+      body: t(
         'auto.components.settings.LinearAgentSkillGuide.noteKeysBody',
         'API keys and workspaces are stored for the active runtime.'
       )
@@ -49,11 +50,11 @@ export function getLinearGuideNotes(): LinearGuideNote[] {
     {
       id: 'visibility',
       icon: EyeOff,
-      title: translate(
+      title: t(
         'auto.components.settings.LinearAgentSkillGuide.noteVisibilityTitle',
         'Hiding ≠ disconnect'
       ),
-      body: translate(
+      body: t(
         'auto.components.settings.LinearAgentSkillGuide.noteVisibilityBody',
         'Hiding Linear in Task Sources only removes it from the picker. It does not remove your key or skill.'
       )

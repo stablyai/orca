@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CursorIcon(): JSX.Element {
   return (
@@ -163,12 +163,13 @@ export function ChevDownIcon(): JSX.Element {
 }
 
 export function ClaudeLogo(): JSX.Element {
+  const t = useTranslate()
   return (
     <svg
       width={14}
       height={14}
       viewBox="0 0 24 24"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.feature.wall.review.animated.visual.shared.9deecb021c',
         'Claude'
       )}
@@ -183,12 +184,13 @@ export function ClaudeLogo(): JSX.Element {
 }
 
 export function CodexLogo(): JSX.Element {
+  const t = useTranslate()
   return (
     <svg
       width={14}
       height={14}
       viewBox="0 0 24 24"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.feature.wall.review.animated.visual.shared.e7894927a2',
         'Codex'
       )}

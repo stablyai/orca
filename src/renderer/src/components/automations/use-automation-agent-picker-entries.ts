@@ -10,7 +10,7 @@ import {
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { automationLaunchChoices } from '../../../../shared/automation-launch-setup-source'
+import { automationLaunchChoices } from '../../../../shared/automations/launch/automation-launch-choices'
 import { mergeExtraAgentArgs } from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { automationChatSupport } from './automation-launch-surface'

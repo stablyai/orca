@@ -3,7 +3,7 @@ import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-s
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
 import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
@@ -34,6 +34,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
   newLaunch: boolean
   /** Where a new chat runs: the host names no default its config could replace. */
   worktree?: string
+  /** The chat has a turn or a send, so its answers are its own account's, which a new chat may no longer pin. */
+  hasTurn?: boolean
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   receiveCatalog: (
@@ -62,9 +64,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
     worktree
   } = args
   const receiver = useRef(args.receiveCatalog)
+  const recordsNewChat = useRef(newLaunch && args.hasTurn !== true)
+  const recordingWait = useRef<string | null>(null)
   useEffect(() => {
     receiver.current = args.receiveCatalog
-  }, [args.receiveCatalog])
+    recordsNewChat.current = newLaunch && args.hasTurn !== true
+  }, [args.receiveCatalog, newLaunch, args.hasTurn])
   const [rereads, setRereads] = useState(0)
   const selectedModel = usesModelSpecificAcpEfforts(agent ?? '') ? args.selectedModel : undefined
   const recheck = useCallback(() => setRereads((count) => count + 1), [])
@@ -73,6 +78,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
+    const key = `${agent}\u0000${sessionId}`
+    // A read sent before the chat's first turn or send answers for the account a new chat pins;
+    // so does the listing such a read waits on, whichever later run picks that up. Each new read decides alone.
+    const readRecords = recordsNewChat.current
+    const waitRecords =
+      readRecords || (recordingWait.current === key && isHostModelListingWaitInFlight(key, client))
     const params = {
       agent,
       sessionId,
@@ -92,13 +103,14 @@ export function useMobileHostModelCatalogUpgrade(args: {
     const apply = (
       catalog: AgentSessionModelCatalogResult,
       settled = false,
-      event: 'demand' | 'progress' = 'demand'
+      event: 'demand' | 'progress' = 'demand',
+      records = readRecords
     ): void => {
       if (stale) {
         return
       }
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      if (newLaunch) {
+      if (records) {
         modelCatalogCache?.record(worktree ?? '', catalog)
       }
       receiver.current(catalog, settled ? 'settled' : event)
@@ -109,9 +121,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
         receiver.current(null, 'demand')
       }
     }
-    const key = `${agent}\u0000${sessionId}`
     let leave: (() => void) | undefined
     const wait = () => {
+      recordingWait.current = waitRecords ? key : null
       leave = joinHostModelListingWait(
         key,
         () => read(true),
@@ -120,7 +132,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
             return
           }
           if (listed) {
-            apply(listed, !listed.listingInProgress && listed.origin !== 'unknown', 'progress')
+            apply(
+              listed,
+              !listed.listingInProgress && listed.origin !== 'unknown',
+              'progress',
+              waitRecords
+            )
             if (listed.origin !== 'unknown' && !listed.listingInProgress) {
               onListingLanded?.()
             }

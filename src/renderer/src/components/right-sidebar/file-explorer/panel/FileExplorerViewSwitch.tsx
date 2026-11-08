@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
 
@@ -18,22 +18,20 @@ export function FileExplorerViewSwitch({
   view,
   onSelectView
 }: FileExplorerViewSwitchProps): React.JSX.Element {
+  const t = useTranslate()
   const options: ExplorerViewOption[] = [
     {
       view: 'files',
-      label: translate('auto.components.right.sidebar.FileExplorerViewSwitch.c4e9a2b713', 'Names'),
-      ariaLabel: translate(
+      label: t('auto.components.right.sidebar.FileExplorerViewSwitch.c4e9a2b713', 'Names'),
+      ariaLabel: t(
         'auto.components.right.sidebar.FileExplorerViewSwitch.b3c8f1a902',
         'Filter files by name'
       )
     },
     {
       view: 'search',
-      label: translate(
-        'auto.components.right.sidebar.FileExplorerNameFilter.7a9fb1e6aa',
-        'Contents'
-      ),
-      ariaLabel: translate(
+      label: t('auto.components.right.sidebar.FileExplorerNameFilter.7a9fb1e6aa', 'Contents'),
+      ariaLabel: t(
         'auto.components.right.sidebar.FileExplorerToolbar.c1f3f3ec70',
         'Search file contents'
       )
@@ -53,7 +51,7 @@ export function FileExplorerViewSwitch({
             onSelectView(value)
           }
         }}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.right.sidebar.FileExplorerViewSwitch.f8a2c4d1e0',
           'Explorer search mode'
         )}

@@ -6,7 +6,7 @@ import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section
 import { RecordProjectOpenParams } from '../../../src/shared/rpc-contract/personal-project-order-params'
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'
 import type { Repo } from '../../../src/shared/repo-types'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import type { Worktree } from './workspace-list-types'
 import { captureMobilePersonalOpening } from './personal-project-opening'
 

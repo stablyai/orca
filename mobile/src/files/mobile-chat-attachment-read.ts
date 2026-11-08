@@ -1,14 +1,14 @@
 import { sharedPromiseSettlementWaiters } from '../../../src/shared/promise-settlement-waiters'
-import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import { readHostStatusReply } from '../query/host-status-query'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   attachmentTextChunkSchema,
   type AttachmentTextRead
-} from '../../../src/shared/attachment-text-source'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+} from '../../../src/shared/attachment-text/attachment-text-source'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 // Match the shared wire identifier without importing the host capability aggregate into this route.
 const AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY = 'native-chat.text-attachment-read.v1'

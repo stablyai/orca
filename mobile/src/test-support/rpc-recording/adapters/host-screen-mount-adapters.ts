@@ -16,7 +16,8 @@ export function hostScreenMountAdapters(
         clientRef: { current: context.client },
         servedProjectSections: null,
         view: INITIAL_MOBILE_VIEW,
-        viewRef: { current: INITIAL_MOBILE_VIEW }
+        viewRef: { current: INITIAL_MOBILE_VIEW },
+        rememberView: () => {}
       })
       let actions: ReturnType<typeof useViewSettings>
       const hook = hookMount(() => {

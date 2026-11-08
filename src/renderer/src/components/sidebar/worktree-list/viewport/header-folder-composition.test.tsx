@@ -16,7 +16,7 @@ import {
   renderWorktreeVirtualRow,
   type WorktreeVirtualRowContext
 } from '../rows/virtual-row-dispatch'
-import type { SectionHeaderRowContext } from '../rows/SectionHeader'
+import type { SectionHeaderRowContext } from '../rows/section-header-row-context'
 import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
 import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
 import { environment, publish, ssh } from '../listing/host-status-test-fixtures'
@@ -161,7 +161,9 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         projectGroupHeaderIndexByGroupId: new Map(),
         projectGroupHeaderBucketByGroupId: new Map(),
         repoHeaderSectionEndByRowKey: new Map(),
-        projectGroupHeaderSectionEndByGroupId: new Map()
+        projectGroupHeaderSectionEndByGroupId: new Map(),
+        rootProjectHeaderKeys: undefined,
+        rootProjectHeaderSectionEndByKey: new Map()
       },
       projectActions: {
         getWorktreeVisibilityDefaults: () => undefined,

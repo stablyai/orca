@@ -1,22 +1,25 @@
-import { setPendingLaunchReadoptions } from '@/components/native-chat/native-chat-launch-draft-source'
-import { continueReadoptedLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-continuity'
+import { setPendingLaunchReadoptions } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { continueReadoptedLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import { reconcileReadoptedSshRepoRows } from '../slices/superseded-ssh-repo-rows'
-import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
-import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
+import {
+  reconcileReadoptedSshRepoRows,
+  type SshRepoReconciliation
+} from './superseded-ssh-repo-rows'
+
+import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
 import { dropWorktreeRowsOfDroppedRepos } from './dropped-repo-worktree-rows'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { withoutPendingRuntimeRepoRemovals } from './pending-runtime-repo-removals'
 
 export type FetchedRepoCatalog = {

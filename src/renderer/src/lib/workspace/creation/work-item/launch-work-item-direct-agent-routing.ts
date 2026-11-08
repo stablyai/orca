@@ -1,3 +1,4 @@
+import type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { agentLaunchCommandErrorMessage } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
@@ -164,6 +165,7 @@ export function finishDirectWorkItemPrompt(args: {
   startupPlan: ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
+  onFailureNotified?: () => void
 }): boolean {
   const {
     primaryTabId,
@@ -176,6 +178,7 @@ export function finishDirectWorkItemPrompt(args: {
   } = args
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
+    args.onFailureNotified?.()
     return false
   }
 
@@ -206,4 +209,15 @@ export function finishDirectWorkItemPrompt(args: {
     })
   }
   return true
+}
+
+export function directWorkItemStartupAccepted(
+  activation: ActivateAndRevealResult,
+  plan: ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan'],
+  planFailed: boolean
+): boolean {
+  return (
+    Boolean(activation.primaryTabId && plan?.launchToken && !planFailed) ||
+    activation.startupAccepted === true
+  )
 }

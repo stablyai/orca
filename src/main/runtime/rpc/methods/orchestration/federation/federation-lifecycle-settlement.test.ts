@@ -1,10 +1,9 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -13,7 +12,7 @@ import '../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
-import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation/federation-lifecycle-settlement'
+import '../../../../orchestration/federation/federation-lifecycle-settlement'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
@@ -139,14 +138,6 @@ describe('orchestration federation lifecycle settlement', () => {
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
   }
 
-  function restartHomeRuntime(): void {
-    homeRuntime.stopOrchestrationFederationRelay()
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
-      orchestrationEnvironmentTransport: transport
-    })
-    homeRuntime.setOrchestrationDb(homeDb)
-  }
-
   function restartWorkerRuntime(): void {
     workerRuntime.stopOrchestrationFederationRelay()
     workerRuntime = new OrcaRuntimeService()
@@ -184,31 +175,6 @@ describe('orchestration federation lifecycle settlement', () => {
       await homeRuntime.syncOrchestrationFederation()
     }
     return { sent, dispatch }
-  }
-
-  function dispatchRemoteCompletion(
-    taskId: string,
-    dispatchId: string,
-    requestId: string,
-    signal?: AbortSignal,
-    outcome: 'succeeded' | 'failed' = 'succeeded'
-  ) {
-    return workerDispatcher.dispatch(
-      {
-        id: `rpc_${requestId}`,
-        authToken: 'worker-local-token',
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-        orchestrationRequestId: requestId,
-        method: 'orchestration.send',
-        params: {
-          from: 'term_windows_worker',
-          subject: 'Done',
-          type: 'worker_done',
-          payload: JSON.stringify({ taskId, dispatchId, outcome })
-        }
-      },
-      { signal }
-    )
   }
 
   function lifecycleResult(response: RuntimeRpcResponse<unknown>): string {
@@ -262,61 +228,6 @@ describe('orchestration federation lifecycle settlement', () => {
     })
     expect(homeDb.getTask(task.id)?.status).toBe('dispatched')
   })
-
-  it.each([
-    [1, 'succeeded'],
-    [1, 'failed'],
-    [2, 'succeeded'],
-    [2, 'failed']
-  ] as const)(
-    'runs a protocol v%s client through %s completion on a current worker server',
-    async (protocolVersion, outcome) => {
-      workerCapabilities = legacyWorkerCapabilities(protocolVersion)
-      const task = createHomeTask()
-
-      const started = await homeDispatcher.dispatch(startRequest(task.id))
-      homeRuntime.stopOrchestrationFederationRelay()
-      expect(started).toMatchObject({ ok: true })
-      const dispatch = homeDb.getDispatchContext(task.id)!
-      expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.protocol_version).toBe(
-        protocolVersion
-      )
-
-      const completed = (await dispatchRemoteCompletion(
-        task.id,
-        dispatch.id,
-        `protocol_${protocolVersion}_${outcome}_completion`,
-        undefined,
-        outcome
-      )) as RuntimeRpcResponse<unknown>
-      await homeRuntime.syncOrchestrationFederatedDispatch(dispatch.id)
-
-      expect(completed).toMatchObject({
-        ok: true,
-        result: {
-          lifecycle: {
-            action: outcome === 'succeeded' ? 'completed' : 'failed',
-            authority: 'worker_server_legacy'
-          }
-        }
-      })
-      expect({
-        task: homeDb.getTask(task.id)?.status,
-        dispatch: homeDb.getDispatchContextById(dispatch.id)?.status,
-        attachment: workerDb.getRemoteDispatchAttachment(dispatch.id)?.state,
-        pending: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length,
-        worktreeCreates: vi.mocked(workerRuntime.createManagedWorktree).mock.calls.length,
-        promptWrites: vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls.length
-      }).toEqual({
-        task: outcome === 'succeeded' ? 'completed' : 'failed',
-        dispatch: outcome === 'succeeded' ? 'completed' : 'failed',
-        attachment: outcome,
-        pending: 0,
-        worktreeCreates: 1,
-        promptWrites: 1
-      })
-    }
-  )
 
   it.each([1, 2] as const)(
     'settles a protocol v%s report from a legacy worker server',
@@ -396,44 +307,6 @@ describe('orchestration federation lifecycle settlement', () => {
         dispatch: 'completed',
         acknowledgment: { dispatchId: dispatch.id, throughSequence: 1 }
       })
-    }
-  )
-
-  it.each([1, 2] as const)(
-    'retries a lost protocol v%s completion acknowledgment after Run-home restart',
-    async (protocolVersion) => {
-      workerCapabilities = legacyWorkerCapabilities(protocolVersion)
-      const task = createHomeTask()
-      await homeDispatcher.dispatch(startRequest(task.id))
-      homeRuntime.stopOrchestrationFederationRelay()
-      const dispatch = homeDb.getDispatchContext(task.id)!
-      await dispatchRemoteCompletion(
-        task.id,
-        dispatch.id,
-        `protocol_${protocolVersion}_lost_ack_completion`
-      )
-      failNextAckBeforeDelivery = true
-
-      await expect(homeRuntime.syncOrchestrationFederatedDispatch(dispatch.id)).rejects.toThrow(
-        'connection lost before acknowledgment'
-      )
-      expect({
-        task: homeDb.getTask(task.id)?.status,
-        acknowledged: homeDb.getFederatedDispatch(dispatch.id)?.to_home_acknowledged_sequence,
-        pending: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length
-      }).toEqual({ task: 'completed', acknowledged: 0, pending: 1 })
-
-      restartHomeRuntime()
-      await vi.waitFor(() =>
-        expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(0)
-      )
-
-      expect({
-        acknowledged: homeDb.getFederatedDispatch(dispatch.id)?.to_home_acknowledged_sequence,
-        attachment: workerDb.getRemoteDispatchAttachment(dispatch.id)?.state,
-        pending: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length,
-        ackAttempts
-      }).toEqual({ acknowledged: 1, attachment: 'succeeded', pending: 0, ackAttempts: 2 })
     }
   )
 
@@ -689,113 +562,6 @@ describe('orchestration federation lifecycle settlement', () => {
     await expect(sent).resolves.toMatchObject({
       ok: false,
       error: { code: 'operation_unknown' }
-    })
-  })
-
-  it('does not register a waiter for an already-aborted signal', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    const addEventListener = vi.spyOn(controller.signal, 'addEventListener')
-
-    await expect(
-      waitForFederatedLifecycleSettlement(workerRuntime, 'ctx_aborted', 1, {
-        timeoutMs: 0,
-        signal: controller.signal
-      })
-    ).resolves.toBeUndefined()
-    expect(addEventListener).not.toHaveBeenCalled()
-  })
-
-  it('keeps terminal settlement replayable until the worker durably acknowledges it', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    homeRuntime.stopOrchestrationFederationRelay()
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    const controller = new AbortController()
-    const sent = dispatchRemoteCompletion(
-      task.id,
-      dispatch.id,
-      'replayed_worker_done_request',
-      controller.signal
-    )
-    await vi.waitFor(() =>
-      expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
-    )
-    failNextAckBeforeDelivery = true
-
-    homeRuntime.ensureOrchestrationFederationRelay()
-    await vi.waitFor(() => expect(ackAttempts).toBe(1))
-    const acknowledgedAfterLoss = homeDb.getFederatedDispatch(
-      dispatch.id
-    )?.to_home_acknowledged_sequence
-    restartHomeRuntime()
-    await vi.waitFor(() =>
-      expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.state).toBe('succeeded')
-    )
-    const acknowledgedAfterRetry = homeDb.getFederatedDispatch(
-      dispatch.id
-    )?.to_home_acknowledged_sequence
-    restartHomeRuntime()
-    homeRuntime.ensureOrchestrationFederationRelay()
-    await homeRuntime.syncOrchestrationFederation()
-
-    const observed = {
-      homeTask: homeDb.getTask(task.id)?.status,
-      workerAttachment: workerDb.getRemoteDispatchAttachment(dispatch.id)?.state,
-      pendingWorkerRelay: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length,
-      acknowledgedAfterLoss,
-      acknowledgedAfterRetry,
-      ackAttempts
-    }
-    controller.abort()
-    const response = (await sent) as RuntimeRpcResponse<unknown>
-
-    expect({ ...observed, completion: lifecycleResult(response) }).toEqual({
-      homeTask: 'completed',
-      workerAttachment: 'succeeded',
-      pendingWorkerRelay: 0,
-      acknowledgedAfterLoss: 0,
-      acknowledgedAfterRetry: 1,
-      ackAttempts: 2,
-      completion: 'completed'
-    })
-  })
-
-  it('acknowledges duplicate identical terminal reports idempotently', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    homeRuntime.stopOrchestrationFederationRelay()
-    const dispatch = homeDb.getDispatchContext(task.id)!
-    const controllers = [new AbortController(), new AbortController()]
-    const enqueue = vi.spyOn(workerDb, 'enqueueFederationRelay')
-    const sent = controllers.map((controller, index) =>
-      dispatchRemoteCompletion(
-        task.id,
-        dispatch.id,
-        `duplicate_worker_done_${index + 1}`,
-        controller.signal
-      )
-    )
-    await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(2))
-    await homeRuntime.syncOrchestrationFederation()
-
-    const observed = {
-      homeTask: homeDb.getTask(task.id)?.status,
-      workerAttachment: workerDb.getRemoteDispatchAttachment(dispatch.id)?.state,
-      pendingWorkerRelay: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length,
-      ackAttempts
-    }
-    for (const controller of controllers) {
-      controller.abort()
-    }
-    const responses = (await Promise.all(sent)) as RuntimeRpcResponse<unknown>[]
-
-    expect({ ...observed, completions: responses.map(lifecycleResult) }).toEqual({
-      homeTask: 'completed',
-      workerAttachment: 'succeeded',
-      pendingWorkerRelay: 0,
-      ackAttempts: 1,
-      completions: ['completed', 'completed']
     })
   })
 

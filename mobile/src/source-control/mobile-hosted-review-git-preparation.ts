@@ -1,10 +1,10 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import {
   hostReplyErrorTextOrFallback,
   refusedRpcMessageOrFallback
-} from '../transport/rpc-refusal-message'
-import type { RpcResponse } from '../transport/types'
+} from '../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   gitBulkStageRun,
   gitCommitRun,
@@ -13,7 +13,7 @@ import {
 } from './mobile-git-mutation-operations'
 import { gitStatusProjectionRead } from './mobile-git-read-operations'
 import type { MobileGitStatusResult } from './mobile-git-status'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 export type MobileHostedReviewStatusReadResult =
   | { ok: true; status: MobileGitStatusResult | null }

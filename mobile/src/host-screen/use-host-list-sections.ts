@@ -3,7 +3,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'

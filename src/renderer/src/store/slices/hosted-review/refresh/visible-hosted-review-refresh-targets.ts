@@ -23,7 +23,7 @@ import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-ref
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { isWslHostOffForForge } from '../../../github/repositories/wsl-host-off-forge'
 
 export function* getVisibleHostedReviewWorkspaces(

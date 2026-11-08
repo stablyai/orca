@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import type { RuntimeEnvironmentCallRequest } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'

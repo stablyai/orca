@@ -8,8 +8,8 @@ import type { WorkspaceSessionState } from '../../../../../shared/workspace-sess
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import '../../../../../shared/workspace-scope'
-import '@/store/slices/store-test-helpers'
-import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
+import '@/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildWorkspaceSessionHostSnapshots } from './workspace-session-host-persistence'
 
 const TARGET_ID = 'target-1'

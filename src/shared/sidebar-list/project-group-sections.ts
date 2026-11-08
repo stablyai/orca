@@ -18,6 +18,7 @@ import {
 } from '../project-section-order'
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
+import { compareRootProjectEntries } from '../root-project-order'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -127,10 +128,6 @@ export function appendProjectGroupSections(
     groupByProjectGroupId.delete(projectGroup.id)
   }
 
-  for (const projectGroup of childGroupsByParentId.get(null) ?? []) {
-    appendProjectGroup(projectGroup, 0)
-  }
-
   const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
   for (const [projectGroupId, entries] of groupByProjectGroupId) {
     if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
@@ -139,11 +136,38 @@ export function appendProjectGroupSections(
     // Keep repos visible while host project-group metadata is still loading.
     remainingRepoEntries.push(...entries)
   }
-  appendOrderedGroups(
-    ctx,
-    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
-    0
-  )
+  const rootEntries: ({ projectGroup: ProjectGroup } | { repoEntry: OrderedGroupEntry })[] = [
+    ...(childGroupsByParentId.get(null) ?? []).map((projectGroup) => ({ projectGroup })),
+    ...withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)).map(
+      (repoEntry) => ({ repoEntry })
+    )
+  ]
+  if (projectOrderBy === 'manual') {
+    rootEntries.sort((left, right) => {
+      const leftEntry =
+        'projectGroup' in left
+          ? { kind: 'group' as const, group: left.projectGroup }
+          : left.repoEntry[1].repo
+            ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
+            : null
+      const rightEntry =
+        'projectGroup' in right
+          ? { kind: 'group' as const, group: right.projectGroup }
+          : right.repoEntry[1].repo
+            ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
+            : null
+      return leftEntry && rightEntry
+        ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder)
+        : 0
+    })
+  }
+  for (const entry of rootEntries) {
+    if ('projectGroup' in entry) {
+      appendProjectGroup(entry.projectGroup, 0)
+    } else {
+      appendOrderedGroups(ctx, [entry.repoEntry], 0)
+    }
+  }
 }
 
 /** The same group parents used by section emission, including missing-parent roots. */

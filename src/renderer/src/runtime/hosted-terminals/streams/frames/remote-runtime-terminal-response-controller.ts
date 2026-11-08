@@ -19,6 +19,7 @@ type SubscribedCapabilities = {
   outputPause: boolean
   outputPauseDropNotice: boolean
   inputAck: boolean
+  outputCadence: boolean
 }
 
 // Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
@@ -28,7 +29,8 @@ function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
       ackOutputSourceRanges: false,
       outputPause: false,
       outputPauseDropNotice: false,
-      inputAck: false
+      inputAck: false,
+      outputCadence: false
     }
   }
   const record: {
@@ -36,12 +38,14 @@ function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
     outputPause?: unknown
     outputPauseDropNotice?: unknown
     inputAck?: unknown
+    outputCadence?: unknown
   } = value
   return {
     ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
     outputPause: record.outputPause === 1,
     outputPauseDropNotice: record.outputPause === 1 && record.outputPauseDropNotice === 1,
-    inputAck: record.inputAck === 1
+    inputAck: record.inputAck === 1,
+    outputCadence: record.outputCadence === 1
   }
 }
 
@@ -96,6 +100,8 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           ? event.inputLedgerId
           : null
       stream.supportsInputAck = stream.inputLedgerId !== null
+      stream.supportsOutputCadence = capabilities.outputCadence
+      this.syncOutputCadence(stream)
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }

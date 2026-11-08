@@ -1,14 +1,14 @@
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
-import { selectCrossStoreFolderChildrenById } from '@/store/cross-store-lineage-parents'
+import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useAllWorktrees,
-  useProjectHostSetupProjection,
-  useRepoMap,
   useWorktreeMap
-} from '@/store/selectors'
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -54,7 +54,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>

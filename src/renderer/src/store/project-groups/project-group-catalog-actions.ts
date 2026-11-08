@@ -2,14 +2,14 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import type { FetchedProjectGroupCatalog } from './project-group-catalog'
-import type { HostCatalogFence } from '../host-catalog-fencing'
+import type { HostCatalogFence } from '../host-catalog/host-catalog-fence'
 import type { RepoSlice } from '../repos/repo-state'
-import { arrayElementsUnchanged } from '../catalog-identity'
+import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
   claimHostCatalogFence,
   isHostCatalogFenceCurrent,
   loadRuntimeHostCatalogs
-} from '../host-catalog-fencing'
+} from '../host-catalog/host-catalog-fence'
 import {
   fetchProjectGroupCatalogForTarget,
   mergeFetchedProjectGroupCatalog

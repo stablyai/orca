@@ -1,5 +1,5 @@
 import type { useRouter } from 'expo-router'
-import type { useForgetHostClient } from '../transport/host-client-hooks'
+import type { useForgetHostClient } from '../transport/connection/host-client-hooks'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { HostScreenState } from './use-host-screen-state'

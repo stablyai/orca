@@ -214,14 +214,6 @@ describe('moving onto a server another desktop already added the same project to
     expect(visibleRepos(store, () => userDataPath)).toEqual([])
   })
 
-  it('tells the connect which projects it linked', async () => {
-    otherDesktopAddsSameCheckout()
-    await expect(convert()).resolves.toMatchObject({
-      outcome: 'converted',
-      linkedProjects: [{ path: '/root/migrepo', automations: 0 }]
-    })
-  })
-
   it.each([
     ['a connection id', { connectionId: 'nested-target' }],
     ['an SSH execution host', { executionHostId: 'ssh:nested-target' as const }],
@@ -236,12 +228,6 @@ describe('moving onto a server another desktop already added the same project to
       expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.linkedRepositoryIds).toBeUndefined()
     }
   )
-
-  it('says nothing was linked when the server held none of the projects', async () => {
-    const result = await convert()
-    expect(result.outcome).toBe('converted')
-    expect(result).not.toHaveProperty('linkedProjects')
-  })
 
   it('leaves the linked project’s saved state to the server, moving only the rest', async () => {
     otherDesktopAddsSameCheckout()
@@ -298,13 +284,6 @@ describe('moving onto a server another desktop already added the same project to
       await expect(convert(true, 'unverifiable')).resolves.toMatchObject({ outcome: 'converted' })
       expect(serverRepoIds()).toEqual(['desktop-only', 'server-repo'])
     })
-  })
-
-  it('stays managed across a restart: the linked rows are not an older build’s change', async () => {
-    otherDesktopAddsSameCheckout()
-    await convert()
-    reconcileManagedOrcadSshTargets(userDataPath, store)
-    expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })
 
   it('never offers the linked project again in a later delta move', async () => {

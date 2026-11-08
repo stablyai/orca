@@ -34,7 +34,7 @@ import {
   type WorkspaceViewOptionKey,
   type WorkspaceViewSection
 } from '../../../../../../shared/workspace-view/workspace-view-options'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 
 export function useWorkspaceOptionsFilterBadge(): {
@@ -66,12 +66,13 @@ function HostsOptionItem({
   preserveWorkspaceBoardOpen,
   hostOptions
 }: OptionItemProps): JSX.Element {
+  const t = useTranslate()
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   return (
     <SidebarHostScopeMenuSection
-      hostVisibilityLabel={getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)}
+      hostVisibilityLabel={getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions, t)}
       hostOptions={hostOptions}
       preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
       setWorkspaceHostScope={setWorkspaceHostScope}
@@ -92,6 +93,7 @@ function GroupByOptionItem(): JSX.Element {
 }
 
 function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
+  const t = useTranslate()
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
@@ -100,7 +102,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between">
           <span>
-            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab', 'Sort by')}
+            {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab', 'Sort by')}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">{sortLabel}</span>
         </span>
@@ -149,6 +151,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
 
 function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const supportsPersonalOrder = usePersonalProjectOrderSupported()
+  const t = useTranslate()
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
   const projectOrderLabel =
@@ -158,10 +161,7 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between">
           <span>
-            {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
-              'Project order'
-            )}
+            {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875', 'Project order')}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">{projectOrderLabel}</span>
         </span>
@@ -193,7 +193,7 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={6}>
                 {!supportsPersonalOrder && opt.id === 'recent'
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
                       'Most recent workspace activity'
                     )
@@ -237,17 +237,18 @@ const OPTION_ITEMS: Record<WorkspaceViewOptionKey, ComponentType<OptionItemProps
 }
 
 function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Element | null {
+  const t = useTranslate()
   switch (section) {
     case 'show':
       return (
         <DropdownMenuLabel>
-          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+          {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
         </DropdownMenuLabel>
       )
     case 'group':
       return (
         <DropdownMenuLabel>
-          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
+          {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
         </DropdownMenuLabel>
       )
     case 'arrange':
@@ -256,10 +257,7 @@ function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Ele
       return (
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            {translate(
-              'auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba',
-              'Filters'
-            )}
+            {t('auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba', 'Filters')}
           </span>
         </div>
       )
@@ -271,6 +269,7 @@ export function WorkspaceOptionsMenuItems({
 }: {
   preserveWorkspaceBoardOpen?: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const repoCount = useAppStore((s) => s.repos.length)
   const groupBy = useAppStore((s) => s.groupBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
@@ -292,7 +291,7 @@ export function WorkspaceOptionsMenuItems({
   return (
     <>
       <DropdownMenuLabel className="pb-0 text-sm text-foreground">
-        {translate(
+        {t(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.workspaceOptions',
           'Workspace options'
         )}

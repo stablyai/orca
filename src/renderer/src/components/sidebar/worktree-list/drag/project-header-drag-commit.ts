@@ -9,19 +9,30 @@ import {
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { isSameRepoRow } from '@/store/slices/repo-host-identity'
+import { isSameRepoRow } from '@/store/repos/repo-host-identity'
+import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
-export function commitProjectHeaderDragDrop(args: {
-  session: ProjectHeaderDragSession
-  sidebarDropIndex: number
-  orderedRepoIds: readonly string[]
-  liveRepos: readonly Repo[]
-  currentBuckets?: ReadonlyMap<string, readonly string[]>
-  currentRepoHeaderRowsByBucket?: ReadonlyMap<string, readonly RepoHeaderRow[]>
-  usesProjectGroupOrdering: boolean
-  onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
-}): void {
+export function commitProjectHeaderDragDrop(
+  args: RootProjectHeaderDrag & {
+    session: ProjectHeaderDragSession
+    sidebarDropIndex: number
+    orderedRepoIds: readonly string[]
+    liveRepos: readonly Repo[]
+    currentBuckets?: ReadonlyMap<string, readonly string[]>
+    currentRepoHeaderRowsByBucket?: ReadonlyMap<string, readonly RepoHeaderRow[]>
+    usesProjectGroupOrdering: boolean
+    onCommitRepoOrder: (orderedIds: string[]) => void
+    onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  }
+): void {
+  if (args.session.rootProjectHeaderKeys) {
+    args.onCommitRootProjectOrder?.(
+      args.session.rootProjectHeaderKeys,
+      `repo:${args.session.repo.id}`,
+      args.sidebarDropIndex
+    )
+    return
+  }
   const draggedRepo = args.liveRepos.find((repo) => isSameRepoRow(repo, args.session.repo))
   // Why: a group change mid-drag (another window or client) moved the row out of this bucket.
   if (

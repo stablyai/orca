@@ -81,12 +81,14 @@ describe('remote runtime pane binding ownership', () => {
         vi.useFakeTimers()
       }
       composedStore = true
-      vi.doMock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+      vi.doMock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+        scheduleRuntimeGraphSync: vi.fn()
+      }))
       vi.doMock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
         notifyCodexPaneBoundForStaleSweep: vi.fn()
       }))
-      const { createTestStore, makeTab, seedStore } =
-        await import('@/store/slices/store-test-helpers')
+      const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
+        { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture')
       const { installActivePanePtyBinding } =
         await import('../../pty-connection/lifecycle/active-pane-pty-binding')
       const { installTerminalBellCompletionArbitration } =
@@ -538,7 +540,7 @@ describe('remote runtime pane binding ownership', () => {
       return defaultCall?.(args)
     })
     const { listRemoteRuntimeSessionTabsDeduped } =
-      await import('@/runtime/remote-runtime-session-tabs-inflight')
+      await import('@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight')
     // Another pane's inventory request starts before this leaf is published.
     const preexisting = listRemoteRuntimeSessionTabsDeduped({
       environmentId: 'env-1',

@@ -1,3 +1,4 @@
+import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import type {
@@ -19,7 +20,7 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   dropIndicatorY: null
 }
 
-export type UseRepoHeaderDragArgs = {
+export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   sidebarRepoHeaderRowsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly RepoHeaderRow[]>
@@ -42,6 +43,8 @@ export type ProjectHeaderDragSession = {
   membershipBucketKey?: ProjectHeaderDragBucketKey
   fixedPinTier?: boolean
   sidebarRepoHeaderIds: readonly string[]
+  rootProjectHeaderKeys?: readonly string[]
+  rootProjectHeaderHostId?: string
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
   handleEl: HTMLElement

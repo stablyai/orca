@@ -1,8 +1,9 @@
+import { hasModernAutomationLaunchSetup } from '../../shared/automations/launch/automation-launch-setup'
+import { automationCanonicalLaunchSetup } from '../../shared/automations/launch/automation-canonical-launch-setup'
 import {
-  hasModernAutomationLaunchSetup,
-  automationCanonicalLaunchSetup
-} from '../../shared/automation-launch-setup'
-import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
+  AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY,
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+} from '../../shared/automations/automation-runtime-capabilities'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
@@ -34,7 +35,6 @@ import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-r
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { hasExtraAgentArgs } from '../../shared/agent-launch/startup/automation-extra-agent-args'
 import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { OrcadServerRepository } from './orcad-migration-repository-link'

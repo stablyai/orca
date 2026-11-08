@@ -1,4 +1,4 @@
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'

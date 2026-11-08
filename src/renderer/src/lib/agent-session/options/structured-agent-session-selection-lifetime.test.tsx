@@ -1,5 +1,5 @@
-import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
-import type { StructuredAgentSessionMutate } from '../../../components/native-chat/use-structured-agent-session-mutate'
+import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import type { StructuredAgentSessionMutate } from '../../../components/native-chat/session/structured/writes/use-structured-agent-session-mutate'
 import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import { useAppStore } from '../../../store/index'
-import { useStructuredAgentSessionOptionState } from '../../../components/native-chat/use-structured-agent-session-option-state'
+import { useStructuredAgentSessionOptionState } from '../../../components/native-chat/session/options/structured/use-structured-agent-session-option-state'
 import { structuredAgentSessionSeedCatalog } from '../../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import { structuredAgentSessionMessageSelection } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { structuredAgentSessionModelId } from '../../../../../shared/agent-session/options/structured-agent-session-option-state'
@@ -20,9 +20,9 @@ import {
   getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests
 } from '../launch/structured-agent-session-launch-registry'
-import { useStructuredAgentSessionOptions } from '../../../components/native-chat/use-structured-agent-session-options'
+import { useStructuredAgentSessionOptions } from '../../../components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { listRuntimeSessionHostsForStartup } from '../../../app-shell/startup-runtime-session-hosts'
-import { structuredAgentSessionTargetForTab } from '../../../runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '../../../runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   registerStructuredSelectionCatalogStore,
@@ -45,21 +45,30 @@ vi.mock('../../launch-structured-agent-session', () => ({
 vi.mock('../launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: transport.create
 }))
-vi.mock('../../../runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: transport.call
 }))
-vi.mock('../../../components/native-chat/StructuredAgentSessionStatusBridge', () => ({
-  useStructuredAgentSessionPermissionStatus: () => ({ permissionReport: false, observation: 0 })
-}))
-vi.mock('../../../runtime/structured-agent-session-host-capability', () => ({
-  useStructuredAgentSessionHostCapability: () => true,
-  useStructuredAgentSessionOwnPermissionState: () => 'supported',
-  useStructuredAgentSessionHostCapabilityState: () => 'unknown',
-  structuredAgentSessionHostKey: () => 'paired-host'
-}))
-vi.mock('../../../components/native-chat/native-chat-session-option-settings-write', () => ({
-  enqueueSessionOptionSettingsWrite: transport.remember
-}))
+vi.mock(
+  '../../../components/native-chat/session/status/structured-agent-session-status-hooks',
+  () => ({
+    useStructuredAgentSessionPermissionStatus: () => ({ permissionReport: false, observation: 0 })
+  })
+)
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  () => ({
+    useStructuredAgentSessionHostCapability: () => true,
+    useStructuredAgentSessionOwnPermissionState: () => 'supported',
+    useStructuredAgentSessionHostCapabilityState: () => 'unknown',
+    structuredAgentSessionHostKey: () => 'paired-host'
+  })
+)
+vi.mock(
+  '../../../components/native-chat/session/options/native-chat-session-option-settings-write',
+  () => ({
+    enqueueSessionOptionSettingsWrite: transport.remember
+  })
+)
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() } }))
 
 const target = { kind: 'environment', environmentId: 'paired-host' } as const
