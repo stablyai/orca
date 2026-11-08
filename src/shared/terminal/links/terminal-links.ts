@@ -4,6 +4,7 @@ import { detectBareFilenameLinks } from './terminal-bare-file-link-detection'
 import {
   hasPathSeparator,
   mergeTerminalFileLinkRanges,
+  readParenthesizedTerminalPathRange,
   toParsedTerminalFileLink,
   trimTerminalPathBoundaryPunctuation,
   type DetectedTerminalFileLinkRange
@@ -67,13 +68,26 @@ function detectLocalPathLinks(lineText: string): {
   let grownWordEndIndex = 0
   for (const match of lineText.matchAll(LOCAL_PATH_REGEX)) {
     const rawStart = match.index ?? 0
-    const range = trimTerminalPathBoundaryPunctuation(match[0], rawStart)
+    const literalRange = trimTerminalPathBoundaryPunctuation(match[0], rawStart)
+    const parenthesizedRange = readParenthesizedTerminalPathRange(
+      lineText,
+      rawStart,
+      rawStart + match[0].length
+    )
+    const range = parenthesizedRange ?? literalRange
     if (!range || !hasPathSeparator(range.text) || isInsideUriScheme(lineText, range)) {
       continue
     }
     const link = toParsedTerminalFileLink(range)
     if (link) {
       paths.push(link)
+    }
+    // A closer followed by prose may also be a literal filename; let the host settle that reading.
+    if (parenthesizedRange && literalRange && literalRange.endIndex > range.endIndex) {
+      const literalLink = toParsedTerminalFileLink(literalRange)
+      if (literalLink) {
+        spacedPaths.push(literalLink)
+      }
     }
     // Why: a path inside an earlier path's word (`a!b/c`) shares its growth; regrowing would rescan the word.
     if (rawStart < grownWordEndIndex) {
