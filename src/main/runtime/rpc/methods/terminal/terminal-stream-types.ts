@@ -89,6 +89,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  // Output sent before the last recovery image and not yet acknowledged; the next image waits for it so images cannot stack up on a slow link.
+  ackRecoveryAwaitedBytes: number
   // Pending headroom granted while paced; kept until the queue drains so leaving alt cannot force an overflow.
   ackPendingHoldbackBytes: number
   // Paced window the last admission used (null when unpaced), so its send records the same decision.

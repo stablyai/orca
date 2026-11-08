@@ -28,7 +28,9 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
-      stream.ackRecoverySnapshotInFlight
+      stream.ackRecoverySnapshotInFlight ||
+      // Images bypass ACK windows, so one per drained window keeps a slow link from queueing them without bound.
+      stream.ackRecoveryAwaitedBytes > 0
     ) {
       return
     }
@@ -74,6 +76,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!publication.published) {
         throw new Error('Remote terminal recovery snapshot was not published.')
       }
+      stream.ackRecoveryAwaitedBytes = stream.ackInFlightBytes
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
@@ -142,6 +145,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (
       stream.ackRecoveryHistoryOwed &&
       stream.ackPendingOutput.length === 0 &&
+      // Flagging overflow while the gate holds the image would queue live output (echo) behind it.
+      stream.ackRecoveryAwaitedBytes === 0 &&
       linkHasRoomForHistory(stream)
     ) {
       // The flood settled: one recovery now replaces the screen-only image and its history.

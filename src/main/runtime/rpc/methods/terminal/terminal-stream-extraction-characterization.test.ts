@@ -48,6 +48,7 @@ describe('terminal stream extraction characterization', () => {
       ackPendingOutputBytes: 0,
       ackPendingOutputOverflowed: false,
       ackRecoverySnapshotInFlight: false,
+      ackRecoveryAwaitedBytes: 0,
       ackPendingHoldbackBytes: 0,
       ackAdmittedPacedWindowBytes: null,
       yieldedQueries: [],

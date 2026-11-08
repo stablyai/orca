@@ -141,6 +141,7 @@ export function creditAckWindow(
     connection.ackTotalWindowBytes + acknowledged
   )
   stream.ackInFlightBytes -= acknowledged
+  stream.ackRecoveryAwaitedBytes = Math.max(0, stream.ackRecoveryAwaitedBytes - acknowledged)
   connection.ackTotalInFlightBytes = Math.max(0, connection.ackTotalInFlightBytes - acknowledged)
   return acknowledged
 }
@@ -154,6 +155,7 @@ export function releaseAckWindow(
     connection.ackTotalInFlightBytes - stream.ackInFlightBytes
   )
   stream.ackInFlightBytes = 0
+  stream.ackRecoveryAwaitedBytes = 0
 }
 
 // Snapshots bypass ACK windows; restore history only after link drain so sustained floods cannot outrun intake.
