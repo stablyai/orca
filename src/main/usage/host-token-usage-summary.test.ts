@@ -115,11 +115,31 @@ describe('readHostTokenUsage', () => {
     expect(usage.codex.getSummary).toHaveBeenCalledWith('orca', '7d')
   })
 
-  it('marks a provider whose tracking is off instead of reporting measured zeros', async () => {
+  it('reads tracking after the store has loaded, not from its pre-load default', async () => {
+    const usage = sources({})
+    let loaded = false
+    usage.claude.getScanState = () => ({
+      enabled: loaded,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyClaudeData: loaded
+    })
+    usage.claude.getSummary = vi.fn(async () => {
+      loaded = true
+      return claudeSummary()
+    })
+
+    const result = await readHostTokenUsage(usage, { range: '30d', scope: 'all' })
+
+    expect(result.providers[0]).toMatchObject({ tracking: true, totalTokens: 570 })
+  })
+
+  it('marks a provider whose tracking is off instead of reporting stored or zero counts', async () => {
     const usage = sources({ codexEnabled: false })
     const result = await readHostTokenUsage(usage, { range: '30d', scope: 'all' })
 
-    expect(usage.codex.getSummary).not.toHaveBeenCalled()
     expect(result.providers[1]).toMatchObject({
       provider: 'codex',
       tracking: false,

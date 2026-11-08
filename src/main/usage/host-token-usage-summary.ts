@@ -34,11 +34,19 @@ const UNTRACKED: TokenCounts = {
   hasUnpricedModels: false
 }
 
-function toRow(
+async function readProvider<TSummary>(
   provider: HostTokenUsageProvider,
-  scanState: { enabled: boolean; lastScanCompletedAt: number | null },
-  counts: TokenCounts
-): HostTokenUsageProviderRow {
+  source: {
+    getScanState(): { enabled: boolean; lastScanCompletedAt: number | null }
+    getSummary(scope: HostTokenUsageScope, range: HostTokenUsageRange): Promise<TSummary>
+  },
+  params: { range: HostTokenUsageRange; scope: HostTokenUsageScope },
+  toCounts: (summary: TSummary) => TokenCounts
+): Promise<HostTokenUsageProviderRow> {
+  // getSummary waits for the persisted store to load; scan state read earlier is the pre-load default.
+  const summary = await source.getSummary(params.scope, params.range)
+  const scanState = source.getScanState()
+  const counts = scanState.enabled ? toCounts(summary) : UNTRACKED
   return {
     provider,
     tracking: scanState.enabled,
@@ -49,47 +57,6 @@ function toRow(
   }
 }
 
-async function readClaude(
-  source: HostTokenUsageSources['claude'],
-  scope: HostTokenUsageScope,
-  range: HostTokenUsageRange
-): Promise<HostTokenUsageProviderRow> {
-  if (!source.getScanState().enabled) {
-    return toRow('claude', source.getScanState(), UNTRACKED)
-  }
-  const summary = await source.getSummary(scope, range)
-  return toRow('claude', source.getScanState(), {
-    sessions: summary.sessions,
-    inputTokens: summary.inputTokens,
-    outputTokens: summary.outputTokens,
-    cacheReadTokens: summary.cacheReadTokens,
-    cacheWriteTokens: summary.cacheWriteTokens,
-    estimatedCostUsd: summary.estimatedCostUsd,
-    hasUnpricedModels: summary.hasUnpricedModels
-  })
-}
-
-async function readCodex(
-  source: HostTokenUsageSources['codex'],
-  scope: HostTokenUsageScope,
-  range: HostTokenUsageRange
-): Promise<HostTokenUsageProviderRow> {
-  if (!source.getScanState().enabled) {
-    return toRow('codex', source.getScanState(), UNTRACKED)
-  }
-  const summary = await source.getSummary(scope, range)
-  return toRow('codex', source.getScanState(), {
-    sessions: summary.sessions,
-    // Codex counts cache hits inside input; Claude reports them separately.
-    inputTokens: summary.inputTokens - summary.cachedInputTokens,
-    outputTokens: summary.outputTokens,
-    cacheReadTokens: summary.cachedInputTokens,
-    cacheWriteTokens: 0,
-    estimatedCostUsd: summary.estimatedCostUsd,
-    hasUnpricedModels: summary.hasUnpricedModels
-  })
-}
-
 /** This host's own token usage; never turns tracking on, since that starts reading local transcripts. */
 export async function readHostTokenUsage(
   sources: HostTokenUsageSources,
@@ -97,8 +64,25 @@ export async function readHostTokenUsage(
 ): Promise<HostTokenUsageSummary> {
   const { range, scope } = params
   const providers = await Promise.all([
-    readClaude(sources.claude, scope, range),
-    readCodex(sources.codex, scope, range)
+    readProvider('claude', sources.claude, params, (summary) => ({
+      sessions: summary.sessions,
+      inputTokens: summary.inputTokens,
+      outputTokens: summary.outputTokens,
+      cacheReadTokens: summary.cacheReadTokens,
+      cacheWriteTokens: summary.cacheWriteTokens,
+      estimatedCostUsd: summary.estimatedCostUsd,
+      hasUnpricedModels: summary.hasUnpricedModels
+    })),
+    readProvider('codex', sources.codex, params, (summary) => ({
+      sessions: summary.sessions,
+      // Codex counts cache hits inside input; Claude reports them separately.
+      inputTokens: summary.inputTokens - summary.cachedInputTokens,
+      outputTokens: summary.outputTokens,
+      cacheReadTokens: summary.cachedInputTokens,
+      cacheWriteTokens: 0,
+      estimatedCostUsd: summary.estimatedCostUsd,
+      hasUnpricedModels: summary.hasUnpricedModels
+    }))
   ])
   return { range, scope, providers }
 }
