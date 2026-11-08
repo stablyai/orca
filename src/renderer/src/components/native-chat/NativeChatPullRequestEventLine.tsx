@@ -28,7 +28,7 @@ function LineLink({ href, children }: { href: string; children: string }): React
   )
 }
 
-/** "CI failing on orca#3 at 8d5f74b": one quiet centered line per finished CI result. */
+/** "CI failing on orca#3 at 8d5f74b": a one-line card per finished CI result, hideable like the other chat cards. */
 export function NativeChatPullRequestEventLine({
   block,
   messageId
@@ -42,34 +42,35 @@ export function NativeChatPullRequestEventLine({
   const Icon = failing ? CircleX : CircleCheck
   return (
     <div
-      className={cn(
-        NATIVE_CHAT_HIDEABLE_CARD_CLASS,
-        'relative flex h-6 min-w-0 items-center justify-center gap-1.5 px-6 text-xs text-chat-foreground-faint'
-      )}
+      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
     >
-      <Icon
-        aria-hidden
-        className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}
-      />
-      {event ? (
-        <span className="min-w-0 truncate">
-          {failing
-            ? t('components.native-chat.ciResultLine.failingLead', 'CI failing on')
-            : t('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
-          <LineLink href={pullRequestEventPullRequestUrl(event)}>
-            {`${event.repo}#${event.number}`}
-          </LineLink>{' '}
-          {t('components.native-chat.ciResultLine.at', 'at')}{' '}
-          <LineLink href={pullRequestEventCommitUrl(event)}>
-            {pullRequestEventShortSha(event.headSha)}
-          </LineLink>
-        </span>
-      ) : (
-        <span className="min-w-0 truncate">{block.text}</span>
-      )}
-      {/* Pinned to the row's end, so the centered line doesn't shift when it shows; the row's
-          padding, the button's width on both sides, keeps long text from running under it. */}
-      <span className="absolute inset-y-0 right-0 flex items-center">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 text-xs text-chat-foreground-faint">
+        <Icon
+          aria-hidden
+          className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}
+        />
+        {event ? (
+          // Only the lead and PR name truncate, so the commit link stays reachable.
+          <span className="flex min-w-0">
+            <span className="min-w-0 truncate">
+              {failing
+                ? t('components.native-chat.ciResultLine.failingLead', 'CI failing on')
+                : t('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
+              <LineLink href={pullRequestEventPullRequestUrl(event)}>
+                {`${event.repo}#${event.number}`}
+              </LineLink>
+            </span>
+            <span className="shrink-0 whitespace-pre">
+              {' '}
+              {t('components.native-chat.ciResultLine.at', 'at')}{' '}
+              <LineLink href={pullRequestEventCommitUrl(event)}>
+                {pullRequestEventShortSha(event.headSha)}
+              </LineLink>
+            </span>
+          </span>
+        ) : (
+          <span className="min-w-0 truncate">{block.text}</span>
+        )}
         <NativeChatCardHideButton
           updates={{ nativeChatCiResultLines: false }}
           settingSectionId={NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID}
@@ -79,7 +80,7 @@ export function NativeChatPullRequestEventLine({
           )}
           ariaLabel={t('components.native-chat.ciResultLine.hide', "Don't show CI result lines")}
         />
-      </span>
+      </div>
     </div>
   )
 }

@@ -10,13 +10,13 @@ import {
 } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { scaledType } from './mobile-native-chat-message-styles'
 
-/** "CI failing on orca#3 at 8d5f74b": the desktop's line, without its Hide button; the phone follows that setting. */
+/** "CI failing on orca#3 at 8d5f74b": the desktop's one-line card, without its Hide button; the phone follows that setting. */
 export function MobileNativeChatPullRequestEventLine({
   block,
   messageId,
@@ -34,22 +34,23 @@ export function MobileNativeChatPullRequestEventLine({
   const event = parsePullRequestEventItemId(messageId)
   const failing = block.tone === 'failure'
   const Icon = failing ? CircleX : CircleCheck
+  const text = {
+    selectable: INLINE_TEXT_SELECTION,
+    onLongPress,
+    numberOfLines: 1
+  }
+  const type = scaledType(typography.metaSize, fontScale)
   return (
-    <View style={styles.row}>
+    <View style={styles.card}>
       <Icon
         size={14 * fontScale}
         color={failing ? colors.statusRed : colors.statusGreen}
         strokeWidth={2}
-        // Sits on the first line's center when long names wrap the text.
-        style={{ marginTop: 2 * fontScale }}
       />
-      <Text
-        selectable={INLINE_TEXT_SELECTION}
-        onLongPress={onLongPress}
-        style={[styles.text, scaledType(typography.metaSize, fontScale)]}
-      >
-        {event ? (
-          <>
+      {event ? (
+        <>
+          {/* Only the lead and PR name truncate, so the commit link stays reachable. */}
+          <Text {...text} style={[styles.lead, type]}>
             {failing
               ? t('chat.ciResultLine.failingLead', 'CI failing on')
               : t('chat.ciResultLine.greenLead', 'CI green on')}{' '}
@@ -59,7 +60,9 @@ export function MobileNativeChatPullRequestEventLine({
               onPress={() => openLink(pullRequestEventPullRequestUrl(event))}
             >
               {`${event.repo}#${event.number}`}
-            </Text>{' '}
+            </Text>
+          </Text>
+          <Text {...text} style={[styles.commit, type]}>
             {t('chat.ciResultLine.at', 'at')}{' '}
             <Text
               accessibilityRole="link"
@@ -68,25 +71,34 @@ export function MobileNativeChatPullRequestEventLine({
             >
               {pullRequestEventShortSha(event.headSha)}
             </Text>
-          </>
-        ) : (
-          block.text
-        )}
-      </Text>
+          </Text>
+        </>
+      ) : (
+        <Text {...text} style={[styles.lead, type]}>
+          {block.text}
+        </Text>
+      )}
     </View>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  row: {
+  // The phone's chat card frame, as the turn diff card uses.
+  card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    gap: spacing.xs
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    padding: spacing.sm
   },
-  text: {
+  lead: {
     flexShrink: 1,
-    textAlign: 'center',
+    color: colors.textMuted
+  },
+  commit: {
+    flexShrink: 0,
     color: colors.textMuted
   },
   link: {
