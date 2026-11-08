@@ -8,7 +8,7 @@ import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
 import { applyJournalWriterEffect } from './journal-writer-effects'
-import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
+import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
@@ -30,6 +30,7 @@ let db: Database.Database | undefined
 let batch: JournalSqlBatch | undefined
 let commands: JournalSqlCommand | undefined
 let checkpoint: JournalCheckpointOwner | undefined
+let checkpointClosing: Promise<void> | undefined
 let readOnly = true
 let fault: unknown
 let closing = false
@@ -41,13 +42,13 @@ try {
   const opened = openJournalDatabase(workerData.filename)
   db = opened.db
   readOnly = opened.readOnly
-  batch = new JournalSqlBatch(db)
   commands = new JournalSqlCommand(db, stateDirectory)
   if (!readOnly) {
     initializeJournalSqlProjection(db)
     migrateJournalDomainSchema(db)
     checkpoint = new JournalCheckpointOwner(db, workerData.filename)
   }
+  batch = new JournalSqlBatch(db, checkpoint)
   reply({ type: 'ready', readOnly })
 } catch (error) {
   fault = error
@@ -68,6 +69,8 @@ port.on('message', (request: JournalSqlRequest) => {
   }
   if (request.command.type === 'close') {
     closing = true
+    checkpointClosing = checkpoint?.close()
+    void checkpointClosing?.catch(() => undefined)
   }
   queue.push(request)
   if (!scheduled) {
@@ -111,7 +114,6 @@ async function drain(): Promise<void> {
   if (writes.length > 0 && database && batch && commands) {
     const executor = commands
     let responses: JournalSqlResponse[] = []
-    let postcommit: JournalSqlFailure | undefined
     try {
       if (fault) {
         throw fault
@@ -136,11 +138,6 @@ async function drain(): Promise<void> {
               )
             }
       })
-      try {
-        checkpoint?.afterCommit()
-      } catch (error) {
-        postcommit ??= journalSqlFailure(error)
-      }
       // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
       responses = result.outcomes.map((outcome, index) =>
         outcome.committed
@@ -152,9 +149,6 @@ async function drain(): Promise<void> {
               error: journalSqlFailure(outcome.error)
             }
       )
-      if (postcommit) {
-        fault = postcommit
-      }
     } catch (error) {
       const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
       fault ??= batch.fault
@@ -170,19 +164,17 @@ async function drain(): Promise<void> {
     for (const response of responses) {
       reply(response)
     }
-    if (postcommit) {
-      reply({ type: 'failed', outcome: 'not-dispatched', fatal: true, error: postcommit })
-    }
   }
   if (close) {
     try {
-      await checkpoint?.close()
+      await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined
       reply({ type: 'done', id: close.id })
       port.close()
     } catch (error) {
       closing = false
+      checkpointClosing = undefined
       reply({
         type: 'failed',
         id: close.id,
@@ -227,21 +219,6 @@ async function drainMessages(requests: readonly MessageRequest[]): Promise<void>
         })
         acknowledged.add(id)
       }
-    }
-    let postcommit: unknown
-    try {
-      checkpoint?.afterCommit()
-    } catch (error) {
-      postcommit ??= error
-    }
-    if (postcommit) {
-      fault = postcommit
-      reply({
-        type: 'failed',
-        outcome: 'not-dispatched',
-        fatal: true,
-        error: journalSqlFailure(postcommit)
-      })
     }
   } catch (error) {
     fault ??= batch.fault

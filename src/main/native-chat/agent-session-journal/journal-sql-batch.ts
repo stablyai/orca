@@ -24,7 +24,10 @@ export class JournalSqlBatchError extends Error {
 export class JournalSqlBatch {
   private failure: unknown
 
-  constructor(private readonly db: Database.Database) {}
+  constructor(
+    private readonly db: Database.Database,
+    private readonly checkpoint?: { beforeWrite(): Promise<void>; afterCommit(): void }
+  ) {}
 
   get fault(): unknown {
     return this.failure
@@ -47,6 +50,7 @@ export class JournalSqlBatch {
     let committing = false
     let failed: JournalSqlBatchError | undefined
     try {
+      await this.checkpoint?.beforeWrite()
       this.db.exec('BEGIN IMMEDIATE')
       began = true
       for (const command of drain) {
@@ -80,6 +84,8 @@ export class JournalSqlBatch {
       if (committing || rollback) {
         this.failure = failed
       }
+    } finally {
+      this.checkpoint?.afterCommit()
     }
     if (failed) {
       throw failed
