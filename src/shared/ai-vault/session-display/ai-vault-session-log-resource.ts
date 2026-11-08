@@ -53,6 +53,7 @@ const logFileResolvers = {
       ? grokTranscriptPathForMetadata(filePath)
       : null,
   openclaw: jsonlLog,
+  zeroclaw: jsonlLog,
   devin: jsonLog,
   droid: jsonlLog,
   cline: (filePath) => clineMessagesPathForMetadata(filePath) || null,

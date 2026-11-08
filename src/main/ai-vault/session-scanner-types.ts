@@ -44,6 +44,7 @@ export type AiVaultScanOptions = {
   rovoSessionsDir?: string
   openclawStateDir?: string
   openclawLegacyStateDir?: string
+  zeroclawStateDir?: string
   piSessionsDir?: string
   ompSessionsDir?: string
   primeAgentSessionsDir?: string

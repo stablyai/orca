@@ -56,6 +56,10 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillPrefix: '/',
     skillSourceOwner: 'grok'
   },
+  zeroclaw: {
+    skillPrefix: '/',
+    skillSourceOwner: 'zeroclaw'
+  },
   // Pi expands only `/skill:<name>`; a bare `/<name>` reaches the model as text.
   pi: {
     skillPrefix: '/',

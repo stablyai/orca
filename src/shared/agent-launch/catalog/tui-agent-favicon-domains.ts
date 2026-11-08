@@ -32,6 +32,7 @@ export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
   openclaw: 'openclaw.ai',
+  zeroclaw: 'zeroclaw.dev',
   codebuddy: 'codebuddy.ai',
   jcode: 'jcode.sh'
 }

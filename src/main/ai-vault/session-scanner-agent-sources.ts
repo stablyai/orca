@@ -19,6 +19,7 @@ import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
 import { isKiroSessionMetadataPath } from './scanners/kiro/session-scanner-kiro-parser'
 
 import { OPENCLAW_AGENT_SOURCE } from './scanners/openclaw/openclaw-session-layout'
+import { ZEROCLAW_AGENT_SOURCE } from './scanners/zeroclaw/zeroclaw-session-layout'
 import { isOmpConversationDirectory } from './scanners/omp/session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
@@ -251,6 +252,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl']
   },
   openclaw: OPENCLAW_AGENT_SOURCE,
+  zeroclaw: ZEROCLAW_AGENT_SOURCE,
   droid: {
     rootDirs: (options, wslHomeDirs) => [
       ...sessionRootDirs(options.droidSessionsDir ?? DROID_SESSIONS_DIR, wslHomeDirs, [
