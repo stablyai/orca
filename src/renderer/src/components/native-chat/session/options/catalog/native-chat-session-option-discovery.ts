@@ -19,7 +19,7 @@ import {
   getRuntimeGitScope,
   type RuntimeGitContext
 } from '@/runtime/source-control/git/runtime-git-client-context'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption

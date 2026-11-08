@@ -1,12 +1,6 @@
 import { MIN_TEXT_CONTRAST } from './plugin-theme-contrast-rules'
-import {
-  browserColorProbe,
-  contrastRatio,
-  mix,
-  paintedThemeColors,
-  type ColorProbe,
-  type Rgba
-} from './plugin-theme-tokens'
+import { browserColorProbe, paintedThemeColors, type ColorProbe } from './plugin-theme-tokens'
+import { contrastRatio, mix, type Rgba } from '../../../shared/color/rgba-contrast'
 
 export const CHAT_SELECTION_MIX_TOKEN = '--chat-selection-mix'
 // Keep in sync with --chat-selection-mix in main.css: about as deep as the system highlight.

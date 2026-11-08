@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
-import { directoryAccountBinding } from '../acp/acp-account-binding'
+import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
 import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'

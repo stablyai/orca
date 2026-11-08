@@ -1,14 +1,14 @@
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../shared/automations-types'
+} from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
-} from '../../shared/task-source-context'
-import type { AutomationDestination } from '../../shared/automation-owner-precondition'
+} from '../../shared/work-items/task-source-context'
+import type { AutomationDestination } from '../../shared/automations/ownership/automation-owner-precondition'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { CommandHandler } from '../dispatch'
 import {

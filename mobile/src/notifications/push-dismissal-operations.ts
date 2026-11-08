@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { missedNotificationsSchema } from './notification-reply-schema'
 
 // Keep catch-up refusals nonthrowing: background reconciliation has no error screen and must leave banners for the next pass. Preserve nullish replies for the caller’s optional access.

@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const { runTerminalHostRoundTrip } = require('./verify-packaged-daemon-entry.cjs')
@@ -15,6 +15,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -27,6 +28,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         "const net = require('node:net'), fs = require('node:fs')",
         'const arg = (name) => process.argv[process.argv.indexOf(name) + 1]',
         `fs.writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+        `fs.writeFileSync(${JSON.stringify(join(root, 'shell'))}, process.env.SHELL)`,
         `net.createServer(${onConnection}).listen(arg('--socket'), () => fs.writeFileSync(arg('--token'), 'tok'))`
       ].join('\n')
     )
@@ -80,8 +82,10 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         }
       })
     }`)
+    vi.stubEnv('SHELL', '/usr/bin/fish')
     const result = await roundTrip(entry, 1_500)
     expect(result.error).toBe(null)
+    expect(readFileSync(join(root, 'shell'), 'utf8')).toBe('/bin/sh')
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
     const messages = readFileSync(messagesPath, 'utf8').trim().split('\n').map(JSON.parse)

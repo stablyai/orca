@@ -30,7 +30,7 @@ import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import {
   type SidebarHostOption,
   buildSidebarHostOptions,

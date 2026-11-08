@@ -3,9 +3,9 @@ import type { Project, ProjectUpdateArgs } from '../../../../../../shared/projec
 
 import {
   type LocalWindowsRuntimePreference,
-  normalizeProjectRuntimePreference,
-  resolveProjectExecutionRuntime
-} from '../../../../../../shared/project-execution-runtime'
+  normalizeProjectRuntimePreference
+} from '../../../../../../shared/execution-host/project-runtime-preference'
+import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
 import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { Button } from '../../../ui/button'

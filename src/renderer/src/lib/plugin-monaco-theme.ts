@@ -1,7 +1,8 @@
 import type * as Monaco from 'monaco-editor'
 import type { PluginThemeTokenColorRule } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
-import { contrastRatio, type ColorProbe, type Rgba } from './plugin-theme-tokens'
+import type { ColorProbe } from './plugin-theme-tokens'
+import { contrastRatio, type Rgba } from '../../../shared/color/rgba-contrast'
 
 export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneThemeData }
 

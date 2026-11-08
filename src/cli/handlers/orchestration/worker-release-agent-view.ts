@@ -3,7 +3,7 @@ import type { WorkerReleaseReceipt } from './worker-output'
 import type {
   HelperStopOutcome,
   WorkerStopReceipt
-} from '../../../shared/orchestration-worker-stop-receipt'
+} from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 
 type WorkerReleaseFields = {
   dispatchId: string

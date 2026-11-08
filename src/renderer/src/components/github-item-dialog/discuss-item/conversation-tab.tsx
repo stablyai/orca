@@ -35,9 +35,10 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo
@@ -64,6 +65,7 @@ export function ConversationTab({
   repoId,
   sourceContext,
   body,
+  bodyImageUrls,
   comments,
   timelineItems,
   files,
@@ -86,6 +88,7 @@ export function ConversationTab({
   repoId: string | null
   sourceContext?: TaskSourceContext | null
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   timelineItems?: GitHubIssueTimelineItem[]
   files: GitHubPRFile[]
@@ -99,12 +102,12 @@ export function ConversationTab({
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   onMutated: () => void
   onChecksUpdated: (checks: PRCheckDetail[]) => void
-  onBodyUpdated: (body: string) => void
+  onBodyUpdated: (body: string, representation?: { bodyImageUrls?: Record<string, string> }) => void
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel =
-    item.author ?? translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')
+  const t = useTranslate()
+  const authorLabel = item.author ?? t('auto.components.GitHubItemDialog.773ff70035', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -159,7 +162,7 @@ export function ConversationTab({
     }
     setBodySaving(true)
     try {
-      await runWorkItemBodyUpdate({
+      const representation = await runWorkItemBodyUpdate({
         item,
         repoPath,
         sourceContext,
@@ -167,7 +170,7 @@ export function ConversationTab({
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(resolvedBodyDraft)
+      onBodyUpdated(resolvedBodyDraft, representation)
       setBodyEditing(false)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
@@ -316,6 +319,7 @@ export function ConversationTab({
           bodySaving={bodySaving}
           bodyChanged={bodyChanged}
           body={body}
+          bodyImageUrls={bodyImageUrls}
           resolvedBodyDraft={resolvedBodyDraft}
           markdownGitHubRepo={markdownGitHubRepo}
           setBodyDraft={setBodyDraft}

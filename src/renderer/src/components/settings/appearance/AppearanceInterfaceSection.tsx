@@ -1,13 +1,15 @@
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
-import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
+import {
+  SettingsSearchableSelect,
+  type SettingsSearchableSelectOption
+} from '../form-controls/SettingsSearchableSelect'
 import { useAppStore } from '../../../store/index'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
@@ -106,6 +108,29 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
+  const languageOptions: SettingsSearchableSelectOption[] = [
+    ...UI_LANGUAGE_CHOICES.map((choice, index) => ({
+      value: choice.value,
+      label: languages.choices[index],
+      keywords: [choice.value]
+    })),
+    ...languages.packs.map((pack) => ({
+      value: pack.id,
+      label: languages.packLabels.get(pack.id) ?? pack.locale,
+      keywords: [pack.id, pack.locale]
+    }))
+  ]
+  if (!languageOptions.some((option) => option.value === settings.uiLanguage)) {
+    languageOptions.push({
+      value: settings.uiLanguage,
+      label: t(
+        'auto.components.settings.AppearanceInterfaceSection.languageUnavailable',
+        '{{value0}} (unavailable)',
+        { value0: settings.uiLanguage }
+      ),
+      disabled: true
+    })
+  }
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
@@ -252,26 +277,16 @@ export function AppearanceInterfaceSection({
           <SettingsRow
             label={languageTitle}
             control={
-              <Select
+              <SettingsSearchableSelect
+                ariaLabel={languageTitle}
                 value={settings.uiLanguage}
+                groups={[{ key: 'ui-languages', options: languageOptions }]}
                 onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
-              >
-                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={languageTitle}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UI_LANGUAGE_CHOICES.map((choice, index) => (
-                    <SelectItem key={choice.value} value={choice.value}>
-                      {languages.choices[index]}
-                    </SelectItem>
-                  ))}
-                  {languages.packs.map((pack) => (
-                    <SelectItem key={pack.id} value={pack.id}>
-                      {languages.packLabels.get(pack.id) ?? pack.locale}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                searchPlaceholder={t(
+                  'auto.components.settings.SettingsSearchableSelect.searchLanguages',
+                  'Search languages…'
+                )}
+              />
             }
           />
         </SearchableSetting>

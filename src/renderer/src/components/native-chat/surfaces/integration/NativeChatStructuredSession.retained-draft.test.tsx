@@ -46,8 +46,11 @@ vi.mock(
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-message', () =>
   moduleFactories.structuredAgentSessionLaunchMessage()
 )
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null

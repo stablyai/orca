@@ -36,7 +36,12 @@ function fixture() {
   )
   chmodSync(fake, 0o700)
   const pointer = join(root, 'selected')
-  const run = (shell: string, env: string[] = [], fakeKind: 'summary' | 'printenv' = 'summary') => {
+  const run = (
+    shell: string,
+    env: string[] = [],
+    fakeKind: 'summary' | 'printenv' = 'summary',
+    userSetup = ''
+  ) => {
     if (fakeKind === 'printenv') {
       writeFileSync(fake, '#!/bin/sh\nenv\n')
     }
@@ -58,7 +63,7 @@ function fixture() {
         shell,
         ...(fish ? ['--no-config'] : shell.endsWith('zsh') ? ['-f'] : ['--norc', '--noprofile']),
         '-c',
-        `${guard}\n${fn}\nclaude`
+        `${guard}\n${userSetup}\n${fn}\nclaude`
       ],
       { encoding: 'utf8', cwd: root }
     )
@@ -149,6 +154,17 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     expect(result.stdout).toBe('')
     expect(existsSync(join(f.a, '..', 'not-a-folder'))).toBe(false)
   })
+
+  it.skipIf(!POSIX_SHELLS.includes(shell))(
+    'keeps the user’s own claude function when the cwd has a claude entry',
+    () => {
+      const f = fixture()
+      writeFileSync(f.pointer, f.a)
+      mkdirSync(join(f.a, '..', 'claude'))
+      const userFn = 'claude() { echo user function; }'
+      expect(f.run(shell, [], 'summary', userFn).stdout).toBe('user function\n')
+    }
+  )
 
   it('follows the selection over the user’s own CLAUDE_CONFIG_DIR, inherited or exported by an rc', () => {
     const f = fixture()

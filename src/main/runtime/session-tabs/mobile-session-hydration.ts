@@ -11,12 +11,12 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
-import { buildHeadlessMobileSessionEditorTabs } from '../mobile-session-editor-projection'
+import { buildHeadlessMobileSessionEditorTabs } from './headless-editor-tabs'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type {
-  RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId,
@@ -29,8 +29,8 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../session-lifecycle/projection/mobile-session-tab-merge'
-import { appendBrowserTabOrder } from '../mobile-session-browser-group-projection'
-import { headlessMobileSnapshotContentUnchanged } from '../mobile-session-snapshot-equality'
+import { appendBrowserTabOrder } from '../session-lifecycle/projection/mobile-session-browser-group-projection'
+import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapshot-equality'
 
 export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends RuntimeSessionTabsInventoryPublication {
   protected abstract buildHeadlessMobileSessionBrowserTabs(
@@ -259,11 +259,20 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? mergedActiveTab.parentTabId
           : mergedActiveTab.id
         : null
-      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = navigationGroups
+      // Saved groups without a saved active group record no selection; keep the restored tab selected.
+      const restoredGroups =
+        hasCurrentNavigation || navigationActiveGroupId || !activeTopLevelId
+          ? navigationGroups
+          : navigationGroups?.map((group) =>
+              group.activeTabId === null && group.tabOrder.includes(activeTopLevelId)
+                ? { ...group, activeTabId: activeTopLevelId }
+                : group
+            )
+      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = restoredGroups
         ? appendBrowserTabOrder(
             mergeMobileSessionTabGroups(
               entryWorktreeId,
-              navigationGroups,
+              restoredGroups,
               mergedTabs,
               mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null,
               session.tabGroups?.[entryWorktreeId]

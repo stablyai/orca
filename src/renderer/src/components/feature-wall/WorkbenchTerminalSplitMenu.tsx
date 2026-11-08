@@ -1,5 +1,5 @@
 import type { JSX, RefObject } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 function SplitRightIcon(): JSX.Element {
@@ -43,6 +43,7 @@ export function WorkbenchTerminalSplitMenu(props: {
   splitRightShortcutLabel: string
   splitDownShortcutLabel: string
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -67,7 +68,7 @@ export function WorkbenchTerminalSplitMenu(props: {
           <SplitRightIcon />
         </span>
         <span className="whitespace-nowrap leading-none">
-          {translate(
+          {t(
             'auto.components.feature.wall.WorkbenchAnimatedVisual.e370fa8c2b',
             'Split Terminal Right'
           )}
@@ -81,7 +82,7 @@ export function WorkbenchTerminalSplitMenu(props: {
           <SplitDownIcon />
         </span>
         <span className="whitespace-nowrap leading-none">
-          {translate(
+          {t(
             'auto.components.feature.wall.WorkbenchAnimatedVisual.ca2cfbf188',
             'Split Terminal Down'
           )}

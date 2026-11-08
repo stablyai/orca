@@ -10,8 +10,8 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/fol
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { translate } from '@/i18n/i18n'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { useTranslate } from '@/i18n/use-translate'
 import { LinearIssueActivity } from './linear-issue-activity'
 import { LinearIssueSubIssues } from './linear-issue-sub-issues'
 import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
@@ -50,6 +50,7 @@ function LinearIssueWorkspaceIssue({
   sourceContext,
   requestKey
 }: LinearIssueWorkspaceIssueProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const allWorktrees = useAllWorktrees()
@@ -138,12 +139,12 @@ function LinearIssueWorkspaceIssue({
         <VisuallyHidden.Root asChild>
           <SheetTitle>
             {detail.displayed.title ??
-              translate('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
+              t('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.LinearIssueWorkspace.ad5dec37b7',
               'Preview, edit, and start work from the selected issue.'
             )}

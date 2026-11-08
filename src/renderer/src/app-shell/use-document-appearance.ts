@@ -32,7 +32,7 @@ import {
 } from '../store/plugins/appearance/plugin-themes'
 import { usePluginIconThemeActivation } from '../store/plugins/appearance/plugin-icon-themes'
 import { usePluginFontRegistration } from '../store/plugins/appearance/plugin-fonts'
-import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'

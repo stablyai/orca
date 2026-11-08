@@ -9,6 +9,18 @@
       "messages_other": "{{count}} messages"
     }
   },
+  "agents": {
+    "desktops": {
+      "agents_one": "{{count}} agent",
+      "agents_other": "{{count}} agents",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "list": {
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
+    }
+  },
   "app": {
     "terminalSettings": {
       "restoreAfterMinutes_one": "After {{count}} minute",

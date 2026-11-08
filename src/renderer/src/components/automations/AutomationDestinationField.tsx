@@ -1,6 +1,6 @@
 import React from 'react'
 import { HostCombobox } from '@/components/host-picker/HostCombobox'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AutomationHostLabel, AutomationHostStatusBadges } from './AutomationHostBadges'
 import { Field } from './automation-page-parts'
 import {
@@ -20,13 +20,14 @@ export function AutomationDestinationField({
   control: AutomationCreateDestinationControl
   labelClassName?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const selected = control.resolution.status === 'ready' ? control.resolution.entry : null
   // Keep ineligible hosts visible with reasons, including connected hosts on older servers without host-scoping support.
   const groups = groupAutomationHostEntriesByAuthority(
     control.entries.filter(automationCreateHostOffered)
   )
   const updateRequiredAuthorities = automationCreateUpdateRequiredAuthorityLabels(control.entries)
-  const label = translate('auto.components.automations.createDestination.label', 'Host')
+  const label = t('auto.components.automations.createDestination.label', 'Host')
 
   return (
     <Field label={label} labelClassName={labelClassName}>
@@ -35,7 +36,7 @@ export function AutomationDestinationField({
         value={selected?.stableKey ?? ''}
         onChange={control.onSelect}
         ariaLabel={label}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.automations.createDestination.placeholder',
           'Select a host'
         )}
@@ -61,7 +62,7 @@ export function AutomationDestinationField({
       {selected && control.projects.length === 0 && !control.recordedProject ? (
         // Otherwise Create is disabled for an empty project list with nothing said.
         <p className="text-xs text-destructive" data-testid="automation-create-no-projects">
-          {translate(
+          {t(
             'auto.components.automations.createDestination.noProjects',
             'No projects are set up on {host}. Add one there, or choose another host.'
           ).replace('{host}', selected.label)}
@@ -74,11 +75,11 @@ export function AutomationDestinationField({
       ) : (
         <p className="text-xs text-muted-foreground">
           {selected
-            ? translate(
+            ? t(
                 'auto.components.automations.createDestination.storedOn',
                 'Stored and scheduled by {authority}.'
               ).replace('{authority}', selected.authorityLabel)
-            : translate(
+            : t(
                 'auto.components.automations.createDestination.unselected',
                 'Choose the host that stores and schedules this automation.'
               )}
@@ -92,7 +93,7 @@ export function AutomationDestinationField({
         >
           {
             // Replacer fn: a literal replacement would expand `$` patterns in host labels.
-            translate(
+            t(
               'auto.components.automations.createDestination.updateRequired',
               'Update the Orca server on {hosts} to store automations there.'
             ).replace('{hosts}', () => updateRequiredAuthorities.join(', '))

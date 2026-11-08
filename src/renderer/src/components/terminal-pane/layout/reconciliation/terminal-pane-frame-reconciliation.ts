@@ -4,7 +4,7 @@ import {
   type PaneCloseKind,
   takePaneCloseIntent,
   takePaneMountUnfocused
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
 

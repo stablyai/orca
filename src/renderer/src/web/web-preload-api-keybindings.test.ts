@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings'
+import {
+  getEffectiveKeybindingsForAction,
+  keybindingMatchesAction
+} from '../../../shared/keybindings'
 import { installApi, installBrowserGlobals } from './web-preload-api-test-harness'
 
 describe('web keybindings preload API', () => {
@@ -55,6 +58,37 @@ describe('web keybindings preload API', () => {
     })
   })
 
+  it.each([
+    ['Linux x86_64', 'linux'],
+    ['Windows NT 10.0', 'win32']
+  ] as const)(
+    'preserves existing %s web shortcuts and resets to Ctrl+K',
+    async (userAgent, platform) => {
+      const { storage } = installBrowserGlobals(userAgent)
+      storage.setItem('orca.web.settings.v1', '{}')
+      storage.setItem('orca.web.searchKeybindingSeed.v1', 'done')
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+      const old = await window.api.keybindings.get()
+      expect(getEffectiveKeybindingsForAction('worktree.palette', platform, old.overrides)).toEqual(
+        ['Mod+Shift+J']
+      )
+      expect(getEffectiveKeybindingsForAction('terminal.clear', platform, old.overrides)).toEqual([
+        'Mod+K'
+      ])
+      const reset = await window.api.keybindings.setAction({
+        actionId: 'worktree.palette',
+        bindings: null
+      })
+      expect(
+        getEffectiveKeybindingsForAction('worktree.palette', platform, reset.overrides)
+      ).toEqual(['Mod+K'])
+      expect(getEffectiveKeybindingsForAction('terminal.clear', platform, reset.overrides)).toEqual(
+        []
+      )
+    }
+  )
+
   it.each(['common', 'platform'])(
     'keeps an explicit %s palette chord ahead of the generated clear shortcut',
     async (section) => {
@@ -76,6 +110,25 @@ describe('web keybindings preload API', () => {
       expect(snapshot.diagnostics).toEqual([])
     }
   )
+
+  it('keeps saved Ctrl+K clear bindings reachable after the earlier Mac rollout', async () => {
+    const { storage } = installBrowserGlobals('Windows NT 10.0')
+    storage.setItem('orca.web.searchKeybindingSeed.v1', 'done')
+    storage.setItem(
+      'orca.web.keybindings.v1',
+      JSON.stringify({ platforms: { win32: { 'terminal.clear': ['Ctrl+K'] } } })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    installWebPreloadApi()
+    const { overrides } = await window.api.keybindings.get()
+    const ctrlK = { key: 'k', control: true }
+    expect(keybindingMatchesAction('terminal.clear', ctrlK, 'win32', overrides)).toBe(true)
+    expect(keybindingMatchesAction('worktree.palette', ctrlK, 'win32', overrides)).toBe(false)
+    await expect(
+      window.api.keybindings.setAction({ actionId: 'worktree.palette', bindings: null })
+    ).rejects.toThrow('conflicts')
+  })
 
   it('leaves an invalid Mac section intact and retries after repair', async () => {
     const { storage } = installBrowserGlobals('MacIntel')
@@ -112,14 +165,17 @@ describe('web keybindings preload API', () => {
     })
   })
 
-  it('keeps a fresh web profile on the new defaults after saving settings and restarting', async () => {
-    const { api, storage } = await installApi('MacIntel')
-    expect((await api.keybindings.get()).overrides).toEqual({})
-    storage.setItem('orca.web.settings.v1', '{}')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    expect((await window.api.keybindings.get()).overrides).toEqual({})
-  })
+  it.each(['MacIntel', 'Windows NT 10.0'])(
+    'keeps a fresh %s web profile on the new defaults after saving settings and restarting',
+    async (userAgent) => {
+      const { api, storage } = await installApi(userAgent)
+      expect((await api.keybindings.get()).overrides).toEqual({})
+      storage.setItem('orca.web.settings.v1', '{}')
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+      expect((await window.api.keybindings.get()).overrides).toEqual({})
+    }
+  )
 
   it('does not overwrite unreadable shortcuts while upgrading an existing web profile', async () => {
     const { storage } = installBrowserGlobals('MacIntel')

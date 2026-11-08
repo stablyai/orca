@@ -1,5 +1,5 @@
-import type { Automation } from '../../shared/automations-types'
-import { describeAutomationScheduleDrift } from '../../shared/automation-schedule-drift'
+import type { Automation } from '../../shared/automations/automation-definition'
+import { describeAutomationScheduleDrift } from '../../shared/automations/scheduling/automation-schedule-drift'
 
 export function reportAutomationScheduleDrift(automations: readonly Automation[]): number {
   const drifted = automations.flatMap((automation) => {

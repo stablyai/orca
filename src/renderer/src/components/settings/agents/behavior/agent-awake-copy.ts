@@ -50,21 +50,22 @@ export function getAgentAwakeDescription(
 }
 
 export function getAgentAwakeLidNote(
-  userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent,
+  t: Translate = translate
 ): string {
   if (userAgent.includes('Windows')) {
-    return translate(
+    return t(
       'auto.components.settings.agent-awake-copy.lidNoteWindows',
       "Lid-close behavior follows this device's power settings."
     )
   }
   if (userAgent.includes('Mac')) {
-    return translate(
+    return t(
       'auto.components.settings.agent-awake-copy.lidNoteMac',
       'Prevents idle sleep with the lid open; closing the lid still puts this Mac to sleep.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.agent-awake-copy.lidNoteDefault',
     'Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )

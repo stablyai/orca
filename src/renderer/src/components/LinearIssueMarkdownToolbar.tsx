@@ -19,6 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type LinearIssueMarkdownToolbarButtonProps = {
   active?: boolean
@@ -95,6 +96,7 @@ export function LinearIssueMarkdownToolbar({
   editor: Editor | null
   disabled: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   // Why: this toolbar can outlive editor recreation, so subscribe directly to language changes.
   useTranslation()
   const runCommand = useCallback(
@@ -110,26 +112,20 @@ export function LinearIssueMarkdownToolbar({
   return (
     <div
       className="linear-issue-markdown-toolbar"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.LinearIssueMarkdownDescriptionEditor.7c52151156',
         'Issue description formatting'
       )}
     >
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.68a41d5665',
-          'Body text'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.68a41d5665', 'Body text')}
         disabled={disabled}
         onClick={() => runCommand((nextEditor) => nextEditor.chain().focus().setParagraph().run())}
       >
         <Pilcrow className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.e3f741d258',
-          'Heading 1'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.e3f741d258', 'Heading 1')}
         active={editor?.isActive('heading', { level: 1 }) ?? false}
         disabled={disabled}
         onClick={() =>
@@ -139,10 +135,7 @@ export function LinearIssueMarkdownToolbar({
         <Heading1 className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.dddaa7a0a6',
-          'Heading 2'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.dddaa7a0a6', 'Heading 2')}
         active={editor?.isActive('heading', { level: 2 }) ?? false}
         disabled={disabled}
         onClick={() =>
@@ -153,7 +146,7 @@ export function LinearIssueMarkdownToolbar({
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarSeparator />
       <LinearIssueMarkdownToolbarButton
-        label={translate('auto.components.LinearIssueMarkdownDescriptionEditor.caa88f50d0', 'Bold')}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.caa88f50d0', 'Bold')}
         active={editor?.isActive('bold') ?? false}
         disabled={disabled}
         onClick={() => runCommand((nextEditor) => nextEditor.chain().focus().toggleBold().run())}
@@ -161,10 +154,7 @@ export function LinearIssueMarkdownToolbar({
         <Bold className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.5666b4493d',
-          'Italic'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.5666b4493d', 'Italic')}
         active={editor?.isActive('italic') ?? false}
         disabled={disabled}
         onClick={() => runCommand((nextEditor) => nextEditor.chain().focus().toggleItalic().run())}
@@ -172,10 +162,7 @@ export function LinearIssueMarkdownToolbar({
         <Italic className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.28fd951b83',
-          'Strike'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.28fd951b83', 'Strike')}
         active={editor?.isActive('strike') ?? false}
         disabled={disabled}
         onClick={() => runCommand((nextEditor) => nextEditor.chain().focus().toggleStrike().run())}
@@ -183,10 +170,7 @@ export function LinearIssueMarkdownToolbar({
         <Strikethrough className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.ad1869bd54',
-          'Inline code'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.ad1869bd54', 'Inline code')}
         active={editor?.isActive('code') ?? false}
         disabled={disabled}
         onClick={() => runCommand((nextEditor) => nextEditor.chain().focus().toggleCode().run())}
@@ -195,10 +179,7 @@ export function LinearIssueMarkdownToolbar({
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarSeparator />
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.c82917e06e',
-          'Bullet list'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.c82917e06e', 'Bullet list')}
         active={editor?.isActive('bulletList') ?? false}
         disabled={disabled}
         onClick={() =>
@@ -208,7 +189,7 @@ export function LinearIssueMarkdownToolbar({
         <List className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
+        label={t(
           'auto.components.LinearIssueMarkdownDescriptionEditor.d6b2f3d35b',
           'Numbered list'
         )}
@@ -221,10 +202,7 @@ export function LinearIssueMarkdownToolbar({
         <ListOrdered className="size-3.5" />
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.e2a0267c8c',
-          'Checklist'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.e2a0267c8c', 'Checklist')}
         active={editor?.isActive('taskList') ?? false}
         disabled={disabled}
         onClick={() =>
@@ -235,10 +213,7 @@ export function LinearIssueMarkdownToolbar({
       </LinearIssueMarkdownToolbarButton>
       <LinearIssueMarkdownToolbarSeparator />
       <LinearIssueMarkdownToolbarButton
-        label={translate(
-          'auto.components.LinearIssueMarkdownDescriptionEditor.9eaf02ac01',
-          'Quote'
-        )}
+        label={t('auto.components.LinearIssueMarkdownDescriptionEditor.9eaf02ac01', 'Quote')}
         active={editor?.isActive('blockquote') ?? false}
         disabled={disabled}
         onClick={() =>
@@ -250,11 +225,8 @@ export function LinearIssueMarkdownToolbar({
       <LinearIssueMarkdownToolbarButton
         label={
           editor?.isActive('link')
-            ? translate(
-                'auto.components.LinearIssueMarkdownDescriptionEditor.340160f4e8',
-                'Remove link'
-              )
-            : translate('auto.components.LinearIssueMarkdownDescriptionEditor.632096eb1c', 'Link')
+            ? t('auto.components.LinearIssueMarkdownDescriptionEditor.340160f4e8', 'Remove link')
+            : t('auto.components.LinearIssueMarkdownDescriptionEditor.632096eb1c', 'Link')
         }
         active={editor?.isActive('link') ?? false}
         disabled={disabled}

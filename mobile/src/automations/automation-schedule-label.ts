@@ -1,7 +1,7 @@
 import {
   describeAutomationSchedule,
   type AutomationScheduleDescriptor
-} from '../../../src/shared/automation-schedules'
+} from '../../../src/shared/automations/scheduling/automation-schedules'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 

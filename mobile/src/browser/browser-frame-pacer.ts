@@ -1,5 +1,5 @@
 import type { Image, ImageLoadEvent, View } from 'react-native'
-import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import { createBrowserFrameDataUri } from './browser-frame-data-uri'

@@ -307,6 +307,11 @@
       "signInHint": "在运行此聊天的电脑上打开终端",
       "forkedFrom": "分支来源"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失败:",
+      "greenLead": "CI 通过:",
+      "at": "提交"
+    },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
       "crash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
@@ -1392,15 +1397,16 @@
       "openFailed": "无法打开此 PDF",
       "opening": "正在打开 PDF…",
       "updateRequired": "更新 Orca Mobile 才能打开 PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "自你 {{time}} 的编辑后，桌面上的文件已更改",
+      "copyMyEdits": "复制我的编辑",
+      "discard": "放弃",
+      "restore": "恢复",
+      "unsavedFrom": "{{time}} 的未保存编辑"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 个活跃",
-      "heading": "智能体",
-      "showAll": "显示全部 {{count}} 个",
-      "showFewer": "收起"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",

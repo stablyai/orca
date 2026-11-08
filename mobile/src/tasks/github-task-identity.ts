@@ -2,8 +2,8 @@ import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
 import { useCallback, useLayoutEffect, useRef, type SetStateAction } from 'react'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload, GitHubWorkItem } from './mobile-tasks-provider-detail-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   githubWorkItemTargetKey,
   resolveGitHubWorkItemTarget,

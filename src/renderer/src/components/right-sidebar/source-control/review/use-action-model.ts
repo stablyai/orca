@@ -140,27 +140,30 @@ export function useSourceControlActionModel({
     if (hasSuppressedGitHubPRState) {
       return null
     }
-    const action = resolveCreatePrHeaderAction({
-      stagedCount: grouped.staged.length,
-      hasUnstagedChanges,
-      hasStageableChanges,
-      hasPartiallyStagedChanges,
-      hasMessage: commitMessage.trim().length > 0,
-      hasUnresolvedConflicts: unresolvedConflictCount > 0,
-      isCommitting,
-      isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
-      upstreamStatus: remoteStatus,
-      prState: hostedReviewState,
-      isPRStateLoading: isHostedReviewStateLoading,
-      inFlightRemoteOpKind,
-      hostedReviewCreation: createReviewHeaderEligibility,
-      isHostedReviewCreationLoading:
-        isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
-      branchCommitsAhead:
-        branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-      hasCurrentBranch: Boolean(branchName),
-      isPrIntentInFlight: isCreatePrIntentInFlight
-    })
+    const action = resolveCreatePrHeaderAction(
+      {
+        stagedCount: grouped.staged.length,
+        hasUnstagedChanges,
+        hasStageableChanges,
+        hasPartiallyStagedChanges,
+        hasMessage: commitMessage.trim().length > 0,
+        hasUnresolvedConflicts: unresolvedConflictCount > 0,
+        isCommitting,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
+        upstreamStatus: remoteStatus,
+        prState: hostedReviewState,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation: createReviewHeaderEligibility,
+        isHostedReviewCreationLoading:
+          isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
+        branchCommitsAhead:
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+        hasCurrentBranch: Boolean(branchName),
+        isPrIntentInFlight: isCreatePrIntentInFlight
+      },
+      t
+    )
     if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
       return {
         ...action,

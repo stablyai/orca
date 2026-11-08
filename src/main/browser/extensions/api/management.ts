@@ -12,7 +12,7 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { hasBrowserExtensionUserGesture } from './permissions'
+import { hasBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 /**
  * chrome.management for extensions that declare "management": Orca's installed list as the

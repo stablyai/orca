@@ -30,7 +30,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 

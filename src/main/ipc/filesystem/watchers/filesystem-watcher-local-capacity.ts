@@ -10,7 +10,7 @@ import {
   registerWatcherSenderCleanup
 } from './filesystem-watcher-listener-lifecycle'
 import { isWatcherRemovalInProgressError } from '../../../workspaces/removal/watcher-removal-gate'
-import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
 /** Calls `retry` when installing may succeed again; returns a cancel. */

@@ -11,7 +11,7 @@ import {
   PaneStartStatuses,
   paneStartFailure,
   type PaneFactSources
-} from '../../pane-start-statuses'
+} from '../surface/pane-start-statuses'
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../layout/runtime-layout-apply'
 import {
   runLayoutPaneStarts,

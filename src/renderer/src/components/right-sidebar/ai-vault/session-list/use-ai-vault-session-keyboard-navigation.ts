@@ -22,20 +22,22 @@ export type AiVaultSessionSelection = {
   move: (delta: 1 | -1) => number | null
 }
 
-/** Reconcile selected session/row after list changes; new queries reset to the top match. */
+/** Reconcile selected session/row after list changes; a new `resetKey` (query or result set) resets to the top match. */
 export function useAiVaultSessionSelection(
   rows: readonly AiVaultListRow[],
   enabled: boolean,
-  query: string
+  resetKey: string
 ): AiVaultSessionSelection {
-  const [stored, setStored] = useState<{ index: number; sessionId: string; query: string } | null>(
-    null
-  )
-  // Clear query-owned picks so reverting search text cannot revive them.
-  if (stored !== null && stored.query !== query) {
+  const [stored, setStored] = useState<{
+    index: number
+    sessionId: string
+    resetKey: string
+  } | null>(null)
+  // Clear picks owned by an older key so reverting search text cannot revive them.
+  if (stored !== null && stored.resetKey !== resetKey) {
     setStored(null)
   }
-  const chosen = stored?.query === query ? stored : null
+  const chosen = stored?.resetKey === resetKey ? stored : null
   const sessionIndexes = useMemo(
     () => rows.flatMap((row, index) => (row.type === 'session' ? [index] : [])),
     [rows]
@@ -51,7 +53,7 @@ export function useAiVaultSessionSelection(
   const select = (index: number): void => {
     const sessionId = sessionIdAt(rows, index)
     if (sessionId !== null) {
-      setStored({ index, sessionId, query })
+      setStored({ index, sessionId, resetKey })
     }
   }
   return {

@@ -16,7 +16,7 @@ import {
   deleteLocalSpeechModel,
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,

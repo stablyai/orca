@@ -1,6 +1,9 @@
 import { detectLanguage } from '@/lib/language-detect'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
-import type { SearchFileResult, SearchMatch } from '../../../../../../shared/code-search-types'
+import type {
+  SearchFileResult,
+  SearchMatch
+} from '../../../../../../shared/file-search/code-search-types'
 
 export function cancelRevealFrame(frameRef: React.RefObject<number | null>): void {
   if (frameRef.current !== null) {

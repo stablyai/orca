@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { RPC_REQUEST_MIN_ACK_MS } from '../transport/rpc-request-budget'
+import { RPC_REQUEST_MIN_ACK_MS } from '../transport/rpc/rpc-request-budget'
 
 /** One tap's whole wait, connect included, shared by every page it reads. */
 export const OLDER_PAGE_BUDGET_MS = 15_000

@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 // Pin #11745 through state as well as replies: refused calls must not mutate graphs or fence legitimate coordinators.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import SyncDatabase from '../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'

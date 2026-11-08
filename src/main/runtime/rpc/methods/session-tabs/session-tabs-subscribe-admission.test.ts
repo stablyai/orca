@@ -1,14 +1,22 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
+
 import '../../runtime-client-capabilities'
 import type { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
-import '../../unused-default-rpc-methods.test-fixture'
+
 import { describe, expect, it, vi } from 'vitest'
+
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
+
 import { RpcDispatcher } from '../../dispatcher'
+
 import type { RpcRequest } from '../../core'
+
 import { SESSION_TAB_METHODS } from './session-tabs'
+
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 const CONNECTION = 'conn-1'

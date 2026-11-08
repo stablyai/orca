@@ -18,7 +18,7 @@ import type {
 import { NativeChatRewindContext } from '../actions/native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from '../../../../../../shared/native-chat/native-chat-rewind-eligibility'
 import { NativeChatForkContext } from '../actions/native-chat-fork-context'
-import { nativeChatRowOffersFork } from '../../../../../../shared/native-chat/native-chat-fork-offer'
+import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -147,15 +147,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           }
           fork={
             fork &&
-            nativeChatRowOffersFork(
-              {
-                message,
-                inSubagentSection: slot.depth > 0,
-                turnWorking: slot.activeTurnIsWorking,
-                inLatestTurn: turnKey !== undefined && turnKey === context.latestTurnKey
-              },
-              fork
-            )
+            nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
               ? fork.rowAction
               : undefined
           }
