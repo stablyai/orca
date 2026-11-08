@@ -1,3 +1,5 @@
+import { isEligibleLocalCertificateHost, isWildcardBindHost } from '../browser-url'
+
 // Chromium emits icon updates only when the URL list changes; rendering and navigation listeners must share origin/icon rules.
 
 export function displayableFaviconUrl(faviconUrl: string | null | undefined): string | null {
@@ -26,6 +28,25 @@ export function pickDisplayableFaviconUrl(favicons: readonly string[] | undefine
     }
   }
   return null
+}
+
+// Session-tab rows resend whole on every change, so a page's inline data: icon must not grow them.
+const MAX_REMOTE_TAB_FAVICON_URL_LENGTH = 2048
+
+/** The favicon a host publishes for a remote client, which loads it from its own network. */
+export function remoteTabFaviconUrl(faviconUrl: string | null | undefined): string | null {
+  const displayable = displayableFaviconUrl(faviconUrl)
+  if (!displayable || displayable.length > MAX_REMOTE_TAB_FAVICON_URL_LENGTH) {
+    return null
+  }
+  if (displayable.startsWith('data:')) {
+    return displayable
+  }
+  // The host's loopback names a different machine on the client.
+  const hostname = new URL(displayable).hostname
+  return isWildcardBindHost(hostname) || isEligibleLocalCertificateHost(hostname)
+    ? null
+    : displayable
 }
 
 function faviconOrigin(rawUrl: string | null | undefined): string | null {

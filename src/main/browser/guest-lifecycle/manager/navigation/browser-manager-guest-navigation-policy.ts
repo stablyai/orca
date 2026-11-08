@@ -11,6 +11,11 @@ import {
 import { allowPageUnload } from '../../navigation/browser-guest-unload-policy'
 import { initiatingFrameUrl } from '../../prompts/browser-external-app-launch'
 import { isSameExtensionNavigation } from '../../../../../shared/browser/extensions/browser-extension-url'
+import {
+  browserNavigationLeavesFaviconOrigin,
+  pickDisplayableFaviconUrl,
+  remoteTabFaviconUrl
+} from '../../../../../shared/browser/browser-favicon-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
@@ -138,6 +143,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     let publishedUrl: string | null = null
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
+      // The new origin reports its own icons; until then the old site's must not show.
+      if (browserNavigationLeavesFaviconOrigin(publishedUrl, url)) {
+        this.remoteTabFaviconUrlByGuestId.delete(guest.id)
+      }
       publishedUrl = guest.getURL()
       this.pendingNavigationByGuestId.delete(guest.id)
       // Committing makes the hidden error obsolete; a later abort must not restore it.
@@ -164,11 +173,29 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       }
     }
 
+    // Renderer webviews keep their own icon; offscreen pages publish theirs only when it changes.
+    const faviconUpdatedHandler = (_event: Electron.Event, favicons: string[]): void => {
+      if (!this.offscreenGuestIds.has(guest.id)) {
+        return
+      }
+      const next = remoteTabFaviconUrl(pickDisplayableFaviconUrl(favicons))
+      if ((this.remoteTabFaviconUrlByGuestId.get(guest.id) ?? null) === next) {
+        return
+      }
+      if (next) {
+        this.remoteTabFaviconUrlByGuestId.set(guest.id, next)
+      } else {
+        this.remoteTabFaviconUrlByGuestId.delete(guest.id)
+      }
+      this.notifyBrowserGuestStateChanged(guest.id)
+    }
+
     guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-navigate-in-page', didNavigateInPageHandler)
+    guest.on('page-favicon-updated', faviconUpdatedHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
@@ -201,6 +228,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-navigate-in-page', didNavigateInPageHandler)
+        guest.off('page-favicon-updated', faviconUpdatedHandler)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

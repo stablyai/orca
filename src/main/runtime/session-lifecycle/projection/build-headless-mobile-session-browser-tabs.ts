@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/runtime-session-contracts'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
 import {
@@ -67,6 +68,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        faviconUrl: browserManager.getBrowserPageRemoteTabFaviconUrl(tab.browserPageId),
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
