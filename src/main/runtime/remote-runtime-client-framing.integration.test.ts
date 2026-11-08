@@ -94,6 +94,10 @@ async function startHost(
     channel.onMessage((plaintext, reply, replyBinary) => {
       const { id, method } = JSON.parse(plaintext)
       requests.push(`${method} over ${channel.transcriptHashB64 ? 'v2' : 'legacy'}`)
+      if (method === 'test.binary') {
+        replyBinary(new Uint8Array([1, 2, 3]))
+        return
+      }
       const result =
         method === 'status.get'
           ? { capabilities: hostCapabilities }
@@ -288,5 +292,16 @@ describe('remote runtime client E2EE framing', () => {
     // In send order: the response, then the terminal frame, each as the host sent it.
     expect(received).toEqual([TERMINAL_OUTPUT.toString(), TERMINAL_OUTPUT.toString()])
     expect(host.requests).toContain('test.output over v2')
+  })
+
+  it('reports an authentic binary payload on a one-shot socket as unexpected, not undecryptable', async () => {
+    const host = await startHost('current')
+
+    await expect(
+      sendRemoteRuntimeRequest(host.connection, 'test.binary', undefined, 5_000)
+    ).rejects.toMatchObject({
+      code: 'invalid_runtime_response',
+      message: 'Remote Orca runtime returned an unexpected binary frame.'
+    })
   })
 })

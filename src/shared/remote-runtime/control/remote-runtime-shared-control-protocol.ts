@@ -29,15 +29,11 @@ export function parseSharedControlFrame(
       error: invalidRemoteRuntimeResponseError('Remote Orca runtime returned a frame before E2EE.')
     }
   }
-  const plaintext = openSealedText(handshake, frame)
-  if (plaintext === null) {
-    return {
-      type: 'error',
-      error: invalidRemoteRuntimeResponseError(
-        'Remote Orca runtime returned an undecryptable frame.'
-      )
-    }
+  const opened = openSealedText(handshake, frame)
+  if (opened.kind === 'failed') {
+    return { type: 'error', error: invalidRemoteRuntimeResponseError(opened.message) }
   }
+  const plaintext = opened.text
   if (state === 'awaiting_authenticated') {
     return { type: 'auth', plaintext }
   }

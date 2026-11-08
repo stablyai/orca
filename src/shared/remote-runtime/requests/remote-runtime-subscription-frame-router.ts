@@ -4,7 +4,11 @@ import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-hands
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
-import { openSealedFrame, readSealedFrame } from '../remote-runtime-sealed-frame'
+import {
+  openSealedFrame,
+  readSealedFrame,
+  SEALED_FRAME_FAILURE_MESSAGES
+} from '../remote-runtime-sealed-frame'
 
 type SubscriptionFrameRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
@@ -157,11 +161,13 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       return
     }
     const opened = openSealedFrame(this.options.handshake, frame)
-    if (opened === null) {
+    if (opened.kind === 'failed') {
       this.options.fail(
         new RemoteRuntimeClientError(
           'invalid_runtime_response',
-          'Remote Orca runtime returned an undecryptable binary frame.'
+          opened.failure === 'undecryptable'
+            ? 'Remote Orca runtime returned an undecryptable binary frame.'
+            : SEALED_FRAME_FAILURE_MESSAGES[opened.failure]
         )
       )
       return

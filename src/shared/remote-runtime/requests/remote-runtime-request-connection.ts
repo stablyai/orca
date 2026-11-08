@@ -204,13 +204,12 @@ export class RemoteRuntimeRequestConnection {
       this.handleReadyFrame(handshake, frame)
       return
     }
-    const plaintext = sealedFrame.openSealedText(handshake, frame)
-    if (plaintext === null) {
-      this.close(
-        invalidRemoteRuntimeResponseError('Remote Orca runtime returned an undecryptable frame.')
-      )
+    const opened = sealedFrame.openSealedText(handshake, frame)
+    if (opened.kind === 'failed') {
+      this.close(invalidRemoteRuntimeResponseError(opened.message))
       return
     }
+    const plaintext = opened.text
 
     if (this.state === 'awaiting_authenticated') {
       this.handleAuthenticatedFrame(handshake, plaintext)

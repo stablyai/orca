@@ -52,20 +52,17 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       this.handleReadyFrame(frame)
       return
     }
-    const plaintext = openSealedText(this.options.handshake, frame)
-    if (plaintext === null) {
+    const opened = openSealedText(this.options.handshake, frame)
+    if (opened.kind === 'failed') {
       this.options.finishError(
-        new RemoteRuntimeClientError(
-          'invalid_runtime_response',
-          'Remote Orca runtime returned an undecryptable frame.',
-          {
-            pairingStage:
-              this.state === 'awaiting_authenticated' ? 'host-identity' : this.pairingStage
-          }
-        )
+        new RemoteRuntimeClientError('invalid_runtime_response', opened.message, {
+          pairingStage:
+            this.state === 'awaiting_authenticated' ? 'host-identity' : this.pairingStage
+        })
       )
       return
     }
+    const plaintext = opened.text
     if (this.state === 'awaiting_authenticated') {
       this.handleAuthenticatedFrame(plaintext)
       return
