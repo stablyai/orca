@@ -23970,5 +23970,31 @@
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Atualize seu modelo de voz",
+    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
+    "update": "Atualizar",
+    "replacedTitle": "Seu modelo de voz foi substituído",
+    "replacedDescription": "{{old}} não funciona no novo mecanismo de voz. {{model}} o substitui ({{size}} MB).",
+    "downloadReplacement": "Baixar {{model}}",
+    "later": "Mais tarde",
+    "dismiss": "Fechar",
+    "updatingTitle": "Atualizando {{model}}",
+    "downloadingTitle": "Baixando {{model}}",
+    "downloadingDescription": "Você pode continuar trabalhando. O ditado volta quando isso terminar.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "O ditado está pronto",
+    "doneDescription": "{{model}} foi atualizado. Os arquivos antigos foram removidos.",
+    "doneRetiredDescription": "{{model}} está pronto. Os arquivos antigos de {{old}} ainda estão no disco.",
+    "keep": "Manter",
+    "deleteOld": "Excluir modelo antigo",
+    "deleteFailed": "Não foi possível excluir {{model}}.",
+    "updateFailedTitle": "Não foi possível atualizar {{model}}",
+    "downloadFailedTitle": "Não foi possível baixar {{model}}",
+    "failedAtDescription": "O download parou em {{mb}} MB. Verifique sua conexão e tente novamente.",
+    "failedDescription": "O download parou. Verifique sua conexão e tente novamente.",
+    "tryAgain": "Tentar novamente"
   }
 }

@@ -23997,5 +23997,31 @@
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Actualiza tu modelo de voz",
+    "updateDescription": "El dictado ahora usa un motor más rápido. {{model}} necesita una descarga única ({{size}} MB) antes de que puedas volver a dictar.",
+    "update": "Actualizar",
+    "replacedTitle": "Tu modelo de voz se ha sustituido",
+    "replacedDescription": "{{old}} no funciona con el nuevo motor de voz. {{model}} lo sustituye ({{size}} MB).",
+    "downloadReplacement": "Descargar {{model}}",
+    "later": "Más tarde",
+    "dismiss": "Cerrar",
+    "updatingTitle": "Actualizando {{model}}",
+    "downloadingTitle": "Descargando {{model}}",
+    "downloadingDescription": "Puedes seguir trabajando. El dictado vuelve cuando termine.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "El dictado está listo",
+    "doneDescription": "{{model}} está actualizado. Se eliminaron los archivos antiguos.",
+    "doneRetiredDescription": "{{model}} está listo. Los archivos antiguos de {{old}} siguen en el disco.",
+    "keep": "Conservar",
+    "deleteOld": "Eliminar modelo antiguo",
+    "deleteFailed": "No se pudo eliminar {{model}}.",
+    "updateFailedTitle": "No se pudo actualizar {{model}}",
+    "downloadFailedTitle": "No se pudo descargar {{model}}",
+    "failedAtDescription": "La descarga se detuvo en {{mb}} MB. Comprueba tu conexión e inténtalo de nuevo.",
+    "failedDescription": "La descarga se detuvo. Comprueba tu conexión e inténtalo de nuevo.",
+    "tryAgain": "Reintentar"
   }
 }

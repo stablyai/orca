@@ -24344,5 +24344,31 @@
     "branchName": "Название ветки",
     "invalidBranchName": "Это имя ветки недопустимо. Выберите другое имя.",
     "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Обновите модель распознавания речи",
+    "updateDescription": "Диктовка теперь работает на более быстром движке. Чтобы снова диктовать, нужно один раз скачать {{model}} ({{size}} МБ).",
+    "update": "Обновить",
+    "replacedTitle": "Ваша модель распознавания речи заменена",
+    "replacedDescription": "{{old}} не работает с новым движком распознавания речи. Вместо неё будет {{model}} ({{size}} МБ).",
+    "downloadReplacement": "Скачать {{model}}",
+    "later": "Позже",
+    "dismiss": "Закрыть",
+    "updatingTitle": "Обновление {{model}}",
+    "downloadingTitle": "Загрузка {{model}}",
+    "downloadingDescription": "Можно продолжать работу. Диктовка вернётся, когда загрузка завершится.",
+    "progress": "{{done}} из {{total}} МБ",
+    "cancel": "Отмена",
+    "doneTitle": "Диктовка готова",
+    "doneDescription": "{{model}} обновлена. Старые файлы удалены.",
+    "doneRetiredDescription": "{{model}} установлена. Старые файлы {{old}} всё ещё на диске.",
+    "keep": "Оставить",
+    "deleteOld": "Удалить старую модель",
+    "deleteFailed": "Не удалось удалить {{model}}.",
+    "updateFailedTitle": "Не удалось обновить {{model}}",
+    "downloadFailedTitle": "Не удалось скачать {{model}}",
+    "failedAtDescription": "Загрузка остановилась на {{mb}} МБ. Проверьте подключение и повторите попытку.",
+    "failedDescription": "Загрузка остановилась. Проверьте подключение и повторите попытку.",
+    "tryAgain": "Повторить"
   }
 }

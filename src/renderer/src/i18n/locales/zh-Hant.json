@@ -23256,5 +23256,31 @@
     "branchName": "分支名稱",
     "invalidBranchName": "此分支名稱無效。請選擇其他名稱。",
     "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "更新你的語音模型",
+    "updateDescription": "聽寫現在使用更快的引擎。{{model}} 需要下載一次（{{size}} MB）才能再次聽寫。",
+    "update": "更新",
+    "replacedTitle": "你的語音模型已被取代",
+    "replacedDescription": "{{old}} 無法在新的語音引擎上執行。{{model}} 將取代它（{{size}} MB）。",
+    "downloadReplacement": "下載 {{model}}",
+    "later": "稍後",
+    "dismiss": "關閉",
+    "updatingTitle": "正在更新 {{model}}",
+    "downloadingTitle": "正在下載 {{model}}",
+    "downloadingDescription": "你可以繼續工作。完成後即可再次使用聽寫。",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "取消",
+    "doneTitle": "聽寫已就緒",
+    "doneDescription": "{{model}} 已更新。舊檔案已移除。",
+    "doneRetiredDescription": "{{model}} 已設定完成。舊的 {{old}} 檔案仍在磁碟上。",
+    "keep": "保留",
+    "deleteOld": "刪除舊模型",
+    "deleteFailed": "無法刪除 {{model}}。",
+    "updateFailedTitle": "無法更新 {{model}}",
+    "downloadFailedTitle": "無法下載 {{model}}",
+    "failedAtDescription": "下載在 {{mb}} MB 時中斷。請檢查連線後再試一次。",
+    "failedDescription": "下載已中斷。請檢查連線後再試一次。",
+    "tryAgain": "再試一次"
   }
 }

@@ -23593,5 +23593,31 @@
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Sprachmodell aktualisieren",
+    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
+    "update": "Aktualisieren",
+    "replacedTitle": "Ihr Sprachmodell wurde ersetzt",
+    "replacedDescription": "{{old}} läuft nicht mit der neuen Spracherkennung. {{model}} ersetzt es ({{size}} MB).",
+    "downloadReplacement": "{{model}} herunterladen",
+    "later": "Später",
+    "dismiss": "Schließen",
+    "updatingTitle": "{{model}} wird aktualisiert",
+    "downloadingTitle": "{{model}} wird heruntergeladen",
+    "downloadingDescription": "Sie können weiterarbeiten. Die Diktierfunktion ist wieder da, sobald dies abgeschlossen ist.",
+    "progress": "{{done}} von {{total}} MB",
+    "cancel": "Abbrechen",
+    "doneTitle": "Diktieren ist bereit",
+    "doneDescription": "{{model}} ist aktualisiert. Die alten Dateien wurden entfernt.",
+    "doneRetiredDescription": "{{model}} ist eingerichtet. Die alten Dateien von {{old}} sind noch auf dem Datenträger.",
+    "keep": "Behalten",
+    "deleteOld": "Altes Modell löschen",
+    "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
+    "updateFailedTitle": "{{model}} konnte nicht aktualisiert werden",
+    "downloadFailedTitle": "{{model}} konnte nicht heruntergeladen werden",
+    "failedAtDescription": "Der Download wurde bei {{mb}} MB unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "failedDescription": "Der Download wurde unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen"
   }
 }

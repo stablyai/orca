@@ -24000,5 +24000,31 @@
   },
   "checks": {
     "gitlabAllowedFailure": "Échec autorisé"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Mettez à jour votre modèle vocal",
+    "updateDescription": "La dictée utilise désormais un moteur plus rapide. {{model}} doit être téléchargé une seule fois ({{size}} Mo) avant que vous puissiez dicter à nouveau.",
+    "update": "Mettre à jour",
+    "replacedTitle": "Votre modèle vocal a été remplacé",
+    "replacedDescription": "{{old}} ne fonctionne pas avec le nouveau moteur vocal. {{model}} le remplace ({{size}} Mo).",
+    "downloadReplacement": "Télécharger {{model}}",
+    "later": "Plus tard",
+    "dismiss": "Fermer",
+    "updatingTitle": "Mise à jour de {{model}}",
+    "downloadingTitle": "Téléchargement de {{model}}",
+    "downloadingDescription": "Vous pouvez continuer à travailler. La dictée revient une fois l’opération terminée.",
+    "progress": "{{done}} sur {{total}} Mo",
+    "cancel": "Annuler",
+    "doneTitle": "La dictée est prête",
+    "doneDescription": "{{model}} est à jour. Les anciens fichiers ont été supprimés.",
+    "doneRetiredDescription": "{{model}} est prêt. Les anciens fichiers de {{old}} sont toujours sur le disque.",
+    "keep": "Conserver",
+    "deleteOld": "Supprimer l’ancien modèle",
+    "deleteFailed": "Impossible de supprimer {{model}}.",
+    "updateFailedTitle": "Impossible de mettre à jour {{model}}",
+    "downloadFailedTitle": "Impossible de télécharger {{model}}",
+    "failedAtDescription": "Le téléchargement s’est arrêté à {{mb}} Mo. Vérifiez votre connexion et réessayez.",
+    "failedDescription": "Le téléchargement s’est arrêté. Vérifiez votre connexion et réessayez.",
+    "tryAgain": "Réessayer"
   }
 }

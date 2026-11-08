@@ -23307,5 +23307,31 @@
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
     "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "更新你的语音模型",
+    "updateDescription": "听写现在使用更快的引擎。{{model}} 需要下载一次（{{size}} MB）才能再次听写。",
+    "update": "更新",
+    "replacedTitle": "你的语音模型已被替换",
+    "replacedDescription": "{{old}} 无法在新的语音引擎上运行。{{model}} 将替换它（{{size}} MB）。",
+    "downloadReplacement": "下载 {{model}}",
+    "later": "稍后",
+    "dismiss": "关闭",
+    "updatingTitle": "正在更新 {{model}}",
+    "downloadingTitle": "正在下载 {{model}}",
+    "downloadingDescription": "你可以继续工作。完成后即可再次使用听写。",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "取消",
+    "doneTitle": "听写已就绪",
+    "doneDescription": "{{model}} 已更新。旧文件已删除。",
+    "doneRetiredDescription": "{{model}} 已设置完成。旧的 {{old}} 文件仍在磁盘上。",
+    "keep": "保留",
+    "deleteOld": "删除旧模型",
+    "deleteFailed": "无法删除 {{model}}。",
+    "updateFailedTitle": "无法更新 {{model}}",
+    "downloadFailedTitle": "无法下载 {{model}}",
+    "failedAtDescription": "下载在 {{mb}} MB 时中断。请检查网络连接后重试。",
+    "failedDescription": "下载已中断。请检查网络连接后重试。",
+    "tryAgain": "重试"
   }
 }

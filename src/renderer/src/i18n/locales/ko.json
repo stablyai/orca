@@ -23307,5 +23307,31 @@
     "branchName": "브랜치 이름",
     "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "음성 모델을 업데이트하세요",
+    "updateDescription": "이제 받아쓰기가 더 빠른 엔진에서 실행됩니다. 다시 받아쓰려면 {{model}}을(를) 한 번 다운로드해야 합니다({{size}} MB).",
+    "update": "업데이트",
+    "replacedTitle": "음성 모델이 교체되었습니다",
+    "replacedDescription": "{{old}}은(는) 새 음성 엔진에서 실행할 수 없습니다. {{model}}이(가) 대신합니다({{size}} MB).",
+    "downloadReplacement": "{{model}} 다운로드",
+    "later": "나중에",
+    "dismiss": "닫기",
+    "updatingTitle": "{{model}} 업데이트 중",
+    "downloadingTitle": "{{model}} 다운로드 중",
+    "downloadingDescription": "계속 작업하셔도 됩니다. 완료되면 받아쓰기를 다시 사용할 수 있습니다.",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "취소",
+    "doneTitle": "받아쓰기 준비 완료",
+    "doneDescription": "{{model}}이(가) 업데이트되었습니다. 이전 파일은 삭제되었습니다.",
+    "doneRetiredDescription": "{{model}} 설정이 완료되었습니다. 이전 {{old}} 파일은 아직 디스크에 있습니다.",
+    "keep": "유지",
+    "deleteOld": "이전 모델 삭제",
+    "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
+    "updateFailedTitle": "{{model}}을(를) 업데이트하지 못했습니다",
+    "downloadFailedTitle": "{{model}}을(를) 다운로드하지 못했습니다",
+    "failedAtDescription": "다운로드가 {{mb}} MB에서 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
+    "failedDescription": "다운로드가 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
+    "tryAgain": "다시 시도"
   }
 }
