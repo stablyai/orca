@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalAcceptanceReceipt
@@ -37,15 +38,19 @@ import {
   type JournalSqlAcceptedInputs
 } from './journal-sql-accepted-inputs'
 
-export type JournalSqlMessage = {
-  kind: 'item' | 'text-snapshot'
+type JournalDomainItemFields = {
   identity: AgentJournalItemIdentity
-  body: AgentJournalMessageItem
   options: JournalItemAppendOptions
   scopeItemIds?: readonly string[]
 }
 
-export type JournalSqlMessageCommit = {
+export type JournalDomainItemWrite = JournalDomainItemFields &
+  (
+    | { kind: 'item'; body: AgentJournalItemBody }
+    | { kind: 'text-snapshot'; body: AgentJournalMessageItem }
+  )
+
+export type JournalDomainItemCommit = {
   cursor: AgentJournalCursor
   outcome:
     | { kind: 'committed'; wrote: boolean }
@@ -59,12 +64,12 @@ export type JournalSqlMessageCommit = {
 }
 
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
-export function applyJournalSqlMessage(
+export function applyJournalDomainItem(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  input: JournalSqlMessage,
+  input: JournalDomainItemWrite,
   savedAt: number
-): JournalSqlMessageCommit {
+): JournalDomainItemCommit {
   if (!db.isTransaction) {
     throw new Error('journal message requires its writer transaction')
   }
@@ -79,7 +84,7 @@ export function applyJournalSqlMessage(
   }
   assertJournalFence(input.options.fence, Number(head.highest_fence))
   const cursor = { epoch, sequence: Number(head.last_sequence) }
-  const empty: JournalSqlMessageCommit = {
+  const empty: JournalDomainItemCommit = {
     cursor,
     outcome: { kind: 'committed', wrote: false },
     items: [],
@@ -95,7 +100,12 @@ export function applyJournalSqlMessage(
   let itemId = alias ? String(alias.item_id) : rawId
   let echo: AgentJournalSubmission | undefined
   const declaration = Boolean(alias?.echo_declared) || Object.hasOwn(input.options, 'echoOf')
-  if (!alias && !declaration && isProviderUserMessageEcho(rawId, input.body)) {
+  if (
+    !alias &&
+    !declaration &&
+    input.body.kind === 'message' &&
+    isProviderUserMessageEcho(rawId, input.body)
+  ) {
     const fingerprint = agentSessionSendBodyFingerprint(sessionId, input.body)
     const candidates = db
       .prepare(`SELECT attempt.payload_json FROM journal_submission_attempts AS attempt
@@ -175,8 +185,7 @@ export function applyJournalSqlMessage(
   }
   const rendered = journalRenderItem(itemId, revision, row.body, row, scope)
   const next = previous ? journalItemRevisionValue(previous, rendered) : rendered
-  const spent = spendJournalSqlCommandCards(db, prefix, savedAt)
-  const result: JournalSqlMessageCommit = {
+  const result: JournalDomainItemCommit = {
     cursor: { epoch, sequence },
     outcome: { kind: 'committed', wrote: true },
     items: [next],
@@ -230,7 +239,7 @@ export function applyJournalSqlMessage(
       result.acceptedInputs = readJournalSqlAcceptedInputs(db, prefix)
     }
   }
-  Object.assign(result, spent)
+  Object.assign(result, spendJournalSqlCommandCards(db, prefix, savedAt))
   result.inputChanged ||= result.cards.length > 0
   if (isJournalProviderActivity(row.recovered, rawId, row.body)) {
     db.prepare(`INSERT INTO journal_provider_activity(session_id,epoch,fence,last_activity_at) VALUES(?,?,?,?)

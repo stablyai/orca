@@ -3,6 +3,7 @@ import type Database from '../../sqlite/sync-database'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
 import { commitJournalSqlMessages, prepareJournalSqlMessages } from './journal-sql-message-commit'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { applyJournalDomainItem } from './journal-domain-item'
 
 const databases: Database.Database[] = []
 const fixture = () => {
@@ -176,21 +177,31 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
 })
 
 it('refuses a snapshot after the saved turn ends and commits only a successful step prefix', async () => {
-  const { db, commit, item, seedItem } = fixture()
-  seedItem({
-    itemId: 'orca:turn',
-    revision: 3,
-    sequence: 3,
-    observedAt: 30,
-    body: { kind: 'turn', turnId: 'turn', state: 'completed', startedAt: 1, completedAt: 2 },
-    turnScope: { kind: 'thread' }
-  })
+  const { db, batch, commit, item } = fixture()
+  const turns = await batch.run(['running', 'completed'] as const, (state) =>
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'turn' },
+        body: { kind: 'turn', turnId: 'turn', state, startedAt: 1 },
+        options: { fence: 1, turnScope: { kind: 'thread' } }
+      },
+      30
+    )
+  )
+  expect(turns.outcomes).toMatchObject([
+    { committed: true, value: { items: [{ revision: 1, body: { state: 'running' } }] } },
+    { committed: true, value: { items: [{ revision: 2, body: { state: 'completed' } }] } }
+  ])
+  expect(item('orca:turn')).toMatchObject({ sequence: 11, revision: 2, observedAt: 30 })
   const late = message('late')
   late.options.turnScope = { kind: 'turn', turnItemId: 'orca:turn' }
   expect((await commit(late)).outcomes[0]).toMatchObject({
     committed: true,
     value: {
-      cursor: { epoch: 'epoch', sequence: 10 },
+      cursor: { epoch: 'epoch', sequence: 12 },
       items: [],
       outcomes: [{ kind: 'dropped', reason: 'turn-settled' }]
     }
@@ -209,14 +220,14 @@ it('refuses a snapshot after the saved turn ends and commits only a successful s
   ).toMatchObject({
     committed: true,
     value: {
-      cursor: { epoch: 'epoch', sequence: 11 },
+      cursor: { epoch: 'epoch', sequence: 13 },
       items: [{ itemId: 'orca:prefix' }],
       failure: { message: 'refused' }
     }
   })
   expect(item('orca:refused')).toBeUndefined()
   expect(item('orca:suffix')).toBeUndefined()
-  expect(db.prepare('SELECT COUNT(*) AS count FROM journal_events').get()!.count).toBe(1)
+  expect(db.prepare('SELECT COUNT(*) AS count FROM journal_events').get()!.count).toBe(3)
 })
 
 it('stores one growing text body and a metadata-only replay tail', async () => {

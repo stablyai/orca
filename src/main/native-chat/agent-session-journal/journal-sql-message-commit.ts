@@ -1,10 +1,13 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalSqlBatch, JournalSqlBatchResult } from './journal-sql-batch'
 import {
-  applyJournalSqlMessage,
-  type JournalSqlMessage,
-  type JournalSqlMessageCommit
-} from './journal-sql-message'
+  applyJournalDomainItem,
+  type JournalDomainItemWrite,
+  type JournalDomainItemCommit
+} from './journal-domain-item'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+export type JournalSqlMessage = JournalDomainItemWrite & { body: AgentJournalMessageItem }
 
 type MessageCommand = {
   target: { sessionId: string; epoch: string }
@@ -17,8 +20,8 @@ export type JournalSqlMessageJob = {
   bytes: number
 }
 
-export type JournalSqlMessagesCommit = Omit<JournalSqlMessageCommit, 'outcome'> & {
-  outcomes: JournalSqlMessageCommit['outcome'][]
+export type JournalSqlMessagesCommit = Omit<JournalDomainItemCommit, 'outcome'> & {
+  outcomes: JournalDomainItemCommit['outcome'][]
   failure?: { message: string }
 }
 
@@ -68,7 +71,7 @@ function applyMessageSteps(
   for (const step of steps) {
     db.exec('SAVEPOINT journal_message_step')
     try {
-      const commit = applyJournalSqlMessage(db, target, step, savedAt)
+      const commit = applyJournalDomainItem(db, target, step, savedAt)
       db.exec('RELEASE journal_message_step')
       result.cursor = commit.cursor
       result.outcomes.push(commit.outcome)

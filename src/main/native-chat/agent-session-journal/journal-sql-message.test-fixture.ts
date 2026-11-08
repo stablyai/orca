@@ -14,7 +14,7 @@ import {
   prepareJournalSqlMessages,
   type JournalSqlMessagesCommit
 } from './journal-sql-message-commit'
-import type { JournalSqlMessage } from './journal-sql-message'
+import type { JournalSqlMessage } from './journal-sql-message-commit'
 
 export const target = { sessionId: 'chat', epoch: 'epoch' }
 export function message(
