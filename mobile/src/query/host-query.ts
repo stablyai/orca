@@ -28,16 +28,14 @@ export { useHostEventRouter } from './host-event-router'
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
   // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads pass none.
-  fetch: (
-    client: RpcClient,
-    target: HostQueryTarget,
-    input: TInput,
-    previous: TData | undefined
-  ) => Promise<TData>
+  // Absent for a family only its screen can read (its inputs live in the screen); that screen passes `read`.
+  fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
   // Only for families the desktop sends no change signal for.
   refetchOnWindowFocus?: boolean
+  // For a screen that offers its own Retry, so a lost read is reported instead of sent again.
+  retry?: false
   // Kept fresh by a subscription, so the connected edge leaves it alone.
   streamBacked?: boolean
   // Desktop change events that make this family stale (host-event-router), and the least time between reads they cause.
@@ -49,6 +47,19 @@ export type HostQuerySignal = {
   floorMs?: number
 }
 
+type HostQueryFetch<TInput extends HostQueryParams, TData> = (
+  client: RpcClient,
+  target: HostQueryTarget,
+  input: TInput,
+  previous: TData | undefined
+) => Promise<TData>
+
+export function defineHostQuery<TInput extends HostQueryParams, TData>(
+  query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
+): HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
+export function defineHostQuery<TInput extends HostQueryParams, TData>(
+  query: HostQuery<TInput, TData>
+): HostQuery<TInput, TData>
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>
 ): HostQuery<TInput, TData> {
@@ -68,30 +79,40 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     ...freshness,
     queryKey,
     // No abort signal: the host has no cancel, and a screen that unmounts still wants the answer cached.
-    queryFn: ({ client: queryClient }) =>
-      fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey)),
+    queryFn: fetch
+      ? ({ client: queryClient }) =>
+          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey))
+      : skipToken,
     meta: { streamBacked, signal }
   })
 }
 
 // An action's read: no stale copy and nothing built on the cached data; resolves once observers hold the answer.
 // `replace` cancels a read already out (its caller rejects rather than resolving with old data) instead of joining it.
+// `read` stands in for the family's fetch when the screen holds the inputs; it may stop early once `signal` aborts.
 export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   queryClient: QueryClient,
   query: HostQuery<TInput, TData>,
   host: { hostId: string; client: RpcClient },
   target: HostQueryTarget,
   input: TInput,
-  options: { replace: boolean }
+  options: { replace: boolean; read?: (signal: AbortSignal) => Promise<TData> }
 ): Promise<TData> {
   const { hostId, client } = host
   if (options.replace) {
     const queryKey = hostQueryKey(hostId, query.family, target, input)
     await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   }
+  const { fetch } = query
+  const { read } = options
+  const live = fetch && (() => fetch(hostReadClient(client), target, input, undefined))
+  if (!read && !live) {
+    throw new Error(`${query.family} is read by its screen`)
+  }
   const data = await queryClient.query({
     ...hostQueryOptions(query, client, hostId, target, input),
-    queryFn: () => query.fetch(hostReadClient(client), target, input, undefined),
+    // Only a call-site reader takes the signal: taking it lets TanStack cancel the read once no screen observes it.
+    queryFn: read ? ({ signal }) => read(signal) : live,
     staleTime: 0
   })
   await new Promise<void>((resolve) => notifyManager.schedule(resolve))
