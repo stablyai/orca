@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   domainLifecycleFixture,
   lifecycleIdentity as identity,
@@ -9,6 +9,7 @@ import type { AgentJournalApprovalItem } from '../../../shared/agent-session/jou
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const cleanup of cleanups.splice(0)) {
     cleanup()
   }
@@ -123,6 +124,7 @@ it('settles current tools and turns and refuses a later provider close or text r
 })
 
 it('verifies history authority at the write position and accepts a proven current revision only', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(100)
   const f = domainLifecycleFixture(cleanups)
   await f.run({ kind: 'item', identity: identity('prompt'), body: pending, options })
   const permit = new Int32Array(new SharedArrayBuffer(4))
@@ -137,7 +139,7 @@ it('verifies history authority at the write position and accepts a proven curren
       expectedCursor: { epoch: 'epoch', sequence: 1 },
       expectedItems: [{ key: 'orca:prompt', canonicalItemId: 'orca:prompt', revision: 1 }],
       permit,
-      deadline: Date.now() + 60000,
+      deadline: 60100,
       mutations: [
         {
           kind: 'item',
