@@ -85,7 +85,9 @@ export function useMobileNativeChatController(args: {
     onActionResolved: onSendResolved
   })
   const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
-  const showsCiResultLines = useMobileNativeChatCiResultLines(args.pairedHostClient, showNativeChat)
+  // CI result lines come only from structured sessions' journals, so a terminal chat reads nothing.
+  const readsCiLines = showNativeChat && activeChatStructured
+  const showsCiResultLines = useMobileNativeChatCiResultLines(args.pairedHostClient, readsCiLines)
   const {
     draftKey: chatDraftKey,
     setComposerText: setChatComposerText,
