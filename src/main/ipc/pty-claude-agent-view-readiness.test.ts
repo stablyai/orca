@@ -82,16 +82,12 @@ describe.each(['local', 'daemon'] as const)('%s PTY navigation readiness', (prov
       })
       await vi.waitFor(() => expect(reconcileConfig).toHaveBeenCalledOnce())
       const serviceSpy = vi.spyOn(agentView, 'getClaudeAgentViewService').mockReturnValue(service)
-      let env: Record<string, string> | undefined
-      const spawn = (
+      const spawn =
         provider === 'daemon'
           ? daemonSpawnAndGetEnv({}, undefined, () => settings)
           : spawnAndGetEnv({}, undefined, undefined, () => settings)
-      ).then((result) => {
-        env = result
-      })
       try {
-        await vi.waitFor(() => expect(env).toBeDefined())
+        const env = await spawn
         expect(reconciled).toBe(false)
         expect(env).not.toHaveProperty('ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR')
       } finally {
