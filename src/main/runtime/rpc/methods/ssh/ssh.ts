@@ -33,7 +33,10 @@ import {
 } from '../../../../../shared/rpc-contract/ssh-params'
 
 // Keep generation optional so older server rows still key by target id.
-function toSshTargetSummary({ id, label, generation }: SshTargetRecord): SshTargetSummary {
+function toSshTargetSummary(
+  target: SshTargetRecord
+): SshTargetSummary & Pick<SshEditableTarget, 'managedServer'> {
+  const { id, label, generation } = target
   const state = getRegisteredSshState(id)
   const remotePlatform = state?.remotePlatform
   return {
@@ -42,7 +45,8 @@ function toSshTargetSummary({ id, label, generation }: SshTargetRecord): SshTarg
     ...(generation === undefined ? {} : { generation }),
     connected: state?.status === 'connected',
     ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
-    ...(remotePlatform === undefined ? {} : { remotePlatform })
+    ...(remotePlatform === undefined ? {} : { remotePlatform }),
+    ...(isManagedOrcadSshTarget(target) ? { managedServer: true as const } : {})
   }
 }
 

@@ -75,6 +75,7 @@ export type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    trustWorktreeId?: string
     launchConfig?: WorktreeStartupLaunch['launchConfig']
     launchToken?: string
     commandDelivery?: 'renderer' | 'provider'

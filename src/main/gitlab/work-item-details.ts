@@ -12,7 +12,7 @@ import {
 } from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
-import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
+import { fetchDiscussionComments } from './mr-discussion-notes'
 import { fetchMRFiles } from './mr-file-diffs'
 import { fetchMRApprovalState, fetchMRReviewers } from './mr-reviewers-and-approvals'
 import { fetchPipelineJobs } from './pipeline-job-graph'
@@ -100,7 +100,7 @@ async function fetchIssueDetails(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
-  const [issueRes, discussions] = await Promise.all([
+  const [issueRes, comments] = await Promise.all([
     glabExecFileAsync(
       [
         'api',
@@ -109,7 +109,7 @@ async function fetchIssueDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
+    fetchDiscussionComments(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
   ])
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -121,7 +121,7 @@ async function fetchIssueDetails(
   return {
     item,
     body: issueRaw.description ?? '',
-    comments: flattenDiscussions(discussions),
+    comments,
     assignees: (issueRaw.assignees ?? [])
       .map((a) => a?.username)
       .filter((u): u is string => typeof u === 'string')
@@ -137,7 +137,7 @@ async function fetchMRDetails(
   options: { includeReviewDetails?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Discussion can overlap MR details; child jobs need its head_pipeline ID.
-  const [mrRes, discussions] = await Promise.all([
+  const [mrRes, comments] = await Promise.all([
     glabExecFileAsync(
       [
         'api',
@@ -146,7 +146,16 @@ async function fetchMRDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId, localGitOptions)
+    // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
+    fetchDiscussionComments(
+      repoPath,
+      projectRef,
+      'mr',
+      iid,
+      connectionId,
+      localGitOptions,
+      options.includeReviewDetails !== false
+    )
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -192,7 +201,7 @@ async function fetchMRDetails(
   return {
     item,
     body: mrRaw.description ?? '',
-    comments: flattenDiscussions(discussions),
+    comments,
     headSha: mrRaw.sha,
     baseSha: mrRaw.diff_refs?.base_sha,
     startSha: mrRaw.diff_refs?.start_sha,

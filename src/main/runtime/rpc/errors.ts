@@ -1,3 +1,4 @@
+import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
 import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
@@ -201,6 +202,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return errorResponse(id, meta, error.code, message)
   }
   if (
+    error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof WslHostWindowsDriveRefusalError
   ) {

@@ -28,6 +28,7 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
+import { legacyRelayChannels } from './legacy-relay-bridge-connections'
 import {
   PtyExitProof,
   type PtyRetirementEvidence
@@ -55,7 +56,7 @@ export type LegacyRelayBridgeHost = {
   /** Absent: relay-era `orca` commands are refused, as before this host served them. */
   remoteCli?: {
     runtime: () => OrcaRuntimeService | null
-    /** The per-host "Allow this host's orca CLI to control Orca" switch. */
+    /** The per-host browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL). */
     allowed: (targetId: string) => boolean
   }
 }
@@ -74,6 +75,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
     bridge.dispose()
   }
   bridges.clear()
+  legacyRelayChannels.dispose()
   heldPanes.clear()
   paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
@@ -110,6 +112,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
     }
     return conn
   }
+  const channels = legacyRelayChannels.for(targetId, () => installed.connection(targetId))
   const remoteCli = installed.remoteCli
   const cliServer = remoteCli
     ? createLegacyRelayCliServer({
@@ -135,7 +138,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         cliServer,
         openTransport: async () =>
           waitForSentinel(
-            await connection().exec(endpoint.connectCommand ?? '', {
+            await channels.open(endpoint.connectCommand ?? '', {
               wrapCommand: endpoint.wrapCommand
             })
           )
@@ -217,6 +220,7 @@ export function stopLegacyRelayBridge(targetId: string): void {
     // Disposing publishes the list, now with the held panes instead of the bridge's.
     bridge.dispose()
   }
+  legacyRelayChannels.dispose(targetId)
 }
 
 /** The target and its leases are gone, so nothing it served is held any longer. */

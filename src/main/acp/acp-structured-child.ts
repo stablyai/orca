@@ -12,6 +12,7 @@ export type AcpStructuredChild = Pick<
   | 'fence'
   | 'acquisitionGeneration'
   | 'spec'
+  | 'permissionModes'
   | 'connection'
   | 'closeRequested'
   | 'journalClosed'

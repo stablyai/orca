@@ -15,11 +15,11 @@ import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
 } from '../types/restored-editor-owner'
-import { resolveRestoredEditorOwnerDestination } from '../actions/restored-editor-owner-destination'
+import { resolveRestoredEditorOwnerDestination } from '../hydration/restored-editor-owner-destination'
 import {
   buildRestoredEditorOwnerTransition,
   restoredEditorTargetGroupId
-} from '../actions/restored-editor-owner-transition'
+} from '../hydration/restored-editor-owner-transition'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
 

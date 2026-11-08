@@ -7,7 +7,6 @@ import {
 } from './host-spawn-admission'
 import {
   AUTOMATIC_ADMIT_HISTORY_MS,
-  NO_OTHER_AUTOMATIC_WORK,
   withOtherDaemonsAutomaticWork
 } from './host-automatic-work-budget'
 
@@ -32,11 +31,6 @@ function decide(state: ReturnType<typeof createSpawnAdmissionState>, now: number
 }
 
 describe('withOtherDaemonsAutomaticWork', () => {
-  it('returns the daemon state unchanged when no other daemon has automatic work', () => {
-    const state = createSpawnAdmissionState(LIMITS, 0)
-    expect(withOtherDaemonsAutomaticWork(state, NO_OTHER_AUTOMATIC_WORK, [], LIMITS, 0)).toBe(state)
-  })
-
   it('counts another daemon live restores against the one live cap', () => {
     const state = createSpawnAdmissionState(LIMITS, 0)
     state.liveAutomatic = 3

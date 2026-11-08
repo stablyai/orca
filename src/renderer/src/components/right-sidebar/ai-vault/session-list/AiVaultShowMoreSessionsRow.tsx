@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AI_VAULT_SESSION_LIMIT_STEP, type AiVaultSessionLimit } from './ai-vault-session-limit'
 
 /** Footer row once the scan filled its History depth; steps the same setting the menu edits. */
@@ -17,6 +17,7 @@ export function AiVaultShowMoreSessionsRow({
   sessionLimit: AiVaultSessionLimit
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (sessionLimit === 'unlimited' || loaded === 0) {
     return null
   }
@@ -37,8 +38,8 @@ export function AiVaultShowMoreSessionsRow({
         onClick={() => onSessionLimitChange(sessionLimit + AI_VAULT_SESSION_LIMIT_STEP)}
       >
         {loading
-          ? translate('sessionSearch.panel.loadingMoreSessions', 'Loading more sessions…')
-          : translate('sessionSearch.panel.showMoreSessions', 'Show more sessions')}
+          ? t('sessionSearch.panel.loadingMoreSessions', 'Loading more sessions…')
+          : t('sessionSearch.panel.showMoreSessions', 'Show more sessions')}
       </Button>
     </div>
   )

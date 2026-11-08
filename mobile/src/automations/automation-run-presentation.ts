@@ -93,6 +93,12 @@ const COPY: Record<
     translate('automations.runFailures.wslMoveInProgress', EN.wslMoveInProgress),
   wslMoveOwnedByHost: () =>
     translate('automations.runFailures.wslMoveOwnedByHost', EN.wslMoveOwnedByHost),
+  managedHostServer: (params) => {
+    const host = params?.host
+    return typeof host === 'string'
+      ? translate('automations.runFailures.managedHostServer', EN.managedHostServer, { host })
+      : null
+  },
   missedGraceWindow: () =>
     translate('automations.runFailures.missedGraceWindow', EN.missedGraceWindow),
   targetMissing: () => translate('automations.runFailures.targetMissing', EN.targetMissing),

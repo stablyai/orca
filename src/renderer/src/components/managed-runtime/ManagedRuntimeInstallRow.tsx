@@ -4,8 +4,8 @@ import {
   cancelManagedRuntimeInstall,
   installManagedRuntime,
   removeManagedRuntime
-} from '@/runtime/managed-runtime-install-status'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/managed-runtime-install-status'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
@@ -26,6 +26,7 @@ export function ManagedRuntimeInstallRow(props: {
   children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
   /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
   signInRunning?: boolean
+  buttonSize?: 'xs' | 'default'
 }): React.JSX.Element {
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -121,7 +122,7 @@ export function ManagedRuntimeInstallRow(props: {
         <>
           {button ? (
             <Button
-              size="xs"
+              size={props.buttonSize ?? 'xs'}
               disabled={button.kind === 'cancel' ? pending !== null : held}
               onClick={() => act(button.kind, primary(button))}
             >

@@ -15,8 +15,8 @@ import '../../../shared/workspace-layout/stable-pane-id'
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { buildWorkspaceSessionPayload } from '../lib/workspace/persistence/workspace-session'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
@@ -58,7 +58,7 @@ vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', async (impor
 }))
 
 const rpc = vi.hoisted((): { calls: Call[] } => ({ calls: [] }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: { command: { type: string } }) =>
     new Promise<LayoutApplyReply>((answer, fail) =>
       rpc.calls.push({ command: params.command, answer, fail })

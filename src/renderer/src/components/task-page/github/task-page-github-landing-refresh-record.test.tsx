@@ -11,7 +11,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

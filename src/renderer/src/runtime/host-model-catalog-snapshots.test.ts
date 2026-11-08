@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-runtime-capabilities', () => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
   readLocalRuntimeCapabilitiesOrUnknown: () => mocks.capabilities
@@ -31,12 +31,13 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import {
+  preloadHostModelCatalogSnapshots,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
-import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from './rpc/testing/runtime-compatibility-test-fixture'
 
 const LOCAL = { kind: 'local' } as const
 const PAIRED = { kind: 'environment', environmentId: 'server-1' } as const
@@ -82,6 +83,31 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
     expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+  })
+
+  it('keeps a held list through an answer whose listing is still running', () => {
+    const held = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', held)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', {
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(held)
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    const filling = { ...list(true), listingInProgress: true as const }
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-2', filling)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', other)).toBe(filling)
+  })
+
+  it("keeps a chat's answer that lands while an older preload is out", async () => {
+    let answer: (catalog: AgentSessionModelCatalogResult) => void = () => {}
+    mocks.call.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const preload = preloadHostModelCatalogSnapshots(LOCAL, ['claude'], { savedOnly: true })
+    const chat = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', chat)
+    answer(list(false))
+    await preload
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(chat)
   })
 })
 

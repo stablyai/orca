@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { collectTabPtyIds } from '../terminal/running-terminal-close-guard'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'

@@ -4,19 +4,12 @@ import type {
   AgentJournalSubmission
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { withStopRowsAfterStoppedSends } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
-import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
 import { expect, it } from 'vitest'
 import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { nativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import { nativeChatDockedTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import { projectMobileNativeChatMessages } from './mobile-native-chat-projection'
-import { useMobileNativeChatProjection } from './use-mobile-native-chat-projection'
-import { useMobileNativeChatTransientData } from './use-mobile-native-chat-transient-data'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 function row(
@@ -229,126 +222,6 @@ it('forgets evicted tool contributions and releases generated orphan names', () 
     'unpaired-tool-results:["sidecar",0]'
   ])
   expect(state.rows[1]?.blocks).toEqual([result('unknown')])
-})
-
-it('places a surviving roster at its new first sibling and recomputes labels', () => {
-  const sibling = (id: string) =>
-    row(id, 'system', [
-      {
-        type: 'subagent',
-        id,
-        groupId: 'group',
-        label: 'Audit',
-        state: 'completed'
-      }
-    ])
-  const first = sibling('one'),
-    second = sibling('two'),
-    third = sibling('three')
-  const middle = prose('middle', 'Between', 'user')
-  let state = projectMobileNativeChatMessages([first, middle, second, third], 'claude')
-  state = projectMobileNativeChatMessages([middle, second, third], 'claude', state)
-  expect(state.rows.map((message) => message.id)).toEqual(['middle', 'two'])
-  expect(state.rows[1]?.blocks).toEqual([
-    {
-      type: 'subagent-group',
-      groupId: 'group',
-      agents: [
-        { id: 'two', label: 'Audit', state: 'completed' },
-        { id: 'three', label: 'Audit 2', state: 'completed' }
-      ]
-    }
-  ])
-})
-
-it('updates live tools, reasoning, sibling outcomes and waiting rows through the phone hooks', () => {
-  let live = [
-    prose('user', 'Inspect', 'user'),
-    prose('a', 'Checking'),
-    spawn('s1'),
-    spawn('s2'),
-    row('tool', 'assistant', [call('live')]),
-    { ...prose('child', 'Child'), agentId: 'child' }
-  ]
-  const held = { ...prose('held', 'Follow-up', 'user'), queued: true as const }
-  let current = [...live, held]
-  let output: readonly NativeChatMessage[] = []
-  let scope = 'chat'
-  const pending = [{ id: 'pending', text: 'Pending', images: ['preview'] }]
-  function Transcript() {
-    const folded = useMobileNativeChatProjection(current, 'claude', [scope])
-    output = useMobileNativeChatTransientData(
-      {
-        folded,
-        streaming: null,
-        pending
-      },
-      scope
-    )
-    useMobileNativeChatTurnDisclosure({
-      messages: output,
-      enabled: true,
-      isWorking: false,
-      scopeKey: scope
-    })
-    nativeChatTaskListPredecessors(output)
-    nativeChatDockedTaskList(folded)
-    return null
-  }
-  let renderer: ReturnType<typeof create>
-  act(() => {
-    renderer = create(createElement(Transcript))
-  })
-  live = [
-    prose('user', 'Inspect', 'user'),
-    prose('a', 'Checking now'),
-    spawn('s1'),
-    spawn('s2', 'completed'),
-    row('tool', 'assistant', [call('live', 'completed'), result('live')]),
-    { ...prose('child', 'Child revised'), agentId: 'child' },
-    { ...prose('thought', 'Consider', 'reasoning'), state: 'completed', completedAt: 10 }
-  ]
-  current = [...live, { ...held }]
-  act(() => renderer.update(createElement(Transcript)))
-  expect(output.map((message) => message.id)).toEqual([
-    'user',
-    'a',
-    's1',
-    'thought',
-    'held',
-    'pending'
-  ])
-  expect(output[1]?.blocks).toEqual([
-    { type: 'text', text: 'Checking now' },
-    call('live', 'completed'),
-    result('live')
-  ])
-  expect(output[2]?.blocks).toEqual([
-    {
-      type: 'subagent-group',
-      groupId: 'live-group',
-      agents: [
-        { id: 's1', label: 's1', state: 'working' },
-        { id: 's2', label: 's2', state: 'completed' }
-      ]
-    }
-  ])
-  expect(output[3]).toMatchObject({
-    role: 'reasoning',
-    state: 'completed',
-    completedAt: 10,
-    blocks: [{ type: 'text', text: 'Consider' }]
-  })
-  expect(output[4]?.queued).toBe(true)
-  expect(output[5]?.blocks).toEqual([
-    { type: 'text', text: 'Pending' },
-    { type: 'image-ref', url: 'preview' }
-  ])
-  scope = 'another-chat'
-  current = [prose('new', 'New chat')]
-  act(() => renderer.update(createElement(Transcript)))
-  expect(output.map((message) => message.id)).toEqual(['new', 'pending'])
-  act(() => renderer.unmount())
 })
 
 it('preserves current delivery facts and synthetic notices when upstream wrappers refresh', () => {

@@ -6,11 +6,14 @@ import {
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type RuntimeWorkspaceFileRoute = {
   worktreeId: string

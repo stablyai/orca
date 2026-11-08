@@ -32,7 +32,7 @@ vi.mock('@/lib/local-preflight-context', () => ({
 vi.mock('@/lib/web-client-location', () => ({
   isWebClientLocation: mocks.isWebClientLocation
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
 vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({}))

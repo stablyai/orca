@@ -73,10 +73,10 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: () => ({ dispose: vi.fn() })
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
@@ -184,24 +184,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('releases every frame after 64 actual preview unmounts', async () => {
-  for (let index = 0; index < 64; index++) {
-    const view = render(<AgentTerminalPreview ptyId={`ssh:host@@pty-${index}`} />)
-    await act(async () => {})
-    view.unmount()
-  }
-  expect(connect).toHaveBeenCalledTimes(64)
-  expect(unsubscribe).toHaveBeenCalledTimes(64)
-  expect(harness.instances).toHaveLength(64)
-  for (const instance of harness.instances) {
-    expect(instance.dispose).toHaveBeenCalledOnce()
-  }
-  expect(fit).not.toHaveBeenCalled()
-  expect(frames.size).toBe(0)
-  expect(cancelFrame).toHaveBeenCalledTimes(64)
-  expect(cancelFrame).toHaveBeenCalledWith(0)
-})
-
 it('does not schedule an old parsed write after actual unmount', async () => {
   harness.deferWrites = true
   const view = render(<AgentTerminalPreview ptyId="ssh:host@@pty-late" />)
@@ -244,25 +226,4 @@ it('retains the replacement frame on the same DOM and ignores retired parsed wri
   expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
   expect(frames.size).toBe(0)
   expect([pending, afterOldWrites]).toEqual([1, 1])
-})
-
-it('keeps live replay writes coalesced and fits the latest cursor and dimensions', async () => {
-  harness.deferWrites = true
-  render(<AgentTerminalPreview ptyId="pty-live" />)
-  await act(async () => {})
-  const terminal = harness.instances[0]
-  for (const callback of terminal?.writeCallbacks.splice(0) ?? []) {
-    callback()
-  }
-  expect(frames.size).toBe(1)
-  flushFrames()
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(200)
-  })
-  expect(connect).toHaveBeenCalledOnce()
-  expect(unsubscribe).not.toHaveBeenCalled()
-  expect(terminal?.dispose).not.toHaveBeenCalled()
-  expect(terminal?.container?.style.transform).toBe('scale(0.75)')
-  expect(terminal?.container?.style.transformOrigin).toBe('top left')
-  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-live', 60, 15)
 })

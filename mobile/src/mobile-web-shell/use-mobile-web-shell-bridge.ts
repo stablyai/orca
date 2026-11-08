@@ -91,7 +91,7 @@ export type MobileWebShellBridgeArgs = {
   // Effective session grants include the served-route union when this page owns the host area.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
-  /** The status the shell's compatibility gate proved; null while pending or unreadable. */
+  /** The status this connection's verdict proved for the shown document; null holds desktop-bound frames. */
   hostStatus?: HostStatusReply | null
   onNavigate: (href: string, replace: boolean) => void
   onExternalLink: (url: string) => void
@@ -222,22 +222,17 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }
   }, [buildId, client, sessionId, snapshot, args.pageGeometry])
 
-  // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
-  const colorScheme = args.colorScheme
+  // A rebuilt host already starts from the latest scheme, language and verdict; each publish re-sends init only when its value changed under a live page.
+  const { colorScheme, uiLocale } = args
+  const verdictOpen = args.hostStatus != null
   useEffect(() => {
     const mounted = hostRef.current
     if (mounted !== null && mounted.sessionId === sessionId) {
       mounted.host.publishColorScheme(colorScheme)
-    }
-  }, [colorScheme, sessionId])
-
-  const uiLocale = args.uiLocale
-  useEffect(() => {
-    const mounted = hostRef.current
-    if (mounted !== null && mounted.sessionId === sessionId) {
       mounted.host.publishUiLocale(uiLocale)
+      mounted.host.publishHostStatus()
     }
-  }, [uiLocale, sessionId])
+  }, [colorScheme, uiLocale, verdictOpen, sessionId])
 
   return {
     bridgeEnabled: ready !== null,

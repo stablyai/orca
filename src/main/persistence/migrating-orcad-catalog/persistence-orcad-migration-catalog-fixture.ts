@@ -8,7 +8,7 @@ import type {
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
 
 export const PROJECT_GROUP: ProjectGroup = {
@@ -169,11 +169,12 @@ export function dormantState(): OrcadMigrationDormantStatePayload {
         lineage: {
           childWorkspaceKey: worktreeWorkspaceKey(DORMANT_WORKTREE_ID),
           childInstanceId: 'instance-1',
-          parentWorkspaceKey: folderWorkspaceKey(FOLDER_WORKSPACE.id),
-          parentInstanceId: null,
+          // Mirrors the worktree row above: a worktree has one parent.
+          parentWorkspaceKey: worktreeWorkspaceKey(REPOSITORY.id),
+          parentInstanceId: 'main-instance',
           origin: 'manual',
           capture: { source: 'manual-action', confidence: 'explicit' },
-          createdAt: 4
+          createdAt: 3
         }
       }
     ],

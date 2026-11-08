@@ -1,7 +1,7 @@
 import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { StepBadge } from '../../setup-guide/SetupStepBadge'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   skillDetected: boolean
@@ -24,14 +24,12 @@ export function BrowserUseSkillStep({
   onBeforeInstall,
   onRecheck
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   return (
     <AgentSkillSetupPanel
       variant="inline"
-      title={translate(
-        'auto.components.settings.BrowserUseSkillStep.459e24eebc',
-        'Browser Use skill'
-      )}
-      description={translate(
+      title={t('auto.components.settings.BrowserUseSkillStep.459e24eebc', 'Browser Use skill')}
+      description={t(
         'auto.components.settings.BrowserUseSkillStep.0871b6998d',
         "Enables agents to navigate and verify pages in Orca's browser."
       )}

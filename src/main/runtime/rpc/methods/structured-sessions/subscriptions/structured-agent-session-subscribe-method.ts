@@ -18,7 +18,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   permission: 'workspace',
   params: SubscribeParams,
   handler: async (params, ctx, emitFrame) => {
-    const emit = params.capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame) : emitFrame
+    const { capabilities } = params
+    const emit =
+      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
     const host = await requireInstalledHost(ctx, params.sessionId)
     const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
     // A stream reads; it never keeps an agent alive or starts one.

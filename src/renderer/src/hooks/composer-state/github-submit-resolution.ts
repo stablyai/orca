@@ -34,7 +34,7 @@ import { useCallback } from 'react'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { getLinkedWorkItemProvider } from '@/lib/new-workspace'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getSmartGitHubSubmitResolution,

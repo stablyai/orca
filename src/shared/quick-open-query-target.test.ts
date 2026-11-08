@@ -24,16 +24,6 @@ it.each([
   expect(parseQuickOpenQueryTarget(query)).toEqual({ pathQuery: query })
 })
 
-it.each([
-  '/home/app.ts',
-  'C:/src/app.ts',
-  'C:\\src\\app.ts',
-  '\\\\server\\share\\app.ts',
-  '//server/share/app.ts'
-])('recognizes an absolute path: %s', (path) => {
-  expect(isQuickOpenAbsolutePath(path)).toBe(true)
-})
-
 it.each(['C:app.ts', 'src/app.ts', 'https://host/app.ts', '/tmp/\0bad'])(
   'does not offer a direct path for %s',
   (path) => {

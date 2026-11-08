@@ -27,12 +27,12 @@ import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-stru
 import { handleGlobalSessionEvent } from '@/runtime/web-session-tabs-sync/global-session-events'
 import { VisibilityResumeCoordinator } from '@/runtime/web-session-tabs-sync/visibility-resume-coordinator'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'
+import { useAgentMessageSenderView } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
 import {
   initialStore,
   resetSenderStore
-} from '@/components/native-chat/native-chat-agent-sender.test-fixture'
-import { makeTab } from '@/store/slices/store-test-helpers'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-sender.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

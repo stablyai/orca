@@ -14,6 +14,7 @@ import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 import {
   aiVaultTitleRequestKey,
   changedOwningPaneTitleRequests,
+  changedTitleRefreshHosts,
   titleRefreshInterval,
   supportsSessionTitleRefresh
 } from './ai-vault-tab-title-freshness'
@@ -239,15 +240,18 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         dirty.add(key)
       }
     }
+    if (dirty.size > 0 || aiVaultTitleSyncInputsChanged(state, previous)) {
+      schedule()
+      return
+    }
+    // Why: host-status pings are frequent and usually leave capabilities alone; walking every saved tab on each
+    // one stalled typing in large workspaces, so only collect when some host's title-refresh support flipped.
+    const changedHosts = changedTitleRefreshHosts(state, previous)
     if (
-      dirty.size > 0 ||
-      (state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId &&
-        collectAiVaultTitleRequests(state).some(
-          (request) =>
-            supportsSessionTitleRefresh(state, request) !==
-            supportsSessionTitleRefresh(previous, request)
-        )) ||
-      aiVaultTitleSyncInputsChanged(state, previous)
+      changedHosts.size > 0 &&
+      collectAiVaultTitleRequests(state).some((request) =>
+        changedHosts.has(request.executionHostId)
+      )
     ) {
       schedule()
     }

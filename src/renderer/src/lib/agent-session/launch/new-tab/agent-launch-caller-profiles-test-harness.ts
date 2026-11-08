@@ -103,7 +103,7 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
   },
   {
     id: 'terminal-session-fork',
-    caller: 'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',
+    caller: 'src/renderer/src/components/terminal-pane/session-fork/terminal-agent-session-fork.ts',
     args: {
       agent: 'codex',
       worktreeId: 'wt-1',

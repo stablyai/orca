@@ -14,11 +14,11 @@ import {
 } from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
-import { scheduleImagePasteWebglAtlasRecovery } from '../../terminal-webgl-atlas-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { useAppStore } from '@/store/index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>

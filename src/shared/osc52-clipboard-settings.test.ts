@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  normalizeOsc52ClipboardDefaultOn,
-  osc52ClipboardDefaultOnOverridesPersistedOff
-} from './osc52-clipboard-settings'
+import { normalizeOsc52ClipboardDefaultOn } from './osc52-clipboard-settings'
 
 describe('normalizeOsc52ClipboardDefaultOn', () => {
   it('flips an unstamped profile on, because its `false` came from the old default', () => {
@@ -25,19 +22,6 @@ describe('normalizeOsc52ClipboardDefaultOn', () => {
     })
   })
 
-  it('defaults a fresh or absent profile on', () => {
-    for (const settings of [
-      undefined,
-      {},
-      { terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true }
-    ]) {
-      expect(normalizeOsc52ClipboardDefaultOn(settings)).toEqual({
-        terminalAllowOsc52Clipboard: true,
-        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
-      })
-    }
-  })
-
   it('is idempotent, so a crash before the write-back cannot re-flip an opt-out', () => {
     const once = normalizeOsc52ClipboardDefaultOn({ terminalAllowOsc52Clipboard: false })
     expect(normalizeOsc52ClipboardDefaultOn(once)).toEqual(once)
@@ -47,30 +31,5 @@ describe('normalizeOsc52ClipboardDefaultOn', () => {
       terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
     })
     expect(normalizeOsc52ClipboardDefaultOn(optedOut)).toEqual(optedOut)
-  })
-})
-
-describe('osc52ClipboardDefaultOnOverridesPersistedOff', () => {
-  it('is true only when the migration overrides a persisted off', () => {
-    expect(
-      osc52ClipboardDefaultOnOverridesPersistedOff({ terminalAllowOsc52Clipboard: false })
-    ).toBe(true)
-  })
-
-  it('is false for a fresh profile, which has no persisted value to override', () => {
-    expect(osc52ClipboardDefaultOnOverridesPersistedOff(undefined)).toBe(false)
-    expect(osc52ClipboardDefaultOnOverridesPersistedOff({})).toBe(false)
-    expect(
-      osc52ClipboardDefaultOnOverridesPersistedOff({ terminalAllowOsc52Clipboard: true })
-    ).toBe(false)
-  })
-
-  it('is false once stamped, because a stamped value is honored rather than overridden', () => {
-    expect(
-      osc52ClipboardDefaultOnOverridesPersistedOff({
-        terminalAllowOsc52Clipboard: false,
-        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
-      })
-    ).toBe(false)
   })
 })

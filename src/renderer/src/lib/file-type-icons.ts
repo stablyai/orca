@@ -1,7 +1,7 @@
 import { File, FileCog, FileLock, FileTerminal, type LucideIcon } from 'lucide-react'
 import { COMPOUND_EXTENSIONS, FILE_ICON_BY_EXTENSION } from './file-type-icon-extension-table'
 import { FILE_ICON_BY_NAME } from './file-type-icon-name-table'
-import type { ActivePluginIconTheme } from '../store/plugin-icon-themes'
+import type { ActivePluginIconTheme } from '../store/plugins/appearance/plugin-icon-themes'
 
 function getFilename(filePath: string | undefined | null): string {
   if (!filePath) {

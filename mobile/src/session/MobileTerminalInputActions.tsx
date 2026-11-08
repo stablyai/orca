@@ -129,7 +129,7 @@ function MobileTerminalDictationButton({
       onLongPress={
         dictationMode === 'toggle'
           ? () => {
-              if (dictation.isRecording || dictation.isProcessing) {
+              if (dictation.isStarting || dictation.isRecording || dictation.isProcessing) {
                 onDictationCancel()
               }
             }

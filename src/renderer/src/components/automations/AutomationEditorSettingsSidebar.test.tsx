@@ -1,16 +1,17 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import * as launchRoute from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useAppStore } from '@/store'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automation-runtime-capabilities'
 import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../../../../shared/automation-extra-agent-args-record'
-import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
@@ -142,8 +143,6 @@ function renderSidebar(
           draft={draft}
           visibleAgents={AGENT_CATALOG}
           pickerTriggerClassName=""
-          segmentedGroupClassName=""
-          segmentedItemClassName=""
           onProjectChange={vi.fn()}
           onDraftChange={(updater) => {
             onDraftChange(updater)
@@ -154,8 +153,19 @@ function renderSidebar(
       </TooltipProvider>
     )
   }
-  const view = render(<Form />)
-  return { ...view, refresh: () => view.rerender(<Form />) }
+  return render(<Form />)
+}
+
+function setOldHostCapabilities(capabilities: readonly string[]) {
+  act(() => {
+    const status = {
+      ...createCompatibleRuntimeStatusResponse().result,
+      capabilities: [...capabilities]
+    }
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([['old', { status, checkedAt: 1 }]])
+    })
+  })
 }
 
 beforeEach(() => {
@@ -166,6 +176,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   setLocalRuntimeCapabilitiesForTests(null)
+  useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
 })
 
 function openPicker() {
@@ -219,7 +230,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   it('keeps agent selection usable on an older host without exposing unsupported setup', () => {
     setLocalRuntimeCapabilitiesForTests([])
     const onDraftChange = vi.fn()
-    vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    setOldHostCapabilities([])
     renderSidebar(onDraftChange, DRAFT, {
       kind: 'runtime',
       environmentId: 'old',
@@ -271,7 +282,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
         kind === 'desktop'
           ? { kind: 'desktop' as const }
           : { kind: 'runtime' as const, environmentId: 'old', pairingRevision: 1 }
-      vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+      setOldHostCapabilities([])
       const changed = vi.fn()
       renderSidebar(
         changed,
@@ -360,7 +371,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   )
 
   it('keeps a re-entered legacy model through a permission-only Configure acceptance', () => {
-    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    setOldHostCapabilities([])
     const changed = vi.fn()
     const initial: AutomationDraft = {
       ...DRAFT,
@@ -368,7 +379,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       extraAgentArgs: '--add-dir docs',
       launchPreferences: { model: 'sonnet' }
     }
-    const form = renderSidebar(changed, initial, {
+    renderSidebar(changed, initial, {
       kind: 'runtime',
       environmentId: 'old',
       pairingRevision: 1
@@ -376,8 +387,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     for (const value of ['--add-dir docs', '--model opus --add-dir docs']) {
       fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value } })
     }
-    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
-    form.refresh()
+    setOldHostCapabilities(AUTOMATION_RUNTIME_CAPABILITIES)
     openPicker()
     fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
     fireEvent.keyDown(screen.getByRole('button', { name: 'Claude permissions' }), {
@@ -494,9 +504,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   })
 
   it('keeps accepted full Arguments through a legacy destination edit and return', () => {
-    const capabilities = vi
-      .spyOn(launchRoute, 'resolveHostCapabilities')
-      .mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
+    setOldHostCapabilities(AUTOMATION_RUNTIME_CAPABILITIES)
     const changed = vi.fn()
     const initial: AutomationDraft = {
       ...DRAFT,
@@ -504,7 +512,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       extraAgentArgs: '--add-dir docs',
       agentArgs: '--saved-literal --model sonnet'
     }
-    const form = renderSidebar(changed, initial, {
+    renderSidebar(changed, initial, {
       kind: 'runtime',
       environmentId: 'old',
       pairingRevision: 1
@@ -521,13 +529,11 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
     const acceptedFull = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
     expect(acceptedFull.agentArgs).toBe('--verbose --model opus')
-    capabilities.mockReturnValue([])
-    form.refresh()
+    setOldHostCapabilities([])
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
       target: { value: '--model opus --add-dir fixtures' }
     })
-    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
-    form.refresh()
+    setOldHostCapabilities(AUTOMATION_RUNTIME_CAPABILITIES)
     expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty(
       'value',
       '--add-dir fixtures'
@@ -544,7 +550,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   })
 
   it('retains the source reset after rebinding away and back on a legacy destination', () => {
-    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    setOldHostCapabilities([])
     const changed = vi.fn()
     const initial: AutomationDraft = {
       ...DRAFT,
@@ -552,7 +558,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       launchPreferences: { model: 'sonnet' },
       agentArgs: '--verbose'
     }
-    const form = renderSidebar(changed, initial, {
+    renderSidebar(changed, initial, {
       kind: 'runtime',
       environmentId: 'old',
       pairingRevision: 1
@@ -561,8 +567,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       openPicker()
       fireEvent.click(screen.getByRole('menuitem', { name: agent }))
     }
-    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
-    form.refresh()
+    setOldHostCapabilities(AUTOMATION_RUNTIME_CAPABILITIES)
     const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
     const saved = applyAutomationLaunchSetupPatch(
       { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
@@ -574,7 +579,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   })
 
   it('carries pending legacy text through capability arrival and an agent rebind', () => {
-    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    setOldHostCapabilities([])
     const changed = vi.fn()
     const initial: AutomationDraft = {
       ...DRAFT,
@@ -582,15 +587,14 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       extraAgentArgs: '--add-dir docs',
       launchPreferences: { model: 'sonnet' }
     }
-    const form = renderSidebar(changed, initial, {
+    renderSidebar(changed, initial, {
       kind: 'runtime',
       environmentId: 'old',
       pairingRevision: 1
     })
     const pending = '--model sonnet --add-dir "new'
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value: pending } })
-    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
-    form.refresh()
+    setOldHostCapabilities(AUTOMATION_RUNTIME_CAPABILITIES)
     for (const agent of ['Codex', 'Claude']) {
       openPicker()
       fireEvent.click(screen.getByRole('menuitem', { name: agent }))
@@ -614,7 +618,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   })
 
   it('sends a legacy argument edit after an earlier surface pick', () => {
-    vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    setOldHostCapabilities([])
     const changed = vi.fn()
     const initial = {
       ...DRAFT,

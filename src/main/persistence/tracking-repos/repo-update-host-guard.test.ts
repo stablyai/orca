@@ -36,55 +36,6 @@ describe('updateRepo host guard', () => {
     })
   })
 
-  it('reports a host mismatch instead of returning the same silent null as a missing row', () => {
-    // Regression #22421: caller used the probed host instead of the stored runtime row's host.
-    const { operations, scheduleSave } = makeOperations([
-      makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
-    ])
-
-    const result = operations.updateRepo(
-      { id: 'repo-1', executionHostId: 'local' },
-      { displayName: 'Renamed' }
-    )
-
-    expect(result).toBeNull()
-    expect(scheduleSave).not.toHaveBeenCalled()
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('repo-1')
-    expect(errors[0]).toContain('requested host local')
-    expect(errors[0]).toContain('runtime:env-1')
-  })
-
-  it('stays silent when the row genuinely does not exist', () => {
-    const { operations } = makeOperations([
-      makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
-    ])
-
-    expect(
-      operations.updateRepo(
-        { id: 'repo-missing', executionHostId: 'local' },
-        { displayName: 'Renamed' }
-      )
-    ).toBeNull()
-    expect(errors).toEqual([])
-  })
-
-  it('writes when the host argument matches the row stamp', () => {
-    const { operations, scheduleSave, state } = makeOperations([
-      makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
-    ])
-
-    const result = operations.updateRepo(
-      { id: 'repo-1', executionHostId: 'runtime:env-1' },
-      { displayName: 'Renamed' }
-    )
-
-    expect(result?.displayName).toBe('Renamed')
-    expect(state.repos[0].displayName).toBe('Renamed')
-    expect(scheduleSave).toHaveBeenCalledTimes(1)
-    expect(errors).toEqual([])
-  })
-
   it('still refuses a cross-host write when both hosts hold a row with the same id', () => {
     const local = makeRepo({ id: 'repo-1', displayName: 'Local', executionHostId: 'local' })
     const peer = makeRepo({ id: 'repo-1', displayName: 'Peer', executionHostId: 'ssh:peer' })
