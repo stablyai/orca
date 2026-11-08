@@ -1,6 +1,9 @@
 import * as z from 'zod'
 import { translate } from '../i18n/mobile-i18n'
-import { defineHostQuery } from '../query/host-query'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
+import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../src/shared/worktree/id'
+import { defineHostQuery, type HostSignalEvent } from '../query/host-query'
+import type { HostQueryTarget } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   gitStatusHostPayloadSchema,
@@ -55,11 +58,25 @@ async function readGitStatus(
   }
 }
 
-// No desktop signal for working-tree edits yet, so focus and foreground revalidate once older than 3 s.
+// The desktop's own repos only: its watcher never sees a relayed server's.
+function namesThisStatus(event: HostSignalEvent, target: HostQueryTarget): boolean {
+  if (event.type !== 'gitStatusChanged' || target.exec !== LOCAL_EXECUTION_HOST_ID) {
+    return false
+  }
+  const worktreeId = target.worktree ?? ''
+  if (getRepoIdFromWorktreeId(worktreeId) !== event.repoId) {
+    return false
+  }
+  return event.worktreeIds?.some((id) => worktreeIdsEqual(id, worktreeId)) ?? true
+}
+
+// Commits, staging and checkouts signal; working-tree edits, SSH and serve don't, so focus and foreground still revalidate once older than 3 s.
 export const gitStatusQuery = defineHostQuery({
   family: 'git.status',
   staleTime: 3_000,
   refetchOnWindowFocus: true,
+  // A rebase or an agent's commits can signal several times a second.
+  signal: { events: ['gitStatusChanged'], floorMs: 1_000, matches: namesThisStatus },
   // Rows from an earlier launch are shown but unconfirmed, so that first read runs at full priority.
   fetch: (
     client,
