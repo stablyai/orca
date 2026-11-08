@@ -81,16 +81,22 @@ async function colors(
   page: Page,
   clip: { x: number; y: number; width: number; height: number },
   path: string
-): Promise<{ brightest: number; redChroma: number }> {
+): Promise<{ brightest: number; peakRedChroma: number }> {
   const image = PNG.sync.read(await page.screenshot({ clip, path }))
-  let brightest = 0
-  let redChroma = 0
+  let peakRed = 0
+  let peakGreen = 0
+  let peakBlue = 0
   for (let offset = 0; offset < image.data.length; offset += 4) {
     const [red, green, blue] = image.data.subarray(offset, offset + 3)
-    brightest = Math.max(brightest, red, green, blue)
-    redChroma = Math.max(redChroma, red - Math.max(green, blue))
+    peakRed = Math.max(peakRed, red)
+    peakGreen = Math.max(peakGreen, green)
+    peakBlue = Math.max(peakBlue, blue)
   }
-  return { brightest, redChroma }
+  // Subpixel antialiasing can tint edge pixels; compare peak channel intensities.
+  return {
+    brightest: Math.max(peakRed, peakGreen, peakBlue),
+    peakRedChroma: peakRed - Math.max(peakGreen, peakBlue)
+  }
 }
 
 // The Linux headful project enables SwiftShader; its headless project disables WebGL.
@@ -134,7 +140,7 @@ test('@headful OSC palette changes keep WebGL contrast colors isolated between p
   }
   const changedClip = await paint(orcaPage, changed, '\x1b]4;1;#ff0000\x07')
   expect(
-    (await colors(orcaPage, changedClip, testInfo.outputPath('changed-palette.png'))).redChroma
+    (await colors(orcaPage, changedClip, testInfo.outputPath('changed-palette.png'))).peakRedChroma
   ).toBeGreaterThan(150)
   // A non-ASCII glyph avoids the old atlas's ASCII warmup.
   const neighborClip = await paint(
@@ -149,5 +155,5 @@ test('@headful OSC palette changes keep WebGL contrast colors isolated between p
   )
   expect(neighborColors.brightest).toBeGreaterThan(90)
   expect(neighborColors.brightest).toBeLessThan(150)
-  expect(neighborColors.redChroma).toBeLessThan(5)
+  expect(neighborColors.peakRedChroma).toBeLessThan(5)
 })
