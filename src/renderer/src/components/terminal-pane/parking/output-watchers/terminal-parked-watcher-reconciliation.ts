@@ -38,28 +38,40 @@ export function fallbackParkedPaneCandidates(
   }))
 }
 
+function leafPtyKey(leafId: string, ptyId: string | null): string {
+  return `${leafId}\u0000${ptyId ?? ''}\u0000${ptyId === null ? 0 : 1}`
+}
+
 export function resolveParkedTerminalPaneCandidates(
   tab: ParkableTerminalTabModel,
   state: ParkedPaneFallbackState
 ): ParkedTerminalPaneCapture[] {
   const captured = capturedPanesByTabId.get(tab.id)
   const fallback = fallbackParkedPaneCandidates(tab, state)
+  if (!captured) {
+    return fallback
+  }
+  // Index captured panes once so a many-split tab stays linear in its pane count.
+  const capturedLeafPtyKeys = new Set(
+    captured.panes.map((candidate) => leafPtyKey(candidate.leafId, candidate.ptyId))
+  )
   const capturedIsCurrent =
-    captured !== undefined &&
     captured.panes.length > 0 &&
     (tab.ptyId === null || captured.panes.some((pane) => pane.ptyId === tab.ptyId)) &&
     (fallback.length === 0 ||
       (captured.panes.length === fallback.length &&
-        fallback.every((pane) =>
-          captured.panes.some(
-            (candidate) => candidate.leafId === pane.leafId && candidate.ptyId === pane.ptyId
-          )
-        )))
+        fallback.every((pane) => capturedLeafPtyKeys.has(leafPtyKey(pane.leafId, pane.ptyId)))))
   if (capturedIsCurrent) {
     return captured.panes
   }
+  const priorByLeafId = new Map<string, ParkedTerminalPaneCapture>()
+  for (const candidate of captured.panes) {
+    if (!priorByLeafId.has(candidate.leafId)) {
+      priorByLeafId.set(candidate.leafId, candidate)
+    }
+  }
   return fallback.map((pane) => {
-    const prior = captured?.panes.find((candidate) => candidate.leafId === pane.leafId)
+    const prior = priorByLeafId.get(pane.leafId)
     return prior
       ? {
           ...pane,
