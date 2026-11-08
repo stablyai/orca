@@ -73,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing' || failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )

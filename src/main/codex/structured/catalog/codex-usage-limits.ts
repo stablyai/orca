@@ -49,8 +49,12 @@ export class CodexUsageLimits {
   }
 
   failure(payload: unknown) {
-    const error = readCodexErrorInfo(payload)?.error
-    if (!error || !USAGE_LIMIT_ERRORS.includes(error)) {
+    const info = readCodexErrorInfo(payload)
+    if (
+      !info ||
+      (!USAGE_LIMIT_ERRORS.includes(info.error) &&
+        !(info.error === 'responseTooManyFailedAttempts' && info.status === 429))
+    ) {
       return null
     }
     const message = readCodexErrorMessage(payload)

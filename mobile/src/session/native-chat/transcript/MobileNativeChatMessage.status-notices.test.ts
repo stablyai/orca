@@ -122,6 +122,54 @@ describe('MobileNativeChatMessage status notices', () => {
     )[0]!
   }
 
+  it('localizes a canonical failure and discloses its diagnostic only on request', async () => {
+    await activateMobileUiLocale('fr')
+    const diagnostic = 'Internal provider diagnostic: modelNotFound'
+    const notice = renderNotice(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(agentSessionFailureFact('modelUnavailable'), {
+          agentName: 'Codex',
+          surface: 'row'
+        }),
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:error',
+          payload: {
+            head: diagnostic,
+            byteLength: diagnostic.length,
+            digest: 'fixture',
+            truncated: false
+          }
+        }
+      },
+      { hostName: null, agentName: 'Codex' }
+    )
+    expect(String(notice.props.children)).toContain('le modèle sélectionné')
+    expect(String(notice.props.children)).not.toContain(diagnostic)
+    const details = () =>
+      renderer!.root.findAll(
+        (node) => String(node.type) === 'Text' && String(node.props.children).includes(diagnostic)
+      )
+    expect(details()).toHaveLength(0)
+    const disclosure = renderer!.root.find(
+      (node) => String(node.type) === 'Pressable' && node.props['aria-expanded'] === false
+    )
+    act(() => disclosure.props.onPress())
+    expect(details().length).toBeGreaterThan(0)
+    act(() => renderer?.unmount())
+    const custom = renderNotice(
+      {
+        kind: 'status',
+        text: 'Custom host advice: use the enterprise model.',
+        failure: agentSessionFailureFact('modelUnavailable')
+      },
+      { hostName: null, agentName: 'Codex' }
+    )
+    expect(custom.props.children).toBe('Custom host advice: use the enterprise model.')
+  })
+
   it('links a CI result line to its pull request and commit through the link sheet', () => {
     const openLink = vi.fn()
     act(() => {
