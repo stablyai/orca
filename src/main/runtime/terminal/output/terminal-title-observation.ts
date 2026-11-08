@@ -128,6 +128,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
           (agentStatus === 'idle' && !statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
+      // A fresh title retires a stale-working display clear, so the row shows the agent again.
+      const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -141,6 +143,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+      }
+      if (prevStatus !== agentStatus || retiresDisplayClear) {
         this.onTitleAgentStatusChanged()
       }
       if (
