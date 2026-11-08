@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { isWindowsDesktopClient } from '@/lib/windows-path-access'
 import { Label } from '@/components/ui/label'
@@ -55,6 +56,7 @@ function finishNotice(): void {
 }
 
 function TerminalFontWeightChoice(): React.JSX.Element {
+  const t = useTranslate()
   const switchId = useId()
   const weight = useAppStore((s) => s.settings?.terminalFontWeight ?? WINDOWS_TERMINAL_FONT_WEIGHT)
   const fontFamily = useAppStore((s) => buildFontFamily(s.settings?.terminalFontFamily ?? ''))
@@ -71,7 +73,7 @@ function TerminalFontWeightChoice(): React.JSX.Element {
       </div>
       <div className="flex items-center justify-between gap-3 text-sm text-popover-foreground">
         <Label htmlFor={switchId}>
-          {translate('terminal.windowsFontWeight.lighterText', 'Lighter terminal text')}
+          {t('terminal.windowsFontWeight.lighterText', 'Lighter terminal text')}
         </Label>
         <Switch
           id={switchId}
