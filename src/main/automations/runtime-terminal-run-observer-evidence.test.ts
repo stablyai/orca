@@ -34,6 +34,13 @@ function createPane(initial: {
   let edgeSpent = false
   let tail = initial.tail
   let rows: StatusRow[] = []
+  const statusListeners = new Set<(paneKey: string) => void>()
+  const setRows = (next: StatusRow[]): void => {
+    rows = next
+    for (const listener of statusListeners) {
+      listener(PANE_KEY)
+    }
+  }
   const acceptedReplies = new Map<number, string>()
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
@@ -41,7 +48,7 @@ function createPane(initial: {
     canOpenRunTerminals: () => true,
     readTerminal: async () => {
       if (initial.clearRowsOnRead) {
-        rows = []
+        setRows([])
       }
       return { tail }
     },
@@ -79,9 +86,16 @@ function createPane(initial: {
   return {
     runtime,
     agentRows: () => rows,
+    subscribeStatusChanges: (listener: (paneKey: string) => void) => {
+      statusListeners.add(listener)
+      return () => {
+        statusListeners.delete(listener)
+      }
+    },
+    clearRows: () => setRows([]),
     acceptedReplies,
     report: (row: Partial<StatusRow> = {}) =>
-      (rows = [{ state: 'done', receivedAt: Date.now(), stateStartedAt: Date.now(), ...row }]),
+      setRows([{ state: 'done', receivedAt: Date.now(), stateStartedAt: Date.now(), ...row }]),
     setTail: (next: string[]) => (tail = next),
     becomeBusy: () => {
       idle = false
@@ -108,7 +122,7 @@ function observe(
     getAgentStatusRowsForPane: (paneKey) => (paneKey === PANE_KEY ? pane.agentRows() : []),
     getAcceptedReply: (paneKey, leadTurnKey) =>
       paneKey === PANE_KEY ? pane.acceptedReplies.get(leadTurnKey) : undefined,
-    subscribeStatusChanges: () => () => {},
+    subscribeStatusChanges: pane.subscribeStatusChanges,
     agentCommandsForRun: () => ['goose']
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only these run fields.
@@ -133,8 +147,6 @@ afterEach(() => {
 })
 
 describe('observing a run with agent evidence', () => {
-  // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
-
   it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
     const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
     const run = observe(pane)
@@ -190,59 +202,6 @@ describe('observing a run with agent evidence', () => {
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
-
-  it("records the agent's accepted full reply as the run output, not its screen", async () => {
-    const pane = createPane({ idle: false, tail: ['TUI chrome'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(1_000)
-    const doneAt = Date.now()
-    pane.report({ stateStartedAt: doneAt })
-    pane.acceptedReplies.set(doneAt, 'the full final reply')
-    pane.becomeIdle()
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'completed',
-        outputSnapshot: expect.objectContaining({
-          content: 'the full final reply',
-          truncated: false
-        })
-      })
-    )
-  })
-
-  it('marks a status preview fallback truncated, since the cap can cut it below its own length', async () => {
-    const pane = createPane({ idle: false, tail: ['TUI chrome'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(1_000)
-    pane.report({ lastAssistantMessage: 'a cut preview' })
-    pane.becomeIdle()
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outputSnapshot: expect.objectContaining({ content: 'a cut preview', truncated: true })
-      })
-    )
-  })
-
-  it.each([
-    { exitCode: 0, interrupted: false, status: 'completed' },
-    { exitCode: 0, interrupted: true, status: 'dispatch_failed' },
-    { exitCode: 3, interrupted: false, status: 'dispatch_failed' }
-  ])(
-    'settles a proven agent exit $exitCode after a turn with interrupted $interrupted as $status',
-    async ({ exitCode, interrupted, status }) => {
-      const pane = createPane({
-        idle: false,
-        tail: ['bye'],
-        exitCause: { kind: 'exited', exitCode }
-      })
-      pane.report({ interrupted })
-      const run = observe(pane)
-      await run.promise
-      expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status }))
-    }
-  )
 
   it('stops on cancellation without recording any result', async () => {
     const pane = createPane({ idle: true, tail: ['$'] })

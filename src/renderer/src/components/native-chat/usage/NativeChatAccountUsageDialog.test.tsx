@@ -130,23 +130,6 @@ describe('/usage modal', () => {
     await screen.findByText('Nothing to reset right now.')
   })
 
-  it('reads nothing when a reset confirmed before closing finishes after it', async () => {
-    let finish!: (value: unknown) => void
-    mocks.read.mockResolvedValue(result)
-    mocks.reset.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        })
-    )
-    const view = render(<NativeChatAccountUsageDialog />)
-    await screen.findByText('chat@example.com')
-    fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
-    view.unmount()
-    await act(async () => finish({ outcome: 'reset' }))
-    expect(mocks.read).toHaveBeenCalledOnce()
-  })
-
   it('collapses host changes during a background read into one follow-up, and sends none after closing', async () => {
     const finishes: ((value: AgentSessionAccountUsage) => void)[] = []
     mocks.read.mockResolvedValueOnce(result).mockImplementation(

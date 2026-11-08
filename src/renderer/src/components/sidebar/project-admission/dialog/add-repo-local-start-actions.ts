@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { FolderOpen, Globe, Monitor, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type AddRepoLocalStartActionHandlers = {
   onBrowse: () => void
@@ -21,31 +22,31 @@ export type AddRepoLocalStartAction = {
   onClick: () => void
 }
 
-export function getAddRepoLocalStartActions({
-  onBrowse,
-  onOpenCloneStep,
-  onOpenRemoteStep,
-  onOpenCreateStep,
-  browseHostKind = 'local',
-  offersServerSshHosts = false
-}: AddRepoLocalStartActionHandlers): {
+export function getAddRepoLocalStartActions(
+  {
+    onBrowse,
+    onOpenCloneStep,
+    onOpenRemoteStep,
+    onOpenCreateStep,
+    browseHostKind = 'local',
+    offersServerSshHosts = false
+  }: AddRepoLocalStartActionHandlers,
+  t: Translate = translate
+): {
   primaryAction: AddRepoLocalStartAction
   secondaryActions: AddRepoLocalStartAction[]
 } {
   const primaryAction = {
     kind: 'browse' as const,
     icon: FolderOpen,
-    title: translate(
-      'auto.components.sidebar.add.repo.local.start.actions.2281fdc8c7',
-      'Browse folder'
-    ),
+    title: t('auto.components.sidebar.add.repo.local.start.actions.2281fdc8c7', 'Browse folder'),
     description:
       browseHostKind === 'runtime'
-        ? translate(
+        ? t(
             'auto.components.sidebar.add.repo.local.start.actions.runtimeBrowseDescription',
             'Existing Git repository or folder on this host'
           )
-        : translate(
+        : t(
             'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
             'Local project, Git repo, or folder with many repos'
           ),
@@ -57,11 +58,11 @@ export function getAddRepoLocalStartActions({
     ? {
         kind: 'remote' as const,
         icon: Monitor,
-        title: translate(
+        title: t(
           'auto.components.sidebar.add.repo.local.start.actions.serverSshTitle',
           "Project on this server's SSH host"
         ),
-        description: translate(
+        description: t(
           'auto.components.sidebar.add.repo.local.start.actions.serverSshAddOnThisComputer',
           'Not available from a server. Add the SSH host on this computer to open its projects.'
         ),
@@ -72,11 +73,8 @@ export function getAddRepoLocalStartActions({
   const clone = {
     kind: 'clone' as const,
     icon: Globe,
-    title: translate(
-      'auto.components.sidebar.add.repo.local.start.actions.7edb8ebe24',
-      'Clone from URL'
-    ),
-    description: translate(
+    title: t('auto.components.sidebar.add.repo.local.start.actions.7edb8ebe24', 'Clone from URL'),
+    description: t(
       'auto.components.sidebar.add.repo.local.start.actions.5f9ffac036',
       'Clone a remote Git repository'
     ),
@@ -85,11 +83,11 @@ export function getAddRepoLocalStartActions({
   const create = {
     kind: 'create' as const,
     icon: Plus,
-    title: translate(
+    title: t(
       'auto.components.sidebar.add.repo.local.start.actions.c709860596',
       'Create new project'
     ),
-    description: translate(
+    description: t(
       'auto.components.sidebar.add.repo.local.start.actions.d72789705e',
       'Start from an empty folder'
     ),

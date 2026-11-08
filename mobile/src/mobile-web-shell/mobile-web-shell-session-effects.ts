@@ -265,9 +265,12 @@ export async function runShellEffect(
         elapsedMs: runtime.now() - context.startedAt
       })
       return
-    case 'remount':
-      send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
-      return
+    case 'remount': {
+      const remount = (): void =>
+        send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
+      // The dead document's deadlines are moot, so the remount can hold the one deadline slot.
+      return effect.inForeground === true ? context.deadline.arm(0, remount) : remount()
+    }
     case 'cancel-deadlines':
       context.deadline.cancel()
       return

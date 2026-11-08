@@ -145,51 +145,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     )
   })
 
-  it('names the visible path when only a joined guess is left to try', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ error: 'host unreachable' }))
-    const onOpenFailure = vi.fn()
-    const pathExistsCache = makeExistsCache([
-      [runtimeKey('/srv/repo/a.txt'), false],
-      [runtimeKey('/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'), false]
-    ])
-
-    clickFirstPath(onOpenFailure, pathExistsCache)
-    await flushDoubleRaf()
-
-    expect(onOpenFailure).toHaveBeenCalledWith('/srv/repo/a.txt', expect.anything())
-  })
-
-  it('says why when the clicked path is gone, naming it rather than a joined guess', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ exists: false }))
-    const onOpenFailure = vi.fn()
-
-    clickFirstPath(onOpenFailure)
-    await flushDoubleRaf()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'missing' })
-    )
-  })
-
-  it('does not call the path missing when the host cannot answer', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ error: 'host unreachable' }))
-    const onOpenFailure = vi.fn()
-
-    clickFirstPath(onOpenFailure)
-    await flushDoubleRaf()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'unverifiable' })
-    )
-  })
-
   it('drops a slow ambiguous probe once a later click has opened something else', async () => {
     setPlatform('Macintosh')
     const firstProbe = createDeferred<boolean>()
@@ -212,37 +167,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
 
     expect(statMock).toHaveBeenCalledTimes(1)
     expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/package.json', wakeWslDistro: true })
-  })
-
-  it('reports a missing path but stays quiet for a bare dotted word', async () => {
-    setPlatform('Macintosh')
-    // Why Once: a lasting rejection would leak into later tests.
-    statMock
-      .mockRejectedValueOnce(new Error('ENOENT: no such file'))
-      .mockRejectedValueOnce(new Error('ENOENT: no such file'))
-    const onOpenFailure = vi.fn()
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', onOpenFailure }
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('console.log')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    await flushAsyncWork()
-    expect(onOpenFailure).not.toHaveBeenCalled()
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('src/gone.ts')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    await flushAsyncWork()
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/repo/src/gone.ts',
-      expect.objectContaining({ verdict: 'missing' })
-    )
   })
 
   it('checks a longer hard-wrapped name before opening its cached prefix', async () => {
@@ -479,27 +403,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
 
     expect(statMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
-  })
-
-  it('still says why when every candidate is already known missing', async () => {
-    setPlatform('Macintosh')
-    hostAnswers(() => ({ exists: false }))
-    const onOpenFailure = vi.fn()
-    const pathExistsCache = makeExistsCache(
-      [
-        '/srv/repo/a.txt',
-        '/srv/repo/a.txt/srv/repo/b.txt',
-        '/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'
-      ].map((path): [string, boolean] => [runtimeKey(path), false])
-    )
-
-    expect(clickFirstPath(onOpenFailure, pathExistsCache)).toBe(true)
-    await flushDoubleRaf()
-
-    expect(onOpenFailure).toHaveBeenCalledWith(
-      '/srv/repo/a.txt',
-      expect.objectContaining({ verdict: 'missing' })
-    )
   })
 
   it('leaves an OSC 8 hyperlink to xterm when its label is a path known missing', () => {

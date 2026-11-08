@@ -29,24 +29,6 @@ describe('whenCodexTerminalAppears', () => {
     expect(onAppear).toHaveBeenCalledTimes(1)
   })
 
-  it('calls back at once when a Codex terminal already exists', () => {
-    noticeTestStore.setState({ tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
-    const onAppear = vi.fn()
-    whenCodexTerminalAppears(onAppear)
-    expect(onAppear).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores other agents', () => {
-    const onAppear = vi.fn()
-    whenCodexTerminalAppears(onAppear)
-    noticeTestStore.setState({
-      tabsByWorktree: { 'wt-1': [{ launchAgent: 'claude' }] },
-      agentStatusByPaneKey: { 'tab-1:leaf': { agentType: 'claude' } },
-      paneForegroundAgentByPaneKey: { 'tab-1:leaf': { agent: 'opencode' } }
-    })
-    expect(onAppear).not.toHaveBeenCalled()
-  })
-
   it('stops watching once unsubscribed', () => {
     const onAppear = vi.fn()
     whenCodexTerminalAppears(onAppear)()

@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
@@ -52,6 +52,7 @@ export function useFileExplorerImport({
   setSelectedPath,
   operationOwner
 }: UseFileExplorerImportParams): (root: HTMLElement | null) => void {
+  const t = useTranslate()
   const rootRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   // Read committed scope after import so speculative navigation cannot select into the wrong workspace.
@@ -132,7 +133,7 @@ export function useFileExplorerImport({
 
         if (failed.length > 0) {
           toast.error(
-            translate(
+            t(
               'auto.components.right.sidebar.useFileExplorerImport.importFailedCount',
               'Failed to import {{count}} files.',
               { count: failed.length, defaultValue_one: 'Failed to import {{count}} file.' }
@@ -141,7 +142,7 @@ export function useFileExplorerImport({
           )
         } else if (skipped.length > 0 && imported.length === 0) {
           toast.error(
-            translate(
+            t(
               'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount',
               'Skipped {{count}} files.',
               { count: skipped.length, defaultValue_one: 'Skipped {{count}} file.' }
@@ -153,7 +154,7 @@ export function useFileExplorerImport({
         toast.error(
           extractIpcErrorMessage(
             err,
-            translate(
+            t(
               'auto.components.right.sidebar.useFileExplorerImport.importFailed',
               'Failed to import files.'
             )

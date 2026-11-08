@@ -24,17 +24,15 @@ import {
 } from './native-chat-queued-edit-draft'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
-import { readNativeChatComposerDraft } from '../../native-chat-composer-draft-store'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
 import {
   useNativeChatQueuedEditLifetime,
   nativeChatQueuedEditSaving,
-  nativeChatQueuedEditEditor
-} from './native-chat-queued-edit-session'
-import type {
-  StructuredQueuedEditArgs,
-  NativeChatQueuedEditSession as Edit
+  nativeChatQueuedEditEditor,
+  type StructuredQueuedEditArgs,
+  type NativeChatQueuedEditSession as Edit
 } from './native-chat-queued-edit-session'
 
 export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditArgs) {

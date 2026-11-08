@@ -36,7 +36,7 @@ type EditorPanelShellProps = {
   disableRenameBrowse: boolean
   onCopyPath: () => void
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
-  onOpenPreviewToSide: () => void
+  onOpenPreview: () => void
   onOpenMarkdownPreview: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
@@ -76,7 +76,7 @@ export function EditorPanelShell({
   disableRenameBrowse,
   onCopyPath,
   onOpenDiffTargetFile,
-  onOpenPreviewToSide,
+  onOpenPreview,
   onOpenMarkdownPreview,
   onToggleSideBySide,
   onEditorToggleChange,
@@ -111,7 +111,7 @@ export function EditorPanelShell({
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
-          canOpenPreviewToSide={model.canOpenPreviewToSide}
+          canOpenPreview={model.canOpenPreview}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
@@ -124,7 +124,7 @@ export function EditorPanelShell({
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
           onOpenDiffTargetFile={onOpenDiffTargetFile}
-          onOpenPreviewToSide={onOpenPreviewToSide}
+          onOpenPreview={onOpenPreview}
           onOpenMarkdownPreview={onOpenMarkdownPreview}
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}

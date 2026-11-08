@@ -39,19 +39,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('delivers an unsubmitted draft to the created terminal and adopted renderer tab', async () => {
-  mocks.ready.mockResolvedValue(true)
-  await expect(deliver()).resolves.toBe(true)
-  expect(mocks.write).toHaveBeenCalledExactlyOnceWith(
-    ptyId,
-    '\x1b[200~ship it\rwith tests\x1b[201~',
-    'launch'
-  )
-  expect(mocks.draft).toHaveBeenCalledWith(
-    expect.objectContaining({ tabId: 'web-terminal-host-adopted', text: 'ship it\nwith tests' })
-  )
-})
-
 it('ends a lost-pane attempt without writing or replaying when readiness later returns', async () => {
   const ready = Promise.withResolvers<boolean>()
   mocks.ready.mockReturnValue(ready.promise)

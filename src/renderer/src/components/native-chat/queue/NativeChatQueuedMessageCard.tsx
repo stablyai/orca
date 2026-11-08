@@ -1,5 +1,5 @@
-import { QueuedMessageImageCount } from './NativeChatQueuedMessageImageCount'
-import type { QueuedMessageDragPresentation } from './NativeChatQueuedMessageRows'
+import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
+import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
   AlertCircle,
@@ -22,9 +22,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import { agentSessionWriteNoticeText } from '../agent-session-write-notice-text'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { isMacPlatform } from '../native-chat-shortcut'
+import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
   queuedMessageCardLine,
   queuedMessageCardNeedsAttention,
@@ -32,27 +33,28 @@ import {
   queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import { NativeChatAgentMessageSenders } from '../NativeChatAgentMessageSenders'
-import { NativeChatPendingIcon } from './NativeChatPendingIcon'
-import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
-import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
+import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
+import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
+import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatQueuedMessageComposer,
   type QueuedEditAttachTarget
-} from './editing/NativeChatQueuedMessageComposer'
-import type { QueuedMessageInlineEditor } from './editing/native-chat-queued-edit-session'
-import { nativeChatImageLabelCopy } from '../media/images/native-chat-image-label'
+} from '@/components/native-chat/queue/editing/NativeChatQueuedMessageComposer'
+import type { QueuedMessageInlineEditor } from '@/components/native-chat/queue/editing/native-chat-queued-edit-session'
+import { nativeChatImageLabelCopy } from '@/components/native-chat/media/images/native-chat-image-label'
 import {
   NATIVE_CHAT_UNKERNED_CSS,
   nativeChatTextHasUnkernedRun
-} from '../native-chat-unkerned-runs'
+} from '@/components/native-chat/composer/editor/native-chat-unkerned-runs'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(
   card: QueuedMessageCard,
   agentName?: string,
-  statedFailures: readonly AgentSessionFailureFact[] = []
+  statedFailures: readonly AgentSessionFailureFact[] = [],
+  t: Translate = translate
 ): string | null {
   switch (card.hold) {
     case 'returned': {
@@ -61,10 +63,7 @@ export function queuedMessageCardCaption(
         return null
       }
       return notice === 'withdrawn'
-        ? translate(
-            'components.native-chat.queuedMessages.withdrawnHold',
-            'Stopped before it was sent'
-          )
+        ? t('components.native-chat.queuedMessages.withdrawnHold', 'Stopped before it was sent')
         : agentSessionWriteNoticeText(notice)
     }
     case 'paused':
@@ -72,23 +71,18 @@ export function queuedMessageCardCaption(
       if (card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
         // Its Send shows only while the agent is idle; the words match what is on the card.
         return card.waitsForAgent
-          ? translate(
+          ? t(
               'components.native-chat.queuedMessages.pausedSendFailedWaiting',
               "Couldn't send — press Send to retry once the agent finishes."
             )
-          : translate(
+          : t(
               'components.native-chat.queuedMessages.pausedSendFailed',
               "Couldn't send — press Send to retry."
             )
       }
-      return translate('components.native-chat.queuedMessages.paused', 'Paused')
-    case 'behind-returned':
-      return translate(
-        'components.native-chat.queuedMessages.behindReturnedHold',
-        'Waiting — a message ahead needs attention'
-      )
+      return t('components.native-chat.queuedMessages.paused', 'Paused')
     case 'sending':
-      return translate('components.native-chat.messageSending', 'Sending…')
+      return t('components.native-chat.messageSending', 'Sending…')
     case 'turn':
     case 'queue-paused':
       // Plainly queued; a paused queue's header row carries the why.
@@ -99,7 +93,8 @@ export function queuedMessageCardCaption(
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
   card: QueuedMessageCard,
-  agentWorking: boolean
+  agentWorking: boolean,
+  t: Translate = translate
 ): {
   /** Steer's ↳, or Send's paper plane. */
   steers: boolean
@@ -109,14 +104,14 @@ export function queuedMessageCardSendNow(
   if (!agentWorking || !queuedMessageCardSteers(card)) {
     return {
       steers: false,
-      label: translate('components.native-chat.queuedMessages.send', 'Send'),
-      hint: translate('components.native-chat.queuedMessages.sendHint', 'Send this message now')
+      label: t('components.native-chat.queuedMessages.send', 'Send'),
+      hint: t('components.native-chat.queuedMessages.sendHint', 'Send this message now')
     }
   }
   return {
     steers: true,
-    label: translate('components.native-chat.queuedMessages.steer', 'Steer'),
-    hint: translate(
+    label: t('components.native-chat.queuedMessages.steer', 'Steer'),
+    hint: t(
       'components.native-chat.queuedMessages.steerHint',
       'Submit without interrupting the model'
     )
@@ -165,11 +160,12 @@ export function NativeChatQueuedMessageCard({
   editDisabled?: boolean
   drag?: QueuedMessageDragPresentation
 }): React.JSX.Element {
-  const caption = queuedMessageCardCaption(card, agentName, statedFailures)
-  const line = queuedMessageCardLine(card, nativeChatImageLabelCopy())
+  const t = useTranslate()
+  const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
+  const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
-  const sendNow = queuedMessageCardSendNow(card, agentWorking)
+  const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
   const isMac = isMacPlatform()
   // Allow inspecting clipped text before acting; another agent may have authored the card.
@@ -305,7 +301,7 @@ export function NativeChatQueuedMessageCard({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate('components.native-chat.queuedMessages.delete', 'Delete')}
+                  aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
                   disabled={busy}
                   onClick={onDelete}
                 >
@@ -315,7 +311,7 @@ export function NativeChatQueuedMessageCard({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate('components.native-chat.queuedMessages.delete', 'Delete')}
+                {t('components.native-chat.queuedMessages.delete', 'Delete')}
               </TooltipContent>
             </Tooltip>
             {/* A command's text is not a draft: edited, it would become a message. */}
@@ -326,7 +322,7 @@ export function NativeChatQueuedMessageCard({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate(
+                    aria-label={t(
                       'components.native-chat.queuedMessages.moreActions',
                       'More actions'
                     )}
@@ -338,7 +334,7 @@ export function NativeChatQueuedMessageCard({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem disabled={editDisabled} onSelect={onEdit}>
                     <Pencil />
-                    {translate('components.native-chat.queuedMessages.editMessage', 'Edit message')}
+                    {t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -369,9 +365,10 @@ function QueuedMessageExpandToggle({
   controls: string | undefined
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label = expanded
-    ? translate('components.native-chat.queuedMessages.showLess', 'Show less')
-    : translate('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
+    ? t('components.native-chat.queuedMessages.showLess', 'Show less')
+    : t('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
   return (
     <Tooltip>
       <TooltipTrigger asChild>

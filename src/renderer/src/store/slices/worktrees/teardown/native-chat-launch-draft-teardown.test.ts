@@ -54,13 +54,13 @@ import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
 import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   addNativeChatPendingAttachment,
   settleNativeChatPendingAttachment
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'

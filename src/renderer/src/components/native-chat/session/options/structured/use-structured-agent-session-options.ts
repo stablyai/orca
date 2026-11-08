@@ -15,7 +15,7 @@ import {
 import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
-import { agentSessionWriteFailureText } from '../../../agent-session-write-notice-text'
+import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
   holdStructuredAgentSessionLaunchOption
@@ -95,6 +95,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     // A resumed conversation may keep its own model, so only a new one runs the listed default.
     newLaunch,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
+    hasTurn: args.hasTurn,
     fence,
     turnId,
     reportedUnpickedModel:

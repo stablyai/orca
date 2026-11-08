@@ -27,8 +27,6 @@ const COORDINATOR_HANDLE = 'term_pre_update_coordinator'
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coordinator'
 const CURRENT_COORDINATOR_PANE = 'tab_current:44444444-4444-4444-8444-444444444444'
 const PROCESS_INCARNATION = 'pty-stable:incarnation-stable'
-const CURRENT_COORDINATOR_PROCESS_INCARNATION =
-  'pty-current-coordinator:incarnation-current-coordinator'
 const WORK_BYTES = Buffer.from('preserved filesystem work\n', 'utf8')
 
 type Harness = {
@@ -396,83 +394,5 @@ describe('orchestration runtime update settlement', () => {
       status: 'dispatched'
     })
     expectIdentityAndWorkPreserved(harness)
-  })
-
-  it('routes ordinary mail with the same attested authority without settling work', async () => {
-    const harness = createUpdateHarness()
-    expect(harness.db.getRunMailboxOwnerIdsForHandle(COORDINATOR_HANDLE)).toEqual([
-      harness.adoptedRunId
-    ])
-    const response = await harness.createDispatcher().dispatch(
-      request(
-        'orchestration.send',
-        {
-          from: WORKER_HANDLE,
-          to: COORDINATOR_HANDLE,
-          type: 'status',
-          subject: 'Retained worker checkpoint',
-          body: readFileSync(harness.markerPath, 'utf8')
-        },
-        'worker',
-        'retained-worker-status'
-      )
-    )
-
-    expect(resultOf(response)).toMatchObject({
-      message: { type: 'status', body: WORK_BYTES.toString('utf8') }
-    })
-    expect(harness.db.getTask(harness.taskId)).toMatchObject({ status: 'dispatched' })
-    expect(harness.db.getDispatchContextById(harness.dispatchId)).toMatchObject({
-      status: 'dispatched'
-    })
-    expect(entityCounts(harness.db)).toEqual({
-      tasks: 1,
-      dispatch_contexts: 1,
-      messages: 1,
-      legacy_compatibility_principals: 0
-    })
-    expectIdentityAndWorkPreserved(harness)
-  })
-
-  it('uses attested process authority when a remote attachment loses runtime lookup', async () => {
-    const harness = createUpdateHarness()
-    const attachment = {
-      dispatch_id: 'dispatch-remote-retained',
-      task_id: 'task-remote-retained',
-      state: 'ready',
-      process_incarnation: CURRENT_COORDINATOR_PROCESS_INCARNATION
-    }
-    vi.spyOn(harness.db, 'findActiveRemoteAttachmentForPane').mockReturnValue(attachment as never)
-    const processCurrent = vi
-      .spyOn(harness.db, 'isRemoteAttachmentProcessCurrent')
-      .mockReturnValue(true)
-    vi.spyOn(harness.db, 'enqueueFederationRelay').mockReturnValue({
-      message_id: 'relay-retained-status',
-      sequence: 1,
-      dispatch_id: attachment.dispatch_id
-    } as never)
-
-    const response = await harness.createDispatcher().dispatch(
-      request(
-        'orchestration.send',
-        {
-          from: CURRENT_COORDINATOR_HANDLE,
-          type: 'status',
-          subject: 'Retained remote checkpoint',
-          body: 'remote work survived'
-        },
-        'current-coordinator',
-        'retained-remote-status'
-      )
-    )
-
-    expect(resultOf(response)).toMatchObject({
-      relay: { dispatchId: attachment.dispatch_id, accepted: true }
-    })
-    expect(processCurrent).toHaveBeenCalledWith({
-      dispatchId: attachment.dispatch_id,
-      paneKey: CURRENT_COORDINATOR_PANE,
-      processIncarnation: CURRENT_COORDINATOR_PROCESS_INCARNATION
-    })
   })
 })

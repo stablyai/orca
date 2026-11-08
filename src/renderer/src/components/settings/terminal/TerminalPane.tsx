@@ -30,12 +30,10 @@ import { TerminalRenderingSection } from './appearance/TerminalRenderingSection'
 import { TerminalWindowsShellSection } from './platform/TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './platform/TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './platform/TerminalCustomShellInput'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../form-controls/SettingsFormControls'
+import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalPaneProps = {
   hostScope?: SettingsHostScope
@@ -131,15 +129,15 @@ export function TerminalPane({
         ...translateSearchKeyword('auto.components.settings.TerminalPane.c2ddb189e7', 'rcfile')
       ]
     }) ? (
-      <section key="default-shell" className="space-y-3">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
-          description={translate(
-            'auto.components.settings.TerminalPane.69724e8f0c',
-            'Choose what Orca opens for new local terminal panes.'
-          )}
-        />
-        <div className="space-y-3">
+      <SettingsGroup
+        key="default-shell"
+        title={translate('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
+        description={translate(
+          'auto.components.settings.TerminalPane.69724e8f0c',
+          'Choose what Orca opens for new local terminal panes.'
+        )}
+      >
+        <div className="space-y-3 py-3">
           <SettingsSegmentedControl
             ariaLabel={translate(
               'auto.components.settings.TerminalPane.fd05fb109c',
@@ -301,14 +299,22 @@ export function TerminalPane({
             </div>
           ) : null}
         </div>
-      </section>
+      </SettingsGroup>
     ) : null
 
   const visibleSections = [
     defaultShellSection,
     isWindows &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
-      <TerminalWindowsAdministratorSection key="windows-administrator" />
+      <SettingsGroup
+        key="windows-administrator"
+        title={translate(
+          'auto.components.settings.DefaultWindowsProjectRuntimeSetting.windows',
+          'Windows'
+        )}
+      >
+        <TerminalWindowsAdministratorSection />
+      </SettingsGroup>
     ) : null,
     showWindowsHostSettings &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
@@ -364,7 +370,7 @@ export function TerminalPane({
 
   return (
     <div className="space-y-6">
-      <SettingsSectionStack sections={visibleSections} spacing="section" />
+      <SettingsSectionStack sections={visibleSections} />
     </div>
   )
 }

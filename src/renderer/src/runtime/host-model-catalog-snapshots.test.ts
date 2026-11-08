@@ -31,6 +31,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import {
+  preloadHostModelCatalogSnapshots,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
@@ -82,6 +83,31 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
     expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+  })
+
+  it('keeps a held list through an answer whose listing is still running', () => {
+    const held = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', held)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', {
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(held)
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    const filling = { ...list(true), listingInProgress: true as const }
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-2', filling)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', other)).toBe(filling)
+  })
+
+  it("keeps a chat's answer that lands while an older preload is out", async () => {
+    let answer: (catalog: AgentSessionModelCatalogResult) => void = () => {}
+    mocks.call.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const preload = preloadHostModelCatalogSnapshots(LOCAL, ['claude'], { savedOnly: true })
+    const chat = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', chat)
+    answer(list(false))
+    await preload
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(chat)
   })
 })
 

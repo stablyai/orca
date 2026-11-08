@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, FolderGit2, GitBranch } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -30,7 +30,8 @@ export function FolderWorktreeSectionHeader({
   onToggle,
   onOpen
 }: FolderWorktreeSectionHeaderProps): React.JSX.Element {
-  const openLabel = translate(
+  const t = useTranslate()
+  const openLabel = t(
     'auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree',
     'Open this worktree'
   )

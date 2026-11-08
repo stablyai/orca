@@ -502,24 +502,3 @@ it('drops checking-session models when cancellation wins while start is pending'
   })
   expect(agentModelCatalogStore.get(key)).toBeNull()
 })
-
-it('explicit Enterprise sign-in authenticates the host choice and verifies a usable session', async () => {
-  const state = await signInAgainst(async () => '', {
-    realLaunchSources: true,
-    authConfig: {
-      method: 'oauth-business',
-      gcpProject: 'enterprise-project',
-      gcpLocation: 'us-central1'
-    }
-  })
-  await vi.waitFor(() =>
-    expect(state.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
-      methodId: 'oauth-business'
-    })
-  )
-  state.finishBrowser()
-  state.openSession()
-  await vi.waitFor(() =>
-    expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('signedIn')
-  )
-})

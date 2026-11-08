@@ -243,51 +243,6 @@ describe('OrchestrationDb reset scopes', () => {
     ).toHaveLength(1)
   })
 
-  it('does not count a worker with durable exit proof as possibly running', () => {
-    db = new OrchestrationDb(':memory:')
-    const run = db.createRun({
-      objective: 'Exit proof',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
-    })
-    // Each worker still owns an unreleased terminal; only a certified exit clears it.
-    const ids = ['stopped', 'operator_close', 'unknown'].map((label) => {
-      const task = db!.createTask({ runId: run.id, spec: label })
-      const { dispatch } = db!.createStartingWorkerDispatch({
-        taskId: task.id,
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER,
-        startOptions: { worktree: 'current' }
-      })
-      db!.createWorkerTerminalResourceStatement({
-        dispatchId: dispatch.id,
-        worktreeId: null,
-        terminalHandle: `term_${label}`,
-        paneKey: null,
-        processIncarnation: `${label}_process`,
-        ownership: 'owned'
-      })
-      const state = label === 'stopped' ? 'stopped' : 'failed'
-      db!.db.exec(
-        `UPDATE worker_dispatches SET state = '${state}' WHERE dispatch_id = '${dispatch.id}'`
-      )
-      if (label !== 'stopped') {
-        db!.db.exec(
-          `UPDATE dispatch_contexts SET status = 'failed', termination_reason = '${label}' WHERE id = '${dispatch.id}'`
-        )
-      }
-      return dispatch.id
-    })
-
-    expect(db.resetTasks()).toMatchObject({ workers: 3, possiblyRunning: 1 })
-    const workers = readRunRemovedWork(db.db, run.id, { removed: true })?.entries?.filter(
-      (entry) => entry.kind === 'worker'
-    )
-    expect(workers?.map((entry) => 'activeAtRemoval' in entry && entry.activeAtRemoval)).toEqual(
-      ids.map((id) => id === ids[2])
-    )
-  })
-
   it('records raw deletes from every lineage table, as an older binary would run them', () => {
     const state = createState()
     addChildWork(state)

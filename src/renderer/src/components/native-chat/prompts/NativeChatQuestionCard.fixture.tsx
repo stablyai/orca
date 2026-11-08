@@ -6,7 +6,7 @@ import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-
 import { useState } from 'react'
 import { NativeChatFileLinkExistenceContext } from '../links/actions/native-chat-file-link-existence'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../conversation/projection/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

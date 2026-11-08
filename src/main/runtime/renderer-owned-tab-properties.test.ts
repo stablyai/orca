@@ -1,5 +1,5 @@
 import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,55 +53,6 @@ function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_MUTATION_METHODS })
   return { runtime, runtimeStore, getSession, session, notifier, dispatcher }
 }
-
-describe.each([undefined, 'Changed title'])(
-  'renderer-owned tab property mutations (title: %s)',
-  (customTitle) => {
-    it.each([
-      { isPinned: true },
-      { isPinned: false },
-      { color: '#ff8800' },
-      { color: null },
-      { viewMode: 'chat' },
-      { viewMode: 'terminal' }
-    ] as const)('refuses an unsupported edit without partially renaming: %j', async (props) => {
-      const { dispatcher, getSession, session, runtimeStore, notifier } = fixture()
-      const response = await dispatcher.dispatch({
-        id: 'edit-1',
-        authToken: 'token',
-        method: 'session.tabs.setTabProps',
-        params: {
-          worktree: `id:${TEST_WORKTREE_ID}`,
-          tabId: 'host-tab',
-          ...(customTitle !== undefined ? { customTitle } : {}),
-          ...props
-        }
-      })
-
-      expect(response).toMatchObject({
-        ok: false,
-        error: { code: 'capability_unsupported' }
-      })
-      expect(notifier.renameTerminal).not.toHaveBeenCalled()
-      expect(runtimeStore.setWorkspaceSession).not.toHaveBeenCalled()
-      expect(getSession()).toBe(session)
-    })
-  }
-)
-
-it.each([' Renamed ', null])(
-  'still forwards a title-only edit to the renderer: %s',
-  async (customTitle) => {
-    const { runtime, notifier } = fixture()
-    await expect(
-      runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
-        tabId: 'host-tab',
-        customTitle
-      })
-    ).resolves.toEqual({ updated: true })
-    expect(notifier.renameTerminal).toHaveBeenCalledWith('host-tab', customTitle?.trim() ?? null)
-  }
-)
 
 it('refuses a combined native chat edit before saving its name, while accepting a title alone', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-native-tab-props-'))

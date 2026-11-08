@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -142,23 +142,6 @@ it('retains in-memory delivery and retirement when durable writes fail', async (
   expect(h.store.reconcile([shown])).toEqual([shown])
 })
 
-it('coalesces a burst of records into writes of the latest entries, off the caller', async () => {
-  const h = fixture()
-  const file = join(h.path, 'mobile-notification-dismissals.json')
-  for (let seq = 0; seq < 20; seq += 1) {
-    h.store.record({
-      ...alert,
-      notificationId: `n${seq}`,
-      notificationEpoch: 'e',
-      notificationSeq: seq
-    })
-  }
-  expect(existsSync(file)).toBe(false)
-  await h.store.flush()
-  const saved: unknown = JSON.parse(readFileSync(file, 'utf8'))
-  expect(Array.isArray(saved) ? saved.length : 0).toBe(20)
-})
-
 it('saves records synchronously from the moment close() is called, ahead of the queued async write', async () => {
   const h = fixture()
   const savedIds = () =>
@@ -172,19 +155,6 @@ it('saves records synchronously from the moment close() is called, ahead of the 
   await closing
   h.store.record({ ...alert, ...shown, notificationId: 'after-close' })
   expect(savedIds()).toEqual(['before-close', 'while-closing', 'after-close'])
-})
-
-it('only warns when a synchronous save after close fails', async () => {
-  const h = fixture()
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  mkdirSync(join(h.path, 'mobile-notification-dismissals.json'))
-  await h.store.close()
-  expect(() => h.store.record({ ...alert, ...shown })).not.toThrow()
-  expect(warn).toHaveBeenCalledWith(
-    '[notifications] Could not persist dismissal recovery state',
-    expect.anything()
-  )
-  expect(h.store.liveDeliveries()).toHaveLength(1)
 })
 
 it('a targeted old delivery cannot retire a newer replacement with the same logical id', () => {

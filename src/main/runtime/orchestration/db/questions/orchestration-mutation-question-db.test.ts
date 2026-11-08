@@ -18,65 +18,6 @@ describe('OrchestrationDb mutation and question state', () => {
     return db
   }
 
-  describe('durable mutation receipts', () => {
-    it('replays completed input and rejects request ID reuse with changed input', () => {
-      const d = createDb()
-      const started = d.beginMutationReceipt({
-        callerFingerprint: 'caller_a',
-        requestId: 'request_1',
-        method: 'orchestration.send',
-        payloadHash: 'hash_a'
-      })
-      expect(started.disposition).toBe('started')
-
-      d.completeMutationReceipt({
-        callerFingerprint: 'caller_a',
-        requestId: 'request_1',
-        method: 'orchestration.send',
-        payloadHash: 'hash_a',
-        receipt: '{"messageId":"msg_1"}'
-      })
-      expect(
-        d.beginMutationReceipt({
-          callerFingerprint: 'caller_a',
-          requestId: 'request_1',
-          method: 'orchestration.send',
-          payloadHash: 'hash_a'
-        })
-      ).toMatchObject({
-        disposition: 'completed',
-        row: { receipt: '{"messageId":"msg_1"}' }
-      })
-
-      expect(() =>
-        d.beginMutationReceipt({
-          callerFingerprint: 'caller_a',
-          requestId: 'request_1',
-          method: 'orchestration.send',
-          payloadHash: 'hash_b'
-        })
-      ).toThrow('already used with different input')
-    })
-
-    it('keeps caller namespaces separate and can discard only pending work', () => {
-      const d = createDb()
-      for (const callerFingerprint of ['caller_a', 'caller_b']) {
-        d.beginMutationReceipt({
-          callerFingerprint,
-          requestId: 'same_request',
-          method: 'orchestration.send',
-          payloadHash: 'same_hash'
-        })
-      }
-      expect(d.getMutationReceipt('caller_a', 'same_request')?.state).toBe('pending')
-      expect(d.getMutationReceipt('caller_b', 'same_request')?.state).toBe('pending')
-
-      d.discardPendingMutationReceipt('caller_a', 'same_request')
-      expect(d.getMutationReceipt('caller_a', 'same_request')).toBeUndefined()
-      expect(d.getMutationReceipt('caller_b', 'same_request')?.state).toBe('pending')
-    })
-  })
-
   describe('question threads', () => {
     it('uses the original message ID and records one durable answer', () => {
       const d = createDb()

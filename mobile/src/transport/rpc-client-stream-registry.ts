@@ -2,6 +2,12 @@ import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
+import type {
+  RpcStreamingListener,
+  RpcStreamSubscribeOptions,
+  StreamRegistryOptions,
+  StreamRequest
+} from './rpc-client-stream-request'
 import {
   buildRequestStreamUnsubscribe,
   updateTerminalSubscriptionViewport
@@ -15,34 +21,9 @@ import {
 } from './rpc-subscription-result-shapes'
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
 import * as sessionTabsStream from './rpc-client-session-tabs-stream'
-import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
-import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
+import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { RpcResponse, RpcSuccess } from './types'
 import { translate } from '../i18n/mobile-i18n'
-
-export type RpcStreamingListener = (result: unknown) => void
-
-export type RpcStreamSubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  envelope?: RpcEnvelopeFields
-}
-
-type StreamRequest = {
-  method: string
-  params: unknown
-  envelope?: RpcEnvelopeFields
-  listener?: RpcStreamingListener
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  subscriptionId?: string
-  cancelled?: boolean
-  sent?: boolean
-  receivedSnapshot?: boolean
-}
-
-type StreamRegistryOptions = {
-  nextId: () => string
-  getState: () => ConnectionState
-  sendFrame: (frame: RpcRequestFrame) => boolean
-}
 
 export class RpcClientStreamRegistry {
   private readonly streams = new Map<string, StreamRequest>()
@@ -64,7 +45,8 @@ export class RpcClientStreamRegistry {
       params,
       envelope: subscribeOptions?.envelope,
       listener,
-      onBinaryFrame: subscribeOptions?.onBinaryFrame
+      onBinaryFrame: subscribeOptions?.onBinaryFrame,
+      holdReplay: subscribeOptions?.holdReplay
     }
     this.streams.set(id, stream)
     if (method === 'browser.screencast') {
@@ -104,14 +86,31 @@ export class RpcClientStreamRegistry {
         this.pendingBrowserRequestId = id
         this.activeBrowserRequestId = null
       }
-      this.resetTerminalRouting(id)
-      if (this.send(id, stream)) {
-        stream.sent = true
-      } else {
-        this.markForReplay()
+      this.terminalRouter.reset(id)
+      if (!stream.holdReplay?.(() => this.resendHeld(id, stream)) && !this.replay(id, stream)) {
         break
       }
     }
+  }
+
+  private resendHeld(id: string, stream: StreamRequest): void {
+    if (
+      this.streams.get(id) === stream &&
+      !stream.sent &&
+      !stream.cancelled &&
+      this.options.getState() === 'connected'
+    ) {
+      this.replay(id, stream)
+    }
+  }
+
+  // A failed write means the socket is gone; every stream then waits for the next connection.
+  private replay(id: string, stream: StreamRequest): boolean {
+    stream.sent = this.send(id, stream)
+    if (!stream.sent) {
+      this.markForReplay()
+    }
+    return stream.sent
   }
 
   markForReplay(): void {
@@ -122,7 +121,7 @@ export class RpcClientStreamRegistry {
       stream.receivedSnapshot = false
       // The id named a registration on the closed socket; the replay's ready brings the new one.
       stream.subscriptionId = undefined
-      this.resetTerminalRouting(id)
+      this.terminalRouter.reset(id)
     }
   }
 
@@ -202,7 +201,11 @@ export class RpcClientStreamRegistry {
           this.pendingBrowserRequestId !== response.id &&
           this.activeBrowserRequestId !== response.id
         ) {
-          this.sendBrowserUnsubscribe(result.subscriptionId, stream.envelope)
+          this.sendRpc(
+            'browser.screencast.unsubscribe',
+            { subscriptionId: result.subscriptionId },
+            stream.envelope
+          )
           this.remove(response.id)
           return
         }
@@ -235,7 +238,10 @@ export class RpcClientStreamRegistry {
     if (stream && sessionTabsStream.holdUnsubscribe(stream)) {
       return
     }
-    const unsubscribe = buildRequestStreamUnsubscribe(stream?.method, stream?.params, id)
+    // An unsent stream has nothing on the desktop, and one held for its owner's verdict must stay silent.
+    const unsubscribe = stream?.sent
+      ? buildRequestStreamUnsubscribe(stream.method, stream.params, id)
+      : null
     if (unsubscribe) {
       this.sendRpc(unsubscribe.method, unsubscribe.params, stream?.envelope)
     }
@@ -273,10 +279,6 @@ export class RpcClientStreamRegistry {
     }
   }
 
-  private sendBrowserUnsubscribe(subscriptionId: string, envelope?: RpcEnvelopeFields): void {
-    this.sendRpc('browser.screencast.unsubscribe', { subscriptionId }, envelope)
-  }
-
   // The stream's envelope rides its unsubscribes too: a routing field must reach the same host.
   private sendRpc(method: string, params: unknown, envelope?: RpcEnvelopeFields): boolean {
     return this.options.sendFrame({ id: this.options.nextId(), method, params, envelope })
@@ -291,7 +293,7 @@ export class RpcClientStreamRegistry {
     const stream = this.streams.get(id)
     this.streams.delete(id)
     this.clearBrowserRequest(id)
-    this.resetTerminalRouting(id)
+    this.terminalRouter.reset(id)
     if (stream?.method === 'browser.screencast') {
       stream.cancelled = true
     }
@@ -304,10 +306,6 @@ export class RpcClientStreamRegistry {
     if (this.pendingBrowserRequestId === id) {
       this.pendingBrowserRequestId = null
     }
-  }
-
-  private resetTerminalRouting(id: string): void {
-    this.terminalRouter.reset(id)
   }
 
   private handleBrowserFrame(frame: BrowserScreencastFrame): void {

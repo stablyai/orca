@@ -2,7 +2,7 @@ import { Download } from 'lucide-react'
 import { useManagedRuntimeInstallCard } from '@/components/managed-runtime/use-managed-runtime-install-card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
 import type { NativeChatInstallSlotInstall } from './NativeChatInstallSlot'
 
@@ -11,6 +11,7 @@ export function NativeChatInstallStrip(props: {
   slot: NativeChatInstallSlotInstall
   agentLabel: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const { slot, agentLabel } = props
   const { card, pending, refusal, act } = useManagedRuntimeInstallCard(
     slot.observation,
@@ -47,7 +48,7 @@ export function NativeChatInstallStrip(props: {
           <Progress
             value={progress.percent ?? 100}
             className="mt-2 h-1.5"
-            aria-label={translate('components.managed-runtime.progress', '{{agent}} download', {
+            aria-label={t('components.managed-runtime.progress', '{{agent}} download', {
               agent: agentLabel
             })}
           />

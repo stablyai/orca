@@ -225,8 +225,13 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
   })
 })
 
-import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
-import * as pendingChips from '@/components/native-chat/native-chat-pending-attachment-cache'
+import * as launchDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as launchDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as launchDraftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as launchDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import * as launchDraftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import * as launchDraftsOwner5 from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import * as pendingChips from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 it.each([
   { mode: 'normal', twin: true, preserved: false },
@@ -250,16 +255,24 @@ it.each([
         ]
       }
     })
-    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'local')
-    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const scope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+      WORKTREE_ID,
+      'codex',
+      'local'
+    )
+    const other = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       WORKTREE_ID,
       'codex',
       HOST_B_HOST_ID
     )
-    launchDrafts.updateNativeChatComposerDraft(scope, { text: 'old task' }, 'immediate')
-    launchDrafts.updateNativeChatComposerDraft(other, { text: 'other host task' }, 'immediate')
-    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
-    launchDrafts.updateNativeChatComposerDraft(scope, { text: '' }, 'immediate')
+    launchDraftsOwner2.updateNativeChatComposerDraft(scope, { text: 'old task' }, 'immediate')
+    launchDraftsOwner2.updateNativeChatComposerDraft(
+      other,
+      { text: 'other host task' },
+      'immediate'
+    )
+    const attempt = launchDraftsOwner3.captureNativeChatComposerSubmission(scope)
+    launchDraftsOwner2.updateNativeChatComposerDraft(scope, { text: '' }, 'immediate')
     pendingChips.addNativeChatPendingAttachment(scope, { id: 'old-chip', path: '', pending: true })
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error('dirty worktree'))
     expect(
@@ -287,23 +300,27 @@ it.each([
     expect(removal.ok).toBe(mode !== 'postcommit-error')
     expect(attempt.draft).toBeUndefined()
     expect(pendingChips.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(twin ? 1 : 0)
-    const freshScope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const freshScope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       WORKTREE_ID,
       'codex',
       'local'
     )
-    launchDrafts.updateNativeChatComposerDraft(freshScope, { text: 'new lifetime' }, 'immediate')
-    launchDrafts.finishNativeChatComposerSubmission(scope, attempt, true)
+    launchDraftsOwner2.updateNativeChatComposerDraft(
+      freshScope,
+      { text: 'new lifetime' },
+      'immediate'
+    )
+    launchDraftsOwner2.finishNativeChatComposerSubmission(scope, attempt, true)
     expect(pendingChips.takeNativeChatPendingAttachment(scope, 'old-chip') !== undefined).toBe(twin)
-    expect(launchDrafts.readNativeChatComposerDraft(freshScope).text).toBe('new lifetime')
-    expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('other host task')
+    expect(launchDraftsOwner2.readNativeChatComposerDraft(freshScope).text).toBe('new lifetime')
+    expect(launchDraftsOwner2.readNativeChatComposerDraft(other).text).toBe('other host task')
   }
 )
 
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 it('actual normal removal clears current setup while held residue stays inert and later manual input retains authority', async () => {
   launchDrafts.clearNativeChatComposerDraftsForTests()
   pendingChips.clearNativeChatPendingAttachmentsForTests()
@@ -318,16 +335,24 @@ it('actual normal removal clears current setup while held residue stays inert an
   const snapshot = new Map(storage.drafts)
   const gate = Promise.withResolvers<ReadonlyMap<string, unknown>>()
   setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => gate.promise })
-  const loading = launchDrafts.hydrateNativeChatComposerDrafts()
-  const source = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'ssh:old')
-  const current = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+  const loading = launchDraftsOwner4.hydrateNativeChatComposerDrafts()
+  const source = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+    WORKTREE_ID,
+    'codex',
+    'ssh:old'
+  )
+  const current = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
     WORKTREE_ID,
     'codex',
     HOST_B_HOST_ID
   )
-  const live = launchDrafts.nativeChatLaunchPromptDraftScopeKey('repo1::/live', 'codex', 'local')
-  launchDrafts.updateNativeChatComposerDraft(current, { text: 'current target' }, 'immediate')
-  launchDrafts.updateNativeChatComposerDraft(live, { text: 'live control' }, 'immediate')
+  const live = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+    'repo1::/live',
+    'codex',
+    'local'
+  )
+  launchDraftsOwner2.updateNativeChatComposerDraft(current, { text: 'current target' }, 'immediate')
+  launchDraftsOwner2.updateNativeChatComposerDraft(live, { text: 'live control' }, 'immediate')
   pendingChips.addNativeChatPendingAttachment(source, {
     id: 'old-pending',
     path: '',
@@ -346,21 +371,25 @@ it('actual normal removal clears current setup while held residue stays inert an
   expect(
     (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
   ).toBe(false)
-  expect(launchDrafts.readNativeChatComposerDraft(current).text).toBe('current target')
+  expect(launchDraftsOwner2.readNativeChatComposerDraft(current).text).toBe('current target')
   expect(storage.drafts.has(originalKey)).toBe(true)
   mockApi.worktrees.remove.mockResolvedValueOnce({})
   expect(
     (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
   ).toBe(true)
   expect(pendingChips.nativeChatPendingAttachmentSnapshot(source)).toHaveLength(0)
-  launchDrafts.updateNativeChatComposerDraft(current, { text: 'new explicit input' }, 'immediate')
+  launchDraftsOwner2.updateNativeChatComposerDraft(
+    current,
+    { text: 'new explicit input' },
+    'immediate'
+  )
   gate.resolve(snapshot)
   await loading
-  await launchDrafts.nativeChatComposerDraftWritesSettled()
-  expect(launchDrafts.readNativeChatComposerDraft(source).text).toBe('new explicit input')
-  expect(launchDrafts.readNativeChatComposerDraft(source).images).toHaveLength(0)
+  await launchDraftsOwner5.nativeChatComposerDraftWritesSettled()
+  expect(launchDraftsOwner2.readNativeChatComposerDraft(source).text).toBe('new explicit input')
+  expect(launchDraftsOwner2.readNativeChatComposerDraft(source).images).toHaveLength(0)
   expect(storage.drafts.has(originalKey)).toBe(true)
-  expect(launchDrafts.readNativeChatComposerDraft(live).text).toBe('live control')
+  expect(launchDraftsOwner2.readNativeChatComposerDraft(live).text).toBe('live control')
   expect(pendingChips.settleNativeChatPendingAttachment(source, 'old-pending', '/late.png')).toBe(
     false
   )

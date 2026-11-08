@@ -11,6 +11,7 @@ import {
 } from '../hooks/usePrimarySelectionPaste'
 import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
+import { useWindowsTerminalFontWeightNotice } from '../components/terminal-pane/appearance/windows-terminal-font-weight-notice'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useHostStructuredAgentsSync } from '../runtime/host-structured-agents-sync'
 import { useLegacyChatRenameMigration } from '../runtime/legacy-chat-rename-migration'
@@ -48,6 +49,7 @@ export function useAppShellServices(): void {
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+  useWindowsTerminalFontWeightNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()

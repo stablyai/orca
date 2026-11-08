@@ -1,8 +1,11 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '../../../../store/types'
 import type { WorktreeRuntimeOwnerState } from '../../../../lib/workspace/ownership/worktree-runtime-owner-state'
-import { resolveNativeChatTabDirectory } from '../../native-chat-tab-directory'
-import type { NativeChatTabDirectoryState } from '../../native-chat-tab-directory'
+import {
+  resolveNativeChatTabDirectory,
+  type NativeChatTabDirectoryState
+} from '../../pane/routing/native-chat-tab-directory'
+
 import {
   findNativeChatTabOwnerWorktreeId,
   createNativeChatTabOwnerSelector

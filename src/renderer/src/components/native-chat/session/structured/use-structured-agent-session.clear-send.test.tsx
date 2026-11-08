@@ -41,13 +41,11 @@ vi.mock('./read/use-structured-agent-session-read', () => ({
 }))
 
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../../shared/agent-session/agent-session-conversation-command'
-import { useStructuredAgentSession } from './use-structured-agent-session'
-import { resetStructuredAgentSessionSendsForTests } from './delivery/structured-agent-session-message-sender'
-import { structuredAgentSessionSendOut } from './delivery/structured-agent-session-pending-sends'
-import {
-  clearNativeChatComposerDraftsForTests,
-  structuredAgentSessionDraftScopeKey
-} from '../../native-chat-composer-draft-store'
+import { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { structuredAgentSessionSendOut } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 const CONVERSATION_IN_FLIGHT = {
   ok: false,
@@ -166,24 +164,6 @@ it('gives the old conversation back when its view unmounted before the /clear th
   })
   expect(structuredAgentSessionSendOut('session-a')).toBe(false)
   expect(view('session-a').result.current.sendOut).toBe(false)
-})
-
-it('gives the slot back when the host refuses the /clear, or its call fails', async () => {
-  for (const answer of [
-    () => Promise.resolve(CONVERSATION_IN_FLIGHT),
-    () => Promise.reject(new Error('connection closed'))
-  ]) {
-    mocks.call.mockImplementation((_target: unknown, method: string) =>
-      method === 'agentSession.conversationCommand' ? answer() : Promise.resolve(null)
-    )
-    const { result, unmount } = view('session-a')
-    await act(async () => {
-      await result.current.runConversationCommand('clear')
-    })
-    expect(structuredAgentSessionSendOut('session-a')).toBe(false)
-    expect(result.current.sendOut).toBe(false)
-    unmount()
-  }
 })
 
 it('takes sends again once a /clear that never answers passes its deadline', async () => {

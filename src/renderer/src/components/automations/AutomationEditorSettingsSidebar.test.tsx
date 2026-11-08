@@ -10,7 +10,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilitie
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automation-runtime-capabilities'
 import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../../../../shared/automation-extra-agent-args-record'
-import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'

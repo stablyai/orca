@@ -94,7 +94,7 @@ describe('useNativeChatLiveSession — file watcher pagination composition', () 
     const { readNativeChatTranscriptTail, subscribeNativeChatTranscript } =
       await import('../../src/main/native-chat/transcript-watch')
     const { createNativeChatMessageListProjection } =
-      await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+      await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
     const directory = await mkdtemp(join(tmpdir(), 'pr31794-live-'))
     const filePath = join(directory, 'session.jsonl')
     const line = (n: number) =>
