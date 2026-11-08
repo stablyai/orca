@@ -345,7 +345,6 @@
 1 src/renderer/src/components/feature-tips/feature-tip-session-panel-demo.tsx
 1 src/renderer/src/components/feature-tips/use-session-search-tip-setup.ts
 3 src/renderer/src/components/feature-wall/AgentCapabilitiesSetupAction.tsx
-1 src/renderer/src/components/feature-wall/AgentCapabilityStatusBadges.tsx
 2 src/renderer/src/components/feature-wall/AiCommitPrSettingsCard.tsx
 8 src/renderer/src/components/feature-wall/AiCommitPrSettingsFields.tsx
 3 src/renderer/src/components/feature-wall/BrowserAgentVerificationPane.tsx
