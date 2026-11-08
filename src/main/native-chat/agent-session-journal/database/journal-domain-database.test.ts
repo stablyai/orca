@@ -24,7 +24,6 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
-import { migrateJournalDomainPredecessor } from './journal-domain-migrations.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -148,9 +147,7 @@ it('copies opaque profile metadata in source order from the committed WAL, witho
     upload_id: 'owed-upload',
     started_at: 123
   })
-  expect(current.prepare('SELECT row_json FROM journal_rows').all()).toEqual([])
-  expect(current.prepare('SELECT value_json FROM journal_outcomes').all()).toEqual([])
-  expect(current.prepare('SELECT message_id FROM queued_messages').all()).toEqual([])
+  expect(current.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
   expect(source.prepare('SELECT row_json FROM journal_rows').get()).toEqual({
     row_json: 'wal-backed source row'
   })
@@ -261,40 +258,6 @@ it.each([1, 100, 'corrupt'])(
     expect(hash(filename)).toBe(before)
   }
 )
-
-it('retries a failed numbered migration without consulting the original or backfilling an already migrated row again', async () => {
-  const stateDirectory = directory()
-  const filename = journalDomainDatabasePath(stateDirectory)
-  const db = new Database(filename)
-  cleanup.push(() => db.close())
-  migrateJournalDomainPredecessor(db, 5)
-  db.exec(`INSERT INTO journal_items VALUES('chat','epoch','item',1,2,1,0,1,NULL,'invalid JSON')`)
-  expect(() => openJournalDomainDatabase(filename)).toThrow()
-  expect(db.pragma('user_version', { simple: true })).toBe(5)
-  const item = {
-    itemId: 'item',
-    revision: 2,
-    sequence: 1,
-    observedAt: 100,
-    body: {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'preserved body' }]
-    },
-    turnScope: { kind: 'thread' }
-  }
-  db.prepare('UPDATE journal_items SET payload_json=?').run(JSON.stringify(item))
-  writeFileSync(journalDatabasePath(stateDirectory), 'broken original')
-  expect(await initializeJournalDomainDatabase(stateDirectory)).toBe(filename)
-  const recovered = open(filename)
-  expect(recovered.prepare('SELECT root,revision,payload_json FROM journal_items').get()).toEqual({
-    root: 1,
-    revision: 2,
-    payload_json: JSON.stringify(item)
-  })
-  recovered.exec('UPDATE journal_items SET root=0')
-  expect(open(filename).prepare('SELECT root FROM journal_items').get()).toEqual({ root: 0 })
-})
 
 it('opens a newer store read-only before changing persistent pragmas or its only version ledger', () => {
   const filename = join(directory(), 'newer.db')

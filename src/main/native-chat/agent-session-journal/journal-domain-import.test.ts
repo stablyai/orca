@@ -25,11 +25,13 @@ afterEach(() => {
   }
 })
 
-/** A new file whose copied legacy tables hold one saved chat, as initialization publishes it. */
-function copiedChat() {
+/** The new file has no source history; the original stays separate and read-only. */
+function savedChat() {
   const root = mkdtempSync(join(tmpdir(), 'orca-domain-import-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = join(root, 'agent-session-domain.db')
+  const originalFilename = join(root, 'original.db')
+  const { db: source } = openJournalDatabase(originalFilename)
   const { db } = openJournalDomainDatabase(filename)
   cleanup.push(() => db.close())
   const rows = journalSqlRetryRows(true)
@@ -50,13 +52,14 @@ function copiedChat() {
       unattended: true
     }
   })
-  runJournalTransaction(db, () => {
-    publishJournalSessionEpoch(db, { sessionId: 'session', workspaceId: 'workspace' }, 'epoch')
-    publishJournalOutcomeEpoch(db, 'session', 'epoch', rows)
+  runJournalTransaction(source, () => {
+    publishJournalSessionEpoch(source, { sessionId: 'session', workspaceId: 'workspace' }, 'epoch')
+    publishJournalOutcomeEpoch(source, 'session', 'epoch', rows)
   })
-  const reader = new Database(filename, { readonly: true, fileMustExist: true })
+  source.close()
+  const reader = new Database(originalFilename, { readonly: true, fileMustExist: true })
   cleanup.push(() => reader.close())
-  return { db, reader }
+  return { db, reader, originalFilename }
 }
 
 function maintain(
@@ -93,7 +96,7 @@ function domainRows(db: Database.Database) {
 }
 
 it('imports a frozen saved chat as typed domain rows, ready last, and resumes after interruption', () => {
-  const { db, reader } = copiedChat()
+  const { db, reader } = savedChat()
   reader.exec('BEGIN')
   expect(() => prepareJournalDomainImport(reader, 'session')).toThrow(/outside a transaction/)
   reader.exec('ROLLBACK')
@@ -173,7 +176,7 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
 })
 
 it('keeps a ready chat on its domain rows and never reads the changed or missing frozen source', () => {
-  const { db, reader } = copiedChat()
+  const { db, reader, originalFilename } = savedChat()
   const { pages, ...header } = prepareJournalDomainImport(reader, 'session')!
   const saved = [...pages]
   for (const page of saved) {
@@ -185,7 +188,11 @@ it('keeps a ready chat on its domain rows and never reads the changed or missing
     WHERE session_id='session'`).run()
   const current = db.prepare(`SELECT payload_json FROM journal_items ORDER BY item_id`).all()
 
-  db.exec(`DROP TABLE journal_rows; DROP TABLE journal_outcome_epochs; DROP TABLE queued_messages`)
+  const source = new Database(originalFilename)
+  source.exec(
+    `DROP TABLE journal_rows; DROP TABLE journal_outcome_epochs; DROP TABLE queued_messages`
+  )
+  source.close()
   expect(maintain(db, { kind: 'projection-state', sessionId: 'session' })).toEqual({
     state: 'ready',
     epoch: 'epoch'

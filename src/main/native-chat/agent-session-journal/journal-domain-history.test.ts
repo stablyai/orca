@@ -13,14 +13,6 @@ import {
   readJournalDomainHistoryPage,
   type JournalDomainHistoryRequest
 } from './journal-domain-history-page'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import {
-  migrateJournalDomainHistoryBounds,
-  writeJournalDomainHistoryBounds
-} from './journal-domain-history-bounds-schema'
-import { JOURNAL_DOMAIN_SCHEMA_VERSION } from './database/journal-domain-migrations'
-import { migrateJournalDomainPredecessor } from './database/journal-domain-migrations.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -31,15 +23,9 @@ afterEach(() => {
 
 function history(db = new Database(':memory:')) {
   const value = messageFixture(db)
-  // The author installs this body as the next numbered migration and calls the bounds write at each item writer.
-  migrateJournalDomainHistoryBounds(db)
   cleanup.push(() => db.close())
   return {
     ...value,
-    seedItem: (item: AgentJournalRenderItem) => {
-      value.seedItem(item)
-      writeJournalDomainHistoryBounds(db, target, item.itemId, journalDomainHistoryMetadata(item))
-    },
     head: (sequence: number, retained = 0) =>
       db
         .prepare('UPDATE journal_chat_state SET last_sequence=?, retained_sequence=?')
@@ -114,6 +100,38 @@ it('pages a chat of almost only subagent rows in bounded, gap-free pages', () =>
   expect(seen).toEqual(Array.from({ length: 301 }, (_, index) => index + 1))
 })
 
+it('keeps revised naming items at their visible history position and removes obsolete names', async () => {
+  const { db, seedItem, head, commit, read } = history()
+  const naming = (label: string): AgentJournalRenderItem['body'] => ({
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'subagent', id: 'child', label, state: 'working', groupId: 'group' }]
+  })
+  seedItem({ ...text(1, ''), itemId: 'orca:first', body: naming('First') })
+  seedItem({ ...text(2, ''), itemId: 'orca:second', body: naming('Second') })
+  for (const sequence of [20, 21, 22]) {
+    seedItem(text(sequence, 'child work', { agentId: 'child' }))
+  }
+  head(22)
+  const revision = message('', 'first', 'item')
+  revision.body.blocks = [
+    { type: 'subagent', id: 'child', label: 'Revised', state: 'working', groupId: 'group' }
+  ]
+  await commit(revision)
+  expect(read({ direction: 'tail', limit: 1 }).page.subagentRoster).toMatchObject([
+    { itemId: 'orca:first', sequence: 1, entry: { id: 'child', label: 'Revised' } }
+  ])
+
+  // A restored hidden row stays hidden when its body is revised.
+  db.prepare("UPDATE journal_items SET hidden=1 WHERE item_id='orca:first'").run()
+  await commit(revision)
+  expect(read({ direction: 'tail', limit: 1 }).page.subagentRoster).toMatchObject([
+    { itemId: 'orca:second', sequence: 2, entry: { id: 'child', label: 'Second' } }
+  ])
+  await commit(message('no longer names a child', 'second', 'item'))
+  expect(read({ direction: 'tail', limit: 1 }).page.subagentRoster).toBeUndefined()
+})
+
 it('never splits a same-sequence group, marking it oversized backward and paging it whole forward', () => {
   const { seedItem, head, event, read } = history()
   const group = Array.from({ length: 200 }, (_, index) =>
@@ -167,7 +185,7 @@ it('excludes a retained body and submission by stored size before reading either
     event(sequence, [`orca:${sequence}:0`])
   }
   head(4)
-  // JSON5 satisfies the expression index but fails the read if this body were decoded.
+  // An excluded body must not be decoded.
   db.prepare("UPDATE journal_items SET payload_json=? WHERE item_id='orca:2:0'").run(
     `{"pad":"${'x'.repeat(10_000)}",}`
   )
@@ -296,86 +314,6 @@ it('answers every selected read from the snapshot its head came from', () => {
     }
   })
   expect(writer.prepare('SELECT COUNT(*) AS count FROM journal_items').get()!.count).toBe(0)
-})
-
-it('backfills history metadata once from the preceding numbered schema and refuses a newer schema', () => {
-  const db = new Database(':memory:')
-  cleanup.push(() => db.close())
-  migrateJournalDomainPredecessor(db, 5)
-  const rows: AgentJournalRenderItem[] = [
-    {
-      ...text(1, ''),
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'subagent', id: 'child', label: 'Child', state: 'working', groupId: 'g' }]
-      }
-    },
-    text(2, 'child work', { agentId: 'child' }),
-    {
-      itemId: 'orca:turn',
-      revision: 3,
-      sequence: 3,
-      observedAt: 3,
-      body: { kind: 'turn', turnId: 'turn', state: 'completed' },
-      turnScope: { kind: 'thread' }
-    }
-  ]
-  for (const item of rows) {
-    db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json)
-      VALUES('chat','epoch',?,?,?,?,0,1,?)`).run(
-      item.itemId,
-      item.sequence,
-      item.revision,
-      item.sequence,
-      JSON.stringify(item)
-    )
-  }
-  migrateJournalDomainSchema(db)
-  expect(
-    db
-      .prepare(`SELECT item_id, revision, hidden, root, subagent_row, subagent_group_key,
-        named_subagent_ids, turn_marker, payload_json FROM journal_items ORDER BY sequence`)
-      .all()
-  ).toEqual([
-    {
-      item_id: 'orca:1:0',
-      revision: 1,
-      hidden: 0,
-      root: 1,
-      subagent_row: 1,
-      subagent_group_key: 'g',
-      named_subagent_ids: '["child"]',
-      turn_marker: 0,
-      payload_json: JSON.stringify(rows[0])
-    },
-    {
-      item_id: 'orca:2:0',
-      revision: 1,
-      hidden: 0,
-      root: 0,
-      subagent_row: 0,
-      subagent_group_key: null,
-      named_subagent_ids: null,
-      turn_marker: 0,
-      payload_json: JSON.stringify(rows[1])
-    },
-    {
-      item_id: 'orca:turn',
-      revision: 3,
-      hidden: 0,
-      root: 1,
-      subagent_row: 0,
-      subagent_group_key: null,
-      named_subagent_ids: null,
-      turn_marker: 1,
-      payload_json: JSON.stringify(rows[2])
-    }
-  ])
-  db.pragma(`user_version=${JOURNAL_DOMAIN_SCHEMA_VERSION + 1}`)
-  expect(() => migrateJournalDomainSchema(db)).toThrow(
-    'journal domain schema is newer than this writer'
-  )
 })
 
 it('refreshes a dependent Stop note when only its turn changes, without skipping a shrunk forward page', () => {

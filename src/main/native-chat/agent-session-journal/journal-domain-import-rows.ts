@@ -3,6 +3,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
+import { writeJournalDomainHistoryBounds } from './journal-domain-history-bounds'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -44,11 +45,12 @@ export function insertJournalDomainImportPage(
       const insert =
         db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
-        subagent_group_key,named_subagent_ids,turn_marker)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        subagent_group_key,turn_marker)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const { ordinal, ownerFence, executionOwner, hidden, item } of page.rows) {
-        const metadata = journalDomainHistoryMetadata(item)
-        insert.run(
+        const payload = JSON.stringify(item)
+        const metadata = journalDomainHistoryMetadata(item, payload)
+        const result = insert.run(
           ...prefix,
           item.itemId,
           ordinal,
@@ -57,14 +59,16 @@ export function insertJournalDomainImportPage(
           item.sequenceIndex ?? 0,
           ownerFence,
           executionOwner,
-          JSON.stringify(item),
+          payload,
           Number(hidden),
           metadata.root,
           metadata.subagentRow,
           metadata.subagentGroupKey,
-          metadata.namedSubagentIds,
           metadata.turnMarker
         )
+        if (Number(result.changes) > 0) {
+          writeJournalDomainHistoryBounds(db, target, item.itemId, metadata)
+        }
       }
       break
     }

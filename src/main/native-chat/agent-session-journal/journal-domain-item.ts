@@ -32,6 +32,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
+import { writeJournalDomainHistoryBounds } from './journal-domain-history-bounds'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   readJournalSqlAcceptedInputs,
@@ -193,14 +194,15 @@ export function applyJournalDomainItem(
     cards: [],
     inputChanged: false
   }
-  const metadata = journalDomainHistoryMetadata(next)
+  const payload = JSON.stringify(next)
+  const metadata = journalDomainHistoryMetadata(next, payload)
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
-      root,subagent_row,subagent_group_key,named_subagent_ids,turn_marker)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
+      root,subagent_row,subagent_group_key,turn_marker)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
       revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
       execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
       root=excluded.root, subagent_row=excluded.subagent_row, subagent_group_key=excluded.subagent_group_key,
-      named_subagent_ids=excluded.named_subagent_ids, turn_marker=excluded.turn_marker`).run(
+      turn_marker=excluded.turn_marker`).run(
     ...prefix,
     itemId,
     stored?.ordinal ?? sequence,
@@ -209,13 +211,13 @@ export function applyJournalDomainItem(
     next.sequenceIndex ?? 0,
     row.ownerFence!,
     row.executionOwner ?? stored?.execution_owner ?? null,
-    JSON.stringify(next),
+    payload,
     metadata.root,
     metadata.subagentRow,
     metadata.subagentGroupKey,
-    metadata.namedSubagentIds,
     metadata.turnMarker
   )
+  writeJournalDomainHistoryBounds(db, target, itemId, metadata)
   db.prepare(
     'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
   ).run(...prefix, itemId)

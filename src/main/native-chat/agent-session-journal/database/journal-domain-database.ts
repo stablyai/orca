@@ -8,9 +8,7 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { JOURNAL_DB_OLDEST_RELEASED_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
-import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -98,11 +96,6 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
       db.close()
       transferred = true
       return { db: new Database(filename, { readonly: true, fileMustExist: true }), readOnly: true }
-    }
-    if (stored !== 0 && stored < JOURNAL_DB_OLDEST_RELEASED_VERSION) {
-      throw new JournalUnreleasedSchemaError(
-        `chat journal ${filename} uses unreleased schema ${stored}, written by an unreleased development build of Orca. Orca can't load its chats. Moving the file aside lets Orca start a new one, but that loses every chat's history, tabs and ownership records stored in it.`
-      )
     }
     if (stored === 0) {
       db.pragma('auto_vacuum = INCREMENTAL')

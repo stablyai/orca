@@ -18,7 +18,7 @@ export type JournalDomainHistoryMetadata = {
   root: number
   subagentRow: number
   subagentGroupKey: string | null
-  namedSubagentIds: string | null
+  namedSubagentIds: string[]
   turnMarker: number
   /** Client-form bytes when they differ from the stored payload; null reads the stored length. */
   wireBytes: number | null
@@ -39,7 +39,7 @@ export function journalDomainHistoryMetadata(
     root: Number(root),
     subagentRow: Number(isSubagentRow(item)),
     subagentGroupKey: block ? subagentFoldKey(block) : null,
-    namedSubagentIds: named.length > 0 ? JSON.stringify(named) : null,
+    namedSubagentIds: named,
     turnMarker: Number(
       readAgentJournalTurn(item.body) !== null || isAgentSessionContextClear(item.body)
     ),

@@ -12,13 +12,11 @@ import {
 } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { migrateJournalDomainPredecessor } from './database/journal-domain-migrations.test-fixture'
 import {
   applyJournalDomainEditLease,
   journalDomainMessageEditHeld
 } from './journal-domain-edit-leases'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
-import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import {
   applyJournalDomainQueueCommand,
   type JournalDomainQueueOperation
@@ -300,71 +298,4 @@ it('holds waiting cards and withdraws unsettled ones, ending only invalidated ed
     [12, ['c']]
   ])
   expect(queue.card('b')?.card).toMatchObject({ state: 'dispatched', position: 2, body: text('b') })
-})
-
-it('migrates current cards in place and snapshots admission provenance from the named card', () => {
-  const db = new Database(':memory:')
-  cleanups.push(() => db.close())
-  migrateJournalDomainPredecessor(db, 9)
-  const version = (
-    messageId: string,
-    sequence: number,
-    current: number,
-    fields: Partial<QueuedMessageRow> = {}
-  ) => {
-    const card = { messageId, position: 2, body: text(messageId), state: 'waiting', ...fields }
-    db.prepare(`INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,
-      version_index,current,state,payload_json,position) VALUES('chat','epoch',?,?,0,?,?,?,?)`).run(
-      messageId,
-      sequence,
-      current,
-      card.state,
-      JSON.stringify(card),
-      card.position
-    )
-  }
-  // Mail admitted from its original card, which a later edit attributed to the user.
-  version('mail', 3, 0, {
-    body: { ...text('mail'), from: { kind: 'agent', senders: [], orchestration: null } }
-  })
-  version('mail', 5, 1, { body: text('edited mail') })
-  version('mine', 4, 1, { deliveryMode: 'steer', unattended: false })
-  version('robot', 6, 1, { unattended: true })
-  const attempt = db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
-    attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
-    dispatch_state,source_card_sequence,source_card_index,payload_json)
-    VALUES('chat','epoch',?,?,0,1,?,?,1,?,'f','accepted',?,0,?)`)
-  const admit = (sendId: string, accepted: number, card: string, cardSequence: number | null) =>
-    attempt.run(
-      sendId,
-      accepted,
-      `item-${sendId}`,
-      accepted,
-      accepted,
-      cardSequence,
-      JSON.stringify({ clientMessageId: sendId, queuedMessageId: card })
-    )
-  admit('send-mine', 7, 'mine', 4)
-  admit('send-robot', 8, 'robot', 6)
-  admit('send-mail', 9, 'mail', 3)
-  admit('send-lost', 10, 'mail', 1)
-  db.prepare(`INSERT INTO journal_edit_leases(session_id,epoch,owner_id,caller_key,edit_id,message_id,
-    fingerprint,state,consumed_as,expires_at) VALUES('chat','epoch','handle','phone','edit','mine','f',
-    'waiting',NULL,?)`).run(now + 60_000)
-
-  migrateJournalDomainSchema(db)
-
-  const accepted = readJournalSqlAcceptedInputs(db, ['chat', 'epoch'])
-  expect(accepted).toEqual({ latestAcceptedTurnSequence: 10, latestPersonAcceptedSequence: 7 })
-  expect(journalDomainQueueRow(db, target, 'mail')?.card).toMatchObject({
-    messageId: 'mail',
-    position: 2,
-    state: 'waiting',
-    body: text('edited mail')
-  })
-  expect(journalDomainQueueRow(db, target, 'mine')?.card).toMatchObject({
-    deliveryMode: 'steer',
-    unattended: false
-  })
-  expect(journalDomainMessageEditHeld(db, target, 'mine', now)).toBe(true)
 })

@@ -72,9 +72,9 @@ it('commits ready revisions from different chats atomically before publishing ei
   db.exec(`PRAGMA foreign_keys=ON;
     CREATE TABLE published_pair (id TEXT PRIMARY KEY);
     CREATE TABLE pending_pair (id TEXT REFERENCES published_pair(id) DEFERRABLE INITIALLY DEFERRED);
-    CREATE TEMP TRIGGER pair_first AFTER UPDATE ON journal_items WHEN NEW.session_id='chat'
+    CREATE TEMP TRIGGER pair_first AFTER UPDATE OF payload_json ON journal_items WHEN NEW.session_id='chat'
       BEGIN INSERT INTO pending_pair VALUES ('paired'); END;
-    CREATE TEMP TRIGGER pair_second AFTER UPDATE ON journal_items WHEN NEW.session_id='other'
+    CREATE TEMP TRIGGER pair_second AFTER UPDATE OF payload_json ON journal_items WHEN NEW.session_id='other'
       BEGIN INSERT INTO published_pair VALUES ('paired'); END`)
   const delivered: string[] = []
   const result = await commitJournalSqlMessages(
@@ -96,7 +96,9 @@ it('commits ready revisions from different chats atomically before publishing ei
 it('accepts an optimistic echo once, preserving its local body and moved placement', async () => {
   const { db, commit, item, seedSend, seedItem } = fixture()
   seedSend()
-  db.exec(`INSERT INTO journal_submission_attempts
+  db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
+      attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
+      dispatch_state,candidate,payload_json,admitted_personal)
     SELECT session_id,epoch,message_id,0,0,0,item_id,0,0,NULL,fingerprint,'unknown',0,payload_json,0
     FROM journal_submission_attempts WHERE current=1`)
   const historical = db

@@ -21,11 +21,10 @@ export function readJournalDomainHistoryRoster(
   if (missing.size === 0) {
     return undefined
   }
-  const earliest = db.prepare(`SELECT item.item_id, item.sequence, item.sequence_index, item.ordinal
-    FROM journal_item_subagent_names name CROSS JOIN journal_items item
-      ON item.session_id=name.session_id AND item.epoch=name.epoch AND item.item_id=name.item_id
-    WHERE name.session_id=? AND name.epoch=? AND name.subagent_id=? AND item.hidden=0 AND item.root=1
-    ORDER BY item.sequence, item.sequence_index, item.ordinal LIMIT 1`)
+  const earliest = db.prepare(`SELECT item_id, sequence, sequence_index, ordinal
+    FROM journal_item_subagent_names
+    WHERE session_id=? AND epoch=? AND subagent_id=? AND hidden=0
+    ORDER BY sequence, sequence_index, ordinal LIMIT 1`)
   const naming = new Map<string, [number, number, number]>()
   for (const id of missing) {
     const row = earliest.get(...prefix, id)
