@@ -28,7 +28,8 @@ export function resetHostIdentityUnderLock(userDataPath: string): HostIdentityRe
   }
   let lock: ReturnType<typeof acquireOrcadInstanceLock>
   try {
-    lock = acquireOrcadInstanceLock(userDataPath)
+    // The path may be a desktop profile, whose permissions a reset must not change.
+    lock = acquireOrcadInstanceLock(userDataPath, { enforcePrivateDataRoot: false })
   } catch (error) {
     // Other lock errors (an unusable or shared data root) carry their own guidance.
     if (error instanceof OrcadInstanceLockError && RUNNING_LOCK_CODES.has(error.code)) {

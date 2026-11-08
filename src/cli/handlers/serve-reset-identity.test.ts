@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync } from 'node:fs'
+import { chmodSync, mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -46,4 +46,20 @@ describe('resetServeHostIdentity', () => {
     expect(loadOrCreateE2EEKeypair(before.dir).publicKeyB64).toBe(before.publicKeyB64)
     expect(new DeviceRegistry(before.dir).validateToken(before.token)).not.toBeNull()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves desktop profile permissions alone when it refuses because the desktop app runs',
+    async () => {
+      const before = pairedProfile()
+      chmodSync(before.dir, 0o755)
+      const lock = acquireOrcadInstanceLock(before.dir, { role: 'desktop' })
+      try {
+        await expect(resetServeHostIdentity(before.dir)).rejects.toThrow(/Stop Orca/)
+      } finally {
+        lock.release()
+      }
+      expect(statSync(before.dir).mode & 0o777).toBe(0o755)
+      expect(loadOrCreateE2EEKeypair(before.dir).publicKeyB64).toBe(before.publicKeyB64)
+    }
+  )
 })

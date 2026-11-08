@@ -1,9 +1,12 @@
 // Copies of one machine image share the pairing identity files; ORCA_INSTANCE_ID tells the copies apart.
-import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, renameSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { z } from 'zod'
-import { bestEffortFsyncDirectorySync, writeDurableSecureJsonFile } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  writeDurableSecureJsonFile
+} from '../../shared/secure-storage/secure-file'
 import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import { writeNewE2EEKeypair } from './rpc/server/pairing/e2ee-keypair'
 import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
@@ -18,13 +21,19 @@ const IDENTITY_FILENAMES = [
   HOST_INSTALLATION_FILENAME
 ] as const
 const STAGED_SUFFIX = '.next'
+/** Replaced identity files are moved here so an unwanted rotation can be undone by hand. */
+export const IDENTITY_BACKUPS_DIRNAME = 'orca-identity-backups'
+const MAX_IDENTITY_BACKUPS = 5
+const BACKUP_NAME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{6}$/
 
 /** `instanceId` is hashed so the file never republishes a provisioner value. `rotating` is written
  * only once every new file is staged beside the live one; a start that sees it publishes them. */
 const HostInstanceMarkerSchema = z.object({
   v: z.literal(1),
   instanceId: z.string().min(1).optional(),
-  rotating: z.literal(true).optional()
+  rotating: z.literal(true).optional(),
+  /** Backup folder for the files a `rotating` publish replaces; stable across an interrupted publish. */
+  backup: z.string().optional()
 })
 type HostInstanceMarker = z.infer<typeof HostInstanceMarkerSchema>
 
@@ -79,8 +88,12 @@ function readMarker(markerPath: string): HostInstanceMarker | null {
   }
 }
 
-function markerFor(instanceId: string | undefined, rotating = false): HostInstanceMarker {
-  return { v: 1, ...(instanceId ? { instanceId } : {}), ...(rotating ? { rotating: true } : {}) }
+function markerFor(instanceId: string | undefined): HostInstanceMarker {
+  return { v: 1, ...(instanceId ? { instanceId } : {}) }
+}
+
+function newBackupName(now: Date): string {
+  return `${now.toISOString().replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}`
 }
 
 function stagedIdentityPaths(userDataPath: string): { live: string; staged: string }[] {
@@ -108,14 +121,50 @@ function discardStagedIdentity(userDataPath: string): void {
   }
 }
 
-/** Moves each staged file over its live file. Staging finished before the `rotating` marker was
- * written, so a missing staged file was already moved by an earlier, interrupted publish. */
+/** Best effort: a failed backup must not block the rotation, so the live file is then overwritten. */
+function backUpLiveFile(live: string, backupDir: string | null): void {
+  if (!backupDir) {
+    return
+  }
+  try {
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 })
+    renameSync(live, join(backupDir, basename(live)))
+  } catch {
+    // ENOENT: an earlier, interrupted publish already moved it (or it never existed).
+  }
+}
+
+function pruneIdentityBackups(userDataPath: string): void {
+  const root = join(userDataPath, IDENTITY_BACKUPS_DIRNAME)
+  try {
+    const names = readdirSync(root)
+      .filter((name) => BACKUP_NAME_RE.test(name))
+      .sort()
+    for (const name of names.slice(0, Math.max(0, names.length - MAX_IDENTITY_BACKUPS))) {
+      rmSync(join(root, name), { recursive: true, force: true })
+    }
+  } catch {
+    // Old backups are only disk space; never fail a rotation over them.
+  }
+}
+
+/** Moves each staged file over its live file, after moving the live file into the backup folder.
+ * Staging finished before the `rotating` marker was written, so a missing staged file was already
+ * moved by an earlier, interrupted publish. */
 function publishStagedIdentity(
   userDataPath: string,
-  instanceId: string | undefined,
+  marker: { instanceId?: string; backup?: string },
   write: HostIdentityWrite
 ): void {
+  const backupDir =
+    marker.backup && BACKUP_NAME_RE.test(marker.backup)
+      ? join(userDataPath, IDENTITY_BACKUPS_DIRNAME, marker.backup)
+      : null
   for (const { live, staged } of stagedIdentityPaths(userDataPath)) {
+    if (!existsSync(staged)) {
+      continue
+    }
+    backUpLiveFile(live, backupDir)
     try {
       renameSync(staged, live)
     } catch (error) {
@@ -125,27 +174,61 @@ function publishStagedIdentity(
     }
   }
   bestEffortFsyncDirectorySync(userDataPath)
-  write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(instanceId))
+  write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(marker.instanceId))
+  pruneIdentityBackups(userDataPath)
 }
 
 /**
  * New keypair, no paired devices, new installation id. Callers must hold the profile lock.
+ * Without `instanceId` the recorded id is kept, so a manual reset never forgets it.
  * Throws HostIdentityRotationNotStartedError when the old identity is still whole; any other
  * error means the next start must finish the rotation before serving.
  */
 export function rotateHostIdentity(
   userDataPath: string,
   instanceId: string | null = hostInstanceIdFromEnv(),
-  write: HostIdentityWrite = writeDurableSecureJsonFile
+  write: HostIdentityWrite = writeDurableSecureJsonFile,
+  now: () => Date = () => new Date()
 ): void {
+  const markerPath = join(userDataPath, HOST_INSTANCE_FILENAME)
+  let stored: HostInstanceMarker | null
+  try {
+    stored = readMarker(markerPath)
+  } catch (error) {
+    throw new HostIdentityRotationNotStartedError(error)
+  }
+  if (stored?.rotating) {
+    // Staging below reuses the `.next` paths, so an earlier rotation must be finished first.
+    publishStagedIdentity(userDataPath, stored, write)
+  }
+  const marker: HostInstanceMarker = {
+    ...markerFor(instanceId ?? stored?.instanceId),
+    rotating: true,
+    backup: newBackupName(now())
+  }
   try {
     stageNewIdentity(userDataPath, write)
-    write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(instanceId ?? undefined, true))
   } catch (error) {
     discardStagedIdentity(userDataPath)
     throw new HostIdentityRotationNotStartedError(error)
   }
-  publishStagedIdentity(userDataPath, instanceId ?? undefined, write)
+  try {
+    write(markerPath, marker)
+  } catch (error) {
+    // The write can fail after its rename (directory sync); a published `rotating` marker
+    // needs the staged files, so only discard them once the marker is known not to say so.
+    let onDisk: HostInstanceMarker | null
+    try {
+      onDisk = readMarker(markerPath)
+    } catch {
+      throw error
+    }
+    if (!onDisk?.rotating) {
+      discardStagedIdentity(userDataPath)
+      throw new HostIdentityRotationNotStartedError(error)
+    }
+  }
+  publishStagedIdentity(userDataPath, marker, write)
 }
 
 /**
@@ -161,7 +244,11 @@ export function ensureHostInstanceIdentity(
   const markerPath = join(userDataPath, HOST_INSTANCE_FILENAME)
   const stored = readMarker(markerPath)
   if (stored?.rotating) {
-    publishStagedIdentity(userDataPath, instanceId ?? stored.instanceId, write)
+    publishStagedIdentity(
+      userDataPath,
+      { instanceId: instanceId ?? stored.instanceId, backup: stored.backup },
+      write
+    )
     return { kind: 'rotated', reason: 'interrupted_rotation' }
   }
   if (!instanceId || stored?.instanceId === instanceId) {
