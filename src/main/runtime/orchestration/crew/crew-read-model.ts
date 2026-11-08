@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { CrewFacet, CrewInvalidation } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import type { CrewReadDependencies } from './crew-read-dependencies'
-import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
   createCrewHostDerivation,
   refreshCrewStatuses,

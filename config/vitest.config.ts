@@ -142,6 +142,9 @@ export default defineConfig({
         }
       : {}),
     projects,
+    // A finished file's background log can lose the race with worker teardown; only that log line is lost.
+    onUnhandledError: (error) =>
+      !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
     ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
   }
 })

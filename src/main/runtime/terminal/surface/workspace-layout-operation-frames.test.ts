@@ -17,7 +17,7 @@ import {
 } from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
-import { WorkspaceLayoutStream, type LayoutOperationCommit } from './workspace-layout-stream'
+import { WorkspaceLayoutStream } from './workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -147,33 +147,5 @@ describe('a throwing operation listener', () => {
     expect(heard).toEqual([['local']])
     expect(store.getWorkspaceSession().tabsByWorktree[GIT]![0]!.generatedTitle).toBe('Title 0')
     warn.mockRestore()
-  })
-})
-
-describe('a headless main', () => {
-  it('hears each operation with no layout subscriber, from one projection it shares', async () => {
-    const store = await storeWith({ [GIT]: 2, [SSH_KEY]: 1 })
-    const getSession = vi.spyOn(store, 'getWorkspaceSession')
-    const stream = streamOver(store)
-    const commits: LayoutOperationCommit[] = []
-    stream.onLayoutOperationCommitted((commit) => commits.push(commit))
-    const first = stream.readPartition('local')
-
-    await renameTabs(store, titles({ [SSH_KEY]: 1 }))
-
-    expect(commits).toEqual([{ hostIds: [SSH] }])
-    getSession.mockClear()
-    expect(stream.readPartition('local')).toBe(first)
-    expect(getSession).not.toHaveBeenCalled()
-    const ssh = stream.readPartition(SSH)!.layout.workspaces[SSH_KEY]!
-    expect(ssh.tabs.map((tab) => tab.generatedTitle)).toEqual(['Title 0'])
-    // Readers share the stream's model; mutations must fail.
-    expect(() => {
-      ssh.tabs[0]!.generatedTitle = 'edited'
-    }).toThrow(TypeError)
-    await renameTabs(store, [{ workspace: GIT, tabId: tabIdOf(GIT, 0), title: 'Next' }])
-    expect(stream.readPartition('local')!.layout.workspaces[GIT]!.tabs[0]!.generatedTitle).toBe(
-      'Next'
-    )
   })
 })

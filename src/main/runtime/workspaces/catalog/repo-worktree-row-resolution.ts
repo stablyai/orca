@@ -21,7 +21,7 @@ import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/type
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'

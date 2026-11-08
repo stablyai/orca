@@ -39,7 +39,7 @@ import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/
 import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
-import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type {
@@ -62,6 +62,7 @@ import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
+  clientKind?: 'mobile' | 'runtime'
   readsOptionsWithoutModel?: boolean
 }
 

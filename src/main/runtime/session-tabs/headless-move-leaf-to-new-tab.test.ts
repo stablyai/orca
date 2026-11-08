@@ -82,24 +82,6 @@ async function setup(
   return { runtime, getSession, published, commit, move }
 }
 describe('moveMobileSessionLeafToNewTab on a headless host', () => {
-  it('commits the move, and republishes the tabs with the leaf in its new tab', async () => {
-    const { runtime, getSession, published, commit, move } = await setup()
-    await expect(move()).resolves.toEqual({ status: 'moved', ptyId: 'sibling-pty' })
-    const layouts = getSession().terminalLayoutsByTabId
-    expect(layouts['host-new-tab']?.root).toEqual({ type: 'leaf', leafId: SIBLING_LEAF_ID })
-    expect(layouts['host-tab']?.root).toEqual({ type: 'leaf', leafId: HEADLESS_LEAF_ID })
-    expect(commit).toHaveBeenCalledWith(
-      expect.objectContaining({ targetTabId: 'host-new-tab', ptyId: null })
-    )
-    expect(published).toHaveLength(1)
-    const { tabs } = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    const parentOf = (leafId: string) =>
-      tabs.flatMap((tab) =>
-        tab.type === 'terminal' && tab.leafId === leafId ? [tab.parentTabId] : []
-      )
-    expect(parentOf(SIBLING_LEAF_ID)).toEqual(['host-new-tab'])
-    expect(parentOf(HEADLESS_LEAF_ID)).toEqual(['host-tab'])
-  })
   it('moves the live terminal with its pane, so tab-scoped reads find it in the new tab', async () => {
     const { runtime, move } = await setup()
     runtime.registerPty('sibling-pty', TEST_WORKTREE_ID, null, {

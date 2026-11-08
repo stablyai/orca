@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
 import {
   holdLaunchReconnectOptOuts,
@@ -23,8 +23,8 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
-} from '../../ssh/connection/ssh-connection-generation'
-import { resetSshProviderAuthorities } from '../../ssh/ssh-provider-authority'
+} from '../../ssh/connection/authority/ssh-connection-generation'
+import { resetSshProviderAuthorities } from '../../ssh/connection/authority/ssh-provider-authority'
 import { installManagedOrcadStartStatus } from '../runtime-environments/runtime-environment-managed-tunnel'
 import {
   connectInFlight,
@@ -33,8 +33,8 @@ import {
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
-import { resetSshCredentialDeclinesForTests } from '../../ssh/ssh-credential-decline'
-import { resetSshUserDisconnectsForTests } from '../../ssh/ssh-user-disconnect'
+import { resetSshCredentialDeclinesForTests } from '../../ssh/authentication/ssh-credential-decline'
+import { resetSshUserDisconnectsForTests } from '../../ssh/connection/ssh-user-disconnect'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
 import { registerPlainSshTerminalHandlers } from './plain-ssh-terminal-handlers'
 import {
@@ -59,21 +59,21 @@ import {
   getSshHostServerStatus,
   isSshHostKeptForBridgedTerminals,
   setSshHostServedListener
-} from '../../ssh/ssh-host-server-status'
+} from '../../ssh/host-server/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
 import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { retainUnretainedOrcadMigrationSources } from '../../ssh/orcad-migration-source-retention'
-import { reconcileManagedOrcadSshTargets } from '../../ssh/orcad-retained-source'
-import { installOrcadMigrationScrollbackRetention } from '../../ssh/orcad-migration-scrollback-retention-wiring'
+import { retainUnretainedOrcadMigrationSources } from '../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
+import { reconcileManagedOrcadSshTargets } from '../../persistence/migrating-orcad-catalog/orcad-retained-source'
+import { installOrcadMigrationScrollbackRetention } from '../../persistence/migrating-orcad-catalog/orcad-migration-scrollback-retention-wiring'
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/legacy-relay-bridge-ipc'
+import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-ipc'
 import {
   onLastBridgedTerminalExit,
   retryMoveAfterLastBridgedExit
-} from '../../ssh/legacy-relay/legacy-relay-move-retry'
+} from '../../ssh/legacy-relay/bridge/legacy-relay-move-retry'
 import { connectTarget } from './ssh-connect-flow'
 import {
   disposeDesktopBrowserBridge,

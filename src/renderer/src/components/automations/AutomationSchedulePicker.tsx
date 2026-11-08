@@ -6,12 +6,12 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import type { AutomationSchedulePreset } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import type { AutomationSchedulePreset } from '../../../../shared/automations/automation-definition'
+import { buildAutomationCronSchedule } from '../../../../shared/automations/scheduling/automation-schedule-occurrences'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
-import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
+import { acceptsAutomationDraftSchedule } from '../../../../shared/automations/scheduling/automation-schedule-input-gate'
 import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'

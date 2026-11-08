@@ -345,6 +345,8 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/codex/**',
+    // The CLI loads the socket-dir check; tsc-emitted output also needs its mode constants beside it.
+    'out/main/daemon/endpoint/publication/daemon-{socket-endpoint-path,private-file-modes}.js',
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
@@ -359,7 +361,8 @@ module.exports = {
     'out/main/plugins/plugin-authoring-checks.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
-    'out/main/skills/bundled-skill-install/cli-entry.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',

@@ -22,7 +22,7 @@ import {
   startMobileDictation,
   type MobileDictationRun
 } from './mobile-dictation-engine-run'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
 import type {
   DictationStatus,
   UseMobileDictationOptions,

@@ -26,6 +26,11 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitBranchDiff'
   | 'getRuntimeGitCommitDiff'
   | 'commitRuntimeGit'
+  | 'createRuntimeGitBranch'
+  | 'cherryPickRuntimeGit'
+  | 'revertRuntimeGit'
+  | 'sequencerAbortRuntimeGit'
+  | 'sequencerContinueRuntimeGit'
   | 'completeRuntimeGitMerge'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
@@ -74,6 +79,11 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitBranchDiff: commands.getRuntimeGitBranchDiff.bind(commands),
     getRuntimeGitCommitDiff: commands.getRuntimeGitCommitDiff.bind(commands),
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
+    createRuntimeGitBranch: commands.createRuntimeGitBranch.bind(commands),
+    cherryPickRuntimeGit: commands.cherryPickRuntimeGit.bind(commands),
+    revertRuntimeGit: commands.revertRuntimeGit.bind(commands),
+    sequencerAbortRuntimeGit: commands.sequencerAbortRuntimeGit.bind(commands),
+    sequencerContinueRuntimeGit: commands.sequencerContinueRuntimeGit.bind(commands),
     completeRuntimeGitMerge: commands.completeRuntimeGitMerge.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),

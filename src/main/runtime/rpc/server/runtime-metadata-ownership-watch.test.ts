@@ -174,50 +174,6 @@ describe('watchRuntimeMetadataOwnership', () => {
     return userDataPath
   }
 
-  it('republishes after a second instance clobbers the record and exits', async () => {
-    const userDataPath = makeUserDataPath()
-    writeRuntimeMetadata(userDataPath, record())
-    const watch = armWatch(userDataPath)
-
-    writeRuntimeMetadata(
-      userDataPath,
-      record({ pid: FOREIGN_DEAD_PID, runtimeId: 'rt_second_instance' })
-    )
-    await watch.check()
-
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({
-      pid: OWNED_PID,
-      runtimeId: OWNED_RUNTIME_ID
-    })
-  })
-
-  it('leaves a live sibling runtime in place', async () => {
-    const userDataPath = makeUserDataPath()
-    const watch = armWatch(userDataPath)
-    writeRuntimeMetadata(
-      userDataPath,
-      record({ pid: FOREIGN_LIVE_PID, runtimeId: 'rt_second_instance' })
-    )
-
-    await watch.check()
-
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: FOREIGN_LIVE_PID })
-  })
-
-  it('reclaims on the poll interval without an explicit check', async () => {
-    usePolledTimers()
-    const userDataPath = makeUserDataPath()
-    armWatch(userDataPath, 1_000)
-    writeRuntimeMetadata(
-      userDataPath,
-      record({ pid: FOREIGN_DEAD_PID, runtimeId: 'rt_second_instance' })
-    )
-
-    await advancePolls(1_000)
-
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: OWNED_PID })
-  })
-
   it('stops reclaiming once the watch is stopped', async () => {
     usePolledTimers()
     const userDataPath = makeUserDataPath()

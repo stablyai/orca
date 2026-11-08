@@ -8,13 +8,13 @@ import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
-import type { TaskProvider } from './task-providers'
+import type { TaskProvider } from './work-items/task-providers'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
-import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
+import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
@@ -131,7 +131,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalDividerColorLight: string
   /** Mirror the terminal palette into Claude Code's theme; off restores the theme Orca replaced. */
   claudeCodeThemeSync: boolean
-  /** Existing profiles get `pending` and an offer toast at their next Claude launch; `settled` once shown or for new profiles. */
+  /** `pending` until the offer toast shows at the next Claude launch, then `settled`. */
   claudeCodeThemeSyncOffer?: 'pending' | 'settled'
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number

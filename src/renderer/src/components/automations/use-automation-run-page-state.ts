@@ -7,7 +7,7 @@ import {
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId
 } from './automation-host-client'
-import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
+import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automations/ownership/automation-host-filter'
 import { canRerunAutomationRun } from './automation-run-view-state'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import type { AutomationsPageListState } from './use-automations-page-list-state'

@@ -6,6 +6,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type {
   NestedRepoScanResult,
   ProjectGroup,
+  ProjectGroupUpdate,
   ProjectGroupImportResult
 } from '../../../../shared/project-group-types'
 import type {
@@ -57,9 +58,9 @@ export type RepoUpdate = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
-    | 'projectGroupOrder'
   >
 > & {
+  projectGroupOrder?: number | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
@@ -268,7 +269,7 @@ export type RepoSlice = {
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    updates: ProjectGroupUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>

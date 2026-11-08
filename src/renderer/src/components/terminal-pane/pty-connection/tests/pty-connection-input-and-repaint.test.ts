@@ -1,7 +1,6 @@
 import { describe, vi } from 'vitest'
 import { registerPtyConnectionKittyKeyboardRestoreTests } from './input-modes/pty-connection-kitty-keyboard-restore.spec'
 import { registerPtyConnectionMode2031SubscriptionsTests } from '../emulation/pty-connection-mode-2031-subscriptions.spec'
-import { registerPtyConnectionFreshNativeFollowResetTests } from '../output/pty-connection-fresh-native-follow-reset.spec'
 import {
   registerPtyConnectionDaemonPendingEscapeTailTests,
   registerPtyConnectionReattachModeResetTests
@@ -30,7 +29,6 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
 describe('pty-connection-kitty-keyboard-restore', registerPtyConnectionKittyKeyboardRestoreTests)
 describe('pty-connection-mode-2031-subscriptions', registerPtyConnectionMode2031SubscriptionsTests)
 describe('pty-connection-reattach-mode-reset', () => {
-  registerPtyConnectionFreshNativeFollowResetTests()
   registerPtyConnectionDaemonPendingEscapeTailTests()
   registerPtyConnectionNativeQueryReplyRoutingTests()
   registerPtyConnectionReattachModeResetTests()

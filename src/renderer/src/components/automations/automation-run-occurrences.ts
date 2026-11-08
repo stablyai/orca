@@ -1,6 +1,6 @@
 /** Folded rows retain the first occurrence date; count/latest occurrence must expose continuing failures rather than suggesting one old event. */
 
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { formatAutomationDateTime } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

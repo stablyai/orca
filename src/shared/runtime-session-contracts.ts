@@ -16,7 +16,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
-import type { CliStatusCaller } from './orchestration-caller-status'
+import type { CliStatusCaller } from './orchestration/orchestration-caller-status'
 import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 

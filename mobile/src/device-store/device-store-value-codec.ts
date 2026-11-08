@@ -1,5 +1,5 @@
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate'
-import { decodeBase64Bytes, encodeBase64Bytes } from '../transport/base64-byte-codec'
+import { decodeBase64Bytes, encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
 
 // Encoded length (base64 of gzipped JSON), about 3-5 MB of JSON; writers trim or skip larger values.
 // Lives here, not in the store module, so a page can check it without importing the store.

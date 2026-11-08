@@ -47,6 +47,7 @@ import { main } from './index'
 import { RuntimeRpcFailureError } from './runtime/types'
 import {
   buildWorktree,
+  noFolderWorkspacesFixture,
   okFixture,
   queueFixtures,
   worktreeListFixture,
@@ -211,6 +212,7 @@ describe('orca cli worktree awareness', () => {
         buildWorktree('/tmp/repo', 'main', 'aaa'),
         buildWorktree('/tmp/repo/feature', 'feature/foo')
       ]),
+      noFolderWorkspacesFixture(),
       okFixture('req_1', {
         worktree: {
           id: 'repo::/tmp/repo/feature',
@@ -227,7 +229,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/feature/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.set', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.set', {
       worktree: 'id:repo::/tmp/repo/feature',
       displayName: undefined,
       linkedIssue: undefined,
@@ -241,6 +243,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/parent', 'feature/parent')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_set_parent', {
         worktree: {
           ...buildWorktree('/tmp/repo/child', 'feature/child'),
@@ -265,7 +268,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/parent/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.set', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.set', {
       worktree: 'id:repo::/tmp/repo/child',
       displayName: undefined,
       linkedIssue: undefined,

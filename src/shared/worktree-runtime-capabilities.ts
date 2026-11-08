@@ -102,6 +102,9 @@ export const WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY =
 export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
   'worktree.run-approved-setup.v1' as const
 
+// Hosts that honor branchIntent 'create-exact': the unsuffixed new branch, or a coded refusal.
+export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
+  'worktree.create.exact-name.v1' as const
 // Hosts that publish worktreeRowsChanged (only while the sidebar feed is off), so a phone's workspace list polls worktree.ps only as a backstop.
 export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'worktree.rows-changed-event.v1' as const
@@ -132,5 +135,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY,
   WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY,
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY,
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [] : [WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY])
 ] as const

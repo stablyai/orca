@@ -22,7 +22,7 @@ import {
   resolveBrowserExtensionTab
 } from '../tabs-and-windows/browser-extension-tab-model'
 import { runBrowserExtensionToolbarAction } from '../actions/browser-extension-toolbar'
-import { noteBrowserExtensionUserGesture } from './permissions'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 function isOrcaShortcut(input: Electron.Input): boolean {
   const overrides = browserManager.getKeybindingOverrides()

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'

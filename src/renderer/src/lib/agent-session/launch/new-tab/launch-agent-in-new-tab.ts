@@ -30,7 +30,7 @@ import {
 } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { launchOnceHostAnswered, routeNewTabLaunch } from './launch-agent-in-new-tab-host-agents'
 import type { AgentTabLaunchOutcome } from './launch-agent-in-new-tab-host-agents'
 

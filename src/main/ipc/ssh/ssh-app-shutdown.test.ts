@@ -7,10 +7,10 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/targets/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
-vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 const { shutdownTunnelsMock } = vi.hoisted(() => ({ shutdownTunnelsMock: vi.fn() }))

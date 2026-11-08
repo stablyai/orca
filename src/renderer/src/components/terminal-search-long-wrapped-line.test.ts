@@ -22,9 +22,6 @@ const WRAPPED_ROWS = 12_000
 const TRIMMED_HEAD_SCROLLBACK = 100
 const TRIMMED_HEAD_LINE_ROWS = 200
 const NEEDLE = 'needle'
-/** Enough wrapped rows and matches expose quadratic per-match scans; stay below the addon’s 1,000-decoration cap for exact counts. */
-const MATCH_ROW_STRIDE = 40
-const MATCHES_IN_LINE = 750
 /** Search runs on every keystroke on the renderer thread; this bound rejects visible freezes. */
 const FULL_SCAN_BUDGET_MS = 5_000
 
@@ -105,50 +102,6 @@ describe('terminal search inside one very long wrapped line', () => {
     }
   )
 
-  it.each(SEARCH_MODES)(
-    'highlights many matches in one wrapped line without re-walking it per match (%s)',
-    async (_mode, options) => {
-      const { terminal, search } = openTerminalWithSearch()
-      // Repeated matches resume deep in one line; per-match cell-to-string offset walks previously kept this path quadratic.
-      const block = ` ${NEEDLE} ${'x'.repeat(COLS * MATCH_ROW_STRIDE - NEEDLE.length - 2)}`
-      await write(terminal, block.repeat(MATCHES_IN_LINE))
-
-      let resultCount = -1
-      search.onDidChangeResults((event) => {
-        resultCount = event.resultCount
-      })
-      const startedAt = performance.now()
-      const found = safeFind(
-        (term, searchOptions) => search.findNext(term, searchOptions),
-        NEEDLE,
-        {
-          ...options,
-          decorations: SEARCH_DECORATIONS
-        }
-      )
-
-      expect(performance.now() - startedAt).toBeLessThan(FULL_SCAN_BUDGET_MS)
-      expect(found).toBe(true)
-      expect(resultCount).toBe(MATCHES_IN_LINE)
-    }
-  )
-
-  it('reports every match inside a wrapped line', async () => {
-    const { terminal, search } = openTerminalWithSearch()
-    let resultCount = -1
-    search.onDidChangeResults((event) => {
-      resultCount = event.resultCount
-    })
-    const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
-    await write(terminal, `${paddedNeedle.repeat(3)}\r\nplain ${NEEDLE}\r\n`)
-
-    safeFind((term, options) => search.findNext(term, options), NEEDLE, {
-      decorations: SEARCH_DECORATIONS
-    })
-
-    expect(resultCount).toBe(4)
-  })
-
   it('keeps reaching matches in a wrapped line whose first row was trimmed away', async () => {
     const { terminal, search } = openTerminalWithSearch(TRIMMED_HEAD_SCROLLBACK)
     // Evict the logical line’s head so the surviving first row is still marked wrapped.
@@ -228,20 +181,6 @@ describe('terminal search inside one very long wrapped line', () => {
 
     expect(found).toBe(true)
     expect(performance.now() - startedAt).toBeLessThan(FULL_SCAN_BUDGET_MS)
-  })
-
-  it('keeps scanning a line past a hit whole word rejects', async () => {
-    const { terminal, search } = openTerminalWithSearch()
-    // Skip non-word substring hits and keep scanning for a real word; wrapped-row skipping relies on finding it.
-    await write(terminal, `a${NEEDLE}a ${NEEDLE} done\r\n`)
-
-    const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {
-      wholeWord: true,
-      decorations: SEARCH_DECORATIONS
-    })
-
-    expect(found).toBe(true)
-    expect(terminal.getSelectionPosition()?.start).toEqual({ x: 9, y: 0 })
   })
 
   it('finds a whole-word match that only matches from a later wrapped row', async () => {

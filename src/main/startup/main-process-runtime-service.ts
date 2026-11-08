@@ -10,7 +10,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
@@ -19,12 +19,14 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
-import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
+import { agentHookRuntimeDeps } from '../agent-hooks/runtime/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
+import { trackRuntimeEnvironmentVerifiedTransitions } from '../ipc/runtime-environments/runtime-environment-verified-transitions'
+import { onRuntimeEnvironmentStatusPublished } from '../ipc/runtime-environments/runtime-environment-status-owner'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import {
@@ -43,7 +45,7 @@ import {
 import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import { SkillCloudService } from '../skills/skill-cloud-service'
+import { SkillCloudService } from '../skills/cloud/skill-cloud-package-service'
 import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,
@@ -114,7 +116,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
+    orchestrationEnvironmentTransport: {
+      ...createOrchestrationEnvironmentTransport(),
+      onEnvironmentVerified: (listener) =>
+        onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
+    },
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(

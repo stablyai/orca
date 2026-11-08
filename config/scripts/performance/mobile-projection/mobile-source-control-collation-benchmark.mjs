@@ -37,7 +37,7 @@ const results = []
 for (const [file, name] of [
   ['mobile/src/source-control/mobile-git-status.ts', 'buildMobileSourceControlSections'],
   ['mobile/src/source-control/mobile-branch-compare.ts', 'buildMobileBranchCompareSection'],
-  ['mobile/src/session/mobile-diff-review-queue.ts', 'buildMobileDiffReviewQueue']
+  ['mobile/src/source-control/review/mobile-diff-review-queue.ts', 'buildMobileDiffReviewQueue']
 ]) {
   const arms = {
     before: await load(
