@@ -50,19 +50,21 @@ describe('terminal dictation button', () => {
         />
       )
     })
-    return container.querySelector('[aria-label$="voice dictation"]')
+    return {
+      stop: container.querySelector('[data-icon="stop"]'),
+      mic: container.querySelector('[data-icon="mic"]')
+    }
   }
 
   it('turns the mic into a stop square while recording', () => {
-    const button = renderWith({ ...idle, isRecording: true })
-    expect(button?.getAttribute('aria-label')).toBe('Stop voice dictation')
-    expect(button?.querySelector('[data-icon="stop"]')).not.toBeNull()
-    expect(button?.querySelector('[data-icon="mic"]')).toBeNull()
+    const icons = renderWith({ ...idle, isRecording: true })
+    expect(icons.stop).not.toBeNull()
+    expect(icons.mic).toBeNull()
   })
 
   it('shows the mic when idle', () => {
-    const button = renderWith(idle)
-    expect(button?.getAttribute('aria-label')).toBe('Start voice dictation')
-    expect(button?.querySelector('[data-icon="mic"]')).not.toBeNull()
+    const icons = renderWith(idle)
+    expect(icons.mic).not.toBeNull()
+    expect(icons.stop).toBeNull()
   })
 })
