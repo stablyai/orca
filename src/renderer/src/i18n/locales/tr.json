@@ -21262,6 +21262,29 @@
       "loading": "Alt modül değişiklikleri yükleniyor…",
       "empty": "Alt modülde değişiklik yok",
       "loadFailed": "Alt modül değişiklikleri yüklenemedi"
+    },
+    "branchPicker": {
+      "switch": "Dal değiştir: {{branch}}",
+      "search": "Dallarda ara",
+      "recover": "{{branch}} dalına geç",
+      "create": "{{branch}} dalından {{name}} dalını oluştur",
+      "open": "Çalışma alanını aç",
+      "occupied": "{{path}} konumunda kullanımda",
+      "remote": "uzak",
+      "statusFailed": "Orca bu çalışma kopyasındaki değişiklikleri okuyamadı. Değiştirmeden önce Kaynak Denetimi'ni yenileyin.",
+      "statusUnknown": "Değiştirmeden önce bu çalışma kopyasındaki değişiklikleri okuyun.",
+      "conflict": "Dal değiştirmeden önce {{operation}} işlemini bitirin veya iptal edin.",
+      "dirty_one": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
+      "dirty_other": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
+      "agentWorking": "Bu çalışma alanında bir ajan çalışıyor. Bitirdiğinde dal değiştirin veya durduysa sekmesini kapatın.",
+      "listFailed": "Orca yerel dalları listeleyemedi. Seçiciyi yeniden açmayı deneyin.",
+      "discoveryFailed": "Orca uzak dal bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
+      "switchFailed": "Orca dal değiştiremedi. Tekrar deneyin.",
+      "switchFailedTitle": "Dal değiştirilemedi",
+      "switchFailedIn": "{{workspace}} içinde dal değiştirilemedi",
+      "switchedIn": "{{workspace}} içinde",
+      "thisComputer": "bu bilgisayar",
+      "updateHost": "Buradan dal değiştirmek için {{host}} üzerindeki Orca'yı güncelleyin."
     }
   },
   "agentsSidebarIntro": {

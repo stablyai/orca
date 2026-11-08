@@ -1,3 +1,12 @@
+import type {
+  BranchSwitchTarget,
+  BranchSwitchCreation
+} from '../../shared/git/branch-switch-target'
+import {
+  resolveBranchSwitchTarget,
+  branchSwitchFailure,
+  branchSwitchTrackingFailure
+} from './branch-switch-target'
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { GitStatusResult } from '../../shared/git/status/git-status-types'
@@ -19,7 +28,10 @@ export class BranchSwitchRefusedError extends Error {
 
 /** The switch landed, but git reported a problem (files left behind, a failed hook); shown as-is. */
 export class BranchSwitchLandedWithWarningError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly branch: string
+  ) {
     super(message)
     this.name = 'BranchSwitchLandedWithWarningError'
   }
@@ -40,7 +52,8 @@ function gitFailureLine(stderr: string): string | null {
   const lines = stderr
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !GIT_CHECKOUT_PROGRESS.test(line))
+    // WSL git runs in an interactive login shell, which writes `logout` to stderr as it exits.
+    .filter((line) => line && line !== 'logout' && !GIT_CHECKOUT_PROGRESS.test(line))
   return lines.find((line) => /^(error|fatal):/.test(line)) ?? lines.at(-1) ?? null
 }
 
@@ -63,7 +76,7 @@ export type BranchSwitchDeps = {
   /** Status as the panel reads it, so Orca's own shared-path symlinks don't count as changes. */
   getStatus: () => Promise<GitStatusResult>
   /** The provider's checkout, so the user's switch keeps the interactive git queue. */
-  checkout: () => Promise<{ skippedPaths: string[] }>
+  checkout: (branch: string, creation?: BranchSwitchCreation) => Promise<{ skippedPaths: string[] }>
   /** A user-facing reason when an agent is working in this checkout, else null. */
   getAgentBlocker: () => Promise<string | null>
   /** Record the user's choice before the lock lets a queued first-work rename look at the branch. */
@@ -164,6 +177,7 @@ async function firstHiddenSubmoduleEdit(
 async function readRefusal(
   worktreePath: string,
   branch: string,
+  creating: boolean,
   options: GitRuntimeOptions,
   deps: BranchSwitchDeps
 ): Promise<{ refusal: string | null; previousBranch: string | null }> {
@@ -201,55 +215,81 @@ async function readRefusal(
       'Another git action is still running in this checkout. Try again when it finishes.'
     )
   }
-  if (status.entries.length > 0) {
-    return refuse(changedFilesReason(status))
-  }
-  const hiddenSubmodule = await firstHiddenSubmoduleEdit(worktreePath, options)
-  if (hiddenSubmodule) {
-    return refuse(
-      `Commit, stash or clean the changes inside submodule ${hiddenSubmodule} before switching branches.`
-    )
+  if (!creating) {
+    if (status.entries.length > 0) {
+      return refuse(changedFilesReason(status))
+    }
+    const hiddenSubmodule = await firstHiddenSubmoduleEdit(worktreePath, options)
+    if (hiddenSubmodule) {
+      return refuse(
+        `Commit, stash or clean the changes inside submodule ${hiddenSubmodule} before switching branches.`
+      )
+    }
   }
   return refuse(await deps.getAgentBlocker())
 }
 
-/** Switch an existing local branch in place, refusing when the checkout is not safe to switch. */
+/** Switch or create a branch in place, refusing when the checkout is not safe to switch. */
 export async function switchBranchGuarded(
   worktreePath: string,
-  branch: string,
+  target: string | BranchSwitchTarget,
   options: GitRuntimeOptions,
   deps: BranchSwitchDeps
 ): Promise<BranchSwitchResult> {
   return withCheckoutLock(worktreePath, async () => {
-    const { refusal, previousBranch } = await readRefusal(worktreePath, branch, options, deps)
+    const resolved: { branch: string; creation?: BranchSwitchCreation } =
+      typeof target === 'string'
+        ? { branch: target }
+        : await resolveBranchSwitchTarget(worktreePath, target, options)
+    const { branch } = resolved
+    const creating = typeof target !== 'string' && target.kind === 'new'
+    const { refusal, previousBranch } = await readRefusal(
+      worktreePath,
+      branch,
+      creating,
+      options,
+      deps
+    )
     if (refusal !== null) {
       throw new BranchSwitchRefusedError(refusal)
     }
-    if (previousBranch === null) {
+    if (previousBranch === null && !creating) {
       return { branch, previousBranch }
     }
     let skippedPaths: string[]
     try {
-      ;({ skippedPaths } = await deps.checkout())
+      ;({ skippedPaths } = await deps.checkout(branch, resolved.creation))
     } catch (error) {
       // Git can exit non-zero after HEAD already moved (a file it could not replace, a failing
       // post-checkout hook); that switch landed and must be recorded.
-      if ((await readCurrentBranch(worktreePath, options)) !== branch) {
-        throw error
+      if (previousBranch === null || (await readCurrentBranch(worktreePath, options)) !== branch) {
+        throw typeof target === 'string' ? error : branchSwitchFailure(error, branch)
       }
       deps.onSwitched?.()
       const stderr = readGitCommandFailureStderr(error) ?? ''
       const failed = parseCheckoutSkippedPaths(stderr)
-      const detail = gitFailureLine(stderr) ?? 'a post-checkout hook or git step failed'
+      const tracking =
+        typeof target === 'string' ? null : branchSwitchTrackingFailure(stderr, branch)
+      const detail = gitFailureLine(stderr)
       throw new BranchSwitchLandedWithWarningError(
         failed.length > 0
           ? filesLeftBehindMessage(branch, failed)
-          : `Switched to ${branch}, but git reported an error: ${detail}`
+          : tracking
+            ? `Switched to ${branch}, but ${tracking}`
+            : detail && /^(error|fatal):/.test(detail)
+              ? `Switched to ${branch}, but git reported: ${detail}`
+              : detail
+                ? `Switched to ${branch}. A git hook in this repository failed afterwards and said: ${detail}. The switch itself worked.`
+                : `Switched to ${branch}. A git hook or git step in this repository failed afterwards. The switch itself worked.`,
+        branch
       )
     }
     deps.onSwitched?.()
     if (skippedPaths.length > 0) {
-      throw new BranchSwitchLandedWithWarningError(filesLeftBehindMessage(branch, skippedPaths))
+      throw new BranchSwitchLandedWithWarningError(
+        filesLeftBehindMessage(branch, skippedPaths),
+        branch
+      )
     }
     return { branch, previousBranch }
   })
