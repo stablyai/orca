@@ -20,7 +20,9 @@ export function createStructuredAgentSessionPublicationWiring(input: {
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged)
       input.client().publishJournal(id, journal, true, inputChanged)
-      input.delivery().afterCommit(id, journal)
+      if (inputChanged) {
+        input.delivery().afterCommit(id, journal)
+      }
     },
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
     logger: deferredStructuredAgentSessionLogger(input.logger),
