@@ -33,6 +33,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
+import { writeJournalDomainTextSnapshot } from './journal-domain-text-snapshot'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   readJournalSqlAcceptedInputs,
@@ -122,16 +123,28 @@ export function applyJournalDomainItem(
   const blindText =
     input.kind === 'text-snapshot' &&
     (input.body.role === 'assistant' || input.body.role === 'reasoning') &&
+    input.body.command === undefined &&
     input.body.blocks.every((block) => block.type === 'text')
   const stored = db
-    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden, placement_json,
-      CASE WHEN ? AND kind='message' AND message_role IN ('assistant','reasoning')
+    .prepare(`SELECT revision,sequence,ordinal,owner_fence,execution_owner,hidden,placement_json,
+      message_role,lifecycle_state,assistant_prose,
+      CASE WHEN ? AND kind='message' AND message_role=? AND subagent_row=0 AND command_entry=0
         THEN NULL ELSE payload_json END AS payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=?`)
-    .get(Number(blindText), ...prefix, itemId)
+    .get(
+      Number(blindText),
+      input.body.kind === 'message' ? input.body.role : null,
+      ...prefix,
+      itemId
+    )
   const previous: AgentJournalRenderItem | undefined = stored
     ? stored.payload_json === null
-      ? { ...JSON.parse(String(stored.placement_json)), body: input.body }
+      ? {
+          ...JSON.parse(String(stored.placement_json)),
+          revision: Number(stored.revision),
+          sequence: Number(stored.sequence),
+          body: input.body
+        }
       : JSON.parse(String(stored.payload_json))
     : undefined
   const item = (key: string): AgentJournalRenderItem | null => {
@@ -190,26 +203,31 @@ export function applyJournalDomainItem(
     ...agentJournalLinkageFields(input.options)
   }
   const rendered = journalRenderItem(itemId, revision, row.body, row, scope)
-  const items = writeJournalDomainCurrentItem(db, target, {
-    inputObservation: row,
-    item: previous ? journalItemRevisionValue(previous, rendered) : rendered,
-    ...(previous
-      ? {
-          previous: {
-            item: previous,
-            ordinal: Number(stored!.ordinal),
-            hidden: Boolean(stored!.hidden)
-          }
-        }
-      : {}),
-    hidden: Boolean(stored?.hidden),
-    writtenSequence: sequence,
-    stopSettle,
-    ownerFence: row.ownerFence!,
-    executionOwner:
-      row.executionOwner ??
-      (stored?.execution_owner == null ? null : Number(stored.execution_owner))
-  })
+  const next = previous ? journalItemRevisionValue(previous, rendered) : rendered
+  const executionOwner =
+    row.executionOwner ?? (stored?.execution_owner == null ? null : Number(stored.execution_owner))
+  const items =
+    blindText &&
+    writeJournalDomainTextSnapshot(db, target, stored, next, row.ownerFence!, executionOwner)
+      ? [next]
+      : writeJournalDomainCurrentItem(db, target, {
+          inputObservation: row,
+          item: next,
+          ...(previous
+            ? {
+                previous: {
+                  item: previous,
+                  ordinal: Number(stored!.ordinal),
+                  hidden: Boolean(stored!.hidden)
+                }
+              }
+            : {}),
+          hidden: Boolean(stored?.hidden),
+          writtenSequence: sequence,
+          stopSettle,
+          ownerFence: row.ownerFence!,
+          executionOwner
+        })
   const result: JournalDomainItemCommit = {
     cursor: { epoch, sequence },
     publicCursor: { epoch: journalContextEpoch(epoch, Number(head.context_boundary)), sequence },

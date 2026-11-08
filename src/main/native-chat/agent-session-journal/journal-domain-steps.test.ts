@@ -29,6 +29,62 @@ const pending: AgentJournalApprovalItem = {
   resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
 }
 
+it('keeps streamed text revisions and placement across reopen and refuses text after its turn ends', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    body: { kind: 'turn', turnId: 't', state: 'running' },
+    options
+  })
+  const snapshot = (text: string) =>
+    f.run({
+      kind: 'steps',
+      steps: [
+        {
+          kind: 'resolved-item',
+          reservedBytes: 4096,
+          options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:turn' } },
+          resolution: {
+            kind: 'text-snapshot',
+            identity: identity('text'),
+            body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+          }
+        }
+      ]
+    })
+  await snapshot('First')
+  await snapshot('Second')
+  await snapshot('Third')
+  expect(f.item('orca:text')).toMatchObject({
+    revision: 3,
+    sequence: 2,
+    observedAt: 100,
+    body: { blocks: [{ text: 'Third' }] },
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
+  f.reopen()
+  await snapshot('After restart')
+  expect(f.item('orca:text')).toMatchObject({
+    revision: 4,
+    sequence: 2,
+    body: { blocks: [{ text: 'After restart' }] }
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    body: { kind: 'turn', turnId: 't', state: 'completed' },
+    options
+  })
+  expect((await snapshot('Too late')).value).toMatchObject({
+    outcomes: [{ kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }]
+  })
+  expect(f.item('orca:text')).toMatchObject({
+    revision: 4,
+    body: { blocks: [{ text: 'After restart' }] }
+  })
+})
+
 it('commits the successful step prefix with only its actual payloads and skips the failed suffix', async () => {
   const f = domainLifecycleFixture(cleanups)
   f.db.exec(
