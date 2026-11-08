@@ -221,11 +221,11 @@ export function useAgentPaneThreads(args: {
     const matchesSearchQuery =
       normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
-      // Why: unread-only must not hide live agents (a read agent can be running again) or the just-selected row that auto-mark-read flipped to read.
+      // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
-        thread.currentAgentState === null &&
+        (thread.currentAgentState === null || thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false

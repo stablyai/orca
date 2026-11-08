@@ -89,6 +89,47 @@ describe('Activity search query in the real hook', () => {
     ])
   })
 
+  it('hides acknowledged unavailable rows unless selected in the unread filter', () => {
+    const [livePane, unavailablePane] = installThreads(2)
+    const entries = useAppStore.getState().agentStatusByPaneKey
+    useAppStore.setState({
+      agentStatusByPaneKey: { [livePane]: entries[livePane] },
+      migrationUnsupportedByPtyId: {
+        'pty-tab-1': {
+          ptyId: 'pty-tab-1',
+          paneKey: unavailablePane,
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 99_000
+        }
+      },
+      acknowledgedAgentsByPaneKey: { [livePane]: 100_000, [unavailablePane]: 100_000 }
+    })
+    const activity = renderHook(
+      (selectedPaneKey: string | null) =>
+        useAgentPaneThreads({ ...options(''), readFilter: 'unread', selectedPaneKey }),
+      { initialProps: null }
+    )
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    activity.rerender(unavailablePane)
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
+    activity.rerender(null)
+    act(() => useAppStore.setState({ acknowledgedAgentsByPaneKey: { [livePane]: 100_000 } }))
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
+  })
+
   it('keeps selection, child classification and scoped row order', () => {
     const panes = installThreads(8)
     const parent = panes[0]
