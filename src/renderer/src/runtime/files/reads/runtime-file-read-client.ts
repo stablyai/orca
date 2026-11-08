@@ -13,8 +13,8 @@ import {
   hasRemoteRuntimeOwner,
   localAccess
 } from '../runtime-file-routing'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import { chatScratchFileAddress } from '../../runtime-chat-scratch-file-address'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { chatScratchFileAddress } from '../addressing/runtime-chat-scratch-file-address'
 import { readRemoteFileContent } from './runtime-remote-file-content'
 import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import { decodeSvgBase64, isSvgFilePath } from '../../../../../shared/svg-document'

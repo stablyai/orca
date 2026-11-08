@@ -4,7 +4,7 @@ import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolu
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useAppStore } from '@/store/index'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from '../links/markdown-preview-local-images'

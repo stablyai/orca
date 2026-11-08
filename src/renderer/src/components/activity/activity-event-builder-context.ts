@@ -15,7 +15,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { tabFromWorktreeAttributedStatusEntry } from '../sidebar/workspace-card/activity/worktree-agent-row-fallback-tab'
 import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'

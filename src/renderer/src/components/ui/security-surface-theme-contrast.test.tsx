@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyPluginAppTheme } from '@/lib/document-theme'
-import { contrastRatio, type Rgba } from '@/lib/plugin-theme-tokens'
+import { contrastRatio, type Rgba } from '../../../../shared/color/rgba-contrast'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './dialog'
 
 const css = readFileSync(resolve('src/renderer/src/assets/main.css'), 'utf8')

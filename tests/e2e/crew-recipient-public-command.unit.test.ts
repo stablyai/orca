@@ -5,7 +5,6 @@ import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-st
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
 import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {

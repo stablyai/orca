@@ -34,7 +34,7 @@ import {
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []

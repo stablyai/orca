@@ -1,5 +1,5 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
+import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
@@ -27,12 +27,12 @@ import {
   agentPermissionChoiceLabel,
   AllAgentsPermissionSetting,
   type AgentPermissionChoiceRow
-} from '../../../agent/launch-settings/AgentPermissionChoiceControls'
-import type { AgentPermissionsSettingProps } from '../permissions/AgentPermissionsSetting'
+} from '@/components/agent/launch-settings/AgentPermissionChoiceControls'
+import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
 import {
   buildAgentRowPermissions,
   sharedAgentPermissionChoice as sharedChoice
-} from '../permissions/agent-row-permission-model'
+} from '@/components/settings/agents/permissions/agent-row-permission-model'
 import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv,
@@ -48,18 +48,18 @@ import {
 } from '@/lib/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { AgentDefaultSetting } from './AgentDefaultSetting'
-import { AgentDetectionCatalog } from './AgentDetectionCatalog'
-import type { AgentCatalogRowProps } from './AgentCatalogRow'
-import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
-import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
-import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+import { AgentDefaultSetting } from '@/components/settings/agents/launch/AgentDefaultSetting'
+import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
+import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
+import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
+import { buildCodexSessionSourceHomeControl } from '@/components/agent/launch-settings/codex-session-source-home-control'
+import { buildAgentOpensAs } from '@/lib/agent-session/launch/native-chat-provider-choice'
 import {
   AgentChatRuntimeArea,
   chatUnavailableOnThisDesktop
-} from '../../../agent/launch-settings/AgentChatChoiceControls'
+} from '@/components/agent/launch-settings/AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 

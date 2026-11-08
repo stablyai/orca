@@ -9,7 +9,7 @@ import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
+import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 let store: ReturnType<typeof createTestStore>
 let actualCreation: typeof importCreation
@@ -41,7 +41,7 @@ vi.mock('@/lib/worktree-operation-route', async (original) => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
 createTabsSliceMockApi()

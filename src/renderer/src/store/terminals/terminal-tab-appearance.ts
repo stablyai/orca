@@ -1,8 +1,8 @@
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
-import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
+import { captureStructuredChatRename } from '@/runtime/native-chat/naming/structured-chat-rename-action'
 
 export function createTerminalTabAppearanceActions(
   set: TerminalStoreSet,
@@ -26,7 +26,7 @@ export function createTerminalTabAppearanceActions(
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
         const action = captureStructuredChatRename(get, item)
-        void import('@/runtime/structured-chat-rename')
+        void import('@/runtime/native-chat/naming/structured-chat-rename')
           .then(({ renameStructuredChatTab }) =>
             renameStructuredChatTab(
               get,

@@ -1,3 +1,4 @@
+import type * as SessionTabsStateModule from '../../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { composeAgentLaunchProfile } from '../../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import * as startupInputs from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -22,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
 import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import { resetWebSessionCloseIntentForTests } from '../../../src/renderer/src/runtime/web-session-close-intent'
+import { resetWebSessionCloseIntentForTests } from '../../../src/renderer/src/runtime/web-session-tabs-sync/closing/web-session-close-intent'
 import {
   ENVIRONMENT_ID,
   WORKTREE_ID,
@@ -61,8 +62,15 @@ vi.mock('../../../src/renderer/src/store', () => ({
   }
 }))
 
+vi.mock(
+  '../../../src/renderer/src/runtime/web-session-tabs-sync/state',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SessionTabsStateModule>()),
+    acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+  })
+)
+
 vi.mock('../../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
 }))
 vi.mock('../../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api', () => ({
@@ -90,9 +98,12 @@ vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => 
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
-vi.mock('../../../src/renderer/src/runtime/web-runtime-browser-materialization', () => ({
-  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
-}))
+vi.mock(
+  '../../../src/renderer/src/runtime/browser/creation/web-runtime-browser-materialization',
+  () => ({
+    hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
+  })
+)
 
 const currentInputs = startupInputs.resolveAgentStartupPlanInputs
 afterEach(() => {

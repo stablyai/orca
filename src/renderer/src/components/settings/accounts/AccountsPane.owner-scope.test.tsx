@@ -141,7 +141,7 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
 vi.mock('@/lib/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn(async () => 'no-running-sessions')
 }))
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({ target: { kind: 'local' }, wslHostDistro: null })
 }))
 vi.mock('@/lib/windows-terminal-capabilities', () => ({

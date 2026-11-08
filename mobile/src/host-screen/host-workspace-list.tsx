@@ -32,7 +32,7 @@ import type { Section, WorkspaceListItem, Worktree } from '../worktree/workspace
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { buildRepoLookById, type RepoLook } from './host-repo-looks'
+import { useRepoLookById, type RepoLook } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../query/host-mutation-drafts'
@@ -69,7 +69,6 @@ export function HostWorkspaceList({
     isWideLayout,
     lastConnectedAt,
     noticeParam,
-    now,
     reconnectAttempts,
     relayRecovery,
     routeNotice,
@@ -105,7 +104,7 @@ export function HostWorkspaceList({
       resetTitle?.()
     }
   }, [hasRows, resetTitle])
-  const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
+  const repoLookById = useRepoLookById(repoById)
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(worktreeCardProperties, { compactWorktreeCards, newCardStyle }),
@@ -151,8 +150,6 @@ export function HostWorkspaceList({
         item={item}
         view={view}
         isReadOnly={isReadOnly}
-        // Only inline agents show times, so other rows skip the 30 s clock.
-        now={cardDetails.inlineAgents && item.agents?.length ? now : 0}
         status={getWorktreeDotStatus(item)}
         repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
         repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
@@ -172,7 +169,6 @@ export function HostWorkspaceList({
       hostId,
       isReadOnly,
       cardDetails,
-      now,
       repoLookById,
       groupBy,
       agentActivityDisplayMode,

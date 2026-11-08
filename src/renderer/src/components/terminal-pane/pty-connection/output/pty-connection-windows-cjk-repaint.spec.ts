@@ -24,6 +24,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -48,7 +49,6 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -72,6 +72,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('does not schedule WebGL atlas recovery for plain synchronized foreground frames', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks2 =
@@ -111,6 +112,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks6 =
@@ -155,6 +157,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks7 =
@@ -198,6 +201,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks8 =
@@ -240,6 +244,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('does not repaint ordinary non-ASCII output on non-Windows clients', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks9 =
@@ -284,6 +289,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks10 =
@@ -329,6 +335,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('coalesces forced foreground refreshes when WebGL is live', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks12 =

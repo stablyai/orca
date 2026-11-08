@@ -39,7 +39,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-surface', ()
     )
   }
 }))
-vi.mock('@/runtime/layout-owner-pending-tabs', () => ({
+vi.mock('@/runtime/workspace-layout/intents/layout-owner-pending-tabs', () => ({
   afterPendingTab: (tabId: string, run: (outcome: string | null) => void) => run(tabId)
 }))
 vi.mock('../../composer/focus/native-chat-composer-focus-intent', () => ({

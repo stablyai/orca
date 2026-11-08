@@ -4,10 +4,10 @@ import { expect, it, vi } from 'vitest'
 import { useNativeChatFork } from './use-native-chat-fork'
 import { launchNativeChatFork } from './native-chat-fork-launch'
 
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'supported'
 }))
-vi.mock('@/runtime/use-host-structured-agent', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent', () => ({
   useHostStructuredAgent: () => ({ agent: 'opencode', capabilities: { fork: 'tip' } })
 }))
 const settle = vi.hoisted(() => vi.fn())

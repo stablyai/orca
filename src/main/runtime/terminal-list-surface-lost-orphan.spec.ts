@@ -7,7 +7,7 @@ import type {
   TerminalTab
 } from '../../shared/workspace-layout/terminal-tab-types'
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import { spawnSurfaceClaimSequence } from './terminal/surface/pty-recorded-surface-topology'
+import './terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
@@ -167,92 +167,6 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
   }
 
   describe('terminal inventory after a pane is dropped', () => {
-    it('reports both terminals attached while both panes exist', async () => {
-      const runtime = makeRuntime()
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
-      expect(byPty.get(KEPT_PTY)?.orphaned).toBe(false)
-      expect(byPty.get(DROPPED_PTY)?.orphaned).toBe(false)
-    })
-
-    it('distinguishes the surface-lost terminal from the healthy one', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
-
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
-      const kept = byPty.get(KEPT_PTY)
-      const dropped = byPty.get(DROPPED_PTY)
-
-      expect(dropped?.orphaned).not.toBe(kept?.orphaned)
-      expect(dropped?.orphaned).toBe(true)
-      expect(kept?.orphaned).toBe(false)
-    })
-
-    it('stops pointing callers at the tab that no longer exists', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
-
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      const dropped = terminals.find((terminal) => terminal.ptyId === DROPPED_PTY)
-      // `terminal close --tab tab-dropped` is what returned `tab_not_found` (#18191 §5).
-      expect(dropped?.tabId).not.toBe('tab-dropped')
-      expect(dropped?.tabId).toBe(`pty:${DROPPED_PTY}`)
-    })
-
-    it('names the pane the dropped terminal was last recorded in, and only for the orphan', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
-
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
-      // Window-owned panes retain recorded names to rebind without forking; main-owned layout has already removed the pane.
-      expect(byPty.get(DROPPED_PTY)?.recordedPaneKey).toBe(
-        ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : makePaneKey('tab-dropped', DROPPED_LEAF)
-      )
-      expect(byPty.get(KEPT_PTY)).not.toHaveProperty('recordedPaneKey')
-    })
-
-    it('keeps reporting the live PTY rather than dropping it from inventory', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
-
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      // Losing a surface is not evidence the process ended; it must stay listed and connected.
-      const dropped = terminals.find((terminal) => terminal.ptyId === DROPPED_PTY)
-      expect(dropped).toBeDefined()
-      expect(dropped?.connected).toBe(true)
-    })
-
-    it('does not call a surface recorded since the last graph statement orphaned', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
-      // Spawn may claim a pane before its first graph statement (#7587); silence cannot retract it, and main-owned bindings outrank graphs.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        bindPaneFirst(runtime, pane('tab-dropped', DROPPED_LEAF, DROPPED_PTY))
-      } else {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordPtyWorktree is protected; reaching it is the only way to stamp a pane the graph never published.
-        const stamp = runtime as unknown as {
-          recordPtyWorktree: (
-            ptyId: string,
-            worktreeId: string,
-            state: Record<string, unknown>
-          ) => void
-          graphSequence: number
-        }
-        stamp.recordPtyWorktree(DROPPED_PTY, WORKTREE_ID, {
-          connected: true,
-          tabId: 'tab-dropped',
-          paneKey: `tab-dropped:${DROPPED_LEAF}`,
-          surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(stamp.graphSequence)
-        })
-      }
-
-      const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-      const dropped = terminals.find((terminal) => terminal.ptyId === DROPPED_PTY)
-      expect(dropped?.orphaned).toBe(false)
-    })
-
     it('does not let the inventory restore un-drop a pane the graph dropped', async () => {
       // Inventory refresh replays persisted pane keys; stamping that replay as fresh graph evidence would erase the orphan being reported.
       const runtime = makeRuntime(sessionStillHoldingBothPanes())

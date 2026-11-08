@@ -13,7 +13,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { editorShortcutMatches } from '../../editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -64,10 +63,8 @@ export default function IpynbViewer({
     } catch (error) {
       return {
         notebook: null,
-        error:
-          error instanceof Error
-            ? error.message
-            : translate('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')
+        // Translated at render so the fallback follows the UI language without reparsing.
+        error: error instanceof Error ? error.message : null
       }
     }
   }, [content])
@@ -152,7 +149,10 @@ export default function IpynbViewer({
             <div className="font-medium text-foreground">
               {t('auto.components.editor.IpynbViewer.c1601b23b2', 'Unable to render notebook')}
             </div>
-            <div className="mt-1">{parsed.error}</div>
+            <div className="mt-1">
+              {parsed.error ??
+                t('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')}
+            </div>
           </div>
         </div>
       </div>

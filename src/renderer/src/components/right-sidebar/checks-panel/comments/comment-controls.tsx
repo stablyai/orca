@@ -27,20 +27,20 @@ import { normalizePRCommentAuthorLogin } from '../../../../../../shared/source-c
 import type { PRComment } from '../../../../../../shared/github/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function CopyButton({
   text,
-  title = translate(
-    'auto.components.right.sidebar.checks.panel.content.copyComment',
-    'Copy comment'
-  )
+  title: titleOverride
 }: {
   text: string
   title?: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const title =
+    titleOverride ??
+    t('auto.components.right.sidebar.checks.panel.content.copyComment', 'Copy comment')
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Clipboard IPC may settle after unmount; do not start a reset timer then.

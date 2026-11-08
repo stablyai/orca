@@ -115,7 +115,7 @@ export function publicLineageFixture(worktreeId = 'repo::/workspace') {
     attachRuntimeWorktreeAgentRows({
       summaries,
       rowSources: sources,
-      terminalTitleEvidenceByWorktreeId: new Map(),
+      terminalTitleEvidenceByRow: new Map(),
       orchestrationByPaneKey: projection.buildByPaneKey(),
       getSummary: (id) => summaries.get(id) ?? null
     })

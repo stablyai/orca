@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { paneClaudeTarget } from '../../host-state/terminal-pane-claude-target'
@@ -70,6 +70,7 @@ export function ClaudeDiffPanelNoticeBanner({
   /** The pane element, watched for width changes. */
   container: HTMLElement
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
   const seen = useAppStore((state) => state.claudeDiffPanelNoticeSeen)
   const markSeen = useAppStore((state) => state.markClaudeDiffPanelNoticeSeen)
@@ -85,17 +86,17 @@ export function ClaudeDiffPanelNoticeBanner({
   }
   return (
     <PaneTopWarningBanner
-      title={translate(
+      title={t(
         'terminal.claudeDiffPanelNotice.title',
         "Claude Code can open its own diff panel beside the chat in wide terminals. That panel is Claude's, not Orca's."
       )}
-      body={translate(
+      body={t(
         'terminal.claudeDiffPanelNotice.body',
         'To hide it, type /diff in Claude Code. Claude remembers that choice for later sessions.'
       )}
       primaryAction={
         <Button type="button" variant="outline" size="xs" onClick={markSeen}>
-          {translate('terminal.claudeDiffPanelNotice.gotIt', 'Got it')}
+          {t('terminal.claudeDiffPanelNotice.gotIt', 'Got it')}
         </Button>
       }
     />

@@ -9,7 +9,7 @@ import {
 import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session/agent-session-wire'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
+import type * as HostCapability from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../src/shared/non-secure-context-uuid'
 import { mkdir, mkdtemp, writeFile, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -26,7 +26,7 @@ import { optionSession } from '../../src/main/codex/structured/catalog/codex-str
 import { startStructuredAgentLaunch } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { structuredAgentSessionMessageSelection } from '../../src/shared/agent-session/options/structured-agent-session-option-view'
@@ -43,11 +43,14 @@ import {
   getStructuredLaunchStateBySessionId
 } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-registry'
 
-vi.mock('@/runtime/structured-agent-session-host-capability', async (original) => ({
-  ...(await original<typeof HostCapability>()),
-  useStructuredAgentSessionHostCapability: () => false,
-  useStructuredAgentSessionOwnPermissionState: () => 'supported'
-}))
+vi.mock(
+  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  async (original) => ({
+    ...(await original<typeof HostCapability>()),
+    useStructuredAgentSessionHostCapability: () => false,
+    useStructuredAgentSessionOwnPermissionState: () => 'supported'
+  })
+)
 vi.mock('@/components/native-chat/session/status/structured-agent-session-status-hooks', () => ({
   useStructuredAgentSessionPermissionStatus: () => ({
     permissionReport: false,

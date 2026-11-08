@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { AgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store/index'
-import { useStructuredAgentSessionOwnPermissionState } from '@/runtime/structured-agent-session-host-capability'
+import { useStructuredAgentSessionOwnPermissionState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import {
   readHostAgentLaunchSettings,

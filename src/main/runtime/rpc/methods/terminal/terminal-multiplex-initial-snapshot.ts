@@ -89,11 +89,14 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
+    ...((stream.supportsOutputPause ||
+      stream.inputSessionId !== null ||
+      stream.supportsOutputCadence) && {
       capabilities: {
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
         ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
-        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
+        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {}),
+        ...(stream.supportsOutputCadence ? { outputCadence: 1 as const } : {})
       }
     }),
     ...(stream.inputSessionId !== null

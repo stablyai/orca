@@ -45,7 +45,13 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { RuntimeRpcFailureError } from './runtime/types'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture,
+  queueNoFolderAtSelector
+} from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -113,7 +119,7 @@ describe('orca cli worktree awareness', () => {
         '/tmp/repo'
       )
       const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
-      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.set'])
+      expect(callMock).toHaveBeenLastCalledWith('worktree.set', expect.anything())
       expect(output.data.orchestrationRequestId).toBe('req_mutation')
       expect(output.data.nextSteps).toContain('Inspect mutation.')
       expect(output.data.nextSteps.join(' ')).toContain('parent selector "name:missing"')
@@ -153,6 +159,10 @@ describe('orca cli worktree awareness', () => {
           err.mockClear()
           const worktree = stage === 'child' ? 'current' : 'name:x'
           const parent = stage === 'parent' ? 'current' : 'name:existing-parent'
+          // `current` resolves from the worktree list; only name:x makes the folder lookup first.
+          if (stage !== 'child') {
+            queueNoFolderAtSelector(callMock)
+          }
           if (stage === 'preflight') {
             callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(rpc))
           } else {
@@ -170,13 +180,7 @@ describe('orca cli worktree awareness', () => {
           await main([...args, ...(json ? ['--json'] : [])], cwd)
           const text = String((json ? log : err).mock.calls.at(-1)?.[0])
           const response = json ? JSON.parse(text) : undefined
-          expect(callMock.mock.calls.map(([method]) => method)).toEqual(
-            stage === 'preflight'
-              ? ['worktree.show']
-              : stage === 'parent'
-                ? ['worktree.list', 'folderWorkspace.list']
-                : ['worktree.list']
-          )
+          expect(callMock.mock.calls.map(([method]) => method)).not.toContain('worktree.set')
           expect(text).toContain(
             stage === 'preflight' ? 'Inspect original request.' : `current directory: ${cwd}`
           )

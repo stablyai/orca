@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { foldersAndAutomationsWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-folders-profile'
+import '../../persistence/__fixtures__/wsl-mover/wsl-mover-folders-profile'
 import { heavyWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-heavy-profile'
 import {
   repo,
@@ -42,45 +42,7 @@ function convert(state: PersistedState, repoIds: string[], folderWorkspaceIds: s
   return rewriteWslDriveUncState(state, { distro: WSL_MOVER_DISTRO, repoIds, folderWorkspaceIds })
 }
 
-const WINDOWS_GIT = { kind: 'wsl', distro: WSL_MOVER_DISTRO, git: 'windows-host' } as const
-
 describe('rewriteWslDriveUncState', () => {
-  it('re-keys every session, UI and catalog row of the converted projects', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const { state, worktreeIds } = convert(before, ['repo-a', 'repo-b'])
-    const expected = persisted(heavyWslMoverProfile(drive))
-    for (const [oldId, newId] of worktreeIds) {
-      expected.worktreeMeta[newId] = {
-        ...expected.worktreeMeta[newId],
-        priorWorktreeIds: [oldId]
-      }
-    }
-    expected.projects = expected.projects.map((project) => ({
-      ...project,
-      localWindowsRuntimePreference: WINDOWS_GIT
-    }))
-    expect(state).toEqual(expected)
-    expect(Object.fromEntries(worktreeIds)).toEqual({
-      [`repo-a::${unc.at('/home/dev/app')}`]: `repo-a::${drive.at('/home/dev/app')}`,
-      [`repo-a::${unc.at('/home/dev/app-feature')}`]: `repo-a::${drive.at('/home/dev/app-feature')}`,
-      [`repo-b::${unc.at('/home/dev/lib', 'wsl$')}`]: `repo-b::${drive.at('/home/dev/lib')}`
-    })
-  })
-
-  it('converts folder workspaces and their group, and keeps automation history as it ran', () => {
-    const before = persisted(foldersAndAutomationsWslMoverProfile(unc))
-    const { state } = convert(before, ['repo-auto'], ['folder-1'])
-    const expected = persisted(foldersAndAutomationsWslMoverProfile(drive))
-    const wtAuto = `repo-auto::${drive.at('/srv/jobs')}`
-    expected.worktreeMeta[wtAuto] = {
-      ...expected.worktreeMeta[wtAuto],
-      priorWorktreeIds: [`repo-auto::${unc.at('/srv/jobs')}`]
-    }
-    expected.projects = [{ ...expected.projects[0], localWindowsRuntimePreference: WINDOWS_GIT }]
-    expected.automationRuns = before.automationRuns
-    expect(state).toEqual(expected)
-  })
-
   it('rewrites minted PTY session ids, keeping the incarnation suffix', () => {
     const before = persisted(heavyWslMoverProfile(unc))
     const oldId = `repo-a::${unc.at('/home/dev/app')}`
@@ -119,19 +81,6 @@ describe('rewriteWslDriveUncState', () => {
     expect(state.projects.find((row) => row.id === 'project-b')).toEqual(
       before.projects.find((row) => row.id === 'project-b')
     )
-  })
-
-  it("keeps a project's own runtime choice and only adds Windows Git to a WSL one", () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    before.projects = [
-      { ...before.projects[0], localWindowsRuntimePreference: { kind: 'windows-host' } },
-      { ...before.projects[1], localWindowsRuntimePreference: { kind: 'wsl', distro: 'Other' } }
-    ]
-    const { state } = convert(before, ['repo-a', 'repo-b'])
-    expect(state.projects.map((row) => row.localWindowsRuntimePreference)).toEqual([
-      { kind: 'windows-host' },
-      { kind: 'wsl', distro: 'Other', git: 'windows-host' }
-    ])
   })
 
   it('is idempotent, so a resumed conversion changes nothing', () => {

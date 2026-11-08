@@ -31,7 +31,6 @@ export function registerPtyConnectionHiddenEscapeAdmissionTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -117,7 +116,6 @@ export function registerPtyConnectionHiddenQueryAdmissionTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

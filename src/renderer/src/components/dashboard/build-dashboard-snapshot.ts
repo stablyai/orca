@@ -1,5 +1,5 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {

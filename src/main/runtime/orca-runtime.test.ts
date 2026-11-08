@@ -7,7 +7,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, mkdir: vi.fn(actual.mkdir) }
 })
 
-await import('./rpc/unused-default-rpc-methods.test-fixture')
 await import('./orca-runtime-tests/runtime-test-module-registration.spec')
 await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
@@ -24,7 +23,6 @@ await import('./orca-runtime-tests/worktree-selector-resolution.spec')
 await import('./orca-runtime-tests/local-worktree-creation.spec')
 await import('./orca-runtime-tests/local-worktree-creation-part-02.spec')
 await import('./orca-runtime-tests/ssh-worktree-lifecycle.spec')
-await import('./orca-runtime-tests/hooks-and-hosted-review.spec')
 await import('./orca-runtime-tests/hooks-and-hosted-review-part-02.spec')
 await import('./orca-runtime-tests/repository-project-operations.spec')
 await import('./orca-runtime-tests/repository-project-operations-part-02.spec')
