@@ -28,6 +28,12 @@ import type { NativeChatSendLifecycle } from '../../session/terminal/send/use-na
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from '../../session/terminal/delivery/native-chat-optimistic-send-outcome'
 import {
+  useNativeChatSubmissionHistory,
+  type NativeChatSubmissionSource
+} from '../../native-chat-submission-source'
+import { isConfirmedNativeChatUserSubmission } from '../../../../../../shared/native-chat/native-chat-submission-evidence'
+import type { NativeChatRecallSource } from '../../drafts/native-chat-sent-prompt-history'
+import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
 } from '../../session/options/terminal/use-native-chat-local-command-answer'
@@ -36,6 +42,8 @@ export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
   draft: string
   draftScopeKey: string
+  recallSource?: NativeChatRecallSource
+  submissionSource?: NativeChatSubmissionSource
   imageAttachments: readonly { path: string }[]
   disabled: boolean
   isDispatchingSessionOption: boolean
@@ -58,6 +66,8 @@ export function useNativeChatPtyComposerSend(args: {
   clearImageAttachments: () => void
   setNotice: (notice: string | null) => void
 }): (retry?: { text: string; imagePaths?: string[] }) => boolean {
+  const submissionKey = args.submissionSource?.key ?? args.draftScopeKey
+  const { submissionHistory, readPriorSubmission } = useNativeChatSubmissionHistory(submissionKey)
   return useCallback(
     (retry) => {
       let text = retry?.text ?? args.draft
@@ -76,6 +86,7 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       const classification = retry ? 'chat' : args.classifySend(text)
+      const priorMessages = classification === 'chat' ? args.recallSource?.messages : undefined
       if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
         return false
       }
@@ -157,9 +168,24 @@ export function useNativeChatPtyComposerSend(args: {
           }
         }
       }
+      const priorSubmission =
+        priorMessages && !priorMessages.some(isConfirmedNativeChatUserSubmission)
+          ? () => readPriorSubmission(args.submissionSource)
+          : undefined
       emitNativeChatMessageSent({
         agent: args.agent,
-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local',
+        ...(priorMessages && pendingHandle?.outcome
+          ? {
+              followUp: {
+                priorMessages,
+                priorSubmission,
+                submission: pendingHandle.outcome.then((outcome) => outcome === 'submitted'),
+                ...(pendingId ? { messageId: `pending:${pendingId}` } : {}),
+                submissionHistory
+              }
+            }
+          : {})
       })
       args.onSubmitted?.()
       if (!retry) {
@@ -172,6 +198,6 @@ export function useNativeChatPtyComposerSend(args: {
       }
       return true
     },
-    [args]
+    [args, submissionHistory, readPriorSubmission]
   )
 }

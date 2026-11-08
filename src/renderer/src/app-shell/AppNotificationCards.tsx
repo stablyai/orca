@@ -25,11 +25,13 @@ export function AppNotificationCards({
   activeView,
   shouldMountUpdateCard,
   chatUiHereCornerCardOpen,
+  chatUiSwitchNoteCohort,
   onChatUiHereCornerCardClose
 }: {
   activeView: TopLevelView
   shouldMountUpdateCard: boolean
   chatUiHereCornerCardOpen: boolean
+  chatUiSwitchNoteCohort: 'control' | 'treatment' | undefined
   onChatUiHereCornerCardClose: () => void
 }): JSX.Element {
   return (
@@ -37,7 +39,10 @@ export function AppNotificationCards({
       {chatUiHereCornerCardOpen ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.chat-ui-here-corner-card" resetKey={activeView}>
-            <ChatUiHereCornerCard onClose={onChatUiHereCornerCardClose} />
+            <ChatUiHereCornerCard
+              onClose={onChatUiHereCornerCardClose}
+              cohort={chatUiSwitchNoteCohort}
+            />
           </OverlayBoundary>
         </Suspense>
       ) : null}

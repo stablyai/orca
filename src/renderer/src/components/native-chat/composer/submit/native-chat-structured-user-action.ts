@@ -1,4 +1,7 @@
-import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
+import {
+  emitNativeChatMessageSent,
+  type NativeChatFollowUpTelemetry
+} from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 
@@ -6,8 +9,13 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-struct
 export function completeNativeChatStructuredUserAction(
   agent: AgentType,
   transport: NativeChatStructuredComposerTransport,
-  reveal: (() => void) | undefined
+  reveal: (() => void) | undefined,
+  followUp?: NativeChatFollowUpTelemetry
 ): void {
-  emitNativeChatMessageSent({ agent, runtime: transport.runtime })
+  emitNativeChatMessageSent({
+    agent,
+    runtime: transport.runtime,
+    ...(followUp ? { followUp } : {})
+  })
   reveal?.()
 }

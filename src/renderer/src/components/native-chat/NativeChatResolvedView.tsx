@@ -402,6 +402,7 @@ export function NativeChatResolvedView({
           readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
           recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
+          submissionSource={session.submissionSource}
         />
       </div>
       {contextMenu.menu}

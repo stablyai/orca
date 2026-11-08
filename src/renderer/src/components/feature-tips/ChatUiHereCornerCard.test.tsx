@@ -23,12 +23,21 @@ const onClose = vi.fn()
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: createGlobalSettingsFixture({ agentDefaultSurface: 'terminal' }),
+    settings: createGlobalSettingsFixture({
+      agentDefaultSurface: 'terminal',
+      telemetry: {
+        optedIn: true,
+        installId: 'switch-note-treatment',
+        existedBeforeTelemetryRelease: true,
+        chatUiSwitchNoteCohort: 'treatment'
+      }
+    }),
     updateSettingsOrThrow
   })
   updateSettingsOrThrow.mockReset().mockResolvedValue(undefined)
   onClose.mockReset()
   vi.mocked(toast.error).mockReset()
+  vi.mocked(toast.success).mockReset()
   vi.mocked(track).mockReset()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -46,7 +55,10 @@ function renderCard(): void {
   act(() =>
     root.render(
       <StrictMode>
-        <ChatUiHereCornerCard onClose={onClose} />
+        <ChatUiHereCornerCard
+          onClose={onClose}
+          cohort={useAppStore.getState().settings?.telemetry?.chatUiSwitchNoteCohort}
+        />
       </StrictMode>
     )
   )
@@ -63,6 +75,31 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe('Chat UI corner card', () => {
+  it('closes with the existing success toast for the control group', async () => {
+    const settings = useAppStore.getState().settings!
+    act(() =>
+      useAppStore.setState({
+        settings: {
+          ...settings,
+          telemetry: {
+            optedIn: true,
+            installId: 'switch-note-control',
+            existedBeforeTelemetryRelease: true,
+            chatUiSwitchNoteCohort: 'control'
+          }
+        }
+      })
+    )
+    renderCard()
+    await act(async () => button('Use Chat UI').click())
+    expect(toast.success).toHaveBeenCalledOnce()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(track).not.toHaveBeenCalledWith(
+      'chat_ui_feature_tip_action',
+      expect.objectContaining({ action: 'switch_note_shown' })
+    )
+  })
+
   it('keeps the card open with a retry when the save fails', async () => {
     updateSettingsOrThrow.mockRejectedValueOnce(new Error('disk unavailable'))
     await act(async () => button('Use Chat UI').click())
@@ -75,6 +112,10 @@ describe('Chat UI corner card', () => {
     expect(button('Use Chat UI').disabled).toBe(false)
     await act(async () => button('Use Chat UI').click())
     expect(onClose).not.toHaveBeenCalled()
+    expect(track).toHaveBeenCalledWith(
+      'chat_ui_feature_tip_action',
+      expect.objectContaining({ action: 'switch_note_shown' })
+    )
     act(() => button('Open Settings').click())
     expect(onClose).toHaveBeenCalledOnce()
     expect(useAppStore.getState().activeView).toBe('settings')

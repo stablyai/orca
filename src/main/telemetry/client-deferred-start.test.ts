@@ -1,9 +1,9 @@
-import 'node:crypto'
-import type * as crypto from 'node:crypto'
+import * as crypto from 'node:crypto'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 import type * as PostHogTransport from './posthog-transport'
+import { ensureChatUiSwitchNoteCohort } from './chat-ui-switch-note-cohort'
 import {
   BASE_COMMON,
   makeFakeSettings,
@@ -64,6 +64,77 @@ describe('deferred PostHog client start', () => {
     createPostHogClient.mockReset()
     scheduleClientStart.mockReset()
     restoreConsentEnv(envStash)
+  })
+
+  it('attaches an assignment made after consent changes to subsequent events', async () => {
+    settings.agentDefaultSurface = 'terminal'
+    settings.telemetry!.optedIn = false
+    vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+    initTelemetry(store, scheduleClientStart)
+    settings.telemetry!.optedIn = true
+    vi.mocked(crypto.randomInt).mockImplementationOnce(() => 1)
+
+    expect(ensureChatUiSwitchNoteCohort(store)).toBe('treatment')
+    vi.mocked(store.getUI).mockReturnValue({
+      ...store.getUI(),
+      featureTipsSeenIds: ['chat-ui-here']
+    })
+    expect(
+      track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action: 'switch_note_shown' })
+    ).toBe(true)
+    scheduleClientStart.mock.calls.at(-1)![0]()
+    expect(sdk.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'chat_ui_feature_tip_action',
+        properties: expect.objectContaining({ chat_ui_switch_note_v1: 'treatment' })
+      })
+    )
+  })
+
+  it('keeps the switch-note assignment on Chat UI usage after a restart', async () => {
+    settings.agentDefaultSurface = 'terminal'
+    settings.telemetry!.chatUiLaunchTipCohort = 'treatment'
+    vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+    vi.mocked(crypto.randomInt).mockImplementationOnce(() => 1)
+    scheduleClientStart.mockClear()
+    initTelemetry(store, scheduleClientStart)
+    expect(
+      track('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'switch_note_shown'
+      })
+    ).toBe(true)
+    scheduleClientStart.mock.calls[0][0]()
+    expect(sdk.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'chat_ui_feature_tip_action',
+        properties: expect.objectContaining({ chat_ui_switch_note_v1: 'treatment' })
+      })
+    )
+    await shutdownTelemetry()
+
+    settings.agentDefaultSurface = 'chat'
+    vi.mocked(store.getUI).mockReturnValue({
+      ...store.getUI(),
+      featureTipsSeenIds: ['chat-ui-here']
+    })
+    scheduleClientStart.mockClear()
+    sdk.capture.mockClear()
+    initTelemetry(store, scheduleClientStart)
+    expect(
+      track('native_chat_follow_up_sent', {
+        agent_kind: 'claude-code',
+        runtime: 'remote',
+        client: 'desktop'
+      })
+    ).toBe(true)
+    scheduleClientStart.mock.calls[0][0]()
+    expect(sdk.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'native_chat_follow_up_sent',
+        properties: expect.objectContaining({ chat_ui_switch_note_v1: 'treatment' })
+      })
+    )
   })
 
   it('holds startup events, then replays them in order with their original timestamps', () => {

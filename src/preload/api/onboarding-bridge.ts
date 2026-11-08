@@ -11,5 +11,7 @@ export const onboardingApi = {
     }
   ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates),
   getChatUiLaunchTipVariant: (): Promise<ChatUiLaunchTipVariant> =>
-    ipcRenderer.invoke('onboarding:getChatUiLaunchTipVariant')
+    ipcRenderer.invoke('onboarding:getChatUiLaunchTipVariant'),
+  assignChatUiSwitchNoteCohort: (): Promise<'control' | 'treatment' | undefined> =>
+    ipcRenderer.invoke('onboarding:assignChatUiSwitchNoteCohort')
 } satisfies PreloadApi['onboarding']

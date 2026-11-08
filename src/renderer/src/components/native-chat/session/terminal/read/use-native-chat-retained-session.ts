@@ -1,3 +1,4 @@
+import { ptyChatSubmissionSource } from '../../../native-chat-submission-source'
 import { useCallback, useEffect, useRef } from 'react'
 import { boundNativeChatWindow } from '../../../../../../../shared/native-chat/native-chat-merge'
 import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'
@@ -15,7 +16,11 @@ import type {
 export function useNativeChatRetainedSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
-  const session = useNativeChatLiveSession(args)
+  const liveSession = useNativeChatLiveSession(args)
+  const session = {
+    ...liveSession,
+    submissionSource: ptyChatSubmissionSource(args, liveSession.messages, liveSession.hasMore)
+  }
   const identity = encodeNativeChatTranscriptIdentity([
     args.paneKey,
     args.runtimeEnvironmentId ?? null,

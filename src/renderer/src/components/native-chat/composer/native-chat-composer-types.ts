@@ -1,3 +1,4 @@
+import type { NativeChatSubmissionSource } from '@/components/native-chat/native-chat-submission-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatAfterStopSend } from './submit/native-chat-composer-target'
 import type { NativeChatOptimisticSendOutcome } from '../session/terminal/delivery/native-chat-optimistic-send-outcome'
@@ -64,6 +65,7 @@ export type NativeChatComposerProps = {
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */
+  submissionSource?: NativeChatSubmissionSource
   recallSource?: NativeChatRecallSource
 }
 

@@ -28,6 +28,8 @@ export type TelemetrySettings = {
   /** Treatment cards split equally by eligibility; frozen locally from settings, never usage history. */
   chatUiLaunchTipButtonEmphasis?: 'normal' | 'swapped'
   chatUiLaunchTipTargeting?: ChatUiLaunchTipTargeting
+  /** Independent, frozen 50/50 assignment: success toast versus the post-switch corner note. */
+  chatUiSwitchNoteCohort?: 'control' | 'treatment'
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
 }

@@ -11,6 +11,7 @@ export type OnboardingApi = {
   ) => Promise<OnboardingState>
   /** Fixed from the profile saved before Chat UI left Experimental. */
   getChatUiLaunchTipVariant: () => Promise<ChatUiLaunchTipVariant>
+  assignChatUiSwitchNoteCohort: () => Promise<'control' | 'treatment' | undefined>
 }
 
 export type StarNagApi = {

@@ -161,6 +161,7 @@ export const EXECUTION_HOST_METHODS = [
   'markdown.readTab',
   'markdown.saveTab',
   'nativeChat.readSession',
+  'nativeChat.submissionSummary',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
   // Sender cards resolve on the host that owns the orchestration records.

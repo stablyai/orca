@@ -202,6 +202,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     event: name,
     properties: {
       ...commonProps,
+      chat_ui_switch_note_v1: settings.telemetry?.chatUiSwitchNoteCohort,
       ...result.props,
       ...mainOwnedProps,
       $process_person_profile: false

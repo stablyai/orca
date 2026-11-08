@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { trackChatUiFeatureTipAction } from './feature-tip-telemetry'
 import { openChatUiFeatureTipSettings } from './chat-ui-here-actions'
 
 const AUTO_DISMISS_MS = 12_000
@@ -18,6 +19,14 @@ export function ChatUiSwitchedCornerNote({
 }): JSX.Element {
   const t = useTranslate()
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const exposureTracked = useRef(false)
+
+  useEffect(() => {
+    if (!exposureTracked.current) {
+      exposureTracked.current = true
+      trackChatUiFeatureTipAction('chat-ui-off', 'switch_note_shown')
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (focusSettings && document.activeElement === document.body) {
@@ -65,7 +74,10 @@ export function ChatUiSwitchedCornerNote({
               <Check className="size-3" />
             </span>
             <CardTitle id="chat-ui-switched-note-heading">
-              {t('featureTips.chatUiHere.switchedNoteTitle', 'New agents will open in Chat UI')}
+              {t(
+                'featureTips.chatUiHere.switchedNoteTitle',
+                'Chat UI is now the default for new agents'
+              )}
             </CardTitle>
           </div>
           <Button

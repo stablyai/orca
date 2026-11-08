@@ -457,6 +457,10 @@ import {
 } from './managed-server-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat-params'
 import {
+  PtyChatSubmissionSummary,
+  StructuredChatSubmissionSummary
+} from './native-chat-submission-params'
+import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
   NotificationReportDesktopPresenceParams,
@@ -849,6 +853,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
+  'agentSession.submissionSummary': StructuredChatSubmissionSummary,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeAvailability': AvailabilityParams,
   'agentSession.subscribeStatus': null,
@@ -1300,6 +1305,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
   'nativeChat.readSession': NativeChatSession,
+  'nativeChat.submissionSummary': PtyChatSubmissionSummary,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
