@@ -155,6 +155,30 @@ describe('commit actions', () => {
     expect(await git('diff', '--', 'unrelated.txt')).toContain('+work in progress')
     expect(await git('status', '--porcelain')).toBe('M unrelated.txt')
   })
+  it('uses the recorded merge mainline without blocking unrelated work from the other parent', async () => {
+    await git('merge', '--no-ff', '-s', 'ours', '--no-edit', 'topic')
+    const merge = await git('rev-parse', 'HEAD')
+    const base = await git('rev-parse', 'HEAD^1')
+    await git('checkout', '-qb', 'pick-source', base)
+    await writeFile(join(directory, 'picked.txt'), 'picked\n')
+    await git('add', 'picked.txt')
+    await git('commit', '-qm', 'first pick')
+    const first = await git('rev-parse', 'HEAD')
+    await git('checkout', '-qb', 'destination', base)
+    await writeFile(join(directory, 'file.txt'), 'work in progress\n')
+    await expect(git('cherry-pick', '-m', '1', first, merge)).rejects.toThrow()
+
+    expect(await recoverSequencer(directory, 'cherry-pick', 'continue')).toEqual({
+      outcome: 'empty',
+      message: 'Already applied, nothing to cherry-pick'
+    })
+    expect(await git('log', '--format=%s')).toBe('first pick\nbase')
+    expect(await git('show', 'HEAD:picked.txt')).toBe('picked')
+    expect(await git('diff', '--', 'file.txt')).toContain('+work in progress')
+    expect(await git('status', '--porcelain')).toBe('M file.txt')
+    await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
+    expect(await detectConflictOperation(directory)).toBe('unknown')
+  })
   it('keeps a conflicting revert whose subject contains nothing to commit in progress', async () => {
     await git('checkout', '-q', 'topic')
     await git('commit', '--amend', '-qm', 'Fix nothing to commit warning')

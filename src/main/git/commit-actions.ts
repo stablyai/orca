@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { detectConflictOperation } from './source-control/git-conflict-operation'
 import type {
   GitCommitAction,
@@ -9,12 +11,40 @@ import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-opt
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 import { bulkPathspecCommands } from './source-control/git-pathspec'
+import { resolveGitDir } from './source-control/resolve-git-dir'
 
 function throwSequencerFailure(error: unknown): never {
   throw new Error(
     gitFailureLine(readGitCommandFailureStderr(error) ?? '') ??
       'Could not finish the operation. Refresh Source Control and try again.'
   )
+}
+
+async function commitActionDiffRefs(
+  operationHead: string,
+  execution: ReturnType<typeof gitOptionsForWorktree>
+): Promise<string[]> {
+  const { stdout } = await gitExecFileAsync(
+    ['show', '--no-patch', '--format=%P', operationHead, '--'],
+    execution
+  )
+  const parents = stdout.trim().split(/\s+/).filter(Boolean)
+  if (parents.length > 1) {
+    try {
+      const gitDir = await resolveGitDir(execution.cwd, execution)
+      const opts = await readFile(join(gitDir, 'sequencer', 'opts'), 'utf8')
+      const { stdout: mainline } = await gitExecFileAsync(
+        ['config', '--file', '-', '--int', '--get', 'options.mainline'],
+        { ...execution, stdin: opts }
+      )
+      const parent = parents[Number(mainline.trim()) - 1]
+      if (parent) {
+        return [parent, operationHead]
+      }
+    } catch {}
+    // Single-item operations may omit opts; the union protects every possible resolution.
+  }
+  return [operationHead]
 }
 
 async function finishEmptyCommitAction(
@@ -35,6 +65,10 @@ async function finishEmptyCommitAction(
       execution
     )
     if (action === 'continue') {
+      const refs = await commitActionDiffRefs(
+        operation === 'cherry-pick' ? 'CHERRY_PICK_HEAD' : 'REVERT_HEAD',
+        execution
+      )
       const { stdout: paths } = await gitExecFileAsync(
         [
           'diff-tree',
@@ -46,7 +80,7 @@ async function finishEmptyCommitAction(
           '-m',
           '--no-renames',
           '--ignore-submodules=none',
-          operation === 'cherry-pick' ? 'CHERRY_PICK_HEAD' : 'REVERT_HEAD',
+          ...refs,
           '--'
         ],
         execution
@@ -55,7 +89,8 @@ async function finishEmptyCommitAction(
         ['diff-files', '--quiet', '--ignore-submodules=none', '--'],
         paths.split('\0').filter(Boolean),
         execution.cwd,
-        execution
+        execution,
+        'git'
       )) {
         await gitExecFileAsync(args, execution)
       }
