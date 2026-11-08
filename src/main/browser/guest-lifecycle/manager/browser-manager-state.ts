@@ -1,6 +1,6 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import type { BrowserSiteDisplayController } from '../../site-settings/browser-site-display-controller'
+import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'

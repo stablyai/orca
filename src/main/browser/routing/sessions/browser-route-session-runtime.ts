@@ -16,7 +16,7 @@ import {
 } from '../partitions/browser-route-partition-retention'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import { BrowserRouteWebContentsRegistry } from '../guest-authority/browser-route-webcontents-registry'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 
 const routeWebContentsRegistryRef: {
   current: BrowserRouteWebContentsRegistry | null

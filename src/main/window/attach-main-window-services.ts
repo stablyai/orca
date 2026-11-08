@@ -24,7 +24,7 @@ import { browserManager } from '../browser/guest-lifecycle/manager/browser-manag
 import {
   hasSystemMediaAccess,
   requestSystemMediaAccess
-} from '../browser/site-settings/browser-media-access'
+} from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {

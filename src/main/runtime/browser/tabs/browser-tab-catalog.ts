@@ -1,6 +1,6 @@
 import type { RuntimeBrowserClientPage } from '../client-pages/runtime-browser-page-registry'
 import type { BrowserTabListResult } from '../../../../shared/runtime-browser-contracts'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { mergeBrowserTabListing } from './browser-tab-listing'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'

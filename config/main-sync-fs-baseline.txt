@@ -64,14 +64,14 @@
 3 src/main/browser/extensions/profile-storage/browser-extension-retired-profile-storage.ts
 1 src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-cdp-probe.ts
 2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
-1 src/main/browser/identity/browser-identity-mode-record.ts
-2 src/main/browser/identity/browser-identity-mode-store.ts
+1 src/main/browser/identity/mode/browser-identity-mode-record.ts
+2 src/main/browser/identity/mode/browser-identity-mode-store.ts
 2 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 4 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
 5 src/main/browser/routing/partitions/browser-route-partition-binding-file.ts
 3 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 4 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
-4 src/main/browser/sessions/browser-session-meta-store.ts
+4 src/main/browser/sessions/profiles/browser-session-meta-store.ts
 2 src/main/browser/site-settings/browser-profile-site-store.ts
 7 src/main/claude-accounts/claude-account-folder.ts
 1 src/main/claude-accounts/claude-observed-config-dirs.ts

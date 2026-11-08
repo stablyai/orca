@@ -171,7 +171,7 @@ async function runFixture(): Promise<FixtureResult> {
       {
         name: 'stub-browser-session-registry',
         resolveId(source, importer) {
-          return source === '../../sessions/browser-session-registry' &&
+          return source === '../../sessions/profiles/browser-session-registry' &&
             importer?.replaceAll('\\', '/').endsWith('/cookies/chromium/finalize-import.ts')
             ? registryStubPath
             : null

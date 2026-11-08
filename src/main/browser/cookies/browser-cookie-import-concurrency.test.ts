@@ -43,7 +43,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock

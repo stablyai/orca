@@ -42,7 +42,7 @@ vi.mock('electron', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock

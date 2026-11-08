@@ -16,7 +16,7 @@ const {
   setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true }))
 }))
 
-vi.mock('../../browser/identity/browser-identity-mode-store', () => ({
+vi.mock('../../browser/identity/mode/browser-identity-mode-store', () => ({
   setBrowserIdentityMode: setBrowserIdentityModeMock,
   getBrowserIdentityModeStatus: vi.fn(() => ({ identity: {}, migrationNotice: null }))
 }))
@@ -35,7 +35,7 @@ vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   }
 }))
 
-vi.mock('../../browser/sessions/browser-session-registry', () => ({
+vi.mock('../../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     createProfile: createProfileMock
   }
