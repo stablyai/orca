@@ -64,7 +64,7 @@ describe('switchBranchGuarded', () => {
       throw new Error('Expected checkout to fail')
     } catch (error) {
       expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
-      expect(String(error)).toContain('HEAD.lock')
+      expect(String(error)).toContain("Orca couldn't switch branches.")
     }
     expect(await currentBranch()).toBe('main')
   })
@@ -138,7 +138,7 @@ describe('switchBranchGuarded', () => {
       switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
     ).rejects.toMatchObject({
       name: 'BranchSwitchLandedWithWarningError',
-      message: `Switched to ${oid}, but git reported an error: hook-failed`
+      message: `Switched to ${oid}. A git hook in this repository failed afterwards and said: hook-failed. The switch itself worked.`
     })
     expect(await git('rev-parse', 'HEAD')).toBe(oid)
     expect(await git('branch', '--show-current')).toBe('')

@@ -60,6 +60,8 @@ export type MobileSourceControlLoaders = {
   mountedRef: MutableRefObject<boolean>
   setRootRef: (node: View | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
+  // Shown rows are being re-read; feeds the header's refresh line.
+  refreshing: boolean
   settings: MobileSourceControlSettings
   // Desktop's rebase target; kept apart from the compare so a failed or unsupported compare keeps it.
   rebaseBaseRef: string | null
@@ -101,16 +103,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setActionError(null)
       }
       refocusRef.current = true
-      return () => {
-        setFocused(false)
-        // Screens above can write (Review stages files), so coming back always revalidates.
-        void queryClient.invalidateQueries({
-          queryKey: statusKey,
-          exact: true,
-          refetchType: 'none'
-        })
-      }
-    }, [queryClient, setActionError, statusKey])
+      // Review reads and writes this same status entry, so coming back shows what it staged without another read.
+      return () => setFocused(false)
+    }, [setActionError])
   )
   const statusQuery = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
     enabled: statusEnabled,
@@ -126,6 +121,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   ).current
   // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
+  // The status read whose compare landed or is out; Review's reads wait until Changes is back on top.
+  const comparedReadRef = useRef<string | null>(null)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
@@ -133,6 +130,13 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     setBranchCompareState({ kind: 'idle' })
     setRebaseBaseRef(null)
   }
+  // A quick switch back finds its status read still fresh, and the reset above just cleared its compare.
+  useEffect(
+    () => () => {
+      comparedReadRef.current = null
+    },
+    [statusIdentityKey]
+  )
 
   const setRootRef = useCallback(
     (node: View | null): void => {
@@ -149,14 +153,22 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
   const loadBranchCompare = useCallback(
     // The compare base can be the branch's upstream, so it follows the status read that triggered it.
-    async (options: { preserveReadyOnFailure: boolean; upstreamName: string | undefined }) => {
+    async (read: string, upstreamName: string | undefined) => {
+      // Forget a compare that didn't land so coming back to Changes retries it before status is stale.
+      // Only this attempt's own exits forget: a superseded one may share its read with the newer compare.
+      const forgetRead = () => {
+        if (comparedReadRef.current === read) {
+          comparedReadRef.current = null
+        }
+      }
       // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
         if (mountedRef.current) {
           setBranchCompareState({ kind: 'idle' })
         }
-        return false
+        forgetRead()
+        return
       }
       // Scope by host and route identity as well as render-time retirement to fence loads that reach the owner first.
       const scope: RequestScope = [client, statusIdentityKey]
@@ -165,39 +177,45 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
         readBranchCompareOutcome(client, worktreeId, currency, {
           compareAgainstUpstream,
-          upstreamName: options.upstreamName
+          upstreamName
         })
       )
       // Mount liveness belongs to the view; a current reply still cannot publish after detach.
       if (!loaded || !mountedRef.current) {
-        return false
+        return
       }
       if (branchCompare.commit(loaded.lease, loaded.value) !== 'committed') {
-        return false
+        return
       }
       const outcome = loaded.value
       setRebaseBaseRef(outcome.effectiveBaseRef)
-      setBranchCompareState((prev) =>
-        nextBranchCompareState(outcome, prev, options.preserveReadyOnFailure)
-      )
-      return outcome.kind === 'ready'
+      setBranchCompareState((prev) => nextBranchCompareState(outcome, prev))
+      if (outcome.kind === 'failed') {
+        forgetRead()
+      }
     },
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
 
   // Each status read that lands, and a new compare setting, refreshes the compare; a read in flight brings its own.
+  // Review shares the status entry, so its reads wait until Changes is back on top and then compare once.
   const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
   const compareShownStatus = useEffectEvent(() => {
-    if (statusRead?.kind === 'ready' && !statusFetching && statusQuery.status === 'success') {
-      void loadBranchCompare({
-        preserveReadyOnFailure: true,
-        upstreamName: statusRead.status.upstreamStatus?.upstreamName
-      })
+    const read = `${statusIdentityKey}\0${statusQuery.dataUpdatedAt}\0${compareAgainstUpstream}`
+    if (
+      focused &&
+      comparedReadRef.current !== read &&
+      statusRead?.kind === 'ready' &&
+      !statusFetching &&
+      statusQuery.status === 'success'
+    ) {
+      comparedReadRef.current = read
+      void loadBranchCompare(read, statusRead.status.upstreamStatus?.upstreamName)
     }
   })
   useEffect(() => {
     compareShownStatus()
-  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream])
+  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream, focused])
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
@@ -292,6 +310,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     mountedRef,
     setRootRef,
     loadStatus,
+    refreshing: statusQuery.isRefetching,
     settings,
     rebaseBaseRef
   }

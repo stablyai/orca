@@ -1,6 +1,6 @@
 import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
-import { isFeatureTipId } from '../feature-tips'
+import { isFeatureTipSeenId } from '../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
@@ -21,7 +21,7 @@ export const NullableString = z.string().nullable()
 export const StringArray = z.array(z.string())
 
 export const FeatureTipIds = z.array(
-  z.custom(isFeatureTipId, { message: 'Unknown feature tip id' })
+  z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
 export const UnknownRecord = z.record(z.string(), z.unknown())
@@ -71,6 +71,7 @@ export const StatusBarItem = z.enum([
   'grok',
   'cursor',
   'zcode',
+  'muse',
   'ssh',
   'resource-usage',
   'ports'
@@ -197,6 +198,7 @@ export const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _museStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),

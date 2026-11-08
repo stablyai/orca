@@ -7,7 +7,7 @@ import * as preflight from './launch-work-item-direct-preflight'
 import * as inventory from '../../../agent-detection-target-inventory'
 
 import { useAppStore } from '@/store/index'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 
 vi.doUnmock('@/lib/ensure-hooks-confirmed')
 const { launchWorkItemDirect } = await import('./launch-work-item-direct')

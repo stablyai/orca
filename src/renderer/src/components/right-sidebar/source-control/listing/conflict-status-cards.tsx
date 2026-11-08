@@ -1,7 +1,7 @@
 import React from 'react'
 import { GitMerge, GitPullRequestArrow, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 
@@ -26,25 +26,26 @@ export function ConflictSummaryCard({
   onResolveWithAI: () => void
   onReview: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const operationLabel =
     conflictOperation === 'merge'
-      ? translate(
+      ? t(
           'auto.components.right.sidebar.source.control.conflict.status.cards.5302a1ddba',
           'Merge conflicts'
         )
       : conflictOperation === 'rebase'
-        ? translate(
+        ? t(
             'auto.components.right.sidebar.source.control.conflict.status.cards.7f3af87549',
             'Rebase conflicts'
           )
         : conflictOperation === 'cherry-pick'
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.source.control.conflict.status.cards.6a8e9ad490',
               'Cherry-pick conflicts'
             )
           : conflictOperation === 'revert'
-            ? translate('gitGraph.revertConflicts', 'Revert conflicts')
-            : translate(
+            ? t('gitGraph.revertConflicts', 'Revert conflicts')
+            : t(
                 'auto.components.right.sidebar.source.control.conflict.status.cards.bdf8772106',
                 'Conflicts'
               )
@@ -55,14 +56,14 @@ export function ConflictSummaryCard({
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <div className="min-w-0 flex-1">
           <div className="text-xs font-medium text-foreground" aria-live="polite">
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControl.d7a5942e41',
               '{{value0}}: {{value1}} unresolved',
               { value0: operationLabel, value1: unresolvedCount }
             )}
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControl.3eeccbb221',
               'Resolved files move back to normal changes after they leave the live conflict state.'
             )}
@@ -80,7 +81,7 @@ export function ConflictSummaryCard({
             onClick={onResolveWithAI}
           >
             <Sparkles className="size-3.5" />
-            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
+            {t('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
           </Button>
         ) : null}
         <Button
@@ -91,7 +92,7 @@ export function ConflictSummaryCard({
           onClick={onReview}
         >
           <GitMerge className="size-3.5" />
-          {translate('auto.components.right.sidebar.SourceControl.27a50fe970', 'Review conflicts')}
+          {t('auto.components.right.sidebar.SourceControl.27a50fe970', 'Review conflicts')}
         </Button>
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
@@ -104,8 +105,8 @@ export function ConflictSummaryCard({
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
             {conflictOperation === 'rebase'
-              ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+              ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+              : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
         {children}
@@ -136,25 +137,26 @@ export function OperationBanner({
   sourceControlAiActionsVisible?: boolean
   onResolveWithAI?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label =
     conflictOperation === 'merge'
-      ? translate(
+      ? t(
           'auto.components.right.sidebar.source.control.conflict.status.cards.edc2d82a2b',
           'Merge in progress'
         )
       : conflictOperation === 'rebase'
-        ? translate(
+        ? t(
             'auto.components.right.sidebar.source.control.conflict.status.cards.5c3707aa44',
             'Rebase in progress'
           )
         : conflictOperation === 'cherry-pick'
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.source.control.conflict.status.cards.ffe53a1da6',
               'Cherry-pick in progress'
             )
           : conflictOperation === 'revert'
-            ? translate('gitGraph.revertInProgress', 'Revert in progress')
-            : translate(
+            ? t('gitGraph.revertInProgress', 'Revert in progress')
+            : t(
                 'auto.components.right.sidebar.source.control.conflict.status.cards.35eb76d323',
                 'Operation in progress'
               )
@@ -183,7 +185,7 @@ export function OperationBanner({
             ) : (
               <GitMerge className="size-3.5" />
             )}
-            {translate(
+            {t(
               'auto.components.right.sidebar.source.control.conflict.status.cards.completeMerge',
               'Complete merge'
             )}
@@ -199,7 +201,7 @@ export function OperationBanner({
             onClick={onResolveWithAI}
           >
             <Sparkles className="size-3.5" />
-            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
+            {t('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
           </Button>
         ) : null}
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
@@ -213,8 +215,8 @@ export function OperationBanner({
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
             {conflictOperation === 'rebase'
-              ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+              ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+              : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
         {children}

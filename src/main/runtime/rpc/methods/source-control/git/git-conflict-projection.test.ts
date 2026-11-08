@@ -1,6 +1,6 @@
 import { BranchSwitchLandedWithWarningError } from '../../../../../git/branch-switch'
 import { mapDispatcherError } from '../../../dispatcher-error-response'
-import '../unused-default-rpc-methods.test-fixture'
+import '../../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { RpcDispatcher } from '../../../dispatcher'
@@ -51,7 +51,7 @@ it('preserves a landed checkout warning across RPC without changing the legacy e
   const reply = mapDispatcherError(
     { id: 'checkout', authToken: '', method: 'git.checkout' },
     { runtimeId: 'test-runtime' },
-    new BranchSwitchLandedWithWarningError('Hook failed after checkout')
+    new BranchSwitchLandedWithWarningError('Hook failed after checkout', 'feature')
   )
   expect(reply).toMatchObject({
     ok: false,

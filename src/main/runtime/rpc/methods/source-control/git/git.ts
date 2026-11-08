@@ -2,6 +2,7 @@ import { GIT_STATUS_METHODS } from './git-status-methods'
 import { GIT_COMMIT_ACTION_METHODS } from './git-commit-action-methods'
 import { defineMethod } from '../../../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
+import { GIT_BRANCH_METHODS } from './git-branch-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
@@ -91,6 +92,7 @@ export const GIT_METHODS = [
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
+  ...GIT_BRANCH_METHODS,
   ...GIT_DIFF_METHODS,
   defineMethod({
     name: 'git.branchCompare',

@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store'
-import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 import {
   isDesktopCreatedTabInFrameDrawnServerWorkspace,

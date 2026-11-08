@@ -2,7 +2,7 @@ import React from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   FEEDBACK_IMAGE_FILE_ACCEPT,
   MAX_FEEDBACK_IMAGE_COUNT,
@@ -32,6 +32,7 @@ export function SidebarFeedbackImageAttachments({
   onAddFiles,
   onRemove
 }: SidebarFeedbackImageAttachmentsProps): React.JSX.Element {
+  const t = useTranslate()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   // Full-screen screenshots exhaust bytes before count; disable picks that cannot fit.
   const attachedBytes = images.reduce((total, image) => total + image.bytes, 0)
@@ -60,11 +61,11 @@ export function SidebarFeedbackImageAttachments({
         <span className="text-xs text-muted-foreground">
           {/* Show progress while shrinking so the thumbnail delay cannot read as a dropped attachment. */}
           {isPreparing
-            ? translate(
+            ? t(
                 'auto.components.sidebar.SidebarFeedbackImageAttachments.preparing',
                 'Preparing attachments…'
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
                 'Attach up to {{count}} screenshots, {{maxSize}} total',
                 {
@@ -82,10 +83,7 @@ export function SidebarFeedbackImageAttachments({
           onClick={() => fileInputRef.current?.click()}
         >
           <ImagePlus className="size-3.5" />
-          {translate(
-            'auto.components.sidebar.SidebarFeedbackImageAttachments.attachImages',
-            'Attach'
-          )}
+          {t('auto.components.sidebar.SidebarFeedbackImageAttachments.attachImages', 'Attach')}
         </Button>
       </div>
 
@@ -115,7 +113,7 @@ export function SidebarFeedbackImageAttachments({
                 type="button"
                 variant="outline"
                 size="icon-xs"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.sidebar.SidebarFeedbackImageAttachments.removeImage',
                   'Remove {{fileName}}',
                   { fileName: image.name }

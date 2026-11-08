@@ -53,7 +53,8 @@ export async function rewindJournalContext(input: {
       const { cleared } = journalQueuePauseRestatement(
         state.queuePauseMarks,
         state.latestAcceptedTurnSequence,
-        input.cards.pauses()
+        input.cards.pauses(),
+        journalInputOrder(state).latestPersonAcceptedSequence()
       )
       const retained = journalInputOrder(state).newestTurn.retainFailures(
         state,

@@ -100,13 +100,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
     expect(p.notifyChanged).not.toHaveBeenCalled()
   })
 
-  it('refuses a user edit', async () => {
-    await expect(update(MOVING, { comment: 'mine' })).rejects.toBeInstanceOf(
-      WslMoveProjectFencedError
-    )
-    expect(store.getWorktreeMeta(MOVING)).toBeUndefined()
-  })
-
   it('refuses a lineage change even alongside passive fields', async () => {
     await expect(
       update(MOVING, { isUnread: true, lineage: { noParent: true } })

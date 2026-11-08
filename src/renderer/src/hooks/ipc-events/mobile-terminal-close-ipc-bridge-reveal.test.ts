@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   _resetLayoutFramePositionForTests,

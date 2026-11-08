@@ -33,7 +33,7 @@ vi.mock('../../../../sidebar/workspace-actions/deletion/delete-worktree-flow', (
   runWorktreeDelete: deleteFlowMocks.runWorktreeDelete
 }))
 
-vi.mock('@/runtime/runtime-environment-ssh-state', () => environmentSshMocks)
+vi.mock('@/runtime/hosts/ssh/runtime-environment-ssh-state', () => environmentSshMocks)
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>

@@ -13,7 +13,7 @@ import { useAppStore } from '@/store'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
 import { createPdfViewerSession } from './pdf-viewer-session'
 import {
@@ -63,6 +63,7 @@ function PdfDocumentViewer({
   preferenceKey = null,
   scrollCacheKey = null
 }: PdfViewerProps): JSX.Element {
+  const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
@@ -229,7 +230,7 @@ function PdfDocumentViewer({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomOut}
             disabled={scale <= MIN_SCALE}
-            title={translate('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
+            title={t('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
           >
             <ZoomOut size={14} />
           </button>
@@ -237,7 +238,7 @@ function PdfDocumentViewer({
             type="button"
             className="rounded p-1 hover:bg-accent hover:text-foreground"
             onClick={zoomReset}
-            title={translate('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
+            title={t('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
           >
             <RotateCcw size={14} />
           </button>
@@ -246,7 +247,7 @@ function PdfDocumentViewer({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomIn}
             disabled={scale >= MAX_SCALE}
-            title={translate('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
+            title={t('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
           >
             <ZoomIn size={14} />
           </button>
@@ -256,18 +257,16 @@ function PdfDocumentViewer({
           type="button"
           className="rounded p-1 hover:bg-accent hover:text-foreground"
           onClick={() => setFindOpen(true)}
-          title={translate(
-            'auto.components.editor.PdfViewer.069ff59932',
-            'Find in PDF ({{value0}})',
-            { value0: findShortcutLabel }
-          )}
+          title={t('auto.components.editor.PdfViewer.069ff59932', 'Find in PDF ({{value0}})', {
+            value0: findShortcutLabel
+          })}
         >
           <Search size={14} />
         </button>
         <span className="min-w-0 truncate" title={filename}>
           {filename}
         </span>
-        <span>{translate('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
+        <span>{t('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
       </div>
     </div>
   )

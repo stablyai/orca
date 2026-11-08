@@ -5,7 +5,7 @@ import { createStore } from 'zustand/vanilla'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
 import { gitGraphScope, gitGraphScopeInputs, GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
-import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import { translate } from '@/i18n/i18n'
 import type {
   GitHistoryRefs,

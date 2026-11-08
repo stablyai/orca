@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as ReleaseModule from './managed-runtime-release'
-import { RUNTIME_RELEASE_RECEIPT } from './managed-runtime-release'
+import {
+  ManagedRuntimeStartError,
+  RUNTIME_RELEASE_RECEIPT,
+  type ManagedRuntime
+} from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
 
 vi.mock('./managed-runtime-release', async (importOriginal) => {
@@ -19,7 +23,7 @@ const ARCHIVE = zipSync({ server: strToU8('server bytes') })
 const roots: string[] = []
 afterEach(() => Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true }))))
 
-async function rig(bodies: ('hang' | 'whole')[]) {
+async function rig(bodies: ('hang' | 'whole')[], validate?: ManagedRuntime['validate']) {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
   roots.push(dataDirectory)
   const root = join(dataDirectory, 'agent-runtimes', 'agent')
@@ -30,7 +34,7 @@ async function rig(bodies: ('hang' | 'whole')[]) {
     archiveBytes: ARCHIVE.length,
     members: [{ path: 'server', sha256: sha256('server bytes'), bytes: 12 }]
   }
-  const runtime = { label: 'Agent', root: () => root, pin: () => pin }
+  const runtime = { label: 'Agent', root: () => root, pin: () => pin, validate }
   const fetcher = async () => {
     const body = bodies.shift()
     return new Response(
@@ -109,4 +113,25 @@ it('repairs a damaged copy when Install is clicked again', async () => {
   expect(repaired).toMatchObject({ installedVersion: '1.0', installedCurrent: true })
   expect(repaired.damaged).toBeUndefined()
   expect(await readdir(root)).toEqual(['1.0'])
+})
+
+it.each([
+  ['at the excerpt boundary', `${'x'.repeat(220)} ghp_${'a'.repeat(36)}`],
+  ['with terminal formatting', `ghp_${'a'.repeat(18)}\u001b[0m${'a'.repeat(18)}`]
+])('redacts secrets %s in a failed start diagnostic', async (_label, stderr) => {
+  const { root, host, phase } = await rig(['whole'], async () => {
+    throw new ManagedRuntimeStartError('Start failed', {
+      kind: 'exit',
+      exit: { code: 3, signal: null, processless: false },
+      stderr
+    })
+  })
+  const installation = host()
+  installation.install()
+  await vi.waitFor(async () => expect(await phase(installation)).toBe('failed'))
+  const { operation, installedVersion } = await installation.status()
+  expect(operation?.error).toContain('It exited with code 3:')
+  expect(operation?.error).not.toContain('ghp_')
+  expect(installedVersion).toBeNull()
+  expect(await readdir(root)).toEqual([])
 })

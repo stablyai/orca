@@ -7,6 +7,7 @@ import { buildPluginListEntries, needsNewerOrca } from '../../../plugins/list/pl
 import { applyPluginAppThemeToSlot } from '../../../plugins/state/plugin-theme-apply'
 import { createPluginPagePreviewCache } from '../../../plugins/state/use-plugin-catalog'
 import { usePluginInstallAction } from '../../../plugins/state/use-plugin-install-action'
+import type { Translate } from '../../../../i18n/use-translate'
 
 type CatalogSnapshot = {
   installed: readonly PluginHostListEntry[]
@@ -28,9 +29,10 @@ export type CatalogAppTheme = {
 export function catalogAppThemes(
   snapshot: CatalogSnapshot,
   base: 'light' | 'dark',
-  installedPluginKeys: ReadonlySet<string>
+  installedPluginKeys: ReadonlySet<string>,
+  t?: Translate
 ): CatalogAppTheme[] {
-  return buildPluginListEntries(snapshot.installed, snapshot.listings)
+  return buildPluginListEntries(snapshot.installed, snapshot.listings, undefined, t)
     .available.flatMap((entry) => {
       const { listing } = entry
       const release = listing?.release

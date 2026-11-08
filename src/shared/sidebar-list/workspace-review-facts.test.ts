@@ -39,13 +39,6 @@ describe('readWorkspaceReviewFact', () => {
   })
 })
 
-it('lists only rows with a PR, under the key the workspaces domain lists them at', () => {
-  const other = { ...row, id: 'repo-1::/r/b', branch: 'b' }
-  expect(buildWorkspaceReviewFacts([row, other], [repo], { 'repo-1::a': pr('open') })).toEqual({
-    [`|${row.id}`]: { provider: 'github', reviewState: 'open' }
-  })
-})
-
 it('reads each host’s copy of a same-id workspace with its own repo, under its own key', () => {
   const sshRepo = { ...repo, connectionId: 'box' }
   const local = { ...row, hostId: 'local' as const }

@@ -14,7 +14,7 @@ import {
   hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import {
   advanceWebSessionOpenFilesIndex,
   sameOpenFiles,

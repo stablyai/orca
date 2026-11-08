@@ -34,6 +34,7 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseWheel',
   'browser.reload',
   'browser.screencast',
+  'browser.screencast.ack',
   'browser.screencast.unsubscribe',
   'browser.tabCreate',
   'browser.viewport',

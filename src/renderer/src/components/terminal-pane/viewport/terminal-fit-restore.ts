@@ -1,11 +1,11 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../../../../shared/terminal/viewport/terminal-fit-restore-deadline'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
-} from '@/runtime/runtime-terminal-stream'
+} from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 
 type TerminalFitRestoreSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | undefined
 

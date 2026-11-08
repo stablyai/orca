@@ -1,38 +1,38 @@
 import { useCallback, useRef } from 'react'
 import {
   DEFAULT_DICTATION_METER,
-  analyzeDictationAudioChunk,
+  analyzeDictationAudioLevel,
   createDictationMeterAnalyzerState,
   dictationMeterStatesEqual,
   toPublicDictationMeterState,
+  type DictationAudioLevel,
   type DictationMeterAnalyzerState,
   type DictationMeterState
 } from '../../../shared/dictation-audio-meter'
-
-const METER_PUBLISH_INTERVAL_MS = 1000 / 15
 
 export type DictationMeterPublisher = (meter: DictationMeterState) => void
 
 export function useAudioCaptureMeter(publishMeter?: DictationMeterPublisher) {
   const analyzerRef = useRef<DictationMeterAnalyzerState>(createDictationMeterAnalyzerState())
   const publishedMeterRef = useRef(DEFAULT_DICTATION_METER)
-  const lastPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
 
   const resetMeter = useCallback(() => {
     analyzerRef.current = createDictationMeterAnalyzerState()
     publishedMeterRef.current = DEFAULT_DICTATION_METER
-    lastPublishedAtRef.current = Number.NEGATIVE_INFINITY
     publishMeter?.(DEFAULT_DICTATION_METER)
   }, [publishMeter])
 
-  const measureChunk = useCallback(
-    (samples: Float32Array) => {
-      const now = performance.now()
-      analyzerRef.current = analyzeDictationAudioChunk(samples, now, analyzerRef.current)
-      if (document.hidden || now - lastPublishedAtRef.current < METER_PUBLISH_INTERVAL_MS) {
+  // The worklet sends one level per 50 ms window, which paces publishing.
+  const measureLevel = useCallback(
+    (level: DictationAudioLevel) => {
+      analyzerRef.current = analyzeDictationAudioLevel(
+        level,
+        performance.now(),
+        analyzerRef.current
+      )
+      if (document.hidden) {
         return
       }
-      lastPublishedAtRef.current = now
       const meter = toPublicDictationMeterState(analyzerRef.current)
       if (!dictationMeterStatesEqual(publishedMeterRef.current, meter)) {
         publishedMeterRef.current = meter
@@ -42,8 +42,8 @@ export function useAudioCaptureMeter(publishMeter?: DictationMeterPublisher) {
     [publishMeter]
   )
 
-  // On the performance.now() clock measureChunk feeds the analyzer with.
+  // On the performance.now() clock measureLevel feeds the analyzer with.
   const getLastSpeechAt = useCallback(() => analyzerRef.current.lastSpeechAt, [])
 
-  return { resetMeter, measureChunk, getLastSpeechAt }
+  return { resetMeter, measureLevel, getLastSpeechAt }
 }

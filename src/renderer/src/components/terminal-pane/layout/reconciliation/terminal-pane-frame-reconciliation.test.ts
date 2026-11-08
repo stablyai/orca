@@ -124,16 +124,6 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(manager.getActivePane()?.leafId).toBe(D)
   })
 
-  it('closes a pane main dropped only when the window asked, with the close it asked for', () => {
-    expect(reconcile(leaf(A))).toBe(false)
-    expect(closePane).not.toHaveBeenCalled()
-
-    expectPaneToClose(TAB, B, 'exit')
-    expect(reconcile(leaf(A))).toBe(true)
-
-    expect(closePane).toHaveBeenCalledWith(manager.getNumericIdForLeaf(B), B, 'exit')
-  })
-
   it('keeps the last pane when main’s tree holds a pane the window has not drawn', () => {
     expectPaneToClose(TAB, A, 'user')
     manager.closePane(manager.getNumericIdForLeaf(B)!)

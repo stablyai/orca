@@ -14,7 +14,7 @@ import {
 } from '@/components/github/pull-request-confirmation-copy'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   DropdownMenu,
   DropdownMenuTrigger,

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import '@/lib/monaco-setup'
 import type { DiffSection } from '../diff/sections/diff-section-types'
 import {

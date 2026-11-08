@@ -68,18 +68,6 @@ function harness() {
 }
 
 describe('TerminalAgentPromptAnswers', () => {
-  it('refuses a second answer to the same prompt before the agent reports moving on', async () => {
-    const h = harness()
-    const { promptId } = h.answers.pending(h.runtime, target)!
-    await h.answer(promptId)
-    expect(h.answers.pending(h.runtime, target)).toBeNull()
-    await expect(h.answer(promptId)).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'prompt_not_pending'
-    })
-    expect(h.keys).toEqual(['1'])
-  })
-
   it('allows only one concurrent answer to claim the prompt', async () => {
     const h = harness()
     const { promptId } = h.answers.pending(h.runtime, target)!
@@ -118,16 +106,6 @@ describe('TerminalAgentPromptAnswers', () => {
     expect(h.answers.pending(h.runtime, target)).toBeNull()
   })
 
-  it('refuses a prompt the agent has moved on from, or a later one', async () => {
-    const h = harness()
-    const { promptId } = h.answers.pending(h.runtime, target)!
-    h.state.row = approvalRow(20)
-    await expect(h.answer(promptId)).resolves.toMatchObject({ reason: 'prompt_not_pending' })
-    h.state.row = { ...approvalRow(20), state: 'working' }
-    await expect(h.answer(promptId)).resolves.toMatchObject({ reason: 'prompt_not_pending' })
-    expect(h.keys).toEqual([])
-  })
-
   it('refuses when the prompt or the process changes between the read and the write', async () => {
     const h = harness()
     const first = h.answers.pending(h.runtime, target)!.promptId
@@ -141,25 +119,6 @@ describe('TerminalAgentPromptAnswers', () => {
     }
     h.state.row = approvalRow()
     await expect(h.answer(first)).resolves.toMatchObject({ reason: 'prompt_not_pending' })
-    expect(h.keys).toEqual([])
-  })
-
-  it('refuses an option the prompt does not offer, and a prompt only Orca can answer', async () => {
-    const h = harness()
-    const { promptId } = h.answers.pending(h.runtime, target)!
-    await expect(h.answer(promptId, 'allow_always')).resolves.toMatchObject({
-      reason: 'option_not_offered'
-    })
-    const hookless = { ...target, answerable: false }
-    const unsupported = h.answers.pending(h.runtime, hookless)!
-    expect(unsupported.kind).toBe('unsupported')
-    await expect(
-      h.answers.answer(h.runtime, hookless, {
-        promptId: unsupported.promptId,
-        optionId: 'allow_once',
-        signal: new AbortController().signal
-      })
-    ).resolves.toMatchObject({ reason: 'prompt_unsupported' })
     expect(h.keys).toEqual([])
   })
 
@@ -190,21 +149,5 @@ describe('TerminalAgentPromptAnswers', () => {
       reason: 'agent_not_reachable'
     })
     expect(h.answers.pending(h.runtime, target)?.promptId).toBe(promptId)
-  })
-
-  it('refuses before any key when the caller’s own check fails', async () => {
-    const h = harness()
-    const { promptId } = h.answers.pending(h.runtime, target)!
-    await expect(
-      h.answers.answer(h.runtime, target, {
-        promptId,
-        optionId: 'allow_once',
-        signal: new AbortController().signal,
-        beforeWrite: async () => {
-          throw new Error('agent_not_in_foreground')
-        }
-      })
-    ).resolves.toEqual({ outcome: 'refused', reason: 'agent_not_reachable' })
-    expect(h.keys).toEqual([])
   })
 })

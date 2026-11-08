@@ -89,6 +89,8 @@ type Props = MobileNativeChatMicProps & {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   disabled?: boolean
+  /** The desktop is out: typing and Send (which queues) still work; attaching and dictation can't. */
+  offline?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
   placeholder?: string
@@ -133,6 +135,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
+  offline = false,
   sendDisabled = false,
   placeholder,
   filePaths = NO_FILE_PATHS,
@@ -154,7 +157,7 @@ export function MobileNativeChatComposer({
   )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
-    disabled: disabled || editSession?.locked === true,
+    disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
@@ -344,7 +347,7 @@ export function MobileNativeChatComposer({
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}
-                disabled={disabled}
+                disabled={disabled || offline}
                 menu={menu}
               />
               {sessionOptions ? (
@@ -375,7 +378,7 @@ export function MobileNativeChatComposer({
                 dictationMode={dictationMode}
                 onMicPressIn={onMicPressIn}
                 onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                disabled={disabled || offline}
               />
             ) : null}
             {editSession ? (

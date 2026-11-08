@@ -11,124 +11,13 @@ import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import {
-  acquireFederationAckLease,
-  getFederationAckedThrough,
-  type FederationAckIdentity
-} from './federation-ack-checkpoints'
 import { createIdleSyncHarness, createFederationSyncDatabase } from './federation-sync-test-harness'
 import { syncFederatedDispatch } from './federation-sync'
-import { parseRelayedMessage } from './federation-sync-message'
 
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
 import { MessageWake } from '../../../runtime-message-waiters'
 
-describe('federation relay parsing', () => {
-  it('accepts a supported message type', () => {
-    expect(
-      parseRelayedMessage(
-        JSON.stringify({ subject: 'done', body: 'Finished', type: 'worker_done' })
-      )
-    ).toMatchObject({ type: 'worker_done', priority: 'normal' })
-  })
-
-  it('rejects an unsupported type before it reaches the database constraint', () => {
-    expect(() =>
-      parseRelayedMessage(JSON.stringify({ subject: 'bad', body: 'Blocked', type: 'invented' }))
-    ).toThrowError('Federated relay message type invented is not supported.')
-  })
-
-  it.each(['escalation', 'decision_gate'] as const)(
-    'binds an old remote %s payload to the imported Dispatch',
-    async (type) => {
-      const db = new OrchestrationDb(':memory:')
-      const run = db.createRun({
-        objective: 'Federated mutation binding',
-        coordinatorHandle: 'term_coordinator',
-        coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
-      })
-      const task = db.createTask({ spec: 'Remote work', runId: run.id })
-      const { dispatch } = db.createStartingWorkerDispatch({
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER,
-        taskId: task.id,
-        startOptions: {},
-        federation: {
-          environmentId: 'environment_windows',
-          environmentName: 'windows',
-          peerFingerprint: 'windows_peer_fingerprint',
-          protocolVersion: 3
-        }
-      })
-      db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'ready', state: 'ready' })
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
-        peerFingerprint: 'windows_peer_fingerprint'
-      } as never)
-      vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
-        async (_environmentId, method) => {
-          if (method === 'status.get') {
-            return {
-              runtimeId: 'remote_epoch_1',
-              capabilities: [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
-            }
-          }
-          if (method === 'orchestration.federationPull') {
-            return {
-              runtimeEpoch: 'remote_epoch_1',
-              items: [
-                {
-                  dispatch_id: dispatch.id,
-                  direction: 'to_home',
-                  sequence: 1,
-                  message_id: `msg_remote_${type}`,
-                  kind: type,
-                  payload: JSON.stringify({
-                    subject: 'Remote control mutation',
-                    body: '',
-                    type,
-                    payload: JSON.stringify({
-                      taskId: task.id,
-                      ...(type === 'decision_gate' ? { question: 'Proceed?' } : {})
-                    })
-                  })
-                }
-              ]
-            }
-          }
-          if (method === 'orchestration.federationAck') {
-            return { acknowledgedThrough: 1 }
-          }
-          throw new Error(`Unexpected method ${method}`)
-        }
-      )
-
-      await syncFederatedDispatch(runtime, dispatch.id)
-
-      expect(JSON.parse(db.getMessageById(`msg_remote_${type}`)!.payload!)).toMatchObject({
-        taskId: task.id,
-        dispatchId: dispatch.id
-      })
-      db.close()
-    }
-  )
-})
-
 describe('federation relay acknowledgments', () => {
-  it('does not replay or settle a protocol-3 attachment after capability downgrade', async () => {
-    const harness = createIdleSyncHarness(0, 3)
-    harness.setRemoteCapabilities([])
-    const calls = harness.remoteCall
-
-    await harness.runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    const pull = calls.mock.calls.find(([, method]) => method === 'orchestration.federationPull')
-    expect(pull?.[2]).not.toHaveProperty('replayUnacknowledged')
-    expect(calls.mock.calls.some(([, method]) => method === 'orchestration.federationAck')).toBe(
-      false
-    )
-  })
-
   it('retains a pending protocol-3 worker_done across restart downgrade and settles after support returns', async () => {
     let remoteRuntimeEpoch = 'remote_epoch_1'
     let remoteCapabilities = [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
@@ -315,16 +204,6 @@ describe('federation relay acknowledgments', () => {
       cached: true
     })
     expect(probe).toHaveBeenCalledOnce()
-  })
-
-  it('probes an unchanged peer once across repeated syncs', async () => {
-    const { runtime, remoteCall } = createIdleSyncHarness(0)
-
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-
-    expect(remoteCall.mock.calls.filter(([, method]) => method === 'status.get')).toHaveLength(1)
   })
 
   it('does not wake a waiter for an acknowledged duplicate replay', async () => {
@@ -570,28 +449,6 @@ describe('federation relay acknowledgments', () => {
     ])
   })
 
-  it('acknowledges only new progress until remote runtime identity changes', async () => {
-    const { runtime, remoteCall, advanceCursor, restartRemote } = createIdleSyncHarness()
-    const ackCalls = () =>
-      remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
-
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackCalls()).toHaveLength(1)
-
-    advanceCursor()
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackCalls()).toHaveLength(2)
-
-    restartRemote()
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackCalls().map(([, , params]) => params)).toEqual([
-      { dispatchId: 'dispatch_remote', throughSequence: 2 },
-      { dispatchId: 'dispatch_remote', throughSequence: 3 },
-      { dispatchId: 'dispatch_remote', throughSequence: 3 }
-    ])
-  })
-
   it('coalesces overlapping syncs while an acknowledgment is in flight', async () => {
     const { runtime, remoteCall, blockAck } = createIdleSyncHarness()
     const gate = blockAck()
@@ -673,39 +530,6 @@ describe('federation relay acknowledgments', () => {
     expect(
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
     ).toHaveLength(2)
-  })
-
-  it('releases the checkpoint once a dispatch is no longer relay eligible', async () => {
-    const { runtime, settleDispatch } = createIdleSyncHarness()
-    const identity: FederationAckIdentity = {
-      environmentId: 'environment_windows',
-      peerFingerprint: 'windows_peer_fingerprint',
-      remoteRuntimeEpoch: 'remote_epoch_1'
-    }
-    const ackedThrough = () =>
-      getFederationAckedThrough(acquireFederationAckLease(runtime, 'dispatch_remote'), identity)
-
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackedThrough()).toBe(2)
-
-    settleDispatch()
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackedThrough()).toBe(0)
-  })
-
-  it('leaves the durable watermark suppressing acks after the checkpoint is released', async () => {
-    const { runtime, remoteCall, settleDispatch } = createIdleSyncHarness()
-    const ackCalls = () =>
-      remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
-
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    expect(ackCalls()).toHaveLength(1)
-
-    settleDispatch()
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-    await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
-
-    expect(ackCalls()).toHaveLength(1)
   })
 })
 

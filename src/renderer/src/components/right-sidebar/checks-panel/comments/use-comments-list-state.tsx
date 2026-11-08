@@ -33,16 +33,20 @@ import {
 } from './pr-comments-list-selection'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { PRCommentGroupView } from './comment-group'
 import { useNow } from '@/hooks/use-now'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
-export function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMode): string {
+export function getPRCommentsListDisplayModeLabel(
+  mode: PRCommentsListDisplayMode,
+  t: Translate = translate
+): string {
   return mode === 'triage'
-    ? translate('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
-    : translate('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
+    ? t('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
+    : t('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
 }
 
 export type PRCommentsListProps = {
@@ -90,6 +94,7 @@ export function useCommentsListState({
   onResolveSelectedCommentsWithAI,
   onOpenLocation
 }: PRCommentsListProps) {
+  const t = useTranslate()
   function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
     let parent = element.parentElement
     while (parent) {
@@ -213,7 +218,7 @@ export function useCommentsListState({
     const checked = selectedGroupIds.has(groupId)
     return (
       <Checkbox
-        aria-label={translate(
+        aria-label={t(
           'auto.components.right.sidebar.checks.panel.content.5dc3af25c0',
           'Select comment'
         )}
@@ -272,19 +277,13 @@ export function useCommentsListState({
         imageUploadAddress={imageUploadAddress}
         placeholder={
           empty
-            ? translate(
+            ? t(
                 'auto.components.right.sidebar.checks.panel.content.ea9fd5ed6a',
                 'Start conversation...'
               )
-            : translate(
-                'auto.components.right.sidebar.checks.panel.content.3fff651d32',
-                'Add a PR comment'
-              )
+            : t('auto.components.right.sidebar.checks.panel.content.3fff651d32', 'Add a PR comment')
         }
-        submitLabel={translate(
-          'auto.components.right.sidebar.checks.panel.content.sendComment',
-          'Send'
-        )}
+        submitLabel={t('auto.components.right.sidebar.checks.panel.content.sendComment', 'Send')}
         autoFocus
         disabled={commentsDisabled}
         disabledReason={commentsDisabledReason}
@@ -293,7 +292,7 @@ export function useCommentsListState({
           onAddComment ??
           (async () => ({
             ok: false,
-            error: translate(
+            error: t(
               'auto.components.right.sidebar.checks.panel.content.b37ebdc51c',
               'Commenting unavailable.'
             )

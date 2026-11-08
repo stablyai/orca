@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { recomputeOn } from '@/lib/recompute-on'
 import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
 import { cn } from '@/lib/utils'
 import { useNow } from '@/hooks/use-now'
@@ -7,7 +8,7 @@ import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew
 
 export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
   // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.
-  useNow(30_000)
+  const now = useNow(30_000)
   if (!at) {
     return null
   }
@@ -18,7 +19,7 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
       dateTime={date.toISOString()}
       className={cn('shrink-0 text-2xs text-muted-foreground', className)}
     >
-      {formatTimeAgo(date.getTime())}
+      {recomputeOn([now], () => formatTimeAgo(date.getTime()))}
     </time>
   ) : null
 }

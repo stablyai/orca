@@ -2,7 +2,10 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-o
 import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
+import type {
+  PendingSidebarRowReveal,
+  PendingSidebarWorktreeReveal
+} from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'

@@ -1,17 +1,20 @@
 import {
   selectCrossStoreFolderChildrenById,
   selectSidebarLineageParentIdentities
-} from '@/store/cross-store-lineage-parents'
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
 } from './folder-workspace-attached-worktrees'
 import { resolveReviewRepository } from '@/lib/review-owner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
 import { Button } from '@/components/ui/button'
@@ -23,7 +26,7 @@ import {
   SourceControlScopeProvider,
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
-import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
+import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './source-control/sync/worktree-git-owner-target'
@@ -37,6 +40,7 @@ type SectionProps = {
 
 const WorktreeSection = memo(
   function WorktreeSection({ owner, scrollRoot, refreshers }: SectionProps) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const id = owner.worktreeId
     const entries = useAppStore((state) => state.gitStatusByWorktree[id] ?? EMPTY_ENTRIES)
@@ -149,7 +153,7 @@ const WorktreeSection = memo(
                 size="icon"
                 className="size-6 shrink-0"
                 onClick={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree',
                   'Open this worktree'
                 )}
@@ -158,7 +162,7 @@ const WorktreeSection = memo(
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate(
+              {t(
                 'auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree',
                 'Open this worktree'
               )}
@@ -168,7 +172,7 @@ const WorktreeSection = memo(
         {isExpanded &&
           (!connected ? (
             <div className="px-4 pb-2 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect',
                 'Reconnect to see this worktree’s changes.'
               )}
@@ -203,6 +207,7 @@ const WorktreeSection = memo(
 )
 
 export default function FolderWorkspaceSourceControlPanel() {
+  const t = useTranslate()
   const activeWorkspaceKey = useAppStore((state) => state.activeWorkspaceKey)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const executionHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId)
@@ -262,7 +267,7 @@ export default function FolderWorkspaceSourceControlPanel() {
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{resolution.folderWorkspace?.name}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount',
               '{{count}} attached worktrees',
               { count: owners.length, defaultValue_one: '{{count}} attached worktree' }
@@ -275,7 +280,7 @@ export default function FolderWorkspaceSourceControlPanel() {
               size="icon"
               variant="ghost"
               onClick={refresh}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.SourceControl.refreshAll',
                 'Refresh all'
               )}
@@ -284,20 +289,20 @@ export default function FolderWorkspaceSourceControlPanel() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {translate('auto.components.right.sidebar.SourceControl.refreshAll', 'Refresh all')}
+            {t('auto.components.right.sidebar.SourceControl.refreshAll', 'Refresh all')}
           </TooltipContent>
         </Tooltip>
       </div>
       {owners.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <div className="text-sm font-medium">
-            {translate(
+            {t(
               'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
               'No attached worktrees yet'
             )}
           </div>
           <div className="mt-2 max-w-64 text-xs leading-5 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
               'Worktrees created from this workspace will show up here.'
             )}

@@ -1,4 +1,4 @@
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { AppState } from '@/store/types'
 import { hasOpenFileExecutionHostEvidence } from '@/lib/unified-tab-host-ownership'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'

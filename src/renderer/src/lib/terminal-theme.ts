@@ -18,6 +18,7 @@ import {
   disambiguatedContentPluginNames,
   disambiguatedPluginContentLabels
 } from '../components/plugins/presentation/plugin-name-disambiguation'
+import type { Translate } from '../i18n/use-translate'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -62,7 +63,8 @@ export function getTerminalTheme(
 
 export function getAvailableTerminalThemeOptions(
   settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>,
-  pluginThemes: readonly PluginTerminalThemeRegistration[] = []
+  pluginThemes: readonly PluginTerminalThemeRegistration[] = [],
+  t?: Translate
 ): TerminalThemeOption[] {
   const builtinOptions = BUILTIN_TERMINAL_THEME_NAMES.map((name) => ({
     value: name,
@@ -83,9 +85,10 @@ export function getAvailableTerminalThemeOptions(
   )
   const labels = disambiguatedPluginContentLabels(
     pluginThemes,
-    [...builtinOptions, ...customOptions].map((option) => option.label)
+    [...builtinOptions, ...customOptions].map((option) => option.label),
+    t
   )
-  const pluginNames = disambiguatedContentPluginNames(pluginThemes)
+  const pluginNames = disambiguatedContentPluginNames(pluginThemes, t)
   const pluginOptions = pluginThemes.map((theme) => ({
     value: theme.id,
     label: labels.get(theme.id) ?? theme.label,

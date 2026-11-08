@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
 import {
   prepareDirectWorkItemSetup,
   type DirectWorkItemLaunchResult
@@ -6,6 +7,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
+  directWorkItemFailureReporter,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
@@ -28,6 +30,7 @@ import {
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
 import {
+  directWorkItemStartupAccepted,
   beginDirectWorkItemStructuredLaunch,
   finishDirectWorkItemPrompt
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
@@ -44,11 +47,7 @@ export async function launchWorkItemDirect(
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
-  const reportFailure = (message: string): false => {
-    toast.error(message)
-    args.onFailureNotified?.()
-    return false
-  }
+  const reportFailure = directWorkItemFailureReporter(args.onFailureNotified)
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -192,9 +191,7 @@ export async function launchWorkItemDirect(
       resolvedCompareBaseRef,
       {
         executionHostId: context.executionHostId,
-        ...(confirmedSetup.approvedSetupHash !== undefined
-          ? { approvedSetupHash: confirmedSetup.approvedSetupHash }
-          : {})
+        ...pickApprovedSetupHashes(confirmedSetup)
       }
     )
     const worktreeId = result.worktree.id
@@ -207,6 +204,7 @@ export async function launchWorkItemDirect(
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
+      actionAgentArgs: args.actionAgentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveLaunchInputs: args.resolveLaunchInputs,
       ...(preflightInputs ? { preflightInputs } : {}),
@@ -249,7 +247,16 @@ export async function launchWorkItemDirect(
         defaultTabs: result.defaultTabs,
         ...(launchPreparation.structuredLaunch
           ? { providesInitialSurface: true }
-          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
+              ...launchPreparation.freshLaunchInputs,
+              prompt: draftContent,
+              promptDelivery,
+              legacy: () => ({
+                startupPlan,
+                pasteDraftAfterLaunch: draftLaunchedNatively ? null : draftContent,
+                submitPastedPrompt: promptDelivery !== 'draft'
+              })
+            }))
       })
       return activationHolder.value !== false
     }
@@ -272,29 +279,29 @@ export async function launchWorkItemDirect(
       // Report a workspace disappearing between create and activation rather than silently drop its draft.
       return reportFailure(workspaceActivationErrorMessage())
     }
-    const primaryTabId = structuredResult.completed
-      ? structuredResult.primaryTabId
-      : activation.primaryTabId
-
     store.setSidebarOpen(true)
 
     if (structuredResult.completed) {
       return true
     }
 
-    const completed = finishDirectWorkItemPrompt({
-      primaryTabId,
+    if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
+      // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
+      return (
+        directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
+        reportFailure(workspaceActivationErrorMessage())
+      )
+    }
+    return finishDirectWorkItemPrompt({
+      primaryTabId: activation.primaryTabId,
       effectiveAgent,
       promptDelivery,
       draftContent,
       startupPlan,
       draftLaunchedNatively,
-      startupPlanFailed
+      startupPlanFailed,
+      onFailureNotified: () => args.onFailureNotified?.()
     })
-    if (!completed) {
-      args.onFailureNotified?.()
-    }
-    return completed
   } catch (error) {
     if (!creationAccepted && args.signal?.aborted) {
       return 'cancelled'

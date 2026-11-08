@@ -23,7 +23,7 @@ import {
 import {
   canResumeHostAutomaticRestores,
   resumeHostAutomaticRestores
-} from '@/runtime/resume-host-automatic-restores'
+} from '@/runtime/hosts/connections/resume-host-automatic-restores'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { releaseHiddenAgentResumeHold } from './hidden-agent-resume-deferral'
 import { startPaneThroughMainThenAttach } from './main-pane-start-request'

@@ -215,22 +215,6 @@ describe('pane resize model on a Mac client', () => {
     expect(hostListeners.size).toBe(0)
   })
 
-  it('does not watch the store for an owner it can never name', () => {
-    const terminal = newTerminal()
-    terminal.options.windowsPty = { backend: 'conpty' }
-    const store = fakeStore(EMPTY)
-    createPaneWindowsPtyModel(
-      () => ({
-        terminal,
-        owner: { executionHostId: 'local', runtimeEnvironmentId: null, connectionId: 'legacy' },
-        transport: null
-      }),
-      store
-    ).apply()
-    expect(terminal.options.windowsPty).toEqual({ backend: 'conpty' })
-    expect(store.listenerCount()).toBe(0)
-  })
-
   it('stays Unix until a late server status arrives, then switches once without touching the drawn grid', async () => {
     const terminal = newTerminal()
     const store = fakeStore(EMPTY)

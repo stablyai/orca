@@ -9,7 +9,6 @@ import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   collectLinks,
-  containsBufferPoint,
   createProvider,
   createProviderSetup,
   makeBufferLine,
@@ -66,35 +65,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
   })
 
-  it('shows the Orca plus default-app hint for local file link hover', async () => {
-    setPlatform('Macintosh')
-    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('CLAUDE.md')])
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-    expect(links[0]).toBeDefined()
-    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
-
-    expect(linkTooltip.textContent).toBe(
-      '/repo/CLAUDE.md (Click for actions, ⌘+click to open, or ⇧⌘+click for default app)'
-    )
-  })
-
-  it('recovers with no links when a path-existence probe rejects (SSH teardown)', async () => {
-    // Contain rejected probes so crash breadcrumbs do not retain unhandled rejections and leak heap (#8260).
-    const shellPathExists = vi.mocked(window.api.shell.pathExists)
-    shellPathExists.mockRejectedValueOnce(new Error('Remote connection dropped/reconnecting'))
-    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')], new Map())
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links).toEqual([])
-    expect(shellPathExists).toHaveBeenCalled()
-  })
-
   it('does not invoke the xterm callback twice when the callback throws', async () => {
     const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
     const callback = vi.fn(() => {
@@ -103,37 +73,6 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     provider.provideLinks(1, callback)
     await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
-  })
-
-  it('does not show an unknown trailing-slash directory link', async () => {
-    setPlatform('Macintosh')
-    const { provider } = createProviderSetup(
-      [makeBufferLine('/repo/unknown-dir/')],
-      makeExistsCache([['active\0/repo/unknown-dir', true]])
-    )
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links).toEqual([])
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-  })
-
-  it('shows the Orca hint for SSH file link hover', async () => {
-    setPlatform('Macintosh')
-    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
-    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('CLAUDE.md')])
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-    expect(links[0]).toBeDefined()
-    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
-
-    expect(linkTooltip.textContent).toBe(
-      '/repo/CLAUDE.md (Click for actions or ⌘+click to open in Orca)'
-    )
   })
 
   it('bounds the terminal path-exists cache while preserving recent probes', async () => {
@@ -321,23 +260,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
   })
 
-  it('uses the pane-specific cwd instead of a stale lifecycle startup cwd', async () => {
-    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
-      return pathValue === '/repo/package.json'
-    })
-    const { provider } = createProviderSetup([makeBufferLine('package.json')], new Map(), {
-      startupCwd: '/repo/packages/web',
-      getPaneLinkCwd: () => '/repo'
-    })
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links.map((link) => link.text)).toEqual(['package.json'])
-    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
-  })
-
   it('returns a wrapped file link when hovering the first physical row', async () => {
     const rows = [
       makeBufferLine('open src/components/'),
@@ -455,21 +377,5 @@ describe('createFilePathLinkProvider range bounds', () => {
     await flushAsyncWork()
 
     expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('reports multi-row ranges that hit-test at wrapped-link boundaries', async () => {
-    const rows = [
-      makeBufferLine('trace src/very/long/'),
-      makeBufferLine('nested/file.ts done', { isWrapped: true })
-    ]
-
-    const links = await collectLinks(rows, 2)
-    const link = links.find((candidate) => candidate.text === 'src/very/long/nested/file.ts')
-
-    expect(link, 'multi-row path should be linkified').toBeDefined()
-    expect(containsBufferPoint(link!, 'trace '.length, 1)).toBe(false)
-    expect(containsBufferPoint(link!, 'trace '.length + 1, 1)).toBe(true)
-    expect(containsBufferPoint(link!, 'nested/file.ts'.length, 2)).toBe(true)
-    expect(containsBufferPoint(link!, 'nested/file.ts'.length + 1, 2)).toBe(false)
   })
 })

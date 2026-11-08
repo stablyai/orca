@@ -5,8 +5,8 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/task-page-github-work-item-status'
 
-export function formatRelativeTime(input: string): string {
-  return formatUiRelativeTimeFromDate(input)
+export function formatRelativeTime(input: string, intlLocale?: string): string {
+  return formatUiRelativeTimeFromDate(input, undefined, intlLocale)
 }
 
 export function getStateLabel(item: GitHubWorkItem): string {

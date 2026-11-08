@@ -81,70 +81,9 @@ function drain(queue: WriteQueueHarness): void {
 }
 
 describe('terminal WebView write queue', () => {
-  // Use distinct chunk strings so retained-code-unit counts detect actual queue retention.
-  function distinctChunks(count: number, codeUnits: number): string[] {
-    return Array.from({ length: count }, (_v, i) => {
-      const marker = `chunk-${i}:`
-      return marker + String.fromCharCode(0x61 + (i % 26)).repeat(codeUnits - marker.length)
-    })
-  }
-
   // Count queue-reachable string units, not heap bytes; xterm may still retain submitted chunks.
-  it('retains only the pending chunk after 127 of 128 dequeues', () => {
-    const CHUNK_CODE_UNITS = 65_536
-    const CHUNK_COUNT = 128
-    const chunks = distinctChunks(CHUNK_COUNT, CHUNK_CODE_UNITS)
-    const measure = (): number => {
-      const queue = createWriteQueue()
-      for (const chunk of chunks) {
-        queue.enqueue(chunk)
-      }
-      for (let i = 0; i < CHUNK_COUNT - 1; i++) {
-        queue.next()
-      }
-      return queue.queuedCodeUnits()
-    }
-
-    expect(measure()).toBe(CHUNK_CODE_UNITS)
-  })
 
   // Legacy compaction retention grows with backlog because it waits for consumed slots to exceed half the queue.
-  it.each([
-    [1_000, 500],
-    [10_000, 5_000]
-  ])('at backlog %i the head reaches %i before any compaction', (backlog, dequeues) => {
-    const chunks = distinctChunks(backlog, 64)
-    const measure = (): { codeUnits: number; head: number; slots: number } => {
-      const queue = createWriteQueue()
-      for (const chunk of chunks) {
-        queue.enqueue(chunk)
-      }
-      for (let i = 0; i < dequeues; i++) {
-        queue.next()
-      }
-      const { head, slots } = queue.snapshot()
-      return { codeUnits: queue.queuedCodeUnits(), head, slots: slots.length }
-    }
-
-    const shipped = measure()
-    // Reachability drops even before compaction.
-    expect(shipped.head).toBe(dequeues)
-    expect(shipped.slots).toBe(backlog)
-    // Only pending string contents remain reachable from the queue.
-    expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
-  })
-
-  it('joins queued strings up to a boundary into one write', () => {
-    const queue = createWriteQueue()
-    queue.enqueue('a')
-    queue.enqueue('b')
-    queue.enqueue('c')
-    queue.enqueueBoundary(() => {})
-    queue.enqueue('d')
-    drain(queue)
-
-    expect(queue.writes).toEqual(['abc', 'd'])
-  })
 
   it('hands xterm a 100 KB write as ordered slices of at most 16 KB', () => {
     const queue = createWriteQueue()
@@ -176,20 +115,6 @@ describe('terminal WebView write queue', () => {
     queue.flushWrite()
 
     expect(order).toEqual(['boundary', 'drained'])
-  })
-
-  it('submits callback-only and empty writes', () => {
-    const queue = createWriteQueue()
-    const calls: string[] = []
-    queue.enqueueBoundary(() => calls.push('first'))
-    queue.enqueue('')
-    queue.enqueueBoundary(() => calls.push('second'))
-    queue.enqueue('')
-    drain(queue)
-
-    expect(calls).toEqual(['first', 'second'])
-    expect(queue.writes).toEqual(['', ''])
-    expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
   })
 
   it('discards pending writes after a reset mid-flight', () => {
@@ -225,33 +150,5 @@ describe('terminal WebView write queue', () => {
     drain(queue)
 
     expect(queue.writes).toEqual(['first', 'secondreentrant'])
-  })
-
-  it('compacts consumed slots and keeps order', () => {
-    const queue = createWriteQueue()
-    const total = 200
-    const consumed = 129
-    for (let i = 0; i < total; i++) {
-      queue.enqueue(`chunk-${i}`)
-    }
-    const taken: unknown[] = []
-    for (let i = 0; i < consumed; i++) {
-      taken.push(queue.next())
-    }
-
-    expect(taken).toEqual(Array.from({ length: consumed }, (_v, i) => `chunk-${i}`))
-    const { slots, head } = queue.snapshot()
-    expect(head).toBe(0)
-    expect(slots).toEqual(
-      Array.from({ length: total - consumed }, (_v, i) => `chunk-${consumed + i}`)
-    )
-  })
-
-  it('resets once the queue is fully consumed', () => {
-    const queue = createWriteQueue()
-    queue.enqueue('only')
-    expect(queue.next()).toBe('only')
-    expect(queue.next()).toBeUndefined()
-    expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
   })
 })

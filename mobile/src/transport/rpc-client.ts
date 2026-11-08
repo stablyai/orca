@@ -1,18 +1,11 @@
-import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
-import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { RpcStreamSubscribeOptions } from './rpc-client-stream-request'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
 export type { SendRequestOptions } from './unvalidated-rpc-request-port'
-
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  // Repeat these top-level fields on subscription replay and unsubscribe.
-  envelope?: RpcEnvelopeFields
-}
 
 type StreamingListener = (result: unknown) => void
 
@@ -23,7 +16,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
     method: string,
     params: unknown,
     onData: StreamingListener,
-    options?: SubscribeOptions
+    options?: RpcStreamSubscribeOptions
   ) => () => void
   updateTerminalSubscriptionViewport: (
     terminal: string,

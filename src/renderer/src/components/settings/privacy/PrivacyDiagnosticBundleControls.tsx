@@ -5,6 +5,7 @@ import type {
 } from '../../../../../preload/api/telemetry-api'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function PrivacyDiagnosticBundleControls({
   status,
@@ -43,6 +44,7 @@ export function PrivacyDiagnosticBundleControls({
   readonly onDeleteUploadedBundle: () => Promise<void>
   readonly onDismissTicket: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (ticketId) {
     return (
       <>
@@ -53,7 +55,7 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onCopyTicket()}
         >
           <ActionIcon busy={copyingTicket} icon={<Clipboard className="size-3.5" />} />
-          {translate(
+          {t(
             'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22',
             'Copy reference ID'
           )}
@@ -65,14 +67,14 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onDeleteUploadedBundle()}
         >
           <ActionIcon busy={deletingTicket} icon={<Trash2 className="size-3.5" />} />
-          {translate(
+          {t(
             'auto.components.settings.PrivacyDiagnosticBundleControls.7f14a1733c',
             'Delete sent file'
           )}
         </Button>
         <Button variant="ghost" size="sm" disabled={deletingTicket} onClick={onDismissTicket}>
           <Check className="size-3.5" />
-          {translate('auto.components.settings.PrivacyDiagnosticBundleControls.2ae9a6b63e', 'Done')}
+          {t('auto.components.settings.PrivacyDiagnosticBundleControls.2ae9a6b63e', 'Done')}
         </Button>
       </>
     )
@@ -88,7 +90,7 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onOpenPreview()}
         >
           <ActionIcon busy={openingPreview} icon={<Eye className="size-3.5" />} />
-          {translate(
+          {t(
             'auto.components.settings.PrivacyDiagnosticBundleControls.798b6f0be5',
             'Open review file'
           )}
@@ -98,7 +100,7 @@ export function PrivacyDiagnosticBundleControls({
           title={
             previewOpened
               ? undefined
-              : translate(
+              : t(
                   'auto.components.settings.PrivacyDiagnosticBundleControls.d8be621237',
                   'Open the review file first.'
                 )
@@ -107,17 +109,14 @@ export function PrivacyDiagnosticBundleControls({
           onClick={() => void onUpload()}
         >
           <ActionIcon busy={uploading} icon={<UploadCloud className="size-3.5" />} />
-          {translate(
+          {t(
             'auto.components.settings.PrivacyDiagnosticBundleControls.aca2c8a367',
             'Send to support'
           )}
         </Button>
         <Button variant="ghost" size="sm" disabled={discarding} onClick={() => void onDiscard()}>
           <ActionIcon busy={discarding} icon={<X className="size-3.5" />} />
-          {translate(
-            'auto.components.settings.PrivacyDiagnosticBundleControls.a5acaffdb6',
-            'Discard'
-          )}
+          {t('auto.components.settings.PrivacyDiagnosticBundleControls.a5acaffdb6', 'Discard')}
         </Button>
       </>
     )
@@ -131,7 +130,7 @@ export function PrivacyDiagnosticBundleControls({
       onClick={() => void onCollect()}
     >
       <ActionIcon busy={collecting} icon={<FileText className="size-3.5" />} />
-      {translate(
+      {t(
         'auto.components.settings.PrivacyDiagnosticBundleControls.dc8404a930',
         'Create diagnostic file'
       )}
@@ -139,17 +138,20 @@ export function PrivacyDiagnosticBundleControls({
   )
 }
 
-export function getDiagnosticBundleDescription({
-  bundle,
-  previewOpened,
-  ticketId
-}: {
-  readonly bundle: DiagnosticsBundlePayload | null
-  readonly previewOpened: boolean
-  readonly ticketId: string | null
-}): string {
+export function getDiagnosticBundleDescription(
+  {
+    bundle,
+    previewOpened,
+    ticketId
+  }: {
+    readonly bundle: DiagnosticsBundlePayload | null
+    readonly previewOpened: boolean
+    readonly ticketId: string | null
+  },
+  t: Translate = translate
+): string {
   if (ticketId) {
-    return translate(
+    return t(
       'auto.components.settings.PrivacyDiagnosticBundleControls.61676df223',
       'Diagnostics sent. Share this reference ID with support: {{value0}}.',
       { value0: ticketId }
@@ -158,19 +160,19 @@ export function getDiagnosticBundleDescription({
   if (bundle) {
     const size = formatBytes(bundle.bytes)
     if (previewOpened) {
-      return translate(
+      return t(
         'auto.components.settings.PrivacyDiagnosticBundleControls.fd7b3891af',
         'You opened the review file ({{value0}}). Send that file to support, or discard it.',
         { value0: size }
       )
     }
-    return translate(
+    return t(
       'auto.components.settings.PrivacyDiagnosticBundleControls.62340d4439',
       'Your review file is ready ({{value0}}). Open it to see what would be sent, then choose whether to send it to support.',
       { value0: size }
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.PrivacyDiagnosticBundleControls.19ec5e29b3',
     'Collects recent app activity and errors into a redacted file you can review before sending. Nothing is uploaded until you choose to send it.'
   )

@@ -3,6 +3,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getSelectedRepoSshGate } from '../../../../lib/new-workspace-ssh-gate'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type RepoHeaderCreateState = {
   disabled: boolean
@@ -11,21 +12,24 @@ export type RepoHeaderCreateState = {
   requiresSshReconnect: boolean
 }
 
-export function getRepoHeaderCreateState(input: {
-  repo: Repo
-  label: string
-  /** From selectRepoSshGateInput, so a paired server's own target reads that server's state. */
-  sshGate: { connectionId: string | null; status: SshConnectionStatus | null }
-}): RepoHeaderCreateState {
+export function getRepoHeaderCreateState(
+  input: {
+    repo: Repo
+    label: string
+    /** From selectRepoSshGateInput, so a paired server's own target reads that server's state. */
+    sshGate: { connectionId: string | null; status: SshConnectionStatus | null }
+  },
+  t: Translate = translate
+): RepoHeaderCreateState {
   if (!isGitRepoKind(input.repo)) {
     return {
       disabled: false,
-      tooltip: translate(
+      tooltip: t(
         'auto.components.sidebar.repo.header.create.state.62e71f2d5d',
         'Create workspace for {{value0}}',
         { value0: input.label }
       ),
-      ariaLabel: translate(
+      ariaLabel: t(
         'auto.components.sidebar.repo.header.create.state.62e71f2d5d',
         'Create workspace for {{value0}}',
         { value0: input.label }
@@ -38,11 +42,11 @@ export function getRepoHeaderCreateState(input: {
   if (sshGate.selectedRepoRequiresConnection) {
     return {
       disabled: true,
-      tooltip: translate(
+      tooltip: t(
         'auto.components.sidebar.repo.header.create.state.6d022563a8',
         'Reconnect SSH target before creating workspaces'
       ),
-      ariaLabel: translate(
+      ariaLabel: t(
         'auto.components.sidebar.repo.header.create.state.3a70acd808',
         'Reconnect SSH target before creating workspaces for {{value0}}',
         { value0: input.label }
@@ -53,12 +57,12 @@ export function getRepoHeaderCreateState(input: {
 
   return {
     disabled: false,
-    tooltip: translate(
+    tooltip: t(
       'auto.components.sidebar.repo.header.create.state.992cfbc44b',
       'Create new worktree for {{value0}}',
       { value0: input.label }
     ),
-    ariaLabel: translate(
+    ariaLabel: t(
       'auto.components.sidebar.repo.header.create.state.992cfbc44b',
       'Create new worktree for {{value0}}',
       { value0: input.label }

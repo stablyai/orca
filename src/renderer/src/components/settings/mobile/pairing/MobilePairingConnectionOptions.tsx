@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from '../../../ui/badge'
 import { translate } from '../../../../i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
@@ -13,32 +14,20 @@ import { MobilePairingPathOption } from './MobilePairingPathOption'
 import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
 import { relayClockSkewMessage } from '../../../mobile/relay-clock-skew-message'
 
-function relayStatusLabel(status: MobileRelayStatus): string {
+function relayStatusLabel(status: MobileRelayStatus, t: Translate = translate): string {
   if (status === 'registered') {
-    return translate('auto.components.settings.MobilePairingConnectionOptions.ready', 'Ready')
+    return t('auto.components.settings.MobilePairingConnectionOptions.ready', 'Ready')
   }
   if (status === 'connecting') {
-    return translate(
-      'auto.components.settings.MobilePairingConnectionOptions.connecting',
-      'Connecting'
-    )
+    return t('auto.components.settings.MobilePairingConnectionOptions.connecting', 'Connecting')
   }
   if (status === 'standby') {
-    return translate(
-      'auto.components.settings.MobilePairingConnectionOptions.available',
-      'Available'
-    )
+    return t('auto.components.settings.MobilePairingConnectionOptions.available', 'Available')
   }
   if (status === 'draining') {
-    return translate(
-      'auto.components.settings.MobilePairingConnectionOptions.reconnecting',
-      'Reconnecting'
-    )
+    return t('auto.components.settings.MobilePairingConnectionOptions.reconnecting', 'Reconnecting')
   }
-  return translate(
-    'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-    'Unavailable'
-  )
+  return t('auto.components.settings.MobilePairingConnectionOptions.unavailable', 'Unavailable')
 }
 
 // Show the landed Relay cell for support; the scheme offers no actionable detail.
@@ -64,6 +53,7 @@ export function MobilePairingConnectionOptions({
   relayMintFailed?: boolean
   relayMintRetrying?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
   const signedIn = authStatus?.state === 'connected'
@@ -132,7 +122,7 @@ export function MobilePairingConnectionOptions({
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>
       <div
         role="radiogroup"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.MobilePairingConnectionOptions.pathGroup',
           'How the phone reaches this computer'
         )}
@@ -149,17 +139,17 @@ export function MobilePairingConnectionOptions({
             optionRefs.current.automatic = el
           }}
           onSelect={() => onChange('automatic')}
-          title={translate(
+          title={t(
             'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
             'Orca Relay'
           )}
           description={
             relayUnavailable
-              ? translate(
+              ? t(
                   'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
                   'Orca Relay isn’t available in this build. Use LAN.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
                   'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
                 )
@@ -167,7 +157,7 @@ export function MobilePairingConnectionOptions({
           trailing={
             relayUnavailable ? (
               <Badge variant="outline" className="text-[11px]">
-                {translate(
+                {t(
                   'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                   'Unavailable'
                 )}
@@ -175,16 +165,16 @@ export function MobilePairingConnectionOptions({
             ) : signedIn && value === 'automatic' ? (
               <Badge variant="outline" className="text-[11px]">
                 {relayMintRetrying
-                  ? translate(
+                  ? t(
                       'auto.components.settings.MobilePairingConnectionOptions.retrying',
                       'Retrying'
                     )
                   : relayMintFailed
-                    ? translate(
+                    ? t(
                         'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                         'Unavailable'
                       )
-                    : relayStatusLabel(relayStatus.status)}
+                    : relayStatusLabel(relayStatus.status, t)}
               </Badge>
             ) : null
           }
@@ -195,7 +185,7 @@ export function MobilePairingConnectionOptions({
         !relayMintFailed &&
         relayStatus.clockOffsetMs !== undefined ? (
           <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive" role="alert">
-            {relayClockSkewMessage(relayStatus.clockOffsetMs)}
+            {relayClockSkewMessage(relayStatus.clockOffsetMs, t)}
           </p>
         ) : null}
         {value === 'automatic' && relayCell ? (
@@ -203,10 +193,7 @@ export function MobilePairingConnectionOptions({
             className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
             data-testid="relay-cell-line"
           >
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.relayCell',
-              'Relay cell'
-            )}
+            {t('auto.components.settings.MobilePairingConnectionOptions.relayCell', 'Relay cell')}
             {`: ${relayCell}`}
           </p>
         ) : null}
@@ -220,11 +207,8 @@ export function MobilePairingConnectionOptions({
             optionRefs.current['local-only'] = el
           }}
           onSelect={() => onChange('local-only')}
-          title={translate(
-            'auto.components.settings.MobilePairingConnectionOptions.localTitle',
-            'LAN'
-          )}
-          description={translate(
+          title={t('auto.components.settings.MobilePairingConnectionOptions.localTitle', 'LAN')}
+          description={t(
             'auto.components.settings.MobilePairingConnectionOptions.localDescription',
             'Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.'
           )}

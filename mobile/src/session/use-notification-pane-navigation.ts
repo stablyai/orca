@@ -1,7 +1,7 @@
 import { structuredSessionIdFromNotificationPane } from '../../../src/shared/structured-session-notification-pane'
 import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
 import { useEffect, useRef, useState } from 'react'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { firstParam } from '../navigation/route-param-reader'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -26,7 +26,8 @@ export function useNotificationPaneNavigation({
   openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
 }) {
   const client = usePageBridgeClient()
-  const router = useRouter()
+  // This screen's own navigation: a screen in a preloaded first commit mounts before the router's container reports ready.
+  const navigation = useNavigation<{ setParams: (params: { paneKey: undefined }) => void }>()
   // An in-page hop (an agent row, a sender jump) carries the tap only in the page URL; the shell route never names it.
   const urlPaneKey =
     firstParam(useLocalSearchParams<{ paneKey?: string | string[] }>().paneKey) || null
@@ -35,12 +36,21 @@ export function useNotificationPaneNavigation({
   const applied = useRef<string | null>(null)
   const [asked, setAsked] = useState(0)
 
+  // The mount's URL tap is already pending; one set later on this screen (the shell reopening the session already showing) asks again.
+  const mountUrlPaneKey = useRef(urlPaneKey)
   useEffect(() => {
-    // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
-    if (urlPaneKey !== null) {
-      router.setParams({ paneKey: undefined })
+    if (urlPaneKey === null) {
+      mountUrlPaneKey.current = null
+      return
     }
-  }, [router, urlPaneKey])
+    if (urlPaneKey !== mountUrlPaneKey.current) {
+      pending.current = urlPaneKey
+      applied.current = null
+      setAsked((count) => count + 1)
+    }
+    // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
+    navigation.setParams({ paneKey: undefined })
+  }, [navigation, urlPaneKey])
 
   useEffect(() => {
     // Acknowledge the initial init separately; read from the client to keep the effect keyed only on client.

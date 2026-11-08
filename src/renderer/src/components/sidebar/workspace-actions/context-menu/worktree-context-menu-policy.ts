@@ -11,6 +11,7 @@ import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/w
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
@@ -104,16 +105,16 @@ export function shouldSuppressContextMenuFollowUpClick(
   )
 }
 
-export function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
+export function getWorktreeParentPickerLabel(
+  validParentWorktreeId: string | null,
+  t: Translate = translate
+): string {
   return validParentWorktreeId
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
         'Change Parent Worktree...'
       )
-    : translate(
-        'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
-        'Set Parent Worktree...'
-      )
+    : t('auto.components.sidebar.WorktreeContextMenu.setParentWorkspace', 'Set Parent Worktree...')
 }
 
 export function isWorktreeParentPickerDisabled(args: {

@@ -65,6 +65,12 @@ export function enqueueWriteBoundary(scope: TerminalDocumentScope, callback: () 
   scope.writeQueue.push(callback)
 }
 
+// Runs once xterm has parsed every write queued so far; a reset or new generation discards it.
+export function afterQueuedWrites(scope: TerminalDocumentScope, callback: () => void) {
+  enqueueWriteBoundary(scope, callback)
+  pumpWrites(scope, scope.terminalGeneration)
+}
+
 export function nextQueuedWrite(scope: TerminalDocumentScope) {
   if (scope.writeQueueHead >= scope.writeQueue.length) {
     resetWriteQueue(scope)

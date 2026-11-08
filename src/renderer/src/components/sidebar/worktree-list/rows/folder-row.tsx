@@ -166,6 +166,7 @@ export function renderFolderWorkspaceOption(args: {
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
+          hostContextLabel={row.hostContextLabel}
           lineageChildCount={row.lineageChildCount}
           lineageChildWorktreeIds={row.lineageChildWorktreeIds}
           lineageCollapsed={row.lineageCollapsed}

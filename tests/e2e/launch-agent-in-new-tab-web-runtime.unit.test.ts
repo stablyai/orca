@@ -9,7 +9,7 @@ import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agen
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '@/runtime/rpc/testing/runtime-environment-bridge-fixture'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fixture'

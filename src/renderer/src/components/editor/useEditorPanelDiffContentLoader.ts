@@ -1,13 +1,13 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { getEditorFileReadContext } from '@/lib/editor-file-operation-owner'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useAppStore } from '@/store'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
-} from '@/runtime/runtime-git-diff-client'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-diff-client'
+import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'

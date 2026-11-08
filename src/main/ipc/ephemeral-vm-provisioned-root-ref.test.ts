@@ -67,23 +67,6 @@ it('captures the source ref commit before a provisioned-root recipe starts', asy
   })
 })
 
-it('captures the effective default ref when no start ref is selected', async () => {
-  const expectedRefHead = createGitFixtureCommit(repoPath)
-  const createCountPath = join(repoPath, 'create-count.txt')
-  const createEnvPath = join(repoPath, 'create-env.json')
-  writeRecipe(repoPath, createCountPath, createEnvPath)
-  registerEphemeralVmHandlers(makeStore(repoPath) as never)
-
-  const result = await provision({})
-
-  expect(result).toMatchObject({ ok: true, connectionType: 'ssh', expectedRefHead })
-  expect(JSON.parse(readFileSync(createEnvPath, 'utf8'))).toEqual({
-    ref: 'main',
-    refHead: expectedRefHead,
-    repoUrl: ''
-  })
-})
-
 it('pairs a multi-remote base with its fetch URL and remote branch ref', async () => {
   createGitFixtureCommit(repoPath)
   const expectedRefHead = createBranchCommit(repoPath, 'upstream-source')

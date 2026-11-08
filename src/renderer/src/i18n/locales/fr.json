@@ -275,10 +275,7 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityDescription": "Les chats Antigravity utilisent un serveur qu’Orca télécharge sur cet hôte, distinct de la CLI agy.",
-        "antigravityNotSignedIn": "Non connecté. Les discussions nécessitent une connexion Antigravity, distincte de votre compte agy du terminal.",
         "antigravityAccount": "Compte",
-        "antigravitySignInNeeded": "Les discussions nécessitent une connexion Antigravity, distincte de votre compte agy du terminal.",
         "searchTerminal": "Terminal",
         "searchAgents": "agents",
         "searchCli": "CLI"
@@ -978,7 +975,7 @@
         "insecureOrigin": "Orca a refusé d'appairer depuis cette page : elle est en http non chiffré sur une autre machine, donc n'importe qui sur le chemin réseau pourrait la remplacer et s'emparer du code d'appairage. Ouvrez le client web en https, à localhost sur cet ordinateur, ou via un tunnel SSH. Pour l'autoriser malgré tout, l'opérateur du serveur peut redémarrer Orca avec ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Ce serveur Orca ne prend plus en charge la clé de connexion de ce navigateur (il a peut-être été rétrogradé). Mettez le serveur à jour, ou appairez à nouveau ce navigateur.",
         "unauthorized": "Non autorisé. Appairez à nouveau ce client web.",
-        "unauthorizedNewLink": "Non autorisé. Demandez un nouveau lien d'appairage."
+        "unauthorizedLinkUsedOrExpired": "Non autorisé. Ce lien d'appairage a peut-être expiré ou a déjà été utilisé. Créez un nouveau lien d'appairage dans Orca et ouvrez-le."
       }
     },
     "store": {
@@ -1681,13 +1678,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "L'espace de travail cible n'est plus disponible.",
-        "16a21d6413": "La reconnexion SSH nécessite des identifiants interactifs.",
-        "386db94f3e": "Le projet cible n'est plus disponible.",
-        "3ad7d77f57": "L'espace de travail cible se trouve sur un hôte différent de la cible de cette exécution d'automatisation.",
-        "workspaceHostUnresolved": "L'espace de travail cible s'étend sur plusieurs hôtes, cette exécution n'a donc aucun hôte unique à utiliser."
-      },
       "useComposerState": {
         "b2ead86962": "Échec de la résolution de la base de la PR.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
@@ -8236,7 +8226,8 @@
           "diagnosticsCopyFailed": "Échec de la copie des diagnostics",
           "5e2c7a1f84": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à l'écran de votre téléphone. Lorsque vous fermez l'application ou si vous la quittez, cela contrôle si elle reste à la taille du téléphone (afin que les outils CLI interactifs ne soient pas redistribués) ou si elle est redimensionnée sur votre bureau. Vous pouvez toujours utiliser Restaurer ou Tout restaurer sur la bannière pour la redimensionner manuellement.",
           "codeRefreshesAutomatically": "Le code se renouvelle automatiquement. Un code copié fonctionne jusqu’à 10 minutes.",
-          "legacyEncryption": "Utilise un ancien chiffrement. Mettez à jour l’app Orca sur cet appareil."
+          "legacyEncryption": "Utilise un ancien chiffrement. Mettez à jour l’app Orca sur cet appareil.",
+          "olderPairingMethod": "Utilise une ancienne méthode d’association. Mettez à jour l’app Orca sur ce téléphone."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8644,6 +8635,7 @@
           "6f6d5188ed": "Révoquer {{value0}}",
           "434e4a6af6": "Lien actuel",
           "df142657a5": "Pas encore utilisé",
+          "olderPairingMethod": "Utilise une ancienne méthode d’association. Mettez à jour Orca sur l’appareil qui utilise ce lien.",
           "b18d1764ef": "Dernière utilisation {{value0}}",
           "linkName": "Lien · {{value0}}",
           "activeLinks": "Liens actifs",
@@ -11171,7 +11163,11 @@
               "micDefault": "système par défaut",
               "dictationLanguageTitle": "Langue de dictée",
               "dictationLanguageDescription": "Indiquez au modèle vocal la langue que vous parlez.",
-              "dictationLanguageKeyword": "langue"
+              "dictationLanguageKeyword": "langue",
+              "modelUnloadTitle": "Décharger le modèle vocal",
+              "modelUnloadDescription": "Choisissez quand le modèle vocal local est déchargé de la mémoire.",
+              "modelUnloadKeyword": "décharger",
+              "modelMemoryKeyword": "mémoire"
             }
           }
         },
@@ -14680,6 +14676,7 @@
             "openLog": "Ouvrir le log",
             "revealLog": "Révéler le log",
             "openWorkingDirectory": "Ouvrir le répertoire de travail",
+            "revealArtifactsFolder": "Révéler le dossier des artefacts",
             "copySessionId": "Copier l'ID de session",
             "copyLogPath": "Copier le chemin du log",
             "messageCount": "{{value0}} msg",
@@ -17513,7 +17510,10 @@
           "reuseLiveSession": "Réutiliser la session active",
           "freshEachRun": "Nouvelle à chaque exécution",
           "precheckEnabled": "Activée, {{timeout}}",
-          "precheckNone": "Aucune"
+          "precheckNone": "Aucune",
+          "migrate": "Migrer",
+          "migrateNotice": "{{host}} a été mis à niveau vers un nouvel hôte distant. Migrez cette automatisation pour qu'elle continue de s'exécuter.",
+          "needsMigration": "Migration requise"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Annuler",
@@ -19946,7 +19946,6 @@
       "queuedMessages": {
         "alreadySent": "Ce message a déjà été envoyé.",
         "listLabel": "Messages en file d'attente",
-        "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",
         "steerHint": "Envoyer sans interrompre le modèle",
@@ -20659,17 +20658,6 @@
           "reviewStatus": "Consultez l'état du problème, l'état de la révision et les vérifications CI sur chaque arbre de travail",
           "managePullRequests": "Lisez, commentez et fusionnez les demandes d'extraction sans quitter Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Installer",
-        "title": "Installer Antigravity",
-        "description": "Appuyez sur Entrée dans le terminal pour lancer l’installateur officiel. La fermeture de ce terminal arrête toute commande encore en cours.",
-        "target": "Emplacement d’installation : {{location}}",
-        "thisDevice": "Cet appareil",
-        "terminal": "Installateur Antigravity",
-        "detected": "Antigravity est détecté dans PATH. Fermez le terminal lorsque l’installation est terminée.",
-        "close": "Fermer le terminal",
-        "recheck": "Revérifier les agents"
       }
     },
     "jiraUserPicker": {
@@ -20764,6 +20752,13 @@
           "description": "La langue que vous parlez. Avec la détection automatique, le modèle la devine à chaque fois.",
           "title": "Langue de dictée",
           "auto": "Détection automatique"
+        },
+        "modelUnload": {
+          "title": "Décharger le modèle vocal",
+          "description": "Durée pendant laquelle le modèle local reste en mémoire après la dictée. Tant qu’il est chargé, la dictée démarre aussitôt ; « Immédiatement » libère la mémoire, et chaque dictée attend alors le chargement du modèle.",
+          "cloud": "Les modèles cloud tournent sur les serveurs du fournisseur, donc rien ne reste chargé ici.",
+          "never": "Jamais",
+          "immediately": "Immédiatement"
         }
       }
     },
@@ -21637,6 +21632,30 @@
       "loading": "Chargement des modifications du sous-module…",
       "empty": "Aucune modification dans le sous-module",
       "loadFailed": "Impossible de charger les modifications du sous-module"
+    },
+    "branchPicker": {
+      "switch": "Changer de branche : {{branch}}",
+      "search": "Rechercher des branches",
+      "recover": "Passer à {{branch}}",
+      "create": "Créer la branche {{name}} à partir de {{branch}}",
+      "open": "Ouvrir l’espace de travail",
+      "occupied": "Extraite dans {{path}}",
+      "remote": "distante",
+      "statusFailed": "Orca n’a pas pu lire les modifications de cette copie de travail. Actualisez le contrôle de code source avant de changer.",
+      "statusUnknown": "Lisez les modifications de cette copie de travail avant de changer.",
+      "conflict": "Terminez ou annulez le {{operation}} avant de changer de branche.",
+      "dirty_one": "Validez ou abandonnez {{count}} fichier modifié avant de changer de branche.",
+      "dirty_other": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
+      "dirty_many": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
+      "agentWorking": "Un agent travaille dans cet espace de travail. Changez de branche une fois qu’il a terminé, ou fermez son onglet s’il s’est arrêté.",
+      "listFailed": "Orca n’a pas pu lister les branches locales. Rouvrez le sélecteur.",
+      "discoveryFailed": "Orca n’a trouvé aucune branche distante. Vous pouvez toujours passer à une branche locale ou créer une branche.",
+      "switchFailed": "Orca n’a pas pu changer de branche. Réessayez.",
+      "switchFailedTitle": "Impossible de changer de branche",
+      "switchFailedIn": "Impossible de changer de branche dans {{workspace}}",
+      "switchedIn": "Dans {{workspace}}",
+      "thisComputer": "cet ordinateur",
+      "updateHost": "Mettez à jour Orca sur {{host}} pour changer de branche d’ici."
     }
   },
   "agentsSidebarIntro": {
@@ -21886,7 +21905,6 @@
     },
     "antigravity": {
       "chatTitle": "Discussions Antigravity",
-      "chatDescription": "Les discussions utilisent leur propre connexion Antigravity, distincte de votre compte agy ci-dessus. Connectez-vous une seule fois sur cet appareil.",
       "chatSignIn": "Se connecter",
       "chatChangeAccount": "Changer de compte",
       "chatRetry": "Réessayer la connexion",
@@ -21899,14 +21917,11 @@
       "chatVerifying": "Finalisation de la connexion…",
       "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
       "chatContinue": "Continuer",
-      "chatSignedInOn": "Connecté sur {{host}}.",
       "chatCancelled": "Connexion annulée.",
       "chatExpired": "La connexion a expiré. Réessayez.",
       "chatFailed": "La connexion a échoué. Réessayez.",
-      "chatNotSignedIn": "Non connecté sur {{host}}.",
       "chatOtherClient": "Une connexion est en cours dans un autre client.",
       "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
-      "scope": "Gérez le compte agy natif sur {{host}}.",
       "signIn": "Démarrez agy sur cet hôte et complétez la connexion au navigateur, puis enregistrez le compte actuel. Pour ajouter un autre compte, utilisez /logout dans agy et reconnectez-vous.",
       "docs": "Instructions de connexion",
       "retry": "Réessayer",
@@ -21937,11 +21952,9 @@
       "personal": "Compte Google",
       "gcpProject": "Projet Google Cloud",
       "gcpLocation": "Emplacement Google Cloud",
-      "signInAgainWith": "Reconnectez-vous pour utiliser {{method}}.",
       "settingsIncomplete": "Choisissez un type de compte Antigravity et saisissez son projet et son emplacement Google Cloud.",
       "settingsLoadFailed": "Orca n’a pas pu charger vos paramètres de connexion Antigravity. Réessayez.",
       "settingsSaveFailed": "Orca n’a pas pu enregistrer vos paramètres de connexion Antigravity. Réessayez.",
-      "signInWith": "Se connecte avec {{method}} sur {{host}}.",
       "lastReading": "{{reading}} · Relevé {{time}}",
       "noReading": "Utilisation inconnue : pas encore relevée"
     },
@@ -23465,6 +23478,7 @@
       "noRunnableHost": "Cette automatisation n’a pas d’hôte sur lequel s’exécuter.",
       "wslMoveInProgress": "Le projet de cette automatisation est en cours de déplacement vers son hôte WSL. Orca a donc ignoré cette exécution. Les exécutions reprendront à la fin du déplacement.",
       "wslMoveOwnedByHost": "Le projet de cette automatisation s’exécute désormais sur son hôte WSL, qui y exécute cette automatisation. Orca n’exécute plus cette copie locale.",
+      "managedHostServer": "Migration vers {{host}} requise",
       "missedGraceWindow": "Lors de la vérification suivante par Orca, la marge de rattrapage de cette exécution manquée était déjà dépassée.",
       "targetMissing": "L’hôte de l’automatisation n’est plus enregistré. Cette automatisation n’a donc plus d’hôte sur lequel s’exécuter.",
       "targetReplaced": "L’hôte de l’automatisation a été supprimé puis réenregistré. Cette automatisation doit donc être rattachée à nouveau avant de pouvoir s’exécuter.",
@@ -23506,6 +23520,17 @@
         "effortRepeated": "Les arguments supplémentaires définissent l’effort plusieurs fois."
       },
       "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour utiliser des arguments supplémentaires."
+    },
+    "setupTrust": {
+      "reviewTitle": "Approuver les nouvelles commandes de configuration de cette automatisation ?",
+      "reviewBody": "Une exécution a ignoré la configuration, car les commandes de configuration du <code>orca.yaml</code> de sa branche ont changé. Si vous les approuvez, les exécutions suivantes les utiliseront. N’approuvez que si vous faites confiance à <repo/>.",
+      "approve": "Approuver",
+      "approved": "Configuration approuvée. Les exécutions suivantes de cette automatisation l’exécuteront.",
+      "skippedSinceApproved": "La configuration n’a pas été exécutée pour cette exécution, car les commandes de configuration orca.yaml de sa branche ont changé. Elles ont depuis été approuvées : les exécutions suivantes les exécuteront.",
+      "skippedReview": "La configuration n’a pas été exécutée : la branche de cette exécution contient des commandes de configuration orca.yaml différentes de celles approuvées pour cette automatisation. Vérifiez-les pour que les exécutions suivantes exécutent la configuration.",
+      "reviewAction": "Vérifier et approuver la configuration",
+      "listSkipped": "Configuration ignorée",
+      "listSkippedTitle": "La dernière exécution a ignoré la configuration, car les commandes de configuration orca.yaml de sa branche ont changé. Vérifiez-les depuis le menu des actions."
     }
   },
   "codeHost": {
