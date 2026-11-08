@@ -43,12 +43,13 @@ export function MobileSessionHeader({
     connectionEscalated,
     terminalSummary,
     handlePanelTap,
-    terminalResume
+    terminalResume,
+    connState
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
-  const showRefreshLine = useRefreshHint(
-    useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
-  )
+  const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
+  // While offline the header already says so; a resume queued for the reconnect isn't a refresh.
+  const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
   const moreRef = useRef<View>(null)

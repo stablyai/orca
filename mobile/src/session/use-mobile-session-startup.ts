@@ -106,7 +106,11 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       return
     }
     // Keep xterm visible while reconnect history hydrates.
-    if (initializedHandlesRef.current.size === 0 && !terminalResume.holdsAny()) {
+    const showsTerminalOutput =
+      initializedHandlesRef.current.size > 0 ||
+      terminalResume.holdsAny() ||
+      terminalResume.anyCatchingUp()
+    if (!showsTerminalOutput) {
       setTerminalsLoaded(false)
     }
     // Clear initialization so reconnect scrollback replaces stale content instead of being ignored.

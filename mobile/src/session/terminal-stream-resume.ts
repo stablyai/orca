@@ -7,6 +7,8 @@ type TerminalResumePosition = { streamToken: string; units: number }
 export class TerminalResumeState {
   private readonly positions = new Map<string, TerminalResumePosition>()
   private readonly catchingUp = new Set<string>()
+  // Live streams whose position would be kept if they stopped now.
+  private readonly resumable = new Set<string>()
   private readonly listeners = new Set<() => void>()
 
   take(handle: string): TerminalResumePosition | null {
@@ -30,6 +32,19 @@ export class TerminalResumeState {
 
   holdsAny(): boolean {
     return this.positions.size > 0
+  }
+
+  /** Whether a live stream on `handle` would resume after a cancel, so cancelling it costs no snapshot. */
+  canResume(handle: string): boolean {
+    return this.resumable.has(handle)
+  }
+
+  setResumable(handle: string, resumable: boolean): void {
+    if (resumable) {
+      this.resumable.add(handle)
+    } else {
+      this.resumable.delete(handle)
+    }
   }
 
   isCatchingUp(handle: string): boolean {
@@ -78,13 +93,18 @@ export function createTerminalStreamResumeCursor(
   let streamId: unknown
   let applying = false
   let units = 0
+  const setToken = (token: string | null) => {
+    streamToken = token
+    state.setResumable(handle, token !== null)
+  }
   state.setCatchingUp(handle, resume !== null)
   return {
     params: resume ? { resume } : {},
     /** True when the host resumed: the xterm already shows everything before the output that follows. */
     subscribed(reply: Record<string, unknown>): boolean {
-      streamToken =
+      setToken(
         reply.outputAck === true && typeof reply.streamToken === 'string' ? reply.streamToken : null
+      )
       streamId = reply.streamId
       units = 0
       applying = resume !== null && reply.resumed === true
@@ -107,19 +127,19 @@ export function createTerminalStreamResumeCursor(
       }
       // A hole or a foreign stream's output means the xterm no longer matches any count the host recorded.
       if (!written || event.streamId !== streamId || typeof event.chunk !== 'string') {
-        streamToken = null
+        setToken(null)
         return
       }
       units += event.chunk.length
     },
     /** A mid-stream snapshot redraws the xterm, and the host stops recording this stream for resume. */
     invalidate(): void {
-      streamToken = null
+      setToken(null)
     },
     ended(type: 'end' | 'error'): void {
       // An error can follow output the transport dropped, so the count may skip a frame the xterm never got.
       if (type === 'error') {
-        streamToken = null
+        setToken(null)
       }
     },
     /** Keeps the position for the next subscribe when the xterm still shows this stream's output. */
@@ -128,6 +148,7 @@ export function createTerminalStreamResumeCursor(
       if (applying && streamToken !== null && stillShown) {
         state.save(handle, { streamToken, units })
       }
+      setToken(null)
     }
   }
 }

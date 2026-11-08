@@ -23,7 +23,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalGestureInputInFlightRef,
     terminalRefs,
     terminalUnsubsRef,
-    leaseOnlyHandlesRef,
     initializedHandlesRef,
     terminalResume,
     terminalDiagnosticsRef,
@@ -37,6 +36,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     getTerminalPaneViewport,
     terminalPaneViewportsRef,
     connState,
+    terminalTextScale,
     showNativeChat,
     switchTab,
     handleTerminalTap: focusTerminalTap,
@@ -251,14 +251,11 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   const connStateSeenRef = useRef(connState)
   useEffect(() => {
     const visible = visibleTerminalHandlesRef.current
-    // Cancel rendered streams on a lost connection, or the shell replays them as snapshots; connected resubscribes each from where its xterm stopped.
+    // Cancel resumable streams on a lost connection, or the shell replays them as snapshots; connected resubscribes each from where its xterm stopped.
     const lostConnection = connStateSeenRef.current === 'connected' && connState !== 'connected'
     connStateSeenRef.current = connState
     for (const handle of terminalUnsubsRef.current.keys()) {
-      if (
-        !visible.includes(handle) ||
-        (lostConnection && !leaseOnlyHandlesRef.current.has(handle))
-      ) {
+      if (!visible.includes(handle) || (lostConnection && terminalResume.canResume(handle))) {
         unsubscribeTerminal(handle)
       }
     }
@@ -267,7 +264,12 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     }
-  }, [visibleKey, connState, subscribeToTerminal, unsubscribeTerminal])
+  }, [visibleKey, connState, subscribeToTerminal, terminalResume, unsubscribeTerminal])
+
+  // Hidden xterms reflow to a new text size on their own, so the host's record of their screens no longer fits them.
+  useEffect(() => {
+    terminalResume.forget()
+  }, [terminalResume, terminalTextScale])
 
   useEffect(() => {
     if (activeSessionTab?.type !== 'markdown') {
