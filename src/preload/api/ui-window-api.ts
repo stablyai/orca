@@ -65,6 +65,9 @@ export type UiWindowApi = {
   maximize: () => void
   isMaximized: () => Promise<boolean>
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
+  /** Focused, shown and not minimized, from the window itself. */
+  isWindowActive: () => Promise<boolean>
+  onWindowActiveChanged: (callback: (active: boolean) => void) => () => void
   requestClose: () => void
   popupMenu: () => void
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void

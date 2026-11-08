@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create, type StoreApi } from 'zustand'
-import { AppStateViewContext, useAppStateValue } from '@/store/app-state-view'
+import { AppStateViewContext, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'

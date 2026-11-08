@@ -11,7 +11,7 @@ import {
   wslDistroHoldUserMessage
 } from '../../../../../../shared/wsl-distro-stopped-hold'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 type PaneStartWait = { connects: Set<() => void>; failed: Set<() => void> }
 

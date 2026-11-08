@@ -23,6 +23,7 @@ import {
 } from './git-history-commit-context-menu'
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -70,6 +71,7 @@ export function GitHistoryPanel({
   ) => void
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const result = state.result
   const viewModels = useMemo(() => {
     if (!result) {
@@ -237,7 +239,7 @@ export function GitHistoryPanel({
       {!collapsed && (
         <div
           role="separator"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.GitHistoryPanel.e5e81e59a6',
             'Resize commits'
           )}
@@ -261,9 +263,7 @@ export function GitHistoryPanel({
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
-            <span>
-              {translate('auto.components.right.sidebar.GitHistoryPanel.d836037d02', 'Commits')}
-            </span>
+            <span>{t('auto.components.right.sidebar.GitHistoryPanel.d836037d02', 'Commits')}</span>
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
@@ -275,7 +275,7 @@ export function GitHistoryPanel({
                 variant="ghost"
                 size="icon-xs"
                 className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9',
                   'What are refs?'
                 )}
@@ -287,7 +287,7 @@ export function GitHistoryPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.GitHistoryPanel.9f7535d22b',
                 'Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.'
               )}
@@ -308,7 +308,7 @@ export function GitHistoryPanel({
                   }
                   onRefresh()
                 }}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
                   'Refresh commits'
                 )}
@@ -317,10 +317,7 @@ export function GitHistoryPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
-                'Refresh commits'
-              )}
+              {t('auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2', 'Refresh commits')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -341,7 +338,7 @@ export function GitHistoryPanel({
           className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-muted-foreground')}
           style={expandedBodyStyle}
         >
-          {translate('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
+          {t('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
         </div>
       )}
       {!collapsed && viewModels.length > 0 && (

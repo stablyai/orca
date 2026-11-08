@@ -3,16 +3,17 @@ import { Mic, Square } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const TYPE_START_DELAY_MS = 650
 const TYPE_INTERVAL_MS = 36
 const WAVEFORM_BAR_HEIGHTS = [38, 70, 100, 58, 82]
 
 export function VoiceDictationFeatureTipVisual(): JSX.Element {
+  const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
   const shortcut = useShortcutKeyDetails('voice.dictation')
-  const dictatedPrompt = translate(
+  const dictatedPrompt = t(
     'featureTips.voice.demoPrompt',
     'Review this diff for edge cases and add tests for anything you find.'
   )
@@ -61,7 +62,7 @@ export function VoiceDictationFeatureTipVisual(): JSX.Element {
             keyCapClassName="h-7 min-w-7 bg-foreground/[0.08] px-2 font-semibold shadow-xs"
           />
           <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate('featureTips.voice.startDictation', 'Start dictation')}
+            {t('featureTips.voice.startDictation', 'Start dictation')}
           </span>
         </div>
       ) : null}
@@ -69,7 +70,7 @@ export function VoiceDictationFeatureTipVisual(): JSX.Element {
       <div className="relative mt-4 h-56 w-full max-w-[21rem] overflow-hidden rounded-xl border border-border/80 bg-card text-left shadow-xs">
         <div className="flex h-10 items-center gap-2 border-b border-border px-3 text-[11px] text-muted-foreground">
           <span className="size-2 rounded-full bg-foreground/35" />
-          <span>{translate('featureTips.voice.agentPromptTitle', 'Agent prompt')}</span>
+          <span>{t('featureTips.voice.agentPromptTitle', 'Agent prompt')}</span>
         </div>
 
         <div className="absolute inset-x-0 bottom-0 top-10 bg-[var(--editor-surface)] px-4 py-5 font-mono text-xs leading-relaxed">
@@ -99,7 +100,7 @@ export function VoiceDictationFeatureTipVisual(): JSX.Element {
             ))}
           </span>
           <span className="min-w-0 flex-1 truncate">
-            {translate('featureTips.voice.listening', 'Listening...')}
+            {t('featureTips.voice.listening', 'Listening...')}
           </span>
           <Square className="size-2.5 shrink-0 fill-current opacity-55" />
         </div>

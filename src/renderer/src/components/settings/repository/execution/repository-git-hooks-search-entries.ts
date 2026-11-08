@@ -1,13 +1,18 @@
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
-export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEntry[] {
+export function getRepositoryGitHooksSearchEntries(
+  repo: Repo,
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: translate('auto.components.settings.repository.search.b79df26937', 'Setup Script'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.b79df26937', 'Setup Script'),
+      description: t(
         'auto.components.settings.repository.search.baaf70bb37',
         'Local and shared scripts that run after a new worktree is created.'
       ),
@@ -35,8 +40,8 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
       ]
     },
     {
-      title: translate('auto.components.settings.repository.search.bce0ca23c6', 'Archive Script'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.bce0ca23c6', 'Archive Script'),
+      description: t(
         'auto.components.settings.repository.search.acd1157f0c',
         'Local and shared scripts that run before a worktree is archived.'
       ),
@@ -67,8 +72,8 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
       ]
     },
     {
-      title: translate('auto.components.settings.repository.search.cc11699c3d', 'Advanced'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.cc11699c3d', 'Advanced'),
+      description: t(
         'auto.components.settings.repository.search.d141897c90',
         'Command source and orca.yaml details.'
       ),
@@ -103,11 +108,8 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.cdfe398068',
-        'When to Run Setup'
-      ),
-      description: translate(
+      title: t('auto.components.settings.repository.search.cdfe398068', 'When to Run Setup'),
+      description: t(
         'auto.components.settings.repository.search.c00a549e03',
         'Choose the default behavior when a setup script is available.'
       ),
@@ -133,11 +135,11 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
       ]
     },
     {
-      title: translate(
+      title: t(
         'auto.components.settings.repository.search.d86ea12d16',
         'Custom GitHub Issue Command'
       ),
-      description: translate(
+      description: t(
         'auto.components.settings.repository.search.d42d1e49c0',
         'File-based linked-issue command configured via orca.yaml and optional local override.'
       ),

@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
@@ -19,10 +19,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 const servers: { stop: () => void }[] = []
 const folders: string[] = []
+const realSetTimeout = globalThis.setTimeout
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+})
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+  vi.useRealTimers()
   // Only exact test-created mkdtemp paths; no external state is reachable.
   for (const folder of folders.splice(0)) {
     await rm(folder, { recursive: true, force: true })
@@ -32,7 +37,16 @@ afterEach(async () => {
 const lines = (records: Record<string, unknown>[]) =>
   records.map((r) => `${JSON.stringify(r)}\n`).join('')
 // ast-grep-ignore: test-no-real-time-wait -- Real elapsed gaps separate hook R, provider K and restart S.
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const pause = (ms: number) => new Promise((resolve) => realSetTimeout(resolve, ms))
+// Transcript polls run on the fake clock while transcript I/O and wall time stay real.
+const settle = (assertion: () => void) =>
+  vi.waitFor(
+    () => {
+      vi.advanceTimersByTime(250)
+      assertion()
+    },
+    { timeout: 3000, interval: 10 }
+  )
 async function load(stream: string): Promise<Record<string, unknown>[]> {
   return (
     await readFile(
@@ -259,10 +273,7 @@ it.each([
     advanceBeforeBind: () => clock?.mockReturnValue(acceptedAt + 10)
   })
   const before = p.row()!
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.row()?.workingMode).toBe('monitoring')
   expect(p.row()?.mainAgent).toEqual(before.mainAgent)
   expect(p.row()?.lastAssistantMessage).toBe('READY')
@@ -271,10 +282,7 @@ it.each([
   const offset = owner.parent.offset
   // A delayed hook is the legitimate parked wake. No second kill is appended.
   await p.post(hooks[1])
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.entries.get(PANE)).toBe(owner)
   expect(owner.parent.offset).toBe(offset)
   if (when === 'accepted-before-bind') {
@@ -288,10 +296,7 @@ it.each(['desktop-http', 'relay-http', 'desktop-spool', 'relay-spool'])(
     const p = await setup(kind, 'accepted-before-bind', { throwOnce: true })
     expect(p.threw).toBe(true)
     expect(p.entries.size).toBe(1)
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     expect(p.row()?.state).toBe('working') // Unknown root remains live; no parent hook was supplied.
   }
 )
@@ -301,10 +306,7 @@ it.each(['relay-spool', 'desktop-spool'])(
   async (kind) => {
     const R = Math.floor(Date.now() / 1000) * 1000
     const p = await setup(kind, 'before-start', { cutoff: R, killAt: R - 1001 })
-    await vi.waitFor(() => expect(p.entries.get(PANE)?.parent.offset).toBeGreaterThan(0), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.entries.get(PANE)?.parent.offset).toBeGreaterThan(0))
     expect(p.entries.get(PANE)?.killedAt).toBeUndefined()
     expect(p.row()?.subagents?.[0]?.state).toBe('working')
     const child = join(p.transcript.slice(0, -6), 'subagents', 'agent-a123.jsonl')
@@ -322,20 +324,14 @@ it.each(['relay-spool', 'desktop-spool'])(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(R + 500).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.entries.get(PANE)?.killedAt).toBe(R + 500), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.entries.get(PANE)?.killedAt).toBe(R + 500))
     expect(p.row()?.subagents?.[0]?.state).toBe('working')
     // R's precision admits K, but only provider generation decides whether this work ends.
     await appendFile(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(R + 600).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   }
 )
 
@@ -343,14 +339,11 @@ it('initialization of an already-listening desktop activates parked runtime spoo
   const p = await setup('desktop-spool', 'before-start', { disabled: true })
   expect(p.entries.size).toBe(0)
   p.desktop.setStatusHooksEnabled(true)
-  await vi.waitFor(
-    () => {
-      expect(p.entries.size).toBe(1)
-      expect(p.row()?.subagents ?? []).toEqual([])
-      expect(p.row()?.workingMode).toBe('monitoring')
-    },
-    { timeout: 3000, interval: 30 }
-  )
+  await settle(() => {
+    expect(p.entries.size).toBe(1)
+    expect(p.row()?.subagents ?? []).toEqual([])
+    expect(p.row()?.workingMode).toBe('monitoring')
+  })
 })
 
 it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async () => {
@@ -358,10 +351,7 @@ it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async (
   const p = await setup('relay-spool', 'before-start', { cutoff: S + 60000 })
   expect(p.entries.get(PANE)?.observedAt).toBeLessThan(S + 60000)
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   const q = await setup('desktop-http', 'after-start')
   await q.post(hooks[2], { receivedAt: 0, hookReceivedAt: 0 })
   expect(q.entries.get(PANE)?.observedAt).toBeGreaterThan(S - 1000)
@@ -369,19 +359,13 @@ it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async (
     q.transcript,
     lines([{ ...q.oldKill, timestamp: new Date(S - 10000).toISOString() }])
   )
-  await vi.waitFor(() => expect(q.entries.get(PANE)?.parent.offset).toBeGreaterThan(0), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(q.entries.get(PANE)?.parent.offset).toBeGreaterThan(0))
   expect(q.row()?.subagents?.[0]?.state).toBe('working')
 })
 
 it('a real failed bind parks without resources and explicit retry delivers its first fact', async () => {
   const p = await setup('relay-spool', 'before-start', { retryBind: true })
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.row()?.workingMode).toBe('monitoring')
 })
 
@@ -438,10 +422,7 @@ it('a held local child permission cannot reset the admitted owner', async () => 
   expect(capture).not.toHaveBeenCalled()
   expect(p.entries.get(PANE)).toBe(owner)
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
 })
 
 it('preferred-port fallback activates the original admitted observation', async () => {
@@ -454,10 +435,7 @@ it('preferred-port fallback activates the original admitted observation', async 
     }
     const p = await setup('relay-spool', 'before-start', { busyPort: address.port })
     expect(p.relay.usedPortFallback).toBe(true)
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     expect(p.row()?.workingMode).toBe('monitoring')
   } finally {
     await new Promise<void>((resolve) => busy.close(() => resolve()))
@@ -483,10 +461,7 @@ it.each(['desktop-http', 'relay-http'])(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(S + 1).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   }
 )
 
@@ -517,8 +492,5 @@ it('reentrant mirror and OSC writes cannot borrow local hook admission', async (
   expect(p.entries.size).toBe(1)
   expect(p.desktop.getStatusSnapshotForPane(other)[0]?.state).toBe('working')
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
 })

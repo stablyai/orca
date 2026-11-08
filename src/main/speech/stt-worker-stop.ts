@@ -1,4 +1,5 @@
 import type { SttEventSink } from './stt-service'
+import type { SttWorkerEvent } from './stt-worker-startup'
 import {
   STT_WORKER_EXITED_ERROR,
   STT_WORKER_HUNG_ERROR,
@@ -9,7 +10,8 @@ export type SttWorkerStopOutcome = 'stopped' | 'error' | 'exit' | 'timeout'
 
 export function waitForSttWorkerStop(args: {
   worker: SttWorkerProcess
-  capturedSink: SttEventSink | null
+  streamId: string
+  sink: SttEventSink
   timeoutMs: number
   discard: boolean
   finish: (outcome: SttWorkerStopOutcome) => void
@@ -28,7 +30,7 @@ export function waitForSttWorkerStop(args: {
       args.worker.off('error', onError)
       args.worker.off('exit', onExit)
     }
-    const finish = (outcome: SttWorkerStopOutcome): void => {
+    const finish = (outcome: SttWorkerStopOutcome, processError?: Error): void => {
       if (settled) {
         return
       }
@@ -36,24 +38,21 @@ export function waitForSttWorkerStop(args: {
       cleanup()
       if (outcome !== 'stopped' && !receivedStopped) {
         // A canceled dictation wants no text; a finishing one lost its tail and must say so.
-        if (!args.discard && (outcome === 'exit' || outcome === 'timeout')) {
-          args.capturedSink?.({
-            type: 'error',
-            error: outcome === 'exit' ? STT_WORKER_EXITED_ERROR : STT_WORKER_HUNG_ERROR
-          })
+        if (!args.discard) {
+          args.sink({ type: 'error', error: stopErrorMessage(outcome, processError) })
         }
-        args.capturedSink?.({ type: 'stopped' })
+        args.sink({ type: 'stopped' })
       }
       args.finish(outcome)
       resolve()
     }
-    const onStopped = (message: { type: string }): void => {
-      if (message.type === 'stopped') {
+    const onStopped = (message: SttWorkerEvent): void => {
+      if (message.type === 'stopped' && message.streamId === args.streamId) {
         receivedStopped = true
         finish('stopped')
       }
     }
-    const onError = (): void => finish('error')
+    const onError = (error: Error): void => finish('error', error)
     const onExit = (): void => finish('exit')
 
     timeout = setTimeout(() => finish('timeout'), args.timeoutMs)
@@ -62,4 +61,11 @@ export function waitForSttWorkerStop(args: {
     args.worker.on('error', onError)
     args.worker.on('exit', onExit)
   })
+}
+
+function stopErrorMessage(outcome: SttWorkerStopOutcome, processError: Error | undefined): string {
+  if (outcome === 'timeout') {
+    return STT_WORKER_HUNG_ERROR
+  }
+  return processError ? String(processError) : STT_WORKER_EXITED_ERROR
 }

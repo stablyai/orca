@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
 import { registerTerminalSubscription } from './terminal-subscription-registration'
 
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'

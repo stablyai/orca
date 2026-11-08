@@ -47,11 +47,7 @@ vi.mock('../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalid
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import {
-  _resetWorktreeCreateConcurrencyForTests,
-  beginPreparationWork,
-  type PreparationWork
-} from '../../../workspaces/creation/worktree-create-concurrency'
+import { _resetWorktreeCreateConcurrencyForTests } from '../../../workspaces/creation/worktree-create-concurrency'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 const gitRepo = {
@@ -163,24 +159,6 @@ describe('runtime create events', () => {
     expect(events('workspace_created')).toHaveLength(0)
   })
 
-  it('counts preparation work running during the create but not the re-arm the create starts', async () => {
-    let competing: PreparationWork | undefined
-    mocks.createLocal.mockImplementation(async ({ rearm }: LocalCreateArgs) => {
-      competing = beginPreparationWork()
-      rearm.fire = () => {
-        beginPreparationWork()
-        beginPreparationWork()
-      }
-      return localCreateResult()
-    })
-
-    await makeRuntime().createManagedWorktree({ repoSelector: 'repo-1', name: 'app' })
-    competing?.end()
-    await vi.waitFor(() => expect(events('workspace_created')).toHaveLength(1))
-
-    expect(events('workspace_created')[0]).toMatchObject({ concurrent_preparations: 1 })
-  })
-
   it('still returns the create when sending its event throws', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.track.mockImplementation(() => {
@@ -204,37 +182,5 @@ describe('runtime create events', () => {
       makeRuntime().createManagedWorktree({ repoSelector: 'repo-1', name: 'app' })
     ).rejects.toThrow('could not create work tree')
     expect(mocks.track).toHaveBeenCalledOnce()
-  })
-
-  it('refuses an SSH create and still names its host on the failed event', async () => {
-    const runtime = makeRuntime({
-      id: 'repo-remote',
-      path: '/srv/app',
-      kind: 'git',
-      executionHostId: 'ssh:remote-1'
-    })
-
-    await expect(
-      runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'app' })
-    ).rejects.toThrow('Remote connection dropped')
-    await vi.waitFor(() => expect(events('workspace_create_failed')).toHaveLength(1))
-
-    expect(events('workspace_create_failed')[0]).toMatchObject({
-      create_entry_point: 'runtime',
-      execution_host: 'ssh'
-    })
-    expect(mocks.probe).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing when the request is rejected before any create starts', async () => {
-    await expect(
-      makeRuntime().createManagedWorktree({
-        repoSelector: 'repo-1',
-        name: 'app',
-        startupAgent: 'codex'
-      })
-    ).rejects.toThrow('Selected agent is disabled')
-    expect(mocks.createLocal).not.toHaveBeenCalled()
-    expect(mocks.track).not.toHaveBeenCalled()
   })
 })

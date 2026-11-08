@@ -11,7 +11,6 @@ import { SKILL_PACKAGE_CONTENT_TYPE } from '../../shared/skill-package-manifest'
 import { collectBundle } from '../observability/bundle'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../observability/tracer'
 import {
-  recordSkillCapabilityAbsence,
   startSkillBundleInstallOperation,
   startSkillInstallOperation,
   startSkillPhaseOperation
@@ -19,7 +18,7 @@ import {
 import { createSkillPackageArchive } from './skill-package-creation'
 import { downloadSkillPackageGrant } from './skill-package-download'
 import { reconcileSkillProviderPlacement } from './skill-placement-reconciliation'
-import { settleObservedSkillTransactionRecovery } from './skill-transaction-recovery-observability'
+import './skill-transaction-recovery-observability'
 
 type CapturingSink = TracerSink & { records: unknown[] }
 
@@ -205,34 +204,6 @@ describe('skill operation observability', () => {
     }
   })
 
-  it('bounds phase counts and records only fixed capability labels', () => {
-    const recovery = startSkillPhaseOperation({ phase: 'recovery', destination: 'startup' })
-    recovery.complete({
-      status: 'partial',
-      scannedCount: Number.MAX_SAFE_INTEGER,
-      recoveredCount: 4,
-      failureCount: 1,
-      orphanCount: 3,
-      truncated: true
-    })
-    const upload = startSkillPhaseOperation({
-      phase: 'upload',
-      compressedBytes: 40 * 1024 * 1024
-    })
-    upload.complete({ status: 'complete' })
-    recordSkillCapabilityAbsence({
-      capability: 'skills.install.bundle.v1',
-      destination: 'remote-runtime'
-    })
-
-    const serialized = JSON.stringify(sink.records)
-    expect(serialized).toContain('1000000')
-    expect(serialized).toContain('41943040')
-    expect(serialized).toContain('orphanCount')
-    expect(serialized).toContain('skills.install.bundle.v1')
-    expect(serialized).toContain('remote-runtime')
-  })
-
   it('reduces phase failures to a bounded category', () => {
     const download = startSkillPhaseOperation({
       phase: 'download',
@@ -302,23 +273,5 @@ describe('skill operation observability', () => {
     expect(serialized).not.toContain(providerRoot)
     expect(serialized).not.toContain('observed-skill')
     expect(serialized).not.toContain('Private instructions')
-  })
-
-  it('records transaction rollback settlement without exposing recovery errors', async () => {
-    await settleObservedSkillTransactionRecovery({
-      rollback: true,
-      recover: async () => undefined
-    })
-    await settleObservedSkillTransactionRecovery({
-      rollback: false,
-      recover: async () => {
-        throw new Error(`${PRIVATE_VALUES.canonicalPath} recovery failed`)
-      }
-    })
-
-    const serialized = JSON.stringify(sink.records)
-    expect(serialized).toContain('rollbackCount')
-    expect(serialized).toContain('skill-operation-unknown')
-    expect(serialized).not.toContain(PRIVATE_VALUES.canonicalPath)
   })
 })

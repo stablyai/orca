@@ -1,4 +1,3 @@
-import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeOs from 'node:os'
 
@@ -27,7 +26,7 @@ vi.mock('os', async (importOriginal) => ({
   networkInterfaces: networkInterfacesMock
 }))
 
-vi.mock('../runtime/windows-default-route-interfaces', () => ({
+vi.mock('../runtime/rpc/server/pairing/network/windows-default-route-interfaces', () => ({
   getWindowsDefaultRouteInterfaceNames: defaultRouteInterfaceNamesMock
 }))
 import { registerMobileHandlers } from './mobile'

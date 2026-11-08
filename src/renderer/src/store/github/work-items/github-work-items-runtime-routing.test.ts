@@ -8,7 +8,7 @@ import {
   runtimeEnvironmentCall
 } from '../github-slice-test-harness'
 
-import { runtimeOwnedRepoState } from '../../slices/store-test-helpers'
+import { runtimeOwnedRepoState } from '../../repos/repo.test-fixture'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {

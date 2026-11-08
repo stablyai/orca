@@ -5,9 +5,9 @@ import {
   CreateIntentParams,
   CreateSupportParams,
   ModelCatalogParams,
-  SendParams,
-  RespondToQuestionParams
+  SendParams
 } from './structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session/agent-session-question-answer'
 
 const ENVELOPE = {

@@ -2,7 +2,7 @@ import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/rpc/server/r
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import {
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
@@ -33,6 +33,7 @@ import {
   savedRun,
   deferred
 } from './automation-test-fixtures'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 export function registerAutomationPresentationTests({
   inventory,
@@ -177,7 +178,9 @@ export function registerAutomationPresentationTests({
     )
     await act(async () => {
       setTree(
-        create(createElement(AutomationManager, { client, hostId: 'desktop', executionHost }))
+        createWithQueryClient(
+          createElement(AutomationManager, { client, hostId: 'desktop', executionHost })
+        )
       )
     })
     await press('New automation')
@@ -293,7 +296,9 @@ export function registerAutomationPresentationTests({
   async function mount(port: ReturnType<typeof automationClient>) {
     let tree: ReactTestRenderer
     await act(async () => {
-      tree = create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' }))
+      tree = createWithQueryClient(
+        createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+      )
       setTree(tree)
     })
     await open()
@@ -368,7 +373,11 @@ export function registerAutomationPresentationTests({
   it('lists, shows and renames an automation whose agent this build does not know without rewriting its agent', async () => {
     const port = portFor({ ...savedAutomation(), agentId: 'future-agent' })
     await act(async () => {
-      setTree(create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' })))
+      setTree(
+        createWithQueryClient(
+          createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+        )
+      )
     })
     expect(
       root()

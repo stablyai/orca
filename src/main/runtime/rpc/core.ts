@@ -1,5 +1,5 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
-import { ZodError, type ZodType } from 'zod'
+import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
@@ -34,10 +34,15 @@ import type {
   PairingCreateOfferParams,
   PairingCreateOfferResult
 } from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+import type {
+  ExchangePairingTicketParams,
+  ExchangePairingTicketResult
+} from '../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {
   registerDeviceKey(params: RegisterDeviceKeyParams): RegisterDeviceKeyResult
+  exchangePairingTicket(params: ExchangePairingTicketParams): ExchangePairingTicketResult
 }
 
 export type PairingRpcContext = {
@@ -300,5 +305,3 @@ export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
   return first?.message ?? 'invalid_argument'
 }
-
-export { ZodError }

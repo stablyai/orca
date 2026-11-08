@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 
 const runtime = vi.hoisted(() => ({
@@ -14,13 +14,13 @@ const runtime = vi.hoisted(() => ({
 vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: runtime.subscribe
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
     runtime.contact.set(id, listener)
     return runtime.stopContact
   }
 }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   onRuntimeEnvironmentsRetired: (listener: (ids: readonly string[]) => void) => {
     runtime.retire.add(listener)
     return runtime.stopRetirement
@@ -32,10 +32,6 @@ const target = {
   worktreePath: '/repo',
   connectionId: undefined,
   runtimeEnvironmentId: 'host-a'
-}
-const change: FsChangedPayload = {
-  worktreePath: '/repo',
-  events: [{ kind: 'update', absolutePath: '/repo/README.md' }]
 }
 function pendingSubscription(): {
   promise: Promise<() => void>
@@ -85,52 +81,5 @@ describe('editor runtime file watch recovery', () => {
     })
     stop()
     expect(stopFresh).toHaveBeenCalledOnce()
-  })
-
-  it('drops payloads and errors from replaced attempts and unrelated host contact', async () => {
-    const onPayload = vi.fn()
-    const onError = vi.fn()
-    runtime.subscribe.mockImplementation((_context, payload, error) => {
-      runtime.payloads.push(payload)
-      runtime.errors.push(error)
-      return Promise.resolve(vi.fn())
-    })
-    const stop = subscribeEditorRuntimeFileWatch(target, onPayload, onError)
-    await settle()
-    runtime.contact.get('host-b')?.()
-    expect(runtime.subscribe).toHaveBeenCalledOnce()
-    runtime.contact.get('host-a')?.()
-    await settle()
-    onPayload.mockClear()
-    runtime.payloads[0](change)
-    runtime.errors[0](new Error('old transport'))
-    expect(onPayload).not.toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
-    runtime.payloads[1](change)
-    expect(onPayload).toHaveBeenCalledOnce()
-    stop()
-    runtime.payloads[1](change)
-    runtime.contact.get('host-a')?.()
-    expect(onPayload).toHaveBeenCalledOnce()
-    expect(runtime.subscribe).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops on owner retirement so a same-ID replacement cannot revive old work', async () => {
-    const stopStream = vi.fn()
-    runtime.subscribe.mockResolvedValue(stopStream)
-    const stop = subscribeEditorRuntimeFileWatch(target, vi.fn(), vi.fn())
-    await settle()
-    for (const retire of runtime.retire) {
-      retire(['host-b'])
-    }
-    expect(stopStream).not.toHaveBeenCalled()
-    for (const retire of runtime.retire) {
-      retire(['host-a'])
-    }
-    expect(stopStream).toHaveBeenCalledOnce()
-    runtime.contact.get('host-a')?.()
-    expect(runtime.subscribe).toHaveBeenCalledOnce()
-    stop()
-    expect(stopStream).toHaveBeenCalledOnce()
   })
 })

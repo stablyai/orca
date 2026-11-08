@@ -11,7 +11,7 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
-import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
+import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 import {
   readTerminalComposerTypedText,
   type TerminalCursorContext
@@ -20,28 +20,18 @@ import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/op
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { claudeTerminalPromptChannel } from '../../claude-terminal-prompt-channel'
 
-import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
-
 const DIALOG_HOLD_RECHECK_MS = 2000
 /** A person typing a few seconds ago may be mid-word in a composer the draft reader can't see (#14832). */
 const TYPING_PAUSE_HOLD_MS = 5000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
-  protected abstract resolveWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-
-  protected abstract removeWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
       if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
+        this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
+        this.terminalWaiters.remove(waiter)
         waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
@@ -58,12 +48,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
+        this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
       } else if (verdict.kind === 'ready-strong') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+        this.terminalWaiters.resolve(
+          waiter,
+          buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
+        )
       }
     }
   }

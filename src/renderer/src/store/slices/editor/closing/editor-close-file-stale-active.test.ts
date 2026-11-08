@@ -1,18 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeOpenFile } from '../types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

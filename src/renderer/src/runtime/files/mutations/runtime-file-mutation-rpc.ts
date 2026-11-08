@@ -1,13 +1,13 @@
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/web-runtime-request-registry'
-import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-mutation-ownership'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
+import { assertFileMutationOwnershipCapability } from '../../../../../shared/file-write/file-mutation-ownership'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
-} from '../../runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+} from '../../rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 type RuntimeFileMutationTarget = { kind: 'environment'; environmentId: string }
 export type RuntimeFileImportSession = {

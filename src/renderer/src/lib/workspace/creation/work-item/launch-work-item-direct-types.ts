@@ -9,7 +9,9 @@ import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 
 export type DirectWorkItemLaunchInputs = AgentLaunchInputViews &
-  Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'>
+  Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'> & {
+    actionAgentArgs?: string
+  }
 
 export type LaunchableWorkItem = {
   provider?: TaskProvider
@@ -42,6 +44,7 @@ export type LaunchWorkItemDirectArgs = {
   agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  actionAgentArgs?: string
   /** The saved choice for `agentOverride`; a chat seeds it and a terminal applies it as flags. */
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>

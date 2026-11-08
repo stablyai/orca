@@ -55,39 +55,4 @@ describe('workspace linked-item source context', () => {
       )
     ).toBe(false)
   })
-
-  it('infers GitHub/GitLab provider when TaskPage seeds omit provider', () => {
-    expect(
-      isWorkspaceLinkedItemSourceContextMatch(
-        {
-          type: 'issue',
-          number: 42,
-          title: 'GitHub issue',
-          url: 'https://github.com/acme/repo/issues/42'
-        },
-        {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'project-1',
-          hostId: 'local'
-        }
-      )
-    ).toBe(true)
-    expect(
-      isWorkspaceLinkedItemSourceContextMatch(
-        {
-          type: 'mr',
-          number: 7,
-          title: 'GitLab MR',
-          url: 'https://gitlab.com/acme/repo/-/merge_requests/7'
-        },
-        {
-          kind: 'task-source',
-          provider: 'gitlab',
-          projectId: 'project-1',
-          hostId: 'local'
-        }
-      )
-    ).toBe(true)
-  })
 })

@@ -4,7 +4,6 @@ import {
   TERMINAL_PASTE_DIRECT_MAX_BYTES,
   TERMINAL_PASTE_MAX_BYTES
 } from './terminal-paste-limits'
-import './terminal-paste-payload-metadata'
 import {
   measurePastePayloadMetadata as measureTerminalPastePayloadMetadata,
   measurePastePayloadMetadataWithYield as measureTerminalPastePayloadMetadataWithYield

@@ -1,9 +1,9 @@
 import { joinPath } from '@/lib/path'
-import type { ImportItemResult } from '../../../../../shared/filesystem-import-result-types'
+import type { ImportItemResult } from '../../../../../shared/file-import/filesystem-import-result'
 import { deconflictCopyName } from '../../../../../shared/import-copy-name'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
-import { captureRuntimeEnvironmentRequestRevision } from '../../runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { runtimePathExists } from '../metadata/runtime-file-metadata-client'
 import {
   assertRuntimeFileMutationCapability,
@@ -22,8 +22,8 @@ import {
   ensureRuntimeDropStagingIgnored,
   uploadRuntimeFileWithoutClobber
 } from './runtime-file-upload-client'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,

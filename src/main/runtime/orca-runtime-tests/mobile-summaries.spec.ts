@@ -1,6 +1,6 @@
 import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'

@@ -5,7 +5,7 @@ import type { GitHubCommentResult, PRComment } from '../../../../../shared/githu
 import { translate } from '@/i18n/i18n'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   restoreReactionOnSubject,
   setReactionOnSubject

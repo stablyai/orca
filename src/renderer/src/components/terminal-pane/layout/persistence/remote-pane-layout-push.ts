@@ -1,10 +1,10 @@
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { terminalLayoutEqual } from '../../../../../../shared/workspace-layout/terminal-layout-equality'
-import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-terminal-actions'
+import { updateWebRuntimePaneLayout } from '@/runtime/hosted-terminals/actions/web-runtime-pane-layout-update'
 import {
   requeuePendingPaneTitleRenames,
   takeUnsentPaneTitleRenames
-} from '@/runtime/pending-pane-title-renames'
+} from '@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames'
 import { collectLeafIdsInOrder } from '../terminal-layout-leaf-traversal'
 
 export type RemotePaneLayoutPusher = {

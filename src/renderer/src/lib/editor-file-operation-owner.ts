@@ -14,7 +14,7 @@ import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/exec
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { resolveWorkspaceDirectory } from './workspace-directory'
 import { getFileConnectionOwnerFromState } from './connection-owner-resolution'
@@ -33,7 +33,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function getEditorFileOperationContext(
   ...args: Parameters<typeof getEditorFileReadContext>

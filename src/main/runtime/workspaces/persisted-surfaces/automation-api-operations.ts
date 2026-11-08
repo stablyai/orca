@@ -8,7 +8,7 @@ import type { Automation, AutomationRun } from '../../../../shared/automations-t
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-run-context'
+} from '../../integrations/automations/runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,

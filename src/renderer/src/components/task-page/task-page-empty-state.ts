@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type RepoBackedTaskEmptyStateProvider = 'github' | 'gitlab'
 
@@ -7,18 +8,21 @@ export type RepoBackedTaskEmptyState = {
   description: string
 }
 
-export function getRepoBackedTaskEmptyState(args: {
-  provider: RepoBackedTaskEmptyStateProvider
-  selectedRepoCount: number
-  gitlabView?: 'issues' | 'mrs' | 'todos'
-}): RepoBackedTaskEmptyState {
+export function getRepoBackedTaskEmptyState(
+  args: {
+    provider: RepoBackedTaskEmptyStateProvider
+    selectedRepoCount: number
+    gitlabView?: 'issues' | 'mrs' | 'todos'
+  },
+  t: Translate = translate
+): RepoBackedTaskEmptyState {
   if (args.selectedRepoCount === 0) {
     return {
-      title: translate(
+      title: t(
         'auto.components.taskPageEmptyState.noProjectSourcesTitle',
         'No project sources selected'
       ),
-      description: translate(
+      description: t(
         'auto.components.taskPageEmptyState.noProjectSourcesDescription',
         'Select at least one project source so Orca knows which host/account to fetch tasks from.'
       )
@@ -26,11 +30,11 @@ export function getRepoBackedTaskEmptyState(args: {
   }
   if (args.provider === 'github') {
     return {
-      title: translate(
+      title: t(
         'auto.components.taskPageEmptyState.noMatchingGitHubWorkTitle',
         'No matching GitHub work'
       ),
-      description: translate(
+      description: t(
         'auto.components.taskPageEmptyState.changeQueryDescription',
         'Change the query or clear it.'
       )
@@ -39,22 +43,16 @@ export function getRepoBackedTaskEmptyState(args: {
   switch (args.gitlabView) {
     case 'issues':
       return {
-        title: translate(
-          'auto.components.taskPageEmptyState.noGitLabIssuesTitle',
-          'No GitLab issues'
-        ),
-        description: translate(
+        title: t('auto.components.taskPageEmptyState.noGitLabIssuesTitle', 'No GitLab issues'),
+        description: t(
           'auto.components.taskPageEmptyState.noGitLabIssuesDescription',
           'No GitLab issues match this filter.'
         )
       }
     case 'mrs':
       return {
-        title: translate(
-          'auto.components.taskPageEmptyState.noGitLabMrsTitle',
-          'No GitLab merge requests'
-        ),
-        description: translate(
+        title: t('auto.components.taskPageEmptyState.noGitLabMrsTitle', 'No GitLab merge requests'),
+        description: t(
           'auto.components.taskPageEmptyState.noGitLabMrsDescription',
           'No GitLab MRs match this filter.'
         )
@@ -62,8 +60,8 @@ export function getRepoBackedTaskEmptyState(args: {
     case 'todos':
     case undefined:
       return {
-        title: translate('auto.components.taskPageEmptyState.noGitLabWorkTitle', 'No GitLab work'),
-        description: translate(
+        title: t('auto.components.taskPageEmptyState.noGitLabWorkTitle', 'No GitLab work'),
+        description: t(
           'auto.components.taskPageEmptyState.noGitLabWorkDescription',
           'No GitLab work matches this filter.'
         )

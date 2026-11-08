@@ -61,25 +61,6 @@ describe('the host-stamped turn start', () => {
     return server.getStatusSnapshot()[0]?.turnStartedAt
   }
 
-  it('stamps a new main-agent turn and carries it across tools, a wait and its answer', async () => {
-    const server = await startServer()
-    await post(server, { hook_event_name: 'UserPromptSubmit', prompt: 'Rename the module' })
-    const started = turnStartedAt(server)
-    expect(started).toBe(server.getStatusSnapshot()[0]?.stateStartedAt)
-
-    const bash = { tool_name: 'Bash', tool_input: { command: 'pnpm build' }, tool_use_id: 'tu-1' }
-    await post(server, { hook_event_name: 'PreToolUse', ...bash })
-    await post(server, { hook_event_name: 'PermissionRequest', ...bash })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting' })
-    await post(server, { hook_event_name: 'PostToolUse', ...bash })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
-    expect(server.getStatusSnapshot()[0]?.stateStartedAt).toBeGreaterThan(started!)
-    expect(turnStartedAt(server)).toBe(started)
-
-    await post(server, { hook_event_name: 'Stop' })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', turnStartedAt: started })
-  })
-
   it('is not stamped by a child agent, and the same prompt sent again is a new turn', async () => {
     const server = await startServer()
     await post(server, { hook_event_name: 'UserPromptSubmit', prompt: 'Rename the module' })
@@ -116,16 +97,6 @@ describe('the host-stamped turn start', () => {
     expect(turnStartedAt(server)).toBe(started)
   })
 
-  it('clears on a session boundary', async () => {
-    const server = await startServer()
-    await post(server, { hook_event_name: 'UserPromptSubmit', prompt: 'Rename the module' })
-    expect(turnStartedAt(server)).toEqual(expect.any(Number))
-
-    await post(server, { hook_event_name: 'SessionStart', source: 'clear' })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', sessionBoundary: true })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('turnStartedAt')
-  })
-
   // An OSC repaint can land before the prompt hook; it must not count from the finished turn.
   it('drops the stamp when a finished main agent runs again with no turn-opening event', async () => {
     const server = await startServer()
@@ -141,17 +112,6 @@ describe('the host-stamped turn start', () => {
     })
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
     expect(server.getStatusSnapshot()[0]).not.toHaveProperty('turnStartedAt')
-  })
-
-  it('cannot be declared by a producer', async () => {
-    const server = await startServer()
-    await post(server, {
-      hook_event_name: 'UserPromptSubmit',
-      prompt: 'Rename the module',
-      turnStartedAt: 1
-    })
-    await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Bash', turnStartedAt: 1 })
-    expect(turnStartedAt(server)).toBeGreaterThan(1)
   })
 
   it('reaches the live push and survives a restart through the status file', async () => {

@@ -18,7 +18,10 @@ import {
 } from '../../../../shared/execution-host'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

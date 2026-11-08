@@ -220,7 +220,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
-  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
+  it('forwards the configured search shortcut to the worktree palette toggle event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -253,27 +253,29 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    createMainWindow(null)
+    createMainWindow(null, {
+      getKeybindings: () => ({ 'worktree.palette': ['Mod+Alt+K'] })
+    })
 
     const isDarwin = process.platform === 'darwin'
     for (const input of [
       {
         type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
+        code: 'KeyK',
+        key: 'k',
         meta: isDarwin,
         control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
+        alt: true,
+        shift: false
       },
       {
         type: 'keyDown',
-        code: 'KeyJ',
+        code: 'KeyK',
         key: '',
         meta: isDarwin,
         control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
+        alt: true,
+        shift: false
       }
     ]) {
       const preventDefault = vi.fn()
@@ -456,18 +458,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
@@ -586,10 +585,13 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    createMainWindow({
-      getUI: () => ({}),
-      getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
-    } as never)
+    createMainWindow(
+      {
+        getUI: () => ({}),
+        getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+      } as never,
+      { getKeybindings: () => ({ 'worktree.palette': ['Mod+Alt+K'] }) }
+    )
 
     const setFocusedListener = vi
       .mocked(ipcMain.on)
@@ -599,18 +601,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: 'KeyK',
+      key: 'k',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: true,
+      shift: false
+    })
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {

@@ -226,8 +226,10 @@ const prCommentSchema = z
   }))
 
 // Preserve upstream order because timeline thread grouping depends on it.
+export const prCommentsSchema = salvagingArray(prCommentSchema)
+
 export function prCommentList(name: string) {
-  return salvagedOptional(name, salvagingArray(prCommentSchema))
+  return salvagedOptional(name, prCommentsSchema)
 }
 
 const checkDetailSchema = z

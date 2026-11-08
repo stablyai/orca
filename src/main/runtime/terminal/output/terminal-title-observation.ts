@@ -37,6 +37,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
   protected abstract markPaneLiveTitlesDirty(): void
+  /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
+  protected abstract onTitleAgentStatusChanged(): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -126,6 +128,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
           (agentStatus === 'idle' && !statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
+      // A fresh title retires a stale-working display clear, so the row shows the agent again.
+      const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -139,6 +143,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+      }
+      if (prevStatus !== agentStatus || retiresDisplayClear) {
+        this.onTitleAgentStatusChanged()
       }
       if (
         identityOnlyTitle ||
@@ -220,6 +227,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     if (nativeStatus === clearedStatus) {
       return previousTitle !== normalizedTitle
     }
+    this.onTitleAgentStatusChanged()
     const foregroundRefresh = this.ptyForegroundAgent.refresh(ptyId, observedAt)
     if (this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)) {
       this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)

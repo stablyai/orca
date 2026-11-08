@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type AppState, useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'
 import { getDefaultSettings } from '../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -12,9 +13,9 @@ import { gateWorktreeAgentActivation } from './workspace/activation/worktree-age
 import { makeCreatedAgentWorktree as makeWorktree } from './workspace/activation/worktree-activation-created-agent.test-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 

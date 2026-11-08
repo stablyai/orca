@@ -10,11 +10,11 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 import {
   getDiskBaselineSignature,
   getWrittenContentDiskSignature
-} from '../../../../../shared/disk-baseline-signature'
+} from '../../../../../shared/file-write/disk-baseline-signature'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
@@ -28,7 +28,7 @@ import { readRuntimeFileContent } from '../reads/runtime-file-read-client'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
-} from '../../runtime-environment-revision'
+} from '../../rpc/environment-revisions/runtime-environment-revision'
 import { getRelativePathInsideWorktree } from '../runtime-file-routing'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 

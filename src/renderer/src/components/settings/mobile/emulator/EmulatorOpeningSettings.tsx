@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { getEmulatorOpeningMode } from '../../../../../../shared/emulator-opening-preferences'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type Device = { name: string; udid: string; runtime?: string; isAvailable?: boolean }
@@ -13,6 +13,7 @@ type Props = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 export function EmulatorOpeningSettings({ settings, devices, enabled, updateSettings }: Props) {
+  const t = useTranslate()
   const mode = getEmulatorOpeningMode(settings)
   const fixed = settings.mobileEmulatorDefaultDeviceUdid ?? ''
   const selected = devices.find((device) => device.udid === fixed)
@@ -21,8 +22,8 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
     <>
       <SettingsRow
         alignTop
-        label={translate('emulator.opening.when', 'When opening')}
-        description={translate(
+        label={t('emulator.opening.when', 'When opening')}
+        description={t(
           'emulator.opening.description',
           'Applies to new emulator tabs on this computer. Existing workspace sessions stay connected.'
         )}
@@ -41,13 +42,11 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
             </SelectTrigger>
             <SelectContent position="popper" align="end">
               <SelectItem value="last-used">
-                {translate('emulator.opening.lastUsed', 'Last used')}
+                {t('emulator.opening.lastUsed', 'Last used')}
               </SelectItem>
-              <SelectItem value="ask">
-                {translate('emulator.opening.ask', 'Ask every time')}
-              </SelectItem>
+              <SelectItem value="ask">{t('emulator.opening.ask', 'Ask every time')}</SelectItem>
               <SelectItem value="specific">
-                {translate('emulator.opening.specific', 'Specific device')}
+                {t('emulator.opening.specific', 'Specific device')}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -56,8 +55,8 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
       {mode === 'specific' && (
         <SettingsRow
           alignTop
-          label={translate('emulator.opening.fixed', 'Default device')}
-          description={translate(
+          label={t('emulator.opening.fixed', 'Default device')}
+          description={t(
             'emulator.opening.fixedDescription',
             'Choose an existing device. A missing or unavailable device prompts for another selection instead of starting a different platform.'
           )}
@@ -70,7 +69,7 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
               }
             >
               <SelectTrigger size="sm" className="w-56 max-w-full">
-                <SelectValue placeholder={translate('emulator.opening.choose', 'Choose device')}>
+                <SelectValue placeholder={t('emulator.opening.choose', 'Choose device')}>
                   {selected
                     ? [selected.name, simulatorRuntimeLabel(selected.runtime)]
                         .filter(Boolean)
@@ -81,7 +80,7 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
               <SelectContent position="popper" align="end">
                 {missing && (
                   <SelectItem value={fixed} disabled>
-                    {fixed} · {translate('emulator.opening.notFound', 'Not found')}
+                    {fixed} · {t('emulator.opening.notFound', 'Not found')}
                   </SelectItem>
                 )}
                 {devices.map((device) => (

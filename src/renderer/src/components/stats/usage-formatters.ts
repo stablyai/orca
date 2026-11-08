@@ -1,13 +1,14 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function formatTokens(value: number): string {
+export function formatTokens(value: number, intlLocale: string = getIntlLocale()): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString(getIntlLocale())
+  return value.toLocaleString(intlLocale)
 }
 
 export function formatCost(value: number | null): string {
@@ -17,21 +18,25 @@ export function formatCost(value: number | null): string {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }
 
-export function formatUpdatedAt(timestamp: number | null): string {
+export function formatUpdatedAt(
+  timestamp: number | null,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (!timestamp) {
-    return translate('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
+    return t('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
-  return translate('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
-    time: new Date(timestamp).toLocaleString(getIntlLocale())
+  return t('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
+    time: new Date(timestamp).toLocaleString(intlLocale)
   })
 }
 
-export function formatSessionTime(timestamp: string): string {
+export function formatSessionTime(timestamp: string, intlLocale: string = getIntlLocale()): string {
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime())) {
     return timestamp
   }
-  return parsed.toLocaleString(getIntlLocale(), {
+  return parsed.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

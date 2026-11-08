@@ -319,7 +319,8 @@ export type LinearListEntry =
 
 export const PROJECT_VIEW_DEFAULT_SORT = '__view_default__'
 
-export const GITHUB_REPO_CONCURRENCY = 3
+// The desktop runs four gh operations at once; more would wait there against the phone's 30 s request deadline.
+export const GITHUB_REPO_CONCURRENCY = 4
 
 export const MAX_RENDERED_PR_DIFF_LINES = 400
 

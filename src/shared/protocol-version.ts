@@ -15,7 +15,8 @@ import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
 } from './remote-runtime/pairing/device-key-capability'
-import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
+import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/ticket-exchange-capability'
+import { FILES_RUNTIME_CAPABILITIES } from './file-access/files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
@@ -49,7 +50,7 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 // Why stars: importers keep reading every capability from here while each area owns its module.
 
 export * from './browser-runtime-capabilities'
-export * from './files-runtime-capabilities'
+
 export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
@@ -124,6 +125,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...HOST_RUNTIME_CAPABILITIES,
     ...DEVICE_KEY_RUNTIME_CAPABILITIES,
     E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY,
+    ...PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES,
     ...MOBILE_RUNTIME_CAPABILITIES,
     ...ORCAD_RUNTIME_CAPABILITIES,
     ...ORCHESTRATION_RUNTIME_CAPABILITIES,

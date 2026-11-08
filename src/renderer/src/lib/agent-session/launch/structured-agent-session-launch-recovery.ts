@@ -12,8 +12,8 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { readStructuredSessionTabInventory } from '@/runtime/native-chat/tab-inventory/structured-session-tab-inventory'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 
 export type StructuredAgentLaunchReceipt = {

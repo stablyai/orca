@@ -15,7 +15,10 @@ import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'
-import { isHostIdentityContinued, isHostIdentityFenceCurrent } from '../../host-catalog-fencing'
+import {
+  isHostIdentityContinued,
+  isHostIdentityFenceCurrent
+} from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { applyTaskChange } from './task-change'
 import {
   bindingKey,

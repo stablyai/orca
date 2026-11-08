@@ -1,6 +1,6 @@
-import type { RuntimeFileReadResult } from '../../../../../shared/runtime-file-contracts'
-import { BINARY_PROBE_BYTES } from '../../../../../shared/binary-buffer'
-import { remoteFileRequest } from '../../../../../shared/remote-file-locator'
+import type { RuntimeFileReadResult } from '../../../../../shared/file-content/runtime-file-read'
+import { BINARY_PROBE_BYTES } from '../../../../../shared/file-preview/binary-buffer'
+import { remoteFileRequest } from '../../../../../shared/file-access/remote-file-locator'
 import type { RuntimeReadableFileContent } from '../runtime-file-client-types'
 import type { RuntimeRemoteFileAddress } from './runtime-file-range-client'
 import { readRemoteRangePreview } from './runtime-file-range-preview'
@@ -10,8 +10,8 @@ import {
   readRemoteBinaryFile,
   readRemoteFileInChunks
 } from './runtime-paged-file-read'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 
 function isRpcRefusal(error: unknown, message: string): boolean {
   return error instanceof RuntimeRpcCallError && error.message === message

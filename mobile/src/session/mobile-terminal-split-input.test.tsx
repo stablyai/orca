@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+import { TerminalResumeState } from './terminal-stream-resume'
 
 vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
@@ -54,6 +55,7 @@ it('a pane tap moves the one input owner without dropping either stream or forwa
         subscribeToTerminal: vi.fn(),
         unsubscribeTerminal: unsubscribe,
         terminalUnsubsRef: subscriptions,
+        terminalResume: new TerminalResumeState(),
         activeSessionTab: null,
         markdownDocs: new Map(),
         fileDocs: new Map()

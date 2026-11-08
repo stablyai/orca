@@ -1,5 +1,5 @@
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '../../slices/runtime-status-connection-generation'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '../../slices/runtime-status/runtime-status-connection-generation'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

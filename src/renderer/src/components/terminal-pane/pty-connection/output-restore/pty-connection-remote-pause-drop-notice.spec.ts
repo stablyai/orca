@@ -30,7 +30,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
 
   describe('connectPanePty remote pause drop notice', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

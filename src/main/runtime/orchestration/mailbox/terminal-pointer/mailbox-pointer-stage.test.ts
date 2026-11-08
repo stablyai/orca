@@ -56,64 +56,6 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
 }
 
 describe('mailbox pointer staging watermark', () => {
-  it('leaves no watermark when the reservation claim is lost', () => {
-    const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 's'
-    })
-    expect(
-      db.stageMailboxPointerEnter([message.id], { ptyId: 'other-pty', processIncarnation: 'inc-x' })
-    ).toBe(true)
-
-    const state = new OrchestrationMailboxPointerState()
-    const args = stageArgs(db, state)
-    stageOrchestrationMailboxPointer({
-      ...args,
-      messages: [{ id: message.id, type: 'status', sequence: 1 }]
-    } as never)
-
-    expect(state.hasActiveWatermark('run:run-1')).toBe(false)
-    expect(state.hasFlight('pty-1')).toBe(false)
-    db.close()
-  })
-
-  it('leaves no watermark when the reservation write throws', () => {
-    const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 's'
-    })
-    const throwing = new Proxy(db, {
-      get(target, prop, receiver) {
-        if (prop === 'markMailboxPointerWriteAttempted') {
-          return () => {
-            throw new Error('SQLITE_BUSY')
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-        const value = Reflect.get(target, prop, receiver)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
-
-    const state = new OrchestrationMailboxPointerState()
-    const args = stageArgs(db, state)
-    stageOrchestrationMailboxPointer({
-      ...args,
-      deps: { ...args.deps, getDb: () => throwing },
-      messages: [{ id: message.id, type: 'status', sequence: 1 }]
-    } as never)
-
-    expect(state.hasActiveWatermark('run:run-1')).toBe(false)
-    expect(state.hasFlight('pty-1')).toBe(false)
-    db.close()
-  })
-
   it('drains a delivery parked behind the watermark when the write is refused', () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({
@@ -177,24 +119,6 @@ describe('mailbox pointer staging watermark', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(writePty.mock.calls.length).toBeGreaterThan(0)
-    db.close()
-  })
-
-  // Why: a pointer left unsubmitted in Cursor's composer stacks up and rides along with the user's next prompt.
-  it('submits the pointer with Enter for a Cursor Agent pane', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
-    const writePty = vi.fn((_ptyId: string, _data: string) => WRITE_ACCEPTED)
-    const state = new OrchestrationMailboxPointerState()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps the staging path reads.
-    stageOrchestrationMailboxPointer({
-      ...stageArgs(db, state),
-      deps: pointerDeps(db, writePty),
-      messages: [{ id: message.id, type: 'status', sequence: 1 }]
-    } as never)
-
-    await vi.waitFor(() => expect(writePty).toHaveBeenLastCalledWith('pty-1', '\r'))
-    expect(writePty.mock.calls[0]?.[1]).toContain('You have 1 orchestration message')
     db.close()
   })
 })

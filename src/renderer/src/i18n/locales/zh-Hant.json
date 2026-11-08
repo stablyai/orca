@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "連線至此工作區的 SSH 主機，然後再試一次。",
+    "sshUnavailable": "此 SSH 主機無法啟動終端工作階段。請在工作區中開啟終端，並在該處啟動代理程式。",
+    "reconnectServer": "重新連線至此工作區的 Orca 伺服器，然後再試一次。",
+    "updateServer": "更新此工作區伺服器上的 Orca，然後再試一次。",
+    "checkSettings": "檢查代理程式的啟動設定，然後再試一次。",
+    "invalidArgs": "{{value0}} 的 CLI 引數中有未閉合的引號。請修正後再試一次。",
     "opencode": {
       "updateRequired": "此版本的 OpenCode 無法使用所選模型安全啟動。請將 OpenCode 更新至受支援的版本，或不要指定模型。",
       "invalidConfig": "OpenCode 無法將所選模型套用至啟動設定。請檢查 OpenCode 的啟動設定後重試，或不要指定模型。",
@@ -483,10 +489,7 @@
         "searchAgents": "代理程式",
         "searchCli": "CLI",
         "searchTerminal": "終端機",
-        "antigravityDescription": "Antigravity 聊天會執行由 Orca 下載至此主機的伺服器，與 agy CLI 各自獨立。",
-        "antigravityNotSignedIn": "尚未登入。聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。",
-        "antigravityAccount": "帳戶",
-        "antigravitySignInNeeded": "聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。"
+        "antigravityAccount": "帳戶"
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
@@ -831,7 +834,6 @@
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
-        "invalidArgs": "{{value0}} 的 CLI 參數無效。請在「設定」→「原始碼控制 AI」中修正。",
         "model": "模型",
         "agentDefault": "代理程式預設值",
         "effortDefault": "預設",
@@ -1155,7 +1157,7 @@
         "insecureOrigin": "Orca 拒絕從此頁面配對：它是另一臺機器上的純 http 頁面，因此網路路徑上的任何人都可以替換它並取走配對碼。請透過 https、本機的 localhost 或 SSH 隧道開啟網頁用戶端。如仍要允許，伺服器操作員可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新啟動 Orca。",
         "deviceDowngraded": "此 Orca 伺服器不再支援此瀏覽器的登入金鑰（可能已被降級）。請更新伺服器，或重新配對此瀏覽器。",
         "unauthorized": "未授權。請重新配對此網頁用戶端。",
-        "unauthorizedNewLink": "未授權。請索取新的配對連結。"
+        "unauthorizedLinkUsedOrExpired": "未授權。此配對連結可能已過期或已被使用。請在 Orca 中建立新的配對連結並開啟。"
       }
     },
     "store": {
@@ -1436,9 +1438,7 @@
           "agent": {
             "launch": {
               "027228a06b": "無法找到用於這些檢查的工作區。",
-              "fb6c294e85": "無法建置代理程式啟動命令。",
               "03c1d61f83": "無法開啟附加到這些檢查的工作區。",
-              "822bf52295": "無法解析工作區啟動平台。",
               "dfb4dd7c00": "無法找到附加到這些檢查的工作區。",
               "9f00d7df0c": "修正檢查的提示詞為空。請更新原始碼控制 AI 設定。",
               "2ebf794906": "此工作區主機上未偵測到已啟用的 AI 代理程式。",
@@ -1477,8 +1477,8 @@
             "direct": {
               "3de6371df3": "無法建置代理程式啟動命令。",
               "67e103dd60": "工作區已建立但無法啟用。",
-              "19c7683acf": "所選代理程式在建立的工作區中不可用。",
-              "8bc45efdbc": "無法解析 PR 的來源分支參照。",
+              "19c7683acf": "所選代理程式無法使用。請檢查工作區的代理程式設定，然後再試一次。",
+              "8bc45efdbc": "無法讀取提取要求。請確認你可以開啟它，然後再試一次。",
               "agent": {
                 "ceeeb509b5": "代理程式啟動時間太長。工作區已準備就緒 — 當代理程式閒置時貼上 {{value0}}。"
               }
@@ -1858,13 +1858,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "目標工作區不再可用。",
-        "16a21d6413": "SSH 重新連線需要互動式憑證。",
-        "386db94f3e": "目標專案不再可用。",
-        "3ad7d77f57": "目標工作區所在的主機與此自動化執行目標不同。",
-        "workspaceHostUnresolved": "目標工作區跨越多個主機，因此此執行沒有可使用的單一主機。"
-      },
       "useComposerState": {
         "b2ead86962": "無法解析 PR 的基礎參照。",
         "3db83fc58a": "此主機沒有可用於附件的專案路徑。",
@@ -3107,7 +3100,6 @@
         "a2a279b32a": "儲存逾時或失敗。關閉前修復錯誤。",
         "46e08bc5c8": "該檔案有未儲存的變更。",
         "61ed600d29": "「{{value0}}」有未儲存的變更。您想在關閉前儲存嗎？",
-        "e57db40c11": "無法為 {{value0}} 建置啟動命令。",
         "5b2c1a9e44": "未偵測到代理程式 CLI，請安裝一個，或在設定中選擇預設代理程式。",
         "quitSnapshotSaveFailed": "已取消結束：無法儲存工作階段快照 ({{value0}})。",
         "reloadSnapshotSaveFailed": "已取消重新載入：無法儲存工作階段快照（{{value0}}）。"
@@ -4181,7 +4173,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "代理程式設定…",
             "ec2adf093e": "在新終端機中啟動 {{value0}}",
-            "465e432ef1": "無法為 {{value0}} 建置啟動命令。",
             "e518f544b1": "未偵測到代理程式",
             "8dea9b5cdf": "沒有啟用代理程式",
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",
@@ -6341,14 +6332,11 @@
           "c39c37676a": "建立一個群組並將該專案移入其中。",
           "6664418e98": "新專案群組",
           "e091caab15": "找不到該專案",
-          "439fa94d53": "更新",
           "579b1a8e61": "從父工作樹移除",
           "8d9cd19d09": "開啟父工作樹",
           "d35dfeae58": "從群組中移除",
           "76865d827f": "移至群組",
           "503ec0f8e6": "從專案建立新群組",
-          "3350101edb": "複製路徑",
-          "copyWorktreeName": "複製工作樹名稱",
           "f4475537d8": "刪除",
           "f5ac91531d": "從 Orca 中移除專案",
           "b42391d8bf": "正在刪除...",
@@ -6366,9 +6354,16 @@
           "workspaceSection": "工作區",
           "primaryDeleteDisabled": "主工作樹不能刪除。請改為移除專案。",
           "deleteWorktree": "刪除工作樹",
-          "sleepWithDescendants": "連同所有下層工作區一起進入睡眠 ({{value0}})",
           "sleepWithDescendantsDescription": "關閉此工作區及其所有下層工作區中使用中的面板以釋放記憶體和 CPU。",
-          "deleteWithDescendants": "連同所有下層工作區一起刪除…"
+          "sleepThisWorkspace": "此工作區",
+          "sleepDescendantsOption": "連同下層工作區 ({{value0}})",
+          "deleteWithDescendants": "連同所有下層工作區一起刪除…",
+          "editDetails": "編輯詳細資料…",
+          "copySubmenu": "複製",
+          "copyPathOption": "路徑",
+          "copyNameOption": "工作樹名稱",
+          "lineageSubmenu": "父層與子層",
+          "projectGroupSubmenu": "專案群組"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "需要更新",
@@ -8189,7 +8184,8 @@
           "diagnosticsCopyFailed": "無法複製診斷訊息",
           "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
           "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。",
-          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。"
+          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。",
+          "olderPairingMethod": "使用較舊的配對方式。請更新這支手機上的 Orca App。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8596,6 +8592,7 @@
           "6f6d5188ed": "撤銷 {{value0}}",
           "434e4a6af6": "目前連結",
           "df142657a5": "尚未使用",
+          "olderPairingMethod": "使用較舊的配對方式。請更新使用此連結之裝置上的 Orca。",
           "b18d1764ef": "最後使用 {{value0}}",
           "linkName": "連結 · {{value0}}",
           "activeLinks": "有效連結",
@@ -11123,7 +11120,11 @@
               "micDefault": "系統預設",
               "dictationLanguageTitle": "聽寫語言",
               "dictationLanguageDescription": "告訴語音模型你說的是哪種語言。",
-              "dictationLanguageKeyword": "語言"
+              "dictationLanguageKeyword": "語言",
+              "modelUnloadTitle": "卸載語音模型",
+              "modelUnloadDescription": "選擇何時從記憶體中卸載本機語音模型。",
+              "modelUnloadKeyword": "卸載",
+              "modelMemoryKeyword": "記憶體"
             }
           }
         },
@@ -14133,7 +14134,6 @@
                     },
                     "d481ab22f9": "已儲存的 AI 代理程式不可用。請使用「自訂啟動」選擇其他代理程式。",
                     "9bbd9077a2": "沒有已啟用的 AI 代理程式。請在設定中設定代理程式。",
-                    "5540ff50cc": "無法建置代理程式啟動命令。",
                     "216f762bd7": "無法解析工作區連線。",
                     "success": "已為 {{value0}} 失敗啟動 AI 代理程式。"
                   }
@@ -14536,6 +14536,7 @@
             "openLog": "開啟日誌",
             "revealLog": "顯示日誌",
             "openWorkingDirectory": "開啟工作目錄",
+            "revealArtifactsFolder": "顯示成品資料夾",
             "copySessionId": "複製工作階段 ID",
             "copyLogPath": "複製日誌路徑",
             "messageCount": "{{value0}} 則訊息",
@@ -15328,7 +15329,6 @@
             "3f4ca29961": "最大化浮動工作區",
             "1c79cba25d": "恢復浮動工作區",
             "648352c51f": "在浮動工作區中開啟 {{value0}}",
-            "82da3701e7": "無法為 {{value0}} 建置啟動命令。",
             "109870e023": "最大化",
             "b5686fee1e": "恢復"
           }
@@ -17322,7 +17322,10 @@
           "reuseLiveSession": "重複使用執行中的工作階段",
           "freshEachRun": "每次執行都新建",
           "precheckEnabled": "已啟用，{{timeout}}",
-          "precheckNone": "無"
+          "precheckNone": "無",
+          "migrate": "遷移",
+          "migrateNotice": "{{host}} 已升級為新的遠端主機。請遷移此自動化以繼續執行。",
+          "needsMigration": "需要遷移"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -19647,7 +19650,6 @@
       "visualLoading": "正在載入視覺化",
       "visualOpenInNewTab": "在新分頁中開啟",
       "queuedMessages": {
-        "behindReturnedHold": "等待中 — 前面有一則訊息需要處理",
         "steer": "引導",
         "send": "傳送",
         "steerHint": "提交且不中斷模型",
@@ -20331,6 +20333,13 @@
           "description": "你說的語言。選擇自動偵測時，模型每次都會自行判斷語言。",
           "title": "聽寫語言",
           "auto": "自動偵測"
+        },
+        "modelUnload": {
+          "title": "卸載語音模型",
+          "description": "停止聽寫後本機模型在記憶體中保留多久。模型已載入時，聽寫會立即開始；選擇「立即」會釋放記憶體，因此每次聽寫都要等待模型載入。",
+          "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
+          "never": "從不",
+          "immediately": "立即"
         }
       }
     },
@@ -20956,6 +20965,29 @@
       "loading": "正在載入子模組變更…",
       "empty": "子模組中沒有變更",
       "loadFailed": "無法載入子模組變更"
+    },
+    "branchPicker": {
+      "switch": "切換分支：{{branch}}",
+      "search": "搜尋分支",
+      "recover": "切換到 {{branch}}",
+      "create": "從 {{branch}} 建立分支 {{name}}",
+      "open": "開啟工作區",
+      "occupied": "已在 {{path}} 中簽出",
+      "remote": "遠端",
+      "statusFailed": "Orca 無法讀取此簽出的變更。請先重新整理原始碼控制再切換。",
+      "statusUnknown": "切換前請先讀取此簽出的變更。",
+      "conflict": "切換分支前，請完成或中止 {{operation}}。",
+      "dirty_one": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "dirty_other": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "agentWorking": "有代理正在此工作區中工作。請在其完成後再切換分支；如果它已停止，請關閉其分頁。",
+      "listFailed": "Orca 無法列出本機分支。請嘗試重新開啟選擇器。",
+      "discoveryFailed": "Orca 找不到遠端分支。你仍然可以切換本機分支或建立分支。",
+      "switchFailed": "Orca 無法切換分支。請再試一次。",
+      "switchFailedTitle": "無法切換分支",
+      "switchFailedIn": "無法在 {{workspace}} 中切換分支",
+      "switchedIn": "在 {{workspace}} 中",
+      "thisComputer": "這台電腦",
+      "updateHost": "請在 {{host}} 上更新 Orca，以便從這裡切換分支。"
     }
   },
   "agentsSidebarIntro": {
@@ -21322,7 +21354,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "聊天功能需另行登入 Antigravity，與上方的 agy 帳戶分開。只需在此裝置上登入一次。",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21335,14 +21366,11 @@
       "chatVerifying": "正在完成登入…",
       "chatPasteHelp": "若登入後的最後一個頁面無法載入，請從瀏覽器複製其完整網址，並在此貼上。",
       "chatContinue": "繼續",
-      "chatSignedInOn": "已在 {{host}} 上登入。",
       "chatCancelled": "已取消登入。",
       "chatExpired": "登入逾時。請再試一次。",
       "chatFailed": "登入失敗。請再試一次。",
-      "chatNotSignedIn": "尚未在 {{host}} 上登入。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "scope": "管理 {{host}} 上的 agy 原生帳戶。",
       "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
       "docs": "登入說明",
       "retry": "重試",
@@ -21373,11 +21401,9 @@
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "請重新登入以使用 {{method}}。",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登入。",
       "lastReading": "{{reading}} · 讀取於 {{time}}",
       "noReading": "用量未知：尚未讀取"
     },
@@ -22683,6 +22709,7 @@
       "noRunnableHost": "此自動化沒有可供執行的主機。",
       "wslMoveInProgress": "此自動化的專案正在移至其 WSL 主機，因此 Orca 略過了此次執行。移動完成後便會恢復執行。",
       "wslMoveOwnedByHost": "此自動化的專案現在在其 WSL 主機上執行，自動化本身也由該主機執行。Orca 不再執行這個本機副本。",
+      "managedHostServer": "需要遷移到 {{host}}",
       "missedGraceWindow": "Orca 再次檢查時，此次執行的補執行寬限期已過。",
       "targetMissing": "自動化主機已不在註冊清單中，因此已無處執行此自動化。",
       "targetReplaced": "自動化主機已被移除並重新註冊，因此必須為此自動化重新建立關聯後才能執行。",
@@ -22724,6 +22751,17 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要核准此自動化的新設定命令嗎？",
+      "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
+      "approve": "核准",
+      "approved": "已核准設定。此自動化之後的執行將執行它。",
+      "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
+      "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",
+      "reviewAction": "審查並核准設定",
+      "listSkipped": "已略過設定",
+      "listSkippedTitle": "由於分支的 orca.yaml 設定命令已變更，上次執行略過了設定。請從動作選單中審查。"
     }
   },
   "codeHost": {
@@ -23055,6 +23093,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
+    "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
     "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",

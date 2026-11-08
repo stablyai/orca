@@ -110,6 +110,7 @@ describe('accepted lead reply', () => {
       {
         getTerminalHandleForPaneKey: () => 'terminal-1',
         readTerminal: async () => ({ tail: [] }),
+        canOpenRunTerminals: () => true,
         waitForTerminal: async () => {
           await post({ hook_event_name: 'Stop', last_assistant_message: REPLY })
           server.reconcileEndedProcessForPaneKeys([PANE])

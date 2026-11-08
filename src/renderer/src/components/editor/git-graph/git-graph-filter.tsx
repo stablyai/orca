@@ -4,10 +4,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { GIT_HISTORY_REFS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
 import { gitGraphScope, useGitGraphScope } from '@/lib/git-graph-tab'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHistoryItemRef,
   GitHistoryRefs
@@ -39,6 +39,7 @@ function GitGraphFilterForOwner({
   owner,
   requests
 }: GitGraphFilterProps & { owner: string; requests: RefObject<RefRequests> }) {
+  const t = useTranslate()
   const [draft, setDraft] = useState<GitHistoryRefs>()
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<{
@@ -157,10 +158,10 @@ function GitGraphFilterForOwner({
         <PopoverTrigger asChild>
           <Button size="sm" variant="outline" disabled={!supported || capable !== true}>
             {supported === false || filter === 'head'
-              ? translate('gitGraph.currentBranch', 'Current branch')
+              ? t('gitGraph.currentBranch', 'Current branch')
               : filter === 'all'
-                ? translate('gitGraph.allBranches', 'All branches')
-                : translate('gitGraph.chosenBranches', 'Chosen branches')}
+                ? t('gitGraph.allBranches', 'All branches')
+                : t('gitGraph.chosenBranches', 'Chosen branches')}
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -175,16 +176,16 @@ function GitGraphFilterForOwner({
           <div className="space-y-2">
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => apply('all')}>
-                {translate('gitGraph.allBranches', 'All branches')}
+                {t('gitGraph.allBranches', 'All branches')}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => apply('head')}>
-                {translate('gitGraph.currentBranch', 'Current branch')}
+                {t('gitGraph.currentBranch', 'Current branch')}
               </Button>
             </div>
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate('gitGraph.searchRefs', 'Search branches and tags')}
+              placeholder={t('gitGraph.searchRefs', 'Search branches and tags')}
             />
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="max-h-72 overflow-auto scrollbar-sleek">
@@ -214,10 +215,7 @@ function GitGraphFilterForOwner({
       </Popover>
       {capable === false || (supported === false && capable === true) ? (
         <span className="text-xs text-muted-foreground">
-          {translate(
-            'gitGraph.oldServer',
-            "This server's Orca version shows only the current branch"
-          )}
+          {t('gitGraph.oldServer', "This server's Orca version shows only the current branch")}
         </span>
       ) : null}
     </div>
