@@ -72,6 +72,7 @@ export function buildEmulatorKeyboardPastePlan(
   return { byteLength: validation.byteLength, chunks, status: 'accepted' }
 }
 
+/** Both transports enforce byte limits; only HID input must reject unsupported characters. */
 function validateEmulatorKeyboardPasteText(
   text: string,
   maxBytes?: number,
@@ -184,7 +185,7 @@ export async function pasteTextIntoEmulatorKeyboard({
   return { byteLength: validation.byteLength, chunkCount, status: 'sent' }
 }
 
-// Android has no HID socket: main injects the whole text over the scrcpy control socket.
+/** Android clipboard input permits Unicode while retaining paste size and target-availability checks. */
 export async function pasteTextIntoAndroidEmulator({
   maxBytes,
   sendText,

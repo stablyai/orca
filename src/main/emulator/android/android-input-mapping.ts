@@ -55,6 +55,7 @@ const BUTTON_KEYCODES: Record<string, number> = {
   voldown: 25
 }
 
+/** Accept supported Android editing aliases; unknown names fail instead of injecting arbitrary keycodes. */
 export function androidButtonKeycode(name: string): number {
   const keycode = /^[a-z]$/.test(name) ? 29 + name.charCodeAt(0) - 97 : BUTTON_KEYCODES[name]
   if (keycode === undefined) {

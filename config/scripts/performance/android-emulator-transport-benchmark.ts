@@ -5,6 +5,7 @@ import { ScrcpyStreamSession } from '../../../src/main/emulator/android/scrcpy-s
 import { startNativeAndroidSession } from '../../../src/main/emulator/android/emulator-grpc-session'
 import { sendScrcpyTouch } from '../../../src/main/emulator/android/scrcpy-control-input'
 
+/** Measures transport delivery on a dedicated AVD, not end-to-end Electron presentation latency. */
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {

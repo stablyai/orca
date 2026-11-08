@@ -25,6 +25,7 @@ async function xml() {
   await shell('uiautomator', 'dump', '/sdcard/orca-input-check.xml')
   return shell('cat', '/sdcard/orca-input-check.xml')
 }
+/** Uses a dedicated AVD because the input probe changes foreground apps and device text. */
 async function main() {
   await shell('am', 'force-stop', 'com.android.settings')
   await shell('am', 'start', '-a', 'android.settings.SETTINGS')

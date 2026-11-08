@@ -21,6 +21,7 @@ export type AndroidKeyboardInput =
   | { text: string }
   | { key: string; shift: boolean; ctrl?: boolean }
 
+/** Unicode and multi-character input use clipboard paste because scrcpy text injection is limited. */
 export function sendScrcpyKeyboard(
   control: ScrcpyControlTarget,
   value: AndroidKeyboardInput
@@ -90,6 +91,7 @@ export function sendScrcpyText(control: ScrcpyControlTarget, text: string): bool
   return splitScrcpyInjectText(text).every((chunk) => control.sendControl(encodeInjectText(chunk)))
 }
 
+/** Shift selection requires a held Shift key as well as modifier bits on the target key. */
 export function sendScrcpyButton(
   control: ScrcpyControlTarget,
   name: string,
@@ -110,6 +112,7 @@ export function sendScrcpyButton(
   )
 }
 
+/** Split large deltas into protocol-sized steps without synthesizing a tap or drag. */
 export function sendScrcpyScroll(
   control: ScrcpyControlTarget,
   x: number,
@@ -142,6 +145,7 @@ export function sendScrcpyScroll(
   return true
 }
 
+/** Control-only scrcpy still validates positions against its rotated, eight-pixel-aligned video size. */
 export function sendScrcpyDisplayScroll(
   control: ScrcpyControlTarget | null,
   display: { width: number; height: number },

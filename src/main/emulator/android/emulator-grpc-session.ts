@@ -21,6 +21,7 @@ import {
 export const nativeAndroidSessions = new Map<string, EmulatorGrpcSession>()
 const unavailableUntil = new Map<string, number>()
 
+/** Returns null during cooldown or failed discovery so the caller can start scrcpy. */
 export async function startNativeAndroidSession(
   serial: string
 ): Promise<EmulatorGrpcSession | null> {
@@ -97,6 +98,7 @@ export class EmulatorGrpcSession {
     queueMicrotask(watch)
   }
 
+  /** The returned cleanup releases held input; the last viewer parks screenshot capture. */
   subscribe(viewer: NativeVideoViewer): () => void {
     if (this.closed) {
       viewer.end()
@@ -111,6 +113,7 @@ export class EmulatorGrpcSession {
     }
   }
 
+  /** All viewers share the largest bounded capture size; replaced streams must not terminate it. */
   private resize(): void {
     if (this.closed) {
       return
@@ -187,7 +190,7 @@ export class EmulatorGrpcSession {
         if (isUnsupportedEmulatorGrpc(error)) {
           unavailableUntil.set(this.serial, Date.now() + 30_000)
         }
-        this.close()
+        this.close(isUnsupportedEmulatorGrpc(error))
       }
     })
     stream.on('end', () => {
@@ -200,6 +203,7 @@ export class EmulatorGrpcSession {
   setInputRotation(rotation: number): void {
     this.inputRotation = rotation
   }
+  /** Release held input before rotating; unsupported RPCs disable native startup temporarily. */
   async rotate(quadrants: number): Promise<void> {
     this.release()
     try {
@@ -212,6 +216,7 @@ export class EmulatorGrpcSession {
       throw error
     }
   }
+  /** Probe live display dimensions before reusing a session that may have outlived the device. */
   async isReusable(): Promise<boolean> {
     if (this.closed) {
       return false
@@ -225,6 +230,7 @@ export class EmulatorGrpcSession {
     }
   }
 
+  /** Normalized pane coordinates are mapped back to the natural display orientation. */
   touch(phase: 'begin' | 'move' | 'end', x: number, y: number): boolean {
     return this.contact.touch(
       phase,
@@ -232,6 +238,7 @@ export class EmulatorGrpcSession {
     )
   }
 
+  /** Mouse contacts avoid Android touch slop; pens and touchscreens retain touch semantics. */
   pointer(phase: 'begin' | 'move' | 'end', x: number, y: number, pointerType?: string): boolean {
     if (phase === 'begin') {
       this.release()
@@ -244,11 +251,13 @@ export class EmulatorGrpcSession {
     )
   }
 
+  /** Use the last presented rotation so wheel coordinates match the frame the user sees. */
   scroll(...scroll: [number, number, number, number]): boolean {
     const rotation = this.inputRotation ?? this.rotation
     return scrollDisplay(this.keyboardControl, this.display, rotation, scroll)
   }
 
+  /** Own the control-only scrcpy session, closing replacements and late arrivals. */
   attachKeyboard(control: ScrcpyStreamSession): void {
     this.keyboardControl?.close()
     if (this.closed) {
@@ -258,6 +267,7 @@ export class EmulatorGrpcSession {
     this.keyboardControl = control
   }
 
+  /** False means the live control transport cannot accept input and callers may fall back. */
   async keyboard(value: AndroidKeyboardInput): Promise<boolean> {
     return !this.closed && this.keyboardControl
       ? sendScrcpyKeyboard(this.keyboardControl, value)
@@ -269,6 +279,7 @@ export class EmulatorGrpcSession {
     this.mouseContact.release()
   }
 
+  /** Close a stalled input stream instead of queuing unbounded interactions. */
   private send(event: GrpcInput): boolean {
     if (this.closed) {
       return false
@@ -291,7 +302,8 @@ export class EmulatorGrpcSession {
     return true
   }
 
-  close(): Promise<void> {
+  /** Idempotently releases owned transports; unsupported screenshot RPCs request a scrcpy retry. */
+  close(retryWithScrcpy = false): Promise<void> {
     if (this.closed) {
       return this.closing
     }
@@ -309,7 +321,7 @@ export class EmulatorGrpcSession {
     stream?.cancel()
     this.closing = this.grpc.close(this.input)
     for (const viewer of this.viewers) {
-      viewer.end()
+      viewer.end(retryWithScrcpy)
     }
     this.viewers.clear()
     return this.closing

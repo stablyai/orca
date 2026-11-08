@@ -27,11 +27,11 @@ export const emulatorApi = {
     return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
   },
   onFrameStreamError: (
-    callback: (data: { streamId: string; message: string }) => void
+    callback: (data: { streamId: string; message: string; retryWithScrcpy?: boolean }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { streamId: string; message: string }
+      data: { streamId: string; message: string; retryWithScrcpy?: boolean }
     ) => callback(data)
     ipcRenderer.on('emulator:frameStreamError', listener)
     return () => ipcRenderer.removeListener('emulator:frameStreamError', listener)

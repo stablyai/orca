@@ -43,6 +43,7 @@ type UseEmulatorScreenKeyboardArgs = {
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
 }
 
+/** Capture requires explicit pane interaction; platform command shortcuts become Android Control keys. */
 export function useEmulatorScreenKeyboard({
   cancelKeyboardFrames,
   canInteract,

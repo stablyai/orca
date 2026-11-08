@@ -14,7 +14,7 @@ type StreamSize = {
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
-  onStreamError: () => void
+  onStreamError: (retryWithScrcpy?: boolean) => void
   onStreamSize: (size: StreamSize) => void
   previewUrl?: string
   screenAspectRatio?: number
@@ -24,6 +24,7 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
+/** Keep native WebGL and scrcpy 2D canvas lifetimes separate when replacing transports. */
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -59,9 +60,9 @@ export function EmulatorScreenStreamContent({
 
   useEffect(() => {
     if (frameStream.error || video.error || native.error) {
-      onStreamError()
+      onStreamError(native.retryWithScrcpy)
     }
-  }, [frameStream.error, video.error, native.error, onStreamError])
+  }, [frameStream.error, video.error, native.error, native.retryWithScrcpy, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -96,7 +97,7 @@ export function EmulatorScreenStreamContent({
         className={mediaClassName}
         draggable={false}
         style={mediaStyle}
-        onError={onStreamError}
+        onError={() => onStreamError()}
         onLoad={(event) => {
           const { naturalWidth, naturalHeight } = event.currentTarget
           if (naturalWidth <= 0 || naturalHeight <= 0) {

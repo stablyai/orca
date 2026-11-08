@@ -61,6 +61,7 @@ export function resolveVisualScreenAspectRatio(
   return resolveVisualStreamGeometry(streamSize, visualOrientation).aspectRatio
 }
 
+/** Already-upright native frames bypass visual rotation; other transports reconcile pixel and device orientation. */
 export function resolveVisualStreamGeometry(
   streamSize: StreamSize | null,
   visualOrientation: EmulatorDeviceVisualOrientation,

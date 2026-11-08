@@ -164,6 +164,37 @@ describe('useEmulatorPaneSession', () => {
     vi.restoreAllMocks()
   })
 
+  it('reconnects an unsupported native preview to scrcpy without another user action', async () => {
+    consumePrelaunchedSimulatorSession(WORKTREE_ID)
+    rememberPrelaunchedSimulatorSession(WORKTREE_ID, {
+      deviceUdid: 'emulator-5584',
+      streamUrl: 'android-grpc://emulator-5584',
+      wsUrl: ''
+    })
+    await act(async () => root.render(<AutoAttachProbe />))
+    await flushEffects()
+
+    await act(async () => latest?.markStreamLost(true))
+    expect(latest?.loading).toBe(true)
+    expect(latest?.isLive).toBe(false)
+    await act(async () => {
+      attachDeferred.resolve({
+        attached: true,
+        info: {
+          deviceUdid: 'emulator-5584',
+          displayName: 'Android',
+          streamUrl: 'scrcpy://emulator-5584',
+          wsUrl: ''
+        }
+      })
+      await attachDeferred.promise
+    })
+    await flushEffects()
+    expect(latest?.isLive).toBe(true)
+    expect(latest?.previewUrl).toBe('scrcpy://emulator-5584')
+    expect(latest?.error).toBeNull()
+  })
+
   it('retains an explicit session when an older automatic capability lookup finishes', async () => {
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     const capability = createDeferred<boolean>()

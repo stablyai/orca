@@ -4,10 +4,12 @@ import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/windo
 import type { NativeVideoFrame } from '../../../../shared/emulator-native-video'
 import { createRgbCanvas } from './emulator-rgb-canvas'
 
+/** Only desktop native stream URLs are eligible for the MessagePort transport. */
 export function nativeEmulatorDeviceId(url: string | undefined): string | null {
   return url?.startsWith('android-grpc://') ? url.slice('android-grpc://'.length) || null : null
 }
 
+/** Owns viewport capture and frame credit; hidden panes park transport without detaching the device. */
 export function useEmulatorNativeVideo(
   deviceId: string | null,
   streamKey: string | undefined,
@@ -20,7 +22,11 @@ export function useEmulatorNativeVideo(
     onSizeRef.current = onSize
   }, [onSize])
   const identity = `${deviceId}:${streamKey}:${enabled}`
-  const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null)
+  const [failure, setFailure] = useState<{
+    identity: string
+    message: string
+    retryWithScrcpy?: boolean
+  } | null>(null)
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !deviceId || !enabled) {
@@ -44,9 +50,9 @@ export function useEmulatorNativeVideo(
       lastSize = ''
     const metrics = { frames: 0, frameAgeMs: 0, maxFrameAgeMs: 0, sequence: 0, droppedFrames: 0 }
     Object.assign(canvas, { nativeVideoMetrics: metrics })
-    const fail = (message: string) => {
+    const fail = (message: string, retryWithScrcpy = false) => {
       if (!disposed) {
-        setFailure({ identity, message })
+        setFailure({ identity, message, retryWithScrcpy })
       }
     }
     const stop = () => {
@@ -151,7 +157,7 @@ export function useEmulatorNativeVideo(
     const offError = api.onFrameStreamError((event) => {
       if (event.streamId === streamId) {
         stop()
-        fail(event.message)
+        fail(event.message, event.retryWithScrcpy)
       }
     })
     const resize = () => {
@@ -176,5 +182,9 @@ export function useEmulatorNativeVideo(
       renderer.dispose()
     }
   }, [deviceId, enabled, identity, streamKey])
-  return { canvasRef, error: failure?.identity === identity ? failure.message : null }
+  return {
+    canvasRef,
+    error: failure?.identity === identity ? failure.message : null,
+    retryWithScrcpy: failure?.identity === identity && failure.retryWithScrcpy === true
+  }
 }

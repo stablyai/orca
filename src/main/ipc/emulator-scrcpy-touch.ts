@@ -21,6 +21,7 @@ function isUnitCoordinate(value: unknown): value is number {
   return typeof value === 'number' && value >= 0 && value <= 1
 }
 
+/** Reject non-finite or out-of-screen coordinates before they reach native device input. */
 function isScrcpyTouchMessage(value: unknown): value is ScrcpyTouchMessage {
   return (
     typeof value === 'object' &&

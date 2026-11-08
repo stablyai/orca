@@ -18,5 +18,5 @@ export type NativeVideoViewer = {
   width: number
   height: number
   frame: (frame: NativeVideoFrame) => void
-  end: () => void
+  end: (retryWithScrcpy?: boolean) => void
 }

@@ -15,6 +15,7 @@ export const SCRCPY_POINTER_ID_GENERIC_FINGER = BigInt.asUintN(64, -2n)
 // The official client caps one inject-text message at this many UTF-8 bytes.
 export const SCRCPY_INJECT_TEXT_MAX_BYTES = 300
 
+/** The paste flag makes clipboard assignment and Android paste one ordered control message. */
 export function encodeSetClipboard(text: string): Buffer {
   const bytes = Buffer.from(text, 'utf8')
   if (bytes.length > (1 << 18) - 14) {
@@ -120,6 +121,7 @@ export function encodeInjectText(text: string): Buffer {
   return buf
 }
 
+/** Each axis uses signed 16-bit fixed point; zero buttons keeps scrolling from becoming a click. */
 export function encodeInjectScrollEvent(p: {
   x: number
   y: number

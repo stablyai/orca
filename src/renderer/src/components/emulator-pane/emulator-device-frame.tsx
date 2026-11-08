@@ -51,6 +51,7 @@ type ScreenCoordinateEvent = Pick<
   'clientX' | 'clientY' | 'currentTarget'
 >
 
+/** Input coordinates follow the displayed screen; parked panes stop capture without stopping the device. */
 export function EmulatorDeviceFrame({
   previewUrl,
   wsUrl,
@@ -347,21 +348,23 @@ export function EmulatorDeviceFrame({
     )
   }, [])
 
-  const handleStreamError = useCallback(() => {
-    setStreamError(true)
-    onStreamLost?.()
-  }, [onStreamLost])
+  const handleStreamError = useCallback(
+    (retryWithScrcpy?: boolean) => {
+      setStreamError(true)
+      onStreamLost?.(retryWithScrcpy)
+    },
+    [onStreamLost]
+  )
 
   // Park inactive tabs and hidden windows to avoid frame IPC/decode churn, including over SSH, without detaching sessions.
   const windowVisibleForStream = useEmulatorStreamWindowVisible()
   const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   // Physical orientation follows successful rotate requests even if portrait-locked apps keep portrait pixels.
-  const screenAspectRatio = visualStreamGeometry.aspectRatio
   const frameKind = resolveDeviceFrameKind(deviceName, streamAspectRatio)
   const frameLayout = useMemo(
-    () => fitDeviceFrameToPane(paneSize, screenAspectRatio, frameKind),
-    [frameKind, screenAspectRatio, paneSize]
+    () => fitDeviceFrameToPane(paneSize, visualStreamGeometry.aspectRatio, frameKind),
+    [frameKind, visualStreamGeometry.aspectRatio, paneSize]
   )
 
   return (
@@ -405,7 +408,7 @@ export function EmulatorDeviceFrame({
             onStreamSize={handleStreamSize}
             onWheel={handleWheel}
             previewUrl={previewUrl}
-            screenAspectRatio={screenAspectRatio}
+            screenAspectRatio={visualStreamGeometry.aspectRatio}
             showStream={Boolean(showStream)}
             streamError={streamError}
             streamKey={streamKey}

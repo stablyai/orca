@@ -8,6 +8,7 @@ import {
   type EmulatorStreamOrientation
 } from './emulator-device-frame-layout'
 
+/** Native frames already carry device rotation; avoid applying the visual quarter-turn twice. */
 export function useEmulatorStreamGeometry(
   streamSize: StreamSize | null,
   visualOrientation: EmulatorDeviceVisualOrientation,

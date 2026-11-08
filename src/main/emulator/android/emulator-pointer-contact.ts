@@ -16,6 +16,7 @@ export class EmulatorPointerContact {
 
   constructor(private readonly send: (touch: EmulatorPointerContactPacket) => boolean) {}
 
+  /** Delay initial motion so Android observes a drag instead of coalescing it into a tap. */
   touch(phase: EmulatorGesturePoint['type'], point: { x: number; y: number }): boolean {
     if (phase === 'begin') {
       this.release()
@@ -43,6 +44,7 @@ export class EmulatorPointerContact {
     return this.send(this.current)
   }
 
+  /** Cancel deferred motion before sending zero pressure to avoid a stuck contact. */
   release(): boolean {
     this.cancelPending()
     const current = this.current
@@ -51,6 +53,7 @@ export class EmulatorPointerContact {
     return current ? this.send({ ...current, pressure: 0 }) : true
   }
 
+  /** The initial intermediate point lets Android recognize motion before the final position. */
   private flushPending(initial: boolean): void {
     this.timer = null
     const pending = this.pending

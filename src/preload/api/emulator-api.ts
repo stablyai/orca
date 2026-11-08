@@ -18,7 +18,7 @@ export type EmulatorApi = {
     callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
   ) => () => void
   onFrameStreamError: (
-    callback: (data: { streamId: string; message: string }) => void
+    callback: (data: { streamId: string; message: string; retryWithScrcpy?: boolean }) => void
   ) => () => void
   startVideoStream: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
   stopVideoStream: (args: { streamId: string }) => Promise<void>

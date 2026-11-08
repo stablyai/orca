@@ -34,6 +34,7 @@ const EXIT_DETAIL_LINES = 3
 // AVD is booting only after this many polls (~4 s).
 const ADB_REGISTRATION_POLLS = 2
 
+/** Reuse a running device; only desktop native mode launches a token-authenticated gRPC endpoint. */
 export async function bootAndroidDevice(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,

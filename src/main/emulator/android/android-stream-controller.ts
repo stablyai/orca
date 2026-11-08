@@ -40,6 +40,7 @@ export class AndroidStreamController {
     }
   }
 
+  /** Prefer native capture locally, but preserve scrcpy startup when probing or control setup fails. */
   private async begin(serial: string): Promise<EmulatorSessionInfo> {
     const native = nativeAndroidSessions.get(serial)
     if (native && (await native.isReusable())) {

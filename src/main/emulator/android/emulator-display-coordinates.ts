@@ -1,3 +1,4 @@
+/** Undo the presented quarter-turn before mapping normalized input to natural-display pixels. */
 export function emulatorDisplayCoordinates(
   x: number,
   y: number,

@@ -13,5 +13,5 @@ export type EmulatorDeviceFrameProps = {
   isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
-  onStreamLost?: () => void
+  onStreamLost?: (retryWithScrcpy?: boolean) => void
 }

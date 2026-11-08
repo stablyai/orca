@@ -1,3 +1,4 @@
+/** Owns a WebGL RGB texture, with a 2D fallback when WebGL cannot be acquired. */
 export function createRgbCanvas(canvas: HTMLCanvasElement): {
   draw: (pixels: Uint8Array, width: number, height: number) => void
   dispose: () => void
@@ -83,6 +84,7 @@ export function createRgbCanvas(canvas: HTMLCanvasElement): {
   }
 }
 
+/** Expand RGB888 to opaque RGBA only for canvases without a usable WebGL context. */
 function createRgbCanvas2d(canvas: HTMLCanvasElement) {
   const context = canvas.getContext('2d', { alpha: false })
   if (!context) {

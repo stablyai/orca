@@ -150,7 +150,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     this.openVideoSocket(0)
   }
 
-  // adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control.
+  /** adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control. */
   private openVideoSocket(attempt: number): void {
     if (this.closed) {
       return
@@ -284,7 +284,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     return this.currentVideoSize
   }
 
-  // Returns false once the control socket is gone so callers can fall back to adb.
+  /** False requests input fallback when the socket is closed or its bounded backlog is exhausted. */
   sendControl(message: Buffer): boolean {
     const socket = this.controlSocket
     if (this.closed || !socket || socket.destroyed) {

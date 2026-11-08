@@ -27,7 +27,7 @@ type EmulatorScreenSurfaceProps = {
   onPointerDown: PointerEventHandler<HTMLDivElement>
   onPointerMove: PointerEventHandler<HTMLDivElement>
   onPointerUp: PointerEventHandler<HTMLDivElement>
-  onStreamError: () => void
+  onStreamError: (retryWithScrcpy?: boolean) => void
   onStreamSize: (size: StreamSize) => void
   onWheel: WheelEventHandler<HTMLDivElement>
   previewUrl?: string

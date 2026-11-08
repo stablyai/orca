@@ -1,3 +1,4 @@
+import { useEmulatorRecovery } from './use-emulator-stream-recovery'
 import { useEmulatorDeviceInventory } from './use-emulator-device-inventory'
 import {
   getEmulatorOpeningMode,
@@ -36,6 +37,7 @@ type UseEmulatorPaneSessionArgs = {
   autoAttachOnMount: boolean
 }
 
+/** Owns attachment identity so stale launch responses cannot replace the user-selected device. */
 export function useEmulatorPaneSession({
   worktreeId,
   tabId,
@@ -134,12 +136,6 @@ export function useEmulatorPaneSession({
     },
     [devices, resetVisualOrientation, selectedUdid, session, setDevices, tabId]
   )
-
-  // Unlike iOS MJPEG, a dead Android stream never reconnects itself; show it disconnected so Connect restarts it.
-  const markStreamLost = useCallback(() => {
-    liveTargetRef.current = null
-    setSession((s) => s && { ...s, attached: false })
-  }, [])
 
   const attach = useCallback(
     async (deviceTarget?: string, automatic = false) => {
@@ -302,7 +298,7 @@ export function useEmulatorPaneSession({
     error,
     selectionRequired,
     attach,
-    markStreamLost,
+    markStreamLost: useEmulatorRecovery(liveTargetRef, session, setSession, streamKey, attach),
     shutdown,
     sendTap,
     sendButton,

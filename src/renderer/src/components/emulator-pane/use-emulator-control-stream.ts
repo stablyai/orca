@@ -51,6 +51,7 @@ export type EmulatorControlStream = {
 }
 
 // Android has no serve-sim socket: its touches go to main, which owns the scrcpy control socket.
+/** Android uses desktop IPC for live input; iOS keeps its session-scoped serve-sim socket. */
 export function useEmulatorControlStream(
   wsUrl: string | undefined,
   enabled: boolean,

@@ -7,6 +7,7 @@ type ScrcpyKeyboardInput =
   | { deviceId: string; text: string }
   | { deviceId: string; key: string; shift: boolean; ctrl?: boolean }
 
+/** Accept text or named keys, treating modifier flags as enabled only when explicitly true. */
 function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   if (typeof value !== 'object' || value === null || !('deviceId' in value)) {
     return null

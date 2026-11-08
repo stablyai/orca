@@ -4,7 +4,7 @@ import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
-import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
+import { androidDeviceIdFromStreamUrl } from './use-emulator-stream-geometry'
 import { useEmulatorInputCheck } from './use-emulator-input-check'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -107,7 +107,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
-            onStreamLost={scrcpyDeviceIdFromStreamUrl(previewUrl) ? markStreamLost : undefined}
+            onStreamLost={androidDeviceIdFromStreamUrl(previewUrl) ? markStreamLost : undefined}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

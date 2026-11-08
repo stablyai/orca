@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 export type EmulatorGrpcEndpoint = { address: string; token: string }
 
+/** Registration paths belong to the local SDK user; remote emulators use scrcpy instead. */
 export function emulatorRegistrationDirectories(): string[] {
   const home = homedir()
   if (process.platform === 'darwin') {
@@ -22,6 +23,7 @@ export function emulatorRegistrationDirectories(): string[] {
   ].map((directory) => join(directory, 'avd', 'running'))
 }
 
+/** Only token-authenticated loopback registrations for the requested serial are eligible. */
 export function parseEmulatorRegistration(
   text: string,
   serial: string
@@ -48,6 +50,7 @@ export function parseEmulatorRegistration(
   return { address: `127.0.0.1:${port}`, token }
 }
 
+/** Missing, stale, or unsafe registrations return null so callers can use scrcpy. */
 export async function discoverEmulatorGrpc(serial: string): Promise<EmulatorGrpcEndpoint | null> {
   if (!/^emulator-\d+$/.test(serial)) {
     return null
@@ -86,6 +89,7 @@ export async function discoverEmulatorGrpc(serial: string): Promise<EmulatorGrpc
   return null
 }
 
+/** Unix registration files must belong to this user and exclude group/world writes. */
 function owned(stat: { uid: number; mode: number }): boolean {
   return process.platform === 'win32' || (stat.uid === userInfo().uid && (stat.mode & 0o022) === 0)
 }

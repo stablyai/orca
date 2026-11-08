@@ -3,6 +3,7 @@ import { nativeAndroidSessions } from '../emulator/android/emulator-grpc-session
 import type { NativeVideoFrame, NativeVideoRequest } from '../../shared/emulator-native-video'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
+/** Renderer-owned subscriptions retain one in-flight and one latest frame, bounding IPC memory. */
 export function registerEmulatorNativeVideoHandlers(): void {
   type Subscription = { owner: WebContents; deviceId: string; stop: () => void }
   const subscriptions = new Map<string, Subscription>()
@@ -46,12 +47,16 @@ export function registerEmulatorNativeVideoHandlers(): void {
       unsubscribe()
       port1.close()
     }
-    const fail = (message: string) => {
+    const fail = (message: string, retryWithScrcpy = false) => {
       if (stopped) {
         return
       }
       if (!owner.isDestroyed()) {
-        owner.send('emulator:frameStreamError', { streamId: args.streamId, message })
+        owner.send('emulator:frameStreamError', {
+          streamId: args.streamId,
+          message,
+          retryWithScrcpy
+        })
       }
       stop()
     }
@@ -108,7 +113,7 @@ export function registerEmulatorNativeVideoHandlers(): void {
             send(frame)
           }
         },
-        end: () => fail('Native emulator stream ended')
+        end: (retryWithScrcpy) => fail('Native emulator stream ended', retryWithScrcpy)
       })
     } catch (error) {
       stop()
@@ -128,6 +133,7 @@ export function registerEmulatorNativeVideoHandlers(): void {
   })
 }
 
+/** Treat renderer dimensions and subscription identifiers as untrusted allocation inputs. */
 function validRequest(args: NativeVideoRequest): boolean {
   return Boolean(
     args &&

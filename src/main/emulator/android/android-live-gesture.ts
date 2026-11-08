@@ -3,8 +3,7 @@ import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 const GESTURE_DURATION_MS = 300
 const GESTURE_STEP_MS = 16
 
-// Follow the whole path (adb swipe only had its endpoints), subdividing sparse paths so
-// the finger moves at a steady pace instead of jumping between points.
+/** Subdivide sparse paths so Android sees continuous motion through intermediate points. */
 function gestureSamples(points: EmulatorGesturePoint[]): { x: number; y: number }[] {
   const segments = points.length - 1
   const stepsPerSegment = Math.max(1, Math.ceil(GESTURE_DURATION_MS / GESTURE_STEP_MS / segments))
@@ -20,6 +19,7 @@ function gestureSamples(points: EmulatorGesturePoint[]): { x: number; y: number 
   return samples
 }
 
+/** Preserves intermediate path points; false tells the caller to fall back when live input fails. */
 export async function sendAndroidLiveGesture(
   send: (phase: EmulatorGesturePoint['type'], x: number, y: number) => boolean,
   points: EmulatorGesturePoint[],

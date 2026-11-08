@@ -1,6 +1,7 @@
 import type { WheelEvent } from 'react'
 import type { EmulatorScreenPoint } from './emulator-screen-gesture'
 
+/** Consume only finite wheel input over the screen; normalize browser units for Android scrolling. */
 export function sendAndroidWheel(
   event: WheelEvent<HTMLDivElement>,
   deviceId: string,

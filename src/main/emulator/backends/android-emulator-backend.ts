@@ -200,6 +200,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     ensureAdbOk(await this.runner(sdk.adb, emuKillArgs(serial)), 'adb emulator shutdown')
   }
 
+  /** Native sessions require a live display probe; scrcpy sessions require an active registry entry. */
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
     const native = nativeAndroidSessions.get(info.deviceUdid)
     return native ? native.isReusable() : scrcpyVideoRegistry.has(info.deviceUdid)
@@ -290,6 +291,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     return run(this.requireSdk(), await this.resolveDeviceId(deviceId))
   }
 
+  /** Deduplicate concurrent boot requests so the same AVD is not launched twice. */
   async ensureBooted(deviceOrName: string): Promise<string> {
     const inFlight = this.bootsInFlight.get(deviceOrName)
     if (inFlight) {

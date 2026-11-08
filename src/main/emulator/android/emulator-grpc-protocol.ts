@@ -79,6 +79,7 @@ export class EmulatorGrpcClient {
     })
     this.metadata.set('authorization', `Bearer ${endpoint.token}`)
   }
+  /** Uses display zero in natural orientation; missing dimensions reject native startup. */
   displaySize(): Promise<{ width: number; height: number }> {
     return new Promise((resolve, reject) => {
       this.client.makeUnaryRequest(
@@ -99,6 +100,7 @@ export class EmulatorGrpcClient {
       )
     })
   }
+  /** Requests RGB888 frames bounded by the viewport, including empty frames while asleep. */
   screenshots(width: number, height: number) {
     return this.client.makeServerStreamRequest(
       `${service}streamScreenshot`,
@@ -108,6 +110,7 @@ export class EmulatorGrpcClient {
       this.metadata
     )
   }
+  /** Quadrants map to emulator physical-model angles, not a renderer-only transform. */
   rotate(quadrants: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const angle = [0, 90, -180, -90][quadrants] ?? 0
@@ -131,6 +134,7 @@ export class EmulatorGrpcClient {
       () => {}
     )
   }
+  /** Allow queued release input to finish before closing the channel, with a bounded wait. */
   close(input: ClientWritableStream<GrpcInput> | null): Promise<void> {
     if (!input) {
       this.client.close()
@@ -152,6 +156,7 @@ export class EmulatorGrpcClient {
   }
 }
 
+/** These status codes require a transport fallback rather than retrying the same RPC. */
 export function isUnsupportedEmulatorGrpc(error: unknown): boolean {
   return (
     typeof error === 'object' &&

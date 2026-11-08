@@ -30,6 +30,7 @@ export type ScrcpyServerOptions = {
   version?: string
 }
 
+/** Control-only sessions disable video metadata so the first socket carries control messages. */
 export function startScrcpyServerArgs(serial: string, options: ScrcpyServerOptions): string[] {
   const version = options.version ?? SCRCPY_SERVER_VERSION
   const jar = options.deviceJarPath ?? SCRCPY_DEVICE_JAR_PATH
