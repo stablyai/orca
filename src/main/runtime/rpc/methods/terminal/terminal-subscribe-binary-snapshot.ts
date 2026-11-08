@@ -21,10 +21,18 @@ import { tryPublishResumedOutput } from './terminal-subscribe-binary-resume'
 
 const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 
-export async function publishTerminalSubscribeBinarySnapshot(
+export function publishTerminalSubscribeBinarySnapshot(
   args: TerminalSubscriptionArgs,
   state: TerminalSubscribeBinaryState,
   /** Set when this stream's output is credited; the client acks and later resumes under this token. */
+  streamToken: TerminalStreamToken | null
+): Promise<void> {
+  return args.registration.publishFirstScreen(() => publishSnapshot(args, state, streamToken))
+}
+
+async function publishSnapshot(
+  args: TerminalSubscriptionArgs,
+  state: TerminalSubscribeBinaryState,
   streamToken: TerminalStreamToken | null
 ): Promise<void> {
   const {
@@ -56,10 +64,12 @@ export async function publishTerminalSubscribeBinarySnapshot(
     return
   }
 
+  // After an exit only the held model is read: renderer seeding would build a model for a dead PTY.
+  const seedsFromRenderer = (): boolean =>
+    missingHeadlessStateBeforeMobileFit && !registration.ptyExited
   // Fit first so the seed uses the phone-owned grid.
   const hydratedFromRenderer =
-    missingHeadlessStateBeforeMobileFit &&
-    (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
+    seedsFromRenderer() && (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
   if (state.closed) {
     return
   }
@@ -76,9 +86,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
   }
   // Missing model state, unlike blank text, means never-attached; null renderer answers fall back to mount wait even for stale host flags.
   const needsRendererScreen =
-    missingHeadlessStateBeforeMobileFit &&
-    !hydratedFromRenderer &&
-    serialized?.source !== 'renderer'
+    seedsFromRenderer() && !hydratedFromRenderer && serialized?.source !== 'renderer'
   let rendererReady =
     needsRendererScreen &&
     (await runtime.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 0 })) !== null
@@ -134,7 +142,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     }
   }
   let rendererSeed: { seq?: number } | null = null
-  if (rendererReady) {
+  if (rendererReady && seedsFromRenderer()) {
     read = await runtime.readTerminal(params.terminal)
     const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
       runtime,
