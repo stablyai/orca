@@ -1,10 +1,8 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineDropRule } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import { providerTimelineTurnRowState, turnOf } from './provider-timeline-rows'
+import { turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 import type { ProviderTimelineTextStreams } from './provider-timeline-text-streams'
 
@@ -18,7 +16,6 @@ export type ProviderTimelineTextHost = {
   sink: ProviderTimelineSink
   state: ProviderTimelineState
   streams: ProviderTimelineTextStreams
-  journal: StructuredAgentSessionTransitionJournal | null
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
@@ -48,7 +45,8 @@ export function applyProviderTimelineTextDelta(
     if (streams.stoppedFor(key, event.join)) {
       return { admission: ADMITTED, dropped: 'turn-settled' }
     }
-    if ('id' in event.item && settledNamedItem(host, key)) {
+    // The writer refuses text for a settled turn; this producer's own closes need no journal read.
+    if ('id' in event.item && state.closedItems.has(key)) {
       return { admission: ADMITTED, dropped: 'item-settled' }
     }
     const serials = state.serials()
@@ -64,19 +62,6 @@ export function applyProviderTimelineTextDelta(
   }
   streams.planAppend(plan, stream, event.text)
   return { admission: plan.submit(host.sink) }
-}
-
-function settledNamedItem(host: ProviderTimelineTextHost, key: string): boolean {
-  if (host.state.closedItems.has(key)) {
-    return true
-  }
-  const held = host.journal?.item(key)
-  const turn = held ? turnOf(held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : null
-  return (
-    host.journal !== null &&
-    turn !== null &&
-    providerTimelineTurnRowState(host.journal, turn) === 'settled'
-  )
 }
 
 export function applyProviderTimelineTextClose(

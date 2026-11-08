@@ -124,6 +124,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   journalEpoch?(): string | null
+  /** Notices of turns settled by any writer while this sink is bound. */
+  observeSettledTurns?(listener: (turnItemIds: readonly string[]) => void): () => void
   journalLinkage?(): StructuredAgentSessionLinkageJournal | null
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
   /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
@@ -147,6 +149,8 @@ export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
+  /** Turn rows any writer's commit left terminal on this journal. */
+  observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -267,6 +271,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       ...resolvedAppend,
       ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
+      observeSettledTurns: queue.observeSettledTurns,
       journalLinkage: queue.journalLinkage,
       journalHistory: queue.journalHistory,
       journalStopDecidesTurn: queue.journalStopDecidesTurn,

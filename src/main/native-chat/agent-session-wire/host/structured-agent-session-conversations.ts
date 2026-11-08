@@ -3,6 +3,7 @@ import type { JournalRow } from '../../agent-session-journal/durable-rows/journa
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { StructuredAgentSessionSettledTurnRoutes } from './structured-agent-session-settled-turn-routes'
 
 export type JournalPublication = {
   kind: 'commit' | 'reset' | 'operational' | 'detach' | 'end'
@@ -29,6 +30,7 @@ export class StructuredAgentSessionConversations extends Map<
   >()
   private ended = false
   private readonly activity = new Map<string, number>()
+  private readonly settledTurns: StructuredAgentSessionSettledTurnRoutes
 
   constructor(
     private readonly delivery: {
@@ -48,6 +50,7 @@ export class StructuredAgentSessionConversations extends Map<
     }
   ) {
     super()
+    this.settledTurns = new StructuredAgentSessionSettledTurnRoutes(delivery.logger)
   }
 
   loadedSessionIds = (): string[] =>
@@ -77,6 +80,9 @@ export class StructuredAgentSessionConversations extends Map<
         return
       }
       this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+      if (rows) {
+        this.settledTurns.deliver(sessionId, journal, rows)
+      }
       try {
         this.delivery.observe?.(sessionId, journal, rows)
       } catch (error) {
@@ -137,6 +143,10 @@ export class StructuredAgentSessionConversations extends Map<
     this.delivery.onOpened?.(sessionId)
     return adopted
   }
+
+  /** Terminal turn rows of each commit, delivered after COMMIT and before its publication callbacks. */
+  observeSettledTurns: StructuredAgentSessionSettledTurnRoutes['observe'] = (...args) =>
+    this.settledTurns.observe(...args)
 
   observeConversationPublications(sessionId: string, observer: PublicationObserver): () => void {
     if (this.ended) {

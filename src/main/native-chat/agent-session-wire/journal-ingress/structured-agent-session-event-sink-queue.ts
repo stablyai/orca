@@ -49,6 +49,8 @@ export class StructuredAgentSessionSinkQueue {
   private readonly buffered: Admitted[] = []
   private readonly waitingPublications = new Map<string, Admitted>()
   private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
+  private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
+  private releaseSettledTurns: (() => void) | undefined
 
   constructor(
     private readonly deps: {
@@ -80,6 +82,14 @@ export class StructuredAgentSessionSinkQueue {
 
   journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
 
+  observeSettledTurns = (listener: (turnItemIds: readonly string[]) => void): (() => void) => {
+    const registered = (turnItemIds: readonly string[]) => listener(turnItemIds)
+    this.settledTurnListeners.add(registered)
+    return () => {
+      this.settledTurnListeners.delete(registered)
+    }
+  }
+
   journalStopDecidesTurn = (turnId: string, endedAt: number): boolean =>
     this.target?.journal.stopMarks.personStopDecides(turnId, endedAt) ?? false
 
@@ -101,16 +111,26 @@ export class StructuredAgentSessionSinkQueue {
       return
     }
     this.target = target
+    this.releaseSettledTurns?.()
+    this.releaseSettledTurns = target.observeSettledTurns?.((turnItemIds) => {
+      for (const listener of this.settledTurnListeners) {
+        listener(turnItemIds)
+      }
+    })
     for (const operation of this.buffered.splice(0)) {
       this.handOver(operation, target)
     }
   }
 
   unbind(): void {
+    this.releaseSettledTurns?.()
+    this.releaseSettledTurns = undefined
     this.target = null
   }
 
   close(): void {
+    this.releaseSettledTurns?.()
+    this.releaseSettledTurns = undefined
     this.closed = true
     this.dropBuffered()
     this.updateBackpressure()

@@ -18,11 +18,13 @@ import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-
 import type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionTaskQueue } from '../host/structured-agent-session-task-queue'
 import type { StructuredAgentSessionConversationOpenOptions } from '../host/structured-agent-session-conversation-open'
+import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
 
 export type StructuredAgentSessionAttachContext = {
   deps: StructuredAgentSessionHostDeps
   runtimeState: StructuredAgentSessionHostRuntimeState
-  sessions: Map<string, StructuredAgentSessionHostSession>
+  sessions: Map<string, StructuredAgentSessionHostSession> &
+    Pick<StructuredAgentSessionConversations, 'observeSettledTurns'>
   subscribers: {
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (

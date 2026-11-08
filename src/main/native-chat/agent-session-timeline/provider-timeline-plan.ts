@@ -11,7 +11,7 @@ import type { JournalStepOutcome } from '../agent-session-journal/writing/journa
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
 > &
-  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written'>
+  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written' | 'observeSettledTurns'>
 
 type ItemStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>
 type SettlementStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'settlement' }>
@@ -91,13 +91,16 @@ export class ProviderTimelinePlan {
 export function providerTimelineSink(
   sink: StructuredAgentSessionEventSink
 ): ProviderTimelineSink | null {
-  const { tryAppendTransition, journalItems, setActivity, written } = sink
+  const { tryAppendTransition, journalItems, setActivity, written, observeSettledTurns } = sink
   if (!tryAppendTransition || !journalItems) {
     return null
   }
   return {
     tryAppendTransition: (transition) => tryAppendTransition.call(sink, transition),
     journalItems: () => journalItems.call(sink),
+    ...(observeSettledTurns
+      ? { observeSettledTurns: (listener) => observeSettledTurns.call(sink, listener) }
+      : {}),
     ...(written ? { written: () => written.call(sink) } : {}),
     ...(setActivity
       ? {

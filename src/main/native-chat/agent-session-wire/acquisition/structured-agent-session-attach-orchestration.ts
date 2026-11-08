@@ -241,7 +241,9 @@ async function runAttachUnderAbort(
         eventSink.bind({
           journal: attached.journal,
           fence,
-          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity)
+          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
+          observeSettledTurns: (listener) =>
+            context.sessions.observeSettledTurns(sessionId, attached.journal, listener)
         })
         const { journal } = attached
         const bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }

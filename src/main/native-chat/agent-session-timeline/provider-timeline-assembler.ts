@@ -17,7 +17,7 @@ import {
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { createLegacyProviderTimelineIdentityScheme } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import { ProviderTimelineRows, providerTimelineTurnRowState } from './provider-timeline-rows'
+import { ProviderTimelineRows, type ProviderTimelineTurnRef } from './provider-timeline-rows'
 import { ProviderTimelineState } from './provider-timeline-state'
 import {
   applyProviderTimelineTextClose,
@@ -86,12 +86,9 @@ export function createProviderTimelineAssembler(
     ...(deps.schedule ? { schedule: deps.schedule } : {})
   })
 
-  const textHost = (journal: ProviderTimelineTextHost['journal']): ProviderTimelineTextHost => ({
-    sink: deps.sink,
-    state,
-    streams,
-    journal
-  })
+  const textHost: ProviderTimelineTextHost = { sink: deps.sink, state, streams }
+  /** Another writer settled this open turn; its closure retries until admitted. */
+  let settledByOther: ProviderTimelineTurnRef | null = null
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
@@ -136,35 +133,51 @@ export function createProviderTimelineAssembler(
     return { admission: plan.submit(deps.sink, observed) }
   }
 
-  /** Settle another writer’s ended turn first; refusal rejects the discovering event so retry repeats both. */
-  const endSettledTurn = (
-    journal: NonNullable<ProviderTimelineTextHost['journal']>
-  ): ProviderTimelineApplyResult | null => {
+  /** Close another writer's settled turn first; refusal rejects the next event so its retry repeats both. */
+  const endSettledTurn = (): ProviderTimelineApplyResult | null => {
     const open = state.open
-    if (state.ended || !open || providerTimelineTurnRowState(journal, open.itemId) !== 'settled') {
+    if (!settledByOther || state.ended || open?.itemId !== settledByOther.itemId) {
+      settledByOther = null
       return null
     }
-    return applyDecided({ type: 'turn.settled', turn: open })
+    const settled = applyDecided({ type: 'turn.settled', turn: open })
+    if (settled.admission.accepted) {
+      settledByOther = null
+    }
+    return settled
   }
+
+  const releaseSettledTurns = deps.sink.observeSettledTurns?.((turnItemIds) => {
+    const open = state.open
+    if (state.ended || !open || !turnItemIds.includes(open.itemId)) {
+      return
+    }
+    settledByOther = open
+    // Activity clears now even if the closure must wait for queue capacity.
+    deps.sink.setActivity?.(null)
+    endSettledTurn()
+  })
 
   const apply = (
     event: ProviderTimelineEvent,
     onPublished?: () => void
   ): ProviderTimelineApplyResult => {
-    const journal = deps.sink.journalItems()
-    const settled = journal ? endSettledTurn(journal) : null
+    const settled = endSettledTurn()
     if (settled && !settled.admission.accepted) {
       return settled
     }
     switch (event.type) {
       case 'text.delta':
-        return applyProviderTimelineTextDelta(textHost(journal), event)
+        return applyProviderTimelineTextDelta(textHost, event)
       case 'text.close':
-        return applyProviderTimelineTextClose(textHost(journal), event)
+        return applyProviderTimelineTextClose(textHost, event)
       case 'activity': {
         const open = state.open
         if (state.ended || !open) {
           return { admission: ADMITTED, dropped: state.ended ? 'session-ended' : 'no-turn' }
+        }
+        if (settledByOther?.itemId === open.itemId) {
+          return { admission: ADMITTED, dropped: 'turn-settled' }
         }
         deps.sink.setActivity?.(
           event.text === null ? null : { turnId: open.turnId, text: event.text }
@@ -212,7 +225,13 @@ export function createProviderTimelineAssembler(
     get openTurnId() {
       return state.open?.turnId ?? null
     },
-    flush: () => streams.flush(),
-    dispose: () => streams.dispose()
+    flush: () => {
+      endSettledTurn()
+      streams.flush()
+    },
+    dispose: () => {
+      releaseSettledTurns?.()
+      streams.dispose()
+    }
   }
 }

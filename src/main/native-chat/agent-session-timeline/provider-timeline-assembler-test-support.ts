@@ -41,6 +41,7 @@ import {
   type ProviderTimelineItemFamily
 } from './provider-timeline-identity'
 import { providerTimelineSink, type ProviderTimelineSink } from './provider-timeline-plan'
+import { boundTarget } from './provider-timeline-bound-target-test-support'
 
 export const SESSION = 'session-timeline'
 export const AGENT = 'grok'
@@ -177,7 +178,7 @@ export function openUnboundProviderTimelineAssembler(
   return {
     assembler,
     bind: async () => {
-      deferred.bind({ journal, fence: 1, publish: () => {} })
+      deferred.bind(boundTarget(journal))
       await deferred.drained()
     },
     drained: async () => {
@@ -235,7 +236,7 @@ export async function openProviderTimelineRig(
   }
   let journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  deferred.bind(boundTarget(journal))
   cleanups.push(async () => {
     deferred.close()
   })
