@@ -1,0 +1,39 @@
+{
+  app: {
+    signingConfigs: [],
+    products: [
+      {
+        name: 'default',
+        compatibleSdkVersion: '26.0.0',
+        runtimeOS: 'HarmonyOS',
+        buildOption: {
+          strictMode: {
+            caseSensitiveCheck: true,
+            useNormalizedOHMUrl: true
+          }
+        },
+        targetSdkVersion: '26.0.0'
+      }
+    ],
+    buildModeSet: [
+      {
+        name: 'debug'
+      },
+      {
+        name: 'release'
+      }
+    ]
+  },
+  modules: [
+    {
+      name: 'entry',
+      srcPath: './entry',
+      targets: [
+        {
+          name: 'default',
+          applyToProducts: ['default']
+        }
+      ]
+    }
+  ]
+}

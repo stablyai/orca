@@ -1,0 +1,11 @@
+{
+  name: 'orca-mobile-harmonyos',
+  version: '0.1.0',
+  desc: 'HarmonyOS version of the Orca Mobile companion app (upstream: stablyai/orca mobile/)',
+  main: '',
+  author: 'jsy',
+  license: 'MIT',
+  modelVersion: '26.0.0',
+  dependencies: {},
+  devDependencies: {}
+}

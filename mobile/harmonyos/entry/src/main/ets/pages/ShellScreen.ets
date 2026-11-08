@@ -1,0 +1,466 @@
+import { HostSession, SessionPhase } from '../transport/HostSession';
+import { NativeDevice } from '../webshell/NativeDevice';
+import { PageStorageStore } from '../storage/PageStorageStore';
+import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR } from '../diagnostics/ConnectionLogStore';
+import { getNumber, getString, KEY_TERMINAL_FONT_SCALE, KEY_TERMINAL_SHOW_KEY_RAIL } from '../settings/SettingsStore';
+import { webview } from '@kit.ArkWeb';
+import { common } from '@kit.AbilityKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
+import { router } from '@kit.ArkUI';
+import { SpikeRpcClient } from '../transport/SpikeRpcClient';
+import { WebBundleFetcher, BundleManifest, isSafeBundlePath } from '../transport/WebBundleFetcher';
+import { BridgeHost } from '../webshell/BridgeHost';
+import fflateModule from '../vendor/fflate-umd.js';
+import { listHosts, getDeviceToken, HostMeta } from '../storage/HostStore';
+import { AgentWatch } from '../notifications/AgentWatch';
+import { LocalNotifier } from '../notifications/LocalNotifier';
+import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
+
+/**
+ * Shell screen (Phase 2a): downloads the desktop web bundle into the sandbox and
+ * renders it inside an ArkWeb fence — local origin via onInterceptRequest, CSP on
+ * the document, and the orcaBridge page channel through a document-start shim that
+ * wraps the injected orcaNative proxy.
+ */
+
+const SHELL_ORIGIN = 'https://appassets.orca-shell.local';
+
+// Page channel shim: window.orcaBridge (postMessage + assignable onmessage) over the
+// orcaNative proxy, mirroring orca-bridge-page-channel.ts's exact surface.
+const BRIDGE_SHIM = `
+(function () {
+  'use strict';
+  var native = window.orcaNative;
+  if (!native || typeof native.postMessage !== 'function') {
+    window.__orcaShellError = 'orcaNative proxy missing';
+    return;
+  }
+  var queued = [];
+  var handler = null;
+  var bridge = {
+    postMessage: function (json) { native.postMessage(String(json)); },
+  };
+  Object.defineProperty(bridge, 'onmessage', {
+    set: function (fn) {
+      handler = fn;
+      try { native.notifyOnMessageSet(); } catch (e) { /* proxy not callable yet */ }
+      while (queued.length > 0) {
+        var f = queued.shift();
+        try { fn({ data: f }); } catch (e) { /* handler error surfaces via page console */ }
+      }
+    },
+    get: function () { return handler; },
+    configurable: true
+  });
+  window.orcaBridge = bridge;
+  ['warn', 'error'].forEach(function (level) {
+    var orig = console[level].bind(console);
+    console[level] = function () {
+      var parts = [];
+      for (var i = 0; i < arguments.length; i++) {
+        try {
+          var a = arguments[i];
+          parts.push(typeof a === 'string' ? a : JSON.stringify(a));
+        } catch (e) { parts.push('[unserializable]'); }
+      }
+      try {
+        native.postMessage(JSON.stringify({ v: 1, type: 'page.console', level: level, text: parts.join(' ').slice(0, 400) }));
+      } catch (e2) { /* drop */ }
+      orig.apply(null, arguments);
+    };
+  });
+  window.__orcaNativePush = function (json) {
+    if (handler) {
+      try { handler({ data: json }); return 'delivered'; }
+      catch (e) { return 'error: ' + (e && e.message || String(e)); }
+    }
+    queued.push(json);
+    return 'queued';
+  };
+})();
+`;
+
+class OrcaNativeProxy {
+  private bridge: BridgeHost | null = null;
+  private logSink: ((line: string) => void) | null = null;
+
+  setBridge(bridge: BridgeHost | null): void {
+    this.bridge = bridge;
+  }
+
+  setLogSink(sink: (line: string) => void): void {
+    this.logSink = sink;
+  }
+
+  postMessage(json: string): string {
+    if (this.bridge) {
+      this.bridge.onClientMessage(json);
+      return 'ok';
+    }
+    return 'no-bridge';
+  }
+
+  notifyOnMessageSet(): string {
+    if (this.bridge) {
+      this.bridge.onPushChannelReady();
+    }
+    return 'ok';
+  }
+}
+
+@Entry
+@Component
+struct ShellScreen {
+  @StorageProp('themeBg') themeBg: string = '#111111';
+  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
+  @StorageProp('themeBorder') themeBorder: string = '#353a42';
+  @StorageProp('themeText') themeText: string = '#e8e8e8';
+  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
+  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
+  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
+  @StorageProp('themeLink') themeLink: string = '#96b8e5';
+  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
+  controller: webview.WebviewController = new webview.WebviewController();
+  private nativeProxy: OrcaNativeProxy = new OrcaNativeProxy();
+  private bridge: BridgeHost | null = null;
+  private client: SpikeRpcClient | null = null;
+  private hostId: string = '';
+  @State phase: string = '启动中…';
+  @State logs: string[] = [];
+  @State webSrc: string = '';
+  @State showLog: boolean = false;
+  private manifest: BundleManifest | null = null;
+  private agentWatch: AgentWatch | null = null;
+  private notifier: LocalNotifier = new LocalNotifier();
+  private baseDir: string = '';
+  private routePathname: string = '';
+  private supervisor: HostSession | null = null;
+  private nativeDevice: NativeDevice | null = null;
+  private disposed: boolean = false;
+  private generation: number = 0;
+  private backgroundListener: () => void = (): void => {
+    if (this.nativeDevice) { this.nativeDevice.stopCapture().catch(() => {}); }
+  };
+
+  appendLog(line: string): void {
+    let stamped = `${new Date().toLocaleTimeString()}  ${line}`;
+    let next = this.logs.slice();
+    next.push(stamped);
+    if (next.length > 120) {
+      next.splice(0, next.length - 120);
+    }
+    this.logs = next;
+  }
+
+  aboutToAppear(): void {
+    let params = router.getParams() as Record<string, string>;
+    this.hostId = params['hostId'];
+    let routeOverride = params['route'];
+    this.routePathname = (routeOverride !== undefined && routeOverride.length > 0)
+      ? routeOverride
+      : `/h/${this.hostId}`;
+    this.nativeProxy.setLogSink((line: string): void => this.appendLog(line));
+    (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
+    this.boot();
+  }
+
+  aboutToDisappear(): void {
+    this.disposed = true; this.generation++;
+    (getContext(this) as common.UIAbilityContext).eventHub.off('orcaBackground', this.backgroundListener);
+    if (this.supervisor) { this.supervisor.stop(); this.supervisor = null; }
+    this.releaseBridge();
+  }
+  onBackPress(): boolean {
+    if (this.showLog) { this.showLog = false; return true; }
+    return this.bridge ? this.bridge.handleBack() : false;
+  }
+  onPageHide(): void { this.backgroundListener(); }
+  private releaseBridge(): void {
+    if (this.bridge) {
+      this.routePathname = this.bridge.getRoute();
+      this.bridge.publishState('disconnected', 0); this.bridge.dispose(); this.bridge = null;
+    }
+    this.nativeProxy.setBridge(null);
+    if (this.agentWatch) { this.agentWatch.stop(); this.agentWatch = null; }
+    if (this.nativeDevice) { this.nativeDevice.dispose().catch(() => {}); this.nativeDevice = null; }
+    this.client = null;
+  }
+  private publishPhase(state: string): void {
+    if (this.disposed || this.phase === state) { return; }
+    this.phase = state;
+    recordConnection(getContext(this), state.startsWith('失败') ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO, state, '').catch(() => {});
+  }
+
+  /** Phase 4a: watch agent states on the open channel and raise local notifications. */
+  private startAgentWatch(client: SpikeRpcClient, meta: HostMeta): void {
+    getBool(getContext(this), KEY_NOTIFICATIONS_LOCAL_ENABLED).then((enabled: boolean): void => {
+      if (!enabled || this.disposed || this.client !== client) {
+        this.appendLog('本地通知已关闭（设置 → 通知）');
+        return;
+      }
+      let notifier = this.notifier;
+      notifier.setLogSink((line: string): void => this.appendLog(`[notify] ${line}`));
+      let context = getContext(this) as common.UIAbilityContext;
+      notifier.requestEnable(context).then((granted: boolean): void => {
+        if (!granted || this.disposed || this.client !== client) {
+          this.appendLog('通知权限未授予');
+          return;
+        }
+        notifier.ensureSlot().then((_ok: boolean): void => {
+          if (this.disposed || this.client !== client) { return; }
+          let watch = new AgentWatch({
+            deviceToken: client.deviceToken,
+            hostId: meta.id,
+            subscribe: (id: string, wire: string, onEvent: (responseJson: string) => void): boolean =>
+              client.subscribeWithId(id, wire, onEvent),
+            cancel: (id: string): void => client.cancelById(id),
+            notify: (title: string, body: string, hostId: string, worktreeId: string): boolean =>
+              notifier.publishAgentEvent(title, body, hostId, worktreeId),
+            logSink: (line: string): void => this.appendLog(`[watch] ${line}`)
+          });
+          this.agentWatch = watch;
+          if (watch.start()) {
+            this.appendLog('agent 状态监视已启动');
+          }
+        }).catch((_e: Error) => {
+        });
+      }).catch((_e: Error) => {
+      });
+    }).catch((_e: Error) => {
+    });
+  }
+
+  async boot(): Promise<void> {
+    try {
+      let hosts: HostMeta[] = await listHosts(getContext(this));
+      let meta: HostMeta | null = null;
+      for (let i = 0; i < hosts.length; i++) {
+        if (hosts[i].id === this.hostId) {
+          meta = hosts[i];
+          break;
+        }
+      }
+      if (meta === null) {
+        this.publishPhase('主机不存在');
+        return;
+      }
+      let token = await getDeviceToken(getContext(this), meta.id);
+      if (token === null) {
+        this.publishPhase('凭证缺失 — 请重新配对');
+        return;
+      }
+
+      if (this.disposed) { return; }
+      let supervisor = new HostSession(meta, token); this.supervisor = supervisor;
+      supervisor.setClientSetup((client: SpikeRpcClient): void => client.setFflate(fflateModule));
+      supervisor.setLogSink((line: string): void => this.appendLog(line));
+      let host = meta;
+      supervisor.addListener((phase: SessionPhase, detail: string): void => {
+        if (this.disposed) { return; }
+        if (phase === 'connected') {
+          let client = supervisor.getClient();
+          if (client) { this.loadConnected(client, host).catch(() => {}); }
+        } else if (phase === 'reconnecting') {
+          this.generation++; this.releaseBridge(); this.publishPhase(`连接中断 · ${detail}`);
+        } else if (phase === 'connecting') { this.publishPhase('连接桌面…'); }
+      });
+      supervisor.start();
+    } catch (e) { this.publishPhase('失败：无法读取桌面凭证，请重新配对'); }
+  }
+
+  private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {
+    let generation = ++this.generation; this.releaseBridge(); this.client = client;
+    try {
+      this.publishPhase('已连接 · 加载会话…');
+      let fetcher = new WebBundleFetcher(client, getContext(this));
+      let manifest = await fetcher.fetchManifest();
+      let baseDir = await fetcher.ensureBundle(manifest);
+      let size = await getNumber(getContext(this), KEY_TERMINAL_FONT_SCALE);
+      let showRail = await getBool(getContext(this), KEY_TERMINAL_SHOW_KEY_RAIL);
+      if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+      this.manifest = manifest; this.baseDir = baseDir;
+      let storage = new PageStorageStore(getContext(this), meta.id);
+      storage.write('orca:terminalTextScale', JSON.stringify(Math.max(12, Math.min(24, size)) / 13));
+      // The page owns shortcut ordering; only override visibility while the native toggle is off.
+      let ids: string[] = ['escape','tab','enter','shiftTab','space','backspace','delete','arrowUp','arrowDown','arrowLeft','arrowRight',
+        'ctrlC','ctrlD','ctrlL','ctrlZ','ctrlR','ctrlA','ctrlE','ctrlW','ctrlU'];
+      if (!showRail) {
+        storage.write('orca:terminal-accessory-layout', JSON.stringify({ version: 2, orderedBuiltInIds: ids,
+          visibleBuiltInIds: [], directionPadEnabled: false }));
+      } else {
+        let held = storage.entries().get('orca:terminal-accessory-layout');
+        if (held) {
+          let parsed: ESObject = JSON.parse(held);
+          if (Array.isArray(parsed['visibleBuiltInIds']) && parsed['visibleBuiltInIds'].length === 0) {
+            storage.write('orca:terminal-accessory-layout', null);
+          }
+        }
+      }
+      let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext); this.nativeDevice = nativeDevice;
+      let bridge = new BridgeHost(client, this.controller, manifest, meta, this.routePathname);
+      bridge.setStorage(storage); bridge.setColorScheme(AppStorage.get<string>('themeScheme') ?? 'dark');
+      bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
+      bridge.setNavigation((home: boolean): void => { if (home) { router.back({ url: 'pages/Home' }); } else { router.back(); } }, (): void => this.publishPhase('已连接'));
+      bridge.setLogSink((line: string): void => this.appendLog(line));
+      this.bridge = bridge; this.nativeProxy.setBridge(bridge);
+      let wasMounted = this.webSrc.length > 0;
+      this.webSrc = `${SHELL_ORIGIN}/${manifest.entrypoint}?generation=${generation}`;
+      this.publishPhase('正在打开会话…');
+      if (wasMounted) { this.controller.loadUrl(this.webSrc); }
+      this.startAgentWatch(client, meta);
+    } catch (e) {
+      if (!this.disposed && generation === this.generation) { this.publishPhase('失败：会话加载未完成，请重试'); }
+    }
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      Row({ space: 10 }) {
+        Text('会话')
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.themeText)
+          .layoutWeight(1)
+        Text(this.phase)
+          .fontSize(11)
+          .fontColor(this.themeWarning)
+          .maxLines(1)
+        if (this.phase.startsWith('失败')) {
+          Button('重试').height(28).fontSize(11).onClick(() => {
+            if (this.supervisor) { this.supervisor.stop(); this.supervisor.start(); }
+          })
+        }
+        Button(this.showLog ? '页面' : '日志')
+          .fontSize(11)
+          .height(28)
+          .onClick(() => {
+            this.showLog = !this.showLog;
+          })
+      }
+      .width('100%')
+      .padding({ left: 12, right: 12, top: 8 })
+
+      // Web must stay mounted regardless of the log overlay — conditional unmount
+      // reloads the shell document and bounces the page back to the host root.
+      Stack() {
+        if (this.webSrc !== '' && this.manifest !== null) {
+          Web({ src: this.webSrc, controller: this.controller })
+            .javaScriptProxy({
+              object: this.nativeProxy,
+              name: 'orcaNative',
+              methodList: ['postMessage', 'notifyOnMessageSet'],
+              controller: this.controller
+            })
+            .javaScriptOnDocumentStart(((): Array<ScriptItem> => {
+              let item: ScriptItem = { script: BRIDGE_SHIM, scriptRules: [SHELL_ORIGIN] };
+              let items: Array<ScriptItem> = [item];
+              return items;
+            })())
+            .onLoadIntercept((event) => {
+              return !event.data.getRequestUrl().startsWith(`${SHELL_ORIGIN}/`);
+            })
+            .onPageEnd(() => { if (this.bridge) { this.publishPhase('已连接'); } })
+            .onInterceptRequest((event) => {
+              let url = event.request.getRequestUrl();
+              let marker = `${SHELL_ORIGIN}/`;
+              if (!url.startsWith(marker)) {
+                return null;
+              }
+              let relPath = url.substring(marker.length).split('?')[0].split('#')[0];
+              try { relPath = decodeURIComponent(relPath); } catch (e) { return null; }
+              if (relPath.length === 0 || relPath.endsWith('/')) {
+                relPath += this.manifest!.entrypoint;
+              }
+              if (!isSafeBundlePath(relPath) || !this.manifest!.assets.some((asset): boolean => asset.path === relPath)) { return null; }
+              let file = `${this.baseDir}/${relPath}`;
+              let contentType = '';
+              try {
+                contentType = WebBundleFetcher.contentTypeFor(this.manifest!, relPath);
+              } catch (e) {
+                contentType = 'application/octet-stream';
+              }
+              let headers: Record<string, string> = {
+                'Cache-Control': 'no-cache',
+                'Content-Type': contentType
+              };
+              if (relPath.endsWith('.html')) {
+                // Fenced document: script only from the bundle origin (upstream shell CSP policy).
+                headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'";
+              }
+              try {
+                let fd = fs.openSync(file, fs.OpenMode.READ_ONLY).fd;
+                let response = new WebResourceResponse();
+                let headerList: Header[] = [];
+                let headerKeys = Object.keys(headers);
+                for (let h = 0; h < headerKeys.length; h++) {
+                  let entry: Header = { headerKey: headerKeys[h], headerValue: headers[headerKeys[h]] };
+                  headerList.push(entry);
+                }
+                response.setResponseHeader(headerList);
+                // mimeType must be the bare media type; parameters belong in the header.
+                let mimeType = contentType.split(';')[0].trim();
+                response.setResponseMimeType(mimeType);
+                response.setResponseEncoding('utf-8');
+                response.setReasonMessage('OK');
+                response.setResponseCode(200);
+                response.setResponseData(fd);
+                response.setResponseIsReady(true);
+                return response;
+              } catch (e) {
+                return null;
+              }
+            })
+            .width('100%')
+            .height('100%')
+            .backgroundColor(this.themeBg)
+        } else {
+          Column({ space: 6 }) {
+            Text(this.phase)
+              .fontSize(14)
+              .fontColor(this.themeWarning)
+            List({ space: 2 }) {
+              ForEach(this.logs, (line: string) => {
+                ListItem() {
+                  Text(line)
+                    .fontSize(9)
+                    .fontColor('#a0c8a0')
+                    .maxLines(3)
+                    .width('100%')
+                }
+              }, (line: string, index: number) => `${index}-${line}`)
+            }
+            .layoutWeight(1)
+            .width('100%')
+          }
+          .width('100%')
+          .height('100%')
+          .padding({ left: 12, right: 12, top: 8 })
+          .alignItems(HorizontalAlign.Start)
+        }
+
+        if (this.showLog) {
+          List({ space: 2 }) {
+            ForEach(this.logs, (line: string) => {
+              ListItem() {
+                Text(line)
+                  .fontSize(9)
+                  .fontColor('#a0c8a0')
+                  .maxLines(3)
+                  .width('100%')
+              }
+            }, (line: string, index: number) => `${index}-${line}`)
+          }
+          .width('100%')
+          .height('100%')
+          .padding({ left: 12, right: 12, top: 8 })
+          .backgroundColor(this.themeBg)
+        }
+      }
+      .width('100%')
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.themeBg)
+  }
+}

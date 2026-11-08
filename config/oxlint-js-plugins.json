@@ -51,5 +51,11 @@
       }
     }
   ],
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+  "ignorePatterns": [
+    "**/harmonyos/tools/vendor/**",
+    "**/harmonyos/entry/src/main/ets/vendor/**",
+    "**/node_modules",
+    "**/dist",
+    "**/out"
+  ]
 }

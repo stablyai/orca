@@ -1,0 +1,12 @@
+Orca Mobile for HarmonyOS is an experimental port of stablyai/orca.
+Upstream copyright (c) 2026 Lovecast Inc.; MIT license retained in LICENSE.
+
+Vendored dependencies:
+- TweetNaCl 1.0.3: tools/vendor/tweetnacl/LICENSE
+- fflate 0.8.3: tools/vendor/fflate/LICENSE and UMD-LICENSE
+- @xterm/xterm 6.1.0-beta.336: tools/vendor/xterm/LICENSE
+- @xterm/addon-webgl 0.20.0-beta.329: tools/vendor/xterm-webgl/LICENSE
+
+TweetNaCl's runtime adapter replaces the Node crypto fallback with HarmonyOS
+secure randomness. Diagnostic xterm code is embedded in a packaged HTML file.
+Full notices are also packaged under rawfile/licenses/THIRD_PARTY_NOTICES.txt.

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<style>
+  html,body{margin:0;padding:0;background:#111111;color:#e8e8e8;font:14px -apple-system,system-ui,sans-serif;height:100%;}
+  #wrap{padding:14px;}
+  .row{margin:6px 0;padding:8px;border-radius:8px;background:#1c1c1c;border:1px solid #2c2c2c;}
+  .ok{color:#7ddf7d;} .bad{color:#ff9a9a;} .dim{color:#9a9a9a;font-size:12px;}
+  button{background:#2a2a2a;color:#e8e8e8;border:1px solid #3a3a3a;border-radius:8px;padding:6px 12px;font-size:13px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h3>Shell bridge spike (orcaBridge)</h3>
+  <div class="row">bridge object: <span id="bridge-state" class="dim">checking…</span></div>
+  <div class="row">page→native post result: <span id="post-result" class="dim">—</span></div>
+  <div class="row">native→page runJavaScript: <span id="native-push" class="dim">—</span></div>
+  <div class="row"><button id="ping">send bridge ping</button> <button id="big">send 64KB frame</button></div>
+  <div class="row dim" id="detail"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var state = { hasBridge: false, posts: 0, pushes: 0, lastPost: '', lastPush: '' };
+
+  function render() {
+    document.getElementById('bridge-state').textContent = state.hasBridge ? 'window.orcaBridge present' : 'window.orcaBridge MISSING';
+    document.getElementById('bridge-state').className = state.hasBridge ? 'ok' : 'bad';
+    document.getElementById('post-result').textContent = state.lastPost;
+    document.getElementById('native-push').textContent = state.lastPush;
+    document.getElementById('detail').textContent = 'posts=' + state.posts + ' pushes=' + state.pushes;
+  }
+
+  // Page -> native: production pages call window.orcaBridge.post(json).
+  function postNative(json) {
+    state.posts++;
+    try {
+      var ack = window.orcaBridge.post(json);
+      state.lastPost = 'ack=' + String(ack);
+    } catch (e) {
+      state.lastPost = 'error: ' + (e && e.message || String(e));
+    }
+    render();
+  }
+
+  // Native -> page: the shell pushes JSON frames via runJavaScript("window.__nativePush(<json>)").
+  window.__nativePush = function (json) {
+    state.pushes++;
+    try {
+      var parsed = JSON.parse(json);
+      state.lastPush = parsed.type === 'native.hello'
+        ? ('native.hello v=' + parsed.v + ' ok=' + parsed.ok)
+        : ('type=' + parsed.type);
+    } catch (e) {
+      state.lastPush = 'bad json: ' + (e && e.message || String(e));
+    }
+    render();
+    return 'delivered';
+  };
+
+  // Frame the page sends on startup: mirror of the production bridge client's first frame.
+  function startup() {
+    state.hasBridge = typeof window.orcaBridge !== 'undefined' && typeof window.orcaBridge.post === 'function';
+    render();
+    if (state.hasBridge) {
+      postNative(JSON.stringify({ type: 'page.ready', v: 1, spike: true, ua: navigator.userAgent }));
+    }
+  }
+
+  document.getElementById('ping').addEventListener('click', function () {
+    postNative(JSON.stringify({ type: 'page.ping', seq: state.posts }));
+  });
+  document.getElementById('big').addEventListener('click', function () {
+    var big = '';
+    for (var i = 0; i < 64000; i++) { big += 'x'; }
+    postNative(JSON.stringify({ type: 'page.big', payload: big }));
+  });
+
+  window.__spikeBridgeState = state;
+  setTimeout(startup, 200);
+  setTimeout(startup, 1200);
+})();
+</script>
+</body>
+</html>

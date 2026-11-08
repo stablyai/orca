@@ -1,0 +1,4 @@
+{
+  "extends": ["../.oxlintrc.json"],
+  "ignorePatterns": ["tools/vendor/**", "entry/src/main/ets/vendor/**"]
+}
