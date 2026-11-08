@@ -41,7 +41,7 @@ function edgeConfig(overrides: Partial<EdgeRelayConfig> = {}): EdgeRelayConfig {
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
-  for (const database of databases.splice(0)) await database.close()
+  for (const database of databases.splice(0)) { await database.close() }
 })
 
 async function setup(options: { requireLiveCells: boolean }) {
@@ -292,17 +292,15 @@ describe('old cells and phones of a host moved to the edge', () => {
   async function cellRegistry(seed: boolean) {
     // The director moved the host; the cell reads the same database without the liveness rule.
     const director = await setup({ requireLiveCells: true })
-    if (seed) await director.edge.ensureEdgeCell()
+    if (seed) { await director.edge.ensureEdgeCell() }
     await director.store.assign(IDENTITY)
     await settle(director.database)
-    if (seed) {
-      await director.edge.moveToEdge(IDENTITY, 0)
-    } else {
-      await director.database.query(`UPDATE relay_assignments SET cell_id = ? WHERE user_id = ?`, [
-        EDGE_CELL_ID,
-        IDENTITY.userId
-      ])
-    }
+    await (seed
+      ? director.edge.moveToEdge(IDENTITY, 0)
+      : director.database.query(`UPDATE relay_assignments SET cell_id = ? WHERE user_id = ?`, [
+          EDGE_CELL_ID,
+          IDENTITY.userId
+        ]))
     const cellStore = new RelayAssignmentStore(director.database, director.clock, { requireLiveCells: false })
     const credentials = {
       resolveResume: vi.fn().mockResolvedValue({ userId: IDENTITY.userId }),

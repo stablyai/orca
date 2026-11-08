@@ -26,7 +26,7 @@ const USER = 'user-1'
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
-  for (const database of databases.splice(0)) await database.close()
+  for (const database of databases.splice(0)) { await database.close() }
 })
 
 function config(): RelayConfig {
@@ -87,26 +87,26 @@ class FakeEdge implements EdgeAdmin {
   exports = 0
 
   async assign(body: EdgeAssignBody) {
-    if (this.down) throw new EdgeAdminUnavailableError('network')
+    if (this.down) { throw new EdgeAdminUnavailableError('network') }
     this.pushes.push(body)
     const current = this.assignment
     if (current && body.assignmentEpoch < current.assignmentEpoch) {
       return { outcome: 'stale' as const, assignmentEpoch: current.assignmentEpoch }
     }
     if (current && body.assignmentEpoch === current.assignmentEpoch) {
-      if (current.cellId !== body.cellId) return { outcome: 'conflict' as const, assignmentEpoch: current.assignmentEpoch }
-      if (body.devices) this.devices = body.devices
+      if (current.cellId !== body.cellId) { return { outcome: 'conflict' as const, assignmentEpoch: current.assignmentEpoch } }
+      if (body.devices) { this.devices = body.devices }
       return { outcome: 'unchanged' as const, assignmentEpoch: current.assignmentEpoch }
     }
     this.assignment = { userId: body.userId, cellId: body.cellId, assignmentEpoch: body.assignmentEpoch }
-    if (body.cellId === EDGE_CELL_ID && body.devices) this.devices = body.devices
+    if (body.cellId === EDGE_CELL_ID && body.devices) { this.devices = body.devices }
     return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
   }
 
   async exportHost() {
-    if (this.down) throw new EdgeAdminUnavailableError('network')
+    if (this.down) { throw new EdgeAdminUnavailableError('network') }
     this.exports += 1
-    if (this.connected) return { outcome: 'busy' as const }
+    if (this.connected) { return { outcome: 'busy' as const } }
     return { outcome: 'exported' as const, assignment: this.assignment, devices: this.devices }
   }
 }

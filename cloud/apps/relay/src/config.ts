@@ -438,7 +438,9 @@ function hostIdList(value: string, name: string): Set<string> {
     .map((id) => id.trim())
     .filter((id) => id.length > 0)
   for (const id of ids) {
-    if (!RELAY_HOST_ID_PATTERN.test(id)) throw new Error(`${name} has an invalid relay host id`)
+    if (!RELAY_HOST_ID_PATTERN.test(id)) {
+      throw new Error(`${name} has an invalid relay host id`)
+    }
   }
   return new Set(ids)
 }
@@ -460,9 +462,13 @@ function parseEdgeConfig(
   parsed: z.infer<typeof EnvSchema>,
   publicUrl: string
 ): EdgeRelayConfig | undefined {
-  if (parsed.ORCA_RELAY_ROLE !== 'director' || !parsed.ORCA_RELAY_EDGE_CELL_URL) return undefined
+  if (parsed.ORCA_RELAY_ROLE !== 'director' || !parsed.ORCA_RELAY_EDGE_CELL_URL) {
+    return undefined
+  }
   const cellUrl = canonicalOrigin(parsed.ORCA_RELAY_EDGE_CELL_URL, 'ORCA_RELAY_EDGE_CELL_URL')
-  if (cellUrl === publicUrl) throw new Error('ORCA_RELAY_EDGE_CELL_URL must differ from the director')
+  if (cellUrl === publicUrl) {
+    throw new Error('ORCA_RELAY_EDGE_CELL_URL must differ from the director')
+  }
   const regions = parsed.ORCA_RELAY_EDGE_REGIONS.split(',')
     .map((region) => region.trim())
     .filter((region) => region.length > 0)

@@ -50,7 +50,7 @@ export type EdgeExportResult =
       devices: EdgeDeviceRow[]
     }
 
-export interface EdgeAdmin {
+export type EdgeAdmin = {
   assign(body: EdgeAssignBody): Promise<EdgeAssignResult>
   exportHost(relayHostId: string): Promise<EdgeExportResult>
 }
@@ -125,7 +125,7 @@ export function createEdgeAdmin(options: {
     async exportHost(relayHostId) {
       const { json } = await call('export', { relayHostId })
       const result = json as Partial<{ outcome: string; devices: unknown; assignment: unknown }>
-      if (result.outcome === 'busy') return { outcome: 'busy' }
+      if (result.outcome === 'busy') { return { outcome: 'busy' } }
       if (result.outcome !== 'exported' || !Array.isArray(result.devices)) {
         throw new EdgeAdminUnavailableError('export_answer')
       }

@@ -20,7 +20,7 @@ const OTHER_HOST = 'gcehostnotinedge'
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
-  for (const database of databases.splice(0)) await database.close()
+  for (const database of databases.splice(0)) { await database.close() }
 })
 
 function config(): RelayConfig {
@@ -64,7 +64,7 @@ async function harness(options: { seeded?: boolean } = {}) {
     regions: new Set(['us-central1'])
   }
   const edge = new EdgeAssignments(database, edgeConfig)
-  if (options.seeded !== false) await edge.ensureEdgeCell()
+  if (options.seeded !== false) { await edge.ensureEdgeCell() }
   const gce = {
     userId: 'user-1',
     cellId: 'us-c1',

@@ -490,7 +490,9 @@ export function createRelayApp(
       try {
         leftEdge = await edge.leaveEdge(identity)
       } catch (error) {
-        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
+        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+          throw error
+        }
         logAssignmentRejection({
           route: 'assign',
           lane: 'none',
@@ -520,7 +522,9 @@ export function createRelayApp(
           console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
           moved = null
         } else {
-          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
+          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+            throw error
+          }
           logAssignmentRejection({
             route: 'assign',
             lane: 'none',

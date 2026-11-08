@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the edge cohort's move-on (push), move-off (export, Postgres write-back, fence) and epoch rules share one row-locked transaction and must stay readable together. */
 import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
@@ -43,10 +44,10 @@ export function inEdgeCohort(
   region: RelayRegion | undefined,
   userId?: string
 ): boolean {
-  if (config.denyHosts.has(relayHostId)) return false
-  if (config.allowHosts.has(relayHostId)) return true
-  if (userId !== undefined && config.allowUsers?.has(userId)) return true
-  if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) return false
+  if (config.denyHosts.has(relayHostId)) { return false }
+  if (config.allowHosts.has(relayHostId)) { return true }
+  if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
+  if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) { return false }
   return edgeCohortBucket(relayHostId) < config.rolloutPercent
 }
 
@@ -71,15 +72,15 @@ export class EdgeMoveDeferredError extends Error {
 type Identity = { userId: string; relayHostId: string }
 
 type EpochSource = {
-  seatsOf(userId: string, relayHostId: string): Array<{ epoch: number }>
-  recentlyLeftOf(userId: string, relayHostId: string, now: number): Array<{ epoch: number }>
+  seatsOf(userId: string, relayHostId: string): { epoch: number }[]
+  recentlyLeftOf(userId: string, relayHostId: string, now: number): { epoch: number }[]
   bookingOf(userId: string, relayHostId: string): { epoch: number } | undefined
 }
 
 // Highest epoch the director's seat map knows for the host, so an edge epoch is minted above every
 // epoch a reserve cell or a phone may already hold.
 export function mapEpochFloor(source: EpochSource | undefined, identity: Identity, now: number): number {
-  if (!source) return 0
+  if (!source) { return 0 }
   const known = [
     ...source.seatsOf(identity.userId, identity.relayHostId).map((seat) => seat.epoch),
     ...source.recentlyLeftOf(identity.userId, identity.relayHostId, now).map((entry) => entry.epoch),
@@ -185,7 +186,7 @@ export class EdgeAssignments {
   // anything. The director's liveness rule would otherwise read the edge row as "no answer" and
   // re-place the host on a cell it is not connected to.
   async edgeAssignment(identity: Identity): Promise<RelayAssignment | null> {
-    if (!this.seeded) return null
+    if (!this.seeded) { return null }
     const row = (
       await this.database.query(
         `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
@@ -193,7 +194,7 @@ export class EdgeAssignments {
         [identity.userId, identity.relayHostId]
       )
     )[0]
-    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return null
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return null }
     return this.answer(identity, integer(row, 'assignment_epoch'), integer(row, 'lease_expires_at'))
   }
 
@@ -211,7 +212,7 @@ export class EdgeAssignments {
           { failIfUnavailable: true }
         )
       } catch (error) {
-        if (error instanceof Error && error.message === 'database_lock_unavailable') throw new EdgeMoveBusyError()
+        if (error instanceof Error && error.message === 'database_lock_unavailable') { throw new EdgeMoveBusyError() }
         throw error
       }
       const row = rows[0]
@@ -240,7 +241,7 @@ export class EdgeAssignments {
             [identity.userId, identity.relayHostId]
           )
         )[0]
-        if (!winner || text(winner, 'cell_id') !== EDGE_CELL_ID) throw new EdgeMoveBusyError()
+        if (!winner || text(winner, 'cell_id') !== EDGE_CELL_ID) { throw new EdgeMoveBusyError() }
         return this.answer(identity, integer(winner, 'assignment_epoch'), integer(winner, 'lease_expires_at'))
       }
       if (text(row, 'cell_id') === EDGE_CELL_ID) {
@@ -251,7 +252,7 @@ export class EdgeAssignments {
         )
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
-      if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
+      if (requestUnits(row) > 0) { throw new EdgeMoveDeferredError('units_held') }
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
       await transaction.query(
         `UPDATE relay_assignments
@@ -281,7 +282,7 @@ export class EdgeAssignments {
     epoch: number,
     region: RelayRegion | undefined
   ): Promise<number> {
-    if (!this.admin) return epoch
+    if (!this.admin) { return epoch }
     const devices = (
       await transaction.query(
         `SELECT ${DEVICE_COLUMNS.join(', ')} FROM relay_devices
@@ -301,10 +302,10 @@ export class EdgeAssignments {
           locationHint: edgeLocationHint(region)
         })
       } catch (error) {
-        if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveDeferredError('push_failed')
+        if (error instanceof EdgeAdminUnavailableError) { throw new EdgeMoveDeferredError('push_failed') }
         throw error
       }
-      if (result.outcome === 'applied' || result.outcome === 'unchanged') return assignmentEpoch
+      if (result.outcome === 'applied' || result.outcome === 'unchanged') { return assignmentEpoch }
       assignmentEpoch = Math.max(assignmentEpoch, result.assignmentEpoch) + 1
       await transaction.query(
         `UPDATE relay_assignments SET assignment_epoch = ? WHERE user_id = ? AND relay_host_id = ?`,
@@ -318,24 +319,24 @@ export class EdgeAssignments {
   // devices back. The edge refuses while the desktop is connected and otherwise freezes the host
   // (30 s), so nothing changes after the snapshot. Returns false when the host is not on the edge.
   async leaveEdge(identity: Identity): Promise<boolean> {
-    if (!this.seeded || !this.admin) return false
+    if (!this.seeded || !this.admin) { return false }
     const row = (
       await this.database.query(
         `SELECT cell_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
         [identity.userId, identity.relayHostId]
       )
     )[0]
-    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return false
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return false }
     let exported
     try {
       exported = await this.admin.exportHost(identity.relayHostId)
     } catch (error) {
-      if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveBusyError()
+      if (error instanceof EdgeAdminUnavailableError) { throw new EdgeMoveBusyError() }
       throw error
     }
-    if (exported.outcome === 'busy') throw new EdgeMoveBusyError()
+    if (exported.outcome === 'busy') { throw new EdgeMoveBusyError() }
     // An object with no assignment never held this host's data (or was erased): keep Postgres.
-    if (!exported.assignment) return true
+    if (!exported.assignment) { return true }
     const devices = exported.devices.map((device) => {
       const parsed = ExportedDeviceSchema.parse(device)
       if (parsed.user_id !== identity.userId || parsed.relay_host_id !== identity.relayHostId) {
@@ -365,13 +366,13 @@ export class EdgeAssignments {
   // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
   // that its phones see HOST_OFFLINE until the next move.
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
-    if (!this.admin) return true
+    if (!this.admin) { return true }
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
-        if (result.outcome !== 'conflict') return true
+        if (result.outcome !== 'conflict') { return true }
       } catch (error) {
-        if (!(error instanceof EdgeAdminUnavailableError)) throw error
+        if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
       }
     }
     console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', cellId, assignmentEpoch }))
@@ -416,12 +417,12 @@ function deviceRow(row: SqlRow): EdgeDeviceRow {
 
 function integer(row: SqlRow, field: string): number {
   const value = Number(row[field])
-  if (!Number.isSafeInteger(value)) throw new Error(`invalid_${field}`)
+  if (!Number.isSafeInteger(value)) { throw new Error(`invalid_${field}`) }
   return value
 }
 
 function text(row: SqlRow, field: string): string {
   const value = row[field]
-  if (typeof value !== 'string') throw new Error(`invalid_${field}`)
+  if (typeof value !== 'string') { throw new Error(`invalid_${field}`) }
   return value
 }

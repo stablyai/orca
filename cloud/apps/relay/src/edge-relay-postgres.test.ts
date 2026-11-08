@@ -94,11 +94,11 @@ describePostgres('relay edge on PostgreSQL', () => {
       new EdgeAssignments(second, edgeConfig).moveToEdge(hosts[1]!, 3)
     ])
     for (const result of results) {
-      if (result.status === 'rejected') expect(result.reason).toBeInstanceOf(EdgeMoveBusyError)
+      if (result.status === 'rejected') { expect(result.reason).toBeInstanceOf(EdgeMoveBusyError) }
     }
     const fulfilled = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
     expect(fulfilled.length).toBeGreaterThan(0)
-    for (const value of fulfilled) expect(value.assignmentEpoch).toBe(4)
+    for (const value of fulfilled) { expect(value.assignmentEpoch).toBe(4) }
 
     const cellView = new RelayAssignmentStore(database, Date.now, { requireLiveCells: false })
     expect((await cellView.resolve(hosts[0]!))?.cellId).toBe(EDGE_CELL_ID)
@@ -137,7 +137,7 @@ describePostgres('relay edge on PostgreSQL', () => {
     const admin = {
       assign: async (body: EdgeAssignBody) => {
         pushed.push(body)
-        if (body.devices) held = body.devices
+        if (body.devices) { held = body.devices }
         return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
       },
       exportHost: async () => ({
