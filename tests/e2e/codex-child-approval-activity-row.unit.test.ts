@@ -158,7 +158,7 @@ async function openHost() {
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const publish = (): void => feed.publish(SESSION, journal)
+  const publish = () => feed.publish(SESSION, journal)
   deferred.bind({ journal, fence: 1, publish })
   const prompts: string[] = []
   const translator = createCodexJournalTranslator({
@@ -204,7 +204,7 @@ async function openHost() {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    publish()
+    await publish()
     translator.resolvePrompt(itemId)
   }
   return { journal, translator, on, drain, answer, prompts, events, tick, close: deferred.close }
