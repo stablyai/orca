@@ -1,18 +1,23 @@
-import { setImmediate } from 'node:timers/promises'
+import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
+import type { JournalSqlMaintenance } from './journal-sql-maintenance'
 
-/** Conversion and sweeps wait for idle; finite replay pruning shares this lane without starvation. */
+const MINUTE = 60_000
+const COMPACTION_INTERVAL = 6 * 60 * MINUTE
+
+/** Conversion and retired epochs wait for idle; periodic pruning shares this owner without starvation. */
 export class JournalSqlBackgroundMaintenance {
   private readonly stopped = new AbortController()
   private running: Promise<void> | undefined
   private discover = false
   private sweep = false
-  private due = false
-  private dueWake = new AbortController()
-  private deadline: { at: number; timer: NodeJS.Timeout } | undefined
+  private periodic = false
+  private reclaim = 0
+  private wake = new AbortController()
+  private timer: NodeJS.Timeout | undefined
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
@@ -24,7 +29,7 @@ export class JournalSqlBackgroundMaintenance {
 
   start(): Promise<void> {
     this.discover = true
-    this.due = true
+    this.armPeriodic()
     return this.requestSweep()
   }
 
@@ -33,23 +38,20 @@ export class JournalSqlBackgroundMaintenance {
     return this.requestRun()
   }
 
-  requestDueWork(at: number): void {
-    if (this.stopped.signal.aborted || (this.deadline && this.deadline.at <= at)) {
+  private armPeriodic(): void {
+    if (this.stopped.signal.aborted || this.timer) {
       return
     }
-    clearTimeout(this.deadline?.timer)
-    const timer = setTimeout(
-      () => {
-        this.deadline = undefined
-        this.due = true
-        this.dueWake.abort()
-        this.dueWake = new AbortController()
-        void this.requestRun()
-      },
-      Math.max(0, Math.min(at - Date.now(), 2_147_483_647))
-    )
-    timer.unref()
-    this.deadline = { at, timer }
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      this.periodic = true
+      this.reclaim = 1024
+      this.wake.abort()
+      this.wake = new AbortController()
+      this.armPeriodic()
+      void this.requestRun()
+    }, MINUTE)
+    this.timer.unref()
   }
 
   private requestRun(): Promise<void> {
@@ -57,7 +59,7 @@ export class JournalSqlBackgroundMaintenance {
       this.running = undefined
     })
     return this.running.then(() =>
-      !this.stopped.signal.aborted && (this.discover || this.sweep || this.due)
+      !this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)
         ? this.requestRun()
         : undefined
     )
@@ -65,8 +67,8 @@ export class JournalSqlBackgroundMaintenance {
 
   stop(): void {
     this.stopped.abort()
-    clearTimeout(this.deadline?.timer)
-    this.deadline = undefined
+    clearTimeout(this.timer)
+    this.timer = undefined
   }
 
   settled(): Promise<void> {
@@ -75,15 +77,13 @@ export class JournalSqlBackgroundMaintenance {
 
   private async boundary(): Promise<boolean> {
     while (!this.stopped.signal.aborted) {
-      if (this.due) {
-        await this.runDueWork()
-      }
-      if (this.due) {
+      await this.runOrdinaryWork()
+      if (this.periodic) {
         continue
       }
-      await this.activity.waitForIdle(AbortSignal.any([this.stopped.signal, this.dueWake.signal]))
+      await this.activity.waitForIdle(AbortSignal.any([this.stopped.signal, this.wake.signal]))
       await setImmediate()
-      if (!this.due) {
+      if (!this.periodic) {
         return !this.stopped.signal.aborted
       }
     }
@@ -91,7 +91,8 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   private async run(): Promise<void> {
-    while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.due)) {
+    while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
+      await this.runOrdinaryWork()
       if (this.discover) {
         this.discover = false
         try {
@@ -103,47 +104,82 @@ export class JournalSqlBackgroundMaintenance {
       if (this.sweep) {
         this.sweep = false
         try {
-          while (await this.boundary()) {
-            if (!(await this.writer.maintain({ kind: 'projection-sweep' }))) {
-              break
-            }
-          }
+          await this.pages({ kind: 'domain-retired-prune' }, Infinity, true)
         } catch (error) {
           this.report(error)
         }
       }
-      if (this.due) {
-        await this.runDueWork()
+    }
+  }
+
+  private async runOrdinaryWork(): Promise<void> {
+    if (this.periodic && !this.stopped.signal.aborted) {
+      this.periodic = false
+      try {
+        const state = await this.writer.maintain({ kind: 'compaction-state' })
+        if (
+          !state ||
+          typeof state !== 'object' ||
+          !('kind' in state) ||
+          state.kind !== 'compaction-state'
+        ) {
+          throw new Error('journal writer returned no compaction state')
+        }
+        const now = Date.now()
+        if (state.completedAt === null || now - state.completedAt >= COMPACTION_INTERVAL) {
+          await this.pages({ kind: 'event-tail-prune', now })
+          if (!this.stopped.signal.aborted) {
+            await this.writer.maintain({ kind: 'compaction-complete', now: Date.now() })
+            this.sweep = true
+          }
+        }
+        await this.pages({ kind: 'page-reclaim' }, this.reclaim)
+      } catch (error) {
+        this.report(error)
       }
     }
   }
 
-  private async runDueWork(): Promise<void> {
-    this.due = false
-    try {
-      await this.pruneEventTail()
-    } catch (error) {
-      this.report(error)
-      this.requestDueWork(Date.now() + 60_000)
-    }
-  }
-
-  private async pruneEventTail(): Promise<void> {
-    while (!this.stopped.signal.aborted) {
+  private async pages(
+    operation: Extract<
+      JournalSqlMaintenance,
+      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
+    >,
+    limit = Infinity,
+    idle = false
+  ): Promise<void> {
+    let work = 0
+    for (let unit = 0; unit < limit && !this.stopped.signal.aborted; unit++) {
+      if (operation.kind !== 'page-reclaim' && this.reclaim > 0) {
+        await this.pages({ kind: 'page-reclaim' }, 1)
+      }
+      if (idle && !(await this.boundary())) {
+        return
+      }
       await setImmediate()
       if (this.stopped.signal.aborted) {
         return
       }
-      const now = Date.now()
-      const result = await this.writer.maintain({ kind: 'event-tail-prune', now })
-      if (!result || typeof result !== 'object' || !('kind' in result)) {
-        throw new Error('journal writer returned no event-tail result')
+      const started = performance.now()
+      const result = await this.writer.maintain(operation)
+      work += performance.now() - started
+      if (!result || typeof result !== 'object' || !('more' in result)) {
+        throw new Error('journal writer returned no maintenance page')
       }
-      if (result.nextDueAt === null) {
-        return
+      if (operation.kind === 'page-reclaim') {
+        this.reclaim = result.more ? Math.max(0, this.reclaim - 1) : 0
       }
-      if (result.nextDueAt > now) {
-        this.requestDueWork(result.nextDueAt)
+      if (work >= 25) {
+        try {
+          await delay(work * 9, undefined, { signal: this.stopped.signal, ref: false })
+        } catch (error) {
+          if (!this.stopped.signal.aborted) {
+            throw error
+          }
+        }
+        work = 0
+      }
+      if (!result.more) {
         return
       }
     }

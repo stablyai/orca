@@ -39,7 +39,7 @@ export function appendJournalSqlEvent(
 export type JournalSqlEventTailResult = {
   kind: 'event-tail'
   deleted: number
-  nextDueAt: number | null
+  more: boolean
 }
 
 /** Runs inside the writer transaction; replay metadata owns no bodies or receipt obligations. */
@@ -61,14 +61,9 @@ export function pruneJournalSqlEventTail(
     compact.run(row.sequence, row.session_id, row.epoch)
     remove.run(row.session_id, row.epoch, row.sequence)
   }
-  const oldest = db
-    .prepare(
-      'SELECT saved_at FROM journal_events ORDER BY saved_at,session_id,epoch,sequence LIMIT 1'
-    )
-    .get()
   return {
     kind: 'event-tail',
     deleted: expired.length,
-    nextDueAt: oldest ? Number(oldest.saved_at) + JOURNAL_EVENT_HISTORY_MS : null
+    more: expired.length === 50
   }
 }
