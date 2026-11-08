@@ -8,6 +8,7 @@ import type { JournalSqlFailure } from '../journal-sql-failure'
 import type { JournalLifecycleIdentityMutationInput } from './journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from './journal-timeline-resolution'
 import type { ProviderTimelineSettlementResolution } from '../../agent-session-timeline/provider-timeline-writer-resolution'
+import type { JournalTextSnapshotPosition } from './journal-text-snapshot-position'
 
 export type JournalHistoryResolution = {
   kind: 'history-catch-up'
@@ -47,7 +48,12 @@ export type JournalWriterStep =
     }
 
 export type JournalStepOutcome =
-  | { kind: 'committed'; wrote: boolean; stopped?: true }
+  | {
+      kind: 'committed'
+      wrote: boolean
+      stopped?: true
+      position?: JournalTextSnapshotPosition
+    }
   | {
       kind: 'dropped'
       reason?: 'turn-settled' | 'item-settled'

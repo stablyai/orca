@@ -5,8 +5,10 @@ import type { JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalReducerState } from './projection/journal-reducer'
+import type { JournalSqlMessagesCommit } from './journal-sql-message-commit'
 
 export type JournalWriterCommit = {
+  messageCommit?: JournalSqlMessagesCommit
   cursor: AgentJournalCursor
   inputChanged: boolean
   keys: { collection: string; key: unknown; deleted: boolean }[]

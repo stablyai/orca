@@ -6,6 +6,9 @@ import {
   type JournalDomainItemCommit
 } from './journal-domain-item'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalStepOutcome } from './writing/journal-writer-step'
+import { journalTextSnapshotPosition } from './writing/journal-text-snapshot-position'
+import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 
 export type JournalSqlMessage = JournalDomainItemWrite & { body: AgentJournalMessageItem }
 
@@ -21,8 +24,8 @@ export type JournalSqlMessageJob = {
 }
 
 export type JournalSqlMessagesCommit = Omit<JournalDomainItemCommit, 'outcome'> & {
-  outcomes: JournalDomainItemCommit['outcome'][]
-  failure?: { message: string }
+  outcomes: JournalStepOutcome[]
+  failure?: JournalSqlFailure
 }
 
 /** Sender work; the writer drains the already classified and sized command. */
@@ -74,7 +77,12 @@ function applyMessageSteps(
       const commit = applyJournalDomainItem(db, target, step, savedAt)
       db.exec('RELEASE journal_message_step')
       result.cursor = commit.cursor
-      result.outcomes.push(commit.outcome)
+      const item = commit.items[0]
+      result.outcomes.push(
+        commit.outcome.kind === 'committed' && item
+          ? { ...commit.outcome, position: journalTextSnapshotPosition(item) }
+          : commit.outcome
+      )
       result.items.push(...commit.items)
       result.receipts.push(...commit.receipts)
       result.cards.push(...commit.cards)
@@ -85,7 +93,7 @@ function applyMessageSteps(
       }
     } catch (error) {
       db.exec('ROLLBACK TO journal_message_step; RELEASE journal_message_step')
-      result.failure = { message: error instanceof Error ? error.message : String(error) }
+      result.failure = journalSqlFailure(error)
       break
     }
   }

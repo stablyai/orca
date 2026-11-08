@@ -249,3 +249,66 @@ it('stores one growing text body and a metadata-only replay tail', async () => {
     db.prepare("SELECT 1 FROM journal_events WHERE changes_json LIKE '%xxxxxxxx%' LIMIT 1").get()
   ).toBeUndefined()
 })
+
+it('retains a stream placement while honoring a newer moved row and a settled turn', async () => {
+  const { db, commit, item } = fixture()
+  await commit({
+    ...message('', 'turn', 'item'),
+    body: { kind: 'message', role: 'assistant', blocks: [] }
+  })
+  const started = await commit(message('first'))
+  const first = started.outcomes[0]
+  if (!first?.committed) {
+    throw new Error('stream start did not commit')
+  }
+  const position = first.value.outcomes[0]
+  if (position?.kind !== 'committed' || !position.position) {
+    throw new Error('stream start returned no placement')
+  }
+  const second = {
+    ...message('second'),
+    kind: 'text-snapshot' as const,
+    position: position.position
+  }
+  await commit(second)
+  expect(item('orca:assistant')).toMatchObject({
+    revision: 2,
+    sequence: 12,
+    observedAt: 100,
+    body: { blocks: [{ type: 'text', text: 'second' }] }
+  })
+  const moved = {
+    ...item('orca:assistant')!,
+    revision: 3,
+    sequence: 8,
+    sequenceIndex: 2,
+    observedAt: 50,
+    turnScope: { kind: 'turn' as const, turnItemId: 'orca:turn' }
+  }
+  db.prepare(`UPDATE journal_items SET revision=3,sequence=8,sequence_index=2,payload_json=?
+    WHERE item_id='orca:assistant'`).run(JSON.stringify(moved))
+  await commit(second)
+  expect(item('orca:assistant')).toMatchObject({
+    revision: 4,
+    sequence: 8,
+    sequenceIndex: 2,
+    observedAt: 50,
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
+  db.prepare(`UPDATE journal_items SET payload_json=? WHERE item_id='orca:turn'`).run(
+    JSON.stringify({
+      itemId: 'orca:turn',
+      revision: 2,
+      sequence: 11,
+      observedAt: 100,
+      body: { kind: 'turn', turnId: 'turn', state: 'completed' },
+      turnScope: { kind: 'thread' }
+    })
+  )
+  const late = await commit(second)
+  expect(late.outcomes[0]).toMatchObject({
+    committed: true,
+    value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }] }
+  })
+  expect(item('orca:assistant')?.revision).toBe(4)
+})

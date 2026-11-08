@@ -7,6 +7,11 @@ import type { JournalStopAcceptance } from './context-epochs/journal-stop-accept
 import type { JournalStopEvent } from './durable-rows/journal-row-schema'
 import type {
   JournalAppendResult,
+  JournalLateDispatchInput,
+  JournalShutdownCutInput,
+  JournalCommandSettlementInput,
+  JournalCommandOpenInput,
+  JournalHandoverInput,
   JournalItemAppendInput,
   JournalItemAppendOptions,
   JournalLifecycleBatchInput,
@@ -30,6 +35,11 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
+import type { JournalSqlMessage } from './journal-sql-message-commit'
+import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import type { JournalWriterSettled } from './journal-writer-operations'
+import type { JournalCommandOpenResult } from './writing/journal-command-open'
+import { restoreJournalSqlFailure } from './journal-sql-failure'
 
 /**
  * The in-memory journal's append surface, each method one writer command with the same answer.
@@ -37,6 +47,11 @@ import type { JournalWriterStep, JournalStepsResult } from './writing/journal-wr
  */
 export abstract class SqlJournalAppends {
   abstract readonly reads: JournalSqlReads
+
+  protected abstract messages(
+    steps: readonly JournalSqlMessage[],
+    beforeRun?: () => boolean
+  ): Promise<JournalStepsResult>
 
   abstract write(
     operation: JournalSqlStoreOperation,
@@ -84,6 +99,10 @@ export abstract class SqlJournalAppends {
     steps: readonly JournalWriterStep[],
     beforeRun?: () => boolean
   ): Promise<JournalStepsResult> {
+    const messages = textMessages(steps)
+    if (messages) {
+      return this.messages(messages, beforeRun)
+    }
     const operation: Extract<JournalSqlStoreOperation, { kind: 'steps' }> = { kind: 'steps', steps }
     return this.answerOf(
       this.write(operation, () => {
@@ -162,6 +181,40 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'stop-accept', ...input }, receipted(receipt)))
   }
 
+  /** Queue ownership is selected in the writer, after every earlier admitted command. */
+  async settleLateDispatch(input: JournalLateDispatchInput): Promise<void> {
+    await this.write({ kind: 'late-dispatch', input })
+  }
+
+  async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
+    await this.write({ kind: 'shutdown-cut', input })
+  }
+
+  async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
+    const { value } = await this.write({ kind: 'handover', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns only its stopped-history delivery result.
+    return value as StoppedHistoryDelivery | null
+  }
+
+  async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
+    const { value } = await this.write({ kind: 'command-open', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-open returns its typed settled result from the writer dispatcher.
+    const result = value as JournalWriterSettled<JournalCommandOpenResult>
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
+    return result.value
+  }
+
+  async settleCommand(input: JournalCommandSettlementInput): Promise<void> {
+    const { value } = await this.write({ kind: 'command-settle', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-settle returns its typed settled result from the writer dispatcher.
+    const result = value as JournalWriterSettled
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
+  }
+
   turnWasRemoved(turnId: string): Promise<boolean> {
     return this.reads.turnWasRemoved(turnId)
   }
@@ -179,6 +232,29 @@ export abstract class SqlJournalAppends {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the writer runs the named command's own procedure and returns its value unchanged.
     return (await commit).value as T
   }
+}
+
+/** Classify at the sender; lifecycle and identity resolution keep their named command path. */
+function textMessages(steps: readonly JournalWriterStep[]): JournalSqlMessage[] | null {
+  if (steps.length === 0) {
+    return null
+  }
+  const messages: JournalSqlMessage[] = []
+  for (const step of steps) {
+    if (step.kind !== 'resolved-item' || step.resolution.kind !== 'text-snapshot') {
+      return null
+    }
+    const { identity, body, scopeItemIds, position } = step.resolution
+    messages.push({
+      kind: 'text-snapshot',
+      identity,
+      body,
+      options: step.options,
+      scopeItemIds,
+      position
+    })
+  }
+  return messages
 }
 
 function receipted(

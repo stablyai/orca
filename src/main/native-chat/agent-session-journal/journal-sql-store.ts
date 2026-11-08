@@ -19,23 +19,14 @@ import type {
   JournalStagedReceipt
 } from './writing/journal-row-writer'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
-import type {
-  JournalLateDispatchInput,
-  JournalShutdownCutInput,
-  JournalCommandSettlementInput,
-  JournalCommandOpenInput,
-  JournalHandoverInput
-} from './journal-store-contracts'
-import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
-import type { JournalWriterSettled } from './journal-writer-operations'
-import type { JournalCommandOpenResult } from './writing/journal-command-open'
-import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { SqlJournalQueuedMessages, type JournalSqlQueueWrite } from './journal-sql-queued-messages'
 import { SqlJournalReopenMarks } from './journal-sql-reopen-marks'
 import { SqlJournalStopMarks } from './journal-sql-stop-marks'
 import { SqlJournalAppends } from './journal-sql-appends'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
+import type { JournalSqlMessage } from './journal-sql-message-commit'
+import type { JournalStepsResult } from './writing/journal-writer-step'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -211,38 +202,36 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     return this.epochReplacements.notifyFor(operation.kind, written)
   }
 
-  /** Queue ownership is selected in the writer, after every earlier admitted command. */
-  async settleLateDispatch(input: JournalLateDispatchInput): Promise<void> {
-    await this.write({ kind: 'late-dispatch', input })
-  }
-
-  async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
-    await this.write({ kind: 'shutdown-cut', input })
-  }
-
-  async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
-    const { value } = await this.write({ kind: 'handover', input })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns only its stopped-history delivery result.
-    return value as StoppedHistoryDelivery | null
-  }
-
-  async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
-    const { value } = await this.write({ kind: 'command-open', input })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-open returns its typed settled result from the writer dispatcher.
-    const result = value as JournalWriterSettled<JournalCommandOpenResult>
-    if ('failure' in result) {
-      throw restoreJournalSqlFailure(result.failure)
-    }
-    return result.value
-  }
-
-  async settleCommand(input: JournalCommandSettlementInput): Promise<void> {
-    const { value } = await this.write({ kind: 'command-settle', input })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-settle returns its typed settled result from the writer dispatcher.
-    const result = value as JournalWriterSettled
-    if ('failure' in result) {
-      throw restoreJournalSqlFailure(result.failure)
-    }
+  protected messages(
+    steps: readonly JournalSqlMessage[],
+    beforeRun?: () => boolean
+  ): Promise<JournalStepsResult> {
+    return this.admit(async (writer) => {
+      if (beforeRun?.() === false) {
+        return { outcomes: steps.map(() => ({ kind: 'dropped' as const })) }
+      }
+      const commit = await writer.messages({ target: this.target, steps, savedAt: this.now() })
+      this.acknowledged = { ...commit.cursor }
+      this.listener?.({
+        cursor: commit.cursor,
+        inputChanged: commit.inputChanged,
+        keys: [],
+        items: commit.items.map((item) => ({
+          itemId: item.itemId,
+          deleted: false,
+          revision: item.revision,
+          sequence: item.sequence,
+          sequenceIndex: item.sequenceIndex ?? 0
+        })),
+        inputKeys: [],
+        effects: [],
+        messageCommit: commit
+      })
+      return {
+        outcomes: commit.outcomes,
+        ...(commit.failure ? { failure: commit.failure } : {})
+      }
+    })
   }
 
   /** Mark preexisting cards; failed writes retain a conservative reopenFloor and throw. */
@@ -289,7 +278,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   private admit<T>(
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects'>) => T | Promise<T>
+    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'messages'>) => T | Promise<T>
   ): Promise<T> {
     if (this.closed) {
       return Promise.reject(

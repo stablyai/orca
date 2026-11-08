@@ -1,8 +1,11 @@
 import type Database from '../../sqlite/sync-database'
 import type {
+  AgentJournalMessageItem,
   AgentJournalSubmission,
   AgentJournalAcceptanceReceipt
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDispatchRowApplies } from './projection/journal-dispatch-settlement'
@@ -11,6 +14,36 @@ import {
   journalDomainEditLeaseDeadline,
   retireJournalDomainEditHolds
 } from './journal-domain-edit-leases'
+
+export function matchJournalSqlMessageEcho(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  body: AgentJournalMessageItem,
+  contextBoundary: number
+): AgentJournalSubmission | undefined {
+  const candidates = db
+    .prepare(`SELECT attempt.payload_json FROM journal_submission_attempts AS attempt
+      JOIN journal_items AS item ON item.session_id=attempt.session_id AND item.epoch=attempt.epoch AND item.item_id=attempt.item_id
+      WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.current=1 AND attempt.fingerprint=?
+        AND attempt.dispatch_state<>'rejected'
+        AND (?=0 OR COALESCE(attempt.accepted_sequence,0)>?)
+        AND NOT EXISTS(SELECT 1 FROM journal_item_aliases AS alias WHERE alias.session_id=attempt.session_id
+          AND alias.epoch=attempt.epoch AND alias.item_id=attempt.item_id AND alias.provider_item_id<>alias.item_id)
+      ORDER BY attempt.submitted_at, attempt.ordinal`)
+    .iterate(
+      ...prefix,
+      agentSessionSendBodyFingerprint(prefix[0], body),
+      contextBoundary,
+      contextBoundary
+    )
+  for (const candidate of candidates) {
+    const submission: AgentJournalSubmission = JSON.parse(String(candidate.payload_json))
+    if (!isWriteFailureSubmission(submission)) {
+      return submission
+    }
+  }
+  return undefined
+}
 
 export function acceptJournalSqlMessageEcho(
   db: Database.Database,

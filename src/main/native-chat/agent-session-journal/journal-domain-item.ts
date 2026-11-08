@@ -15,14 +15,13 @@ import type {
   AgentJournalAcceptanceReceipt
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { JournalItemAppendOptions } from './journal-store-contracts'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { isProviderUserMessageEcho } from './projection/journal-item-echo'
 import { isJournalProviderActivity } from './projection/journal-provider-activity'
 import {
   acceptJournalSqlMessageEcho,
+  matchJournalSqlMessageEcho,
   spendJournalSqlCommandCards
 } from './journal-sql-message-effects'
 import { journalRenderItem } from './projection/journal-render-item'
@@ -40,6 +39,7 @@ import {
   readJournalSqlAcceptedInputs,
   type JournalSqlAcceptedInputs
 } from './journal-sql-accepted-inputs'
+import type { JournalTextSnapshotPosition } from './writing/journal-text-snapshot-position'
 
 type JournalDomainItemFields = {
   identity: AgentJournalItemIdentity
@@ -50,7 +50,11 @@ type JournalDomainItemFields = {
 export type JournalDomainItemWrite = JournalDomainItemFields &
   (
     | { kind: 'item'; body: AgentJournalItemBody }
-    | { kind: 'text-snapshot'; body: AgentJournalMessageItem }
+    | {
+        kind: 'text-snapshot'
+        body: AgentJournalMessageItem
+        position?: JournalTextSnapshotPosition
+      }
   )
 
 export type JournalDomainItemCommit = {
@@ -109,32 +113,27 @@ export function applyJournalDomainItem(
     input.body.kind === 'message' &&
     isProviderUserMessageEcho(rawId, input.body)
   ) {
-    const fingerprint = agentSessionSendBodyFingerprint(sessionId, input.body)
-    const candidates = db
-      .prepare(`SELECT attempt.payload_json FROM journal_submission_attempts AS attempt
-      JOIN journal_items AS item ON item.session_id=attempt.session_id AND item.epoch=attempt.epoch AND item.item_id=attempt.item_id
-      WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.current=1 AND attempt.fingerprint=?
-        AND attempt.dispatch_state<>'rejected'
-        AND (?=0 OR COALESCE(attempt.accepted_sequence,0)>?)
-        AND NOT EXISTS(SELECT 1 FROM journal_item_aliases AS alias WHERE alias.session_id=attempt.session_id
-          AND alias.epoch=attempt.epoch AND alias.item_id=attempt.item_id AND alias.provider_item_id<>alias.item_id)
-      ORDER BY attempt.submitted_at, attempt.ordinal`)
-      .iterate(...prefix, fingerprint, head.context_boundary, head.context_boundary)
-    for (const candidate of candidates) {
-      const submission: AgentJournalSubmission = JSON.parse(String(candidate.payload_json))
-      if (!isWriteFailureSubmission(submission)) {
-        echo = submission
-        itemId = agentJournalSubmissionKey(submission.clientMessageId)
-        break
-      }
+    echo = matchJournalSqlMessageEcho(db, prefix, input.body, Number(head.context_boundary))
+    if (echo) {
+      itemId = agentJournalSubmissionKey(echo.clientMessageId)
     }
   }
+  const position =
+    input.kind === 'text-snapshot' &&
+    input.position?.itemId === itemId &&
+    (input.body.role === 'assistant' || input.body.role === 'reasoning') &&
+    input.body.blocks.every((block) => block.type === 'text')
+      ? input.position
+      : undefined
   const stored = db
-    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden, payload_json FROM journal_items
+    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden,
+      CASE WHEN revision=? THEN NULL ELSE payload_json END AS payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=?`)
-    .get(...prefix, itemId)
+    .get(position?.revision ?? -1, ...prefix, itemId)
   const previous: AgentJournalRenderItem | undefined = stored
-    ? JSON.parse(String(stored.payload_json))
+    ? stored.payload_json === null && position
+      ? { ...position, body: input.body }
+      : JSON.parse(String(stored.payload_json))
     : undefined
   const item = (key: string): AgentJournalRenderItem | null => {
     if (key === rawId || key === itemId) {
@@ -237,9 +236,11 @@ export function applyJournalDomainItem(
       ? { item: previous, ordinal: Number(stored!.ordinal), hidden: Boolean(stored!.hidden) }
       : undefined
   )
-  db.prepare(
-    'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
-  ).run(...prefix, itemId)
+  if (tombstone) {
+    db.prepare(
+      'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
+    ).run(...prefix, itemId)
+  }
   if ((!alias && itemId !== rawId) || (!alias?.echo_declared && declaration)) {
     db.prepare(
       `INSERT INTO journal_item_aliases(session_id,epoch,provider_item_id,item_id,echo_declared,echo_json) VALUES(?,?,?,?,?,?)
