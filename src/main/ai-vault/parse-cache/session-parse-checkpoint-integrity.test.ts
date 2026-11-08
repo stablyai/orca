@@ -18,6 +18,9 @@ import {
 } from './session-parse-cache-persistence'
 import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
+import { readResumableTranscript } from '../transcripts/session-transcript-reader'
+import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-claude-checkpoint'
+import { checkpointResumeFor, sessionParseCheckpointOf } from './session-parse-checkpoint-restore'
 
 let root: string
 let cacheFile: string
@@ -197,4 +200,71 @@ it('indexes the complete transcript when search starts without a saved index', a
   })
   const rows = search.connection.prepare('SELECT user_text FROM messages_fts ORDER BY rowid').all()
   expect(rows.map((row) => row.user_text)).toEqual(['original', 'new message'])
+})
+
+it('keeps a completed parse checkpoint usable when the transcript rotates before publication', async () => {
+  const path = join(root, 'session.jsonl')
+  const rotated = join(root, 'rotated.jsonl')
+  await writeFile(path, `${userRecord(0, 'original')}\n`)
+  const candidate = await sessionCandidate('claude', path)
+  const read = await readResumableTranscript({
+    candidate,
+    platform: process.platform,
+    resume: null,
+    stateFactory: (messages) => createClaudeSessionResumeState(candidate.file, messages),
+    sessionForConsumers: async (session) => {
+      await rename(path, rotated)
+      return session
+    }
+  })
+  const checkpoint = sessionParseCheckpointOf(candidate, read.resume)
+  if (!checkpoint) {
+    throw new Error('Missing completed checkpoint')
+  }
+  await appendFile(rotated, `${userRecord(1, 'after rotation')}\n`)
+  const next = await sessionCandidate('claude', rotated)
+  const resumed = await readResumableTranscript({
+    candidate: next,
+    platform: process.platform,
+    resume: await checkpointResumeFor(next, checkpoint),
+    stateFactory: (messages) => createClaudeSessionResumeState(next.file, messages)
+  })
+  expect(resumed.session?.previewMessages.map((message) => message.text)).toEqual([
+    'original',
+    'after rotation'
+  ])
+})
+
+it('restores samples across a multi-chunk record and an unfinished UTF-8 tail', async () => {
+  const path = join(root, 'session.jsonl')
+  const tail = Buffer.from(userRecord(1, '\u4f60\u597d'))
+  const split = tail.indexOf(Buffer.from('\u4f60')) + 1
+  await writeFile(
+    path,
+    Buffer.concat([
+      Buffer.from(
+        `${userRecord(0, 'original')}\n${JSON.stringify({ type: 'progress', padding: 'x'.repeat(140000) })}\n`
+      ),
+      tail.subarray(0, split)
+    ])
+  )
+  await scan(path)
+  await flushSessionParseCachePersist()
+  restart()
+  await appendFile(path, Buffer.concat([tail.subarray(split), Buffer.from('\n')]))
+  const completed = await scan(path)
+  expect(completed?.messageCount).toBe(2)
+  expect(completed?.previewMessages.map((message) => message.text)).toEqual([
+    'original',
+    '\u4f60\u597d'
+  ])
+  await flushSessionParseCachePersist()
+  restart()
+  await appendFile(path, `${userRecord(2, 'after completion')}\n`)
+  const next = await scan(path)
+  expect(next?.previewMessages.map((message) => message.text)).toEqual([
+    'original',
+    '\u4f60\u597d',
+    'after completion'
+  ])
 })

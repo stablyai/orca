@@ -27,6 +27,7 @@ const checkpointSchema = z
       (value.sizeBytes === null || value.byteOffset <= value.sizeBytes)
   )
 
+/** Validate the envelope before the owning parser validates its versioned state payload. */
 export function parsePersistedCheckpoint(value: unknown): SessionParseCheckpoint | undefined {
   const parsed = checkpointSchema.safeParse(value)
   if (!parsed.success) {

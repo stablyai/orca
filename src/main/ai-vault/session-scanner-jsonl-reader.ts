@@ -2,6 +2,10 @@ import type { Hash } from 'node:crypto'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
+  appendTranscriptSample,
+  type TranscriptSample
+} from './transcripts/session-transcript-sample'
+import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
 } from './transcripts/session-transcript-record-budget'
@@ -16,6 +20,7 @@ type JsonlReadResult = {
   skippedRecords: SkippedTranscriptRecord[]
   /** Hash of bytes [0, consumedThrough), present when the caller supplied one for [0, start). */
   prefixHash?: Hash
+  sample?: TranscriptSample
 }
 
 export type JsonlPrefixCheckpoints = {
@@ -24,7 +29,7 @@ export type JsonlPrefixCheckpoints = {
   reached: (offset: number, digest: string) => void
 }
 
-// Track byte offsets across whole records; oversized records are skipped without dropping the session.
+/** Fold complete records and retain hashes and samples only through the last terminated line. */
 export async function consumeCompleteJsonlLines(args: {
   path: string
   start: number
@@ -33,6 +38,7 @@ export async function consumeCompleteJsonlLines(args: {
   /** Covers [0, start); extended through each complete line and returned for the new end. */
   prefixHash?: Hash | null
   prefixCheckpoints?: JsonlPrefixCheckpoints
+  sample?: TranscriptSample
   shouldStop?: () => boolean
   signal?: AbortSignal
 }): Promise<JsonlReadResult> {
@@ -43,12 +49,15 @@ export async function consumeCompleteJsonlLines(args: {
       trailingPartialLine: null,
       bytesRead: 0,
       skippedRecords: [],
+      ...(args.sample ? { sample: args.sample } : {}),
       ...(args.prefixHash ? { prefixHash: args.prefixHash } : {})
     }
   }
   const hash = args.prefixHash ?? null
   // Set once hash has absorbed a partial tail, so it no longer ends at consumedThrough.
   let committedHash: Hash | null = null
+  let sample = args.sample
+  let committedSample = sample
   let consumedThrough = args.start
   let bytesRead = 0
   // A piece list avoids O(record^2) copying when one record spans many chunks.
@@ -112,6 +121,16 @@ export async function consumeCompleteJsonlLines(args: {
       committedHash ??= hash.copy()
       hash.update(chunk.subarray(hashedThrough))
     }
+    if (sample) {
+      const committedEnd = Math.max(0, consumedThrough - chunkStart)
+      if (committedEnd > 0) {
+        sample = appendTranscriptSample(sample, chunk.subarray(0, committedEnd))
+        committedSample = sample
+      }
+      if (!stopped) {
+        sample = appendTranscriptSample(sample, chunk.subarray(committedEnd))
+      }
+    }
     if (stopped) {
       remainderParts = []
       remainderLength = 0
@@ -151,6 +170,7 @@ export async function consumeCompleteJsonlLines(args: {
         : null,
     bytesRead,
     skippedRecords,
+    ...(committedSample ? { sample: committedSample } : {}),
     ...(hash ? { prefixHash: committedHash ?? hash } : {})
   }
 }

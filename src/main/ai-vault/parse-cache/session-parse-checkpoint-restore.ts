@@ -4,7 +4,9 @@ import type { TranscriptReadStats } from '../transcripts/session-transcript-read
 import { createClaudeSessionResumeStateFromCheckpoint } from '../scanners/claude/session-scanner-claude-checkpoint'
 import type { SessionParseCheckpoint, SessionParseResumePoint } from './session-parse-cache-store'
 import { readCheckpointSample } from './session-parse-checkpoint-sample'
+import { hashTranscriptSample } from '../transcripts/session-transcript-sample'
 
+/** Restore a Claude fold only after its identity, version and committed byte windows validate. */
 export async function checkpointResumeFor(
   candidate: SessionFileCandidate,
   checkpoint: SessionParseCheckpoint,
@@ -25,10 +27,8 @@ export async function checkpointResumeFor(
   if (!state) {
     return null
   }
-  if (
-    (await readCheckpointSample(candidate, checkpoint.byteOffset, stats, signal)) !==
-    checkpoint.sampleHash
-  ) {
+  const sample = await readCheckpointSample(candidate, checkpoint.byteOffset, stats, signal)
+  if (!sample || hashTranscriptSample(sample, checkpoint.byteOffset) !== checkpoint.sampleHash) {
     return null
   }
   return {
@@ -37,25 +37,20 @@ export async function checkpointResumeFor(
     sizeBytes: checkpoint.sizeBytes === null ? undefined : checkpoint.sizeBytes,
     byteOffset: checkpoint.byteOffset,
     channel,
+    sample,
     skippedRecords: checkpoint.skippedRecords,
     // A restart cannot continue the previous hash chain; consumers see a missing prefix hash.
     prefixHash: null
   }
 }
 
-/** Compose the persisted checkpoint from a finished read; null when the parser cannot snapshot. */
-export async function sessionParseCheckpointOf(
+/** Snapshot a completed fold and its stream-derived sample without accessing the filesystem. */
+export function sessionParseCheckpointOf(
   candidate: SessionFileCandidate,
-  resume: SessionParseResumePoint,
-  stats?: TranscriptReadStats,
-  signal?: AbortSignal
-): Promise<SessionParseCheckpoint | null> {
+  resume: SessionParseResumePoint
+): SessionParseCheckpoint | null {
   const data = resume.state.snapshotResume?.()
-  if (!data) {
-    return null
-  }
-  const sampleHash = await readCheckpointSample(candidate, resume.byteOffset, stats, signal)
-  if (sampleHash === null) {
+  if (!data || !resume.sample) {
     return null
   }
   return {
@@ -69,7 +64,7 @@ export async function sessionParseCheckpointOf(
       typeof candidate.file.dev === 'number' && typeof candidate.file.ino === 'number'
         ? { dev: candidate.file.dev, ino: candidate.file.ino }
         : null,
-    sampleHash,
+    sampleHash: hashTranscriptSample(resume.sample, resume.byteOffset),
     skippedRecords: resume.skippedRecords,
     snapshot: data.snapshot
   }

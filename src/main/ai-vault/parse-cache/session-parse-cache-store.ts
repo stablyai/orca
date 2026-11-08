@@ -6,6 +6,7 @@ import type {
 import type { ResumableSessionParseState } from '../session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from '../transcripts/session-transcript-channel'
+import type { TranscriptSample } from '../transcripts/session-transcript-sample'
 import type { SkippedTranscriptRecord } from '../transcripts/session-transcript-record-budget'
 
 // Keep listed rows hot: unlimited scans must not evict their own next hits; only unlisted rows are count-bounded.
@@ -25,6 +26,7 @@ export type SessionParseResumePoint = {
   skippedRecords: SkippedTranscriptRecord[]
   // Hash of bytes before byteOffset; null when the read that set this point did not hash.
   prefixHash: Hash | null
+  sample?: TranscriptSample
 }
 
 /**
@@ -161,6 +163,7 @@ export function noteSessionParseCacheListed(path: string): void {
   unlistedPaths.delete(path)
 }
 
+/** Hydrate cold rows lazily; runtime parser state is reconstructed when the transcript changes. */
 export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry | undefined {
   const entry = cache.get(path)
   if (entry !== undefined || coldTier === null || scopeKnowledge.get(path) === 'unresolved') {
@@ -256,6 +259,7 @@ export function scopeCwdStampOf(entry: PersistedSessionParseCacheEntry): Session
   }
 }
 
+/** Publish hot rows and persist changed metadata or checkpoints through the configured cold tier. */
 export function storeSessionParseCacheEntry(path: string, entry: SessionParseCacheEntry): void {
   entry = { ...entry, skippedRecords: entry.resume?.skippedRecords ?? entry.skippedRecords ?? [] }
   if (scopeKnowledge.has(path)) {

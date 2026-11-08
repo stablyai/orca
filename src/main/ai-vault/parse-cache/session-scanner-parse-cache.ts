@@ -42,7 +42,7 @@ import {
   type TranscriptReadStats
 } from '../transcripts/session-transcript-reader'
 
-// Resume only append-only folds; return factories so cached resumes avoid allocating throwaway state.
+/** Select append-only parser factories; rewritten formats retain whole-file reads. */
 function resumableStateFactoryFor(
   candidate: SessionFileCandidate
 ): ((messages: TranscriptMessageSink) => ResumableSessionParseState) | null {
@@ -148,6 +148,7 @@ function sessionParseCacheCoversTranscript(
   )
 }
 
+/** Keep read requirements, sidecar enrichment and checkpoint publication inside one file lane. */
 async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
@@ -217,7 +218,7 @@ async function parseCachedInLane(
       signal,
       sessionForConsumers
     })
-    const checkpoint = await sessionParseCheckpointOf(candidate, read.resume, stats, signal)
+    const checkpoint = sessionParseCheckpointOf(candidate, read.resume)
     throwIfAiVaultScanCancelled(signal)
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,

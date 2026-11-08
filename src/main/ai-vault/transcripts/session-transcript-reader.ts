@@ -99,6 +99,11 @@ export async function readResumableTranscript(
       path: file.path,
       start: startOffset,
       prefixHash,
+      sample: canResume
+        ? resume.sample
+        : state.snapshotResume
+          ? { head: Buffer.alloc(0), tail: Buffer.alloc(0) }
+          : undefined,
       prefixCheckpoints: prefixOffsets && {
         offsets: prefixOffsets,
         reached: (offset, digest) => channel.prefixReached(offset, digest)
@@ -147,7 +152,8 @@ export async function readResumableTranscript(
           canResume ? resume.skippedRecords : [],
           readResult.skippedRecords
         ),
-        prefixHash: readResult.prefixHash ?? null
+        prefixHash: readResult.prefixHash ?? null,
+        ...(readResult.sample ? { sample: readResult.sample } : {})
       }
     }
   } catch (error) {

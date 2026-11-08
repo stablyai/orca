@@ -1,17 +1,21 @@
-import { createHash } from 'node:crypto'
 import { readTranscriptSlice, transcriptFileStat } from '../../native-chat/wsl-transcript-fs-access'
 import type { SessionFileCandidate } from '../session-scanner-types'
 import type { TranscriptReadStats } from '../transcripts/session-transcript-reader'
+import {
+  appendTranscriptSample,
+  type TranscriptSample
+} from '../transcripts/session-transcript-sample'
 
 const SAMPLE_BYTES = 4096
 
+/** Read bounded restore windows; invalid observations return null and I/O errors propagate. */
 export async function readCheckpointSample(
   candidate: SessionFileCandidate,
   byteOffset: number,
   stats?: TranscriptReadStats,
   signal?: AbortSignal
-): Promise<string | null> {
-  const hash = createHash('sha256')
+): Promise<TranscriptSample | null> {
+  let sample: TranscriptSample = { head: Buffer.alloc(0), tail: Buffer.alloc(0) }
   const headLength = Math.min(byteOffset, SAMPLE_BYTES)
   const tailStart = Math.max(headLength, byteOffset - SAMPLE_BYTES)
   for (const [start, length] of [
@@ -28,7 +32,7 @@ export async function readCheckpointSample(
     if (bytes.length !== length) {
       return null
     }
-    hash.update(bytes)
+    sample = appendTranscriptSample(sample, bytes)
   }
   if (byteOffset > 0) {
     const observed = await transcriptFileStat(candidate.file.path, 'scan', signal)
@@ -42,5 +46,5 @@ export async function readCheckpointSample(
       return null
     }
   }
-  return hash.digest('hex')
+  return sample
 }
