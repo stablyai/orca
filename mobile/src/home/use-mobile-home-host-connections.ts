@@ -76,11 +76,17 @@ function wireMobileHomeHostSubscriptions(
     const reconnected = refetchGate.observe(state)
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
-      unsubscribeClientEvents ??= subscribeSharedClientEvents(entry.client, (event) => {
-        if (WORKTREE_CHANGE_EVENTS.has(event.type)) {
-          refreshOnChange()
-        }
-      })
+      if (!unsubscribeClientEvents) {
+        let heardReady = false
+        unsubscribeClientEvents = subscribeSharedClientEvents(entry.client, (event) => {
+          // A wire ready after the first follows a reopened stream or path switch, which missed notices.
+          const replayed = event.type === 'ready' && heardReady && !('joined' in event)
+          if (WORKTREE_CHANGE_EVENTS.has(event.type) || replayed) {
+            refreshOnChange()
+          }
+          heardReady ||= event.type === 'ready'
+        })
+      }
       // One stream per connection: each subscribe makes the desktop check usage, so focus must not resubscribe.
       unsubscribeAccounts ??= subscribeAccountsSnapshots(entry.client, {
         onSnapshot: (snapshot) =>

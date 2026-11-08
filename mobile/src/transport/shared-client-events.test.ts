@@ -4,9 +4,14 @@ import { subscribeSharedClientEvents, type SharedClientEvent } from './shared-cl
 
 function wire() {
   const opened: { method: string; emit: (payload: unknown) => void; stop: () => void }[] = []
+  const stateListeners = new Set<(state: 'connected' | 'disconnected') => void>()
   let connectedAt = 1000
   const client = stubRpcClient({
     getLastConnectedAt: () => connectedAt,
+    onStateChange: (listener) => {
+      stateListeners.add(listener)
+      return () => stateListeners.delete(listener)
+    },
     subscribe: (method, _params, listener) => {
       const stop = vi.fn()
       opened.push({ method, emit: listener, stop })
@@ -18,6 +23,10 @@ function wire() {
     opened,
     reconnect: () => {
       connectedAt += 1
+      for (const listener of stateListeners) {
+        listener('disconnected')
+        listener('connected')
+      }
     }
   }
 }
@@ -88,5 +97,43 @@ describe('subscribeSharedClientEvents', () => {
     expect(late.events).toEqual([{ type: 'ready', joined: true }, replayed])
     expect(afterReconnect.events).toEqual([replayed])
     expect(opened).toHaveLength(1)
+  })
+
+  it('opens the wire again for its listeners after a live stream ends, and after a refused one only on the next connection', async () => {
+    const { client, opened, reconnect } = wire()
+    const home = recorder()
+    const preference = recorder()
+    subscribeSharedClientEvents(client, home.listener)
+    subscribeSharedClientEvents(client, preference.listener)
+    opened[0]!.emit({ type: 'ready', subscriptionId: 'sub-1' })
+
+    opened[0]!.emit({ type: 'end' })
+    expect(opened[0]!.stop).toHaveBeenCalledTimes(1)
+    await flush()
+    expect(opened).toHaveLength(2)
+    opened[0]!.emit({ type: 'reposChanged' })
+    opened[1]!.emit({ type: 'ready', subscriptionId: 'sub-2' })
+    opened[1]!.emit({ type: 'reposChanged' })
+    const afterEnd = [
+      { type: 'ready', subscriptionId: 'sub-1' },
+      { type: 'end' },
+      { type: 'ready', subscriptionId: 'sub-2' },
+      { type: 'reposChanged' }
+    ]
+    expect(home.events).toEqual(afterEnd)
+    expect(preference.events).toEqual(afterEnd)
+
+    opened[1]!.emit({ type: 'error', message: 'interrupted' })
+    await flush()
+    expect(opened).toHaveLength(3)
+    opened[2]!.emit({ type: 'error', message: 'refused' })
+    await flush()
+    expect(opened).toHaveLength(3)
+
+    reconnect()
+    expect(opened).toHaveLength(4)
+    opened[3]!.emit({ type: 'reposChanged' })
+    expect(home.events.at(-1)).toEqual({ type: 'reposChanged' })
+    expect(preference.events.at(-1)).toEqual({ type: 'reposChanged' })
   })
 })

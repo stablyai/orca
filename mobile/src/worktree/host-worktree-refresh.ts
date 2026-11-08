@@ -34,7 +34,8 @@ export function startHostWorktreeRefresh({
   appState
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
-  let eventStreamReady = false
+  // Any ready after the first is a replay: a reconnect or a reopened stream missed the notices between.
+  let heardReady = false
   // Set when a buried or backgrounded page skips a notice; coming back then re-reads the options once.
   let owed = false
   const hidden = (): boolean => appState.currentState !== 'active'
@@ -56,10 +57,9 @@ export function startHostWorktreeRefresh({
     if (event.type === 'ready') {
       // Every ready: a change between the last read and this subscription sent no notice.
       sidebarFeed?.refresh()
-      const replayedAfterReconnect = eventStreamReady
-      eventStreamReady = true
-      if (replayedAfterReconnect) {
-        // Why: client events are not queued while disconnected, so re-read after replay.
+      const replayed = heardReady
+      heardReady = true
+      if (replayed) {
         if (hidden()) {
           owed = true
         } else {
@@ -69,7 +69,6 @@ export function startHostWorktreeRefresh({
       return
     }
     if (event.type === 'end' || event.type === 'error') {
-      eventStreamReady = false
       return
     }
     if (hidden()) {
