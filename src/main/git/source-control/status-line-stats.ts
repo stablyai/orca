@@ -11,6 +11,8 @@ import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import { settledNumstatCache } from './git-read-cache-invalidation'
+import { readGitConfigSnapshot } from './git-config-snapshot'
+import { wslDistroForCommand } from '../command-runner/git-command-resolution'
 import { readWorktreePathsDiffStamp } from './worktree-diff-stamp'
 
 async function runNumstat(
@@ -48,29 +50,48 @@ async function runNumstat(
   }
 }
 
-// Statting more working files than this costs about as much as the numstat it would skip.
-const MAX_STAMPED_UNSTAGED_PATHS = 256
+// Statting more files than this costs about as much as the numstat it would skip.
+const MAX_STAMPED_PATHS = 512
 
-/** Unstaged numstat stamps each listed working file; unlisted files are unchanged or status would list them. */
-function unstagedStampPaths(entries: readonly GitStatusEntry[]): string[] | null {
-  const paths: string[] = []
+/** Rollback switch: `ORCA_GIT_STATUS_NUMSTAT_REUSE=0` recomputes every numstat pass. */
+function isNumstatReuseEnabled(): boolean {
+  return process.env.ORCA_GIT_STATUS_NUMSTAT_REUSE !== '0'
+}
+
+/**
+ * Worktree files a numstat pass depends on: unstaged working files (unlisted ones are unchanged or status would list
+ * them) and every `.gitattributes` that can apply to a listed path. Null when the pass cannot be stamped.
+ */
+function numstatStampPaths(entries: readonly GitStatusEntry[], cached: boolean): string[] | null {
+  const area = cached ? 'staged' : 'unstaged'
+  const workingPaths: string[] = []
+  const attributePaths = new Set<string>(['.gitattributes'])
   for (const entry of entries) {
-    if (entry.area !== 'unstaged') {
+    if (entry.area !== area) {
       continue
     }
     // A gitlink's numstat follows the submodule's HEAD, which no parent file stamps.
-    if (entry.submodule) {
+    if (!cached && entry.submodule) {
       return null
     }
-    paths.push(entry.path)
-    if (entry.oldPath !== undefined) {
-      paths.push(entry.oldPath)
+    for (const entryPath of entry.oldPath === undefined
+      ? [entry.path]
+      : [entry.path, entry.oldPath]) {
+      if (!cached) {
+        workingPaths.push(entryPath)
+      }
+      for (let end = entryPath.indexOf('/'); end !== -1; end = entryPath.indexOf('/', end + 1)) {
+        attributePaths.add(`${entryPath.slice(0, end)}/.gitattributes`)
+      }
+    }
+    if (workingPaths.length + attributePaths.size > MAX_STAMPED_PATHS) {
+      return null
     }
   }
-  return paths.length <= MAX_STAMPED_UNSTAGED_PATHS ? paths : null
+  return [...workingPaths, ...attributePaths]
 }
 
-/** Reuse a numstat pass while HEAD, index and the stamped working files are provably unchanged. */
+/** Reuse a numstat pass while HEAD, index, config, attributes and stamped working files are provably unchanged. */
 async function readNumstatThroughSettledCache(
   worktreePath: string,
   cached: boolean,
@@ -78,13 +99,26 @@ async function readNumstatThroughSettledCache(
   entries: readonly GitStatusEntry[],
   options: GitRuntimeOptions
 ): Promise<Map<string, GitLineStats> | null> {
-  const stampPaths = cached ? [] : unstagedStampPaths(entries)
-  if (!stampPaths) {
+  const stampPaths = numstatStampPaths(entries, cached)
+  // WSL Git reads config and attributes the host cannot stamp.
+  if (
+    !stampPaths ||
+    !isNumstatReuseEnabled() ||
+    options.wslDistro ||
+    wslDistroForCommand(worktreePath)
+  ) {
     return runNumstat(worktreePath, cached, detectRenames, options)
   }
   const readGeneration = settledNumstatCache.beginRead()
-  const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options)
-  const readKey = JSON.stringify([worktreePath, options.wslDistro ?? '', cached, detectRenames])
+  const config = await readGitConfigSnapshot(worktreePath, options)
+  if (!config?.files || !config.attributeFiles) {
+    return runNumstat(worktreePath, cached, detectRenames, options)
+  }
+  const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options, [
+    ...config.files,
+    ...config.attributeFiles
+  ])
+  const readKey = JSON.stringify([worktreePath, cached, detectRenames])
   const reused = settledNumstatCache.get(readKey, stamp)
   if (reused) {
     return reused
