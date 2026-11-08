@@ -64,6 +64,7 @@ export async function initializeMultiplexStream(
     ackRecoveryAwaitedBytes: 0,
     ackPendingHoldbackBytes: 0,
     ackAdmittedPacedWindowBytes: null,
+    ackOutputWaited: false,
     yieldedQueries: [],
     yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
     ackRecoveryHistoryOwed: false,

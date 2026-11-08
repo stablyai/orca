@@ -77,6 +77,9 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         throw new Error('Remote terminal recovery snapshot was not published.')
       }
       stream.ackRecoveryAwaitedBytes = stream.ackInFlightBytes
+      if (state.linkEstimate.enabled) {
+        state.linkEstimate.noteImageSent(publication.bytes)
+      }
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
@@ -181,5 +184,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       state.linkEstimate.noteAcknowledged(stream, acknowledged)
     }
     state.flushAllAckPendingOutput()
+    if (stream.ackPendingOutput.length === 0 && !stream.ackPendingOutputOverflowed) {
+      stream.ackOutputWaited = false
+    }
   }
 }

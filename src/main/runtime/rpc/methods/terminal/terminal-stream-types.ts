@@ -95,6 +95,8 @@ export type TerminalMultiplexStream = {
   ackPendingHoldbackBytes: number
   // Paced window the last admission used (null when unpaced), so its send records the same decision.
   ackAdmittedPacedWindowBytes: number | null
+  // Output outran the window since an ACK last found the queue empty; a recovery clears the queue, not the backlog.
+  ackOutputWaited: boolean
   yieldedQueries: YieldedTerminalQuery[]
   yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */
