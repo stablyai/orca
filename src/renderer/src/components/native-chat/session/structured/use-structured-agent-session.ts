@@ -316,6 +316,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
     refreshCommands: commandMenu.refresh,
     setCommandsMenuOpen: commandMenu.setOpen,
+    commandsChecking: commandMenu.checking,
     setStructuredOption,
     /** Why the host's catalog probe says no chat can start here; the chat shows it as a notice. */
     unavailable,
