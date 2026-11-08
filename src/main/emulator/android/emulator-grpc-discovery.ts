@@ -29,10 +29,13 @@ export function parseEmulatorRegistration(
   serial: string
 ): EmulatorGrpcEndpoint | null {
   const values = new Map(
-    text.split(/\r?\n/).map((line) => {
-      const separator = line.indexOf('=')
-      return [line.slice(0, separator), line.slice(separator + 1)]
-    })
+    text
+      .split(/\r?\n/)
+      .filter((line) => line.includes('='))
+      .map((line) => {
+        const separator = line.indexOf('=')
+        return [line.slice(0, separator), line.slice(separator + 1)]
+      })
   )
   const port = Number(values.get('grpc.port'))
   const token = values.get('grpc.token')

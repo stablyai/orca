@@ -11,6 +11,7 @@ export class EmulatorPointerContact {
   private current: EmulatorPointerContactPacket | null = null
   private pending: EmulatorPointerContactPacket | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
+  private ending = false
   private beganAt = 0
   private origin: EmulatorPointerContactPacket | null = null
 
@@ -30,6 +31,11 @@ export class EmulatorPointerContact {
     }
     if (phase === 'end') {
       this.current = { ...this.current, ...point }
+      if (this.pending) {
+        this.pending = this.current
+        this.ending = true
+        return true
+      }
       return this.release()
     }
     this.current = { ...this.current, ...point }
@@ -50,6 +56,7 @@ export class EmulatorPointerContact {
     const current = this.current
     this.current = null
     this.origin = null
+    this.ending = false
     return current ? this.send({ ...current, pressure: 0 }) : true
   }
 
@@ -73,7 +80,10 @@ export class EmulatorPointerContact {
       this.pending = pending
       this.timer = setTimeout(() => this.flushPending(false), 16)
     } else {
-      this.send(pending)
+      const sent = this.send(pending)
+      if (sent && this.current && this.ending) {
+        this.timer = setTimeout(() => this.release(), 16)
+      }
     }
   }
 
