@@ -36,6 +36,7 @@ describe('Claude structured processless acquisition', () => {
         getSettings: async () => ({}),
         getContextUsage: async () => ({}),
         renameSession: async () => {},
+        enableRemoteControl: async () => ({}),
         supportedModels: async () => [],
         interrupt: async () => undefined,
         cancelAsyncMessage: async () => false,
