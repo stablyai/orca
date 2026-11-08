@@ -626,7 +626,6 @@
 6 test-no-wall-clock:src/main/skills/transaction-state/skill-install-lock.test.ts
 1 test-no-wall-clock:src/main/skills/install/skill-install-recovery.test.ts
 1 test-no-wall-clock:src/main/skills/install/skill-install-request.test.ts
-1 test-no-wall-clock:src/main/skills/install/skill-installation.test.ts
 1 test-no-wall-clock:src/main/skills/provider-placement/skill-placement-reconciliation.test.ts
 1 test-no-wall-clock:src/main/skills/provider-placement/skill-placement-transaction.test.ts
 2 test-no-wall-clock:src/main/skills/transaction-state/skill-transaction-startup-recovery.test.ts
