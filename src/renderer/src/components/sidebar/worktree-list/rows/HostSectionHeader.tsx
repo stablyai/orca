@@ -2,14 +2,15 @@ import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
 
 function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel = translate(
+  const t = useTranslate()
+  const totalLabel = t(
     'auto.components.sidebar.HostSectionHeader.workspaceCount',
     '{{count}} workspaces',
     { count, defaultValue_one: '{{count}} workspace' }
@@ -60,9 +61,10 @@ export function HostSectionHeader({
   onDragPointerDown?: (event: React.PointerEvent<HTMLElement>) => void
   dragging?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const isBlocked = row.health === 'blocked'
   const isDisconnected = row.health === 'disconnected'
-  const detail = getHostHeaderDetail(row)
+  const detail = getHostHeaderDetail(row, t)
   return (
     <div className="px-2 pt-1">
       {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}

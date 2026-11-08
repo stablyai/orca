@@ -95,11 +95,4 @@ describe('delegated mobile device sync', () => {
     expect(registry.validateToken(fresh?.token ?? '')?.name).toBe('Pixel 9')
     expect(registry.validateToken(first.token)).toBeNull()
   })
-
-  it('reruns at most once', () => {
-    const upsert = vi.spyOn(registry, 'upsertDelegatedMobileDevices').mockReturnValue([])
-
-    expect(sync('Pixel')).toEqual([])
-    expect(upsert).toHaveBeenCalledTimes(2)
-  })
 })

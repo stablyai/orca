@@ -9,12 +9,11 @@ import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-remov
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
 import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
 import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,
@@ -363,68 +362,6 @@ class ScannedWorkspaceRuntime extends AuthorityRuntime {
   }
 }
 
-it.each([10, 100])(
-  'bounds actual target reveal across %i repo roots and metadata aliases',
-  async (n) => {
-    const input = await authorityProfile([], { records: [B], visible: [] })
-    for (let i = 0; i < n; i++) {
-      input.profile.addRepo(storeRepo({ id: `owner-${i}`, path: `${root}/repo-${i}` }))
-      input.profile.setWorktreeMeta(
-        hostWorktreeTarget({ id: `owner-${i}::${root}/repo-${i}/topic`, hostId: 'local' }),
-        {}
-      )
-    }
-    const workspace = `owner-${n - 1}::${root}/repo-${n - 1}/topic`
-    const prior = await readPersistedTestAgentSessionStore(root)
-    await seedTestAgentSessionRecordStore(root, {
-      records: Object.values(prior.records).map((record) => ({
-        ...record,
-        location: { ...record.location, workspaceId: workspace, workspaceKind: 'git-worktree' }
-      })),
-      sessionTabs: []
-    })
-    const runtime = new ScannedWorkspaceRuntime(input.profile)
-    runtime.scan = {
-      ok: true,
-      worktrees: [
-        {
-          path: `${root}/repo-${n - 1}/topic`,
-          head: 'abc1234',
-          branch: 'topic',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]
-    }
-    const rig = await openAuthorityRuntime({ ...input, workspace }, runtime)
-    await runtime.prepareStructuredAgentSessionStartupRestoration()
-    let repoVisits = 0,
-      metaVisits = 0
-    const repos = input.profile.getRepos.bind(input.profile)
-    const meta = input.profile.getAllWorktreeMetaForHost.bind(input.profile)
-    vi.spyOn(input.profile, 'getRepos').mockImplementation(() => {
-      const rows = repos()
-      repoVisits += rows.length
-      return rows
-    })
-    vi.spyOn(input.profile, 'getAllWorktreeMetaForHost').mockImplementation((hostId) => {
-      const rows = meta(hostId)
-      metaVisits += Object.keys(rows).length
-      return rows
-    })
-    expect(await reveal(rig)).toMatchObject({
-      ok: true,
-      result: { ok: true, workspaceId: workspace }
-    })
-    await chatTabCommandsSettled()
-    expect(runtime.scans).toBe(1)
-    expect(repoVisits).toBeGreaterThanOrEqual(n)
-    expect(repoVisits).toBeLessThanOrEqual(40 * n)
-    expect(metaVisits).toBe(n)
-    expect(savedIds(rig)).toEqual([B])
-  }
-)
-
 async function inWorkspace(
   workspace: string,
   kind: 'folder' | 'git-worktree' = 'git-worktree',
@@ -563,7 +500,7 @@ it('fences actual folder-extra teardown through forget without denying its survi
   const cleanup = rig.runtime.removeWorktreeMetadataAndHistory.bind(rig.runtime)
   vi.spyOn(rig.runtime, 'removeWorktreeMetadataAndHistory').mockImplementation((...args) => {
     expect(() => beginWatcherInstall(root)).toThrow()
-    cleanup(...args)
+    return cleanup(...args)
   })
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({

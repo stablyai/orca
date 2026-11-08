@@ -4,38 +4,43 @@ import type {
 } from '../../../../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationBlocker } from '../../../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
-export function migrationPhaseLabel(phase: OrcadManagedPendingMigrationRow['phase']): string {
+export function migrationPhaseLabel(
+  phase: OrcadManagedPendingMigrationRow['phase'],
+  t: Translate = translate
+): string {
   switch (phase) {
     case 'source-fenced':
-      return translate('auto.components.settings.managedServers.phase.fenced', 'Host locked')
+      return t('auto.components.settings.managedServers.phase.fenced', 'Host locked')
     case 'destination-staged':
-      return translate('auto.components.settings.managedServers.phase.staged', 'Copy staged')
+      return t('auto.components.settings.managedServers.phase.staged', 'Copy staged')
     case 'destination-committed':
-      return translate('auto.components.settings.managedServers.phase.committed', 'Copy committed')
+      return t('auto.components.settings.managedServers.phase.committed', 'Copy committed')
     case 'source-retired':
-      return translate('auto.components.settings.managedServers.phase.retired', 'Finished')
+      return t('auto.components.settings.managedServers.phase.retired', 'Finished')
   }
 }
 
 export function recoveryLabel(
-  recovery: NonNullable<OrcadManagedRuntimeStatus['recovery']>
+  recovery: NonNullable<OrcadManagedRuntimeStatus['recovery']>,
+  t: Translate = translate
 ): string {
   switch (recovery.operation) {
     case 'activate':
-      return translate(
+      return t(
         'auto.components.settings.managedServers.recovery.activate',
         'An update was interrupted'
       )
     case 'rollback':
-      return translate(
+      return t(
         'auto.components.settings.managedServers.recovery.rollback',
         'A rollback was interrupted'
       )
     case 'decommission':
-      return translate(
+      return t(
         'auto.components.settings.managedServers.recovery.decommission',
         'A stop was interrupted'
       )
@@ -43,14 +48,17 @@ export function recoveryLabel(
 }
 
 /** `null` counts are unknown, never zero: the server did not answer. */
-export function terminalCensusLabel(terminals: OrcadManagedRuntimeStatus['terminals']): string {
+export function terminalCensusLabel(
+  terminals: OrcadManagedRuntimeStatus['terminals'],
+  t: Translate = translate
+): string {
   if (terminals.liveSessions === null) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.terminals.unknown',
       'Running terminals: unknown'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.managedServers.terminals.count',
     'Running terminals: {{count}}',
     { count: terminals.liveSessions }
@@ -58,8 +66,8 @@ export function terminalCensusLabel(terminals: OrcadManagedRuntimeStatus['termin
 }
 
 /** Copy for Update anyway; it states only what the forced update was verified to keep. */
-export function forceUpdateMessage(): string {
-  return translate(
+export function forceUpdateMessage(t: Translate = translate): string {
+  return t(
     'auto.components.settings.managedServers.row.forceUpdate',
     'Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.'
   )
@@ -142,49 +150,52 @@ const MIGRATION_CODES = new Set([
   'orcad_rollback_crosses_migration'
 ])
 
-export function managedServerOutcomeLabel(result: {
-  outcome: string
-  code?: string
-  verdict?: string
-}): string {
+export function managedServerOutcomeLabel(
+  result: {
+    outcome: string
+    code?: string
+    verdict?: string
+  },
+  t: Translate = translate
+): string {
   const code = result.code ?? ''
   if (code === 'orcad_stop_active_environment') {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.defaultServer',
       'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.live',
       'Not done: terminals on this server are still running. Close them and try again.'
     )
   }
   if (result.verdict === 'unverifiable' || UNVERIFIABLE_CODES.has(code)) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.unverifiable',
       'Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.'
     )
   }
   if (code === ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.wslMoveRunning',
       'Not done: a project is moving onto this server. Orca updates it once the move finishes.'
     )
   }
   if (MIGRATION_CODES.has(code)) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.migration',
       'Not done: a move onto this server is unfinished. Resume it first.'
     )
   }
   if (result.outcome === 'deferred' || result.outcome === 'pending') {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.outcome.deferred',
       'Not done yet: the server isn’t ready for this. Try again later.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.managedServers.outcome.failed',
     'Orca couldn’t finish this on the server. Try again.'
   )

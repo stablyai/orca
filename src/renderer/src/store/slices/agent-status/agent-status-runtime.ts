@@ -1,5 +1,5 @@
 import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
-import { projectAgentPaneConversation } from '../agent-pane-conversation'
+import { projectAgentPaneConversation } from './agent-pane-conversation'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -10,7 +10,7 @@ import type {
   AgentStatusChangeListener
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
-import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
+import type { GeneratedTabTitleUpdate } from '../../terminals/terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 export type AgentStatusStateUpdate =

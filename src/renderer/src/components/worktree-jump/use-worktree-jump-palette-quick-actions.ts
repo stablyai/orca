@@ -1,11 +1,17 @@
-import { useCallback, useMemo } from 'react'
+import {
+  useGitGraphScope,
+  gitGraphSupport,
+  gitGraphUpdateMessage,
+  probeGitGraphSupport
+} from '@/lib/git-graph-tab'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
-import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
@@ -17,6 +23,7 @@ import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-op
 import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import { recomputeOn } from '@/lib/recompute-on'
 
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
@@ -63,6 +70,26 @@ export function useWorktreeJumpPaletteQuickActions({
   deferredQuery,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
+  const graphScope = useGitGraphScope(activeWorktreeId ?? '')
+  const graphOwner = JSON.stringify([activeWorktreeId, graphScope?.route])
+  const [graphProbe, setGraphProbe] = useState<{ owner: string; support: boolean | null }>()
+  const graphSupport = graphProbe?.owner === graphOwner ? graphProbe.support : null
+  useEffect(() => {
+    let live = true
+    if (activeWorktreeId) {
+      setGraphProbe({ owner: graphOwner, support: gitGraphSupport(activeWorktreeId) })
+      void probeGitGraphSupport(activeWorktreeId)
+        .then((value) => {
+          if (live) {
+            setGraphProbe({ owner: graphOwner, support: value })
+          }
+        })
+        .catch(() => {})
+    }
+    return () => {
+      live = false
+    }
+  }, [activeWorktreeId, graphOwner, runtimeStatusByEnvironmentId])
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
     const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
@@ -137,38 +164,67 @@ export function useWorktreeJumpPaletteQuickActions({
     ]
   )
   // Availability reads store state imperatively; these values supply its real memo dependencies, including managed-browser runtime status.
-  const availableActions = useMemo(() => {
-    void activeView
-    void activeWorktreeId
-    void worktreesByRepo
-    void repos
-    void sshConnectionStates
-    void activeGroupIdByWorktree
-    void groupsByWorktree
-    void unifiedTabsByWorktree
-    void isLoading
-    void settings?.activeRuntimeEnvironmentId
-    void runtimeStatusByEnvironmentId
-    const context = buildQuickActionContext()
-    return {
-      context,
-      actionResults: actionResults.filter((action) => action.isAvailable(context).available)
-    }
-  }, [
-    actionResults,
-    buildQuickActionContext,
-    activeView,
-    activeWorktreeId,
-    worktreesByRepo,
-    repos,
-    sshConnectionStates,
-    activeGroupIdByWorktree,
-    groupsByWorktree,
-    unifiedTabsByWorktree,
-    isLoading,
-    settings?.activeRuntimeEnvironmentId,
-    runtimeStatusByEnvironmentId
-  ])
+  const availableActions = useMemo(
+    () =>
+      recomputeOn(
+        [
+          activeView,
+          activeWorktreeId,
+          worktreesByRepo,
+          repos,
+          sshConnectionStates,
+          activeGroupIdByWorktree,
+          groupsByWorktree,
+          unifiedTabsByWorktree,
+          isLoading,
+          settings?.activeRuntimeEnvironmentId,
+          runtimeStatusByEnvironmentId
+        ],
+        () => {
+          const context = buildQuickActionContext()
+          return {
+            context,
+            actionResults: actionResults
+              .filter(
+                (action) =>
+                  (action.id === 'git-graph' &&
+                    context.activeWorktree &&
+                    repos.find((repo) => repo.id === context.activeWorktree?.repoId)?.kind !==
+                      'folder') ||
+                  action.isAvailable(context).available
+              )
+              .map((action) =>
+                action.id === 'git-graph'
+                  ? {
+                      ...action,
+                      disabled: graphSupport !== true,
+                      description:
+                        graphSupport === false && activeWorktreeId
+                          ? gitGraphUpdateMessage(activeWorktreeId)
+                          : ''
+                    }
+                  : action
+              )
+          }
+        }
+      ),
+    [
+      graphSupport,
+      actionResults,
+      buildQuickActionContext,
+      activeView,
+      activeWorktreeId,
+      worktreesByRepo,
+      repos,
+      sshConnectionStates,
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      unifiedTabsByWorktree,
+      isLoading,
+      settings?.activeRuntimeEnvironmentId,
+      runtimeStatusByEnvironmentId
+    ]
+  )
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {
     const results = rankCmdJMiddleResults({
       query: deferredQuery,

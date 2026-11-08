@@ -3,7 +3,9 @@ import { translate } from '../i18n/mobile-i18n'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { fetchAddPRReviewComment, fetchSetPRFileViewed } from './github-pr-review-line-mutations'
+import { fetchSetPRFileViewed } from './github-pr-review-line-mutations'
+import { useHostMutation } from '../query/host-mutation'
+import { prCommentTarget, prCommentWrite } from './pr-comment-writes'
 import {
   applyMobileDiffReviewGitHubViewed,
   buildMobileDiffReviewGitHub,
@@ -20,6 +22,7 @@ import { isPrSidebarDetailsPlaceholder, prSidebarDetailsNeedFetch } from './mobi
 import type { MobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
 
 type Input = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -31,10 +34,12 @@ type Input = {
 
 /** The branch's GitHub pull request as the diff screen uses it: viewed state, threads and line comments. */
 export function useMobileDiffReviewGitHub(input: Input) {
-  const { client, connState, worktreeId, filter, screenState, prSidebar, setActionError } = input
+  const { hostId, client, connState, worktreeId, filter, screenState, prSidebar, setActionError } =
+    input
   const {
     prSidebarState,
     prSidebarIsGithubRepo,
+    prQueries,
     refetchPRSidebar,
     ensurePrSidebarDetails,
     patchPrFileViewed
@@ -157,6 +162,7 @@ export function useMobileDiffReviewGitHub(input: Input) {
     ]
   )
 
+  const { mutate: postComment } = useHostMutation(prCommentWrite, { hostId, client })
   const commentOnGitHub = useCallback(
     async (args: {
       item: MobileDiffReviewQueueItem
@@ -167,26 +173,33 @@ export function useMobileDiffReviewGitHub(input: Input) {
       if (!client || !github?.headSha || !canCommentOnGitHub(github, args.item, args)) {
         return { ok: false, error: null }
       }
-      const outcome = await fetchAddPRReviewComment(client, worktreeId, {
-        prNumber: github.prNumber,
-        commitId: github.headSha,
-        path: args.item.filePath,
-        line: args.line,
-        startLine: args.startLine,
-        body: args.body,
-        prRepo: github.prRepo
-      })
-      if (!outcome.ok) {
+      try {
+        // Re-reads only the comments, so the new thread shows under its line.
+        await postComment({
+          worktreeId,
+          prRepo: github.prRepo,
+          target: prCommentTarget(prQueries),
+          write: {
+            kind: 'line',
+            params: {
+              prNumber: github.prNumber,
+              commitId: github.headSha,
+              path: args.item.filePath,
+              line: args.line,
+              startLine: args.startLine,
+              body: args.body
+            }
+          }
+        })
+      } catch (error) {
         // The sheet is still open over the screen's banner, so the sheet shows this.
         triggerError()
-        return { ok: false, error: outcome.error }
+        return { ok: false, error: error instanceof Error ? error.message : null }
       }
       triggerSuccess()
-      // Show the new thread under its line.
-      void refetchPRSidebar({ includeDetails: true })
       return { ok: true }
     },
-    [client, github, refetchPRSidebar, worktreeId]
+    [client, github, postComment, prQueries, worktreeId]
   )
 
   return { github, applyViewed, setRemoteViewed, commentOnGitHub }

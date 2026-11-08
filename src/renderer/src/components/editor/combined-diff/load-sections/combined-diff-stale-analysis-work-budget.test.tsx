@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitDiffResult,
   GitDiffTextResult

@@ -15,6 +15,7 @@ export const UNIT_INCLUDE = [
 
 export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts',
   'config/scripts/test-runtime/environment/vitest-bun-node-builtins.ts',
   'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
@@ -37,7 +38,7 @@ export const UNIT_EXCLUDE = [
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts',
   'src/main/startup/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-probe-lifetime.live-shell.test.ts',
-  'src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts',
+  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
   'src/shared/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',

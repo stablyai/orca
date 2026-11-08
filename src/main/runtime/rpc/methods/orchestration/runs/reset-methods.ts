@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { ResetParams } from '../schemas'
+import { ResetParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 
 export const ORCHESTRATION_RESET_METHODS = [
   defineMethod({

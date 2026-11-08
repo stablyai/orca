@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
 import { SETUP_RUN_POLICIES } from '../components/new-workspace-reply-schema'

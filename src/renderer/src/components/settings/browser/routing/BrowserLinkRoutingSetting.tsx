@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserLinkRoutingSettingProps = {
   settings: GlobalSettings
@@ -17,9 +17,10 @@ export function BrowserLinkRoutingSetting({
   isMac,
   updateSettings
 }: BrowserLinkRoutingSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
+      title={t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
       description={linkRoutingDescription}
       keywords={[
         'browser',
@@ -32,16 +33,14 @@ export function BrowserLinkRoutingSetting({
         'file',
         'editor'
       ]}
-      className="flex items-center justify-between gap-4 py-2"
+      className="flex items-center justify-between gap-4 py-3"
     >
       <div className="space-y-0.5">
-        <Label>
-          {translate('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
-        </Label>
+        <Label>{t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}</Label>
         <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
       </div>
       <Switch
-        aria-label={translate('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
+        aria-label={t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
         checked={settings.openLinksInApp}
         onCheckedChange={(checked) =>
           updateSettings({

@@ -1,6 +1,7 @@
 import { registerAutomationPresentationTests } from './AutomationManager.presentation.spec'
 import { registerAutomationHostReselectionTests } from './AutomationManager.host-reselection.spec'
 import { registerAutomationRunHistoryTests } from './AutomationManager.run-history.spec'
+import { registerAutomationDraftPersistenceTests } from './AutomationManager.draft-persistence.spec'
 import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { AutomationEditor } from './AutomationEditor'
@@ -8,6 +9,10 @@ import { automationUpdateParams } from './automation-draft'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  automationEditorDraftKey,
+  resetAutomationEditorDraftsForTests
+} from './automation-editor-draft-row'
 import { AutomationManager } from './AutomationManager'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationRunDetails } from './AutomationRunDetails'
@@ -23,6 +28,7 @@ import {
   savedAutomation,
   savedRun
 } from './automation-test-fixtures'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -69,6 +75,8 @@ let tree: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
+  // Unsaved edits outlive the editor for the page's life; each test is a fresh page.
+  resetAutomationEditorDraftsForTests()
 })
 function setTree(value: ReactTestRenderer): void {
   tree = value
@@ -185,7 +193,9 @@ async function mount(
     throw new Error(`Unexpected request: ${method}`)
   })
   await act(async () => {
-    tree = create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' }))
+    tree = createWithQueryClient(
+      createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+    )
   })
   return {
     ...port,
@@ -200,7 +210,13 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press })
+  registerAutomationRunHistoryTests({ root, setTree })
+  registerAutomationDraftPersistenceTests({
+    root,
+    press,
+    mount,
+    unmount: () => act(() => tree?.unmount())
+  })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,
@@ -233,6 +249,7 @@ describe('mobile automation navigation and setup', () => {
           capabilities: [],
           onCancel: vi.fn(),
           onDraftChange: vi.fn(),
+          draftKey: automationEditorDraftKey(),
           onSave: save
         })
       )
@@ -334,6 +351,7 @@ describe('mobile automation navigation and setup', () => {
             capabilities: [],
             onCancel: vi.fn(),
             onDraftChange: vi.fn(),
+            draftKey: automationEditorDraftKey(),
             onSave: vi.fn()
           })
         )
@@ -411,6 +429,7 @@ describe('mobile automation navigation and setup', () => {
       capabilities: [],
       onCancel: vi.fn(),
       onDraftChange: vi.fn(),
+      draftKey: automationEditorDraftKey(),
       onSave: vi.fn()
     }
     await act(async () => {
@@ -507,7 +526,8 @@ describe('mobile automation navigation and setup', () => {
       loading: false,
       error: null,
       loadMore: vi.fn(),
-      reload: vi.fn()
+      reload: vi.fn(),
+      scope: null
     }
     await act(async () => {
       tree = create(
@@ -566,6 +586,7 @@ describe('mobile automation navigation and setup', () => {
         capabilities: [],
         onCancel: vi.fn(),
         onDraftChange: vi.fn(),
+        draftKey: automationEditorDraftKey(),
         onSave
       }
       await act(async () => {
@@ -611,6 +632,24 @@ describe('mobile automation navigation and setup', () => {
       expect(current.enabled).toBe(false)
     }
   )
+  it('asks before Cancel drops an edited draft and closes an untouched one at once', async () => {
+    await mount()
+    await press('New automation')
+    await press('Cancel')
+    expect(root().findAllByType(AutomationEditor)).toHaveLength(0)
+    await press('New automation')
+    const name = () =>
+      root()
+        .findAllByType(AutomationField)
+        .find((node) => node.props.label === 'Name')!
+    await act(async () => name().props.onChange('Nightly digest'))
+    await press('Cancel')
+    const prompt = root().find(
+      (node) => String(node.type) === 'ConfirmModal' && node.props.visible === true
+    )
+    await act(async () => prompt.props.onCancel())
+    expect(name().props.value).toBe('Nightly digest')
+  })
   it('preserves an uncertain legacy create without issuing a second uncorrelated write', async () => {
     const port = await mount('legacy')
     await press('New automation')

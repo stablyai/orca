@@ -1,5 +1,6 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   getLocalExecutionHostLabel,
@@ -181,7 +182,7 @@ export function feedDomainsFromWindowState(
   state: AppState,
   serverHostIds: ReadonlySet<string> = new Set([SERVER_HOST_ID])
 ): SidebarInputsFeedDomain[] {
-  const worktrees = getAllWorktreesFromState(state)
+  const worktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state))
   const servers = readWindowPairedServerHosts(state, serverHostIds)
   const windowActivity = readWindowWorkspaceActivityFacts(state, GOLDEN_NOW)
   const serverRows = readWindowPairedServerRows(state, new Set(servers.keys()))

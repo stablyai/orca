@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import { AutomationsPageBreadcrumb } from './AutomationsPageBreadcrumb'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
@@ -28,6 +28,7 @@ export function AutomationsPageTopBar({
   showRunsDashboard: () => void
   showAutomationDetails: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <header
@@ -50,7 +51,7 @@ export function AutomationsPageTopBar({
           />
         ) : (
           <h1 className="truncate text-base font-semibold leading-8">
-            {translate('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
+            {t('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
           </h1>
         )}
       </header>

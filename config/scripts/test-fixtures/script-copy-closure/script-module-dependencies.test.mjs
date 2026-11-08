@@ -33,10 +33,7 @@ describe('copyScriptWithLocalModules', () => {
   it('preserves parent paths for modules shared with the runtime', () => {
     const sourceDir = sourceTree({ 'runtime.ts': 'export const value = 42\n' })
     mkdirSync(join(sourceDir, 'scripts'))
-    writeFileSync(
-      join(sourceDir, 'scripts', 'entry.mjs'),
-      "export { value } from '../runtime.ts'\n"
-    )
+    writeFileSync(join(sourceDir, 'scripts', 'entry.mjs'), "export { value } from '../runtime'\n")
     const destinationRoot = mkdtempSync(join(fixtureDir, 'dest-'))
     copyScriptWithLocalModules(
       join(sourceDir, 'scripts', 'entry.mjs'),

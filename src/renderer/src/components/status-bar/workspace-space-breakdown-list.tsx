@@ -6,7 +6,7 @@ import type {
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatBytes, formatCompactCount } from './workspace-space-format'
 import { getLargestWorkspaceSpaceItemSize } from './workspace-space-presentation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import { cn } from '@/lib/utils'
 import {
@@ -40,17 +40,18 @@ export function WorkspaceSpaceBreakdownList({
   worktree: WorkspaceSpaceWorktree | null
   isScanning: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (!worktree) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 text-center text-sm text-muted-foreground">
         <span className="flex items-center gap-2">
           {isScanning ? <Loader2 className="size-4 animate-spin" /> : null}
           {isScanning
-            ? translate(
+            ? t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.c5135e7e4a',
                 'Scanning workspace sizes. You can leave this page.'
               )
-            : translate(
+            : t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.5c6d25720c',
                 'Select a workspace to inspect.'
               )}
@@ -67,7 +68,7 @@ export function WorkspaceSpaceBreakdownList({
   const omittedItem: WorkspaceSpaceItem | null =
     worktree.omittedTopLevelItemCount > 0
       ? {
-          name: translate(
+          name: t(
             'components.status.bar.workspaceSpace.otherTopLevelItems',
             'Other top-level items ({{value0}})',
             { value0: worktree.omittedTopLevelItemCount }
@@ -95,7 +96,7 @@ export function WorkspaceSpaceBreakdownList({
               {formatBytes(worktree.sizeBytes)}
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.topLevelItems',
                 '{{formattedCount}} top-level items',
                 {
@@ -114,22 +115,16 @@ export function WorkspaceSpaceBreakdownList({
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0 break-words">
             {worktree.error ??
-              translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.0ba046fbc5',
-                'Scan failed.'
-              )}
+              t('auto.components.status.bar.WorkspaceSpaceManagerPanel.0ba046fbc5', 'Scan failed.')}
           </span>
         </div>
       ) : topLevelItemCount === 0 ? (
         <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.16988df079',
-            'No files found.'
-          )}
+          {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.16988df079', 'No files found.')}
         </div>
       ) : worktree.topLevelItems.length === 0 ? (
         <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-          {translate(
+          {t(
             'workspaceSpace.savedScan.folderDetailsUnavailable',
             'Folder details are not saved with past scans. Refresh to inspect this workspace.'
           )}
@@ -165,7 +160,7 @@ export function WorkspaceSpaceBreakdownList({
                       breakdownItems.length <= 4 && '[@media(min-height:651px)]:hidden'
                     )}
                   >
-                    {translate('workspaceSpace.breakdown.viewAll', 'Show more folder details')}
+                    {t('workspaceSpace.breakdown.viewAll', 'Show more folder details')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-80">
@@ -200,6 +195,7 @@ function BreakdownRow({
   executionHostId: ExecutionHostId | 'unresolved'
   hideWhenShort?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const row = (
     <div
       className={cn(
@@ -225,7 +221,7 @@ function BreakdownRow({
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => void revealInFileManager(item.path, executionHostId)}>
           <FolderSearch className="size-3.5" />
-          {getRevealInFileManagerLabel()}
+          {getRevealInFileManagerLabel(t)}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

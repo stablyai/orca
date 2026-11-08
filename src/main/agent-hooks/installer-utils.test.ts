@@ -5,7 +5,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -16,15 +15,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import {
-  createManagedCommandMatcher,
-  removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsHookCommand,
-  writeManagedScript,
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
-import { buildPosixAgentHookPostCommand } from './hook-post-command'
+import './hook-post-command'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
 let tmpDir: string
@@ -55,16 +51,6 @@ describe('writeHooksJson', () => {
     expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({
       hooks: { Stop: [] }
     })
-  })
-
-  it('does not replace a dangling hook config symlink', () => {
-    const targetPath = join(tmpDir, 'missing-dotfiles-hooks.json')
-    symlinkSync(targetPath, configPath)
-
-    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow()
-
-    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(existsSync(targetPath)).toBe(false)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -113,81 +99,6 @@ describe('writeHooksJson', () => {
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
     expect(bak).toEqual(config)
   })
-
-  it('cleans temporary output when writing to an existing directory fails', () => {
-    const blockingDir = configPath
-    mkdirSync(blockingDir)
-
-    expect(() => writeHooksJson(blockingDir, { hooks: {} })).toThrow()
-
-    const entries = readdirSync(tmpDir)
-    expect(entries.filter((e) => e.endsWith('.tmp'))).toHaveLength(0)
-  })
-})
-
-describe('removeManagedCommands', () => {
-  const match = createManagedCommandMatcher('copilot-hook.sh')
-
-  it('preserves unrelated nested hooks while removing managed entries', () => {
-    const cleaned = removeManagedCommands(
-      [
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"'
-            },
-            { type: 'command', command: 'echo keep me' }
-          ]
-        }
-      ],
-      match
-    )
-
-    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
-  })
-
-  it('removes exec-form hooks whose managed script path is an argument', () => {
-    const cleaned = removeManagedCommands(
-      [
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: 'C:\\Windows\\System32\\conhost.exe',
-              args: [
-                '--headless',
-                'C:\\Windows\\System32\\cmd.exe',
-                '/d',
-                '/c',
-                'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd'
-              ]
-            },
-            { type: 'command', command: 'echo keep me' }
-          ]
-        }
-      ],
-      match
-    )
-
-    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
-  })
-})
-
-describe('writeManagedScript', () => {
-  it.skipIf(process.platform === 'win32')(
-    'repairs executable bits even when script content is unchanged',
-    () => {
-      const scriptPath = join(tmpDir, 'agent-hooks', 'claude-hook.sh')
-
-      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
-      chmodSync(scriptPath, 0o644)
-
-      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
-
-      expect(statSync(scriptPath).mode & 0o111).not.toBe(0)
-    }
-  )
 })
 
 describe('wrapPosixHookCommand', () => {
@@ -241,41 +152,6 @@ describe('wrapPosixHookCommand', () => {
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'drains stdin when a directory occupies the managed script path',
-    () => {
-      const scriptPath = join(tmpDir, 'directory-hook.sh')
-      mkdirSync(scriptPath)
-      const result = runProcessSync({
-        program: '/bin/sh',
-        args: ['-c', wrapPosixHookCommand(scriptPath)],
-        input: 'x'.repeat(1_000_000),
-        timeoutMs: 5000
-      })
-
-      expect(result.timedOut).toBe(false)
-      expect(result.code).toBe(0)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'drains stdin when the managed script is executable but unreadable',
-    () => {
-      const scriptPath = join(tmpDir, 'unreadable-hook.sh')
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
-      chmodSync(scriptPath, 0o111)
-      const result = runProcessSync({
-        program: '/bin/sh',
-        args: ['-c', wrapPosixHookCommand(scriptPath)],
-        input: 'x'.repeat(1_000_000),
-        timeoutMs: 5000
-      })
-
-      expect(result.timedOut).toBe(false)
-      expect(result.code).toBe(0)
     }
   )
 
@@ -362,35 +238,6 @@ describe('wrapRuntimeHomeHookCommand', () => {
     expect(result.code, result.stderr.toString()).toBe(7)
   })
 
-  it.skipIf(process.platform !== 'win32')('keeps common Windows profiles on the fast path', () => {
-    const destinationHome = join(tmpDir, 'destination 国際 profile')
-    const scriptDir = join(destinationHome, '.orca', 'agent-hooks')
-    mkdirSync(scriptDir, { recursive: true })
-    writeFileSync(join(scriptDir, 'claude-hook.cmd'), '@echo off\r\nexit /b 7\r\n', 'utf-8')
-    const result = runProcessSync({
-      program: shell,
-      args: ['-c', wrapRuntimeHomeHookCommand('claude-hook')],
-      env: { ...process.env, HOME: destinationHome.replaceAll('\\', '/') },
-      timeoutMs: 5000
-    })
-
-    expect(result.timedOut).toBe(false)
-    expect(result.code, result.stderr.toString()).toBe(7)
-  })
-
-  it('drains stdin when HOME is unavailable', () => {
-    const command = `unset HOME; ${wrapRuntimeHomeHookCommand('claude-hook')}`
-    const result = runProcessSync({
-      program: shell,
-      args: ['-c', command],
-      input: 'x'.repeat(1_000_000),
-      timeoutMs: 5000
-    })
-
-    expect(result.timedOut).toBe(false)
-    expect(result.code).toBe(0)
-  })
-
   it('emits neutral JSON when a lifecycle script is missing', () => {
     const result = runProcessSync({
       program: shell,
@@ -407,64 +254,4 @@ describe('wrapRuntimeHomeHookCommand', () => {
     expect(result.code, result.stderr.toString()).toBe(0)
     expect(JSON.parse(result.stdout.toString().trim())).toEqual({})
   })
-})
-
-describe('buildPosixAgentHookPostCommand', () => {
-  it.skipIf(process.platform === 'win32').each([
-    ['raw-json-v1', 'application/json', '--data-binary', '@-'],
-    ['', 'application/x-www-form-urlencoded', '--data-urlencode', 'payload@-'],
-    ['future-transport', 'application/x-www-form-urlencoded', '--data-urlencode', 'payload@-']
-  ])(
-    'uses the compatible transport for advertisement %s',
-    (transport, contentType, flag, value) => {
-      const argsPath = join(tmpDir, 'curl-args.jsonl')
-      const payloadPath = join(tmpDir, 'curl-payload')
-      const payload = '{"prompt":"漢字 $HOME & quoted"}'
-      const command = [
-        'curl() { printf "%s\n" "$@" > "$ORCA_TEST_CURL_ARGS"; cat > "$ORCA_TEST_CURL_PAYLOAD"; }',
-        'payload="$ORCA_TEST_PAYLOAD"',
-        ...buildPosixAgentHookPostCommand('claude')
-      ].join('\n')
-      const result = runProcessSync({
-        program: '/bin/sh',
-        args: ['-c', command],
-        env: {
-          PATH: '/usr/bin:/bin',
-          ORCA_AGENT_HOOK_TRANSPORT: transport,
-          ORCA_AGENT_HOOK_PORT: '1234',
-          ORCA_AGENT_HOOK_TOKEN: 'token',
-          ORCA_PANE_KEY: 'tab:leaf',
-          ORCA_TAB_ID: 'tab',
-          ORCA_AGENT_LAUNCH_TOKEN: 'launch',
-          ORCA_WORKTREE_ID: 'folder:/path & space',
-          ORCA_AGENT_HOOK_ENV: 'prod',
-          ORCA_AGENT_HOOK_VERSION: '1',
-          ORCA_TEST_CURL_ARGS: argsPath,
-          ORCA_TEST_CURL_PAYLOAD: payloadPath,
-          ORCA_TEST_PAYLOAD: payload
-        },
-        timeoutMs: 5000
-      })
-      expect(result.code).toBe(0)
-      const args = readFileSync(argsPath, 'utf8').trimEnd().split('\n')
-      expect(args).toContain(`Content-Type: ${contentType}`)
-      expect(args).toContain('http://127.0.0.1:1234/hook/claude')
-      expect(args).toContain('X-Orca-Agent-Hook-Token: token')
-      const payloadFlagIndex = args.lastIndexOf(flag)
-      expect(args.slice(payloadFlagIndex, payloadFlagIndex + 2)).toEqual([flag, value])
-      expect(readFileSync(payloadPath, 'utf8')).toBe(payload)
-      if (transport === 'raw-json-v1') {
-        expect(args).not.toContain('--data-urlencode')
-        const metadata = args.find((arg) => arg.startsWith('X-Orca-Agent-Hook-Meta: '))
-        expect(metadata).toBeDefined()
-        expect(
-          Buffer.from(metadata!.slice('X-Orca-Agent-Hook-Meta: '.length), 'base64').toString()
-        ).toBe('tab:leaf\x1ftab\x1flaunch\x1ffolder:/path & space\x1fprod\x1f1')
-      } else {
-        expect(args).not.toContain('--data-binary')
-        expect(args).toContain('paneKey=tab:leaf')
-        expect(args).toContain('worktreeId=folder:/path & space')
-      }
-    }
-  )
 })

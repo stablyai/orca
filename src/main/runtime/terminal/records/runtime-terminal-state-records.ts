@@ -100,6 +100,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null
+  /** What the last command printed before the incarnation's PTY exited. */
+  lastExitOutput?: { incarnationId: PtyIncarnationId | null; text: string }
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
   /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */
@@ -110,6 +112,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     sessionBoundary?: boolean
     /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
+    /** When OSC 7501 first reported blocked on sign-in: input would go to the login menu. */
+    programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null

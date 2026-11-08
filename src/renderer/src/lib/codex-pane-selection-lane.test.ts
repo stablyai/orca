@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {

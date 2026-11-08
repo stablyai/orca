@@ -4,7 +4,8 @@ const requestEditorFileClose = vi.hoisted(() => vi.fn<(fileId: string) => void>(
 vi.mock('../editor/autosave/editor-autosave', () => ({ requestEditorFileClose }))
 
 import { useAppStore } from '../../store'
-import { makeOpenFile, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
+import { makeOpenFile } from '../../store/slices/editor/types/open-file.test-fixture'
+import { makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
 import { registerEditorFrameFlush } from '../editor/save/flush/editor-pending-flush'
 import { createWorkspaceTabCloseCommands } from './workspace-tab-close-commands'
 
@@ -33,6 +34,6 @@ it('closes the renamed file, prompting when it is dirty, after the frame flush',
   answer(true)
   await drainMicrotasks()
 
-  expect(requestEditorFileClose).toHaveBeenCalledWith('new', undefined)
+  expect(requestEditorFileClose).toHaveBeenCalledWith('new', { tabId: 'tab' })
   expect(useAppStore.getState().unifiedTabsByWorktree[worktreeId]).toHaveLength(1)
 })

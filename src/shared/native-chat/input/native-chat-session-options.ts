@@ -110,6 +110,8 @@ export type NativeChatSessionOptionSettingsMutation =
 
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Live local admission for a structured action, before consuming its composer trigger. */
+  admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>

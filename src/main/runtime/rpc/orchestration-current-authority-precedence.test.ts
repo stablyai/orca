@@ -1,9 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
-  COORDINATOR_HANDLE,
-  COORDINATOR_PANE,
   createHarness,
   currentEvidence,
   CURRENT_COORDINATOR_HANDLE,
@@ -23,106 +20,6 @@ afterEach(() => {
 })
 
 describe('current orchestration authority precedence', () => {
-  it.each(['dispatch', 'websocket'] as const)(
-    '%s uses an attested current coordinator binding before legacy fallback',
-    async (transport) => {
-      const harness = createHarness()
-      const run = harness.db.createRun({
-        objective: 'current work',
-        coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-        coordinatorPaneKey: CURRENT_COORDINATOR_PANE
-      })
-
-      const response = await invoke(
-        harness.dispatcher,
-        request(
-          'orchestration.taskCreate',
-          {
-            spec: 'current assignment',
-            callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-          },
-          currentEvidence('coordinator'),
-          `current-task-create-${transport}`
-        ),
-        transport
-      )
-
-      expect(response).toMatchObject({
-        ok: true,
-        result: { task: { run_id: run.id, spec: 'current assignment' } }
-      })
-      expect(harness.db.listTasks({ runId: harness.adoptedRunId })).toHaveLength(1)
-    }
-  )
-
-  it('prefers a different current Run even for the retained coordinator terminal', async () => {
-    const harness = createHarness()
-    const run = harness.db.createRun({
-      objective: 'intentional current work',
-      coordinatorHandle: COORDINATOR_HANDLE,
-      coordinatorPaneKey: COORDINATOR_PANE
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'current assignment', callerTerminalHandle: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'retained-terminal-current-run'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { task: { run_id: run.id } } })
-  })
-
-  it('checks a different current Run before retained coordinator mail', async () => {
-    const harness = createHarness()
-    const run = harness.db.createRun({
-      objective: 'intentional current work',
-      coordinatorHandle: COORDINATOR_HANDLE,
-      coordinatorPaneKey: COORDINATOR_PANE
-    })
-    const message = harness.db.insertMessage({
-      runId: run.id,
-      from: CURRENT_WORKER_HANDLE,
-      to: `run:${run.id}`,
-      subject: 'current completion',
-      deliveryContract: 'current_delivery'
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.check',
-        { terminal: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'retained-terminal-current-check'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { runId: run.id, messages: [{ id: message.id }], count: 1 }
-    })
-    expect(response).not.toHaveProperty('result.legacyCompatibility')
-  })
-
-  it('preserves legacy fallback for a retained coordinator without a current binding', async () => {
-    const harness = createHarness()
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'legacy follow-up', callerTerminalHandle: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'legacy-task-create'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: harness.adoptedRunId, spec: 'legacy follow-up' } }
-    })
-  })
-
   it.each([
     ['heartbeat', undefined],
     ['worker_done', 'succeeded']

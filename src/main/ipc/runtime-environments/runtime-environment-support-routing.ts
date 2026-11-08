@@ -10,11 +10,8 @@ import {
   type KnownRuntimeEnvironment,
   getPreferredPairedRuntimeConnection
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import {
-  markEnvironmentUsed,
-  resolveEnvironment
-} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   subscribeRemoteRuntimeRequest,
@@ -130,7 +127,7 @@ export function executeSupportRoutedCall(args: {
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
-        markEnvironmentUsed(args.userDataPath, environmentId, {
+        recordRuntimeEnvironmentUsage(args.userDataPath, environmentId, {
           runtimeId: response._meta.runtimeId
         })
       }

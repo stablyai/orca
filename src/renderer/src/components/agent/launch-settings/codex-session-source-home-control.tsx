@@ -5,7 +5,7 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/proj
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentSessionSourceHomeControl = {
   runtimeLabel: string
@@ -85,6 +85,7 @@ export function AgentSessionSourceHomeInput({
   value,
   onSave
 }: AgentSessionSourceHomeControl): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState(value)
 
   const commit = (): void => {
@@ -94,15 +95,12 @@ export function AgentSessionSourceHomeInput({
   return (
     <div className="flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {translate(
-          'auto.components.settings.AgentsPane.codexSessionSource',
-          'Codex home to import from'
-        )}
+        {t('auto.components.settings.AgentsPane.codexSessionSource', 'Codex home to import from')}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.AgentsPane.codexSessionSourceInfo',
                 'About importing Codex history'
               )}
@@ -112,7 +110,7 @@ export function AgentSessionSourceHomeInput({
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={6} className="max-w-xs">
-            {translate(
+            {t(
               'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
               'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.'
             )}
@@ -149,7 +147,7 @@ export function AgentSessionSourceHomeInput({
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+            {t('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
           </Button>
         )}
       </div>

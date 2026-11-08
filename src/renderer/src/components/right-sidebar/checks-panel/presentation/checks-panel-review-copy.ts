@@ -1,5 +1,6 @@
 import type { GitHubPRRefreshSkippedReason } from '../../../../../../shared/github/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getGitHubUnavailableEmptyStateCopy } from '../../hosted-review/provider-actions/github-refresh-error-copy'
 import {
   autoRetrySchedule,
@@ -14,31 +15,34 @@ import {
 type KeyedCopy = { key: string; fallback: string }
 
 /** Append current concurrent lookup failures or positive-unresolved evidence below blocker/no-review copy. */
-export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): string | undefined {
+export function concurrentLookupDetail(
+  input: ChecksPanelReviewStateInput,
+  t: Translate = translate
+): string | undefined {
   const { reviewLabel, providerName, refresh } = input
   if (input.reviewLookup === 'positive_unresolved') {
-    return translate(
+    return t(
       'auto.components.right.sidebar.checks.panel.review.detail.positive',
       'Orca also has saved {{reviewLabel}} information that it could not verify.',
       { reviewLabel }
     )
   }
   if (isRateLimitRefresh(refresh)) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.checks.panel.review.detail.rate_limited',
       'Orca also could not check {{reviewLabel}} status because {{provider}} is temporarily limiting requests.',
       { reviewLabel, provider: providerName }
     )
   }
   if (refresh?.errorType === 'network') {
-    return translate(
+    return t(
       'auto.components.right.sidebar.checks.panel.review.detail.network',
       'Orca also could not check {{reviewLabel}} status because this environment could not reach {{provider}}.',
       { reviewLabel, provider: providerName }
     )
   }
   if (refresh?.status === 'error' || isHardRefreshError(refresh)) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.checks.panel.review.detail.untyped',
       'Orca also could not confirm whether this branch already has a {{reviewLabel}}.',
       { reviewLabel }
@@ -50,7 +54,8 @@ export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): stri
 export function transientRefreshState(
   input: ChecksPanelReviewStateInput,
   composerMode: ChecksPanelReviewState['composerMode'],
-  workflowAction: ChecksPanelReviewState['workflowAction']
+  workflowAction: ChecksPanelReviewState['workflowAction'],
+  t: Translate = translate
 ): ChecksPanelReviewState {
   const { reviewLabel, providerName, refresh } = input
   const schedule = autoRetrySchedule(input)
@@ -63,7 +68,7 @@ export function transientRefreshState(
   }
   const githubUnavailableCopy =
     refresh?.errorType === 'server_error'
-      ? getGitHubUnavailableEmptyStateCopy(refresh.errorType)
+      ? getGitHubUnavailableEmptyStateCopy(refresh.errorType, t)
       : null
   if (githubUnavailableCopy) {
     return { ...base, ...githubUnavailableCopy }
@@ -71,12 +76,12 @@ export function transientRefreshState(
   if (isRateLimitRefresh(refresh)) {
     return {
       ...base,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.paused.title',
         '{{provider}} refresh paused',
         { provider: providerName }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.paused.body',
         '{{provider}} is temporarily limiting requests. This can happen even when the displayed API quota is not exhausted.',
         { provider: providerName }
@@ -86,12 +91,12 @@ export function transientRefreshState(
   if (refresh?.errorType === 'network') {
     return {
       ...base,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.network.title',
         'Could not reach {{provider}}',
         { provider: providerName }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.network.body',
         'This environment could not reach {{provider}}. Check its connection, then retry.',
         { provider: providerName }
@@ -101,12 +106,12 @@ export function transientRefreshState(
   if (refresh?.errorType === 'unknown') {
     return {
       ...base,
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.checks.panel.review.unknown_error.title',
         'Could not check {{reviewLabel}} status',
         { reviewLabel }
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.checks.panel.review.unknown_error.body',
         'The lookup failed, so Orca could not confirm whether this branch already has a {{reviewLabel}}.',
         { reviewLabel }
@@ -115,12 +120,12 @@ export function transientRefreshState(
   }
   return {
     ...base,
-    title: translate(
+    title: t(
       'auto.components.right.sidebar.checks.panel.review.untyped.title',
       '{{reviewLabelCap}} status unavailable',
       { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
     ),
-    description: translate(
+    description: t(
       'auto.components.right.sidebar.checks.panel.review.untyped.body',
       'Orca could not confirm whether this branch already has a {{reviewLabel}}. Retry to check again.',
       { reviewLabel }
@@ -181,7 +186,10 @@ const HARD_ERROR_COPY: Record<
   }
 }
 
-export function hardRefreshErrorState(input: ChecksPanelReviewStateInput): ChecksPanelReviewState {
+export function hardRefreshErrorState(
+  input: ChecksPanelReviewStateInput,
+  t: Translate = translate
+): ChecksPanelReviewState {
   const { reviewLabel, providerName, refresh } = input
   const copy =
     HARD_ERROR_COPY[(refresh?.errorType as keyof typeof HARD_ERROR_COPY) ?? 'gh_unavailable'] ??
@@ -189,8 +197,8 @@ export function hardRefreshErrorState(input: ChecksPanelReviewStateInput): Check
   const vars = { provider: providerName, reviewLabel }
   return {
     renderReview: false,
-    title: translate(copy.title.key, copy.title.fallback, vars),
-    description: translate(copy.body.key, copy.body.fallback, vars),
+    title: t(copy.title.key, copy.title.fallback, vars),
+    description: t(copy.body.key, copy.body.fallback, vars),
     composerMode: 'hidden',
     workflowAction: null,
     recovery: ['retry']
@@ -277,7 +285,8 @@ const SKIPPED_COPY: Partial<
 /** Returns the skipped-reason row, or `null` to defer to the missing/unknown row. */
 export function skippedRefreshState(
   input: ChecksPanelReviewStateInput,
-  skippedReason: GitHubPRRefreshSkippedReason
+  skippedReason: GitHubPRRefreshSkippedReason,
+  t: Translate = translate
 ): ChecksPanelReviewState | null {
   const copy = SKIPPED_COPY[skippedReason]
   if (!copy) {
@@ -287,8 +296,8 @@ export function skippedRefreshState(
   const vars = { reviewLabel: input.reviewLabel }
   return {
     renderReview: false,
-    title: translate(copy.title.key, copy.title.fallback, vars),
-    description: translate(copy.body.key, copy.body.fallback, vars),
+    title: t(copy.title.key, copy.title.fallback, vars),
+    description: t(copy.body.key, copy.body.fallback, vars),
     composerMode: 'hidden',
     workflowAction: null,
     recovery: copy.recovery

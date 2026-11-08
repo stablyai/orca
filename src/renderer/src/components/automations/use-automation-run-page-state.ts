@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
@@ -51,6 +52,7 @@ export function useAutomationRunPageState({
     'selectedRuns' | 'selectedRunsReady' | 'selectedRunsNotice' | 'selectedAutomationRunPage'
   >
 }) {
+  const t = useTranslate()
   const {
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
@@ -244,10 +246,13 @@ export function useAutomationRunPageState({
     ? list.runTargetFor(selectedAutomationRunPage)
     : null
   const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
-    ? getAutomationRunWorkspaceDisplay({
-        run: selectedAutomationRunPage,
-        worktree: selectedRunTarget?.worktree ?? null
-      })
+    ? getAutomationRunWorkspaceDisplay(
+        {
+          run: selectedAutomationRunPage,
+          worktree: selectedRunTarget?.worktree ?? null
+        },
+        t
+      )
     : null
   const selectedAutomationRunPageViewState = selectedRunTarget?.viewState ?? null
   const canRerunSelectedAutomationRunPage =

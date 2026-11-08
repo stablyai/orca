@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   notifyCodexPaneBoundForStaleSweep,
   resetCodexStalePaneSweepForTests
-} from './codex-stale-pane-sweep'
+} from './agent-session/accounts/codex/codex-stale-pane-sweep'
 
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'

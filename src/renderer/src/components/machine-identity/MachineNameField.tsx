@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { cn } from '@/lib/utils'
 import { MACHINE_NAME_MAX_LENGTH } from '../../../../shared/machine-name'
@@ -18,6 +18,7 @@ export function MachineNameField({
   id = 'machine-name',
   className
 }: MachineNameFieldProps): React.JSX.Element | null {
+  const t = useTranslate()
   const machineName = useAppStore((s) => s.settings?.machineName ?? '')
   const updateSettings = useAppStore((s) => s.updateSettings)
   const publishedMachineName = usePublishedMachineName(machineName)
@@ -31,7 +32,7 @@ export function MachineNameField({
   return (
     <div className={cn('space-y-2', className)}>
       <label htmlFor={id} className="text-xs font-medium text-foreground">
-        {translate('auto.components.settings.MachineNameField.label', 'Machine name')}
+        {t('auto.components.settings.MachineNameField.label', 'Machine name')}
       </label>
       <DebouncedSettingsTextInput
         id={id}
@@ -40,21 +41,18 @@ export function MachineNameField({
         maxLength={MACHINE_NAME_MAX_LENGTH}
         placeholder={
           publishedMachineName ??
-          translate(
-            'auto.components.settings.MachineNameField.placeholder',
-            'Detected automatically'
-          )
+          t('auto.components.settings.MachineNameField.placeholder', 'Detected automatically')
         }
         aria-describedby={descriptionId}
       />
       <p id={descriptionId} className="text-xs text-muted-foreground">
         {publishedMachineName
-          ? translate(
+          ? t(
               'auto.components.settings.MachineNameField.description',
               'Other devices and hosts see “{{name}}”. Leave this blank to use the computer’s own name.',
               { name: publishedMachineName }
             )
-          : translate(
+          : t(
               'auto.components.settings.MachineNameField.pending',
               'Other devices and hosts see this name. Leave it blank to use the detected computer name.'
             )}

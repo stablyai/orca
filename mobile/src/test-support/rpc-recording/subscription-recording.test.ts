@@ -296,10 +296,10 @@ describe('actual stream result partitions', () => {
             expect(before.outcome.recording.checkpoints.length).toBeGreaterThan(0)
           }
           const run = await runStreamInput(branch, mode)
+          // The live name's shared client-event stream opens again after the page refuses its frame; the chat page's own stream does not.
           const stopsAtMigration =
-            mode !== 'native' &&
-            position === 'first' &&
-            operation !== 'notifications.desktop-stream'
+            mode !== 'native' && position === 'first' && operation === 'session.native-chat-page'
+          const reopened = mode !== 'native' && operation === 'session.live-worktree-name'
           if (stopsAtMigration) {
             expect('error' in run.outcome).toBe(true)
             if (!('error' in run.outcome)) {
@@ -310,27 +310,17 @@ describe('actual stream result partitions', () => {
               throw new Error('Wrong failure boundary')
             }
             expect(run.outcome.error.origin).toBe('scripted-frame-opening')
-            expect(run.outcome.error.request).toBe(
-              operation === 'session.live-worktree-name'
-                ? 'runtime.clientEvents.subscribe#2'
-                : 'nativeChat.subscribe#2'
-            )
-            expect(run.actions.at(-1)).toBe(
-              operation === 'session.live-worktree-name' ? 'mount' : 'load-earlier'
-            )
+            expect(run.outcome.error.request).toBe('nativeChat.subscribe#2')
+            expect(run.actions.at(-1)).toBe('load-earlier')
             expect(run.actions).not.toContain('unmount')
-            expect(run.reads.at(-1)).toMatchObject(
-              operation === 'session.live-worktree-name'
-                ? { name: 'Feature Work', resolution: 'present', crash: captureValue(null) }
-                : {
-                    messageIds: [],
-                    status: 'error',
-                    hasMore: false,
-                    error: 'the reply could not be read (unrecognised-message)',
-                    crash: captureValue(null)
-                  }
-            )
-            expect(run.requests).toHaveLength(operation === 'session.live-worktree-name' ? 1 : 0)
+            expect(run.reads.at(-1)).toMatchObject({
+              messageIds: [],
+              status: 'error',
+              hasMore: false,
+              error: 'the reply could not be read (unrecognised-message)',
+              crash: captureValue(null)
+            })
+            expect(run.requests).toHaveLength(0)
             expect(run.effects.filter((effect) => effect.name === 'stream-listener-crash')).toEqual(
               []
             )
@@ -346,11 +336,13 @@ describe('actual stream result partitions', () => {
               operation === 'notifications.desktop-stream' ? 'stop' : 'unmount'
             )
             if (operation === 'session.live-worktree-name') {
+              // A page that refused the first ready hears nothing until the reopened stream's ready.
+              const missedRename = reopened && position === 'first'
               expect(last.state).toMatchObject({
-                name: 'Feature Work Renamed',
+                name: missedRename ? 'Feature Work' : 'Feature Work Renamed',
                 resolution: 'present'
               })
-              expect(run.requests).toHaveLength(2)
+              expect(run.requests).toHaveLength(missedRename ? 1 : 2)
             } else if (operation === 'session.native-chat-page') {
               expect(last.state).toMatchObject({
                 messageIds:
@@ -379,10 +371,12 @@ describe('actual stream result partitions', () => {
           if (mode !== 'native') {
             expect(run.pairs).toHaveLength(1)
             const frames = run.pairs[0]!.toShell.map((json) => JSON.parse(json))
-            expect(frames.filter((frame) => frame.type === 'subscribe')).toHaveLength(1)
+            expect(frames.filter((frame) => frame.type === 'subscribe')).toHaveLength(
+              reopened ? 2 : 1
+            )
             expect(
               frames.filter((frame) => frame.type === 'cancel' && frame.target === 'subscription')
-            ).toHaveLength(1)
+            ).toHaveLength(reopened ? 2 : 1)
           }
         }
       }
@@ -425,122 +419,85 @@ describe('actual stream result partitions', () => {
         for (const branch of variants.filter((input) => input.lineage?.role !== 'prelude')) {
           const run = await runStreamInput(branch, mode)
           const partition = branch.lineage!.partition!
-          const failed = mode !== 'native' && partition === 'result-absent' && position !== 'last'
           const outer = ['outer-refused', 'outer-refused-no-message', 'method-not-found'].includes(
             partition
           )
-          const expected =
-            partition === 'normal'
-              ? [5, 4]
-              : outer && position !== 'last'
-                ? [2, 2]
-                : failed
-                  ? [2, 2]
-                  : position === 'middle'
-                    ? [4, 4]
-                    : [4, 3]
-          if (failed) {
-            expect('error' in run.outcome).toBe(true)
-            if (!('error' in run.outcome) || !(run.outcome.error instanceof RecordingStreamGuard)) {
-              throw new Error('Missing actual stopped opening')
-            }
-            expect(run.outcome.error.origin).toBe('scripted-frame-opening')
-            expect(run.outcome.error.request).toBe('runtime.clientEvents.subscribe#2')
-            expect(run.actions).toEqual(['start'])
-          } else {
-            if ('error' in run.outcome) {
-              throw run.outcome.error
-            }
-            expect(run.actions).toEqual(['start', 'stop'])
-            expect(run.outcome.recording.checkpoints.at(-1)!.observation.settlements).toMatchObject(
-              { cutover: { status: 'fulfilled' } }
-            )
-            expect(run.outcome.recording.checkpoints.at(-1)!.observation.state).toEqual({
-              fetchWorktrees: expected[0],
-              fetchRepoMetadata: expected[1],
-              running: false
-            })
+          // The page refuses an absent result and drops the stream, like a host refusal.
+          const ended = outer || (mode !== 'native' && partition === 'result-absent')
+          // Workspace options reads: one at start, one more when the replayed ready after the cutover arrives intact.
+          const expected = partition === 'normal' || (position === 'middle' && !ended) ? 2 : 1
+          // A stream that ended after its ready opens again at once; one refused before it waits for the cutover.
+          const subscribeIds =
+            !ended || position === 'first'
+              ? ['frame-1', 'frame-2']
+              : position === 'last'
+                ? ['frame-1', 'frame-2', 'frame-4']
+                : outer
+                  ? ['frame-1', 'frame-2', 'frame-3']
+                  : ['frame-1', 'frame-3', 'frame-4']
+          if ('error' in run.outcome) {
+            throw run.outcome.error
           }
-          if (!('error' in run.outcome)) {
-            const payloads = run.outcome.recording.checkpoints.at(-1)!.observation.payloads
-            if (!Array.isArray(payloads)) {
-              throw new Error('Missing actual refresh stream/control bytes')
-            }
-            const frames = payloads.map((row) => {
-              if (
-                !row ||
-                typeof row !== 'object' ||
-                Array.isArray(row) ||
-                typeof row.json !== 'string'
-              ) {
-                throw new Error('Missing actual refresh frame')
-              }
-              return JSON.parse(row.json)
-            })
-            const unsubscribeIds = outer
-              ? position === 'last'
-                ? ['sub-1']
-                : ['sub-2']
-              : partition === 'normal' || position === 'middle'
-                ? ['sub-1', 'sub-2']
-                : position === 'first'
-                  ? ['sub-2']
-                  : ['sub-1']
-            expect(frames.filter((frame) => frame.method.endsWith('.subscribe'))).toEqual([
-              {
-                id: 'frame-1',
-                deviceToken: 'recording-device',
-                method: CLIENT_EVENTS,
-                params: null
-              },
-              {
-                id: 'frame-2',
-                deviceToken: 'recording-device',
-                method: CLIENT_EVENTS,
-                params: null
-              }
-            ])
-            expect(
-              frames
-                .filter((frame) => frame.method.endsWith('.unsubscribe'))
-                .map((frame) => frame.params)
-            ).toEqual(unsubscribeIds.map((subscriptionId) => ({ subscriptionId })))
-            expect(frames).toHaveLength(2 + unsubscribeIds.length)
+          expect(run.actions).toEqual(['start', 'stop'])
+          expect(run.outcome.recording.checkpoints.at(-1)!.observation.settlements).toMatchObject({
+            cutover: { status: 'fulfilled' }
+          })
+          expect(run.outcome.recording.checkpoints.at(-1)!.observation.state).toEqual({
+            refreshWorktrees: 0,
+            syncViewSettings: expected,
+            running: false
+          })
+          const payloads = run.outcome.recording.checkpoints.at(-1)!.observation.payloads
+          if (!Array.isArray(payloads)) {
+            throw new Error('Missing actual refresh stream/control bytes')
           }
+          const frames = payloads.map((row) => {
+            if (
+              !row ||
+              typeof row !== 'object' ||
+              Array.isArray(row) ||
+              typeof row.json !== 'string'
+            ) {
+              throw new Error('Missing actual refresh frame')
+            }
+            return JSON.parse(row.json)
+          })
+          const unsubscribeIds = outer
+            ? position === 'last'
+              ? ['sub-1']
+              : ['sub-2']
+            : partition === 'normal' || position === 'middle'
+              ? ['sub-1', 'sub-2']
+              : position === 'first'
+                ? ['sub-2']
+                : ['sub-1']
+          expect(frames.filter((frame) => frame.method.endsWith('.subscribe'))).toEqual(
+            subscribeIds.map((id) => ({
+              id,
+              deviceToken: 'recording-device',
+              method: CLIENT_EVENTS,
+              params: null
+            }))
+          )
+          expect(
+            frames
+              .filter((frame) => frame.method.endsWith('.unsubscribe'))
+              .map((frame) => frame.params)
+          ).toEqual(unsubscribeIds.map((subscriptionId) => ({ subscriptionId })))
+          expect(frames).toHaveLength(subscribeIds.length + unsubscribeIds.length)
           expect(run.requests).toEqual([])
-          expect(run.effects.filter((effect) => effect.name === 'fetchWorktrees')).toHaveLength(
-            expected[0]!
+          expect(run.effects.filter((effect) => effect.name === 'syncViewSettings')).toHaveLength(
+            expected
           )
-          expect(run.effects.filter((effect) => effect.name === 'fetchRepoMetadata')).toHaveLength(
-            expected[1]!
-          )
+          expect(run.effects.filter((effect) => effect.name === 'refreshWorktrees')).toHaveLength(0)
           if (mode !== 'native') {
             const posted = run.pairs[0]!.toShell.map((json) => JSON.parse(json))
-            expect(posted.filter((frame) => frame.type === 'subscribe')).toHaveLength(1)
+            expect(posted.filter((frame) => frame.type === 'subscribe')).toHaveLength(ended ? 2 : 1)
             expect(posted.filter((frame) => frame.type === 'request')).toEqual([])
             expect(
               posted.filter((frame) => frame.type === 'cancel' && frame.target === 'subscription')
-            ).toHaveLength(1)
+            ).toHaveLength(ended ? 2 : 1)
           }
-        }
-        if (mode !== 'native' && position !== 'last') {
-          const entered: string[] = []
-          for (const segment of variants) {
-            entered.push(segment.lineage!.role ?? segment.lineage!.partition!)
-            const run = await runStreamInput(segment, mode)
-            if ('error' in run.outcome) {
-              expect(segment.lineage!.partition).toBe('result-absent')
-              expect(run.outcome.error).toBeInstanceOf(RecordingStreamGuard)
-              expect(run.actions).toEqual(['start'])
-              expect(run.reads.at(-1)).toEqual({
-                fetchWorktrees: 2,
-                fetchRepoMetadata: 2,
-                running: true
-              })
-              break
-            }
-          }
-          expect(entered).toEqual(['prelude', 'normal', 'result-absent'])
         }
       }
     },

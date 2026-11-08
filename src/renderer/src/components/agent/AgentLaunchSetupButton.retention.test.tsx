@@ -8,14 +8,12 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
-import * as sources from '../native-chat/native-chat-launch-draft-source'
-import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
+import * as sources from '../native-chat/drafts/native-chat-launch-draft-source'
+import { transitionLaunchDrafts } from '../native-chat/drafts/native-chat-launch-draft-transition'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -58,10 +56,25 @@ afterEach(() => {
 
 describe('setup records exist only for authored setups', () => {
   it('keeps typed prompt and options through close, reopen and a rename', () => {
-    const entry = {
+    const entry: AgentPickerEntry = {
       ...row(0, 'codex'),
       worktreeId: 'repo::/old',
-      arguments: '--add-dir docs'
+      arguments: '--add-dir docs',
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'gpt',
+            label: 'gpt',
+            isDefault: true,
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ]
+      }
     }
     const show = (value: AgentPickerEntry) =>
       act(() =>
@@ -75,7 +88,10 @@ describe('setup records exist only for authored setups', () => {
       document.querySelector<HTMLButtonElement>('button[aria-label="Configure codex"]')!
     const prompt = () =>
       document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const effort = (label: string) =>
+      getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
     show(entry)
     fireEvent.click(configure())
     close()
@@ -83,15 +99,17 @@ describe('setup records exist only for authored setups', () => {
 
     // The open panel's first write is an option change; it shows at once and retains the setup.
     fireEvent.click(configure())
-    fireEvent.change(document.querySelector('textarea')!, { target: { value: '--add-dir src' } })
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    // Arguments are agent settings, so the launch panel offers no editor for them.
+    expect(document.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
     expect(sourceCount()).toBe(1)
     changePrompt(prompt(), 'fix the flaky test')
     close()
-    expect(document.querySelector('textarea')).toBeNull()
+    expect(document.querySelector('[cmdk-input]')).toBeNull()
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
     close()
 
     act(() =>
@@ -104,7 +122,7 @@ describe('setup records exist only for authored setups', () => {
     show({ ...entry, worktreeId: 'repo::/new' })
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
   })
 
   it('keeps a search preset in its own options slot, saving only real changes, with one shared prompt', async () => {
@@ -148,7 +166,8 @@ describe('setup records exist only for authored setups', () => {
     const effort = (label: string) =>
       getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
     const model = () => document.querySelector('[cmdk-item][data-current="true"]')?.textContent
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
 
     // Opening a preset saves nothing, and the plain row still shows defaults.
     fireEvent.click(searched)

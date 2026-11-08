@@ -18,9 +18,15 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
-import { getFolderWorkspaceRowGeometry } from './indentation'
+import {
+  getFolderWorkspaceRowGeometry,
+  getLineageChildrenInlineStyle,
+  LINEAGE_CHILDREN_INLINE_OFFSET
+} from './indentation'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import type { WorktreeItemRowContext } from './item-row'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 
@@ -36,6 +42,7 @@ export type FolderWorkspaceRowContext = {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   getCachedFolderWorkspacePathStatus: (request: {
@@ -54,6 +61,13 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree,
     rowKey: string
   ) => void
+} & Pick<WorktreeItemRowContext, 'worktreeDragState' | 'nativeLineageDropTargetIdentity'>
+
+/** The folder's own nested workspaces: its disclosure, and their cards when shown inline. */
+export type FolderRowLineage = {
+  onToggle: LineageToggleHandler | undefined
+  children?: React.ReactNode
+  childIsActive?: boolean
 }
 
 export function renderFolderWorkspaceVirtualRow(args: {
@@ -61,8 +75,20 @@ export function renderFolderWorkspaceVirtualRow(args: {
   row: FolderWorkspaceItemRow
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  lineage?: FolderRowLineage
 }): React.JSX.Element {
-  const { ctx, row, vItem } = args
+  return renderFolderWorkspaceOption(args)
+}
+
+/** Without `vItem`, the option sits inside a lineage group's frame instead of owning one. */
+export function renderFolderWorkspaceOption(args: {
+  ctx: FolderWorkspaceRowContext
+  row: FolderWorkspaceItemRow
+  vItem?: VirtualItem
+  measureVirtualRowElement?: (element: HTMLDivElement | null) => void
+  lineage?: FolderRowLineage
+}): React.JSX.Element {
+  const { ctx, row, vItem, lineage } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
   const isActiveWorktree = isActiveSidebarWorkspace(folderWorktree, {
@@ -79,6 +105,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
     folderWorkspaceId: row.folderWorkspace.id,
     workspaceLineageByChildKey: ctx.workspaceLineageByChildKey,
+    crossStoreChildren: ctx.crossStoreChildrenByFolderId.get(row.folderWorkspace.id) ?? [],
     worktreeLineageById: ctx.worktreeLineageById,
     worktreeMap: ctx.worktreeMap,
     repoMap: ctx.repoMap,
@@ -96,7 +123,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   })
   return (
     <div
-      key={vItem.key}
+      key={vItem?.key ?? row.key}
       id={getWorktreeOptionId(folderWorktreeIdentity)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
@@ -104,13 +131,18 @@ export function renderFolderWorkspaceVirtualRow(args: {
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={folderWorktreeIdentity}
-      data-worktree-virtual-row
-      data-worktree-virtual-row-key={String(vItem.key)}
-      data-worktree-virtual-row-start={vItem.start}
-      data-index={vItem.index}
-      ref={args.measureVirtualRowElement}
-      className="absolute left-0 right-0 top-0"
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      data-worktree-lineage-drop-row=""
+      {...(vItem
+        ? {
+            'data-worktree-virtual-row': true,
+            'data-worktree-virtual-row-key': String(vItem.key),
+            'data-worktree-virtual-row-start': vItem.start,
+            'data-index': vItem.index,
+            ref: args.measureVirtualRowElement,
+            className: 'absolute left-0 right-0 top-0',
+            style: { transform: getVirtualRowTransform(vItem.start) }
+          }
+        : { className: 'relative' })}
       onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
@@ -123,6 +155,8 @@ export function renderFolderWorkspaceVirtualRow(args: {
           worktree={folderWorktree}
           repo={undefined}
           isActive={isActiveWorktree}
+          // A child-active folder looks active without the active card's side effects.
+          isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
@@ -132,6 +166,22 @@ export function renderFolderWorkspaceVirtualRow(args: {
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
+          hostContextLabel={row.hostContextLabel}
+          lineageChildCount={row.lineageChildCount}
+          lineageChildWorktreeIds={row.lineageChildWorktreeIds}
+          lineageCollapsed={row.lineageCollapsed}
+          lineageChildren={lineage?.children}
+          lineageChildrenStyle={
+            lineage?.children
+              ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
+              : undefined
+          }
+          onLineageToggle={lineage?.onToggle}
+          isLineageDropTarget={Boolean(
+            ctx.worktreeDragState.draggingWorktreeId &&
+            (ctx.worktreeDragState.lineageDropTargetIdentity === folderWorktreeIdentity ||
+              ctx.nativeLineageDropTargetIdentity === folderWorktreeIdentity)
+          )}
         />
         <div className="pointer-events-auto absolute right-3 top-1.5">
           <FolderPathStatusIndicator status={pathStatus} />

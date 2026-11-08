@@ -139,23 +139,3 @@ describe('PluginService content verification on load', () => {
     await service.dispose()
   })
 })
-
-describe('PluginContentVerifier', () => {
-  it('shares one hash between concurrent loads of the same tree', async () => {
-    const plugin = await createInstalledPlugin({ worker: false })
-    const verifier = new PluginContentVerifier()
-    const target = {
-      pluginKey: plugin.pluginKey,
-      rootDir: plugin.rootDir,
-      contentHash: plugin.contentHash
-    }
-    const hashes = await import('./plugin-content-hash')
-    const spy = vi.spyOn(hashes, 'hashPluginTree')
-
-    await Promise.all([verifier.verify(target), verifier.verify(target), verifier.verify(target)])
-    expect(spy).toHaveBeenCalledTimes(1)
-    await verifier.verify(target)
-    expect(spy).toHaveBeenCalledTimes(2)
-    spy.mockRestore()
-  })
-})

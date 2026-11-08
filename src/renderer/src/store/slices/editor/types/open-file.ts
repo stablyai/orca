@@ -1,4 +1,5 @@
-import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type {
   GitBranchChangeEntry,
@@ -90,7 +91,7 @@ export type OpenFile = {
   csvPreviewOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -119,6 +120,8 @@ export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null

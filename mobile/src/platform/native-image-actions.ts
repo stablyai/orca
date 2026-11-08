@@ -8,7 +8,7 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../src/shared/clipboard-image'
-import { isKnownRasterImageMimeType } from '../../../src/shared/raster-image-preview-limits'
+import { isKnownRasterImageMimeType } from '../../../src/shared/file-preview/raster-image-preview-limits'
 import {
   imageParamsSchema,
   type BridgeImageRunParams

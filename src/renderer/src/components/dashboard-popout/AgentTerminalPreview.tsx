@@ -2,8 +2,8 @@ import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
@@ -18,6 +18,7 @@ import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailabl
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import {
@@ -34,6 +35,7 @@ import {
 } from '@/components/link-actions/link-action-request'
 import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
 import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
+import { useTranslate } from '@/i18n/use-translate'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
 // Preview snapshots bound history; pane scrollback would only cost memory.
@@ -63,12 +65,14 @@ export function AgentTerminalPreview({
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const [linkRequest, setLinkRequest] = useState<LinkActionRequest | null>(null)
   const linkSourceRef = useRef(linkSource)
   const browserForegroundRef = useRef(onBrowserForeground)
   const settings = useAppStore((state) => state.settings)
+  const terminalFontReady = usePluginFontReady(settings?.terminalFontFamily)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   // Read live settings without terminal remount, PTY reconnect or snapshot repaint.
@@ -358,7 +362,7 @@ export function AgentTerminalPreview({
       buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')
     )
     syncPreviewTerminalLigatures(terminal, settings)
-  }, [settings, macOptionAsAlt])
+  }, [settings, terminalFontReady, macOptionAsAlt])
 
   return (
     // Fix the box to the viewport so snapshot geometry cannot resize the dialog; fit/clip the true PTY frame at its cursor end.
@@ -381,7 +385,7 @@ export function AgentTerminalPreview({
       ) : null}
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ ptyId })}
+          {terminalPreviewUnavailableMessage({ ptyId }, t)}
         </div>
       ) : null}
       <div

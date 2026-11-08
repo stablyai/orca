@@ -39,7 +39,7 @@ vi.mock('../../store', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
-vi.mock('../../store/pinned-tab-close-guard', () => ({
+vi.mock('../../store/slices/tabs/closing/pinned-tab-close-guard', () => ({
   guardPinnedTabClose: ({ onClose }: { onClose: () => void }) => onClose(),
   isUnifiedTabPinned: vi.fn(() => false),
   resolvePinnedTabLabel: vi.fn()

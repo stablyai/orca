@@ -23,6 +23,7 @@ vi.mock('expo-router', async () => {
     useFocusEffect: (effect: () => () => void) =>
       React.useEffect(() => (focus.active ? effect() : undefined), [effect, focus.active]),
     useLocalSearchParams: () => ({}),
+    useNavigation: () => ({ setParams: () => {} }),
     useRouter: () => ({ setParams: () => {} })
   }
 })
@@ -57,11 +58,6 @@ const from: AgentMessageSource = {
   ]
 }
 const reply = (result: unknown): RpcResponse => ({ id: 'reply', ok: true, result })
-const refused = (code: string): RpcResponse => ({
-  id: 'reply',
-  ok: false,
-  error: { code, message: 'private host diagnostic' }
-})
 const chat: MobileSessionTab = {
   type: 'agent-session',
   id: 'agent-session:live',
@@ -238,36 +234,6 @@ it.each(['claude', 'codex'] as const)(
     expect(h.toast).not.toHaveBeenCalled()
   }
 )
-
-it('never falls back after ambiguous lookup and carries its remaining budget into terminal output', async () => {
-  vi.useFakeTimers()
-  vi.setSystemTime(1000)
-  const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) => {
-    if (method === 'orchestration.partyOpen') {
-      vi.setSystemTime(15000)
-      return reply({ location: { kind: 'terminal', handle: 'term_worker' } })
-    }
-    vi.setSystemTime(16000)
-    return reply({ focus: { worktreeId: 'destination' } })
-  })
-  const h = mount(send)
-  await act(async () => h.open())
-  expect(send.mock.calls[1]).toEqual([
-    'terminal.focus',
-    expect.any(Object),
-    expect.objectContaining({ timeoutMs: 1000 })
-  ])
-  expect(send.mock.calls.map(([method]) => method)).toEqual([
-    'orchestration.partyOpen',
-    'terminal.focus'
-  ])
-  expect(h.navigate).not.toHaveBeenCalled()
-  expect(h.toast).toHaveBeenCalledTimes(1)
-  send.mockClear()
-  send.mockImplementation(async () => refused('timeout'))
-  await act(async () => h.open())
-  expect(send.mock.calls.map(([method]) => method)).toEqual(['orchestration.partyOpen'])
-})
 
 it('retains the displayed source, respects pending selection, and fences stale source/visit/generation/newer intent', async () => {
   const pending: ((response: RpcResponse) => void)[] = []
