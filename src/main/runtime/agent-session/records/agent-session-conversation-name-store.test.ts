@@ -1,11 +1,13 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -45,7 +47,7 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-conversation-name-store-'))
 })
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 

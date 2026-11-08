@@ -11,13 +11,11 @@ import type {
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
@@ -128,7 +126,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -244,8 +242,10 @@ describe('concurrent claims', () => {
     const before = store.getRecord('session-alpha')
     const persistedBefore = await readPersistedTestAgentSessionStore(directory)
     // Fail the record update inside commit, like full-disk/I/O failure.
-    openTestJournalHostDatabase(directory).db.exec(
-      "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db.exec(
+        "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+      )
     )
     await expect(store.setConversationName('session-alpha', 'renamed')).rejects.toThrow(
       'disk I/O error'

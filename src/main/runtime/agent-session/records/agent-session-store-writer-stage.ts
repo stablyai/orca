@@ -16,7 +16,7 @@ type StoreWriterLane = {
 }
 
 /** A send admitted on a slept record wakes it in the same draft. */
-export function wakeAdmittedRecord(
+function wakeAdmittedRecord(
   draft: AgentSessionStoreState,
   admitted: string | undefined,
   at: number | undefined

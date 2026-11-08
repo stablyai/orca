@@ -1,4 +1,3 @@
-import { agentSessionRecordPredecessorIds } from '../../agent-session-record-lineage'
 import { clearSuccessor } from '../../agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
@@ -32,6 +31,7 @@ import {
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
 import {
   commitAgentSessionProcessIdentity,
@@ -68,11 +68,9 @@ import {
   type AgentSessionStoreState
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from '../agent-session-tab-table'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/replay/journal-stored-cursor'
+import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
-import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
@@ -90,27 +88,29 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 
 export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
+  private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
-    private readonly journalDatabase: JournalHostDatabase
+    private readonly journalDatabase: JournalSqlDatabase
   ) {
     super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
 
-  /** Structural readability does not depend on which agents this host can launch. */
+  /** Structural readability does not depend on which agents this host can launch.
+   *  `records` must come from this database's own load. */
   static open(args: {
-    journalDatabase: JournalHostDatabase
+    journalDatabase: JournalSqlDatabase
+    records: AgentSessionStoreState
     hostId: string
     legacySessionTabIds: readonly string[]
   }): AgentSessionRecordStore {
-    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
-      rows,
+      args.records,
       args.hostId,
       args.legacySessionTabIds
     )
@@ -135,14 +135,27 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readStoredWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+    readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
-  /** Sessions a committed /clear continued into this one, read through the clear-successor index;
-   *  each candidate is checked on its conversation, so unreadable leases still count. */
-  listClearedFrom = (sessionId: string): string[] =>
-    agentSessionRecordPredecessorIds(this.journalDatabase.db, sessionId).filter(
-      (id) => clearSuccessor(this.getConversation(id)) === sessionId
-    )
+  /** Sessions a committed /clear continued into this one, derived from every held conversation
+   *  (unreadable leases still count) and rebuilt only when lineage changes. */
+  listClearedFrom = (sessionId: string): string[] => {
+    const lineage = this.transactions.lineageRevision()
+    if (this.clearedFrom?.lineage !== lineage) {
+      const predecessors = new Map<string, string[]>()
+      for (const conversation of this.listConversations()) {
+        const successor = clearSuccessor(conversation)
+        if (successor !== null) {
+          predecessors.set(successor, [
+            ...(predecessors.get(successor) ?? []),
+            conversation.sessionId
+          ])
+        }
+      }
+      this.clearedFrom = { lineage, predecessors }
+    }
+    return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
+  }
   lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
