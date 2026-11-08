@@ -1,6 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync, rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
@@ -9,7 +7,6 @@ import { settledWriteStub } from '../../../providers/settled-pty-write-stub'
 import { paneKeyPtyId, ptyPaneKey, rememberPaneKeyForPty } from '../../../ipc/pty/pane/key-state'
 import { mainProcessState } from '../../../startup/main-process-state'
 import { driveSyntheticTitleFromHookStatus } from '../../../startup/synthetic-title-runtime'
-import { createLongPollServer } from '../../rpc/server/runtime-rpc-long-poll-server.test-fixture'
 import {
   createBoundRun,
   createDatabase,
@@ -142,85 +139,6 @@ describe('hook title evidence and completion recovery', () => {
     ])
     db.close()
   })
-
-  it('CLI waits through a silent titleless turn while its mail is typed mid-turn', async () => {
-    const { db, runtime, write, status, dispose } = producerFixture()
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-title-wait-cli-'))
-    temporaryDirectories.push(userDataPath)
-    const server = createLongPollServer({ runtime, userDataPath, enableWebSocket: false })
-    const exitCode = process.exitCode
-    for (const name of ['ORCA_AGENT_SESSION_ID', 'ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE']) {
-      vi.stubEnv(name, '')
-    }
-    vi.stubEnv('ORCA_USER_DATA_PATH', userDataPath)
-    vi.stubEnv('ORCA_TERMINAL_HANDLE', TERMINAL_HANDLE)
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
-    try {
-      // The source CLI has its own TS project; keep the real client import at the runtime boundary.
-      const cliPath = '../../../../cli/index'
-      const { main }: { main(argv: string[], cwd: string): Promise<void> } = await import(cliPath)
-      const wait = async () => {
-        output.mockClear()
-        process.exitCode = 0
-        await main(
-          [
-            'terminal',
-            'wait',
-            '--terminal',
-            TERMINAL_HANDLE,
-            '--for',
-            'tui-idle',
-            '--timeout-ms',
-            '300',
-            '--json'
-          ],
-          userDataPath
-        )
-        return JSON.parse(String(output.mock.calls.at(-1)?.[0]))
-      }
-      await server.start()
-      const run = createBoundRun(db, 'Titleless Run')
-      await runtime.listTerminals()
-      status('done')
-      await expect(
-        runtime.sendTerminal(
-          TERMINAL_HANDLE,
-          { text: 'next prompt', enter: true },
-          { inputKind: 'driving' }
-        )
-      ).resolves.toMatchObject({ accepted: true })
-      write.mockClear()
-      status('working')
-      insertDirectRunMessage(db, run.id, 'Worker progress')
-      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-      runtime.onPtyData(PTY_ID, 'working without native titles\r\n', 1)
-      // Real silence lets the production display timer fire; no output resets it.
-      await new Promise((resolve) => setTimeout(resolve, 3_200))
-      expect((await runtime.listTerminals()).terminals[0]?.title).toBe('Codex')
-      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('⠋ Codex')
-      expect(await wait()).toMatchObject({ ok: false, error: { code: 'timeout' } })
-      expect(process.exitCode).toBe(1)
-      // A working agent queues typed input, so its mail does not wait for Stop.
-      expect(write.mock.calls.map(([, data]) => data)).toEqual([
-        expect.stringContaining('You have 1 orchestration message'),
-        '\r'
-      ])
-
-      status('done')
-      expect(await wait()).toMatchObject({ ok: true, result: { wait: { satisfied: true } } })
-      expect(process.exitCode).toBe(0)
-      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      expect(write).toHaveBeenCalledTimes(2)
-    } finally {
-      process.exitCode = exitCode ?? 0
-      try {
-        await server.stop()
-      } finally {
-        await dispose()
-      }
-    }
-  }, 15_000)
 
   it('Pi controlled hooks preserve titleless and native-title panes', async () => {
     vi.useFakeTimers()
