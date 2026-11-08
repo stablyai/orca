@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import { useAppStore } from '@/store'
 import { restoreTerminalFitToDesktop } from '../../terminal-pane/viewport/terminal-fit-restore'
@@ -37,14 +38,15 @@ export function useNativeChatMobileHoldNotice(
 
 export function nativeChatMobileHoldNotice(
   pending: boolean,
-  onTakeBack: () => void
+  onTakeBack: () => void,
+  t: Translate = translate
 ): NativeChatComposerNotice {
   return {
     key: 'mobile-hold',
     kind: 'device',
-    text: translate('components.native-chat.composer.locked', 'Input is held by another device.'),
+    text: t('components.native-chat.composer.locked', 'Input is held by another device.'),
     action: {
-      label: translate('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back'),
+      label: t('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back'),
       onClick: onTakeBack,
       disabled: pending
     }

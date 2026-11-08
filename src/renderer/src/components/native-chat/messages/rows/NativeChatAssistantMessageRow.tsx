@@ -17,6 +17,7 @@ import { NativeChatAgentControls } from '../actions/NativeChatAgentControls'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
+import { useTranslate } from '@/i18n/use-translate'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -44,6 +45,7 @@ export function NativeChatAssistantMessageRow({
   rowRef: React.RefObject<HTMLDivElement | null>
   scrollToTop: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     message,
     activeTurnIsWorking,
@@ -58,7 +60,7 @@ export function NativeChatAssistantMessageRow({
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
   // The same words slot construction chooses the turn's action holder by; Copy needs them.
-  const words = nativeChatAgentRowWords(message)
+  const words = nativeChatAgentRowWords(message, t)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
   const showControls =

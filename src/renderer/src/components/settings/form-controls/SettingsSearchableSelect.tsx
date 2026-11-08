@@ -5,7 +5,7 @@ import { Button } from '../../ui/button'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
 
 export type SettingsSearchableSelectOption = {
@@ -57,6 +57,7 @@ export function SettingsSearchableSelect({
   status,
   actions
 }: SettingsSearchableSelectProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandSelection, setCommandSelection] = useState<{
@@ -173,10 +174,7 @@ export function SettingsSearchableSelect({
             {visibleGroups.length === 0 && !status ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 {emptyText ??
-                  translate(
-                    'auto.components.settings.SettingsSearchableSelect.noMatches',
-                    'No matches.'
-                  )}
+                  t('auto.components.settings.SettingsSearchableSelect.noMatches', 'No matches.')}
               </div>
             ) : null}
             {visibleGroups.map((group) => (

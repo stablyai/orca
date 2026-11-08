@@ -17,10 +17,12 @@ import {
 import { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
 import { TerminalTccAttributionNotice } from '../../developer-permissions/TerminalTccAttributionNotice'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ConfirmKind = 'killOne'
 
 export function ManageSessionsSection(): React.JSX.Element {
+  const t = useTranslate()
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -216,11 +218,8 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   return (
     <SettingsGroup
-      title={translate(
-        'auto.components.settings.ManageSessionsSection.d1b80fd5cd',
-        'Manage Sessions'
-      )}
-      description={translate(
+      title={t('auto.components.settings.ManageSessionsSection.d1b80fd5cd', 'Manage Sessions')}
+      description={t(
         'auto.components.settings.ManageSessionsSection.7c4889a724',
         'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'
       )}

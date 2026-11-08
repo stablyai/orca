@@ -1,16 +1,17 @@
 import { CircleAlert } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function NativeChatComposerDraftNotSavedIcon({
   shown
 }: {
   shown: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!shown) {
     return null
   }
-  const explanation = translate(
+  const explanation = t(
     'components.native-chat.composer.draftNotSaved',
     "This draft couldn't be saved yet. Orca keeps trying."
   )

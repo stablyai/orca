@@ -64,6 +64,8 @@ export type MobileWebShellScreenProps = {
   appNamesRoute?: boolean
   // The caller compares the consumed one-shot value before clearing it; a newer tap may already have replaced it (ruling 34).
   onRouteParamClear?: (param: BridgeClearableRouteParam, value: string) => void
+  // Where the page has navigated inside its own document; without it the location is only held for a fold.
+  onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
 }
 
@@ -73,6 +75,7 @@ export function MobileWebShellScreen({
   route,
   appNamesRoute,
   onRouteParamClear,
+  onPageLocation,
   onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
@@ -226,7 +229,9 @@ export function MobileWebShellScreen({
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
-    onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
+    // A caller that tracks the location takes it; pages from #34484 desktops report it only for a fold to reopen.
+    onPageLocation: (href) =>
+      onPageLocation === undefined ? holdPageLocation(href, ownsHostArea) : onPageLocation(href),
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
@@ -344,7 +349,7 @@ export function MobileWebShellScreen({
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {
-            reportShellFailure(parsed.reason)
+            reportShellFailure(parsed.reason, parsed.reclaimed === true)
             return
           }
           // Load completion proves only response commit; start waiting for the page’s own first paint here.

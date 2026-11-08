@@ -41,6 +41,7 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
+    useContext: () => null,
     useEffect: (effect: () => void | Cleanup) => {
       const cleanup = effect()
       if (typeof cleanup === 'function') {

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
 import {
@@ -17,6 +17,7 @@ export type NativeChatSessionMenuSource = Omit<NativeChatSessionContextSource, '
 export function useNativeChatSessionContextActions(
   source: NativeChatSessionMenuSource | undefined
 ) {
+  const t = useTranslate()
   const [pending, setPending] = useState(false)
   const operation = useRef(0)
   const busy = useRef(false)
@@ -43,7 +44,7 @@ export function useNativeChatSessionContextActions(
       if (operation.current !== current || !context) {
         return
       }
-      const noContext = translate(
+      const noContext = t(
         'components.native-chat.contextMenu.noSessionContext',
         'No chat context is available.'
       )

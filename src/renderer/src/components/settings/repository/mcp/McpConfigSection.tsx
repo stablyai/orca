@@ -34,7 +34,7 @@ import {
   loadMcpConfigInspections
 } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { formatMcpConfigSummary } from './mcp-config-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
@@ -53,6 +53,7 @@ type McpConfigSectionProps = {
 const EMPTY_WORKTREES: Worktree[] = []
 
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const openFile = useAppStore((state) => state.openFile)
   const setActiveView = useAppStore((state) => state.setActiveView)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
@@ -284,12 +285,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       )
       setActiveView('terminal')
       toast.success(
-        translate('auto.components.settings.McpConfigSection.1f3665e35a', 'MCP config created'),
+        t('auto.components.settings.McpConfigSection.1f3665e35a', 'MCP config created'),
         {
-          description: translate(
-            'auto.components.settings.McpConfigSection.9ee215caf6',
-            '.mcp.json'
-          )
+          description: t('auto.components.settings.McpConfigSection.9ee215caf6', '.mcp.json')
         }
       )
     } catch (error) {
@@ -299,16 +297,16 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   return (
     <SettingsGroup
-      title={translate('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+      title={t('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
       description={
         <>
-          {translate(
+          {t(
             'auto.components.settings.McpConfigSection.96f5609b04',
             'Inspect MCP server definitions that agents can use while working in this repo.'
           )}
           {connectionId ? (
             <span className="block">
-              {translate(
+              {t(
                 'auto.components.settings.McpConfigSection.6bac9ddfc6',
                 'SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.'
               )}
@@ -322,7 +320,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             variant="ghost"
             size="icon-sm"
             onClick={() => void loadConfigs()}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.McpConfigSection.f34c152dc0',
               'Refresh MCP configs'
             )}
@@ -342,14 +340,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             >
               <Plus className="size-3.5" />
               {createConfirm
-                ? translate(
-                    'auto.components.settings.McpConfigSection.0a5c1ead54',
-                    'Create empty config'
-                  )
-                : translate(
-                    'auto.components.settings.McpConfigSection.82436439eb',
-                    'Add MCP config'
-                  )}
+                ? t('auto.components.settings.McpConfigSection.0a5c1ead54', 'Create empty config')
+                : t('auto.components.settings.McpConfigSection.82436439eb', 'Add MCP config')}
             </Button>
           ) : null}
         </div>
@@ -359,7 +351,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         data-settings-row=""
         className="flex items-center justify-between py-3 text-xs text-muted-foreground"
       >
-        <span>{formatMcpConfigSummary(configs)}</span>
+        <span>{formatMcpConfigSummary(configs, t)}</span>
         {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
       </div>
       {visibleConfigs.length === 0 ? (
@@ -376,7 +368,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             <span>{inspectionUnavailableMessage}</span>
           ) : (
             <span>
-              {translate(
+              {t(
                 'auto.components.settings.McpConfigSection.b900cd6282',
                 'No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.'
               )}

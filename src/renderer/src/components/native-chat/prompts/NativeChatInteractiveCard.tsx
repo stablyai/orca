@@ -5,7 +5,7 @@ import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type { NativeChatInteractiveSend } from '../session/terminal/send/use-native-chat-interactive-send'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Dismiss only after acknowledged delivery; unmount cancels scheduled writes and ignores late results, but cannot recall issued writes. */
 export function NativeChatInteractiveCard({
@@ -31,6 +31,7 @@ export function NativeChatInteractiveCard({
   /** Paste target while the prompt card replaces the composer. */
   answerInputRef?: React.RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element {
+  const t = useTranslate()
   const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
   // Keep paced multi-step answers visible until delivery settles; block duplicate submissions meanwhile.
   const submittingRef = useRef(false)
@@ -62,7 +63,7 @@ export function NativeChatInteractiveCard({
           <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
             <div className="rounded-lg border border-input bg-card p-3 shadow-xs">
               <p className="text-sm text-foreground">
-                {translate(
+                {t(
                   'components.native-chat.question.terminalRequired',
                   'Answer this OMP question in the terminal.'
                 )}
@@ -73,7 +74,7 @@ export function NativeChatInteractiveCard({
                 disabled={!onAnswerInTerminal}
                 onClick={onAnswerInTerminal}
               >
-                {translate('components.native-chat.question.openTerminal', 'Answer in terminal')}
+                {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
               </Button>
             </div>
           </div>

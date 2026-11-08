@@ -1,7 +1,7 @@
 import type { NativeChatComposerHandle } from '../../../composer/native-chat-composer-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { returnMessageToComposer } from '../../structured/delivery/structured-agent-session-message-hand-back'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
@@ -38,6 +38,7 @@ export function useNativeChatPendingDelivery(args: {
     sessionId?: string | null
   }
 }) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { paneKey, agent, composerRef, workingEpoch } = args
   const { messages } = args.session
@@ -182,7 +183,7 @@ export function useNativeChatPendingDelivery(args: {
         continue
       }
       result.set(`pending:${entry.id}`, {
-        text: translate('components.native-chat.messageNotSent', 'Message not sent'),
+        text: t('components.native-chat.messageNotSent', 'Message not sent'),
         ...(composerRef
           ? {
               onSend: () => {
@@ -207,7 +208,7 @@ export function useNativeChatPendingDelivery(args: {
     }
     return result
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [pending, cancel, paneKey, composerRef, languageRevision])
+  }, [pending, cancel, paneKey, composerRef, languageRevision, t])
   return { pending, record, cancel, reject, holdUnconfirmed, clear, notices }
 }
 

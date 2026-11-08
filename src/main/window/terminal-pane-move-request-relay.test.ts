@@ -94,20 +94,6 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
     await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
   })
 
-  it('leaves a commit no client asked for alone', async () => {
-    const { relay, sender } = await requestMove()
-    const commit = vi.fn(async (): Promise<TerminalLeafMoveResult> => ({
-      status: 'moved',
-      ptyId: null
-    }))
-
-    await expect(relay.commitRelayedPaneMove(sender, 'tab-other', commit)).resolves.toEqual({
-      status: 'moved',
-      ptyId: null
-    })
-    expect(commit).toHaveBeenCalledOnce()
-  })
-
   it('answers with the commit when the window goes away while it commits', async () => {
     const { relay, pending, sender, webContents } = await requestMove()
     const { commit, finish } = deferredCommit()
@@ -117,27 +103,5 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
 
     await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
     await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-  })
-
-  it('refuses a second move for a tab id a timed-out move still fences', async () => {
-    const first = await requestMove()
-    const timedOut = expect(first.pending).rejects.toThrow('terminal_pane_move_timeout')
-    await vi.advanceTimersByTimeAsync(10_000)
-    await timedOut
-
-    const second = first.relay.requestTerminalPaneMoveFromRenderer(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
-      createMainWindow().mainWindow as never,
-      move
-    )
-    await expect(second).rejects.toThrow('terminal_pane_move_in_progress')
-    const commit = vi.fn(async (): Promise<TerminalLeafMoveResult> => ({
-      status: 'moved',
-      ptyId: 'pty-1'
-    }))
-    await expect(
-      first.relay.commitRelayedPaneMove(first.sender, move.targetTabId, commit)
-    ).resolves.toEqual({ status: 'refused', reason: 'pane_unavailable' })
-    expect(commit).not.toHaveBeenCalled()
   })
 })

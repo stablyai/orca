@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
@@ -44,6 +44,7 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const {
     rows,
@@ -371,7 +372,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         data-worktree-sidebar
         tabIndex={0}
         role="listbox"
-        aria-label={translate('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
+        aria-label={t('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
@@ -404,7 +405,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           })}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
+            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
           })}
         </div>
       </div>

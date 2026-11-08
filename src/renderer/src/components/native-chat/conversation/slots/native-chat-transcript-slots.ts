@@ -35,6 +35,7 @@ import {
 } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -80,7 +81,8 @@ export type NativeChatMessageSlot = {
 }
 
 export function buildNativeChatTranscriptSlots(
-  input: NativeChatTranscriptSlotsInput
+  input: NativeChatTranscriptSlotsInput,
+  t?: Translate
 ): NativeChatTranscriptSlot[] {
   const {
     messages,
@@ -217,9 +219,9 @@ export function buildNativeChatTranscriptSlots(
     if (!slot.drawsMessage || slot.message.role !== 'assistant') {
       continue
     }
-    if (nativeChatAgentRowWords(slot.message).length > 0) {
+    if (nativeChatAgentRowWords(slot.message, t).length > 0) {
       lastWordsByTurn.set(slot.turnKey, slot)
-    } else if (nativeChatAgentRowHasImages(slot.message)) {
+    } else if (nativeChatAgentRowHasImages(slot.message, t)) {
       lastImageByTurn.set(slot.turnKey, slot)
     }
   }

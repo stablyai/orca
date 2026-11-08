@@ -1,15 +1,16 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { NativeChatImageRefBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatImageLabel as sharedNativeChatImageLabel,
   type NativeChatImageLabelCopy
 } from '../../../../../../shared/native-chat/native-chat-image-label'
 
-export function nativeChatImageLabelCopy(): NativeChatImageLabelCopy {
+export function nativeChatImageLabelCopy(t: Translate = translate): NativeChatImageLabelCopy {
   return {
-    pastedImage: translate('components.native-chat.composer.pastedImageLabel', 'Pasted image'),
+    pastedImage: t('components.native-chat.composer.pastedImageLabel', 'Pasted image'),
     imageCount: (count) =>
-      translate('components.native-chat.queuedMessages.imageCount', '{{count}} images', {
+      t('components.native-chat.queuedMessages.imageCount', '{{count}} images', {
         count,
         defaultValue_one: '{{count}} image'
       })

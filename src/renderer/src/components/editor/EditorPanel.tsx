@@ -4,6 +4,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { canShowWorkspaceFileBrowserAction } from '@/lib/file-preview'
+import { openEditorHtmlPreview } from './open-editor-html-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
@@ -245,8 +246,16 @@ function EditorPanelInner({
     ...customEditors
   })
 
-  const { handleOpenPreviewToSide, handleOpenDiffTargetFile, handleOpenMarkdownPreview } =
-    editorPanelFileActions(activeFile, activeViewStateId, model)
+  const { handleOpenDiffTargetFile, handleOpenMarkdownPreview } = editorPanelFileActions(
+    activeFile,
+    activeViewStateId,
+    model
+  )
+  const handleOpenPreview = (): void => {
+    if (isVisible) {
+      void openEditorHtmlPreview(activeFile.id, activeViewStateId)
+    }
+  }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
     // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
     runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
@@ -334,7 +343,7 @@ function EditorPanelInner({
           disableRenameBrowse={disableRenameBrowse}
           onCopyPath={() => void handleCopyPath()}
           onOpenDiffTargetFile={handleOpenDiffTargetFile}
-          onOpenPreviewToSide={handleOpenPreviewToSide}
+          onOpenPreview={handleOpenPreview}
           onOpenMarkdownPreview={handleOpenMarkdownPreview}
           onToggleSideBySide={() => setSideBySide((prev) => !prev)}
           onEditorToggleChange={handleEditorToggleChange}

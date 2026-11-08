@@ -1,7 +1,7 @@
 import { EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
@@ -20,7 +20,8 @@ export function NativeChatCardHideButton({
   hiddenMessage: string
   ariaLabel?: string
 }): React.JSX.Element {
-  const label = translate('components.native-chat.turnDiff.hide', 'Hide')
+  const t = useTranslate()
+  const label = t('components.native-chat.turnDiff.hide', 'Hide')
   return (
     // Keep the header one text line tall, as the transcript row-height estimate assumes.
     <span className="-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/chat-card:pointer-events-auto group-hover/chat-card:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">

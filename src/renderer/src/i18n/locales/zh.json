@@ -20993,6 +20993,29 @@
       "loading": "正在加载子模块更改…",
       "empty": "子模块中没有更改",
       "loadFailed": "无法加载子模块更改"
+    },
+    "branchPicker": {
+      "switch": "切换分支：{{branch}}",
+      "search": "搜索分支",
+      "recover": "切换到 {{branch}}",
+      "create": "从 {{branch}} 创建分支 {{name}}",
+      "open": "打开工作区",
+      "occupied": "已在 {{path}} 中检出",
+      "remote": "远程",
+      "statusFailed": "Orca 无法读取此检出的更改。请先刷新源代码管理再切换。",
+      "statusUnknown": "切换前请先读取此检出的更改。",
+      "conflict": "切换分支前，请完成或中止 {{operation}}。",
+      "dirty_one": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
+      "dirty_other": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
+      "agentWorking": "有代理正在此工作区中工作。请在其完成后再切换分支；如果它已停止，请关闭其标签页。",
+      "listFailed": "Orca 无法列出本地分支。请尝试重新打开选择器。",
+      "discoveryFailed": "Orca 找不到远程分支。你仍然可以切换本地分支或创建分支。",
+      "switchFailed": "Orca 无法切换分支。请重试。",
+      "switchFailedTitle": "无法切换分支",
+      "switchFailedIn": "无法在 {{workspace}} 中切换分支",
+      "switchedIn": "在 {{workspace}} 中",
+      "thisComputer": "此电脑",
+      "updateHost": "请在 {{host}} 上更新 Orca，以便从这里切换分支。"
     }
   },
   "rendererRecovery": {

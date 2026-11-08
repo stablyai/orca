@@ -5,7 +5,7 @@ import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { WorkItemStateBadge } from '@/components/github/work-item-state-badge'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink
@@ -25,6 +25,8 @@ import {
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
 
 function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       {item.author ? (
@@ -40,8 +42,8 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
       ) : null}
       {item.updatedAt ? (
         <span className="shrink-0">
-          {translate('components.native-chat.githubPeek.updated', 'updated {{time}}', {
-            time: formatRelativeTime(item.updatedAt)
+          {t('components.native-chat.githubPeek.updated', 'updated {{time}}', {
+            time: formatRelativeTime(item.updatedAt, intlLocale)
           })}
         </span>
       ) : null}
@@ -56,8 +58,8 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
           <span aria-hidden>·</span>
           <span className="shrink-0">
             {item.commentCount === 1
-              ? translate('components.native-chat.githubPeek.oneComment', '1 comment')
-              : translate('components.native-chat.githubPeek.comments', '{{count}} comments', {
+              ? t('components.native-chat.githubPeek.oneComment', '1 comment')
+              : t('components.native-chat.githubPeek.comments', '{{count}} comments', {
                   count: item.commentCount
                 })}
           </span>
@@ -79,6 +81,7 @@ export function NativeChatGitHubPeekBody({
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
+  const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(
     githubLinkPreviewKey(repo, link),
     () => readCachedGitHubLinkPreview(repo, link),
@@ -131,11 +134,9 @@ export function NativeChatGitHubPeekBody({
         </div>
       ) : (
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>
-            {translate('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}
-          </span>
+          <span>{t('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}</span>
           <Button variant="link" size="xs" onClick={retry}>
-            {translate('components.native-chat.githubPeek.retry', 'Retry')}
+            {t('components.native-chat.githubPeek.retry', 'Retry')}
           </Button>
         </div>
       )}

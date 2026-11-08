@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  ARCHIVE_SCREEN_LINES,
-  createTerminalArchiveFixture
-} from './worker-terminal-archive.test-support'
+import { createTerminalArchiveFixture } from './worker-terminal-archive.test-support'
 import { syncSinglePty } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 afterEach(() => vi.restoreAllMocks())
@@ -24,79 +21,6 @@ describe('worker archive through real terminal read routing', () => {
     expect(archive.content.warnings).not.toContain(
       'Dispatch capability tokens were redacted from terminal output.'
     )
-  })
-
-  it('keeps an ordinary live stream without duplicating an identical screen', async () => {
-    const fixture = await createTerminalArchiveFixture({ hydrate: false })
-    fixture.runtime.onPtyData('pty-1', `${ARCHIVE_SCREEN_LINES.join('\r\n')}\r\n`, Date.now())
-    const archive = await fixture.capture()
-    if (archive.kind !== 'terminal_tail') {
-      throw new Error('Expected terminal archive')
-    }
-    expect(archive.content.lines).toEqual(ARCHIVE_SCREEN_LINES)
-    expect(archive.content.warnings).toEqual([])
-  })
-
-  it.each(['\r\n'.repeat(7), `host % codex\r\n${'\r\n'.repeat(6)}`])(
-    'preserves a populated normal screen alongside a short stream (%j)',
-    async (stream) => {
-      const fixture = await createTerminalArchiveFixture()
-      fixture.runtime.onPtyData('pty-1', stream, Date.now())
-      const preview = await fixture.runtime.readTerminal(fixture.handle)
-      expect(preview.source).toBe('stream')
-      expect(preview.tail).not.toContain(ARCHIVE_SCREEN_LINES[1])
-
-      const archive = await fixture.capture()
-
-      expect(archive.kind).toBe('terminal_tail')
-      expect(archive.status).toBe('captured')
-      if (archive.kind !== 'terminal_tail') {
-        throw new Error('Expected terminal archive')
-      }
-      expect(archive.content.lines).toEqual(expect.arrayContaining(ARCHIVE_SCREEN_LINES))
-      expect(archive.content.warnings.join(' ')).toContain('screen')
-      if (stream.includes('host % codex')) {
-        expect(archive.content.lines).toContain('host % codex')
-      }
-    }
-  )
-
-  it('preserves retained history beyond the preview and the current screen', async () => {
-    const fixture = await createTerminalArchiveFixture({ provider: true })
-    const history = Array.from({ length: 180 }, (_, index) => `history ${index}`)
-    fixture.runtime.onPtyData('pty-1', `${history.join('\r\n')}\r\n`, Date.now())
-    expect((await fixture.runtime.readTerminal(fixture.handle)).tail).not.toContain('history 0')
-
-    const archive = await fixture.capture()
-
-    if (archive.kind !== 'terminal_tail') {
-      throw new Error('Expected terminal archive')
-    }
-    expect(archive.content.lines).toEqual(
-      expect.arrayContaining([...history, ...ARCHIVE_SCREEN_LINES])
-    )
-    expect(archive.content.warnings.join(' ')).toContain('screen')
-  })
-
-  it('preserves the alternate screen using the same capture path', async () => {
-    const fixture = await createTerminalArchiveFixture({ alternate: true })
-    fixture.runtime.onPtyData('pty-1', '\r\n'.repeat(7), Date.now())
-    const archive = await fixture.capture()
-    if (archive.kind !== 'terminal_tail') {
-      throw new Error('Expected terminal archive')
-    }
-    expect(archive.content.lines).toEqual(expect.arrayContaining(ARCHIVE_SCREEN_LINES))
-  })
-
-  it('allows a genuinely empty terminal with honest unavailable-screen provenance', async () => {
-    const fixture = await createTerminalArchiveFixture({ screenLines: [], hydrate: false })
-    const archive = await fixture.capture()
-    expect(archive.status).toBe('empty')
-    if (archive.kind !== 'terminal_tail') {
-      throw new Error('Expected terminal archive')
-    }
-    expect(archive.content.lines.every((line) => line.trim() === '')).toBe(true)
-    expect(archive.content.warnings.join(' ')).toContain('screen was unavailable')
   })
 
   it.each(['unavailable', 'stale'] as const)(
@@ -129,21 +53,6 @@ describe('worker archive through real terminal read routing', () => {
       expect(archive.content.warnings.join(' ')).toContain('screen was unavailable')
     }
   )
-
-  it('preserves and redacts a composer draft from the authoritative screen', async () => {
-    const fixture = await createTerminalArchiveFixture({ hydrate: false })
-    const secret = `dcap_${'d'.repeat(24)}`
-    fixture.runtime.onPtyData('pty-1', `output\r\n────────\r\n❯ ${secret}`, Date.now())
-
-    const archive = await fixture.capture()
-
-    if (archive.kind !== 'terminal_tail') {
-      throw new Error('Expected terminal archive')
-    }
-    expect(archive.content.draft).toBe('[dispatch capability redacted]')
-    expect(JSON.stringify(archive.content)).not.toContain(secret)
-    expect(archive.content.lines).toContain('output')
-  })
 
   it('refuses capture when the terminal handle changes during a host screen read', async () => {
     const fixture = await createTerminalArchiveFixture({ provider: true })

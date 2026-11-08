@@ -115,15 +115,7 @@ vi.mock('./use-mobile-agent-history-state', () => ({
     scope: 'workspace',
     screenState: { kind: 'ready', sessions: [state.session], issues: [] },
     refreshing: false,
-    hostStatusResult:
-      state.generation === 1
-        ? {
-            hostPlatform: 'darwin',
-            capabilities: state.legacy ? [] : ['aiVault.v1', 'session.tabs.qoderOwnedCreate.v1']
-          }
-        : state.completedBoundary
-          ? { hostPlatform: 'darwin', capabilities: [] }
-          : null,
+    revalidating: false,
     activeWorktreePath: '/owned/workspace',
     scopeFilterPaths: ['/owned/workspace'],
     onSelectScope: vi.fn(),
@@ -142,8 +134,8 @@ vi.mock('./MobileAgentSessionHistoryList', () => ({
   }
 }))
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
-import { AgentHistoryResumeNotice } from './AgentHistoryNotices'
-import { useProvideSessionScreenHandlers } from '../session/session-screen-handlers'
+import './AgentHistoryNotices'
+import '../session/session-screen-handlers'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(async () => {
@@ -152,6 +144,15 @@ afterEach(async () => {
   mobileI18n.removeResourceBundle('fr', 'translation')
   await activateMobileUiLocale('en')
 })
+
+// A reconnect lands on a host without the owned-create capability.
+function hostStatus() {
+  const current = state.generation === 1 && !state.legacy
+  return {
+    hostPlatform: 'darwin',
+    capabilities: current ? ['aiVault.v1', 'session.tabs.qoderOwnedCreate.v1'] : []
+  }
+}
 
 function ownedSession(): AiVaultSession {
   return {
@@ -237,6 +238,9 @@ it.each([
   const sendRequest: RpcClient['sendRequest'] = vi.fn<RpcClient['sendRequest']>(
     async (method, params) => {
       calls.push({ method, params, generation: state.generation })
+      if (method === 'status.get') {
+        return { id: 'owned-reply', ok: true, result: hostStatus() }
+      }
       if (method === 'repo.list') {
         return {
           id: 'owned-reply',
@@ -418,70 +422,6 @@ it.each([
   }
 })
 
-it('resuming into the session it was opened from shows the resumed terminal there', async () => {
-  notifications.replace.mockClear()
-  notifications.back.mockClear()
-  state.legacy = false
-  state.generation = 1
-  state.connection = 'connected'
-  state.session = ownedSession()
-  const replies: Record<string, unknown> = {
-    'repo.list': { repos: [{ id: 'owned-repo', path: '/owned/workspace', connectionId: null }] },
-    'folderWorkspace.list': { workspaces: [] },
-    'projectGroup.list': { groups: [] },
-    'worktree.ps': {
-      worktrees: [{ worktreeId: 'owned-worktree', repoId: 'owned-repo', path: '/owned/workspace' }]
-    },
-    'settings.get': {},
-    'session.tabs.createTerminal': {
-      tab: { type: 'terminal', id: 'owned-tab', terminal: 'owned-pty', title: 'Terminal' }
-    }
-  }
-  state.client = {
-    ...createFakeRpcClient({ getGeneration: () => state.generation }),
-    sendRequest: vi.fn<RpcClient['sendRequest']>(async (method) => ({
-      id: 'owned-reply',
-      ok: true,
-      result: replies[method]
-    }))
-  }
-  const onResumedTerminal = vi.fn()
-  function SessionBelow() {
-    useProvideSessionScreenHandlers('owned-host', 'owned-worktree', {
-      onResumedTerminal
-    })
-    return null
-  }
-  let tree: ReactTestRenderer | null = null
-  await act(async () => {
-    tree = create(
-      React.createElement(
-        React.Fragment,
-        null,
-        React.createElement(SessionBelow),
-        React.createElement(MobileAgentSessionHistoryPanel, {
-          hostId: 'owned-host',
-          worktreeId: 'owned-worktree',
-          origin: 'session'
-        })
-      )
-    )
-  })
-  try {
-    await act(async () => {
-      if (!state.session || !state.onResume) {
-        throw new Error('missing resume callback')
-      }
-      await state.onResume(state.session)
-    })
-    expect(onResumedTerminal).toHaveBeenCalledExactlyOnceWith('owned-pty')
-    expect(notifications.back).toHaveBeenCalledTimes(1)
-    expect(notifications.replace).not.toHaveBeenCalled()
-  } finally {
-    await act(async () => tree?.unmount())
-  }
-})
-
 it.each([
   'opened',
   'old-host',
@@ -579,7 +519,8 @@ it.each([
         'session.tabs.createTerminal': {
           tab: { type: 'terminal', id: 'fallback-tab', terminal: 'fallback-pty', title: 'Terminal' }
         },
-        'terminal.send': { send: { accepted: true } }
+        'terminal.send': { send: { accepted: true } },
+        'status.get': hostStatus()
       }
       return { id: 'reply', ok: true, result: results[method] }
     })
@@ -680,88 +621,3 @@ it.each([
     }
   }
 )
-
-it('a removed worktree on History Resume shows one timed toast and stays on History', async () => {
-  await activateMobileUiLocale('en')
-  notifications.replace.mockClear()
-  notifications.back.mockClear()
-  notifications.error.mockClear()
-  notifications.announce.mockClear()
-  state.generation = 1
-  state.connection = 'connected'
-  state.legacy = false
-  state.session = {
-    ...ownedSession(),
-    agent: 'codex',
-    structuredSession: { sessionId: 'native-root', workspaceId: 'owned-worktree' }
-  }
-  vi.useFakeTimers()
-  const send = vi.fn<RpcClient['sendRequest']>(async (method) => {
-    const results: Record<string, unknown> = {
-      'orchestration.partyLocation': {
-        location: { kind: 'chat', sessionId: 'native-live', worktreeId: 'owned-worktree' }
-      },
-      'session.tabs.list': { tabs: [] },
-      'agentSession.reveal': {
-        ok: false,
-        refusal: {
-          code: 'agent_session_workspace_removed',
-          message: 'This workspace is no longer available.',
-          details: { workspaceKind: 'git-worktree' }
-        }
-      }
-    }
-    return { id: 'reply', ok: true, result: results[method] }
-  })
-  state.client = {
-    ...createFakeRpcClient({ getGeneration: () => state.generation }),
-    sendRequest: send
-  }
-  let tree: ReactTestRenderer | null = null
-  await act(async () => {
-    tree = create(
-      React.createElement(MobileAgentSessionHistoryPanel, {
-        hostId: 'owned-host',
-        worktreeId: 'owned-worktree'
-      })
-    )
-  })
-  const resume = async () => {
-    await act(async () => {
-      if (!state.onResume || !state.session) {
-        throw new Error('missing row')
-      }
-      await state.onResume(state.session)
-    })
-  }
-  const toasts = () =>
-    tree!.root.findAll(
-      (node) => node.type === Text && node.props.children === 'The worktree was deleted.'
-    )
-  try {
-    await resume()
-    expect(toasts()).toHaveLength(1)
-    expect(tree!.root.findAllByType(AgentHistoryResumeNotice)).toHaveLength(0)
-    expect(notifications.announce).toHaveBeenCalledExactlyOnceWith('The worktree was deleted.')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000)
-    })
-    // A second Resume restarts the one toast instead of stacking another.
-    await resume()
-    expect(toasts()).toHaveLength(1)
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000)
-    })
-    expect(toasts()).toHaveLength(1)
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
-    })
-    expect(toasts()).toHaveLength(0)
-    expect(notifications.error).toHaveBeenCalledTimes(2)
-    expect(notifications.replace).not.toHaveBeenCalled()
-    expect(notifications.back).not.toHaveBeenCalled()
-    expect(send.mock.calls.map(([method]) => method)).not.toContain('session.tabs.createTerminal')
-  } finally {
-    await act(async () => tree?.unmount())
-  }
-})

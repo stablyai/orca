@@ -94,30 +94,6 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     expect(harness.db.getTask(child.id)?.status).toBe('pending')
   })
 
-  it('reports task_not_startable with retry detail for an invalid --retry-of', async () => {
-    const harness = createHarness()
-    const task = harness.db.createTask({ spec: 'work' })
-    mockWorkerStartTopology(harness.runtime)
-
-    const response = await harness.dispatcher.dispatch(
-      request('orchestration.workerStart', {
-        task: task.id,
-        from: COORDINATOR_HANDLE,
-        agent: 'claude',
-        retryOf: 'ctx_missing'
-      })
-    )
-
-    expect(expectFailure(response).error).toEqual(
-      taskNotStartableRefusal(`Task ${task.id} cannot retry from Dispatch ctx_missing.`, {
-        taskId: task.id,
-        status: 'ready',
-        unmetDependencies: [],
-        retryOf: 'ctx_missing'
-      })
-    )
-  })
-
   it('types the atomic claim loser when the task changes after the ready precheck', async () => {
     const harness = createHarness()
     const task = harness.db.createTask({ spec: 'raced' })

@@ -1,6 +1,7 @@
 import { createElement, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
 import { useMobileNativeChatFileAttachments } from './native-chat/composer/use-mobile-native-chat-file-attachments'
@@ -111,6 +112,7 @@ async function mount(structured: boolean) {
       setFileDocs: vi.fn(),
       setMarkdownDocs: vi.fn(),
       sessionTabsRef: { current: [] },
+      forgetLastSessionTab: () => {},
       closedTabTombstonesRef: { current: new Map() },
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: setTab,
@@ -150,7 +152,7 @@ async function mount(structured: boolean) {
     return null
   }
   await act(async () => {
-    renderer = create(createElement(Harness))
+    renderer = create(documentQueryClient().wrap(createElement(Harness)))
   })
   await act(async () => appendStoredInputs(ORIGINAL, 'sent', structured))
   const read = () => {

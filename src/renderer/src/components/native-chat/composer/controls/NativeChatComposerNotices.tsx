@@ -1,6 +1,6 @@
 import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatActionButton } from './NativeChatActionButton'
@@ -53,6 +53,7 @@ export function NativeChatPromptSlotNotices({
 }
 
 function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.Element {
+  const t = useTranslate()
   const isError = notice.kind === 'error'
   const isHostWarning = notice.kind === 'host' && notice.tone === 'warning'
   const Icon =
@@ -63,7 +64,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         : isError
           ? AlertCircle
           : Paperclip
-  const dismissLabel = translate('components.native-chat.notices.dismiss', 'Dismiss')
+  const dismissLabel = t('components.native-chat.notices.dismiss', 'Dismiss')
   return (
     <li data-notice-kind={notice.kind} className={cn(isError && 'bg-destructive/5')}>
       <div className="flex items-start gap-2 px-2.5 py-1.5">
@@ -107,7 +108,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
           </pre>
           <NativeChatCopyButton
             text={notice.errorText}
-            label={translate('components.native-chat.notices.copyError', 'Copy error')}
+            label={t('components.native-chat.notices.copyError', 'Copy error')}
             className="absolute right-0.5 top-0.5"
           />
         </div>

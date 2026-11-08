@@ -30,7 +30,7 @@ import {
   RepositoryAgentTrustSection
 } from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
@@ -102,6 +102,7 @@ export function RepositoryPane({
   updateProject,
   writeSourceControlAiSettings
 }: RepositoryPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const isFolder = isFolderRepo(repo)
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
@@ -177,22 +178,19 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject })
+  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject }, t)
   const identityEntryTitles = new Set([
-    translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-    translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-    translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-    translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+    t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
+    t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
     getRepositoryAgentTrustSearchEntry().title,
-    translate(
-      'auto.components.settings.repository.search.keepForkUpToDate',
-      'Keep Fork Up to Date'
-    ),
-    translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
-    translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
-    translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
-    translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
+    t('auto.components.settings.repository.search.keepForkUpToDate', 'Keep Fork Up to Date'),
+    t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+    t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    t('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
+    t('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
+    t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
   const sparsePresetEntries = allEntries.filter((entry) =>
@@ -234,20 +232,20 @@ export function RepositoryPane({
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
       <SettingsGroup
         key="identity"
-        title={translate('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
+        title={t('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
         description={
           <>
-            {translate(
+            {t(
               'auto.components.settings.RepositoryPane.b0a0c14a1c',
               'Project-specific display details for the sidebar and tabs.'
             )}
             <span className="block">
-              {translate('auto.components.settings.RepositoryPane.323debba71', 'Type:')}{' '}
+              {t('auto.components.settings.RepositoryPane.323debba71', 'Type:')}{' '}
               <span className="text-foreground">{getRepoKindLabel(repo)}</span>
             </span>
             {isFolder ? (
               <span className="block">
-                {translate(
+                {t(
                   'auto.components.settings.RepositoryPane.ee5a290616',
                   'Opened as folder. Git features are unavailable for this workspace.'
                 )}
@@ -265,8 +263,8 @@ export function RepositoryPane({
         }
       >
         <SearchableSetting
-          title={translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
-          description={translate(
+          title={t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+          description={t(
             'auto.components.settings.RepositoryPane.b0a0c14a1c',
             'Project-specific display details for the sidebar and tabs.'
           )}
@@ -275,7 +273,7 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         >
           <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+            {t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
           </Label>
           <RepoSettingsDraftInput
             id={`repo-display-name-${repo.id}`}
@@ -287,8 +285,8 @@ export function RepositoryPane({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate('auto.components.settings.RepositoryPane.26fef02bf3', 'Project Icon')}
-          description={translate(
+          title={t('auto.components.settings.RepositoryPane.26fef02bf3', 'Project Icon')}
+          description={t(
             'auto.components.settings.RepositoryPane.e641c359de',
             'Project icon and color used in the sidebar and tabs.'
           )}
@@ -380,7 +378,7 @@ export function RepositoryPane({
     ) : null,
     hooksSection,
     forceFullPaneForRepoMatch ||
-    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry()]) ? (
+    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry(t)]) ? (
       <RepositoryFormatterSection
         key={`formatter-${repo.id}-${selectedHostId}`}
         repo={repo}

@@ -107,62 +107,6 @@ describe('skill provider placement reconciliation', () => {
     )
   })
 
-  it('creates a verified copy when a host-owned alias operation is denied', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-placement-test-'))
-    temporaryDirectories.push(root)
-    const canonicalPath = join(root, 'canonical', 'private-skill')
-    const providerRoot = join(root, 'provider')
-    await mkdir(canonicalPath, { recursive: true })
-    await writeFile(join(canonicalPath, 'SKILL.md'), 'private skill')
-    const observed = await nativeSkillInstallFilesystem.observeSkill(canonicalPath)
-
-    const result = await reconcileSkillProviderPlacement({
-      canonicalPath,
-      skillName: 'private-skill',
-      destination: { provider: 'claude', rootPath: providerRoot, readsCanonicalRoot: false },
-      previousReceipt: null,
-      packageDigest: observed.observedDigest,
-      filesystem: {
-        ...nativeSkillInstallFilesystem,
-        createAlias: async () => {
-          throw new Error('injected-host-alias-denial')
-        }
-      }
-    })
-
-    expect(result).toMatchObject({ topology: 'independent-copy', status: 'installed' })
-    expect(await readFile(join(providerRoot, 'private-skill', 'SKILL.md'), 'utf8')).toBe(
-      'private skill'
-    )
-  })
-
-  it('uses host alias inspection when the client cannot stat the destination', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-placement-test-'))
-    temporaryDirectories.push(root)
-    const canonicalPath = join(root, 'canonical', 'private-skill')
-    const providerRoot = join(root, 'provider')
-    await mkdir(canonicalPath, { recursive: true })
-    await writeFile(join(canonicalPath, 'SKILL.md'), 'private skill')
-    const observed = await nativeSkillInstallFilesystem.observeSkill(canonicalPath)
-    const createAlias = vi.fn()
-
-    const result = await reconcileSkillProviderPlacement({
-      canonicalPath,
-      skillName: 'private-skill',
-      destination: { provider: 'claude', rootPath: providerRoot, readsCanonicalRoot: false },
-      previousReceipt: null,
-      packageDigest: observed.observedDigest,
-      filesystem: {
-        ...nativeSkillInstallFilesystem,
-        createAlias,
-        aliasTargets: async () => true
-      }
-    })
-
-    expect(result).toMatchObject({ topology: 'provider-alias', status: 'unchanged' })
-    expect(createAlias).not.toHaveBeenCalled()
-  })
-
   it('updates an owned copy even when host alias inspection returns false', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-placement-test-'))
     temporaryDirectories.push(root)

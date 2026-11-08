@@ -1,10 +1,7 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
-import {
-  DEFAULT_TERMINAL_FONT_WEIGHT,
-  DEFAULT_TERMINAL_FONT_WEIGHT_BOLD
-} from './terminal/appearance/terminal-fonts'
+import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from './task-providers'
 import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
@@ -28,6 +25,8 @@ export function buildDefaultSettings(args: {
   primarySelectionMiddleClickPaste: boolean
   primarySelectionDefaultedForLinux: boolean
   terminalFontFamily: string
+  terminalFontWeight: number
+  terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
   terminalInactivePaneOpacity: number
   terminalRightClickToPaste: boolean
   notifications: NotificationSettings
@@ -76,7 +75,8 @@ export function buildDefaultSettings(args: {
       args.primarySelectionMiddleClickPaste,
     terminalFontSize: 14,
     terminalFontFamily: args.terminalFontFamily,
-    terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    terminalFontWeight: args.terminalFontWeight,
+    terminalFontWeightWindowsRegular: args.terminalFontWeightWindowsRegular,
     terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,

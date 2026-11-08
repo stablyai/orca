@@ -1,6 +1,6 @@
 import { ArrowUp } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
-import { translate } from '../../../../i18n/i18n'
+import { useTranslate } from '../../../../i18n/use-translate'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from '../rows/NativeChatMessageTimestamp'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/native-chat-visual-directive'
@@ -19,6 +19,7 @@ export function NativeChatAgentControls({
   action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
@@ -31,11 +32,8 @@ export function NativeChatAgentControls({
       <button
         type="button"
         onClick={onScrollToTop}
-        aria-label={translate(
-          'components.native-chat.scrollMessageToTop',
-          'Scroll this message to top'
-        )}
-        title={translate('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        aria-label={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        title={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
         className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ArrowUp className="size-3.5" />
