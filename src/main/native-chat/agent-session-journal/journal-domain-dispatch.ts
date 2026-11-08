@@ -121,7 +121,8 @@ export function applyJournalDomainDispatch(
         sequence,
         at: savedAt,
         fence: input.fence,
-        scope
+        scope,
+        ...(input.recovered ? { recovered: true as const } : {})
       }
       carries = (input.carries ?? []).filter((id) => id.length > 0)
       if (next.handoverRecorded && previous) {

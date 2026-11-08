@@ -8,10 +8,12 @@ import {
   JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
   journalDomainSubmissionColumns
 } from './journal-domain-submission-columns'
-import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import { journalRenderItem } from './projection/journal-render-item'
+import { journalSubmissionFromRow } from './submissions/journal-submission-fold'
 import type { JournalReducerState } from './projection/journal-reducer'
 import {
   journalDomainSubmissionFactsJson,
+  journalDomainSourcePlacement,
   type JournalDomainSubmissionAttempt
 } from './journal-domain-submission-records'
 import {
@@ -21,7 +23,10 @@ import {
   journalInputSourceSequence
 } from './input-order/journal-input-source'
 
-export type JournalDomainImportAttempt = JournalDomainSubmissionAttempt & { echoObserved: boolean }
+export type JournalDomainImportAttempt = JournalDomainSubmissionAttempt & {
+  echoObserved: boolean
+  current?: boolean
+}
 
 /** Interpret frozen source facts only during the one-way import. */
 export function restoredJournalDomainSubmission(
@@ -40,6 +45,18 @@ export function restoredJournalDomainSubmission(
   const rejected = state.inputs.rejections.get(id)
   const rejectedEvent = rejected && 'kind' in rejected ? rejected : undefined
   const rejectedSend = rejected && !('kind' in rejected) ? rejected : undefined
+  const original =
+    source?.kind === 'outcome-admission'
+      ? source.item
+      : source &&
+        journalRenderItem(
+          agentJournalSubmissionKey(id),
+          0,
+          source.body,
+          source,
+          { kind: 'thread' },
+          source
+        )
   return {
     submission,
     sequence: journalInputSourceSequence(source) ?? submission.submittedSequence ?? 0,
@@ -52,12 +69,8 @@ export function restoredJournalDomainSubmission(
     echoObserved: state.inputs.echoes.has(agentJournalSubmissionKey(id)),
     ended: state.inputs.ended.has(id),
     admission: {
-      body:
-        submission.dispatchState === 'pending' ||
-        submission.dispatchState === 'unknown' ||
-        stoppedHistoryCandidate(submission)
-          ? journalInputSourceBody(source)
-          : null,
+      body: journalInputSourceBody(source),
+      ...(original ? { sourcePlacement: journalDomainSourcePlacement(original) } : {}),
       providerHandle: source?.kind === 'submission' ? source.providerHandle : null,
       fence: source?.fence ?? submission.fence,
       scope: journalInputSourceScope(source) ?? null,
@@ -71,7 +84,8 @@ export function restoredJournalDomainSubmission(
           sequence: handover.seq,
           at: handover.ts,
           fence: handover.fence,
-          scope: handover.turnScope ?? null
+          scope: handover.turnScope ?? null,
+          ...(handover.recovered ? { recovered: true as const } : {})
         }
       : null,
     handoverPlace: place
@@ -117,7 +131,7 @@ export function insertJournalDomainImportedSubmission(
     submission.clientMessageId,
     attempt.sequence,
     attempt.index,
-    1,
+    Number(attempt.current !== false),
     agentJournalSubmissionKey(submission.clientMessageId),
     attempt.ordinal,
     Number(attempt.candidate),
@@ -152,7 +166,7 @@ export function restoredJournalDomainSubmissions(
       index + 1
     ])
   )
-  return [...memoryJournalMap(state.submissions).values()].map((submission) =>
+  const current = [...memoryJournalMap(state.submissions).values()].map((submission) =>
     restoredJournalDomainSubmission(
       state,
       submission,
@@ -162,4 +176,22 @@ export function restoredJournalDomainSubmissions(
       enteredPhase.get(submission.clientMessageId) ?? null
     )
   )
+  const retained = [...memoryJournalMap(state.inputs.sources)].flatMap(([id, source]) =>
+    state.submissions.has(id)
+      ? []
+      : [
+          {
+            ...restoredJournalDomainSubmission(
+              state,
+              source.kind === 'submission' ? journalSubmissionFromRow(source) : source.submission,
+              order.inputOrdinal(id),
+              false,
+              null,
+              null
+            ),
+            current: false
+          }
+        ]
+  )
+  return [...current, ...retained]
 }

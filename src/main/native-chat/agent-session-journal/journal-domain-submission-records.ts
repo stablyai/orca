@@ -30,6 +30,7 @@ export type JournalDomainSubmissionFacts = {
 
 export type JournalDomainSubmissionAdmission = {
   body: AgentJournalMessageItem | null
+  sourcePlacement?: Omit<AgentJournalRenderItem, 'body'>
   providerHandle: AgentSessionJournalProviderHandle | null
   fence: number
   scope: AgentJournalTurnScope | null
@@ -44,6 +45,7 @@ export type JournalDomainSubmissionHandover = {
   at: number
   fence: number
   scope: AgentJournalTurnScope | null
+  recovered?: true
 }
 
 /** Retained independently: a later itemless handover cannot replace its presentation. */
@@ -120,6 +122,11 @@ export type JournalDomainSubmissionStoredFacts = Pick<
   admission: Omit<JournalDomainSubmissionAdmission, 'body' | 'familyId'>
 }
 
+export function journalDomainSourcePlacement(item: AgentJournalRenderItem) {
+  const { body: _body, ...placement } = item
+  return placement
+}
+
 export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissionAttempt): string {
   const { body: _body, familyId: _family, ...admission } = attempt.admission
   const {
@@ -179,7 +186,7 @@ export function readJournalDomainSubmissionAttempt(
   }
 }
 
-/** Source bodies are released at settlement; the immutable optimistic message then owns its body. */
+/** A retained source survives independent revisions and removal of its optimistic item. */
 export function readJournalDomainSubmissionBody(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,

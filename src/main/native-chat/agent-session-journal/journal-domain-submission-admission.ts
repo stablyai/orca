@@ -184,6 +184,13 @@ export function applyJournalDomainSubmission(
     familyId ?? null,
     JSON.stringify({
       admission: {
+        sourcePlacement: {
+          itemId,
+          revision: 0,
+          sequence,
+          observedAt: savedAt,
+          turnScope: { kind: 'thread' }
+        },
         providerHandle: agentSessionJournalProviderHandle(facts.identity),
         fence: input.fence,
         scope: null,

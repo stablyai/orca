@@ -265,7 +265,7 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
       rejection_sequence: null,
       rejection_kept_message_id: null,
       echo_observed: 0,
-      body_released: 1
+      body_released: 0
     },
     {
       message_id: 'retry',
@@ -277,7 +277,7 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
       rejection_sequence: null,
       rejection_kept_message_id: null,
       echo_observed: 0,
-      body_released: 1
+      body_released: 0
     },
     {
       message_id: 'send',
@@ -289,7 +289,7 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
       rejection_sequence: null,
       rejection_kept_message_id: null,
       echo_observed: 1,
-      body_released: 1
+      body_released: 0
     }
   ])
   const item = (item_id: string, revision: number, sequence: number) => ({

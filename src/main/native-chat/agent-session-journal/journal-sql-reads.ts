@@ -18,6 +18,7 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
   hasProviderTurn(nativeId: string): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
   forkMarkerGroup(
@@ -81,6 +82,20 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    historySourceItems: async (clientMessageIds) => {
+      const items: AgentJournalRenderItem[] = []
+      for (let offset = 0; offset < clientMessageIds.length; offset += 128) {
+        items.push(
+          ...(
+            await read({
+              kind: 'history-source-items',
+              clientMessageIds: clientMessageIds.slice(offset, offset + 128)
+            })
+          ).items
+        )
+      }
+      return items
+    },
     hasProviderTurn: async (namespace) =>
       (await read({ kind: 'provider-turn-in-namespace', namespace })).present,
     savedItemIds: async (itemIds) => (await read({ kind: 'saved-item-ids', itemIds })).itemIds,

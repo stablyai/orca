@@ -438,7 +438,8 @@ it('matches a changed provider echo after acceptance once, without claiming the 
       .get()
   ).toEqual({
     echo_observed: 1,
-    admission_body_json: null,
+    admission_body_json:
+      '{"kind":"message","role":"user","blocks":[{"type":"text","text":"same"}]}',
     signed_out: 0,
     dispatch_fence: 1
   })
@@ -702,7 +703,7 @@ it('requeues only proven unrun delivery, keeps typed refusals and answered turns
   expect(skipped).toMatchObject({ cursor: { sequence: 17 }, value: null, coordinates: [] })
   expect(f.attempt('first')).toMatchObject({
     ordinal: 0,
-    admission: { body: null },
+    admission: { body: body('card') },
     submission: { dispatchState: 'rejected' }
   })
 })

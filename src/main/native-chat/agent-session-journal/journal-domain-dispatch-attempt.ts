@@ -46,7 +46,8 @@ export function writeJournalDomainDispatchAttempt(
     handover?.fence ?? null,
     journalDomainSubmissionFactsJson(attempt),
     Number(
-      next.dispatchState === 'pending' ||
+      attempt.admission.sourcePlacement !== undefined ||
+        next.dispatchState === 'pending' ||
         next.dispatchState === 'unknown' ||
         stoppedHistoryCandidate(next)
     ),

@@ -4,6 +4,7 @@ import {
   type JournalGenerationResult
 } from './journal-generation-read'
 import { readJournalDomainAcceptedSendUnopened } from './journal-domain-accepted-unopened'
+import { readJournalDomainSourceItems } from './journal-domain-source-items'
 import {
   readJournalDomainPublication,
   type JournalPublicationRead,
@@ -55,6 +56,7 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
     | { kind: 'generation'; input: JournalGenerationRead }
@@ -85,6 +87,7 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
   | { kind: 'provider-turn-in-namespace'; present: boolean }
   | { kind: 'saved-item-ids'; itemIds: string[] }
   | { kind: 'generation'; generation: JournalGenerationResult }
@@ -137,6 +140,11 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'history-source-items':
+      return {
+        kind: operation.kind,
+        items: readJournalDomainSourceItems(scope, operation.clientMessageIds)
+      }
     case 'fork-marker-group':
     case 'projected-stop-notes':
       return readJournalDomainPublication(scope, operation)
