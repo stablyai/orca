@@ -12,6 +12,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
 import { useWorkspaceCopyStatus, type WorkspaceCopyStatus } from './use-workspace-copy-status'
 import { recordWorktreeBranchSwitchLanded } from './workspace-branch-switch-status'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { refreshGitStatusForWorktree } from '../sync/git-status-refresh'
 
 // The same project at the same path on this machine and on an SSH host share one status slot.
 const id = 'repo1::/srv/ai-tools'
@@ -181,5 +183,49 @@ it("doesn't trust the twin's slot when this copy becomes the owner", async () =>
   expect(seen.current?.entries).toEqual([])
   await finish(clean)
   expect(useAppStore.getState().gitStatusByWorktree[id]).toEqual([])
+  expect(seen.current).toMatchObject({ statusKnown: true, entries: [] })
+})
+
+it('trusts the slot again when a newer identical poll supersedes the picker refresh', async () => {
+  // Both copies clean at the same commit; the store keeps the same entries reference for an identical status.
+  useAppStore.setState({
+    gitStatusByWorktree: { [id]: [] },
+    gitStatusHeadByWorktree: { [id]: 'aaa' }
+  })
+  const seen: { current: WorkspaceCopyStatus | null } = { current: null }
+  function Probe({ open }: { open: boolean }) {
+    seen.current = useWorkspaceCopyStatus({
+      worktreeId: id,
+      worktreePath: path,
+      hostId: 'local',
+      open,
+      refreshOnOpen: true
+    })
+    return null
+  }
+  await act(async () => root.render(<Probe open={false} />))
+  await act(async () => useAppStore.setState({ activeWorkspaceExecutionHostId: 'local' }))
+  const finishPicker = deferStatus()
+  await act(async () => root.render(<Probe open />))
+  const target = resolveWorktreeGitCopyNow(id, 'local')
+  if (!target) {
+    throw new Error('Local copy unresolved')
+  }
+  const state = useAppStore.getState()
+  await act(async () =>
+    refreshGitStatusForWorktree({
+      target: target.transport,
+      ownerHostId: target.hostId,
+      worktreeId: id,
+      worktreePath: path,
+      deps: {
+        setGitStatus: state.setGitStatus,
+        updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
+        setUpstreamStatus: state.setUpstreamStatus,
+        fetchUpstreamStatus: async () => null
+      }
+    })
+  )
+  await finishPicker(clean)
   expect(seen.current).toMatchObject({ statusKnown: true, entries: [] })
 })
