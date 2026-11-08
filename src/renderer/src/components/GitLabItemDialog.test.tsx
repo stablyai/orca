@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import GitLabItemDialog from './GitLabItemDialog'
 

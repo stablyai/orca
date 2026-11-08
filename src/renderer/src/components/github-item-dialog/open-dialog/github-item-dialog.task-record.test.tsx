@@ -11,6 +11,7 @@ import {
 } from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 
