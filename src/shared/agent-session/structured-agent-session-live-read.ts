@@ -4,6 +4,7 @@ import { createStructuredAgentSessionEventCoalescer } from './structured-agent-s
 import { createAgentSessionTextAppendReader } from './agent-session-text-append'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
+  agentSessionReadFailureText,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
 } from './failures/structured-agent-session-read-refusal'
@@ -24,25 +25,6 @@ export type StructuredAgentSessionLiveSubscribe = (
   onError: (error: unknown) => void,
   onClose: () => void
 ) => Promise<{ unsubscribe: () => void }>
-
-// Raw stream failures carry code/message; String(object) would hide the failure as [object Object].
-function readFailureText(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message || 'Something went wrong.'
-  }
-  if (typeof error === 'string') {
-    return error || 'Something went wrong.'
-  }
-  if (typeof error === 'object' && error !== null) {
-    if ('message' in error && typeof error.message === 'string' && error.message.length > 0) {
-      return error.message
-    }
-    if ('code' in error && typeof error.code === 'string' && error.code.length > 0) {
-      return error.code
-    }
-  }
-  return 'Something went wrong.'
-}
 
 /** Resume from the last applied cursor after stream end/failure with capped exponential backoff. */
 export function startStructuredAgentSessionLiveRead(args: {
@@ -117,9 +99,9 @@ export function startStructuredAgentSessionLiveRead(args: {
     const refusal = readAgentSessionErrorRefusal(error)
     failedFinally = isFinalAgentSessionReadRefusal(refusal)
     if (refusal) {
-      args.applyError(readFailureText(error), refusal)
+      args.applyError(agentSessionReadFailureText(error), refusal)
     } else {
-      args.applyError(readFailureText(error))
+      args.applyError(agentSessionReadFailureText(error))
     }
   }
   const reportReadFailure = (error: unknown): void => {
