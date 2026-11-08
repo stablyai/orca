@@ -1,7 +1,6 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic, Square } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import { MobileNativeChatControlSwap } from '../../session/native-chat/input/mobile-native-chat-control-swap'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles
@@ -151,25 +150,20 @@ function MobileTerminalDictationButton({
               : t('session.terminalInputActions.startDictation', 'Start voice dictation')
       }
     >
-      {/* Live dictation shows Stop, as in the chat composer; the swap keeps a held press on the control. */}
-      <MobileNativeChatControlSwap
-        swapKey={dictation.isProcessing ? 'processing' : dictationActive ? 'active' : 'idle'}
-        icon
-      >
-        {dictation.isProcessing ? (
-          <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
-        ) : dictationActive ? (
-          <Square
-            pointerEvents="none"
-            size={14}
-            color={colors.statusRed}
-            strokeWidth={2.4}
-            fill={colors.statusRed}
-          />
-        ) : (
-          <Mic pointerEvents="none" size={17} color={colors.textSecondary} strokeWidth={2.4} />
-        )}
-      </MobileNativeChatControlSwap>
+      {/* Icons ignore touches, so swapping them mid-hold never drops the press's release. */}
+      {dictation.isProcessing ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : dictationActive ? (
+        <Square
+          pointerEvents="none"
+          size={14}
+          color={colors.statusRed}
+          strokeWidth={2.4}
+          fill={colors.statusRed}
+        />
+      ) : (
+        <Mic pointerEvents="none" size={17} color={colors.textSecondary} strokeWidth={2.4} />
+      )}
     </Pressable>
   )
 }

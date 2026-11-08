@@ -2490,7 +2490,7 @@
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
       "startingMic": "Iniciando micrófono",
-      "stopHint": "Toca detener para terminar",
+      "stopHint": "Toca el micrófono para parar",
       "transcribing": "Transcribiendo en el escritorio",
       "uploadingImage": "Subiendo imagen al host",
       "uploadingImageTitle": "Subiendo imagen"

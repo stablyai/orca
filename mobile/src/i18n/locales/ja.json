@@ -2418,7 +2418,7 @@
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
       "startingMic": "マイクを起動中",
-      "stopHint": "停止をタップして終了",
+      "stopHint": "マイクをタップして停止",
       "transcribing": "デスクトップで文字起こし中",
       "uploadingImage": "ホストに画像をアップロード中",
       "uploadingImageTitle": "画像をアップロード中"
