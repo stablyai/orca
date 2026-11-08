@@ -13,7 +13,7 @@ import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncSta
 import {
   type RetiredTerminalTabSweepState,
   buildRetiredTerminalTabStateSweepPatch
-} from '../../store/slices/retired-terminal-tab-state-sweep'
+} from '../../store/terminals/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 

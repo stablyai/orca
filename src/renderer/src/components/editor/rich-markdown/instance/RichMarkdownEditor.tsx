@@ -1,6 +1,6 @@
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useAppStore } from '@/store/index'
 import { useLocalImagePick } from '../images/useLocalImagePick'
@@ -32,6 +32,7 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from '../links/rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
+import { useTranslate } from '@/i18n/use-translate'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -56,6 +57,7 @@ export default function RichMarkdownEditor({
   markdownReviewContent = content,
   headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
@@ -371,7 +373,7 @@ export default function RichMarkdownEditor({
       searchActions={searchActions}
       citationStatus={
         selectedCitationStatus
-          ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus)
+          ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus, t)
           : ''
       }
       linkBubbleOwnerId={codec.transport.key}

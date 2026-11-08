@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "连接到此工作区的 SSH 主机，然后重试。",
+    "sshUnavailable": "此 SSH 主机无法启动终端会话。请在工作区中打开终端，并在那里启动智能体。",
+    "reconnectServer": "重新连接到此工作区的 Orca 服务器，然后重试。",
+    "updateServer": "更新此工作区服务器上的 Orca，然后重试。",
+    "checkSettings": "检查智能体的启动设置，然后重试。",
+    "invalidArgs": "{{value0}} 的 CLI 参数中有未闭合的引号。请修正后重试。",
     "opencode": {
       "updateRequired": "此版本的 OpenCode 无法使用所选模型安全启动。请将 OpenCode 更新到受支持的版本，或不指定模型。",
       "invalidConfig": "OpenCode 无法将所选模型应用到启动配置。请检查 OpenCode 启动配置后重试，或不指定模型。",
@@ -54,10 +60,7 @@
       },
       "providers": {
         "title": "提供方",
-        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。",
-        "antigravityNotSignedIn": "未登录。聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。",
         "antigravityAccount": "账户",
-        "antigravitySignInNeeded": "聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。",
         "searchAgents": "智能体",
         "searchTerminal": "终端",
         "searchCli": "CLI"
@@ -425,7 +428,6 @@
       "actionModel": {
         "on": "开启",
         "off": "关闭",
-        "invalidArgs": "{{value0}} 的 CLI 参数无效。请在设置 → Source Control AI 中修正。",
         "model": "模型",
         "agentDefault": "智能体默认",
         "effortDefault": "默认",
@@ -1030,9 +1032,7 @@
           "agent": {
             "launch": {
               "027228a06b": "无法找到用于这些检查的工作区。",
-              "fb6c294e85": "无法构建智能体启动命令。",
               "03c1d61f83": "无法打开附加到这些检查的工作区。",
-              "822bf52295": "无法解析工作区启动平台。",
               "dfb4dd7c00": "无法找到附加到这些检查的工作区。",
               "9f00d7df0c": "检查提示为空。请更新源代码管理 AI 设置。",
               "2ebf794906": "此工作区主机上未检测到已启用的 AI 智能体。",
@@ -1071,8 +1071,8 @@
             "direct": {
               "3de6371df3": "无法构建智能体启动命令。",
               "67e103dd60": "工作区已创建但无法激活。",
-              "19c7683acf": "所选智能体在创建的工作区中不可用。",
-              "8bc45efdbc": "无法解析 PR 头引用。",
+              "19c7683acf": "所选智能体不可用。请检查工作区的智能体设置，然后重试。",
+              "8bc45efdbc": "无法读取拉取请求。请确认你可以打开它，然后重试。",
               "agent": {
                 "ceeeb509b5": "智能体启动时间太长。工作区已准备就绪 - 当智能体空闲时粘贴 {{value0}}。"
               }
@@ -2644,7 +2644,6 @@
         "a2a279b32a": "保存超时或失败。关闭前修复错误。",
         "46e08bc5c8": "该文件有未保存的更改。",
         "61ed600d29": "“{{value0}}”有未保存的更改。您想在关闭前保存吗？",
-        "e57db40c11": "无法为 {{value0}} 构建启动命令。",
         "5b2c1a9e44": "未检测到智能体 CLI，请安装一个，或在设置中选择默认智能体。",
         "b7c1f0a934": "无法访问远程主机，因此 Orca 无法判断工作是否仍在运行。还是关窗吧？",
         "quitSnapshotSaveFailed": "退出已取消：无法保存会话快照 ({{value0}})。",
@@ -3719,7 +3718,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "智能体设置...",
             "ec2adf093e": "在新终端中启动 {{value0}}",
-            "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
             "8dea9b5cdf": "没有启用智能体",
             "terminalListNeedsServerUpdate": "更新此服务器上的 Orca 以列出终端智能体",
@@ -5371,29 +5369,26 @@
           "removeBatchFolder_other": "从 Orca 移除<target>{{count}} 个工作区</target>。磁盘上的项目文件夹不会被删除。",
           "removeBatchMixed_other": "从 Orca 移除<target>{{count}} 个工作区</target>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目。",
           "removeBatchGit_other": "从 git 移除<target>{{count}} 个工作区</target>，并删除其工作区文件夹。",
-          "removeSingleFolder": "从 Orca 移除 <target/>。磁盘上的项目文件夹不会被删除。",
-          "removeSingleGit": "从 git 移除 <target/>，并删除其工作区文件夹。",
           "removeWithChildrenFolder_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。磁盘上的项目文件夹不会被删除。",
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目。",
-          "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹。"
+          "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹。",
+          "removeSingleFolderFromOrca": "将其从 Orca 中移除。磁盘上的文件夹会保留。",
+          "deleteSingleWorktreeAndBranch": "删除工作树及其分支（未合并的分支会保留）。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "显示已加载的路径",
           "loadedPathsNotice": "已加载的路径可能不完整或已过时。",
           "loadedChangedPaths": "已加载的更改路径",
           "unresolvedConflict": "未解决的冲突",
-          "changeCount_one": "{{count}} 处未提交或未跟踪的更改",
-          "changeCount_other": "{{count}} 处未提交或未跟踪的更改",
-          "changes": "未提交或未跟踪的更改",
-          "moreLoadedPaths_other": "以及另外 {{count}} 个已加载的路径"
+          "moreLoadedPaths_other": "以及另外 {{count}} 个已加载的路径",
+          "changesLost_one": "{{count}} 项未提交的更改将丢失",
+          "changesLost_other": "{{count}} 项未提交的更改将丢失",
+          "uncountedChangesLost": "未提交的更改将丢失"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "子工作区将被删除",
           "alsoDeletesChildren_other": "删除此工作区也会删除 {{count}} 个子工作区。",
           "moreChildren_other": "另有 {{count}} 个"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "不要再问"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "这是<strong>主工作树</strong>（最初的克隆目录）。"
@@ -5843,14 +5838,11 @@
           "c39c37676a": "创建一个组并将该项目移入其中。",
           "6664418e98": "新项目组",
           "e091caab15": "找不到该项目",
-          "439fa94d53": "更新",
           "579b1a8e61": "从父级中删除",
           "8d9cd19d09": "打开父工作树",
           "d35dfeae58": "从组中删除",
           "76865d827f": "移至群组",
           "503ec0f8e6": "来自项目的新组",
-          "3350101edb": "复制路径",
-          "copyWorktreeName": "复制工作树名称",
           "f4475537d8": "删除",
           "f5ac91531d": "从 Orca 中删除项目",
           "b42391d8bf": "正在删除...",
@@ -5868,9 +5860,16 @@
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主工作树不能删除。请改为移除项目。",
           "deleteWorktree": "删除工作树",
-          "sleepWithDescendants": "与后代一起休眠 ({{value0}})",
           "sleepWithDescendantsDescription": "关闭此工作区中的活动面板以及每个嵌套的后代面板以释放内存和 CPU。",
-          "deleteWithDescendants": "与后代一起删除..."
+          "sleepThisWorkspace": "当前工作区",
+          "sleepDescendantsOption": "包括后代 ({{value0}})",
+          "deleteWithDescendants": "与后代一起删除...",
+          "editDetails": "编辑详情…",
+          "copySubmenu": "复制",
+          "copyPathOption": "路径",
+          "copyNameOption": "工作树名称",
+          "lineageSubmenu": "父级与子级",
+          "projectGroupSubmenu": "项目组"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -8273,17 +8272,10 @@
           "a4ff6143f8": "清除字体选择",
           "b661b034ec": "· 默认：",
           "ceefb9d7f1": "未找到主题。",
-          "9119fb2268": "当前",
-          "4e11f87ca6": "显示中",
-          "fbb428db98": "已选择：",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 匹配“{{value0}}”",
           "builtin_themes": "内置",
-          "imported_from": "从 {{value0}} 导入",
           "imported_themes": "已导入",
           "search_terminal_themes": "搜索终端主题",
-          "plugin_themes": "插件",
-          "from_plugin": "来自 {{value0}}"
+          "plugin_themes": "插件"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -11873,6 +11865,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "仓库、项目和工作区访问令牌是从匹配的 Bitbucket 设置页面创建的，并且需要读取访问拉取请求的权限。",
               "basicHint": "为您的帐户创建 Atlassian API 令牌，然后将其与拥有它的电子邮件地址配对。",
+              "scopesTitle": "请选择以下 Bitbucket API 令牌范围：",
+              "scopeUser": "验证您的帐户",
+              "scopeRepository": "读取构建状态",
+              "scopeReadPullRequest": "读取拉取请求",
+              "scopeWritePullRequest": "创建拉取请求",
+              "scopesWriteNote": "如仅需只读访问，请省略写入范围。写入不包含读取；请分别选择每个范围。",
               "docsLink": "Bitbucket API 令牌文档",
               "storageNote": "当操作系统钥匙串可用时，通过加密存储存储在本计算机上。 ORCA_BITBUCKET_* 环境变量始终优先于您在此处保存的内容。",
               "cancel": "取消",
@@ -13683,7 +13681,6 @@
                     },
                     "d481ab22f9": "已保存的 AI 智能体不可用。请使用「自定义启动」选择其他智能体。",
                     "9bbd9077a2": "没有已启用的 AI 智能体。请在设置中配置智能体。",
-                    "5540ff50cc": "无法构建智能体启动命令。",
                     "216f762bd7": "无法解析工作区连接。",
                     "success": "已为 {{value0}} 失败启动 AI 智能体。"
                   }
@@ -14879,7 +14876,6 @@
             "3f4ca29961": "最大化浮动工作区",
             "1c79cba25d": "恢复浮动工作区",
             "648352c51f": "在浮动工作区中打开 {{value0}}",
-            "82da3701e7": "无法为 {{value0}} 构建启动命令。",
             "109870e023": "最大化",
             "b5686fee1e": "恢复"
           }
@@ -19161,7 +19157,6 @@
       "queuedMessages": {
         "alreadySent": "此消息已发送。",
         "listLabel": "排队的消息",
-        "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
         "steer": "立即发送",
         "send": "发送",
         "steerHint": "提交且不中断模型",
@@ -19456,7 +19451,9 @@
         "hidden": "Orca 将不再显示已创建的拉取请求",
         "many_one": "已创建 {{count}} 个拉取请求",
         "many_other": "已创建 {{count}} 个拉取请求"
-      }
+      },
+      "splitRight": "向右拆分",
+      "splitDown": "向下拆分"
     },
     "tab": {
       "bar": {
@@ -19731,11 +19728,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除。",
-          "clean": "没有未提交或未跟踪的更改",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",
-          "unavailableDetails": "详细信息不可用"
+          "unavailableDetails": "详细信息不可用",
+          "none": "没有未提交的更改"
         },
         "unsavedEdits": {
           "discarded_one": "{{count}} 个文件中未保存的编辑将被放弃：",
@@ -20110,6 +20107,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "无法格式化 {{file}}。将不经格式化直接保存：{{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "新建代理"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "在聊天旁打开窗格",
+          "action": "拆分窗格"
+        }
       }
     }
   },
@@ -20997,6 +21007,29 @@
       "loading": "正在加载子模块更改…",
       "empty": "子模块中没有更改",
       "loadFailed": "无法加载子模块更改"
+    },
+    "branchPicker": {
+      "switch": "切换分支：{{branch}}",
+      "search": "搜索分支",
+      "recover": "切换到 {{branch}}",
+      "create": "从 {{branch}} 创建分支 {{name}}",
+      "open": "打开工作区",
+      "occupied": "已在 {{path}} 中检出",
+      "remote": "远程",
+      "statusFailed": "Orca 无法读取此检出的更改。请先刷新源代码管理再切换。",
+      "statusUnknown": "切换前请先读取此检出的更改。",
+      "conflict": "切换分支前，请完成或中止 {{operation}}。",
+      "dirty_one": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
+      "dirty_other": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
+      "agentWorking": "有代理正在此工作区中工作。请在其完成后再切换分支；如果它已停止，请关闭其标签页。",
+      "listFailed": "Orca 无法列出本地分支。请尝试重新打开选择器。",
+      "discoveryFailed": "Orca 找不到远程分支。你仍然可以切换本地分支或创建分支。",
+      "switchFailed": "Orca 无法切换分支。请重试。",
+      "switchFailedTitle": "无法切换分支",
+      "switchFailedIn": "无法在 {{workspace}} 中切换分支",
+      "switchedIn": "在 {{workspace}} 中",
+      "thisComputer": "此电脑",
+      "updateHost": "请在 {{host}} 上更新 Orca，以便从这里切换分支。"
     }
   },
   "rendererRecovery": {
@@ -21231,7 +21264,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "聊天使用自己的 Antigravity 登录，与上方的 agy 帐户分开。在此设备上登录一次即可。",
       "chatSignIn": "登录",
       "chatChangeAccount": "更换帐户",
       "chatRetry": "重试登录",
@@ -21244,14 +21276,11 @@
       "chatVerifying": "正在完成登录…",
       "chatPasteHelp": "如果登录后的最后一个页面无法加载，请从浏览器复制它的完整地址并粘贴到这里。",
       "chatContinue": "继续",
-      "chatSignedInOn": "已在 {{host}} 上登录。",
       "chatCancelled": "已取消登录。",
       "chatExpired": "登录超时。请重试。",
       "chatFailed": "登录失败。请重试。",
-      "chatNotSignedIn": "未在 {{host}} 上登录。",
       "chatOtherClient": "另一个客户端正在登录。",
       "chatReadFailed": "无法检查 {{host}} 上的登录。",
-      "scope": "管理 {{host}} 上的本机 agy 帐户。",
       "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户。要添加其他帐户，请在 agy 中使用 /logout 并再次登录。",
       "docs": "登录说明",
       "retry": "重试",
@@ -21282,11 +21311,9 @@
       "personal": "Google 账户",
       "gcpProject": "Google Cloud 项目",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "请重新登录以使用 {{method}}。",
       "settingsIncomplete": "请选择 Antigravity 账户类型并输入其 Google Cloud 项目和位置。",
       "settingsLoadFailed": "Orca 无法加载 Antigravity 登录设置。请重试。",
       "settingsSaveFailed": "Orca 无法保存 Antigravity 登录设置。请重试。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登录。",
       "lastReading": "{{reading}} · 读取于 {{time}}",
       "noReading": "用量未知：尚未读取"
     },
@@ -21665,7 +21692,10 @@
     "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
     "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
-    "alwaysForceDeleteBranches": "始终删除保留的分支"
+    "alwaysForceDeleteBranches": "始终删除保留的分支",
+    "moreDeleteOptions": "更多删除选项",
+    "alwaysDelete": "始终删除",
+    "alwaysDeleteTooltip": "今后删除时跳过此确认。"
   },
   "workspace": {
     "branchChoice": {
@@ -22582,6 +22612,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
+    "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
     "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
     "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
@@ -23210,6 +23241,41 @@
     "historyChanged": "历史记录再次发生变化。请刷新 Git 图后重试。",
     "loadFailed": "无法加载 Git 历史记录",
     "updateHost": "请更新 {{host}} 上的 Orca 以打开 Git 图",
-    "title": "Git 图"
+    "title": "Git 图",
+    "revertConflicts": "撤销提交冲突",
+    "revertInProgress": "正在撤销提交",
+    "abortOperationTitle": "中止{{operation}}？",
+    "abortOperationDescription": "这会取消正在进行的操作，并可能丢弃在此期间完成的冲突解决。",
+    "abortOperation": "中止{{operation}}",
+    "recoveryFailed": "无法完成操作。请刷新源代码管理后重试。",
+    "continueOperation": "继续{{operation}}",
+    "reverting": "正在撤销提交",
+    "updateActionsHost": "请更新{{host}}上的 Orca 以操作提交",
+    "thisHost": "此主机",
+    "cannotApplyMerge": "无法在此处拣选或撤销合并提交",
+    "confirmCommitAction": "对{{commit}}执行{{action}}？",
+    "cancelAction": "取消",
+    "checkoutCommit": "检出提交",
+    "cherryPick": "拣选",
+    "revert": "撤销提交",
+    "actionLanded": "当前位于{{branch}}上的{{commit}}",
+    "detachedHead": "分离的 HEAD",
+    "actionWarning": "操作已完成，但 Git 报告了问题。",
+    "actionConflicted": "请在源代码管理中解决冲突，然后继续或中止操作。",
+    "alreadyApplied": "已应用，没有可拣选的更改",
+    "nothingToRevert": "无需还原；更改已撤销。",
+    "actionRefused": "操作未完成。",
+    "actionUnavailable": "此工作区已无法执行该操作。请重新打开 Git 图后重试。",
+    "ownerChanged": "工作区主机已更改。请重新打开 Git 图后重试。",
+    "showAllBranches": "显示所有分支",
+    "actionDirty": "请先提交或暂存更改，然后重试。",
+    "actionFailed": "Git 未创建提交。请检查工作目录，然后重试。",
+    "operationInProgress": "请先完成或中止正在进行的 {{operation}}，然后重试。",
+    "checkoutBranch": "切换分支",
+    "createBranch": "在此创建分支",
+    "branchCreated": "已在 {{commit}} 创建 {{branch}}",
+    "branchName": "分支名称",
+    "invalidBranchName": "此分支名称无效。请选择其他名称。",
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
   }
 }

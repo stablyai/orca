@@ -6,7 +6,7 @@ import {
   rankWorktreeStatus,
   type WorktreeStatus
 } from '../../../src/shared/worktree-status-rollup'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HomeResumeCard } from './home-resume-card'
 import type {
   HomeAttentionWorktree,

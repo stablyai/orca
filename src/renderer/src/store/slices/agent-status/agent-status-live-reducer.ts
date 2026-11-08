@@ -1,4 +1,4 @@
-import { projectAgentPaneConversation } from '../agent-pane-conversation'
+import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {

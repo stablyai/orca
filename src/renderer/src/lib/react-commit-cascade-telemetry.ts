@@ -6,7 +6,7 @@ import {
   readReactCommitCascadeWriteSummary,
   resetReactCommitCascadeWriteSamples
 } from '@/lib/react-commit-cascade-store-write-samples'
-import { readStoreListenerCount } from '@/store/store-listener-census'
+import { readStoreListenerCount } from '@/store/diagnostics/store-listener-census'
 import type { RendererSurface } from '@/lib/renderer-memory-sampling'
 import { REACT_NESTED_UPDATE_LIMIT } from '../../../shared/react-update-depth-attribution'
 

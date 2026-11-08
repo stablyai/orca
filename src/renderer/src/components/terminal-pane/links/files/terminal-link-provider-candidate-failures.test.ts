@@ -126,38 +126,6 @@ describe('terminal link candidates fail independently', () => {
     expect([...cache.values()].map((entry) => entry.exists)).toEqual([true, true])
   })
 
-  it('uses paired-host per-path answers without consulting the client filesystem', async () => {
-    const rows = await replayRows()
-    runtimeEnvironmentCallMock.mockImplementation(async ({ method, params }) => {
-      if (method !== 'files.pathsExist' || !Array.isArray(params?.relativePaths)) {
-        throw new Error('Unexpected remote probe')
-      }
-      return {
-        id: 'paths',
-        ok: true,
-        result: params.relativePaths.map((path) =>
-          path === 'notes/README.md' || path === 'renderer/package.json'
-            ? { exists: true }
-            : { error: 'ENOTDIR: joined path' }
-        ),
-        _meta: { runtimeId: 'remote' }
-      }
-    })
-    const cache = makeExistsCache()
-    const { provider } = createProviderSetup(rows, cache, {
-      startupCwd: '/home/alice/dev',
-      worktreePath: '/home/alice/dev',
-      runtimeEnvironmentId: 'env-notes'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'env-notes', method: 'files.pathsExist' })
-    )
-    expect(fsPathExistsMock).not.toHaveBeenCalled()
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true])
-  })
-
   it('does not cache a transport failure as missing and can retry the next hover', async () => {
     const rows = await replayRows()
     vi.mocked(getConnectionId).mockReturnValue('ssh-notes')

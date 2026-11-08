@@ -10,7 +10,8 @@ import {
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
 import { toast } from 'sonner'
-import { type AppState, useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -44,7 +45,6 @@ export type SourceControlRecoveryLaunchCopy = {
   emptyPrompt: string
   savedAgentUnavailable: string
   noEnabledAgent: string
-  launchCommandUnavailable: string
   connectionUnavailable: string
   success: string
 }
@@ -75,10 +75,6 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
     noEnabledAgent: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
       'No enabled AI agents. Configure agents in Settings.'
-    ),
-    launchCommandUnavailable: translate(
-      'auto.components.right.sidebar.source.control.ai.recovery.launch.5540ff50cc',
-      'Could not build the agent launch command.'
     ),
     connectionUnavailable: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.216f762bd7',
@@ -235,8 +231,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
   })
-  if (!result) {
-    toast.error(copy.launchCommandUnavailable)
+  if (!result || 'refused' in result) {
     return false
   }
 

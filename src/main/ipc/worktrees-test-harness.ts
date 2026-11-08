@@ -30,6 +30,7 @@ import {
   resolveDefaultBaseRefWithLocalGitMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
+  getBranchConflictKindStrictMock,
   getPRForBranchMock,
   getHostedReviewForBranchMock,
   getWorkItemMock,
@@ -101,6 +102,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     resolveDefaultBaseRefWithLocalGitMock,
     getDefaultRemoteMock,
     getBranchConflictKindMock,
+    getBranchConflictKindStrictMock,
     getPRForBranchMock,
     getHostedReviewForBranchMock,
     getWorkItemMock,
@@ -225,6 +227,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
   getDefaultRemoteMock.mockResolvedValue('origin')
   getBranchConflictKindMock.mockResolvedValue(null)
+  getBranchConflictKindStrictMock.mockResolvedValue(null)
   getPRForBranchMock.mockResolvedValue(null)
   getHostedReviewForBranchMock.mockResolvedValue(null)
   getWorkItemMock.mockResolvedValue(null)

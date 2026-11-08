@@ -1,4 +1,4 @@
-import type { AutomationRunUsage } from '../../shared/automations-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
 import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'

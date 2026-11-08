@@ -19,11 +19,11 @@ import {
   getRegisteredPairedBrowserTabCreator,
   loadPairedBrowserTabCreator
 } from './paired-browser-tab-creator'
-import { findGroupAndWorktree } from '../../tab-group-state'
+import { findGroupAndWorktree } from '../../tabs/tab-group-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
 import { browserTabOpenView } from './browser-tab-open-view'
-import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,

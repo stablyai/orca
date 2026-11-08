@@ -63,7 +63,6 @@ export function registerPtyConnectionDaemonPendingEscapeTailTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -155,7 +154,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

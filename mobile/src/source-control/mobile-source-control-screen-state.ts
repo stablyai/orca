@@ -34,7 +34,6 @@ export type ScreenState =
   | { kind: 'error'; message: string }
 
 export type LoadStatusOptions = {
-  preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
   rereadSettings?: boolean

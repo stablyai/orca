@@ -21,6 +21,7 @@ import type { StoreState } from '../test-fixtures/pty-connection-test-store-stat
 
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -42,7 +43,6 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -58,6 +58,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      // Each test binds the once-per-load settings subscription to its own store.
+      await loadFreshTerminalModules()
     })
 
     afterEach(async () => {

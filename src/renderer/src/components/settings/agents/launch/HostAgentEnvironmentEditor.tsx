@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AgentLaunchSettingsMutation } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAgentLaunchFieldWrite } from '../../../agent/launch-settings/use-agent-launch-field-write'
@@ -15,11 +15,12 @@ export function HostAgentEnvironmentEditor({
   names: readonly string[]
   mutate: (mutation: AgentLaunchSettingsMutation) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [newName, setNewName] = useState('')
   return (
     <div className="space-y-2">
       <span className="text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+        {t('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
       </span>
       {names.map((name) => (
         <EnvironmentValueRow key={name} agent={agent} name={name} saved mutate={mutate} />
@@ -28,8 +29,8 @@ export function HostAgentEnvironmentEditor({
         <Input
           value={newName}
           onChange={(event) => setNewName(event.target.value)}
-          aria-label={translate('settings.agents.environmentName', 'Environment variable name')}
-          placeholder={translate('settings.agents.environmentName', 'Environment variable name')}
+          aria-label={t('settings.agents.environmentName', 'Environment variable name')}
+          placeholder={t('settings.agents.environmentName', 'Environment variable name')}
           spellCheck={false}
           className="h-7"
         />
@@ -66,6 +67,7 @@ function EnvironmentValueRow({
     >
   ) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [value, setValue] = useState('')
   const [changed, setChanged] = useState(false)
   const { pending, write } = useAgentLaunchFieldWrite()
@@ -91,17 +93,17 @@ function EnvironmentValueRow({
             setValue(event.target.value)
             setChanged(true)
           }}
-          aria-label={translate('settings.agents.environmentValue', 'Value for {{name}}', { name })}
+          aria-label={t('settings.agents.environmentValue', 'Value for {{name}}', { name })}
           placeholder={
             saved
-              ? translate('settings.agents.savedEnvironment', 'Saved value · enter to replace')
-              : translate('settings.agents.newEnvironment', 'Value')
+              ? t('settings.agents.savedEnvironment', 'Saved value · enter to replace')
+              : t('settings.agents.newEnvironment', 'Value')
           }
           spellCheck={false}
           className="h-7"
         />
         <Button type="button" size="xs" disabled={!changed || pending} onClick={save}>
-          {translate('settings.agents.save', 'Save')}
+          {t('settings.agents.save', 'Save')}
         </Button>
         {saved ? (
           <Button
@@ -113,7 +115,7 @@ function EnvironmentValueRow({
               write('remove', () => mutate({ type: 'environment-remove', agent, name }))
             }
           >
-            {translate('settings.agents.removeEnvironment', 'Remove')}
+            {t('settings.agents.removeEnvironment', 'Remove')}
           </Button>
         ) : null}
       </div>

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
+import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 import { useMonacoTheme } from './use-monaco-theme'
 
 const defineTheme = vi.hoisted(() => vi.fn())

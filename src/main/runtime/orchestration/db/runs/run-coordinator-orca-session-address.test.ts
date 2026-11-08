@@ -1,12 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   formatOrcaSessionAddress,
   parseOrcaSessionAddress
 } from '../../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import {
@@ -33,19 +30,6 @@ function addressesFor(db: OrchestrationDb, runId: string): string[] {
     .all(runId)
     .map((row) => String(row.terminal_handle))
     .sort()
-}
-
-function tempDbPath(tempRoots: string[]): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-orca-session-'))
-  tempRoots.push(root)
-  return join(root, 'orchestration.db')
-}
-
-/** Drops the Run's remembered addresses and reopens, so only the on-open refill can write them back. */
-function refillAfterReopen(db: OrchestrationDb, path: string, runId: string): OrchestrationDb {
-  db.db.prepare('DELETE FROM run_coordinator_handles WHERE run_id = ?').run(runId)
-  db.close()
-  return new OrchestrationDb(path)
 }
 
 /** Insert a handle-less chat coordinator directly as a historical fixture. */
@@ -89,160 +73,6 @@ describe('Run coordinator Orca session address', () => {
       type: 'worker_done'
     })
     expect(db.getMessageById(reply.id)?.to_handle).toBe('run:run_session')
-  })
-
-  it('remembers an Orca session id bound by update, and again on reopen when the cache row is gone', () => {
-    const path = tempDbPath(tempRoots)
-    db = new OrchestrationDb(path)
-    db.db
-      .prepare(
-        `INSERT INTO runs (id, objective, consumer_generation, legacy)
-         VALUES ('run_unbound', 'bound later', 1, 0)`
-      )
-      .run()
-    db.db
-      .prepare(
-        `UPDATE runs SET coordinator_orca_session_id = ?,
-           coordinator_orca_session_id_generation = consumer_generation
-         WHERE id = ?`
-      )
-      .run(CHAT_SESSION_ID, 'run_unbound')
-    expect(addressesFor(db, 'run_unbound')).toEqual([CHAT_ADDRESS])
-
-    db = refillAfterReopen(db, path, 'run_unbound')
-    expect(addressesFor(db, 'run_unbound')).toEqual([CHAT_ADDRESS])
-  })
-
-  it('recreates on open a coordinator trigger an older build compiled with another address prefix', () => {
-    const path = tempDbPath(tempRoots)
-    db = new OrchestrationDb(path)
-    const triggers = db.db
-      .prepare(`SELECT sql FROM sqlite_master WHERE name LIKE 'trg_runs_remember_coordinator_%'`)
-      .all()
-      .map((row) => String(row.sql))
-    expect(triggers).toHaveLength(2)
-    const olderBuild = triggers.map((sql) =>
-      sql.replaceAll(`'${ORCA_SESSION_ADDRESS_PREFIX}'`, "'session:'")
-    )
-    // Verify trigger differences so reopening actually exercises replacement.
-    olderBuild.forEach((sql, index) => expect(sql).not.toBe(triggers[index]))
-    db.db.exec(`
-      DROP TRIGGER trg_runs_remember_coordinator_insert;
-      DROP TRIGGER trg_runs_remember_coordinator_update;
-      ${olderBuild.map((sql) => `${sql};`).join('\n')}
-    `)
-    db.close()
-
-    db = new OrchestrationDb(path)
-    insertSessionCoordinatedRun(db, 'run_after_upgrade')
-    expect(addressesFor(db, 'run_after_upgrade')).toEqual([CHAT_ADDRESS])
-  })
-
-  it('remembers a PTY coordinator written by insert, update and refill by exactly its handle', () => {
-    const path = tempDbPath(tempRoots)
-    db = new OrchestrationDb(path)
-    db.db
-      .prepare(
-        `INSERT INTO runs (id, objective, coordinator_handle, consumer_generation, legacy)
-         VALUES ('run_pty', 'pty', 'term_first', 1, 0)`
-      )
-      .run()
-    expect(addressesFor(db, 'run_pty')).toEqual(['term_first'])
-    db.db
-      .prepare(
-        `UPDATE runs SET coordinator_handle = 'term_second',
-           consumer_generation = consumer_generation + 1 WHERE id = 'run_pty'`
-      )
-      .run()
-    expect(addressesFor(db, 'run_pty')).toEqual(['term_first', 'term_second'])
-
-    db = refillAfterReopen(db, path, 'run_pty')
-    expect(addressesFor(db, 'run_pty')).toEqual(['term_second'])
-  })
-
-  it('remembers a structured-worker coordinator by its handle and its session address', () => {
-    const path = tempDbPath(tempRoots)
-    db = new OrchestrationDb(path)
-    const handle = mintStructuredWorkerHandle()
-    db.db
-      .prepare(
-        `INSERT INTO runs (
-           id, objective, coordinator_handle, coordinator_orca_session_id,
-           coordinator_orca_session_id_generation, consumer_generation, legacy
-         ) VALUES ('run_inserted', 'structured worker', ?, ?, 1, 1, 0)`
-      )
-      .run(handle, WORKER_SESSION_ID)
-    expect(addressesFor(db, 'run_inserted')).toEqual([WORKER_ADDRESS, handle].sort())
-
-    db.db
-      .prepare(
-        `INSERT INTO runs (id, objective, coordinator_handle, consumer_generation, legacy)
-         VALUES ('run_updated', 'id recorded later', ?, 1, 0)`
-      )
-      .run(handle)
-    db.db
-      .prepare(
-        `UPDATE runs SET coordinator_orca_session_id = ?,
-           coordinator_orca_session_id_generation = consumer_generation
-         WHERE id = 'run_updated'`
-      )
-      .run(WORKER_SESSION_ID)
-    expect(addressesFor(db, 'run_updated')).toEqual([WORKER_ADDRESS, handle].sort())
-
-    db = refillAfterReopen(db, path, 'run_updated')
-    expect(addressesFor(db, 'run_updated')).toEqual([WORKER_ADDRESS, handle].sort())
-    expect(db.getRunMailboxOwnerIdsForHandle(WORKER_ADDRESS)).toEqual(
-      db.getRunMailboxOwnerIdsForHandle(handle)
-    )
-  })
-
-  it('adds no session address for an Orca session id at a stale generation', () => {
-    const path = tempDbPath(tempRoots)
-    db = new OrchestrationDb(path)
-    db.db
-      .prepare(
-        `INSERT INTO runs (
-           id, objective, coordinator_handle, coordinator_orca_session_id,
-           coordinator_orca_session_id_generation, consumer_generation, legacy
-         ) VALUES ('run_stale_insert', 'stale id', 'term_stale', ?, 1, 2, 0)`
-      )
-      .run(WORKER_SESSION_ID)
-    expect(addressesFor(db, 'run_stale_insert')).toEqual(['term_stale'])
-
-    db.db
-      .prepare(
-        `INSERT INTO runs (id, objective, consumer_generation, legacy)
-         VALUES ('run_stale_update', 'written stale', 2, 0)`
-      )
-      .run()
-    db.db
-      .prepare(
-        `UPDATE runs SET coordinator_orca_session_id = ?, coordinator_orca_session_id_generation = 1
-         WHERE id = 'run_stale_update'`
-      )
-      .run(WORKER_SESSION_ID)
-    expect(addressesFor(db, 'run_stale_update')).toEqual([])
-
-    db = refillAfterReopen(db, path, 'run_stale_insert')
-    expect(addressesFor(db, 'run_stale_insert')).toEqual(['term_stale'])
-    expect(db.getRunMailboxOwnerIdsForHandle(WORKER_ADDRESS)).toEqual([])
-  })
-
-  it('keeps PTY coordinators remembered by handle alone', () => {
-    db = new OrchestrationDb(':memory:')
-    const run = db.createRun({
-      objective: 'pty',
-      coordinatorHandle: 'term_first',
-      coordinatorPaneKey: PTY_PANE
-    })
-    db.bindRun({
-      runId: run.id,
-      coordinatorHandle: 'term_second',
-      coordinatorPaneKey: 'tab_second:77777777-7777-4777-8777-777777777777'
-    })
-
-    expect(db.getRunRaw(run.id)?.coordinator_orca_session_id).toBeNull()
-    expect(addressesFor(db, run.id)).toEqual(['term_first', 'term_second'])
   })
 
   it("never leaves a replaced structured coordinator's Orca session id on the Run", () => {

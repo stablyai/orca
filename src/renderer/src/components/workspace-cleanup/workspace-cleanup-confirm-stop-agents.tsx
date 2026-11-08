@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import './workspace-cleanup-host-identity'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
@@ -23,6 +23,7 @@ export function WorkspaceCleanupConfirmStopAgents({
   onBack: () => void
   onConfirm: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const count = candidates.length
   return (
     <>
@@ -35,22 +36,19 @@ export function WorkspaceCleanupConfirmStopAgents({
             <div className="min-w-0">
               <DialogTitle>
                 {count === 1
-                  ? translate(
+                  ? t(
                       'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
                       'Stop this agent?'
                     )
-                  : translate(
-                      'components.workspace.cleanup.stopAgents.titleMany',
-                      'Stop these agents?'
-                    )}
+                  : t('components.workspace.cleanup.stopAgents.titleMany', 'Stop these agents?')}
               </DialogTitle>
               <DialogDescription className="mt-1.5">
                 {count === 1
-                  ? translate(
+                  ? t(
                       'components.workspace.cleanup.stopAgents.descriptionOne',
                       "Deleting will stop the agent's current work."
                     )
-                  : translate(
+                  : t(
                       'components.workspace.cleanup.stopAgents.descriptionMany',
                       "Deleting will stop these agents' current work."
                     )}
@@ -62,11 +60,11 @@ export function WorkspaceCleanupConfirmStopAgents({
       <ScrollArea className="min-h-0 flex-1">
         <ul>
           {candidates.map((candidate, index) => {
-            const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+            const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate, t)
             return (
               <li
                 key={getWorkspaceCleanupCandidateIdentity(candidate)}
-                aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate)}
+                aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate, t)}
                 className={cn(
                   'border-b border-border/60 px-5 py-2.5',
                   index === candidates.length - 1 && 'border-b-0'
@@ -78,11 +76,9 @@ export function WorkspaceCleanupConfirmStopAgents({
                   </span>
                   <WorkspaceCleanupMetadataChip
                     icon={Monitor}
-                    label={translate(
-                      'components.workspace.cleanup.host.label',
-                      'Host: {{value0}}',
-                      { value0: hostLabel }
-                    )}
+                    label={t('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+                      value0: hostLabel
+                    })}
                     value={hostLabel}
                   />
                 </div>
@@ -97,22 +93,13 @@ export function WorkspaceCleanupConfirmStopAgents({
       <div className="border-t border-border px-5 py-3">
         <DialogFooter>
           <Button variant="outline" onClick={onBack}>
-            {translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.74f6c16279',
-              'Back'
-            )}
+            {t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.74f6c16279', 'Back')}
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
             <Trash2 className="size-4" />
             {count === 1
-              ? translate(
-                  'components.workspace.cleanup.stopAgents.confirmOne',
-                  'Stop agent and delete'
-                )
-              : translate(
-                  'components.workspace.cleanup.stopAgents.confirm',
-                  'Stop agents and delete'
-                )}
+              ? t('components.workspace.cleanup.stopAgents.confirmOne', 'Stop agent and delete')
+              : t('components.workspace.cleanup.stopAgents.confirm', 'Stop agents and delete')}
           </Button>
         </DialogFooter>
       </div>

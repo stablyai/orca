@@ -3,13 +3,13 @@
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from '../shared/automation-owner-conflict'
-import type { AutomationDestination } from '../shared/automation-owner-precondition'
+} from '../shared/automations/ownership/automation-owner-conflict'
+import type { AutomationDestination } from '../shared/automations/ownership/automation-owner-precondition'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { SshTargetSummary } from '../shared/ssh-types'
 import type { Repo } from '../shared/repo-types'
 import { getRepoRoutingConnectionId } from '../shared/execution-host'
-import { getManagedOrcadSshTargetId } from '../shared/managed-orcad-execution-host'
+import { getManagedOrcadSshTargetId } from '../shared/execution-host/managed-orcad-execution-host'
 import { listEnvironments } from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { RuntimeClient } from './runtime-client'
 import { fetchSshTargetSummaries } from './host-selector-alternatives'

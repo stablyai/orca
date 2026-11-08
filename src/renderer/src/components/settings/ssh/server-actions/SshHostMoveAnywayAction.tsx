@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SshManagedServerStatus, SshTarget } from '../../../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { sshHostServerReassurance } from '@/ssh/ssh-host-server-setup-copy'
 import { trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { Button } from '../../../ui/button'
@@ -39,6 +39,7 @@ export function SshHostMoveAnywayDialog({
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const api = getManagedOrcadApi()
   const mountedRef = useMountedRef()
   const [busy, setBusy] = useState(false)
@@ -76,18 +77,18 @@ export function SshHostMoveAnywayDialog({
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.moveAnyway.title', 'Move this host anyway')}
+            {t('auto.components.settings.moveAnyway.title', 'Move this host anyway')}
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2">
               <p>
-                {translate(
+                {t(
                   'auto.components.settings.moveAnyway.description',
                   'Orca sets itself up on {{host}} without the saved items below. They stay on this computer and don’t appear on {{host}}. Unsaved edits are kept, never deleted.',
                   { host: target.label }
                 )}
               </p>
-              <p>{sshHostServerReassurance(target.label)}</p>
+              <p>{sshHostServerReassurance(target.label, t)}</p>
             </div>
           </DialogDescription>
         </DialogHeader>
@@ -99,10 +100,10 @@ export function SshHostMoveAnywayDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
-            {translate('auto.components.settings.moveAnyway.cancel', 'Cancel')}
+            {t('auto.components.settings.moveAnyway.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void moveAnyway()} disabled={busy}>
-            {translate('auto.components.settings.moveAnyway.confirm', 'Move anyway')}
+            {t('auto.components.settings.moveAnyway.confirm', 'Move anyway')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -119,6 +120,7 @@ export function SshHostMoveAnywayButton({
   status: SshManagedServerStatus | undefined
   disabled?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   if (!canMoveSshHostAnyway(status)) {
     return null
@@ -132,7 +134,7 @@ export function SshHostMoveAnywayButton({
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
-        {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+        {t('auto.components.settings.moveAnyway.action', 'Move anyway…')}
       </Button>
       <SshHostMoveAnywayDialog
         target={target}

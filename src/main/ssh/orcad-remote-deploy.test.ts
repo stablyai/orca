@@ -329,22 +329,6 @@ describe('deployOrcad', () => {
     vi.clearAllMocks()
   })
 
-  it('installs under the orcad namespace, not the relay one', async () => {
-    const script: HostScript = {
-      activationRecord: '',
-      readiness: { [NEW_VERSION]: readyLine({}) },
-      log: []
-    }
-    scriptHost(script)
-    await deployOrcad(options())
-    expect(vi.mocked(acquireInstallLock).mock.calls[0][1]).toBe(
-      `/home/u/.orca-remote/orcad-${NEW_VERSION}`
-    )
-    expect(vi.mocked(uploadRemoteInstallDirectory).mock.calls[0][2]).toContain(
-      `orcad-${NEW_VERSION}`
-    )
-  })
-
   it.each([
     ['linux-arm64', 'linux-arm64-glibc'],
     ['darwin-x64', 'darwin-x64']

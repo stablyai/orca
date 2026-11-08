@@ -2,12 +2,13 @@ import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/b
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { isBrowserPageMountAdmitted } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,
@@ -18,6 +19,7 @@ import { captureLinkOpenIntent } from '../../link-open-intent'
 import { beginLinkOpenRequest } from '../../link-open-request'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { openFileInBrowserTab } from '../../file-preview'
+import { openEditorHtmlPreview } from '@/components/editor/open-editor-html-preview'
 import type { BrowserOpenOutcome } from './browser-link-destination'
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -27,12 +29,12 @@ vi.mock('@/store/index', () => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
@@ -265,5 +267,120 @@ it('reports failure when main refuses the browser creation', async () => {
   expect(await opening).toEqual({ status: 'failed' })
   expect(store.getState().browserPagesByWorkspace).toEqual({})
   expect(isBrowserPageMountAdmitted(pageId)).toBe(false)
+  expect(requestBrowserFocus).not.toHaveBeenCalled()
+})
+
+it('opens a remote document in the requested group without moving an existing mixed browser workspace', async () => {
+  const owner = 'repo2::/remote'
+  store.setState((state) => ({
+    repos: [
+      ...state.repos,
+      {
+        ...state.repos[0]!,
+        id: 'repo2',
+        connectionId: 'preview-owner',
+        executionHostId: 'ssh:preview-owner'
+      }
+    ],
+    worktreesByRepo: {
+      ...state.worktreesByRepo,
+      repo2: [
+        makeWorktree({ id: owner, repoId: 'repo2', path: '/remote', hostId: 'ssh:preview-owner' })
+      ]
+    }
+  }))
+  const openPreview = () =>
+    new Promise<BrowserOpenOutcome>((resolve) =>
+      openFileInBrowserTab({
+        filePath: '/remote/index.html',
+        worktreeId: owner,
+        placementWorkspaceId: WORKSPACE,
+        linkContext: {
+          linkIntent: captureLinkOpenIntent(store.getState(), WORKSPACE, 'source', {
+            explicitSourceGroup: true
+          }),
+          isCurrentRequest: beginLinkOpenRequest()
+        },
+        onLinkOutcome: resolve
+      })
+    )
+  layoutApplyTestTransport.answerWith('apply')
+  const existing = store.getState().createBrowserTab(WORKSPACE, '', {
+    targetGroupId: 'b',
+    browserRuntimeEnvironmentId: null,
+    docLocation: { kind: 'workspace-doc', worktreeId: owner, filePath: '/remote/index.html' },
+    activate: false
+  })
+  await main.settle()
+  const unrelated = store
+    .getState()
+    .createBrowserPage(existing.id, 'https://example.com/unrelated')!
+  await main.settle()
+  layoutApplyTestTransport.answerWith('pending')
+
+  const opening = openPreview()
+  layoutApplyTestTransport.answerWith('apply')
+  layoutApplyTestTransport.answerPending()
+  await main.settle()
+  expect(await opening).toMatchObject({ status: 'opened', result: { groupId: 'a' } })
+  const state = store.getState()
+  expect(
+    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === existing.id)
+  ).toMatchObject({ groupId: 'b' })
+  expect(
+    state.browserTabsByWorktree[WORKSPACE]?.find((tab) => tab.id === existing.id)?.activePageId
+  ).toBe(unrelated.id)
+  expect(state.browserPagesByWorkspace[existing.id]).toHaveLength(2)
+  expect(state.groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual(['a', 'b', 'c'])
+  const preview = state.activeBrowserTabId
+  expect(preview).not.toBe(existing.id)
+  expect(state.browserPagesByWorkspace[preview!]?.[0]?.docLocation).toEqual({
+    kind: 'workspace-doc',
+    worktreeId: owner,
+    filePath: '/remote/index.html'
+  })
+  expect(await openPreview()).toMatchObject({
+    status: 'opened',
+    result: { browserWorkspaceId: preview, groupId: 'a' }
+  })
+  expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+})
+
+it('keeps the editor selected after navigating away and back while main creates its preview', async () => {
+  store.setState((state) => ({
+    openFiles: [
+      {
+        id: 'report',
+        filePath: '/repo/report.html',
+        relativePath: 'report.html',
+        worktreeId: WORKSPACE,
+        language: 'html',
+        mode: 'edit',
+        isDirty: false
+      }
+    ],
+    unifiedTabsByWorktree: {
+      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
+        tab.id === 'source' ? { ...tab, contentType: 'editor', entityId: 'report' } : tab
+      )
+    }
+  }))
+  store.getState().focusGroup(WORKSPACE, 'a')
+  const opening = openEditorHtmlPreview('report', 'source')
+  await Promise.resolve()
+  store.getState().focusGroup(WORKSPACE, 'b')
+  store.getState().focusGroup(WORKSPACE, 'a')
+  layoutApplyTestTransport.answerWith('apply')
+  layoutApplyTestTransport.answerPending()
+  await main.settle()
+  await opening
+  const state = store.getState()
+  expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
+    'source'
+  )
+  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('a')
+  expect(
+    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.contentType === 'browser')
+  ).toMatchObject({ groupId: 'a' })
   expect(requestBrowserFocus).not.toHaveBeenCalled()
 })

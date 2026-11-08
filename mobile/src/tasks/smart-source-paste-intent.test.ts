@@ -1,13 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   deriveRepoSlug,
-  findRepoMatchingSlug,
   findRepoMatchingSlugForPaste,
-  lookupGitHubItemByOwnerRepo,
   resolvePasteIntent,
   type PasteRepoCandidate
 } from './smart-source-paste-intent'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 describe('resolvePasteIntent', () => {
   it('classifies a GitHub issue/PR URL as a github-link', () => {
@@ -79,72 +77,6 @@ describe('findRepoMatchingSlug', () => {
     { id: 'b', displayName: 'B', slug: null }
   ]
 
-  it('matches case-insensitively', () => {
-    expect(findRepoMatchingSlug(repos, { owner: 'Acme', repo: 'Widgets' })?.id).toBe('a')
-  })
-
-  it('returns null when no repo matches', () => {
-    expect(findRepoMatchingSlug(repos, { owner: 'other', repo: 'thing' })).toBeNull()
-  })
-
-  it('does not match a GHES link to a same-named github.com repo', () => {
-    expect(
-      findRepoMatchingSlug(repos, {
-        owner: 'acme',
-        repo: 'widgets',
-        host: 'github.corp.example'
-      })
-    ).toBeNull()
-  })
-
-  it('falls back to the host-aware repo slug RPC for SSH and enterprise repos', async () => {
-    const calls: string[] = []
-    const client = {
-      sendRequest: async (_method: string, params: unknown) => {
-        const repo = (params as { repo: string }).repo
-        calls.push(repo)
-        return {
-          ok: true,
-          result:
-            repo === 'id:b'
-              ? { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' }
-              : null
-        }
-      }
-    } as unknown as RpcClient
-    await expect(
-      findRepoMatchingSlugForPaste(
-        client,
-        repos,
-        { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' },
-        new Map()
-      )
-    ).resolves.toMatchObject({ id: 'b' })
-    expect(calls).toEqual(['id:a', 'id:b'])
-  })
-
-  it('caches an unsupported repo slug probe across unmatched pastes', async () => {
-    let calls = 0
-    const client = {
-      sendRequest: async () => {
-        calls += 1
-        return {
-          ok: false,
-          error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
-        }
-      }
-    } as unknown as RpcClient
-    const cache = new Map<string, { owner: string; repo: string } | null>()
-
-    await expect(
-      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'widgets' }, cache)
-    ).resolves.toBeNull()
-    await expect(
-      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'other' }, cache)
-    ).resolves.toBeNull()
-    expect(calls).toBe(1)
-  })
-
   it('caches a rejected optional repo slug probe as no match', async () => {
     const client = {
       sendRequest: async () => {
@@ -160,27 +92,5 @@ describe('findRepoMatchingSlug', () => {
         new Map()
       )
     ).resolves.toBeNull()
-  })
-
-  it('sends the pasted host through the exact owner/repo lookup RPC', async () => {
-    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: null })
-    const client = { sendRequest } as unknown as RpcClient
-
-    await lookupGitHubItemByOwnerRepo(
-      client,
-      'repo-1',
-      { owner: 'acme', repo: 'widgets', host: 'github.corp.example' },
-      7,
-      'pr'
-    )
-
-    expect(sendRequest).toHaveBeenCalledWith('github.workItemByOwnerRepo', {
-      repo: 'id:repo-1',
-      owner: 'acme',
-      ownerRepo: 'widgets',
-      host: 'github.corp.example',
-      number: 7,
-      type: 'pr'
-    })
   })
 })

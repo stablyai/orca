@@ -13,11 +13,9 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 const rpc: { call: Mock; supports: Mock } = vi.hoisted(() => ({

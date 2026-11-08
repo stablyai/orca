@@ -57,6 +57,8 @@ const mimeSchema = z.enum(BRIDGE_CLIPBOARD_MIMES)
 export type BridgeNativeVerbSpec = {
   params: z.ZodType
   result: z.ZodType
+  // Served through the desktop, so it waits for this connection's verdict like any request; the rest never leave the phone.
+  desktop?: true
 }
 
 // Let the frame cap bound clipboard writes and the normal reply cap bound reads; a separate text cap would reject values the transport already accepts.
@@ -134,7 +136,8 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   },
   'native.pdf.view': {
     params: pdfViewParamsSchema,
-    result: pdfViewResultSchema
+    result: pdfViewResultSchema,
+    desktop: true
   },
   'native.image.act': {
     params: imageParamsSchema,
@@ -156,6 +159,12 @@ export function isBridgeNativeMethod(method: string): boolean {
 
 export function readBridgeNativeVerb(method: string): BridgeNativeVerb | null {
   return BRIDGE_NATIVE_VERB_NAMES.find((verb) => verb === method) ?? null
+}
+
+// Unknown native methods count as desktop-bound so they wait like any request until refused.
+export function isPhoneOnlyNativeVerb(method: string): boolean {
+  const verb = readBridgeNativeVerb(method)
+  return verb !== null && BRIDGE_NATIVE_VERBS[verb].desktop !== true
 }
 
 export type BridgeNativeVerbRefusal = 'unknown-verb' | 'ungranted' | 'invalid-params'

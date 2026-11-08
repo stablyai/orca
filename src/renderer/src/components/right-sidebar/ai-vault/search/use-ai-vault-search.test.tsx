@@ -11,7 +11,7 @@ import {
   searchHit,
   searchResults
 } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import { useAiVaultSearch } from './use-ai-vault-search'
 
@@ -26,7 +26,7 @@ const feeds = vi.hoisted(() => ({
   subscribe: vi.fn(),
   emit: new Map<string, (event: AgentSessionStatusEvent) => void>()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: feeds.subscribe
 }))
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({

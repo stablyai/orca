@@ -12,7 +12,7 @@ import {
   wasOrcaHookPreviouslyApproved
 } from '../tasks/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { removeWorktreeRow } from '../worktree/worktree-host-row-identity'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import { worktreeArchiveHookTrustRead, worktreeRemove } from './host-screen-operations'

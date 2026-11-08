@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type { AutomationTemplate } from './automation-templates'
 import { getDefaultWorktree } from './automation-draft-model'
-import { hasModernAutomationLaunchSetup } from '../../../../shared/automation-launch-setup'
+import { hasModernAutomationLaunchSetup } from '../../../../shared/automations/launch/automation-launch-setup'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'

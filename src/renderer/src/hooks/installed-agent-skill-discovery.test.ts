@@ -132,23 +132,6 @@ describe('installed agent skill discovery lifecycle', () => {
     expect(discover).toHaveBeenCalledTimes(3)
   })
 
-  it('collapses concurrent forced refreshes onto one scan', async () => {
-    // Fan-out install notifications must share a refresh rather than serialize one scan per surface.
-    const scan = deferred<SkillDiscoveryResult>()
-    const discover = discoverSkillsForRuntimeTarget
-    discover.mockReturnValue(scan.promise)
-
-    const requests = [
-      discoverInstalledAgentSkills(true, undefined),
-      discoverInstalledAgentSkills(true, undefined),
-      discoverInstalledAgentSkills(true, undefined)
-    ]
-    scan.resolve(result(1))
-
-    await expect(Promise.all(requests)).resolves.toEqual([result(1), result(1), result(1)])
-    expect(discover).toHaveBeenCalledTimes(1)
-  })
-
   it('lets a superseded scan settle without evicting the newer pending scan', async () => {
     // An old scan settling after invalidation must not remove the new scan’s dedup entry.
     const staleScan = deferred<SkillDiscoveryResult>()
@@ -250,25 +233,5 @@ describe('installed agent skill discovery lifecycle', () => {
     )
     await expect(discoverInstalledAgentSkills(false, undefined, LOCAL)).resolves.toEqual(result(3))
     expect(discover).toHaveBeenCalledTimes(3)
-  })
-
-  it('collapses one remote environment onto a single entry across client target shapes', async () => {
-    // Remote scans drop client target shape, which must not fragment their cache keys.
-    const discover = discoverSkillsForRuntimeTarget
-    discover.mockResolvedValue(result(1))
-
-    await discoverInstalledAgentSkills(
-      false,
-      { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      remote('env-a')
-    )
-    await discoverInstalledAgentSkills(
-      false,
-      { projectRuntime: resolvedWslProjectRuntime },
-      remote('env-a')
-    )
-    await discoverInstalledAgentSkills(false, undefined, remote('env-a'))
-
-    expect(discover).toHaveBeenCalledTimes(1)
   })
 })

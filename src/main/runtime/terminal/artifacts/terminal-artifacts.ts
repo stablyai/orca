@@ -3,9 +3,9 @@ import { RuntimeTerminalFileGrants, type RuntimeTerminalFileGrantHost } from './
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,
-  RuntimeFileReadResult,
-  RuntimeTerminalPathResolution
-} from '../../../../shared/runtime-file-contracts'
+  RuntimeFileReadResult
+} from '../../../../shared/file-content/runtime-file-read'
+import type { RuntimeTerminalPathResolution } from '../../../../shared/terminal/runtime-terminal-file-path'
 import {
   assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,

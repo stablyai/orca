@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   MARKUP_COLORS,
@@ -30,42 +31,42 @@ type ToolItem = {
   label: string
 }
 
-function toolItems(): ToolItem[] {
+function toolItems(t: Translate = translate): ToolItem[] {
   return [
     {
       kind: 'pen',
       icon: Pencil,
-      label: translate('auto.components.browser-pane.markup.tool.pen', 'Pen')
+      label: t('auto.components.browser-pane.markup.tool.pen', 'Pen')
     },
     {
       kind: 'highlight',
       icon: Highlighter,
-      label: translate('auto.components.browser-pane.markup.tool.highlight', 'Highlighter')
+      label: t('auto.components.browser-pane.markup.tool.highlight', 'Highlighter')
     },
     {
       kind: 'arrow',
       icon: ArrowUpRight,
-      label: translate('auto.components.browser-pane.markup.tool.arrow', 'Arrow')
+      label: t('auto.components.browser-pane.markup.tool.arrow', 'Arrow')
     },
     {
       kind: 'rect',
       icon: Square,
-      label: translate('auto.components.browser-pane.markup.tool.rect', 'Rectangle')
+      label: t('auto.components.browser-pane.markup.tool.rect', 'Rectangle')
     },
     {
       kind: 'ellipse',
       icon: Circle,
-      label: translate('auto.components.browser-pane.markup.tool.ellipse', 'Ellipse')
+      label: t('auto.components.browser-pane.markup.tool.ellipse', 'Ellipse')
     },
     {
       kind: 'text',
       icon: Type,
-      label: translate('auto.components.browser-pane.markup.tool.text', 'Text')
+      label: t('auto.components.browser-pane.markup.tool.text', 'Text')
     },
     {
       kind: 'eraser',
       icon: Eraser,
-      label: translate('auto.components.browser-pane.markup.tool.eraser', 'Eraser')
+      label: t('auto.components.browser-pane.markup.tool.eraser', 'Eraser')
     }
   ]
 }
@@ -101,11 +102,12 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
   onRedo,
   onClear
 }: MarkupToolbarProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 shadow-md backdrop-blur">
-        {toolItems().map((item) => (
+        {toolItems(t).map((item) => (
           <IconButton
             key={item.kind}
             label={item.label}
@@ -126,10 +128,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={translate(
-                    'auto.components.browser-pane.markup.style',
-                    'Color and thickness'
-                  )}
+                  aria-label={t('auto.components.browser-pane.markup.style', 'Color and thickness')}
                 >
                   <span
                     className="size-4 rounded-full border border-border"
@@ -139,7 +138,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate('auto.components.browser-pane.markup.style', 'Color and thickness')}
+              {t('auto.components.browser-pane.markup.style', 'Color and thickness')}
             </TooltipContent>
           </Tooltip>
           <PopoverContent side="top" align="start" className="w-auto p-2">
@@ -163,7 +162,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                 <button
                   key={option}
                   type="button"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.browser-pane.markup.widthOption',
                     '{{value0}} px',
                     { value0: option }
@@ -193,10 +192,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-1 px-2"
-                  aria-label={translate(
-                    'auto.components.browser-pane.markup.fontSize',
-                    'Font size'
-                  )}
+                  aria-label={t('auto.components.browser-pane.markup.fontSize', 'Font size')}
                 >
                   <Type className="size-3.5" />
                   <span className="text-[11px] tabular-nums">{fontSize}</span>
@@ -204,7 +200,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate('auto.components.browser-pane.markup.fontSize', 'Font size')}
+              {t('auto.components.browser-pane.markup.fontSize', 'Font size')}
             </TooltipContent>
           </Tooltip>
           <PopoverContent side="top" align="start" className="w-auto p-2">
@@ -213,7 +209,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                 <button
                   key={size}
                   type="button"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.browser-pane.markup.widthOption',
                     '{{value0}} px',
                     { value0: size }
@@ -234,21 +230,21 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
         <Divider />
 
         <IconButton
-          label={translate('auto.components.browser-pane.markup.undo', 'Undo')}
+          label={t('auto.components.browser-pane.markup.undo', 'Undo')}
           disabled={!canUndo}
           onClick={onUndo}
         >
           <Undo2 className="size-4" />
         </IconButton>
         <IconButton
-          label={translate('auto.components.browser-pane.markup.redo', 'Redo')}
+          label={t('auto.components.browser-pane.markup.redo', 'Redo')}
           disabled={!canRedo}
           onClick={onRedo}
         >
           <Redo2 className="size-4" />
         </IconButton>
         <IconButton
-          label={translate('auto.components.browser-pane.markup.clear', 'Clear all')}
+          label={t('auto.components.browser-pane.markup.clear', 'Clear all')}
           disabled={!canUndo && !canRedo}
           onClick={onClear}
         >

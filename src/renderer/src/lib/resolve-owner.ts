@@ -1,11 +1,14 @@
 /**
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
+/**
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
+ */
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getRepoSshConnectionId,
   parseExecutionHostId,
@@ -13,7 +16,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   findIndexedWorktreeOwnerForHost,
   findIndexedDetectedWorktrees,
@@ -26,7 +29,7 @@ import {
   SELF_LOCAL_AUTHORITY,
   type HostAuthority
 } from '../../../shared/host-authority'
-import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
+import type { ExecutionHostOwnerMatch } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResultForHost,

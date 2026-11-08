@@ -1,7 +1,8 @@
+import { nativeChatSlotIndexOf } from './conversation/slots/native-chat-transcript-slot-selection'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, screen } from '@testing-library/react'
-import { render } from './native-chat-tooltip-test-harness'
+import { render } from './messages/actions/native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -24,17 +25,16 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { MessageRow } from './NativeChatMessageRow'
+import { MessageRow } from './messages/rows/NativeChatMessageRow'
 import {
   buildNativeChatTranscriptSlots,
-  nativeChatSlotIndexOf,
   type NativeChatMessageSlot
-} from './native-chat-transcript-slots'
+} from './conversation/slots/native-chat-transcript-slots'
 import {
   APPROVED_REVIEW,
   approvalReviewMessage
 } from '../../../../shared/native-chat-activity.test-fixture'
-import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
+import { openToolRunMembers } from './tools/runs/native-chat-tool-run-members-test-support'
 
 afterEach(() => {
   cleanup()

@@ -7,6 +7,14 @@ public class OrcaMobileWebShellModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
 
+    // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
+    Function("warmUp") {
+      // A second's delay keeps the warm-up off the launch's first frames.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MobileWebShellWarmUp.start()
+      }
+    }
+
     AsyncFunction("presentPdf") { (url: URL) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
         throw PdfPresenterUnavailableException()

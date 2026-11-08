@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { isCodexSharedServerWarningEnabled } from '../../../../../../shared/codex-terminal-server-isolation'
 import type { CodexSharedServerStatus } from '../../../../../../shared/codex-shared-server-command'
@@ -79,6 +79,7 @@ export function CodexSharedServerBanner({
   tabId: string
   leafId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
   const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
   const warningEnabled = useAppStore(
@@ -113,7 +114,7 @@ export function CodexSharedServerBanner({
       ? {
           body: (
             <>
-              {translate(
+              {t(
                 'terminal.codexSharedServerBanner.openedBeforeUpdateBody',
                 'This terminal was opened before Orca started giving each Codex its own server.'
               )}{' '}
@@ -127,14 +128,14 @@ export function CodexSharedServerBanner({
               size="xs"
               onClick={() => openTerminalBesideTab(tabId)}
             >
-              {translate('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
+              {t('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
             </Button>
           )
         }
       : {
           body: (
             <>
-              {translate(
+              {t(
                 'terminal.codexSharedServerBanner.body',
                 'Sessions may end unexpectedly, and agent status may be wrong.'
               )}{' '}
@@ -143,7 +144,7 @@ export function CodexSharedServerBanner({
           ),
           primaryAction: (
             <Button type="button" variant="outline" size="xs" onClick={() => showDialog('fix')}>
-              {translate('terminal.codexSharedServerBanner.fix', 'Fix')}
+              {t('terminal.codexSharedServerBanner.fix', 'Fix')}
             </Button>
           )
         }
@@ -156,7 +157,7 @@ export function CodexSharedServerBanner({
     <>
       {status ? (
         <PaneTopWarningBanner
-          title={translate(
+          title={t(
             'terminal.codexSharedServerBanner.title',
             'This Codex is sharing a server with your other Codex tabs'
           )}
@@ -174,15 +175,15 @@ export function CodexSharedServerBanner({
       ) : null}
       <OldTerminalDialog
         open={openDialog === 'oldTerminal'}
-        title={translate(
+        title={t(
           'terminal.codexSharedServerBanner.oldTerminalDialogTitle',
           'Why this Codex shares a server'
         )}
-        description={translate(
+        description={t(
           'terminal.codexSharedServerBanner.oldTerminalDialogRisk',
           'Codex sessions that share a server can end together, and agent status can be wrong.'
         )}
-        cause={translate(
+        cause={t(
           'terminal.codexSharedServerBanner.oldTerminalDialogCause',
           'Older terminals still share a Codex server. Open a new terminal to run Codex on a separate server.'
         )}

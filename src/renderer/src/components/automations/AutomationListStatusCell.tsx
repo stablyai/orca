@@ -1,6 +1,6 @@
 import React from 'react'
 import { TriangleAlert, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AutomationListStatusCell({
   enabled,
@@ -16,12 +16,11 @@ export function AutomationListStatusCell({
   /** The last run skipped setup whose commands changed and still need approval. */
   setupSkipped?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (movedToDistro) {
-    const label = translate(
-      'sidebar.wslMoved.automationRunsOnHost',
-      'Runs on the {{distro}} host',
-      { distro: movedToDistro }
-    )
+    const label = t('sidebar.wslMoved.automationRunsOnHost', 'Runs on the {{distro}} host', {
+      distro: movedToDistro
+    })
     return (
       <span className="min-w-0 truncate text-muted-foreground" title={label}>
         {label}
@@ -29,7 +28,7 @@ export function AutomationListStatusCell({
     )
   }
   if (enabled && needsMigration) {
-    const label = translate(
+    const label = t(
       'auto.components.automations.AutomationDetail.needsMigration',
       'Needs migration'
     )
@@ -43,13 +42,13 @@ export function AutomationListStatusCell({
     return (
       <span
         className="inline-flex min-w-0 items-center gap-1 truncate text-status-warning-text"
-        title={translate(
+        title={t(
           'automations.setupTrust.listSkippedTitle',
           "The last run skipped setup because its branch's orca.yaml setup commands changed. Review them from the actions menu."
         )}
       >
         <TriangleAlert className="size-3.5 shrink-0" />
-        {translate('automations.setupTrust.listSkipped', 'Setup skipped')}
+        {t('automations.setupTrust.listSkipped', 'Setup skipped')}
       </span>
     )
   }
@@ -57,14 +56,14 @@ export function AutomationListStatusCell({
     return (
       <span className="inline-flex min-w-0 items-center gap-1 truncate text-muted-foreground">
         <span className="size-1.5 shrink-0 rounded-full bg-foreground" />
-        {translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
+        {t('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
       </span>
     )
   }
   return (
     <span className="inline-flex min-w-0 items-center gap-1 truncate text-muted-foreground">
       <X className="size-3.5 shrink-0" />
-      {translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+      {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
     </span>
   )
 }

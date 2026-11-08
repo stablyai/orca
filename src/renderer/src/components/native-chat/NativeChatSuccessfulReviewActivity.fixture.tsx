@@ -1,8 +1,8 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { MessageRow } from './NativeChatMessageRow'
-import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
+import { MessageRow } from './messages/rows/NativeChatMessageRow'
+import { buildNativeChatTranscriptSlots } from './conversation/slots/native-chat-transcript-slots'
 
 const reviewText =
   'Automatic approval review approved (risk: low, authorization: high): The local check is allowed.'

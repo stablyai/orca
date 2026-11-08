@@ -17,7 +17,7 @@ import { BrowserUseComputerUseNotice } from './BrowserUseComputerUseNotice'
 import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserUseSetupProps = {
   onConfigureMoreBrowsers?: () => void
@@ -28,6 +28,7 @@ export function BrowserUseSetup({
   onConfigureMoreBrowsers,
   onOpenComputerUse
 }: BrowserUseSetupProps = {}): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
@@ -86,13 +87,13 @@ export function BrowserUseSetup({
 
   if (!browserUseEnabled) {
     return (
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center justify-between gap-4 py-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserUsePane.96b91c6349',
               'Let coding agents drive this browser with your logins.'
             )}
@@ -107,14 +108,14 @@ export function BrowserUseSetup({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/60 bg-card/30 p-4">
+    <div className="space-y-3 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">
-            {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserUsePane.finishSteps',
               'Let coding agents drive this browser with your logins. Finish the steps below.'
             )}
@@ -143,11 +144,11 @@ export function BrowserUseSetup({
 
       {showSkillStep ? (
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.BrowserUsePane.2d6ead9ab2',
             'Install Browser Use Skill'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.BrowserUsePane.68ea76eb71',
             "Install the Browser Use skill so agents can operate Orca's browser."
           )}

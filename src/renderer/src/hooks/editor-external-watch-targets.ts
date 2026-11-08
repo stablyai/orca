@@ -1,10 +1,10 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
@@ -19,7 +19,10 @@ import {
   resolveEditorExternalWatchTargetRows
 } from './editor-external-watch-target-rows'
 import { selectWatchEligibleWorkspaceIds } from './editor-external-watch-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type EditorExternalWatchTarget = {
   worktreeId: string
@@ -200,7 +203,7 @@ export function selectEditorExternalWatchTargets(
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId
-    ? findWorktreeById(selectWorktreesByRepo(state), activeWorktreeId)
+    ? findFirstIndexedWorktree(selectWorktreesByRepo(state), activeWorktreeId)
     : undefined
   const activeWorktreeHost = parseExecutionHostId(activeWorktree?.hostId)
   const activeRepo = activeWorktree

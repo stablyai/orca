@@ -1,6 +1,7 @@
+import { SequencerRecoveryControls } from './sequencer-recovery-controls'
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
@@ -59,6 +60,7 @@ export function SourceControlContentStatus({
   hasFilteredBranchEntries: boolean
   filterQuery: string
 }): React.JSX.Element {
+  const t = useTranslate()
   // Why: a stopped host can't answer git, so its read error or "clean" result is not the workspace's.
   const stoppedWslHost = useStoppedWslHost(worktreeId)
   // Folder sections keep to the plain message and Retry; raw Git output stays in the worktree's own panel.
@@ -83,7 +85,15 @@ export function SourceControlContentStatus({
             onAbortOperation={onAbortOperation}
             onResolveWithAI={onResolveWithAi}
             onReview={onReviewConflicts}
-          />
+          >
+            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
+              <SequencerRecoveryControls
+                worktreeId={worktreeId}
+                operation={conflictOperation}
+                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
+              />
+            )}
+          </ConflictSummaryCard>
         </div>
       )}
       {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
@@ -97,7 +107,15 @@ export function SourceControlContentStatus({
             onCompleteMerge={onCompleteMerge}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             onResolveWithAI={onResolveWithAi}
-          />
+          >
+            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
+              <SequencerRecoveryControls
+                worktreeId={worktreeId}
+                operation={conflictOperation}
+                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
+              />
+            )}
+          </OperationBanner>
         </div>
       )}
       {repositoryHuge && (
@@ -118,7 +136,7 @@ export function SourceControlContentStatus({
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-px size-4 shrink-0 text-status-warning" />
               <span className="min-w-0 flex-1 text-xs text-foreground">
-                {translate(
+                {t(
                   'auto.components.right.sidebar.SourceControl.statusReadFailed',
                   'Git could not read this workspace. Changes shown may be out of date.'
                 )}
@@ -137,31 +155,28 @@ export function SourceControlContentStatus({
       )}
       {showGenericEmptyState && !normalizedFilter && !stoppedWslHost ? (
         <EmptyState
-          heading={translate(
+          heading={t(
             'auto.components.right.sidebar.source.control.content.status.3f425c239c',
             'No changes on this branch'
           )}
-          supportingText={translate(
+          supportingText={t(
             'auto.components.right.sidebar.source.control.content.status.640f6fdb36',
             'This workspace is clean and this branch has no changes ahead of {{value0}}',
             {
               value0:
                 branchBaseRef ??
-                translate(
-                  'auto.components.right.sidebar.source.control.content.status.8deb86bbec',
-                  'base'
-                )
+                t('auto.components.right.sidebar.source.control.content.status.8deb86bbec', 'base')
             }
           )}
         />
       ) : null}
       {filterTooLarge && (
         <EmptyState
-          heading={translate(
+          heading={t(
             'auto.components.right.sidebar.source.control.content.status.978eba351e',
             'Search text is too large'
           )}
-          supportingText={translate(
+          supportingText={t(
             'auto.components.right.sidebar.source.control.content.status.0bce43409f',
             'Use a shorter file filter.'
           )}
@@ -169,11 +184,11 @@ export function SourceControlContentStatus({
       )}
       {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
         <EmptyState
-          heading={translate(
+          heading={t(
             'auto.components.right.sidebar.source.control.content.status.1b6caf533d',
             'No matching files'
           )}
-          supportingText={translate(
+          supportingText={t(
             'auto.components.right.sidebar.source.control.content.status.00c07771b7',
             'No changed files match "{{value0}}"',
             { value0: filterQuery }

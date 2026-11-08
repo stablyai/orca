@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect } from 'react'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import {

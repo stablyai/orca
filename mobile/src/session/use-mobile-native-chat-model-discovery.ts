@@ -6,7 +6,7 @@ import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
 } from '../../../src/shared/native-chat/input/native-chat-discovered-catalog-models'
-import { defineRpcOperation, runRpcOperation } from '../transport/rpc-operation'
+import { defineRpcOperation, runRpcOperation } from '../transport/rpc/rpc-operation'
 
 const discoveredModel = z.object({
   id: z.string().min(1),

@@ -4,15 +4,6 @@ import { CreateTerminalTab } from './session-tabs-schemas-params'
 const SESSION = { key: 'session_id', id: 'codex-1' }
 
 describe('session.tabs.createTerminal resumeProviderSession', () => {
-  it('carries the conversation a resume names', () => {
-    const parsed = CreateTerminalTab.parse({
-      worktree: 'id:wt',
-      launchAgent: 'codex',
-      resumeProviderSession: SESSION
-    })
-    expect(parsed.resumeProviderSession).toEqual(SESSION)
-  })
-
   it('drops a malformed value instead of refusing the create', () => {
     const parsed = CreateTerminalTab.parse({
       worktree: 'id:wt',

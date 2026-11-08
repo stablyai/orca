@@ -1,7 +1,7 @@
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 /** Equalizes a tab's panes, then `then` runs (focus); in a layout-owner build main equalizes. */
 export function equalizeTerminalPanes(

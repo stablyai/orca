@@ -8,6 +8,11 @@ import { scanAstGrep } from '../../static-analysis/structural-scan/ast-grep-scan
 import { resolvePullRequestDiffBase } from '../../git/pr-diff-base/git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { createExistingTypeAssertionMatcher } from '../../static-analysis/type-assertion-budget/existing-type-assertions.mjs'
+import {
+  JS_PLUGINS_CONFIG,
+  JS_PLUGIN_DISABLE_PATTERN,
+  SECONDARY_SCAN_DISABLE_PATTERN
+} from './secondary-scan-directive-pattern.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
@@ -21,14 +26,6 @@ const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
   /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
-const JS_PLUGINS_CONFIG = 'config/oxlint-js-plugins.json'
-// The root scan no longer loads these plugins, so their suppressions belong to the JS plugins scan.
-const JS_PLUGIN_NAMES = JSON.parse(
-  readFileSync(new URL(`../../../../${JS_PLUGINS_CONFIG}`, import.meta.url), 'utf8')
-).jsPlugins.map((plugin) => plugin.name)
-const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
-  String.raw`\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\b(?:${JS_PLUGIN_NAMES.join('|')})\/`
-)
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
@@ -504,7 +501,8 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
       (line) =>
         ANTI_SLOP_DISABLE_PATTERN.test(line) ||
         REACT_DOCTOR_DISABLE_PATTERN.test(line) ||
-        JS_PLUGIN_DISABLE_PATTERN.test(line)
+        JS_PLUGIN_DISABLE_PATTERN.test(line) ||
+        (scanLabel === 'code quality' && SECONDARY_SCAN_DISABLE_PATTERN.test(line))
     )
   )
 }

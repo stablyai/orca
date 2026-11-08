@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
-      "reconnecting": "Verbindung wird wiederhergestellt…",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -353,6 +352,13 @@
       "resume": "Fortsetzen",
       "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
       "title": "Nachrichten in der Warteschlange"
+    },
+    "offlineQueue": {
+      "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
+      "waitingFor": "Wird gesendet, wenn {{host}} wieder erreichbar ist",
+      "waiting": "Wird gesendet, wenn der Desktop wieder erreichbar ist",
+      "behind": "Wartet – eine Nachricht davor braucht Aufmerksamkeit",
+      "closed": "Nicht gesendet, bevor Orca geschlossen wurde"
     },
     "receipt": {
       "cancelled": "Abgebrochen",
@@ -1307,10 +1313,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
       "loadFolderFailed": "Ordner konnte nicht geladen werden",
+      "loadedOfTotal": "{{loaded}} von {{total}}",
       "loading": "Wird geladen…",
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
+      "searchAll": "Alle durchsuchen",
+      "searchAllIn": "Ganz {{folder}} durchsuchen",
+      "searched": "{{loaded}} von {{total}} in {{folder}} durchsucht.",
+      "searching": "{{folder}} wird durchsucht… {{loaded}} von {{total}}",
+      "showMore": "{{rows}} weitere anzeigen",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
     },
     "fileExplorerRowActions": {
@@ -1384,6 +1396,13 @@
       "openFailed": "Diese PDF-Datei konnte nicht geöffnet werden",
       "opening": "PDF wird geöffnet…",
       "updateRequired": "Orca Mobile aktualisieren, um PDFs zu öffnen"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Auf dem Desktop geändert seit deinen Änderungen von {{time}}",
+      "copyMyEdits": "Meine Änderungen kopieren",
+      "discard": "Verwerfen",
+      "restore": "Wiederherstellen",
+      "unsavedFrom": "Nicht gespeicherte Änderungen von {{time}}"
     }
   },
   "home": {

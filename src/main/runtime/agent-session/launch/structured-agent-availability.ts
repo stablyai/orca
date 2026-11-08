@@ -7,7 +7,7 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
-import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
+import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
@@ -19,7 +19,7 @@ import {
 } from '../installation/structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
 
 export type StructuredAgentAvailabilityReader = (

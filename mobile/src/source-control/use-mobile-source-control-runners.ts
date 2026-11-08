@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
@@ -101,7 +101,7 @@ export function useMobileSourceControlRunners(params: Params) {
           setCommitMessage('')
         }
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
@@ -113,7 +113,6 @@ export function useMobileSourceControlRunners(params: Params) {
         if (options?.refreshOnError) {
           // Keep the reason visible: a successful reload clears the action error by default.
           await loadStatus({
-            preserveReadyOnFailure: true,
             force: true,
             clearActionErrorOnSuccess: false
           })
