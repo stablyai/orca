@@ -117,7 +117,7 @@ export async function fetchMobileWebBundle(args: {
     stallTimer = setTimeout(() => {
       // Windows still arriving for another fetch on this connection mean this one waits for slots, not on a dead link.
       const idleMs = Date.now() - connection.lastWindowAt
-      if (idleMs < MOBILE_WEB_BUNDLE_WINDOW_STALL_MS) {
+      if (idleMs >= 0 && idleMs < MOBILE_WEB_BUNDLE_WINDOW_STALL_MS) {
         armStallClock(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS - idleMs)
         return
       }
@@ -145,8 +145,9 @@ export async function fetchMobileWebBundle(args: {
       { buildId: manifest.buildId, path: asset.entry.path, offset },
       { timeoutMs: WINDOW_READ_BACKSTOP_MS }
     )
-    throwIfCallerAborted(args.signal)
+    // Any reply is connection activity, even one this fetch no longer wants; fetches waiting for its slot count on it.
     connection.lastWindowAt = Date.now()
+    throwIfCallerAborted(args.signal)
     armStallClock()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
