@@ -34,7 +34,13 @@ export function initializeNewOrcaProfileState(
     const initial = cohorts.migrateCohortSeeds(
       telemetry
         ? cohorts.migrateTelemetry(
-            { ...defaults, settings: { ...defaults.settings, telemetry } },
+            {
+              ...defaults,
+              settings: {
+                ...defaults.settings,
+                telemetry: { ...telemetry, protectedMilestones: { installCohort: 'existing' } }
+              }
+            },
             true
           )
         : cohorts.migrateTelemetry(defaults, false),

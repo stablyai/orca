@@ -10,8 +10,6 @@ import {
 } from '../../../../shared/terminal/input/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
-import { observeTerminalUserInput } from '../../../telemetry/protected-milestones'
-import { isUntypedTerminalInput } from '../../../../shared/terminal/input/terminal-untyped-input'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
@@ -231,10 +229,6 @@ export function createPtyWriteInput(deps: {
         ptyOwnership.get(args.id) === LOCAL_EXECUTION_HOST_ID
       ) {
         runtime?.observeClaudeTerminalEvidence?.(args.id, { kind: 'input', data: args.data })
-      }
-      // Main-window driving input carries xterm's user-input provenance; Orca's own writes use launch/orchestration.
-      if (accepted && args.inputKind === 'driving' && !isUntypedTerminalInput(args.data)) {
-        observeTerminalUserInput()
       }
       return accepted
     }

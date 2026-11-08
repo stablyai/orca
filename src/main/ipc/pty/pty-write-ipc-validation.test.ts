@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
+import { bindSession } from '../../telemetry/protected-milestones'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -58,6 +59,28 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener
   } = setupPtyIpcSuite()
+
+  it('admits a terminal user activity observation only from the main window', () => {
+    const captured: string[] = []
+    const settings = { telemetry: { protectedMilestones: { installCohort: 'existing' } } }
+    const store = { getSettings: () => settings, updateSettings: () => undefined }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies all store methods read by milestone capture.
+    bindSession(
+      store as never,
+      (name) => captured.push(name),
+      () => true
+    )
+    registerPtyHandlers(mainWindow as never)
+    const listener = onMock.mock.calls.find(([name]) => name === 'pty:noteUserInput')?.[1]
+    if (!listener) {
+      throw new Error('missing terminal user input listener')
+    }
+
+    listener(foreignWindowIpcEvent)
+    expect(captured).toEqual([])
+    listener(mainWindowIpcEvent)
+    expect(captured).toEqual(['meaningful_activity_day'])
+  })
 
   it('rejects malformed and cross-window pty write IPC before provider writes', async () => {
     const mockProc = createMockProc()

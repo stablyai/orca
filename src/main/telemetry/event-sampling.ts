@@ -11,7 +11,7 @@ export function isProtectedMilestoneEvent(name: string): boolean {
 }
 
 export function telemetryEventSampleRate(name: EventName): 0.01 | 0.001 | 1 {
-  if (name === 'agent_prompt_sent') {
+  if (name === 'agent_prompt_sent' || name === 'native_chat_prompt_submitted') {
     return 0.01
   }
   if (name === 'daemon_audit_eligibility') {

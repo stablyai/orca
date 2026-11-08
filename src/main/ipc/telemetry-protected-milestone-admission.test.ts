@@ -46,6 +46,13 @@ describe('renderer telemetry admission', () => {
         install_cohort: 'fresh'
       })
     ).toBe(false)
+    expect(
+      trackHandler(sender, 'native_chat_prompt_submitted', {
+        agent_kind: 'codex',
+        runtime: 'local',
+        client: 'desktop'
+      })
+    ).toBe(false)
     expect(trackMock).not.toHaveBeenCalled()
 
     const send = { agent_kind: 'codex', launch_source: 'sidebar', request_kind: 'followup' }

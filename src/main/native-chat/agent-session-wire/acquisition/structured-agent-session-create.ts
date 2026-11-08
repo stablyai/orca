@@ -232,7 +232,8 @@ async function foundConversation(
             ...(first.selection === undefined
               ? openingMessageOptions(candidate.record.options)
               : {})
-          }
+          },
+          caller.userClient
         ).catch((error: unknown) => {
           if (!(error instanceof CommandReceiptExistsError)) {
             throw error

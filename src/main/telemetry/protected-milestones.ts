@@ -3,6 +3,7 @@
 // debounced settings save (a crash before that save can re-emit after restart), so dashboards dedupe per install_id.
 
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { utcDayIndex } from '../../shared/telemetry-day'
 import { eventSchemas, type EventName, type EventProps } from '../../shared/telemetry-events'
 import type {
   FirstAgentInteractionSource,
@@ -22,7 +23,7 @@ type Observation = EventName | 'terminal_input'
 type SourceObservation =
   | { name: 'agent_started'; props: EventProps<'agent_started'> }
   | { name: 'agent_prompt_sent'; props: EventProps<'agent_prompt_sent'> }
-  | { name: 'native_chat_message_sent'; props: EventProps<'native_chat_message_sent'> }
+  | { name: 'native_chat_prompt_submitted'; props: EventProps<'native_chat_prompt_submitted'> }
   | { name: 'workspace_created'; props: EventProps<'workspace_created'> }
   | { name: 'terminal_input' }
 type Enqueue = (name: ProtectedMilestone['name'], props: ProtectedMilestone['props']) => void
@@ -31,7 +32,7 @@ type MilestoneSession = { store: Store; enqueue: Enqueue; isEnabled: () => boole
 const SOURCE_EVENTS: ReadonlySet<string> = new Set<EventName>([
   'agent_started',
   'agent_prompt_sent',
-  'native_chat_message_sent',
+  'native_chat_prompt_submitted',
   'workspace_created'
 ])
 // Automation and scriptable launches cannot prove a person acted that day.
@@ -41,17 +42,13 @@ const UNATTRIBUTED_LAUNCH_SOURCES: ReadonlySet<string> = new Set([
   'unknown'
 ])
 
-// Typing must cost at most one consent read a minute while the day is unmarked.
+// While a UTC day is unmarked, typing must cost at most one consent read a minute within that day.
 const TERMINAL_INPUT_CHECK_INTERVAL_MS = 60_000
 
 // Mirrors accepted cursors so a failed settings write cannot re-emit within the session.
 let cursor: ProtectedMilestoneCursor | null = null
 let session: MilestoneSession | null = null
 let lastTerminalInputCheckAt: number | null = null
-
-export function utcDayIndex(now = Date.now()): number {
-  return Math.floor(now / 86_400_000)
-}
 
 /** Bind the telemetry session's store, capture path and live gates; each launch starts from persisted cursors. */
 export function bindSession(store: Store, enqueue: Enqueue, isEnabled: () => boolean): void {
@@ -88,8 +85,8 @@ function parseObservation(name: Observation, props: unknown): SourceObservation 
     const parsed = eventSchemas.agent_prompt_sent.safeParse(props)
     return parsed.success ? { name, props: parsed.data } : null
   }
-  if (name === 'native_chat_message_sent') {
-    const parsed = eventSchemas.native_chat_message_sent.safeParse(props)
+  if (name === 'native_chat_prompt_submitted') {
+    const parsed = eventSchemas.native_chat_prompt_submitted.safeParse(props)
     return parsed.success ? { name, props: parsed.data } : null
   }
   if (name === 'workspace_created') {
@@ -100,7 +97,7 @@ function parseObservation(name: Observation, props: unknown): SourceObservation 
 }
 
 function interactionSource(observation: SourceObservation): FirstAgentInteractionSource | null {
-  if (observation.name === 'native_chat_message_sent') {
+  if (observation.name === 'native_chat_prompt_submitted') {
     return observation.props.client === 'mobile' ? 'mobile_chat' : 'native_chat'
   }
   if (observation.name === 'agent_prompt_sent') {
@@ -159,7 +156,8 @@ function earnedProtectedMilestones(
   const source = interactionSource(observation)
   if (
     source &&
-    (observation.name === 'agent_prompt_sent' || observation.name === 'native_chat_message_sent') &&
+    (observation.name === 'agent_prompt_sent' ||
+      observation.name === 'native_chat_prompt_submitted') &&
     !current.firstInteractionDone
   ) {
     earned.push({
@@ -228,22 +226,34 @@ export function record(
   }
 }
 
-/** Accepted desktop terminal input marks the day; the day check is constant-time, so keystrokes add no work once marked. */
+/** Genuine desktop xterm input admitted by a local or remote transport marks the day. */
 export function observeTerminalUserInput(now = Date.now()): void {
   const day = utcDayIndex(now)
   if (!session || (cursor && cursor.activityDay >= day)) {
     return
   }
   const last = lastTerminalInputCheckAt
-  if (last !== null && now >= last && now - last < TERMINAL_INPUT_CHECK_INTERVAL_MS) {
+  if (
+    last !== null &&
+    utcDayIndex(last) === day &&
+    now >= last &&
+    now - last < TERMINAL_INPUT_CHECK_INTERVAL_MS
+  ) {
     return
   }
-  lastTerminalInputCheckAt = now
   try {
-    if (session.isEnabled()) {
-      record('terminal_input', undefined, session.store.getSettings(), day)
+    if (!session.isEnabled()) {
+      lastTerminalInputCheckAt = now
+      return
     }
+    const settings = session.store.getSettings()
+    if (hydrate(settings.telemetry?.protectedMilestones).activityDay >= day) {
+      return
+    }
+    lastTerminalInputCheckAt = now
+    record('terminal_input', undefined, settings, day)
   } catch (err) {
+    lastTerminalInputCheckAt = now
     // Telemetry must never disturb terminal input.
     console.warn('[telemetry] terminal activity milestone failed', err)
   }

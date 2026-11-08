@@ -14,7 +14,7 @@ export const firstAgentInteractionSourceSchema = z.enum([
 ])
 export type FirstAgentInteractionSource = z.infer<typeof firstAgentInteractionSourceSchema>
 
-// terminal_input: accepted desktop keystroke/paste/drop into a terminal (xterm user-input provenance), never its bytes.
+// terminal_input: genuine xterm user input admitted by a local/remote transport, including buffered input; never its bytes.
 export const meaningfulActivityTriggerSchema = z.enum([
   'agent_started',
   'orca_send',

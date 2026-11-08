@@ -32,6 +32,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'feature_interaction_usage_bucket_reached',
   'first_agent_interaction',
   'meaningful_activity_day',
+  'native_chat_prompt_submitted',
   'plugin_installed',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',

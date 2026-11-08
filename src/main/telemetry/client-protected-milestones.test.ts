@@ -136,10 +136,18 @@ describe('protected telemetry milestones', () => {
     state.mock.capture.mockImplementationOnce(() => {
       throw new Error('queue rejected')
     })
-    track('native_chat_message_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' })
+    track('native_chat_prompt_submitted', {
+      agent_kind: 'codex',
+      runtime: 'local',
+      client: 'desktop'
+    })
     expect(state.settings.telemetry?.protectedMilestones?.firstAgentInteractionDay).toBeUndefined()
 
-    track('native_chat_message_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' })
+    track('native_chat_prompt_submitted', {
+      agent_kind: 'codex',
+      runtime: 'local',
+      client: 'desktop'
+    })
     expect(milestones()).toEqual(['meaningful_activity_day', 'first_agent_interaction'])
     expect(state.settings.telemetry?.protectedMilestones?.firstAgentInteractionDay).toBe(20_765)
   })
@@ -201,8 +209,30 @@ describe('protected telemetry milestones', () => {
     expect(captured('first_agent_interaction')[0].properties.source).toBe('unattributed_prompt')
   })
 
-  it('counts a phone-forwarded chat send as an interaction and an active day', () => {
+  it('keeps commands and unacknowledged PTY sends from consuming chat milestones', () => {
+    track('native_chat_message_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' })
     recordMobileChatSend('mobile', 'claude', { ok: true, replayed: false })
+    expect(milestones()).toEqual([])
+    expect(state.settings.telemetry?.protectedMilestones).toEqual({ installCohort: 'fresh' })
+
+    track('native_chat_prompt_submitted', {
+      agent_kind: 'codex',
+      runtime: 'remote',
+      client: 'desktop'
+    })
+    expect(captured('first_agent_interaction')[0].properties).toMatchObject({
+      source: 'native_chat',
+      agent_kind: 'codex'
+    })
+    expect(captured('meaningful_activity_day')[0].properties.trigger).toBe('native_chat')
+  })
+
+  it('counts a provider-accepted phone prompt as an interaction and an active day', () => {
+    track('native_chat_prompt_submitted', {
+      agent_kind: 'claude-code',
+      runtime: 'unknown',
+      client: 'mobile'
+    })
 
     expect(captured('first_agent_interaction')[0].properties).toMatchObject({
       source: 'mobile_chat',
@@ -220,21 +250,22 @@ describe('protected telemetry milestones', () => {
     expect(captured('meaningful_activity_day')[0].properties.install_cohort).toBe('existing')
   })
 
-  it('marks one day from terminal typing without an interaction or per-keystroke reads', () => {
+  it('marks terminal activity once per day across restart and UTC rollover', () => {
     observeTerminalUserInput()
-    const reads = vi.mocked(state.store.getSettings).mock.calls.length
-    for (let index = 0; index < 50; index++) {
-      observeTerminalUserInput()
-    }
-    expect(state.store.getSettings).toHaveBeenCalledTimes(reads)
     restart()
     observeTerminalUserInput()
-
     expect(milestones()).toEqual(['meaningful_activity_day'])
-    expect(captured('meaningful_activity_day')[0].properties.trigger).toBe('terminal_input')
+
+    vi.setSystemTime(new Date('2026-11-09T00:01:00Z'))
+    observeTerminalUserInput()
+    expect(
+      captured('meaningful_activity_day').map((message) => message.properties.trigger)
+    ).toEqual(['terminal_input', 'terminal_input'])
+    expect(state.settings.telemetry?.protectedMilestones?.meaningfulActivityDay).toBe(20_766)
   })
 
-  it('rate-limits terminal checks while consent blocks them, then marks the day', () => {
+  it('rate-limits blocked terminal checks within the day and retries immediately after UTC midnight', () => {
+    vi.setSystemTime(new Date('2026-11-08T23:59:59Z'))
     state.settings.telemetry!.optedIn = false
     observeTerminalUserInput()
     state.settings.telemetry!.optedIn = true
@@ -242,8 +273,9 @@ describe('protected telemetry milestones', () => {
     expect(milestones()).toEqual([])
     expect(state.settings.telemetry?.protectedMilestones?.meaningfulActivityDay).toBeUndefined()
 
-    vi.advanceTimersByTime(60_000)
+    vi.setSystemTime(new Date('2026-11-09T00:00:01Z'))
     observeTerminalUserInput()
     expect(milestones()).toEqual(['meaningful_activity_day'])
+    expect(state.settings.telemetry?.protectedMilestones?.meaningfulActivityDay).toBe(20_766)
   })
 })
