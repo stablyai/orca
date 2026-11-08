@@ -125,16 +125,17 @@ export async function startLocalWorker(args: {
       : requestedWorktree === 'current'
         ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
         : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  if (terminal) {
-    await assertExplicitWorkerUsable({
-      runtime,
-      db,
-      terminal,
-      from: params.from,
-      coordinator,
-      resolvedWorktreeId: resolvedWorktree?.id
-    })
-  }
+  const claimsTerminal = terminal
+    ? await assertExplicitWorkerUsable({
+        runtime,
+        db,
+        terminal,
+        from: params.from,
+        coordinator,
+        resolvedWorktreeId: resolvedWorktree?.id,
+        followUpOf: args.followUp?.of
+      })
+    : undefined
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
@@ -148,7 +149,8 @@ export async function startLocalWorker(args: {
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
-    launchReceipt: launch.receipt
+    launchReceipt: launch.receipt,
+    claimsTerminal
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
   const effects: WorkerEffect[] = []

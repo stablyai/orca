@@ -6,6 +6,10 @@ import type {
   OrchestrationPartyIdentity as OrchestrationParty
 } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import {
+  refuseClaimedWorkerTerminal,
+  type WorkerTerminalClaim
+} from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import {
@@ -56,7 +60,8 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   }
 }
 
-/** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */
+/** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID.
+ *  Returns the claim its Dispatch insert repeats atomically; refused here first, before a Run binds or anything waits. */
 export async function assertExplicitWorkerUsable(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -64,11 +69,20 @@ export async function assertExplicitWorkerUsable(args: {
   from: string
   coordinator: OrchestrationCallerIdentity | null
   resolvedWorktreeId: string | undefined
-}): Promise<void> {
+  followUpOf: string | undefined
+}): Promise<WorkerTerminalClaim> {
   const chat = chatAssigneeOf(args.terminal)
   await (chat
     ? assertExplicitWorkerChatUsable({ ...args, chat })
     : assertExplicitWorkerTerminalUsable({ ...args, terminal: args.terminal.address }))
+  const handle = args.terminal.address
+  const claim = {
+    handle,
+    paneKey: args.runtime.getTerminalPaneKey(handle) ?? undefined,
+    followUpOf: args.followUpOf
+  }
+  refuseClaimedWorkerTerminal(args.db, claim)
+  return claim
 }
 
 /** The same refusals for a chat named by its Orca session ID: itself, unreachable, another worktree. */

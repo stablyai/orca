@@ -5,6 +5,7 @@ import type { WorkerStartInput } from './worker-start-schema'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
+import type { WorkerTerminalClaim } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 
 export function createLocalWorkerStartDispatch(
   {
@@ -27,7 +28,8 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId,
     repoSelector,
     agent,
-    launchReceipt
+    launchReceipt,
+    claimsTerminal
   }: {
     params: WorkerStartInput
     run: RunRow
@@ -38,6 +40,7 @@ export function createLocalWorkerStartDispatch(
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
+    claimsTerminal: WorkerTerminalClaim | undefined
   }
 ) {
   const startOptions = {
@@ -82,6 +85,7 @@ export function createLocalWorkerStartDispatch(
     mutationReceipt: orchestrationMutation,
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
-    takesMailOf: followUp?.takesMailOf
+    takesMailOf: followUp?.takesMailOf,
+    claimsTerminal
   })
 }
