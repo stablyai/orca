@@ -97,9 +97,7 @@ export function mobileNativeChatComposerPlaceholder(
   afterStop?: 'queue' | 'send',
   t: Translate = translate
 ): string {
-  if (lockReason === 'disconnected') {
-    return t('chat.composerPlaceholder.reconnecting', 'Reconnecting…')
-  }
+  // Offline still takes typing: Send queues, so the usual prompt stays.
   if (lockReason === 'waiting') {
     return t('chat.composerPlaceholder.waitingForTerminal', 'Waiting for terminal…')
   }

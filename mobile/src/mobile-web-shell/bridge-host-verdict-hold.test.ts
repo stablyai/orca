@@ -37,6 +37,21 @@ describe('the connection verdict hold', () => {
     expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'handshaking' } })
   })
 
+  it("serves the phone's own store before the verdict, so drafts typed offline are saved", async () => {
+    const { bridge } = heldBridge()
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(1),
+        method: 'native.store.rows',
+        params: { action: 'read', table: 'draft', keys: ['draft:chat:wt:'] }
+      })
+    )
+    await flushBridge()
+
+    expect(bridge.nativeCalls.map((call) => call.verb)).toEqual(['native.store.rows'])
+  })
+
   it('re-sends init as connected once the verdict opens, then sends what waited', () => {
     const { bridge, verdict } = heldBridge()
     bridge.host.receive(
@@ -73,5 +88,26 @@ describe('the connection verdict hold', () => {
       'worktree.ps',
       'stats.summary'
     ])
+  })
+  it('re-sends a stream the page held across a reconnect only after the new verdict, before what waited', () => {
+    const verdict: { status: HostStatusReply | null } = { status: PROVEN }
+    const bridge = harness({ ready: true, readHostStatus: () => verdict.status })
+    bridge.host.receive(subscribeFrame(bridgeId(1)))
+    const stream = bridge.client.streams[0]!
+    expect(stream.holdReplay?.(() => undefined)).toBe(false)
+
+    verdict.status = null
+    const resent: number[] = []
+    expect(stream.holdReplay?.(() => resent.push(bridge.client.requests.length))).toBe(true)
+    bridge.host.receive(
+      clientFrame({ type: 'request', id: bridgeId(2), method: 'worktree.ps', params: {} })
+    )
+    bridge.host.publishHostStatus()
+    expect(resent).toEqual([])
+
+    verdict.status = PROVEN
+    bridge.host.publishHostStatus()
+    expect(resent).toEqual([0])
+    expect(bridge.client.requests.map((request) => request.method)).toEqual(['worktree.ps'])
   })
 })

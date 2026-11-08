@@ -1,5 +1,8 @@
 import { getIntlLocale } from '@/i18n/i18n'
-export function formatSparsePresetUpdatedAt(timestamp: number): string | null {
+export function formatSparsePresetUpdatedAt(
+  timestamp: number,
+  intlLocale: string = getIntlLocale()
+): string | null {
   if (!Number.isFinite(timestamp)) {
     return null
   }
@@ -9,7 +12,7 @@ export function formatSparsePresetUpdatedAt(timestamp: number): string | null {
     return null
   }
 
-  return new Intl.DateTimeFormat(getIntlLocale(), {
+  return new Intl.DateTimeFormat(intlLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric'

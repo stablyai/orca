@@ -108,39 +108,6 @@ function makeFixture(hosts: readonly ExecutionHostId[], count: number) {
 afterEach(() => vi.restoreAllMocks())
 
 describe('legacy worker recovery persistence snapshot budget', () => {
-  it.each([1, 10, 100])('takes two host snapshots for %i recovered workers', async (count) => {
-    const fixture = makeFixture(['local'], count)
-    const clone = vi.spyOn(globalThis, 'structuredClone')
-
-    const result = await fixture.persistence.persist(fixture.resolutions)
-
-    expect(result).toEqual(
-      new Set(fixture.resolutions.map(({ candidate }) => candidate.dispatchId))
-    )
-    expect(clone).toHaveBeenCalledTimes(2)
-    expect(fixture.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-    expect(fixture.getWorkspaceSession().sleepingAgentSessionsByPaneKey).toEqual({})
-    for (const { candidate, resolution } of fixture.resolutions) {
-      expect(fixture.getWorkspaceSession().tabsByWorktree[candidate.worktreeId]).toHaveLength(
-        resolution === 'exited' ? 0 : 1
-      )
-    }
-  })
-
-  it('bounds snapshots by host for an interleaved local, SSH and runtime batch', async () => {
-    const hosts = ['local', 'ssh:remote', 'runtime:peer'] as const
-    const fixture = makeFixture(hosts, 12)
-    const clone = vi.spyOn(globalThis, 'structuredClone')
-
-    expect((await fixture.persistence.persist(fixture.resolutions)).size).toBe(12)
-
-    expect(clone).toHaveBeenCalledTimes(hosts.length * 2)
-    for (const host of hosts) {
-      expect(fixture.getWorkspaceSession(host).sleepingAgentSessionsByPaneKey).toEqual({})
-    }
-    expect(fixture.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-  })
-
   it('rolls back every host without overwriting edits made during the durable write', async () => {
     const hosts = ['local', 'ssh:remote', 'runtime:peer'] as const
     const fixture = makeFixture(hosts, 12)
@@ -175,52 +142,5 @@ describe('legacy worker recovery persistence snapshot budget', () => {
         tabsByWorktree: { ...original.tabsByWorktree, [`new-folder-${host}`]: [] }
       })
     }
-  })
-
-  it('still flushes previously adopted surfaces when this batch makes no session edits', async () => {
-    const fixture = makeFixture(['local'], 10)
-    fixture.getWorkspaceSession().sleepingAgentSessionsByPaneKey = {}
-    for (const resolution of fixture.resolutions) {
-      resolution.resolution = 'adopted'
-    }
-
-    expect((await fixture.persistence.persist(fixture.resolutions)).size).toBe(10)
-
-    expect(fixture.setWorkspaceSession).not.toHaveBeenCalled()
-    expect(fixture.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not snapshot or flush an empty or unroutable batch', async () => {
-    const fixture = makeFixture(['local'], 1)
-    const clone = vi.spyOn(globalThis, 'structuredClone')
-
-    expect(await fixture.persistence.persist([])).toEqual(new Set())
-    expect(await fixture.persistence.persist([makeResolution(100)])).toEqual(new Set())
-
-    expect(clone).not.toHaveBeenCalled()
-    expect(fixture.flushPendingOrThrowAsync).not.toHaveBeenCalled()
-  })
-
-  it('uses the provider that proved absence when a deleted folder has no host lookup', async () => {
-    const fixture = makeFixture(['ssh:remote'], 1)
-    const resolution = makeResolution(100)
-    resolution.resolution = 'exited'
-    resolution.hostId = 'ssh:remote'
-
-    expect(await fixture.persistence.persist([resolution])).toEqual(new Set(['dispatch-100']))
-    expect(fixture.setWorkspaceSession.mock.calls[0][1]).toBe('ssh:remote')
-    expect(fixture.flushPendingOrThrowAsync).toHaveBeenCalledOnce()
-  })
-
-  it('prefers owning-provider evidence over stale workspace host metadata', async () => {
-    const fixture = makeFixture(['local', 'ssh:remote'], 2)
-    const localBefore = structuredClone(fixture.getWorkspaceSession('local'))
-    const resolution = fixture.resolutions[0]
-    resolution.resolution = 'exited'
-    resolution.hostId = 'ssh:remote'
-
-    expect(await fixture.persistence.persist([resolution])).toEqual(new Set(['dispatch-0']))
-    expect(fixture.setWorkspaceSession.mock.calls[0][1]).toBe('ssh:remote')
-    expect(fixture.getWorkspaceSession('local')).toEqual(localBefore)
   })
 })

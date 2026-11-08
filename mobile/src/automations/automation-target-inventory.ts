@@ -13,6 +13,7 @@ import {
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
 } from '../../../src/shared/preflight-runtime-capabilities'
 import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { readHostStatusReply } from '../query/host-status-query'
 import {
   newTabRepoListRead,
   preflightDetectAgentsRead,
@@ -162,7 +163,7 @@ export async function loadAutomationAgents(
     }
   }
   try {
-    const status = hostStatusProbe.interpret(await hostStatusProbe.request(client))
+    const status = hostStatusProbe.interpret(await readHostStatusReply(client))
     requireCurrent()
     const capabilities = status.accepted ? (status.value.capabilities ?? []) : []
     const worktreeId = workspaceId ?? getRepoMainWorktreeId({ id: setup.repoId, path: setup.path })

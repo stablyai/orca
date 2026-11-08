@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-health'
 import type { RuntimeHostBlockedReason } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeCompatVerdict } from '../../../shared/protocol-compat'
@@ -27,12 +28,15 @@ export function getExecutionHostHealthLabel(
   }
 }
 
-export function describeRuntimeCompatBlock(verdict: RuntimeCompatVerdict): string {
+export function describeRuntimeCompatBlock(
+  verdict: RuntimeCompatVerdict,
+  t: Translate = translate
+): string {
   if (verdict.kind === 'ok') {
-    return translate('runtime.compat.compatible', 'Runtime client and server are compatible.')
+    return t('runtime.compat.compatible', 'Runtime client and server are compatible.')
   }
   if (verdict.reason === 'client-too-old') {
-    return translate(
+    return t(
       'runtime.compat.clientTooOld',
       'This Orca client is too old for the selected server. Update Orca on this machine. Client protocol {{clientProtocol}}, server requires client protocol {{requiredProtocol}}.',
       {
@@ -41,7 +45,7 @@ export function describeRuntimeCompatBlock(verdict: RuntimeCompatVerdict): strin
       }
     )
   }
-  return translate(
+  return t(
     'runtime.compat.serverTooOld',
     'The selected Orca server is too old for this client. Update Orca on the server. Server protocol {{serverProtocol}}, client requires server protocol {{requiredProtocol}}.',
     {
