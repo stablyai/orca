@@ -19,7 +19,9 @@ import {
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
+  ORCA_IMAGE_PROTOCOL_VALUE,
+  PI_FORCE_IMAGE_PROTOCOL_ENV,
+  PI_FORCE_IMAGE_PROTOCOL_VALUE
 } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
@@ -183,7 +185,8 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE,
+    [PI_FORCE_IMAGE_PROTOCOL_ENV]: PI_FORCE_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)

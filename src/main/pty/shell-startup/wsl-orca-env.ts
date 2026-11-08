@@ -122,6 +122,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
     `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
     'CLAUDE_CODE_FORCE_TERMINAL_IMAGES/u',
+    'PI_FORCE_IMAGE_PROTOCOL/u',
     ...(env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR?.startsWith('/')
       ? ['ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR/u', 'ORCA_CLAUDE_CONFIG_DIR/u']
       : []),
