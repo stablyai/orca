@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
@@ -28,7 +30,10 @@ import {
   runtimeSocketDirs,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
-import { ensureDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
+import {
+  daemonSocketDirIsTrusted,
+  ensureDaemonSocketDir
+} from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { errorMessage } from '../../../../shared/error-message'
 import {
   loadHostDescriptor,
@@ -41,13 +46,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       return
     }
 
-    // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
-    if (this.platform !== 'win32') {
-      for (const dir of runtimeSocketDirs(this.userDataPath)) {
-        sweepOrphanedRuntimeSockets(dir, this.pid)
-      }
-    }
-
     const transportMeta = createRuntimeTransportMetadata(
       this.userDataPath,
       this.pid,
@@ -55,8 +53,21 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       this.runtime.getRuntimeId()
     )
 
+    // Verify a relocated dir's owner before anything lists or unlinks inside it.
     if (transportMeta.kind === 'unix') {
       ensureDaemonSocketDir(transportMeta.endpoint)
+    }
+
+    // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
+    if (this.platform !== 'win32') {
+      for (const dir of runtimeSocketDirs(this.userDataPath)) {
+        if (
+          dir === this.userDataPath ||
+          (existsSync(dir) && daemonSocketDirIsTrusted(join(dir, basename(transportMeta.endpoint))))
+        ) {
+          sweepOrphanedRuntimeSockets(dir, this.pid)
+        }
+      }
     }
 
     const socketTransport = new UnixSocketTransport({

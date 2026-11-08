@@ -1,5 +1,5 @@
 // Shared-home locks need explicit operator confirmation: local silence cannot prove a remote holder exited.
-import { readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +20,10 @@ import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspect
 import { resolveUserDataPath } from './orcad-app-paths'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
-import { RUNTIME_SOCKET_NAME_REGEX } from '../runtime/rpc/server/runtime-rpc-socket-metadata'
+import {
+  RUNTIME_SOCKET_NAME_REGEX,
+  runtimeSocketDirs
+} from '../runtime/rpc/server/runtime-rpc-socket-metadata'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   ORCAD_STALE_LOCK_DATA_ROOT_FLAG,
@@ -214,9 +217,12 @@ function holderEndpoints(dataRoot: string, pid: number): string[] | null {
         endpoints.add(transport.endpoint)
       }
     }
-    for (const entry of readdirSync(dataRoot)) {
-      if (RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid)) {
-        endpoints.add(join(dataRoot, entry))
+    for (const dir of runtimeSocketDirs(dataRoot)) {
+      // A long data root relocates the holder's socket; a missing relocated dir holds nothing.
+      for (const entry of dir === dataRoot || existsSync(dir) ? readdirSync(dir) : []) {
+        if (RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid)) {
+          endpoints.add(join(dir, entry))
+        }
       }
     }
   } catch {
