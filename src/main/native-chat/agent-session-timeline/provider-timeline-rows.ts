@@ -78,24 +78,6 @@ export class ProviderTimelineRows {
     return this.request(key, REQUEST_INCARNATION_BOUND)
   }
 
-  /** Never reuse a persisted request incarnation. */
-  nextRequest(key: string, journal: Journal): ProviderTimelineRowId {
-    return this.request(key, this.heldIncarnations(key, journal) + 1)
-  }
-
-  heldRequest(key: string, journal: Journal): ProviderTimelineRowId | null {
-    const held = this.heldIncarnations(key, journal)
-    return held === 0 ? null : this.request(key, held)
-  }
-
-  private heldIncarnations(key: string, journal: Journal): number {
-    let held = 0
-    while (journal.itemBody(this.request(key, held + 1).itemId) !== null) {
-      held += 1
-    }
-    return held
-  }
-
   private request(key: string, incarnation: number): ProviderTimelineRowId {
     return this.row(
       this.deps.scheme.request({ generation: this.deps.generation, key, incarnation })

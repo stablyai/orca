@@ -6,7 +6,8 @@ import type {
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { journalTimelineItemsView } from '../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveJournalTimelineItem } from '../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/projection/journal-reducer'
 import { personStopDecidesTurn } from '../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { ClaudeContextReportTarget } from './claude-context-facts'
@@ -44,32 +45,30 @@ export function journal({ deferred = false } = {}) {
       body
     })
   }
-  const scans = { count: 0 }
-  const bound: StructuredAgentSessionRevisionJournal = {
-    item: (itemId) => rows.get(itemId) ?? null,
-    epoch: 'test',
-    visitItems: (visit) => {
-      scans.count += 1
-      for (const row of rows.values()) {
-        visit(row.itemId, row.sequence, row.body)
-      }
-    },
-    itemBody: (itemId) => rows.get(itemId)?.body ?? null
-  }
+  const stopState = createJournalReducerState('orca-session', 'test')
+  const view = journalTimelineItemsView(
+    (itemId) => rows.get(itemId) ?? null,
+    () => rows.values(),
+    (turnId, at) => personStopDecidesTurn(stopState, turnId, at)
+  )
   const revise: NonNullable<StructuredAgentSessionEventSink['tryReviseResolvedItemAndPublish']> = (
-    _reservedBytes,
-    resolve,
+    reservedBytes,
+    resolution,
     options
   ) => {
     run(() => {
-      const resolved = resolve(bound)
-      if (resolved) {
-        appendItem(resolved.identity, resolved.body, options)
+      const resolved = resolveJournalTimelineItem(
+        view,
+        resolution,
+        options.turnScope,
+        reservedBytes
+      )
+      if (resolved.kind === 'resolved') {
+        appendItem(resolved.item.identity, resolved.item.body, options)
       }
     })
     return { accepted: true }
   }
-  const stopState = createJournalReducerState('orca-session', 'test')
   const queueStop = (turnId: string, at: number): void =>
     run(() => {
       stopState.queuePauseMarks.latestStop = {
@@ -88,7 +87,7 @@ export function journal({ deferred = false } = {}) {
   const turnRow = (turnId: string) =>
     rows.get(agentJournalItemKey(claudeTurnLifecycleIdentity('claude-session', turnId)))
   const items = () => [...rows.values()].sort((left, right) => left.sequence - right.sequence)
-  return { sink, clock, appends, rows, turnRow, items, scans, flush, queueStop }
+  return { sink, clock, appends, rows, turnRow, items, flush, queueStop }
 }
 
 export function frame(message: Record<string, unknown>, observedAt: number, startsTurn = false) {

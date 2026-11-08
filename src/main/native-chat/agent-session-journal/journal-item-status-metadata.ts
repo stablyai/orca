@@ -12,13 +12,13 @@ export function journalItemStatusMetadata(item: AgentJournalRenderItem) {
   return [
     body.kind === 'message' ? body.role : null,
     Number(isStructuredAgentSessionCommandEntry(body)),
-    lifecycleState(body),
+    journalItemLifecycleState(body),
     Number(hasAssistantProse(body)),
     item.turnScope?.kind ?? null
   ]
 }
 
-function lifecycleState(body: AgentJournalItemBody): string | null {
+export function journalItemLifecycleState(body: AgentJournalItemBody): string | null {
   const turn = readAgentJournalTurn(body)
   if (turn) {
     return turn.state

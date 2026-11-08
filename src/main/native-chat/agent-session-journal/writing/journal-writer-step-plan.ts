@@ -7,6 +7,18 @@ import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appende
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalStepOutcome, JournalWriterStep } from './journal-writer-step'
 import { resolveJournalTimelineItem } from './journal-timeline-resolution'
+import { journalTimelineView } from './journal-timeline-view'
+import { resolveProviderTimelineSettlement } from '../../agent-session-timeline/provider-timeline-writer-resolution'
+
+function lifecycleAppender(state: JournalReducerState): JournalLifecycleBatchAppender {
+  return new JournalLifecycleBatchAppender({
+    state: () => state,
+    cursor: () => ({ epoch: state.epoch, sequence: state.lastSequence }),
+    enqueueRows: () => {
+      throw new Error('journal step planning cannot enqueue another write')
+    }
+  })
+}
 
 /** null is stale; an empty plan is a valid no-op, including a deduplicated settlement. */
 export function planJournalWriterStep(
@@ -16,9 +28,10 @@ export function planJournalWriterStep(
 ): ((seq: number, ts: number) => JournalRow)[] | null {
   if (step.kind === 'resolved-item') {
     const resolved = resolveJournalTimelineItem(
-      (itemId) => readJournalInputItem(state, itemId),
+      journalTimelineView(state),
       step.resolution,
-      step.options.turnScope
+      step.options.turnScope,
+      step.reservedBytes
     )
     if (resolved.kind === 'dropped') {
       onResolved(resolved)
@@ -44,6 +57,16 @@ export function planJournalWriterStep(
     return []
   }
   const { resolution } = step
+  if (resolution.kind !== 'history-catch-up') {
+    const mutations = resolveProviderTimelineSettlement(journalTimelineView(state), resolution)
+    return lifecycleAppender(state).planResolved({
+      settlementId: step.settlementId,
+      fence: step.fence,
+      ownerFence: step.ownerFence,
+      recovered: step.recovered,
+      resolve: () => mutations
+    })
+  }
   if (
     Atomics.load(resolution.permit, 0) !== 1 ||
     Date.now() >= resolution.deadline ||
@@ -85,13 +108,7 @@ export function planJournalWriterStep(
     }
     seen.add(canonical)
   }
-  return new JournalLifecycleBatchAppender({
-    state: () => state,
-    cursor: () => ({ epoch: state.epoch, sequence: state.lastSequence }),
-    enqueueRows: () => {
-      throw new Error('journal step planning cannot enqueue another write')
-    }
-  }).plan({
+  return lifecycleAppender(state).plan({
     settlementId: step.settlementId,
     fence: step.fence,
     ownerFence: step.ownerFence,

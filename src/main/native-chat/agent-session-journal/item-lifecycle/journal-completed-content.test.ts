@@ -67,7 +67,7 @@ it.each(['direct', 'transition'] as const)(
                 kind: 'item',
                 reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
                 options,
-                resolve: () => ({ identity, body })
+                resolution: { kind: 'literal', identity, body }
               }
             ]
           })

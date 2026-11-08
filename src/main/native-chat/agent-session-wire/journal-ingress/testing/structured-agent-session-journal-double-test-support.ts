@@ -1,11 +1,16 @@
 // Run journal-double steps immediately, as on an idle write queue.
 
-import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalStep } from '../../../agent-session-journal/writing/journal-step-writer'
 import type { JournalStepsResult } from '../../../agent-session-journal/writing/journal-writer-step'
 import { journalSqlFailure } from '../../../agent-session-journal/journal-sql-failure'
 import { resolveJournalTimelineItem } from '../../../agent-session-journal/writing/journal-timeline-resolution'
+import { journalTimelineItemsView } from '../../../agent-session-journal/writing/journal-timeline-view'
+import { resolveProviderTimelineSettlement } from '../../../agent-session-timeline/provider-timeline-writer-resolution'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type {
   JournalItemAppendOptions,
@@ -14,6 +19,7 @@ import type {
 
 type AppendingDouble = {
   item?: AgentSessionJournal['item']
+  visitItems?: AgentSessionJournal['visitItems']
   appendItem: (
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -52,6 +58,17 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
       beforeRun?: () => boolean
     ): Promise<JournalStepsResult> => {
       const result: JournalStepsResult = { outcomes: [] }
+      const item = (itemId: string) => journal.item?.(itemId) ?? null
+      const view = journalTimelineItemsView(item, () => {
+        const items: AgentJournalRenderItem[] = []
+        journal.visitItems?.((itemId) => {
+          const held = item(itemId)
+          if (held) {
+            items.push(held)
+          }
+        })
+        return items
+      })
       if (beforeRun?.() === false) {
         return { outcomes: steps.map(() => ({ kind: 'dropped' as const })) }
       }
@@ -61,9 +78,10 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
             if (step.step.kind === 'resolved-item') {
               const command = step.step
               const resolved = resolveJournalTimelineItem(
-                (itemId) => journal.item?.(itemId) ?? null,
+                view,
                 command.resolution,
-                command.options.turnScope
+                command.options.turnScope,
+                command.reservedBytes
               )
               if (resolved.kind === 'dropped') {
                 result.outcomes.push(resolved)
@@ -75,6 +93,24 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
                 )
                 result.outcomes.push({ kind: 'committed', wrote: true })
               }
+              continue
+            }
+            if (
+              step.step.kind === 'settlement' &&
+              step.step.resolution.kind !== 'history-catch-up'
+            ) {
+              const { settlementId, fence, ownerFence, recovered } = step.step
+              const mutations = resolveProviderTimelineSettlement(view, step.step.resolution)
+              if (mutations.length > 0) {
+                await journal.appendLifecycleBatch?.({
+                  settlementId,
+                  fence,
+                  ...(ownerFence !== undefined ? { ownerFence } : {}),
+                  ...(recovered ? { recovered } : {}),
+                  mutations
+                })
+              }
+              result.outcomes.push({ kind: 'committed', wrote: mutations.length > 0 })
               continue
             }
             throw new Error('journal command steps require a real journal')

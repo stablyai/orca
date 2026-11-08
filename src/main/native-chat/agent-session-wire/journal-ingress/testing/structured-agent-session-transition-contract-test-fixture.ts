@@ -8,11 +8,12 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import type { JournalLifecycleMutationInput } from '../../../agent-session-journal/writing/journal-lifecycle-mutation'
+import type { JournalLifecycleIdentityMutationInput } from '../../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
 import type { StructuredAgentSessionTransitionStep } from '../structured-agent-session-transition'
+import type { JournalTimelineItemResolution } from '../../../agent-session-journal/writing/journal-timeline-resolution'
 
 export const SESSION = 'session-transition'
 
@@ -36,7 +37,7 @@ export function tool(
   return { kind: 'tool-call', name, input: { name }, state }
 }
 
-export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleMutationInput {
+export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleIdentityMutationInput {
   return {
     kind: 'item',
     identity: id,
@@ -46,16 +47,13 @@ export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleMutati
 }
 
 export function itemStep(
-  resolve: Extract<
-    StructuredAgentSessionTransitionStep,
-    { kind: 'item'; resolve: unknown }
-  >['resolve'],
+  resolution: JournalTimelineItemResolution,
   reservedBytes = 4096
 ): StructuredAgentSessionTransitionStep {
   return {
     kind: 'item',
     reservedBytes,
-    resolve,
+    resolution,
     options: { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   }
 }

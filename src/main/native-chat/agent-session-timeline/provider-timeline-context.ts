@@ -3,6 +3,7 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import type { ProviderTimelineJoin } from './provider-timeline-event'
 import { providerKey, type ProviderTimelineRows } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
+import type { ProviderTimelineRequest } from './provider-timeline-writer-resolution'
 
 export type ProviderTimelineContext = {
   sessionId: string
@@ -19,6 +20,13 @@ export function providerTimelineSettlementId(
   what: string
 ): string {
   return `provider-timeline:${context.sessionId}:${context.generation}:${serial}:${what}`
+}
+
+export function providerTimelineRequest(
+  context: ProviderTimelineContext,
+  key: string
+): ProviderTimelineRequest {
+  return { agent: context.agent, sessionId: context.sessionId, generation: context.generation, key }
 }
 
 /** Prefer the named turn, then open turn; independent subagent threads always join the open turn. */

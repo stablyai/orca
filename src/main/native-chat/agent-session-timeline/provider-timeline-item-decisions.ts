@@ -1,24 +1,14 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
-import { providerTimelinePlacement } from './provider-timeline-context'
+import { providerTimelinePlacement, providerTimelineRequest } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
   ProviderTimelineDecision,
   ProviderTimelineDecisionInput
 } from './provider-timeline-decision'
-import { providerKey, providerTimelineTurnRowState, turnOf } from './provider-timeline-rows'
-import type { ProviderTimelineRequestBody } from './provider-timeline-event'
+import { providerKey, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineOpenItem } from './provider-timeline-state'
-
-function pendingPrompt(body: AgentJournalItemBody | null): body is ProviderTimelineRequestBody {
-  return (
-    (body?.kind === 'approval' || body?.kind === 'question') && body.resolution.state === 'pending'
-  )
-}
 
 export function decideItem(
   input: ProviderTimelineDecisionInput,
@@ -39,7 +29,7 @@ export function decideItem(
     return { dropped: 'item-settled' }
   }
   const obligation = change !== 'close' && requiresTerminalSettlement(event.body)
-  const opened: ProviderTimelineOpenItem = { kind: 'item', row, turnItemId: placed }
+  const opened: ProviderTimelineOpenItem = { kind: 'item', turnItemId: placed }
   return {
     writes: [
       {
@@ -75,16 +65,15 @@ export function decideRequest(
   input: ProviderTimelineDecisionInput,
   event: Extract<ProviderTimelineDecidedEvent, { type: 'request.open' }>
 ): ProviderTimelineDecision {
-  const { state, journal, context } = input
+  const { state, context } = input
   const key = requestKey(event.request)
-  if (state.items.has(key) && !(journal && state.settledInJournal(key, journal))) {
-    return { dropped: 'request-duplicate' }
-  }
+  // The writer drops a duplicate while the earlier incarnation is pending; an answered one is reused.
+  const previous = state.items.get(key)
   const scope = providerTimelinePlacement(context, state, event.join)
   const turn = turnOf(scope)
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
-    row: null,
+    request: event.request,
     turnItemId: turn,
     ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
   }
@@ -97,19 +86,21 @@ export function decideRequest(
         ),
         lifecycle: true,
         options: { ...event.producer, turnScope: scope, lifecycle: true },
-        resolve: (at) => {
-          // Reused request IDs need new incarnations; never overwrite existing rows.
-          const row = context.rows.nextRequest(event.request, at)
-          opened.row = row
-          // A live request outliving its turn still needs its card.
-          if (
-            turn !== null &&
-            !event.outlivesTurn &&
-            providerTimelineTurnRowState(at, turn) === 'settled'
-          ) {
-            return null
+        resolution: {
+          kind: 'request-open',
+          request: providerTimelineRequest(context, event.request),
+          body: event.body,
+          turnItemId: turn,
+          ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
+        },
+        onResolved: (outcome) => {
+          if (outcome.kind === 'dropped' && state.items.get(key) === opened) {
+            if (previous) {
+              state.items.set(key, previous)
+            } else {
+              state.items.delete(key)
+            }
           }
-          return { identity: row.identity, body: event.body }
         }
       }
     ],
@@ -117,38 +108,18 @@ export function decideRequest(
   }
 }
 
+/** The writer withdraws the newest incarnation only while it is still pending. */
 export function decideWithdrawal(
   input: ProviderTimelineDecisionInput,
   event: Extract<ProviderTimelineDecidedEvent, { type: 'request.withdrawn' }>
 ): ProviderTimelineDecision {
-  const { state, journal, context } = input
   const key = requestKey(event.request)
-  const entry = state.items.get(key)
-  const opened = entry?.kind === 'request' ? entry : null
-  // Released requests may still have their newest incarnation in the journal.
-  if (!opened && journal && !context.rows.heldRequest(event.request, journal)) {
-    return { dropped: 'request-unknown' }
-  }
   return {
     settle: {
       what: 'request-withdrawn',
-      resolve: (at) => {
-        // Resolve after request-open; preserve client answers or turn settlement that landed first.
-        const row = opened ? opened.row : context.rows.heldRequest(event.request, at)
-        const held = row ? at.item(row.itemId) : null
-        const cancelled =
-          held && pendingPrompt(held.body) ? cancelledJournalPromptBody(held.body) : null
-        if (!row || !held || !cancelled) {
-          return []
-        }
-        return [
-          {
-            kind: 'item',
-            identity: row.identity,
-            body: cancelled,
-            turnScope: held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-          }
-        ]
+      resolution: {
+        kind: 'request-withdrawn',
+        request: providerTimelineRequest(input.context, event.request)
       }
     },
     commit: (next) => next.items.delete(key)

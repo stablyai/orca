@@ -1,5 +1,5 @@
 // Adapters translate and retry refused events; admission alone advances assembler state.
-// Deferred writes resolve from current journal state, preserving other writers’ answers and Stops.
+// The writer resolves each write at its position, preserving other writers’ answers and Stops.
 // Each provider child gets a fresh assembler and generation.
 
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
@@ -95,14 +95,10 @@ export function createProviderTimelineAssembler(
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
-    journal: ProviderTimelineTextHost['journal'],
     onPublished?: () => void
   ): ProviderTimelineApplyResult => {
     const serials = state.serials()
-    const decision = decideProviderTimelineEvent(
-      { context, state, journal, serial: serials.next },
-      event
-    )
+    const decision = decideProviderTimelineEvent({ context, state, serial: serials.next }, event)
     if (decision.dropped) {
       return { admission: ADMITTED, dropped: decision.dropped }
     }
@@ -148,7 +144,7 @@ export function createProviderTimelineAssembler(
     if (state.ended || !open || providerTimelineTurnRowState(journal, open.itemId) !== 'settled') {
       return null
     }
-    return applyDecided({ type: 'turn.settled', turn: open }, journal)
+    return applyDecided({ type: 'turn.settled', turn: open })
   }
 
   const apply = (
@@ -186,7 +182,7 @@ export function createProviderTimelineAssembler(
       case 'context.usage':
       case 'provider.frame':
       case 'session.ended':
-        return applyDecided(event, journal, onPublished)
+        return applyDecided(event, onPublished)
     }
   }
 

@@ -9,6 +9,7 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
@@ -21,8 +22,7 @@ import type { StructuredAgentSessionLogger } from '../host/structured-agent-sess
 import type {
   StructuredAgentSessionIdentityResolver,
   StructuredAgentSessionHistoryJournal,
-  StructuredAgentSessionLinkageJournal,
-  StructuredAgentSessionRevisionResolver
+  StructuredAgentSessionLinkageJournal
 } from './structured-agent-session-journal-views'
 
 import {
@@ -105,15 +105,15 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Reserved bytes must bound the eventual resolved revision. */
+  /** The writer resolves the revision at its position; reserved bytes must bound it. */
   tryReviseResolvedItem?(
     reservedBytes: number,
-    resolve: StructuredAgentSessionRevisionResolver,
+    resolution: JournalTimelineItemResolution,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
   tryReviseResolvedItemAndPublish?(
     reservedBytes: number,
-    resolve: StructuredAgentSessionRevisionResolver,
+    resolution: JournalTimelineItemResolution,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
   /** Resolve on the journal lane; null appends nothing. */

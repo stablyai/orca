@@ -14,17 +14,19 @@ import {
 it('lands its steps back to back, each resolved after the one before it', async () => {
   const { journal, deferred, sink, publishes, bind } = await rig()
   bind()
-  const first = identity('first')
+  const turn = identity('turn-lifecycle:turn-1')
+  const running = { kind: 'turn' as const, turnId: 'turn-1', state: 'running' as const }
+  const window = { tokens: 200_000, capturedAt: 2 }
   const transition: StructuredAgentSessionTransition = {
     lifecycle: false,
     publish: true,
     steps: [
-      itemStep(() => ({ identity: first, body: tool('read', 'running') })),
-      itemStep((view) => {
-        const before = view.itemBody(agentJournalItemKey(first))
-        return before?.kind === 'tool-call'
-          ? { identity: identity('second'), body: tool(`after-${before.name}`, 'running') }
-          : null
+      itemStep({ kind: 'turn-open', identity: turn, body: running }),
+      // A context revision writes only onto a row that exists when it resolves.
+      itemStep({
+        kind: 'turn-row',
+        target: { identity: turn },
+        write: { contextUsage: { window } }
       })
     ]
   }
@@ -35,13 +37,12 @@ it('lands its steps back to back, each resolved after the one before it', async 
   await deferred.drained()
 
   const items = journal.snapshot().items
-  const start = items[0]?.sequence ?? 0
-  expect(items.map((item) => [item.itemId, item.sequence - start])).toEqual([
-    [agentJournalItemKey(first), 0],
-    [agentJournalItemKey(identity('second')), 1],
-    [agentJournalItemKey(identity('later')), 2]
+  expect(items.map((item) => item.itemId)).toEqual([
+    agentJournalItemKey(turn),
+    agentJournalItemKey(identity('later'))
   ])
-  expect(items[1]?.body).toMatchObject({ name: 'after-read' })
+  expect(items[0]?.body).toEqual({ ...running, contextUsage: { window } })
+  expect(items[0]?.revision).toBe(2)
   expect(publishes).toHaveLength(1)
 })
 
@@ -53,7 +54,7 @@ it('writes nothing after a step whose row the database refused', async () => {
 BEFORE INSERT ON main.journal_rows WHEN instr(NEW.row_json, 'refused-step') > 0
 BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
   const step = (recordId: string) =>
-    itemStep(() => ({ identity: identity(recordId), body: tool(recordId, 'running') }))
+    itemStep({ kind: 'literal', identity: identity(recordId), body: tool(recordId, 'running') })
   sink.tryAppendTransition?.({
     lifecycle: false,
     publish: true,

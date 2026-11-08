@@ -1,15 +1,11 @@
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalStep } from '../../agent-session-journal/writing/journal-step-writer'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
-  JournalHistoryResolution,
-  JournalStepOutcome
+  JournalStepOutcome,
+  JournalWriterSettlementResolution
 } from '../../agent-session-journal/writing/journal-writer-step'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
-import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionSinkAdmission
@@ -17,7 +13,7 @@ import type {
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 // Admit each event’s writes whole so producer state cannot advance after partial admission.
-// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
+// The writer resolves every step in one command; failure retains the written prefix and skips later steps.
 
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
@@ -33,18 +29,9 @@ export type StructuredAgentSessionTransitionJournal = Pick<
 export type StructuredAgentSessionTransitionStep =
   | {
       kind: 'item'
-      reservedBytes: number
-      resolution: JournalTimelineItemResolution
-      options: StructuredAgentSessionItemAppendOptions
-    }
-  | {
-      kind: 'item'
       /** Exceeding the reservation fails the sink. */
       reservedBytes: number
-      resolve: (journal: StructuredAgentSessionTransitionJournal) => {
-        identity: AgentJournalItemIdentity
-        body: AgentJournalItemBody
-      } | null
+      resolution: JournalTimelineItemResolution
       options: StructuredAgentSessionItemAppendOptions
     }
   | {
@@ -52,19 +39,9 @@ export type StructuredAgentSessionTransitionStep =
       /** Journal deduplicates settlements by this ID. */
       settlementId: string
       recovered?: true
-      /** Queue pacing only; the journal chooses actual mutations. */
+      /** Queue pacing only; the writer chooses actual mutations. */
       reservedBytes: number
-      /** Resolve at execution; an empty result writes nothing. */
-      resolve: (
-        journal: StructuredAgentSessionTransitionJournal
-      ) => readonly JournalLifecycleMutationInput[]
-    }
-  | {
-      kind: 'settlement'
-      settlementId: string
-      recovered?: true
-      reservedBytes: number
-      resolution: JournalHistoryResolution
+      resolution: JournalWriterSettlementResolution
     }
 
 export type StructuredAgentSessionTransition = {
@@ -77,8 +54,6 @@ export type StructuredAgentSessionTransition = {
   /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
 }
-
-const STEP_OVERFLOW = 'structured agent-session transition step exceeded its reserved size'
 
 export type StructuredAgentSessionTransitionSink = {
   tryAppendTransition?(
@@ -105,57 +80,26 @@ function transitionAppend(
       run: async (bound) => {
         const { journal, fence } = bound
         const result = await journal.appendSteps(
-          transition.steps.map((step): JournalStep =>
-            step.kind === 'item'
-              ? 'resolution' in step
+          transition.steps.map((step): JournalStep => ({
+            kind: 'command',
+            step:
+              step.kind === 'item'
                 ? {
-                    kind: 'command',
-                    step: {
-                      kind: 'resolved-item',
-                      reservedBytes: step.reservedBytes,
-                      resolution: step.resolution,
-                      options: structuredAgentSessionJournalAppendOptions(fence, step.options)
-                    }
-                  }
-                : {
-                    kind: 'item',
-                    resolve: () => {
-                      const resolved = step.resolve(journal)
-                      if (
-                        resolved &&
-                        estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
-                          step.reservedBytes
-                      ) {
-                        throw new Error(STEP_OVERFLOW)
-                      }
-                      return resolved
-                    },
+                    kind: 'resolved-item',
+                    reservedBytes: step.reservedBytes,
+                    resolution: step.resolution,
                     options: structuredAgentSessionJournalAppendOptions(fence, step.options)
-                  }
-              : 'resolution' in step
-                ? {
-                    kind: 'command',
-                    step: {
-                      kind: 'settlement',
-                      settlementId: step.settlementId,
-                      reservedBytes: step.reservedBytes,
-                      fence,
-                      ownerFence: fence,
-                      recovered: step.recovered,
-                      resolution: step.resolution
-                    }
                   }
                 : {
                     kind: 'settlement',
-                    batch: {
-                      settlementId: step.settlementId,
-                      fence,
-                      ownerFence: fence,
-                      recovered: step.recovered,
-                      resolve: () => step.resolve(journal)
-                    }
+                    settlementId: step.settlementId,
+                    reservedBytes: step.reservedBytes,
+                    fence,
+                    ownerFence: fence,
+                    recovered: step.recovered,
+                    resolution: step.resolution
                   }
-          ),
+          })),
           transition.beforeRun
         )
         transition.onResolved?.(result.outcomes)

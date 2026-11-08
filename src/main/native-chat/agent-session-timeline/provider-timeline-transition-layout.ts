@@ -11,7 +11,7 @@ import { turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 import type { ProviderTimelineTextStreams } from './provider-timeline-text-streams'
 
-/** Pace admission; actual settlement mutations resolve from the journal. */
+/** Pace admission; the writer chooses actual settlement mutations. */
 const SETTLEMENT_RESERVED_BYTES = 64 * 1024
 
 /** Flush preceding text; separate anonymous messages by producer and release streams at their own boundaries. */
@@ -72,14 +72,14 @@ export function planProviderTimelineWrites(
       settlementId: providerTimelineSettlementId(context, serial(), settle.what),
       reservedBytes: SETTLEMENT_RESERVED_BYTES,
       recovered: settle.recovered,
-      resolve: settle.resolve
+      resolution: settle.resolution
     })
   }
   for (const write of decision.writes ?? []) {
     plan.item(
       {
         reservedBytes: write.reservedBytes,
-        ...('resolution' in write ? { resolution: write.resolution } : { resolve: write.resolve }),
+        resolution: write.resolution,
         options: write.options
       },
       write.lifecycle,

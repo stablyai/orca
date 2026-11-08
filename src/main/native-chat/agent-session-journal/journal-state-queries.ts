@@ -27,6 +27,13 @@ export type JournalStateQueries = {
   latestAcceptedUnopened: (state: JournalReducerState) => boolean
   newestTurnBySequence: (state: JournalReducerState) => AgentJournalTurnLifecycle | null
   latestItemForTurn: (state: JournalReducerState, turnId: string) => AgentJournalRenderItem | null
+  newestTurnItem: (state: JournalReducerState) => AgentJournalRenderItem | null
+  contextWindowHeld: (state: JournalReducerState) => boolean
+  /** Running turns and calls, pending prompts and live work; null spans every turn. */
+  unsettledItems: (
+    state: JournalReducerState,
+    turnItemId: string | null
+  ) => Iterable<AgentJournalRenderItem>
   oldestAppliedSettlementId: (state: JournalReducerState) => string | undefined
   nativeInputEntries: (state: JournalReducerState) => Iterable<[string, JournalInputEntry]>
   nativeInputCards: (state: JournalReducerState) => Iterable<[string, JournalInputCard]>

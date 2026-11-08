@@ -152,6 +152,52 @@ export function sqlJournalStateQueries(
       scope.examined(row)
       return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
     },
+    newestTurnItem() {
+      facts.flush()
+      const row = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND (turn_id IS NOT NULL OR context_clear=1) AND kind='turn' AND hidden=0
+        ORDER BY sequence DESC, ordinal DESC LIMIT 1`)
+        .get(...scope.prefix)
+      if (!row) {
+        return null
+      }
+      scope.examined(row)
+      return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
+    },
+    contextWindowHeld() {
+      facts.flush()
+      // Newest first: the latest turn normally holds the window, so decoding stops at once.
+      const rows = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND (turn_id IS NOT NULL OR context_clear=1) AND kind='turn' AND hidden=0
+        ORDER BY sequence DESC, ordinal DESC`)
+        .all(...scope.prefix)
+      for (const row of rows) {
+        scope.examined(row)
+        const item = context.read<AgentJournalRenderItem>('items', String(row.entry_key))
+        if (readAgentJournalTurn(item?.body)?.contextUsage?.window !== undefined) {
+          return true
+        }
+      }
+      return false
+    },
+    *unsettledItems(_state, turnItemId) {
+      facts.flush()
+      const rows = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND hidden=0
+        AND (lifecycle_state IN ('running','pending') OR live_work=1)
+        ${turnItemId === null ? '' : 'AND turn_item_id=?'} ORDER BY ordinal`)
+        .all(...scope.prefix, ...(turnItemId === null ? [] : [turnItemId]))
+      for (const row of rows) {
+        scope.examined(row)
+        const item = context.read<AgentJournalRenderItem>('items', String(row.entry_key))
+        if (item) {
+          yield item
+        }
+      }
+    },
     oldestAppliedSettlementId: () =>
       journalSqlOrderedValues<string>(context, 'appliedSettlementIds', 1).next().value,
     nativeInputEntries: (state) => memoryJournalMap(state.inputEntries).entries(),

@@ -76,6 +76,7 @@ describe('ACP recovered history boundaries', () => {
           (step) =>
             step.kind === 'command' &&
             step.step.kind === 'resolved-item' &&
+            'body' in step.step.resolution &&
             step.step.resolution.body.kind === 'message' &&
             step.step.resolution.body.role === 'assistant'
         )
@@ -372,7 +373,7 @@ describe('ACP recovered history boundaries', () => {
                 const outcome = outcomes[index]
                 if (
                   step.kind === 'settlement' &&
-                  'resolution' in step &&
+                  step.resolution.kind === 'history-catch-up' &&
                   outcome?.kind === 'committed' &&
                   outcome.wrote
                 ) {

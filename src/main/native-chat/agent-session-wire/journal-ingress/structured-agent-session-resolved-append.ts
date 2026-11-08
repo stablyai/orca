@@ -8,6 +8,8 @@ import type {
 import type { StructuredAgentSessionRevisionJournal } from './structured-agent-session-journal-views'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 
 type ResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
 
@@ -54,6 +56,35 @@ export function createStructuredAgentSessionResolvedAppend(
       }
     })
   const ITEM_OVERFLOW = 'structured agent-session resolved item exceeded its reserved size'
+  const revise = (
+    reservedBytes: number,
+    resolution: JournalTimelineItemResolution,
+    options: StructuredAgentSessionItemAppendOptions,
+    publish: boolean
+  ) =>
+    queue.submit({
+      bytes: reservedBytes + (publish ? 1 : 0),
+      run: async (bound) => {
+        const result = await bound.journal.appendSteps([
+          {
+            kind: 'command',
+            step: {
+              kind: 'resolved-item',
+              reservedBytes,
+              resolution,
+              options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
+            }
+          }
+        ])
+        if (result.failure) {
+          throw restoreJournalSqlFailure(result.failure)
+        }
+        const outcome = result.outcomes[0]
+        if (publish && outcome?.kind === 'committed' && outcome.wrote) {
+          bound.publish()
+        }
+      }
+    })
   const identityOnly = (publish: boolean) =>
     ((identitySizeBound, body, resolveIdentity, options) =>
       submit(
@@ -68,10 +99,10 @@ export function createStructuredAgentSessionResolvedAppend(
   return {
     tryAppendResolvedItem: identityOnly(false),
     tryAppendResolvedItemAndPublish: identityOnly(true),
-    tryReviseResolvedItem: (reservedBytes, resolve, options) =>
-      submit(reservedBytes, resolve, options, { publish: false, overflow: ITEM_OVERFLOW }),
-    tryReviseResolvedItemAndPublish: (reservedBytes, resolve, options) =>
-      submit(reservedBytes + 1, resolve, options, { publish: true, overflow: ITEM_OVERFLOW }),
+    tryReviseResolvedItem: (reservedBytes, resolution, options) =>
+      revise(reservedBytes, resolution, options, false),
+    tryReviseResolvedItemAndPublish: (reservedBytes, resolution, options) =>
+      revise(reservedBytes, resolution, options, true),
     tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) =>
       submit(
         estimateStructuredAgentSessionItemBytes(identitySizeBound, body),

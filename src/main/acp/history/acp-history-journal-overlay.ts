@@ -9,6 +9,8 @@ import {
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { resolveJournalTimelineItem } from '../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
+import { journalTimelineItemsView } from '../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveProviderTimelineSettlement } from '../../native-chat/agent-session-timeline/provider-timeline-writer-resolution'
 import type { JournalStepOutcome } from '../../native-chat/agent-session-journal/writing/journal-writer-step'
 
 /** Pure per-turn scratch: held durable rows never affect replay translation. */
@@ -39,34 +41,36 @@ export class AcpHistoryJournalOverlay {
       visitItems: visitItemsWithLinkage,
       visitItemsWithLinkage
     }
+    const view = journalTimelineItemsView(item, () =>
+      [...this.staged.values()].map((staged) => staged.item)
+    )
     this.sink = {
       journalItems: () => this.journal,
       tryAppendTransition: (transition) => {
         const outcomes: JournalStepOutcome[] = []
         for (const step of transition.steps) {
           if (step.kind === 'settlement') {
-            if ('resolution' in step) {
+            if (step.resolution.kind === 'history-catch-up') {
               throw new Error('history catch-up cannot settle a per-turn translation overlay')
             }
-            const mutations = step.resolve(this.journal)
+            const mutations = resolveProviderTimelineSettlement(view, step.resolution)
             mutations.forEach((mutation) => this.write(mutation))
             outcomes.push({ kind: 'committed', wrote: mutations.length > 0 })
           } else {
-            const result =
-              'resolution' in step
-                ? resolveJournalTimelineItem(item, step.resolution, step.options.turnScope)
-                : null
-            if (result?.kind === 'dropped') {
+            const result = resolveJournalTimelineItem(
+              view,
+              step.resolution,
+              step.options.turnScope,
+              step.reservedBytes
+            )
+            if (result.kind === 'dropped') {
               outcomes.push(result)
               continue
             }
-            const resolved = 'resolve' in step ? step.resolve(this.journal) : result?.item
-            if (resolved) {
-              this.write(
-                journalLifecycleItemMutation(step.options, resolved.identity, resolved.body)
-              )
-            }
-            outcomes.push(resolved ? { kind: 'committed', wrote: true } : { kind: 'dropped' })
+            this.write(
+              journalLifecycleItemMutation(step.options, result.item.identity, result.item.body)
+            )
+            outcomes.push({ kind: 'committed', wrote: true })
           }
         }
         transition.onResolved?.(outcomes)

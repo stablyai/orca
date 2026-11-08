@@ -8,6 +8,20 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import { readJournalUsageLimitContinueIdentity } from './journal-status-cuts'
+import {
+  journalTimelineContextWindowHeld,
+  newestJournalTimelineTurn,
+  unsettledJournalTimelineItems
+} from './writing/journal-timeline-view'
+import type { JournalReducerState } from './projection/journal-reducer'
+
+function* presentedItems(state: JournalReducerState) {
+  for (const item of memoryJournalMap(state.items).values()) {
+    if (journalInputPresentationMember(state, item.itemId)) {
+      yield item
+    }
+  }
+}
 
 export const memoryJournalStateQueries: JournalStateQueries = {
   usageLimitContinueIdentity: readJournalUsageLimitContinueIdentity,
@@ -64,6 +78,10 @@ export const memoryJournalStateQueries: JournalStateQueries = {
     }
     return latest
   },
+  newestTurnItem: (state) => newestJournalTimelineTurn(presentedItems(state)),
+  contextWindowHeld: (state) => journalTimelineContextWindowHeld(presentedItems(state)),
+  unsettledItems: (state, turnItemId) =>
+    unsettledJournalTimelineItems(presentedItems(state), turnItemId),
   oldestAppliedSettlementId(state) {
     return memoryJournalSet(state.appliedSettlementIds).values().next().value
   },

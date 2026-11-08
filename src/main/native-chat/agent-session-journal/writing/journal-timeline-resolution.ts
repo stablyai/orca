@@ -4,14 +4,30 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
-  type AgentJournalMessageItem,
-  type AgentJournalRenderItem
+  type AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalResolvedItem } from './journal-item-appender'
+import type { JournalTimelineView } from './journal-timeline-view'
 import { requiresTerminalSettlement } from '../item-lifecycle/journal-terminal-settlement'
 import { relightsProviderTimelineBackgroundTask } from '../../agent-session-timeline/provider-timeline-background-tasks'
+import {
+  resolveProviderTimelineRequestOpen,
+  resolveProviderTimelineTurnOpen,
+  resolveProviderTimelineTurnOpener,
+  type ProviderTimelineRequest
+} from '../../agent-session-timeline/provider-timeline-writer-resolution'
+import {
+  resolveAgentJournalTurnRowWrite,
+  type AgentJournalTurnRowTarget,
+  type AgentJournalTurnRowWrite
+} from '../../agent-session-timeline/agent-journal-turn-row-revision'
+import {
+  mergeAgentJournalTurnFailure,
+  refineAgentJournalQuotaTurnEnd,
+  type AgentJournalFailureVoice
+} from '../../agent-session-timeline/agent-journal-turn-failure-revision'
 
 export type JournalTimelineItemResolution =
   | { kind: 'text-snapshot'; identity: AgentJournalItemIdentity; body: AgentJournalMessageItem }
@@ -22,22 +38,104 @@ export type JournalTimelineItemResolution =
       change: 'open' | 'update' | 'close'
     }
   | { kind: 'literal'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | {
+      kind: 'request-open'
+      request: ProviderTimelineRequest
+      body: AgentJournalItemBody
+      turnItemId: string | null
+      outlivesTurn?: true
+    }
+  | { kind: 'turn-open'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | {
+      kind: 'turn-opener'
+      identity: AgentJournalItemIdentity
+      message: { userItemId: string; requestedAt: number }
+    }
+  | { kind: 'turn-row'; target: AgentJournalTurnRowTarget; write: AgentJournalTurnRowWrite }
+  /** Record the provider's turn on a still-running host command turn. */
+  | { kind: 'turn-claim'; identity: AgentJournalItemIdentity; providerTurnId: string }
+  | {
+      kind: 'turn-failure'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalItemBody
+      voice: AgentJournalFailureVoice
+    }
+  | {
+      kind: 'quota-turn-end'
+      identity: AgentJournalItemIdentity
+      failureItemId: string
+      write: AgentJournalTurnRowWrite
+    }
 
 export type JournalTimelineItemResult =
   | { kind: 'resolved'; item: JournalResolvedItem }
   | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
   | { kind: 'dropped'; reason: 'item-settled' }
+  | { kind: 'dropped' }
+
+const nothing = { kind: 'dropped' } as const
+
+function resolved(item: JournalResolvedItem | null): JournalTimelineItemResult {
+  return item ? { kind: 'resolved', item } : nothing
+}
 
 /** The persisted scope wins over the placement captured when the stream was admitted. */
 export function resolveJournalTimelineItem(
-  item: (itemId: string) => AgentJournalRenderItem | null,
+  view: JournalTimelineView,
   resolution: JournalTimelineItemResolution,
+  placement: AgentJournalTurnScope,
+  reservedBytes: number
+): JournalTimelineItemResult {
+  switch (resolution.kind) {
+    case 'literal':
+      return resolved({ identity: resolution.identity, body: resolution.body })
+    case 'request-open':
+      return resolveProviderTimelineRequestOpen(view, resolution)
+    case 'turn-open':
+      return resolveProviderTimelineTurnOpen(view, {
+        identity: resolution.identity,
+        body: resolution.body
+      })
+    case 'turn-opener':
+      return resolved(
+        resolveProviderTimelineTurnOpener(view, resolution.identity, resolution.message)
+      )
+    case 'turn-row':
+      return resolved(
+        resolveAgentJournalTurnRowWrite(view, resolution.target, resolution.write, reservedBytes)
+      )
+    case 'turn-claim': {
+      const body = view.itemBody(agentJournalItemKey(resolution.identity))
+      return body?.kind === 'turn' && body.state === 'running'
+        ? resolved({
+            identity: resolution.identity,
+            body: { ...body, providerTurnId: resolution.providerTurnId }
+          })
+        : nothing
+    }
+    case 'turn-failure':
+      return resolved(mergeAgentJournalTurnFailure(view, resolution, resolution.voice))
+    case 'quota-turn-end':
+      return resolved(
+        refineAgentJournalQuotaTurnEnd(
+          view,
+          resolution.identity,
+          resolution.failureItemId,
+          resolution.write
+        )
+      )
+    case 'text-snapshot':
+    case 'guarded-item':
+      return resolveGuardedItem(view, resolution, placement)
+  }
+}
+
+function resolveGuardedItem(
+  view: JournalTimelineView,
+  resolution: Extract<JournalTimelineItemResolution, { kind: 'text-snapshot' | 'guarded-item' }>,
   placement: AgentJournalTurnScope
 ): JournalTimelineItemResult {
-  if (resolution.kind === 'literal') {
-    return { kind: 'resolved', item: { identity: resolution.identity, body: resolution.body } }
-  }
-  const held = item(agentJournalItemKey(resolution.identity))
+  const held = view.item(agentJournalItemKey(resolution.identity))
   const scope = held ? (held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : placement
   if (resolution.kind === 'guarded-item') {
     if (
@@ -56,7 +154,7 @@ export function resolveJournalTimelineItem(
     }
   }
   if (scope.kind === 'turn') {
-    const turn = readAgentJournalTurn(item(scope.turnItemId)?.body)
+    const turn = readAgentJournalTurn(view.itemBody(scope.turnItemId) ?? undefined)
     if (turn && turn.state !== 'running') {
       return { kind: 'dropped', reason: 'turn-settled', turnItemId: scope.turnItemId }
     }

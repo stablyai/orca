@@ -66,6 +66,9 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_opener
   ON journal_proj_items(session_id, epoch, opener_item_id) WHERE opener_item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS journal_proj_items_kind
   ON journal_proj_items(session_id, epoch, kind, ordinal);
+CREATE INDEX IF NOT EXISTS journal_proj_items_unsettled
+  ON journal_proj_items(session_id, epoch, ordinal)
+  WHERE lifecycle_state IN ('running','pending') OR live_work=1;
 CREATE INDEX IF NOT EXISTS journal_proj_items_turn_scope
   ON journal_proj_items(session_id, epoch, turn_item_id, kind) WHERE turn_item_id IS NOT NULL;
 `
