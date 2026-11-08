@@ -5,6 +5,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
+import { recomputeOn } from '@/lib/recompute-on'
 import {
   resolveAiVaultHistorySessionResumeState,
   resolveAiVaultSessionResumeActions,
@@ -69,11 +70,13 @@ export function useAiVaultPanelSessionResume(args: {
   const chatProgramFactsVersion = useChatProgramFactsVersion()
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
-      resolveAiVaultHistoryRowResume({
-        ...getSessionRowResumeArgs(session),
-        settings: launchRoute.settings
-      }).resumeInChat,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- both track what eligibility reads outside its arguments
+      // Eligibility reads the store and host agent caches outside its arguments; these track them.
+      recomputeOn([launchRoute, chatProgramFactsVersion], () =>
+        resolveAiVaultHistoryRowResume({
+          ...getSessionRowResumeArgs(session),
+          settings: launchRoute.settings
+        })
+      ).resumeInChat,
     [getSessionRowResumeArgs, launchRoute, chatProgramFactsVersion]
   )
   return {
