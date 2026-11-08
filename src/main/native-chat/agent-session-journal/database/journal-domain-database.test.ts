@@ -16,6 +16,8 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
+import { createJournalReducerState } from '../projection/journal-reducer'
+import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -184,8 +186,13 @@ it('preserves early version-four queue rows without assuming later additive sour
     session_id TEXT NOT NULL, message_id TEXT NOT NULL, position INTEGER NOT NULL,
     body_json TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL,
     host_instance TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY(session_id,message_id));
-    INSERT INTO queued_messages VALUES('chat','original-message',1,'original body','original fingerprint',100,'host','waiting');
     PRAGMA user_version=4`)
+  const body = '{"kind":"message","role":"user","blocks":[{"type":"text","text":"waiting"}]}'
+  source
+    .prepare(
+      "INSERT INTO queued_messages VALUES('chat','original-message',1,?,'original fingerprint',100,'host','waiting')"
+    )
+    .run(body)
   source.close()
   const before = hash(journalDatabasePath(stateDirectory))
   const current = open(await initializeJournalDomainDatabase(stateDirectory))
@@ -194,13 +201,27 @@ it('preserves early version-four queue rows without assuming later additive sour
       session_id: 'chat',
       message_id: 'original-message',
       position: 1,
-      body_json: 'original body',
+      body_json: body,
       fingerprint: 'original fingerprint',
       created_at: 100,
       host_instance: 'host',
       state: 'waiting'
     }
   ])
+  expect(readJournalLegacyCards(current, createJournalReducerState('chat', 'epoch'))).toMatchObject(
+    [
+      {
+        messageId: 'original-message',
+        position: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'waiting' }] },
+        holdReason: null,
+        returnedReason: null,
+        returnedRejection: null,
+        consumedAs: null,
+        queuedAt: null
+      }
+    ]
+  )
   expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
 })
 

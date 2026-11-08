@@ -18,10 +18,7 @@ import {
   placeQueuedHandOffInDoubt
 } from '../submissions/journal-submission-fold'
 import type { QueuedMessageRow } from './queued-message-table'
-import {
-  LEGACY_QUEUED_MESSAGE_COLUMNS,
-  readStoredQueuedMessageRow
-} from './queued-message-stored-row'
+import { readStoredQueuedMessageRow } from './queued-message-stored-row'
 import type Database from '../../../sqlite/sync-database'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
@@ -156,9 +153,7 @@ export class LegacyQueuedCards {
     }
     const { db } = this.deps.database()
     const row = db
-      .prepare(
-        `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? AND message_id = ?`
-      )
+      .prepare('SELECT * FROM queued_messages WHERE session_id = ? AND message_id = ?')
       .get(this.deps.sessionId, messageId)
     const card = row === undefined ? null : readStoredQueuedMessageRow(row)
     return card && this.change(card)
@@ -293,9 +288,7 @@ export function readJournalLegacyCards(
 
 function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessageRow[] {
   return db
-    .prepare(
-      `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
-    )
+    .prepare('SELECT * FROM queued_messages WHERE session_id = ? ORDER BY position ASC')
     .all(sessionId)
     .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
 }
