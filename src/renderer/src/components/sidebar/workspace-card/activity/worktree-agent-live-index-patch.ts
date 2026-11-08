@@ -16,9 +16,6 @@ export type LiveEntriesByWorktreeCache = {
 
 // Count full rebuilds to verify same-key status pings take the incremental path.
 let liveEntriesFullRebuildCount = 0
-export function getLiveEntriesFullRebuildCountForTests(): number {
-  return liveEntriesFullRebuildCount
-}
 export function recordLiveEntriesFullRebuild(): void {
   liveEntriesFullRebuildCount += 1
 }
