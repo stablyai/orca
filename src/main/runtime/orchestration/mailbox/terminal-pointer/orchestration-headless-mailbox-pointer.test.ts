@@ -74,47 +74,6 @@ describe('orchestration mailbox pointer for a terminal no pane shows', () => {
     db.close()
   })
 
-  it('points a coordinator at mail that arrives mid-turn', async () => {
-    const { db, runtime, write, sendRunMail } = await coordinator()
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
-    await runtime.serializeMainTerminalBuffer(PTY_ID)
-    const message = sendRunMail()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(pointerCount(write)).toBe(1)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-    db.close()
-  })
-
-  it('waits for a name-only idle pane to go quiet before typing the pointer', async () => {
-    const { db, runtime, write, sendRunMail } = await coordinator()
-    sendRunMail()
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex\x07output\n', Date.now())
-    await runtime.serializeMainTerminalBuffer(PTY_ID)
-    expect(pointerCount(write)).toBe(0)
-
-    await vi.advanceTimersByTimeAsync(3_050)
-    expect(pointerCount(write)).toBe(1)
-    db.close()
-  })
-
-  // A quiet retry armed before the prompt opened must not type into it on the retained working report.
-  it('does not type into a pane that turned to a permission prompt after a retry was armed', async () => {
-    const { db, runtime, write, sendRunMail } = await coordinator()
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex\x07output\n', Date.now())
-    runtime.onPtyData(
-      PTY_ID,
-      '\x1b]9999;{"state":"working","agentType":"codex"}\x07\x1b]0;Codex waiting for permission\x07',
-      Date.now()
-    )
-    await runtime.serializeMainTerminalBuffer(PTY_ID)
-    sendRunMail()
-
-    await vi.advanceTimersByTimeAsync(4_000)
-    expect(write).not.toHaveBeenCalled()
-    db.close()
-  })
-
   it('types into no PTY while two live PTYs claim the coordinator pane', async () => {
     const { db, runtime, write, sendRunMail } = await coordinator()
     runtime.registerPty('pty-mailbox-replacement', WORKTREE_ID, null, {

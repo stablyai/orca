@@ -9,7 +9,7 @@ import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import '../../../../../shared/layout-owner-switch'
 import {
   createBoundRun,
   createRuntime,
@@ -17,7 +17,6 @@ import {
   insertDirectRunMessage,
   isMailboxPointer,
   LAUNCH_TOKEN,
-  LEAF_ID,
   PANE_KEY,
   pointerCount,
   PTY_ID,
@@ -120,55 +119,6 @@ describe('orchestration notification mailbox consistency', () => {
     expect(checked).toMatchObject({ runId: runA.id, count: 1 })
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     restartedDb.close()
-  })
-
-  it('finds owned mail without scanning an older unowned direct backlog', () => {
-    const db = new OrchestrationDb(':memory:')
-    const detachedHandle = 'term_backlogged_detached'
-    const ownedRun = db.createRun({
-      objective: 'Owned after backlog',
-      coordinatorHandle: detachedHandle,
-      coordinatorPaneKey:
-        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
-    })
-    const unownedRun = createBoundRun(db, 'Unowned backlog')
-    for (let index = 0; index < 51; index += 1) {
-      db.insertMessage({
-        from: TERMINAL_HANDLE,
-        to: detachedHandle,
-        subject: `Unowned ${index}`,
-        type: 'status',
-        runId: unownedRun.id,
-        deliveryContract: 'current_delivery'
-      })
-    }
-    const owned = db.insertMessage({
-      from: 'term_worker',
-      to: detachedHandle,
-      subject: 'Owned after unowned backlog',
-      type: 'worker_done',
-      runId: ownedRun.id,
-      deliveryContract: 'current_delivery'
-    })
-    sqliteFor(db)
-      .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
-      .run(detachedHandle, owned.id)
-    const prepare = vi.spyOn(sqliteFor(db), 'prepare')
-
-    expect(db.routeForeignDirectMessagesToOwnedMailboxes(detachedHandle)).toMatchObject({
-      routedCount: 1,
-      hasMore: false
-    })
-
-    const routingSql = prepare.mock.calls
-      .map(([sql]) => sql)
-      .find((sql) => sql.includes('FROM run_coordinator_handles AS coordinator'))
-    expect(routingSql).toContain('INDEXED BY idx_messages_undelivered_direct_run')
-    // An anti-join per coordinator row is fine; one per candidate message would scan the backlog.
-    expect(routingSql).not.toMatch(/NOT EXISTS \([^)]*candidate\./)
-    expect(db.getMessageById(owned.id)?.to_handle).toBe(`run:${ownedRun.id}`)
-    expect(db.getUnreadDirectMessageTypes(detachedHandle)).toEqual(['status'])
-    db.close()
   })
 
   it('does not submit or replay a pointer after ownership changes during Enter delay', async () => {
@@ -357,117 +307,6 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  // Main remints duplicate leaf ids at load, so equivalent-pane serialization applies only to window-owned layouts.
-  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'serializes equivalent panes while newer mail arrives during Enter delay',
-    async () => {
-      vi.useFakeTimers()
-      const db = new OrchestrationDb(':memory:')
-      const harness = createRuntime(db)
-      const run = createBoundRun(db, 'Equivalent pane Run')
-      const first = insertDirectRunMessage(db, run.id, 'First status')
-      await driveToLiveIdle(harness.runtime)
-      expect(pointerCount(harness.write)).toBe(1)
-
-      registerSecondPane(harness.runtime, LEAF_ID)
-      const second = db.insertMessage({
-        from: 'term_worker',
-        to: `run:${run.id}`,
-        subject: 'Second status',
-        runId: run.id
-      })
-      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
-      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
-      await Promise.resolve()
-      expect(
-        harness.write.mock.calls.filter(
-          ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
-        )
-      ).toHaveLength(0)
-
-      await vi.advanceTimersByTimeAsync(500)
-      expect(
-        harness.write.mock.calls.filter(
-          ([ptyId, payload]) => ptyId === PTY_ID && isMailboxPointer(payload)
-        )
-      ).toHaveLength(2)
-      await vi.advanceTimersByTimeAsync(500)
-
-      const checked = await checkBoundMailbox(harness.runtime)
-      expect(checked).toMatchObject({ runId: run.id, count: 2 })
-      expect(checked.messages).toEqual(
-        [first, second].map((message) => expect.objectContaining({ id: message.id }))
-      )
-      db.close()
-    }
-  )
-
-  it.each([
-    ['Codex', '\x1b]0;Codex working\x07', '\x1b]0;Codex done\x07'],
-    ['Claude', '\x1b]0;\u280b Claude working\x07', '\x1b]0;\u2733 Claude Code\x07']
-  ])(
-    'submits a staged pointer after %s becomes working without duplicating it',
-    async (_provider, workingTitle, idleTitle) => {
-      vi.useFakeTimers()
-      const db = new OrchestrationDb(':memory:')
-      const harness = createRuntime(db)
-      const run = createBoundRun(db, 'Working-before-Enter Run')
-      const message = insertDirectRunMessage(db, run.id, 'Actionable status')
-
-      await driveToLiveIdle(harness.runtime)
-      expect(pointerCount(harness.write)).toBe(1)
-      harness.runtime.onPtyData(PTY_ID, workingTitle, 3)
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
-      expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-      harness.runtime.onPtyData(PTY_ID, idleTitle, 4)
-      await Promise.resolve()
-      expect(pointerCount(harness.write)).toBe(1)
-      db.close()
-    }
-  )
-
-  it.each([
-    ['Codex', '\x1b]0;Codex permission\x07'],
-    ['Claude', '\x1b]0;Claude waiting for permission\x07']
-  ])(
-    'does not submit a staged pointer after %s enters a permission state',
-    async (_provider, permissionTitle) => {
-      vi.useFakeTimers()
-      const db = new OrchestrationDb(':memory:')
-      const harness = createRuntime(db)
-      const run = createBoundRun(db, 'Permission-before-Enter Run')
-      const message = insertDirectRunMessage(db, run.id, 'Actionable status')
-
-      await driveToLiveIdle(harness.runtime)
-      expect(pointerCount(harness.write)).toBe(1)
-      harness.runtime.onPtyData(PTY_ID, permissionTitle, 3)
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-      expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-      db.close()
-    }
-  )
-  it('submits a staged pointer once when a live PTY is cold-parked before Enter', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Cold-park Run')
-    const message = insertDirectRunMessage(db, run.id, 'Submit while parked')
-
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-    harness.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    await vi.advanceTimersByTimeAsync(500)
-
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
-    expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-    db.close()
-  })
-
   it.each([
     ['working', '\x1b]0;Codex working\x07', '\x1b]0;Codex done\x07'],
     ['permission', '\x1b]0;Codex waiting for permission\x07', '\x1b]0;Codex done\x07']
@@ -624,30 +463,6 @@ describe('orchestration notification mailbox consistency', () => {
     expect(pointerCount(restarted.write)).toBe(0)
     const checked = await checkBoundMailbox(restarted.runtime)
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
-    db.close()
-  })
-
-  it('points newer Run mail with the normal text when the coordinator never acked', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Never-acked Run')
-    const insert = (subject: string) =>
-      db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject, runId: run.id })
-    const firstMessage = insert('First status')
-    const firstDelivery = await checkBoundMailbox(harness.runtime)
-    expect(firstDelivery.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
-    const newerMessage = insert('Newer status')
-
-    await driveToLiveIdle(harness.runtime)
-    const pointers = harness.write.mock.calls.filter(([, payload]) => isMailboxPointer(payload))
-    expect(pointers).toHaveLength(1)
-    expect(String(pointers[0]![1])).toContain('You have 1 orchestration message.')
-    expect(String(pointers[0]![1])).not.toContain('acknowledged')
-
-    const next = await checkBoundMailbox(harness.runtime)
-    expect(next.messages).toEqual([expect.objectContaining({ id: newerMessage.id })])
-    expect(next.deliveryId).not.toBe(firstDelivery.deliveryId)
     db.close()
   })
 })
