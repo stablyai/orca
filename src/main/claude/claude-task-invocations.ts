@@ -8,7 +8,7 @@ export type ClaudeTaskInvocation = {
   reportedParentTaskId?: string
   excluded: boolean
   monitor: boolean
-  ended?: string
+  ended?: { status: string; toolUseId?: string }
   /** Only accepted current evidence proves an alias is historical after replacement. */
   observed: boolean
 }
@@ -58,7 +58,7 @@ export class ClaudeTaskInvocations {
         }
       }
       if (message.subtype === 'task_notification') {
-        invocation.ended = String(frame.status)
+        invocation.ended = { status: String(frame.status), toolUseId: invocation.toolUseId }
       }
       if (invocation.toolUseId) {
         this.tasks.get(id)!.aliases.set(invocation.toolUseId, invocation)
@@ -98,7 +98,7 @@ export class ClaudeTaskInvocations {
   settle(id: string, status: unknown, run?: string): void {
     const invocation = this.get(id, run)
     if (invocation) {
-      invocation.ended = String(status)
+      invocation.ended = { status: String(status), toolUseId: invocation.toolUseId }
     }
   }
 
@@ -145,7 +145,10 @@ export class ClaudeTaskInvocations {
       invocation,
       current,
       acceptsStart:
-        current && (invocation.ended === undefined || (start && invocation.ended === 'completed'))
+        current &&
+        (invocation.ended === undefined ||
+          (start &&
+            (invocation.ended.status === 'completed' || invocation.ended.toolUseId === undefined)))
     }
   }
 

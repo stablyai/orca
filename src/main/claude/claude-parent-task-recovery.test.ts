@@ -18,6 +18,12 @@ import {
   claudeBackgroundTaskIdentity
 } from './claude-background-task-row-journal'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  adapterAtPublishFor,
+  fakeClaude,
+  identityFor
+} from './structured/claude-structured-session-test-support'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { ClaudeSubagentIdentities } from './claude-subagent-identities'
 import { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
 
@@ -561,4 +567,179 @@ it('retains pending ownership and terminal evidence without granting a partial f
   expect(stoppedBody?.kind === 'message' ? stoppedBody.blocks : []).toContainEqual(
     expect.objectContaining({ parentToolUseId: 'tool-stopped-before-start', state: 'idle' })
   )
+})
+
+it.each(['alias', 'no-alias', 'partial-alias', 'known-terminal'])(
+  'admits a resumed agent only when the terminal did not identify that invocation: %s',
+  async (shape) => {
+    const run = await producer()
+    run.send(
+      system('task_notification', {
+        task_id: 'owner',
+        status: 'stopped',
+        ...(shape === 'known-terminal' ? { tool_use_id: 'spawn-owner' } : {})
+      })
+    )
+    if (shape === 'partial-alias') {
+      run.send(system('task_progress', { task_id: 'owner', tool_use_id: 'spawn-owner' }))
+    }
+    run.send(
+      system('task_started', {
+        task_id: 'owner',
+        task_type: 'local_agent',
+        is_backgrounded: true,
+        ...(shape === 'no-alias' ? {} : { tool_use_id: 'spawn-owner' })
+      })
+    )
+    run.send(
+      system('task_started', {
+        task_id: 'shell',
+        task_type: 'local_bash',
+        tool_use_id: 'shell-tool',
+        parent_task_id: 'owner',
+        is_backgrounded: true
+      })
+    )
+    const owner = run.records().find((row) => row.kind === 'agent')
+    const shell = run.records().find((row) => row.kind === 'command')
+    if (shape === 'known-terminal') {
+      expect(owner?.membership).not.toBe('live')
+    } else {
+      expect(owner).toMatchObject({ membership: 'live', stoppable: true })
+      expect(shell).toMatchObject({
+        membership: 'live',
+        stoppable: true,
+        parentChildWorkId: owner?.childWorkId
+      })
+    }
+  }
+)
+
+it('releases an alias-less roster against reopened ownership on binding without another provider frame', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-parent-binding-'))
+  cleanup.push(root)
+  const identity = identityFor()
+  const open = () => journals.open({ identity, now: () => 9000, stateDirectory: root })
+  let journal = await open()
+  for (const id of ['saved-shell', 'saved-only']) {
+    await journal.appendItem(
+      claudeBackgroundTaskIdentity(id, 1),
+      claudeBackgroundTaskBody({
+        type: 'background-task',
+        taskId: id,
+        kind: 'command',
+        label: 'sleep',
+        parentToolUseId: 'saved-tool',
+        state: 'unverifiable',
+        startedAt: 1
+      }),
+      {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+        agentId: id,
+        parentAgentId: 'saved-owner',
+        producerKind: 'background',
+        providerParentRef: 'saved-tool'
+      }
+    )
+  }
+  const originalId = journal.snapshot().items[0]!.itemId
+  await journals.closeAll()
+  journal = await open()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const claude = fakeClaude()
+  const evidence: AgentChildWorkEvidence[] = []
+  const adapter = adapterAtPublishFor(
+    claude,
+    {},
+    [],
+    [],
+    undefined,
+    undefined,
+    (_sessionId, batch) => evidence.push(...batch)
+  )
+  await adapter.acquire({ identity, fence: 1, spawnToken: 'binding-test', events: deferred.sink })
+  const roster = () =>
+    claude.connections[0]!.handlers.onMessage?.(
+      system('background_tasks_changed', {
+        tasks: [{ task_id: 'saved-shell', task_type: 'local_bash' }]
+      })
+    )
+  roster()
+  expect(evidence.filter((edge) => edge.type === 'live')).toEqual([])
+  deferred.bind({ journal, fence: 1, publish: () => {} })
+  expect(await deferred.drained()).toEqual({ ok: true })
+  expect(evidence).toContainEqual(
+    expect.objectContaining({
+      type: 'live',
+      child: expect.objectContaining({
+        ownerId: 'saved-owner',
+        stoppable: true
+      })
+    })
+  )
+  expect(journal.item(originalId)).toMatchObject({
+    agentId: 'saved-shell',
+    parentAgentId: 'saved-owner',
+    providerParentRef: 'saved-tool'
+  })
+  expect(journal.item(originalId)?.body).toMatchObject({
+    kind: 'message',
+    blocks: expect.arrayContaining([
+      expect.objectContaining({
+        taskId: 'saved-shell',
+        parentToolUseId: 'saved-tool',
+        state: 'working'
+      })
+    ])
+  })
+  roster()
+  expect(await deferred.drained()).toEqual({ ok: true })
+  expect(
+    journal
+      .snapshot()
+      .items.filter(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.blocks.some(
+            (block) => block.type === 'background-task' && block.taskId === 'saved-shell'
+          )
+      )
+  ).toHaveLength(1)
+  expect(journal.snapshot().items.find((row) => row.agentId === 'saved-only')?.body).toMatchObject({
+    kind: 'message',
+    blocks: expect.arrayContaining([expect.objectContaining({ state: 'unverifiable' })])
+  })
+  const retired = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const replacement = adapterAtPublishFor(claude)
+  await replacement.acquire({
+    identity,
+    fence: 1,
+    spawnToken: 'retired-test',
+    events: retired.sink
+  })
+  claude.connections[1]!.handlers.onMessage?.(
+    system('task_started', {
+      task_id: 'retired-shell',
+      task_type: 'local_bash',
+      is_backgrounded: true
+    })
+  )
+  await replacement.releaseAcquisition({ sessionId: identity.sessionId })
+  retired.bind({ journal, fence: 1, publish: () => {} })
+  expect(await retired.drained()).toEqual({ ok: true })
+  expect(
+    journal
+      .snapshot()
+      .items.some(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.blocks.some(
+            (block) => block.type === 'background-task' && block.taskId === 'retired-shell'
+          )
+      )
+  ).toBe(false)
+  retired.close()
+  await adapter.releaseAcquisition({ sessionId: identity.sessionId })
+  deferred.close()
 })

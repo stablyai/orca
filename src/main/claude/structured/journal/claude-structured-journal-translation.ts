@@ -1,8 +1,6 @@
 import { ClaudeTaskInvocations } from '../../claude-task-invocations'
-import type {
-  ClaudeJournalTranslator,
-  ClaudeJournalTranslatorDeps
-} from '../../claude-journal-translator-contract'
+import { ClaudeJournalBoundDelivery } from '../../claude-journal-bound-delivery'
+import type * as contract from '../../claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -47,10 +45,11 @@ import {
 } from '../../claude-plugin-input-failure-journal'
 
 export function createClaudeJournalTranslator(
-  deps: ClaudeJournalTranslatorDeps
-): ClaudeJournalTranslator {
+  deps: contract.ClaudeJournalTranslatorDeps
+): contract.ClaudeJournalTranslator {
   const coverage = createClaudeFinalOutputCoverage(deps.sink)
   deps = { ...deps, sink: coverage.sink }
+  const delivery = deps.delivery ?? new ClaudeJournalBoundDelivery(deps.sink)
   const tools = new Map<string, ClaudeToolUse>()
   const turnScope = () => turn.turnScope
   const prompts = new ClaudeJournalPrompts({
@@ -162,99 +161,100 @@ export function createClaudeJournalTranslator(
     backgroundTasks.settleSession()
     settleClaudeInterruptedTurn(turn, observedAt, failed)
   }
-  return {
-    handle: withClaudeConversationContent((event) => {
-      if (event.type === 'retiring') {
-        journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
-        return
-      }
-      if (event.type === 'ended') {
-        finish(event.observedAt ?? Date.now(), event.failure?.kind === 'pluginInputRequired')
-        return
-      }
-      turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
-      if (event.type === 'message') {
-        context.observe(event.message, event.observedAt ?? Date.now())
-        // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
-        if (isRootClaudeFrame(event.message)) {
-          if (event.message.type === 'system' && event.message.subtype === 'init') {
-            turn.observeProviderCycleStart()
-          } else if (
-            event.startsTurn === true ||
-            event.message.type === 'assistant' ||
-            event.message.type === 'stream_event'
-          ) {
-            turn.observeProviderCycleWork()
-            turn.inputChoiceWorkObserved ||=
-              event.message.type !== 'assistant' ||
-              event.message.is_api_error_message !== true ||
-              event.startedSend != null
-          }
-        }
-      }
-      if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
-        return
-      }
-      if (
-        event.type === 'message' &&
-        journalClaudeStream(messageContext, event.message, event.observedAt ?? Date.now())
-      ) {
-        return
-      }
-      // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
-      const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
-      // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
-      if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
-        flush()
-      }
-      if (announced) {
-        corrections.retry()
-        streamedText.reattribute()
-        streamedThinking.reattribute()
-      }
-      if (event.type === 'prompt') {
-        prompts.handle(event)
-      } else if (event.type === 'prompt-cancelled') {
-        prompts.retryPendingCancellations()
-        prompts.cancel(event.promptKey)
-      } else if (event.type === 'message' && event.message.type === 'result') {
-        journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
-      } else if (event.type === 'message') {
-        backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
-        messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-        const kind = claudeProviderFrameKind(event.message)
-        if (
-          !journalClaudeMessage(
-            messageContext,
-            event.message,
-            event.startsTurn === true,
-            event.observedAt ?? Date.now(),
-            event.requestedAt,
-            event.clientMessageId
-          )
+  const handle = withClaudeConversationContent((event) => {
+    if (event.type === 'retiring') {
+      journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
+      return
+    }
+    if (event.type === 'ended') {
+      finish(event.observedAt ?? Date.now(), event.failure?.kind === 'pluginInputRequired')
+      return
+    }
+    turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
+    if (event.type === 'message') {
+      context.observe(event.message, event.observedAt ?? Date.now())
+      // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
+      if (isRootClaudeFrame(event.message)) {
+        if (event.message.type === 'system' && event.message.subtype === 'init') {
+          turn.observeProviderCycleStart()
+        } else if (
+          event.startsTurn === true ||
+          event.message.type === 'assistant' ||
+          event.message.type === 'stream_event'
         ) {
-          providerFallback.append(
-            kind,
-            event.message,
-            undefined,
-            undefined,
-            undefined,
-            corrections.stampFor(claudeFrameParentRef(event.message))
-          )
+          turn.observeProviderCycleWork()
+          turn.inputChoiceWorkObserved ||=
+            event.message.type !== 'assistant' ||
+            event.message.is_api_error_message !== true ||
+            event.startedSend != null
         }
-        context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishClaudeTurnActivity(turn, deps.sink, event)
-        // Idle also closes faults without a result; the live cause decides failed reopening.
-        if (claudeSessionStateEndsTurn(event.message)) {
-          corrections.abandon()
-          // No verdict: the CLI said the turn is over, not how it ended.
-          turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
-        }
-      } else if (event.type === 'provider-frame') {
-        providerFallback.append(event.kind, event.payload)
-        publishClaudeTurnActivity(turn, deps.sink, event)
       }
-    }),
+    }
+    if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
+      return
+    }
+    if (
+      event.type === 'message' &&
+      journalClaudeStream(messageContext, event.message, event.observedAt ?? Date.now())
+    ) {
+      return
+    }
+    // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
+    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
+    if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
+      flush()
+    }
+    if (announced) {
+      corrections.retry()
+      streamedText.reattribute()
+      streamedThinking.reattribute()
+    }
+    if (event.type === 'prompt') {
+      prompts.handle(event)
+    } else if (event.type === 'prompt-cancelled') {
+      prompts.retryPendingCancellations()
+      prompts.cancel(event.promptKey)
+    } else if (event.type === 'message' && event.message.type === 'result') {
+      journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
+    } else if (event.type === 'message') {
+      backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
+      messageContext.usageLimits.observe(event.message, turn.command?.rejections)
+      const kind = claudeProviderFrameKind(event.message)
+      if (
+        !journalClaudeMessage(
+          messageContext,
+          event.message,
+          event.startsTurn === true,
+          event.observedAt ?? Date.now(),
+          event.requestedAt,
+          event.clientMessageId
+        )
+      ) {
+        providerFallback.append(
+          kind,
+          event.message,
+          undefined,
+          undefined,
+          undefined,
+          corrections.stampFor(claudeFrameParentRef(event.message))
+        )
+      }
+      context.observeResponse(event.message, event.observedAt ?? Date.now())
+      publishClaudeTurnActivity(turn, deps.sink, event)
+      // Idle also closes faults without a result; the live cause decides failed reopening.
+      if (claudeSessionStateEndsTurn(event.message)) {
+        corrections.abandon()
+        // No verdict: the CLI said the turn is over, not how it ended.
+        turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+      }
+    } else if (event.type === 'provider-frame') {
+      providerFallback.append(event.kind, event.payload)
+      publishClaudeTurnActivity(turn, deps.sink, event)
+    }
+  })
+  return {
+    handle: (event) => delivery.interpret(event, handle),
     journalPrompts: prompts,
     get currentTurnId() {
       return turn.id
@@ -294,6 +294,7 @@ export function createClaudeJournalTranslator(
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
+      delivery.dispose()
       flush()
       context.dispose()
       streamedText.dispose()

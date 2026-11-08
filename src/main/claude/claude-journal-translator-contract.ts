@@ -1,4 +1,5 @@
 import type { ClaudeTaskInvocations } from './claude-task-invocations'
+import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
@@ -17,6 +18,7 @@ import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-s
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
+  delivery?: ClaudeJournalBoundDelivery
   bindPromptItemId?: (journalItemId: string, promptKey: string) => void
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
