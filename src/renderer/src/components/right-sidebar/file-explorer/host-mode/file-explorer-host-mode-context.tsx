@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { FileExplorerHostBar } from './FileExplorerHostBar'
 import { FileExplorerHostList } from './FileExplorerHostList'
 import { FileExplorerToolbar } from '../panel/FileExplorerToolbar'
+import { FileExplorerQueryStrip } from '../panel/FileExplorerQueryStrip'
 import {
   HostModeContext,
   useFileExplorerHostModeContext
@@ -39,6 +40,25 @@ export function FileExplorerHostAwareToolbar(
         active: hostMode.active,
         available: hostMode.available,
         onToggle: hostMode.active ? hostMode.exit : hostMode.enter
+      }}
+    />
+  )
+}
+
+/** Contents search covers the workspace, so choosing it in Host mode returns to Project first. */
+export function FileExplorerHostAwareQueryStrip(
+  props: React.ComponentProps<typeof FileExplorerQueryStrip>
+): React.JSX.Element {
+  const { active, exit } = useFileExplorerHostModeContext()
+  const { onSelectView } = props
+  return (
+    <FileExplorerQueryStrip
+      {...props}
+      onSelectView={(view) => {
+        if (active && view === 'search') {
+          exit()
+        }
+        onSelectView(view)
       }}
     />
   )

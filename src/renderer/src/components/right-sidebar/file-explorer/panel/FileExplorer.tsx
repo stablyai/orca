@@ -21,7 +21,6 @@ import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerFilesTreePane } from '../tree/FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
-import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { SearchFilters } from '../content-search/SearchFilters'
 import { SearchQueryRow } from '../content-search/SearchQueryRow'
 import { FileExplorerSearchResultsLayer } from '../content-search/FileExplorerSearchResultsLayer'
@@ -39,6 +38,7 @@ import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-me
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
 import {
+  FileExplorerHostAwareQueryStrip,
   FileExplorerHostAwareToolbar,
   FileExplorerHostInertBoundary,
   FileExplorerHostModeProvider,
@@ -294,7 +294,10 @@ function FileExplorerFiles(): React.JSX.Element {
             />
           </FileExplorerProjectOnly>
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
+        <FileExplorerHostAwareQueryStrip
+          view={explorerView}
+          onSelectView={setRightSidebarExplorerView}
+        >
           {/* Keep query rows mounted to preserve input selection when switching modes. */}
           <div className="relative min-h-8">
             <FileExplorerHostQueryRow view={explorerView} />
@@ -318,7 +321,7 @@ function FileExplorerFiles(): React.JSX.Element {
               </FileExplorerProjectOnly>
             </FileExplorerHostInertBoundary>
           </div>
-        </FileExplorerQueryStrip>
+        </FileExplorerHostAwareQueryStrip>
         {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerHostOverlay showDotfiles={showDotfiles} />

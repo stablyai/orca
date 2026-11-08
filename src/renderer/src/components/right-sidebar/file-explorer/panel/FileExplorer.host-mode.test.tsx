@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
 
 const state = {
   rightSidebarExplorerView: 'files',
+  setRightSidebarExplorerView: vi.fn(),
   showRightSidebarFiles: () => {},
   showRightSidebarSearch: () => {},
   activeWorktreeId: 'wt-1',
@@ -244,5 +245,17 @@ describe('FileExplorer Host mode', () => {
     expect(projectFilter?.isConnected).toBe(true)
     expect(projectFilter?.closest('[inert]')).not.toBeNull()
     expect(contentsQuery?.closest('[inert]')).not.toBeNull()
+  })
+
+  it('returns to Project when the Contents tab is chosen in Host mode', async () => {
+    h.hostActive = true
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Search file contents"]')?.click()
+    )
+
+    expect(container.querySelector('[data-testid="host-list"]')).toBeNull()
+    expect(state.setRightSidebarExplorerView).toHaveBeenCalledWith('search')
   })
 })
