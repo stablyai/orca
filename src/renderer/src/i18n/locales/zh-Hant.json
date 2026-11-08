@@ -19964,7 +19964,10 @@
         "many_other": "已建立 {{count}} 個 PR"
       },
       "splitRight": "向右分割",
-      "splitDown": "向下分割"
+      "splitDown": "向下分割",
+      "fileLink": {
+        "workspaceResolution": "檔案名稱依此聊天的工作區解析。"
+      }
     },
     "tab": {
       "bar": {

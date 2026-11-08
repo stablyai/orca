@@ -19822,7 +19822,10 @@
       "splitRight": "向右拆分",
       "splitDown": "向下拆分",
       "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息"
+      "newRowsMarker": "新消息",
+      "fileLink": {
+        "workspaceResolution": "文件名按本聊天的工作区解析。"
+      }
     },
     "tab": {
       "bar": {
