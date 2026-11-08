@@ -24,15 +24,28 @@ import {
 import { syncFederatedDispatch } from './synchronization/federation-sync'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
+import {
+  FederationRelayScheduler,
+  type FederationRelayTickOutcome
+} from './relay/federation-relay-scheduler'
+import { FederationAcknowledgmentRecovery } from './relay/federation-acknowledgment-recovery'
 
 export class RuntimeOrchestrationFederation {
-  private readonly timers = new Map<string, ReturnType<typeof setInterval>>()
+  private readonly relays = new FederationRelayScheduler((dispatchId) => this.relayTick(dispatchId))
+  private readonly acknowledgmentRecovery = new FederationAcknowledgmentRecovery({
+    findNextAfter: (afterRowId) =>
+      this.runtime
+        .getOrchestrationDb()
+        .findNextTerminalFederatedDispatchPendingAcknowledgment(afterRowId),
+    sync: (dispatchId) => this.runtime.syncOrchestrationFederatedDispatch(dispatchId),
+    acknowledgedThrough: (dispatchId) =>
+      this.runtime.getOrchestrationDb().getFederatedDispatch(dispatchId)
+        ?.to_home_acknowledged_sequence ?? null
+  })
   private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
   private readonly warnings = new Set<string>()
-  private terminalRecoveryTimer: ReturnType<typeof setTimeout> | null = null
-  private terminalRecoveryInFlight: Promise<void> | null = null
-  private terminalRecoveryRowId = 0
   private relayGeneration = 0
+  private stopVerifiedWatch: (() => void) | null = null
   /** Worker server -> runtime incarnation that last proved the orchestration contract. */
   private readonly contractVerifiedRuntimeIds = new Map<string, string>()
 
@@ -43,16 +56,9 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
-    for (const timer of this.timers.values()) {
-      clearInterval(timer)
-    }
-    this.timers.clear()
-    if (this.terminalRecoveryTimer) {
-      clearTimeout(this.terminalRecoveryTimer)
-    }
-    this.terminalRecoveryTimer = null
-    this.terminalRecoveryInFlight = null
-    this.terminalRecoveryRowId = 0
+    this.unwatchVerifiedEnvironments()
+    this.relays.clear()
+    this.acknowledgmentRecovery.reset()
     clearFederationAckCheckpoints(this.runtime)
     this.syncs.clear()
     this.warnings.clear()
@@ -172,10 +178,14 @@ export class RuntimeOrchestrationFederation {
     if (current?.db === db) {
       return current.promise
     }
-    const sync = syncFederatedDispatch(this.runtime, dispatchId)
+    const generation = this.relayGeneration
+    const isCurrent = (): boolean =>
+      generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
+    const sync = syncFederatedDispatch(this.runtime, dispatchId, isCurrent)
       .then(() => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
+          this.relays.noteSynced(dispatchId)
         }
       })
       .catch((error: unknown) => {
@@ -200,9 +210,13 @@ export class RuntimeOrchestrationFederation {
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
+    const generation = this.relayGeneration
     const current = this.syncs.get(dispatchId)
     if (current?.db === db) {
       await current.promise.catch(() => undefined)
+    }
+    if (generation !== this.relayGeneration || this.runtime.getOrchestrationDb() !== db) {
+      return
     }
     await this.syncDispatch(dispatchId)
   }
@@ -211,87 +225,61 @@ export class RuntimeOrchestrationFederation {
     if (!this.transport) {
       return
     }
+    this.stopVerifiedWatch ??=
+      this.transport.onEnvironmentVerified?.((environmentId) =>
+        this.relays.resetEnvironment(environmentId)
+      ) ?? null
     for (const dispatch of this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
-      if (this.timers.has(dispatch.dispatch_id)) {
-        continue
-      }
-      const tick = () => {
-        const db = this.runtime.getOrchestrationDb()
-        if (!db.isFederatedDispatchRelayEligible(dispatch.dispatch_id)) {
-          const activeTimer = this.timers.get(dispatch.dispatch_id)
-          if (activeTimer) {
-            clearInterval(activeTimer)
-          }
-          this.timers.delete(dispatch.dispatch_id)
-          this.warnings.delete(dispatch.dispatch_id)
-          return
+      this.relays.arm(dispatch.dispatch_id, dispatch.environment_id)
+    }
+    this.acknowledgmentRecovery.ensure()
+  }
+
+  private async relayTick(dispatchId: string): Promise<FederationRelayTickOutcome> {
+    if (!this.runtime.getOrchestrationDb().isFederatedDispatchRelayEligible(dispatchId)) {
+      this.warnings.delete(dispatchId)
+      return 'ended'
+    }
+    return this.syncDispatch(dispatchId).then(
+      (): FederationRelayTickOutcome => 'synced',
+      (): FederationRelayTickOutcome => {
+        if (!this.isEnvironmentRemoved(dispatchId)) {
+          return 'failed'
         }
-        void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
+        this.warnings.delete(dispatchId)
+        return 'ended'
       }
-      const timer = setInterval(tick, 1_000)
-      timer.unref?.()
-      this.timers.set(dispatch.dispatch_id, timer)
-      tick()
-    }
-    this.ensureTerminalHistoryRecovery()
-  }
-
-  private ensureTerminalHistoryRecovery(): void {
-    if (this.terminalRecoveryTimer || this.terminalRecoveryInFlight) {
-      return
-    }
-    const generation = this.relayGeneration
-    const recovery = this.recoverNextTerminalHistoryAcknowledgment(generation).catch((error) => {
-      console.warn('[orchestration] terminal federation acknowledgment recovery failed', error)
-    })
-    this.terminalRecoveryInFlight = recovery
-    void recovery.finally(() => {
-      if (this.terminalRecoveryInFlight === recovery) {
-        this.terminalRecoveryInFlight = null
-      }
-    })
-  }
-
-  private async recoverNextTerminalHistoryAcknowledgment(generation: number): Promise<void> {
-    const db = this.runtime.getOrchestrationDb()
-    let historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(
-      this.terminalRecoveryRowId
     )
-    if (!historical && this.terminalRecoveryRowId > 0) {
-      this.terminalRecoveryRowId = 0
-      historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(0)
+  }
+
+  /** Checked only after a failed sync; a store read error keeps the relay retrying. */
+  private isEnvironmentRemoved(dispatchId: string): boolean {
+    const environmentId = this.runtime
+      .getOrchestrationDb()
+      .getFederatedDispatch(dispatchId)?.environment_id
+    if (environmentId === undefined) {
+      return false
     }
-    if (!historical) {
-      return
+    try {
+      // A removed server cannot answer; the next ensureRelay re-arms it if the server is added back.
+      return this.transport?.hasEnvironment?.(environmentId) === false
+    } catch {
+      return false
     }
-    this.terminalRecoveryRowId = historical.rowId
-    await this.runtime
-      .syncOrchestrationFederatedDispatch(historical.dispatchId)
-      .catch(() => undefined)
-    if (generation !== this.relayGeneration) {
-      return
-    }
-    this.terminalRecoveryTimer = setTimeout(() => {
-      this.terminalRecoveryTimer = null
-      this.ensureTerminalHistoryRecovery()
-    }, 1_000)
-    this.terminalRecoveryTimer.unref?.()
+  }
+
+  private unwatchVerifiedEnvironments(): void {
+    this.stopVerifiedWatch?.()
+    this.stopVerifiedWatch = null
   }
 
   stopRelay(): void {
     this.relayGeneration += 1
-    for (const timer of this.timers.values()) {
-      clearInterval(timer)
-    }
-    this.timers.clear()
+    this.unwatchVerifiedEnvironments()
+    this.relays.clear()
+    this.acknowledgmentRecovery.reset()
     this.warnings.clear()
     this.syncs.clear()
-    if (this.terminalRecoveryTimer) {
-      clearTimeout(this.terminalRecoveryTimer)
-    }
-    this.terminalRecoveryTimer = null
-    this.terminalRecoveryInFlight = null
-    this.terminalRecoveryRowId = 0
     clearFederationAckCheckpoints(this.runtime)
   }
 }

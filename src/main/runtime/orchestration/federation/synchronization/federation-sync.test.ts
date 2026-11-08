@@ -538,6 +538,29 @@ describe('federation relay acknowledgments', () => {
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
     ).toHaveLength(2)
   })
+
+  it.each(['stopRelay', 'database swap'] as const)(
+    'keeps a sync interrupted by %s from acknowledging into current state',
+    async (interruption) => {
+      const { runtime, blockAck, replaceDb } = createIdleSyncHarness()
+      const gate = blockAck()
+
+      const oldSync = runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+      await gate.reached
+      if (interruption === 'stopRelay') {
+        runtime.stopOrchestrationFederationRelay()
+      } else {
+        replaceDb()
+      }
+      gate.release()
+      await oldSync
+
+      expect(
+        runtime.getOrchestrationDb().getFederatedDispatch('dispatch_remote')
+          ?.to_home_acknowledged_sequence
+      ).toBe(0)
+    }
+  )
 })
 
 describe('bounded outgoing answer relay', () => {
