@@ -22,6 +22,7 @@ import type {
   MobileDisplayMode,
   MobileNewTabAgentLoadState,
   MobileSessionTab,
+  MobileSessionTabGroup,
   Terminal
 } from './mobile-session-route-types'
 import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
@@ -34,6 +35,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
+  const sessionTabGroupsRef = useRef<MobileSessionTabGroup[]>([])
+  const activeSessionGroupIdRef = useRef<string | null>(null)
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
@@ -119,6 +122,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     sessionTabs,
     setSessionTabs,
     sessionTabsRef,
+    sessionTabGroupsRef,
+    activeSessionGroupIdRef,
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
