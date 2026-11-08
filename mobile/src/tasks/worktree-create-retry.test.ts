@@ -7,9 +7,7 @@ import { createWorktreeWithNameRetry } from './worktree-create-retry'
 type Attempt = { method: string; params: unknown }
 
 function scriptedClient(
-  outcomes: Array<
-    { id: string; displayName?: string; warning?: string } | { errorMessage: string }
-  >,
+  outcomes: ({ id: string; displayName?: string; warning?: string } | { errorMessage: string })[],
   attempts: Attempt[]
 ): RpcClient {
   let call = 0
