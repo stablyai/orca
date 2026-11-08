@@ -1,9 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import {
   chatAssigneeSessionId,
-  observeChatAssignee,
-  type ChatAssigneeObservation
+  observeChatAssignee
 } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
@@ -69,14 +67,12 @@ export async function inspectSessionWorker(
   }
 }
 
-/** A fleet page's chat verdicts, read off the session records a restart leaves uninstalled. */
-export async function chatAssigneeObserver(
+/** Chat verdicts read session records that a restart leaves uninstalled until something asks. */
+export async function ensureChatAssigneeRecords(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
-  db: OrchestrationDb,
   rows: readonly { agentTerminalHandle: string | null }[]
-): Promise<(sessionId: OrcaSessionId) => ChatAssigneeObservation> {
+): Promise<void> {
   if (rows.some((row) => chatAssigneeSessionId(row.agentTerminalHandle))) {
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   }
-  return (sessionId) => observeChatAssignee(sessionId, db)
 }
