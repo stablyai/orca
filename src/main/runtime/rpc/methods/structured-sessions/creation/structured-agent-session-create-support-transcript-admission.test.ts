@@ -4,6 +4,7 @@ import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-age
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -31,6 +32,7 @@ async function createSupport(runtimeOverrides: Record<string, unknown>): Promise
   }
   const replies: RpcResponse[] = []
   await new RpcDispatcher({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial dispatcher double; the assertions below check the wire behavior it drives.
     runtime: runtime as unknown as OrcaRuntimeService,
     methods: STRUCTURED_AGENT_SESSION_METHODS
   }).dispatchStreaming(
@@ -47,7 +49,7 @@ async function createSupport(runtimeOverrides: Record<string, unknown>): Promise
         }
       }
     },
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    (raw) => replies.push(JSON.parse(raw)),
     STRUCTURED_CLIENT
   )
   const first = replies[0]
@@ -57,14 +59,18 @@ async function createSupport(runtimeOverrides: Record<string, unknown>): Promise
   return first
 }
 
-function errorRefusal(reply: RpcResponse): Record<string, unknown> | undefined {
+function errorRefusal(
+  reply: RpcResponse
+): Pick<AgentSessionWireRefusal, 'code' | 'details'> | undefined {
   if (reply.ok) {
     return undefined
   }
   const data = reply.error.data
-  return typeof data === 'object' && data !== null
-    ? (data as { refusal?: Record<string, unknown> }).refusal
-    : undefined
+  if (typeof data !== 'object' || data === null || !('refusal' in data)) {
+    return undefined
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply came off the wire as JSON; the assertions below check the shape.
+  return data.refusal as Pick<AgentSessionWireRefusal, 'code' | 'details'>
 }
 
 describe('createSupport admission for a resumed CLI conversation', () => {
@@ -85,7 +91,7 @@ describe('createSupport admission for a resumed CLI conversation', () => {
       details: { reason: 'transcriptNotFound' }
     })
     // The exact predicate that turns this reply into a refused admission on the client.
-    expect(isAgentSessionCreateAdmissionRefusal(refusal as never)).toBe(true)
+    expect(refusal && isAgentSessionCreateAdmissionRefusal(refusal)).toBe(true)
     expect(transcriptReadable).toHaveBeenCalledOnce()
   })
 
