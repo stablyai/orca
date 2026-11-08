@@ -372,8 +372,9 @@
 2 src/main/orcad/orcad-wsl-host-claude-profile-refresh.ts
 1 src/main/orcad/serve-profile-ssh-targets.ts
 6 src/main/persistence/atomic-snapshot-writer.ts
-6 src/main/persistence/loading-store/user-data-path.ts
-3 src/main/persistence/loading-store/write-flush-barriers.ts
+1 src/main/persistence/loading-store/github-cache-sidecar.ts
+1 src/main/persistence/loading-store/github-cache-startup-read.ts
+5 src/main/persistence/loading-store/user-data-path.ts
 9 src/main/persistence/migrating-orcad-catalog/migration-journal-directory.ts
 4 src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-installers.ts
 3 src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-staging.ts
@@ -501,7 +502,7 @@
 2 src/main/speech/stt-worker-paths.ts
 2 src/main/sqlite/harden-database-files.ts
 1 src/main/sqlite/sync-database.ts
-1 src/main/sqlite/versioned-cache-database.ts
+2 src/main/sqlite/versioned-cache-database.ts
 1 src/main/ssh/authentication/ssh-auth-resolution.ts
 2 src/main/ssh/config/ssh-config-alias-claim.ts
 5 src/main/ssh/config/ssh-config-include-expander.ts
