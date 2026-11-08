@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
+import { NativeChatSubagentEntries } from './subagents/NativeChatSubagentRun'
 import {
   NativeChatChildNavigationContext,
   useNativeChatChildNavigator

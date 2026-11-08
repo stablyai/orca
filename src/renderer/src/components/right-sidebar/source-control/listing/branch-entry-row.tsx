@@ -17,6 +17,7 @@ import {
 } from './row-layout'
 import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function BranchEntryRow({
   entry,
@@ -41,6 +42,7 @@ export function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -90,7 +92,7 @@ export function BranchEntryRow({
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={reviewNoteCountTitle(commentCount)}
+            title={reviewNoteCountTitle(commentCount, t)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

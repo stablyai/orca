@@ -6,7 +6,7 @@ import {
   structuredLaunchFailure
 } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
+import { agentSessionWriteFailureText } from '../native-chat/messages/notices/agent-session-write-notice-text'
 import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'

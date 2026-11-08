@@ -1,4 +1,4 @@
-import type { NativeChatSubagentChoices } from './native-chat-subagent-sections'
+import type { NativeChatSubagentChoices } from './subagents/native-chat-subagent-sections'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'

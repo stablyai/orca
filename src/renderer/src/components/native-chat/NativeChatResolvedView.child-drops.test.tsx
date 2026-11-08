@@ -9,11 +9,11 @@ import { NativeChatResolvedView } from './NativeChatResolvedView'
 import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
-} from './NativeChatPaneFileDropSurface'
+} from './attachments/intake/NativeChatPaneFileDropSurface'
 import { useNativeChatChildNavigation } from './native-chat-child-navigation'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
-vi.mock('./use-native-chat-retained-session', () => ({
+vi.mock('./session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => ({
     agent: 'codex',
     sessionId: 'terminal-parent',
@@ -34,7 +34,7 @@ vi.mock('./use-native-chat-retained-session', () => ({
     loadEarlier: async () => 'exhausted'
   })
 }))
-vi.mock('./NativeChatComposer', () => ({
+vi.mock('./composer/NativeChatComposer', () => ({
   NativeChatComposer: () => {
     const [draft, setDraft] = useState('Parent draft')
     useNativeChatPaneFileDropClaim({

@@ -8,7 +8,7 @@ import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../git/worktrees/movement/worktree-move'
 import { isWslMoveFolderWorkspaceBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import type { Store } from '../persistence/loading-store/store'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveWorktreeMetaOwner } from '../persistence/host-qualified-worktree-meta'
 

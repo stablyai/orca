@@ -10,7 +10,7 @@ import { FederationAttachStartParams } from '../../../shared/rpc-contract/orches
 import {
   readWorkerTerminalHostScope,
   type WorkerTerminalHostScopeRead
-} from '../../../shared/worker-terminal-host-scope'
+} from '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,

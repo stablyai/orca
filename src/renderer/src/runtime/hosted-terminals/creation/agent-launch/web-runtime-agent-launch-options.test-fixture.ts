@@ -1,7 +1,8 @@
+import type * as SessionTabsStateModule from '../../../web-session-tabs-sync/state'
 // @vitest-environment happy-dom
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import { resetWebSessionCloseIntentForTests } from '../../../web-session-close-intent'
+import { resetWebSessionCloseIntentForTests } from '../../../web-session-tabs-sync/closing/web-session-close-intent'
 import {
   WORKTREE_ID,
   FOCUS_LEAF_ID,
@@ -88,8 +89,12 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   }
 }))
 
+vi.mock('../../../web-session-tabs-sync/state', async (importOriginal) => ({
+  ...(await importOriginal<typeof SessionTabsStateModule>()),
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+}))
+
 vi.mock('../../../web-session-tabs-sync/tracking-lifecycle', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
 }))
 vi.mock('../../../web-session-tabs-sync/snapshot-api', () => ({
@@ -117,7 +122,7 @@ vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => 
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
-vi.mock('../../../web-runtime-browser-materialization', () => ({
+vi.mock('../../../browser/creation/web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 

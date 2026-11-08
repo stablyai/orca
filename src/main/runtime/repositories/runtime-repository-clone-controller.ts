@@ -22,7 +22,7 @@ import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-auto
 import { getRepoName } from '../../git/repo'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'
 import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'

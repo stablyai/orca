@@ -3,7 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 
 export function workerTerminalLeaseIsCurrent(
   runtime: WorkerTerminalReleaseRuntime,

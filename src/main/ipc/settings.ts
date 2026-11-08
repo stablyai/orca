@@ -25,6 +25,7 @@ import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
+import { registerCustomAppIconHandlers } from './custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
@@ -61,6 +62,7 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  registerCustomAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }

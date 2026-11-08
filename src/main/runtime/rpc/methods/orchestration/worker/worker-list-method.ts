@@ -1,4 +1,4 @@
-import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration-fleet-projection'
+import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { WorkerTerminalListState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'

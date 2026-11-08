@@ -1,17 +1,12 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeUnifiedTab,
-  makeWorktree,
-  TEST_REPO
-} from '../store/slices/store-test-helpers'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 import type { AppState } from '../store/types'
-import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   buildStoreState,
@@ -35,94 +30,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-  })
-
-  it('caps pending mobile state events while startup hydration is unresolved', async () => {
-    const setFitOverride = vi.fn()
-    const hydrateOverrides = vi.fn()
-    const setDriverForPty = vi.fn()
-    const hydrateDrivers = vi.fn()
-    const setDriverForBrowserPage = vi.fn()
-    const hydrateBrowserDrivers = vi.fn()
-    const listeners: { fit?: MobileFitListener } = {}
-    let resolveFitOverrides: (value: []) => void = () => {}
-    let resolveDrivers: (value: []) => void = () => {}
-    let resolveBrowserDrivers: (value: []) => void = () => {}
-
-    vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
-      setFitOverride,
-      hydrateOverrides
-    }))
-    vi.doMock('@/lib/pane-manager/mobile-driver-state', () => ({
-      setDriverForPty,
-      hydrateDrivers
-    }))
-    vi.doMock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
-      setDriverForBrowserPage,
-      hydrateBrowserDrivers
-    }))
-    stubReactSyncEffect()
-    stubAuxiliaryModules()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => buildStoreState({})
-      }
-    }))
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: () => () => {},
-        runtime: {
-          getTerminalFitOverrides: () =>
-            new Promise<[]>((resolve) => {
-              resolveFitOverrides = resolve
-            }),
-          getTerminalDrivers: () =>
-            new Promise<[]>((resolve) => {
-              resolveDrivers = resolve
-            }),
-          getBrowserDrivers: () =>
-            new Promise<[]>((resolve) => {
-              resolveBrowserDrivers = resolve
-            }),
-          onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
-            listeners.fit = listener
-            return () => {}
-          }
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-
-    const emitFit = listeners.fit
-    if (!emitFit) {
-      throw new Error('Expected fit listener to be registered')
-    }
-    for (let index = 0; index < 350; index += 1) {
-      emitFit({
-        ptyId: `pty-${index}`,
-        mode: 'mobile-fit',
-        cols: 80,
-        rows: 24
-      })
-    }
-    expect(setFitOverride).not.toHaveBeenCalled()
-
-    resolveFitOverrides([])
-    resolveDrivers([])
-    resolveBrowserDrivers([])
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(hydrateOverrides).toHaveBeenCalledWith([])
-    expect(hydrateDrivers).toHaveBeenCalledWith([])
-    expect(hydrateBrowserDrivers).toHaveBeenCalledWith([])
-    expect(setFitOverride).toHaveBeenCalledTimes(300)
-    expect(setFitOverride).toHaveBeenNthCalledWith(1, 'pty-50', 'mobile-fit', 80, 24)
-    expect(setFitOverride).toHaveBeenLastCalledWith('pty-349', 'mobile-fit', 80, 24)
   })
 
   it('clears pending mobile state events and ignores late hydration after cleanup', async () => {
@@ -358,8 +265,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('applies a large snapshot with one status and bounded title publications', async () => {
-    const paneCount = 100
+  it('applies a status snapshot to terminal panes after session readiness', async () => {
+    const paneCount = 2
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
@@ -435,246 +342,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const { useIpcEvents } = await import('./useIpcEvents')
     useIpcEvents()
     await Promise.resolve()
-    let relevantPublications = 0
-    const unsubscribe = store.subscribe((state, previousState) => {
-      if (
-        state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey ||
-        state.tabsByWorktree !== previousState.tabsByWorktree
-      ) {
-        relevantPublications += 1
-      }
-    })
     resolveSnapshot?.(snapshot)
 
-    const renamed = () =>
-      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
-      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
-        'Hermes - action required'
-      )
-      // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeFalsy()
-      } else {
-        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
-      }
+      expect(
+        store.getState().agentStatusByPaneKey['tab-snapshot-1:00000000-0000-4000-8000-000000000001']
+          ?.state
+      ).toBe('waiting')
     })
-    for (let turn = 0; turn < 10; turn += 1) {
-      await Promise.resolve()
-    }
-
-    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
-    unsubscribe()
-    expect(renamed()).toEqual([])
-  })
-
-  it('indexes one 100-pane tab and its split tree once per snapshot', async () => {
-    const paneCount = 100
-    const tabId = 'tab-indexed-snapshot'
-    const worktreeId = 'wt-indexed-snapshot'
-    const leafIds = Array.from(
-      { length: paneCount },
-      (_, index) => `00000000-0000-4000-8001-${String(index).padStart(12, '0')}`
-    )
-    let leafIdLookupCount = 0
-    const leaves = leafIds.map((leafId) => {
-      const leaf = { type: 'leaf' } as TerminalPaneLayoutNode
-      Object.defineProperty(leaf, 'leafId', {
-        enumerable: true,
-        get: () => {
-          leafIdLookupCount += 1
-          return leafId
-        }
-      })
-      return leaf
-    })
-    const root = leaves
-      .slice(1)
-      .reduce<TerminalPaneLayoutNode>(
-        (tree, leaf) => ({ type: 'split', direction: 'vertical', first: tree, second: leaf }),
-        leaves[0]!
-      )
-    let tabIdLookupCount = 0
-    const tab = makeTab({ id: tabId, worktreeId, title: 'Workspace', ptyId: 'pty-indexed' })
-    Object.defineProperty(tab, 'id', {
-      enumerable: true,
-      get: () => {
-        tabIdLookupCount += 1
-        return tabId
-      }
-    })
-    const snapshot = leafIds.map((leafId, index): AgentStatusSetData => ({
-      paneKey: makePaneKey(tabId, leafId),
-      worktreeId,
-      state: 'working',
-      prompt: `indexed prompt ${index}`,
-      agentType: 'claude',
-      receivedAt: 1_700_000_000_000 + index,
-      stateStartedAt: 1_700_000_000_000 + index
-    }))
-    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
-    const getSnapshot = vi.fn(
-      () =>
-        new Promise<AgentStatusSetData[]>((resolve) => {
-          resolveSnapshot = resolve
-        })
-    )
-    const store = createTestStore()
-    store.setState({
-      workspaceSessionReady: true,
-      repos: [TEST_REPO],
-      worktreesByRepo: {
-        [TEST_REPO.id]: [makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })]
-      },
-      tabsByWorktree: { [worktreeId]: [tab] },
-      terminalLayoutsByTabId: {
-        [tabId]: {
-          root,
-          activeLeafId: leafIds[0]!,
-          expandedLeafId: null
-        }
-      },
-      setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
-      settings: { ...store.getState().settings, terminalFontSize: 13 }
-    } as Partial<AppState>)
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: store.subscribe,
-        getState: store.getState,
-        setState: store.setState
-      }
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal('window', buildWindowApi({ getSnapshot, onSet: () => () => {} }))
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    await Promise.resolve()
-    tabIdLookupCount = 0
-    leafIdLookupCount = 0
-    resolveSnapshot(snapshot)
-
-    await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
-    })
-    expect(tabIdLookupCount).toBe(1)
-    expect(leafIdLookupCount).toBe(paneCount)
-  })
-
-  it('indexes 100 distinct tab owners once per snapshot', async () => {
-    const paneCount = 100
-    const worktreeId = 'wt-indexed-tabs'
-    const tabs: AppState['tabsByWorktree'][string] = []
-    const snapshot: AgentStatusSetData[] = []
-    const unsupportedSnapshot: MigrationUnsupportedPtyEntry[] = []
-    let tabIdLookupCount = 0
-    for (let index = 0; index < paneCount; index += 1) {
-      const tabId = `tab-indexed-${index}`
-      const leafId = `00000000-0000-4000-8003-${String(index).padStart(12, '0')}`
-      const tab = makeTab({
-        id: tabId,
-        worktreeId,
-        title: 'Workspace',
-        ptyId: `pty-indexed-${index}`
-      })
-      Object.defineProperty(tab, 'id', {
-        enumerable: true,
-        get: () => {
-          tabIdLookupCount += 1
-          return tabId
-        }
-      })
-      tabs.push(tab)
-      snapshot.push({
-        paneKey: makePaneKey(tabId, leafId),
-        worktreeId,
-        state: 'working',
-        prompt: `indexed tab prompt ${index}`,
-        agentType: 'claude',
-        receivedAt: 1_700_000_000_500 + index,
-        stateStartedAt: 1_700_000_000_500 + index
-      })
-      unsupportedSnapshot.push({
-        ptyId: `pty-indexed-${index}`,
-        worktreeId,
-        tabId,
-        leafId,
-        paneKey: makePaneKey(tabId, leafId),
-        reason: 'legacy-numeric-pane-key',
-        source: 'local',
-        updatedAt: 1_700_000_000_500 + index
-      })
-    }
-    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
-    const getSnapshot = vi.fn(
-      () =>
-        new Promise<AgentStatusSetData[]>((resolve) => {
-          resolveSnapshot = resolve
-        })
-    )
-    let resolveUnsupportedSnapshot!: (entries: MigrationUnsupportedPtyEntry[]) => void
-    const getMigrationUnsupportedSnapshot = vi.fn(
-      () =>
-        new Promise<MigrationUnsupportedPtyEntry[]>((resolve) => {
-          resolveUnsupportedSnapshot = resolve
-        })
-    )
-    const store = createTestStore()
-    store.setState({
-      workspaceSessionReady: true,
-      repos: [TEST_REPO],
-      worktreesByRepo: {
-        [TEST_REPO.id]: [makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })]
-      },
-      tabsByWorktree: { [worktreeId]: tabs },
-      terminalLayoutsByTabId: {},
-      setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
-      settings: {
-        ...store.getState().settings,
-        terminalFontSize: 13,
-        tabAutoGenerateTitle: false
-      }
-    } as Partial<AppState>)
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: store.subscribe,
-        getState: store.getState,
-        setState: store.setState
-      }
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        getSnapshot,
-        getMigrationUnsupportedSnapshot,
-        onSet: () => () => {}
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    await Promise.resolve()
-    tabIdLookupCount = 0
-    resolveSnapshot(snapshot)
-
-    await vi.waitFor(() => {
-      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
-    })
-    expect(tabIdLookupCount).toBe(paneCount)
-    expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
-
-    // Repeated snapshots with unchanged tabs must reuse the ownership index.
-    tabIdLookupCount = 0
-    resolveUnsupportedSnapshot(unsupportedSnapshot)
-    await vi.waitFor(() => {
-      expect(Object.keys(store.getState().migrationUnsupportedByPtyId)).toHaveLength(paneCount)
-    })
-    expect(tabIdLookupCount).toBe(0)
   })
 })

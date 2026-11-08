@@ -15,12 +15,13 @@ import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-vi
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 import { buildDefaultSettings } from './default-global-settings'
-import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
+import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './agent-launch/startup/setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import { getDefaultOnboardingState } from './onboarding-defaults'
 import {
   defaultTerminalFontFamily,
+  defaultTerminalFontWeight,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from './terminal/appearance/terminal-platform-defaults'
@@ -100,6 +101,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
+    terminalFontWeight: defaultTerminalFontWeight(),
+    // Fresh Windows profiles start on Regular, so a later 500 is a choice, not the old default.
+    terminalFontWeightWindowsRegular:
+      typeof process !== 'undefined' && process.platform === 'win32' ? 'done' : undefined,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),

@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatChildTranscriptFrame } from './NativeChatChildTranscriptFrame'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 const session: NativeChatLiveSession = {
   sessionId: 'fixture-child-history',

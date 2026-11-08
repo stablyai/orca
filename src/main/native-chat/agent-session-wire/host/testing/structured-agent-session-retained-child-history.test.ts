@@ -62,11 +62,15 @@ describe('the host retains child history while summaries report running work', (
     })
     expect(summaries.at(-1)).toEqual(['run', 'owner', 'shell'])
 
-    records = [finished('done', 5), finished('run', 7)]
+    records = [finished('done', 5), { ...finished('run', 7), outcome: 'cancelled' }]
     host.publishChildWorkEvidence(SESSION, [])
     await host.flushStreamedEvents(SESSION)
     const retained = await strip()
     expect(ids(retained?.children ?? [])).toEqual(['done', 'run'])
+    expect(retained?.children).toMatchObject([
+      { membership: 'settled', outcome: 'succeeded' },
+      { membership: 'settled', outcome: 'cancelled' }
+    ])
     expect(ids(host.readStatusSummary(SESSION)?.children ?? [])).toEqual([])
     expect(structuredSessionBackgroundTasksView(retained, null)).toMatchObject({
       show: true,

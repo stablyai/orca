@@ -14,10 +14,10 @@ import {
   type NativeChatChildLocation
 } from './native-chat-child-navigation'
 import { NativeChatWorkerScope, useNativeChatWorkerScope } from './native-chat-worker-scope'
-import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
-import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import { useStructuredAgentSessionRead } from './session/structured/read/use-structured-agent-session-read'
+import { useStructuredAgentSessionMessages } from './conversation/projection/use-structured-agent-session-messages'
+import { useStructuredAgentSessionTransportState } from './session/structured/use-structured-agent-session-transport-state'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { nativeChatChildTranscript } from './native-chat-child-transcript'
 

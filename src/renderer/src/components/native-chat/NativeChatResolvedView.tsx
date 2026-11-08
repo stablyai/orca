@@ -1,17 +1,18 @@
-import { NativeChatPaneFileDropScope } from './NativeChatPaneFileDropSurface'
+import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import { NativeChatPaneFileDropScope } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/utils'
-import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
+import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '../../store'
-import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
-import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { selectNativeChatViewState } from './native-chat-view-state'
+import { useAppStore } from '../../store/index'
+import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
+import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
+import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatChildTranscriptStack } from './NativeChatChildTranscript'
-import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import type { NativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 import {
   NativeChatChildNavigationContext,
   useNativeChatChildNavigator
@@ -19,47 +20,55 @@ import {
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
-} from './use-native-chat-reveal-latest'
-import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
-import { useNativeChatFontSize } from './use-native-chat-font-size'
-import { useNativeChatFind } from './use-native-chat-find'
-import { NativeChatFindBar } from './NativeChatFindBar'
-import { useNativeChatCanSend } from './use-native-chat-can-send'
-import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+} from './messages/actions/use-native-chat-reveal-latest'
+import { useNativeChatLaunchPromptDeliveryNotice } from './session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice'
+import { NativeChatComposer } from './composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
+import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
+import { useNativeChatFind } from './viewport/find/use-native-chat-find'
+import { NativeChatFindBar } from './viewport/find/NativeChatFindBar'
+import { useNativeChatCanSend } from './host-access/use-native-chat-can-send'
+import { NativeChatInteractiveCard } from './prompts/NativeChatInteractiveCard'
 import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/native-chat-agent-support'
-import { useNativeChatTerminalPromptCard } from './use-native-chat-interactive-prompt-card'
-import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
-import { NativeChatEmptyState } from './NativeChatEmptyState'
-import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import { useNativeChatTerminalPromptCard } from './prompts/use-native-chat-interactive-prompt-card'
+import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
+import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
+import { useNativeChatInteractiveSend } from './session/terminal/send/use-native-chat-interactive-send'
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
-import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
-import { shouldPruneLaunchPrompt } from './native-chat-pending'
+import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
+import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
-} from './use-native-chat-pending-delivery'
+} from './session/terminal/delivery/use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
+  commandMarkersAsMessages,
   readCommandMarkerCache,
   type NativeChatCommandMarker
-} from './native-chat-command-marker'
-import { useNativeChatTerminalTranscript } from './use-native-chat-terminal-transcript'
-import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
+} from './session/terminal/delivery/native-chat-command-marker'
+import {
+  deriveNativeChatStreamingText,
+  nativeChatStreamingMessage
+} from '../../../../shared/native-chat/native-chat-streaming'
+import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
-} from './use-native-chat-context-menu'
-import { createNativeChatRuntimeSelector } from './native-chat-runtime-owner'
-import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
+} from './pane/actions/use-native-chat-context-menu'
+import { createNativeChatRuntimeSelector } from './pane/ownership/native-chat-runtime-owner'
+import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { useNativeChatLinkActions } from './use-native-chat-link-actions'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
-import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
-import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
-import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
-import { handleNativeChatPaneShortcut } from './native-chat-pane-shortcut'
+import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-file-link-context'
+import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
+import { useNativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
+import { useNativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
+import { handleNativeChatPaneShortcut } from './pane/routing/native-chat-pane-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function NativeChatResolvedView({
@@ -172,18 +181,25 @@ export function NativeChatResolvedView({
     [commandMarkerScope]
   )
 
-  const { answerLocally, deliveryNotices, sessionAfterCommandBoundaries, sessionWithPending } =
-    useNativeChatTerminalTranscript({
-      session,
-      launchPrompt: paneLaunchPrompt,
-      agent,
-      commandMarkers,
-      delivery,
-      workingEpoch: sendWorkingEpoch,
-      previewText: hookPreview,
-      working: liveWorking,
-      previewIsToolOutput: hookPreviewIsToolOutput
-    })
+  const { launchPromptMessage, sessionAfterCommandBoundaries } = useNativeChatDeliveryProjection(
+    paneLaunchPrompt,
+    session,
+    commandMarkers
+  )
+  // Why: answer from the conversation the pane shows, so a `/clear` sent here reads as reset.
+  const answerLocally = useNativeChatLocalCommandAnswer(agent, sessionAfterCommandBoundaries)
+  const launchPromptDeliveryNotices = useNativeChatLaunchPromptDeliveryNotice(
+    paneLaunchPrompt?.failed ? launchPromptMessage?.id : null,
+    sessionAfterCommandBoundaries.messages
+  )
+  // Why memoized: a fresh map each render would re-render every memoized transcript row.
+  const deliveryNotices = useMemo(
+    () =>
+      delivery.notices.size === 0
+        ? launchPromptDeliveryNotices
+        : new Map([...(launchPromptDeliveryNotices ?? []), ...delivery.notices]),
+    [launchPromptDeliveryNotices, delivery.notices]
+  )
   const {
     promptCard,
     presentation: promptCardPresentation,

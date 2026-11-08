@@ -7,6 +7,7 @@ import {
   getWslHostsTurnOnLabel
 } from '../../../../sidebar/wsl-host-row-status'
 import type { WslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** In place of "Reconnecting…" for a WSL host that cannot run: nothing retries, so say why. */
 export function WslHostUnavailableBanner({
@@ -14,6 +15,7 @@ export function WslHostUnavailableBanner({
 }: {
   reason: WslHostUnavailableReason
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center"
@@ -28,12 +30,12 @@ export function WslHostUnavailableBanner({
         </div>
         <div className="min-w-0 flex-1 text-sm font-semibold">
           {reason === 'turned-off'
-            ? getWslHostsTurnedOffLabel()
-            : getWslHostServerFilesMissingLabel()}
+            ? getWslHostsTurnedOffLabel(t)
+            : getWslHostServerFilesMissingLabel(t)}
         </div>
         {reason === 'turned-off' ? (
           <Button size="sm" onClick={openWslHostsExperimentalSetting}>
-            {getWslHostsTurnOnLabel()}
+            {getWslHostsTurnOnLabel(t)}
           </Button>
         ) : null}
       </div>

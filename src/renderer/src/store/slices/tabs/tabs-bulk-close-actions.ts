@@ -2,11 +2,11 @@ import {
   afterPendingTabs,
   isPendingTab,
   isTabClosePending
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorTabsRetirement } from '../editor/tabs/editor-tab-retirement'
 import { editorTabWorkspace } from '../editor/tabs/workspace-editor-files'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findGroupForTab, findTabAndWorktree } from '../tab-group-state'
+import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
 
 export function createTabsBulkCloseActions(
   set: TabsSliceSet,

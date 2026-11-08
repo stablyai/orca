@@ -90,8 +90,6 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
   )
 }
 
-export type { RecipeVmOpening, RecipeVmState }
-
 export class WorkspaceSleepCoordinator {
   /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()

@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import { useAppStore } from '@/store/index'
-import { makeWorktree, TEST_REPO } from '../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import './sleeping-record-execution-host-scope'
 

@@ -1,8 +1,8 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { readNodeFileWithinLimit } from '../../../../shared/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../../../shared/node-bounded-json-stringify'
+import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
+import { stringifyJsonWithinByteLimit } from '../../../../shared/json-stream/node-bounded-json-stringify'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,

@@ -1,15 +1,15 @@
 import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { NativeChatSessionChildren } from './NativeChatSessionChildren'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
+import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimitActions'
 import type { ComponentProps, ReactNode, Ref } from 'react'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatRowActionsProvider } from './NativeChatRowActionsProvider'
-import { NativeChatSignInContext } from './native-chat-sign-in'
-import type { useNativeChatSignIn } from './native-chat-sign-in'
-import type { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
-import type { useStructuredAgentSession } from './use-structured-agent-session'
-import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import { NativeChatRowActionsProvider } from './messages/actions/NativeChatRowActionsProvider'
+import { NativeChatSignInContext } from './host-access/native-chat-sign-in'
+import type { useNativeChatSignIn } from './host-access/native-chat-sign-in'
+import type { useNativeChatInterruptedContinuation } from './usage/NativeChatInterruptedContinue'
+import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
+import type { NativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 
 export function NativeChatStructuredTranscript({
   pane,
@@ -17,6 +17,7 @@ export function NativeChatStructuredTranscript({
   controller,
   continuation,
   signIn,
+  forks,
   messageListRef,
   ...props
 }: Omit<
@@ -38,11 +39,12 @@ export function NativeChatStructuredTranscript({
   directory: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['directory']
   controller: ReturnType<typeof useStructuredAgentSession>
   continuation: ReturnType<typeof useNativeChatInterruptedContinuation>['view']
+  forks: ComponentProps<typeof NativeChatRowActionsProvider>['forks']
   signIn: ReturnType<typeof useNativeChatSignIn>
   messageListRef: Ref<NativeChatMessageListHandle>
 }): React.JSX.Element {
   return (
-    <NativeChatRowActionsProvider pane={pane} chat={controller}>
+    <NativeChatRowActionsProvider pane={pane} chat={controller} forks={forks}>
       <NativeChatUsageLimitActionsProvider
         recovery={controller}
         pane={pane}

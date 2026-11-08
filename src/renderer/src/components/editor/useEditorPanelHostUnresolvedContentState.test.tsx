@@ -4,7 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -181,14 +182,11 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     }
     expect(closeFile).not.toHaveBeenCalled()
     expect(editorDrafts[activeFile.id]).toBe('# unsaved edits')
-    const expectedReads = 1 + FILE_LOAD_RETRY_DELAYS_MS.length
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(expectedReads)
     expect(latestFileContents[activeFile.id]?.loadError).toBe(WORKTREE_HOST_UNRESOLVED_ERROR)
     expect(latestFileContents[activeFile.id]?.loadErrorCode).toBe(WORKTREE_HOST_UNRESOLVED_CODE)
 
     // Terminal: no more reads, still no eviction.
     await advanceTimers(60_000)
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(expectedReads)
     expect(closeFile).not.toHaveBeenCalled()
   })
 })

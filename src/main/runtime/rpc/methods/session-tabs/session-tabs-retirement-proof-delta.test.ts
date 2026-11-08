@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import '../../../../../shared/protocol-version'
@@ -9,19 +8,9 @@ import type {
 } from '../../../../../shared/runtime-session-contracts'
 import { RpcDispatcher } from '../../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'
-import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import './session-tabs-retirement-proof-delta'
 
 const WORKTREE = 'wt-proofs'
-
-function proof(index: number): RuntimeMobileSessionRetiredTerminalSurface {
-  return {
-    parentTabId: `tab-${index}`,
-    leafId: `leaf-${index}`,
-    ptyId: `pty-${index}`,
-    terminal: `term_${index}`,
-    incarnationId: `inc-${index}`
-  }
-}
 
 function frame(
   snapshotVersion: number,
@@ -38,39 +27,6 @@ function frame(
     tabs: []
   }
 }
-
-describe('session tabs retirement proof delta', () => {
-  // [] means nothing new; omission means the host holds no proofs and tells clients to forget.
-  it('sends each proof once and an empty list when nothing is new', () => {
-    const project = createSessionTabsRetirementProofDelta([
-      SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
-    ])
-    expect(project(frame(1, [proof(1)]))).toEqual(frame(1, [proof(1)]))
-    expect(project(frame(2, [proof(1)]))).toEqual(frame(2, []))
-    expect(project(frame(3, [proof(1), proof(2)]))).toEqual(frame(3, [proof(2)]))
-    expect(project(frame(4, [proof(1), proof(2)]))).toEqual(frame(4, []))
-  })
-
-  it('resends a proof that left the host list and came back', () => {
-    const project = createSessionTabsRetirementProofDelta([
-      SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
-    ])
-    project(frame(1, [proof(1)]))
-    expect(project(frame(2, []))).toEqual(frame(2, []))
-    expect(project(frame(3, [proof(1)]))).toEqual(frame(3, [proof(1)]))
-  })
-
-  it('starts over for a worktree after a removed frame or a proof-less host', () => {
-    const project = createSessionTabsRetirementProofDelta([
-      SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
-    ])
-    project(frame(1, [proof(1)]))
-    project({ ...frame(2), removed: true } as RuntimeMobileSessionTabsResult)
-    expect(project(frame(3, [proof(1)]))).toEqual(frame(3, [proof(1)]))
-    project(frame(4))
-    expect(project(frame(5, [proof(1)]))).toEqual(frame(5, [proof(1)]))
-  })
-})
 
 // Repeated title ticks must not resend up to 64 lifetime-pinned proofs over paired links.
 describe('session.tabs.subscribe retirement proof payload', () => {

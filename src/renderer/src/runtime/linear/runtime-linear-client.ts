@@ -14,13 +14,13 @@ import {
   rowLessSourceTarget,
   type RowLessSource as RuntimeLinearSettings
 } from '@/lib/default-creation-host'
-import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
+import { isRuntimeProviderSearchQueryWithinLimit } from '../issue-search/runtime-provider-search-bounds'
 import type { LinearIssueAttributeFilter } from '../../../../shared/linear/issue-attribute-filter'
 import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter
 } from '../../../../shared/linear/issue-attribute-filter'
-import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 
 // Stores swallow ordinary read failures; rethrow typed mixed-version refusal so UI offers upgrade instead of falsely empty filtered results.
 export class LinearIssueAttributeFilterUnsupportedError extends Error {

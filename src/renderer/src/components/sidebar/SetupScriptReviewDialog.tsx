@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type SetupScriptReviewDialogProps = {
   open: boolean
@@ -51,18 +52,16 @@ export function SetupScriptReviewDialog({
   isSaving,
   onSave
 }: SetupScriptReviewDialogProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle size="compact">
-            {translate(
-              'auto.components.sidebar.SetupScriptReviewDialog.title',
-              'Review setup script'
-            )}
+            {t('auto.components.sidebar.SetupScriptReviewDialog.title', 'Review setup script')}
           </DialogTitle>
           <DialogDescription size="compact">
-            {translate(
+            {t(
               'auto.components.sidebar.SetupScriptReviewDialog.description',
               'Saving runs this whenever Orca creates a worktree for {{repo}}.',
               { repo: repoDisplayName }
@@ -71,15 +70,12 @@ export function SetupScriptReviewDialog({
         </DialogHeader>
 
         <ScriptBlock
-          heading={translate(
-            'auto.components.sidebar.SetupScriptReviewDialog.setupScript',
-            'Setup script'
-          )}
+          heading={t('auto.components.sidebar.SetupScriptReviewDialog.setupScript', 'Setup script')}
           script={setup}
         />
         {archive ? (
           <ScriptBlock
-            heading={translate(
+            heading={t(
               'auto.components.sidebar.SetupScriptReviewDialog.archiveScript',
               'Archive script'
             )}
@@ -91,7 +87,7 @@ export function SetupScriptReviewDialog({
           <p className="text-xs text-muted-foreground">
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
                 'Detected from <source>{{source}}</source>'
               )}
@@ -103,7 +99,7 @@ export function SetupScriptReviewDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {translate('common.cancel', 'Cancel')}
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button onClick={onSave} disabled={isSaving}>
             {isSaving ? (
@@ -112,10 +108,7 @@ export function SetupScriptReviewDialog({
               <Download className="size-3.5" />
             )}
             <span className={cn(isSaving && 'text-muted-foreground')}>
-              {translate(
-                'auto.components.sidebar.SetupScriptReviewDialog.save',
-                'Save local setup'
-              )}
+              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
             </span>
           </Button>
         </DialogFooter>

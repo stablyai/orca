@@ -1,3 +1,5 @@
+import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
+import { terminalPendingLabel } from './new-tab-agent-menu-model'
 import React from 'react'
 import {
   FilePlus,
@@ -15,6 +17,7 @@ import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
 import { formatBrowserHistoryUrl } from '@/lib/browser/history/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
@@ -52,7 +55,8 @@ export function EntryActionRow({
   onClick,
   onUseAgent,
   option,
-  selected
+  selected,
+  terminalPending
 }: {
   disabled?: boolean
   id: string
@@ -62,8 +66,12 @@ export function EntryActionRow({
   onClick: () => void
   option: ActiveOption
   selected: boolean
+  terminalPending?: boolean
 }): React.JSX.Element {
-  const presentation = getActionPresentation(option, labelOverride)
+  const t = useTranslate()
+  const presentation = getActionPresentation(option, labelOverride, t)
+  const launchDisabled =
+    disabled || (option.kind === 'agent' && tabAgentLaunchOptionDisabled(option.option))
 
   const row = (
     <div className="flex items-center gap-1">
@@ -72,7 +80,7 @@ export function EntryActionRow({
         id={id}
         role="option"
         aria-selected={selected}
-        disabled={disabled}
+        disabled={launchDisabled}
         className={cn(
           // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
           'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
@@ -116,6 +124,7 @@ export function EntryActionRow({
               : undefined
           }
           disabled={disabled}
+          terminalBlocked={terminalPending}
           onUse={onUseAgent}
         />
       ) : null}
@@ -164,7 +173,8 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
 
 function getActionPresentation(
   option: ActiveOption,
-  labelOverride?: string
+  labelOverride?: string,
+  t: Translate = translate
 ): {
   detail: string
   icon: React.ReactNode
@@ -204,7 +214,7 @@ function getActionPresentation(
         ? option.option.matchedTexts.join(' · ')
         : (option.option.matchedText ?? option.option.title),
       icon: getOpenTabIcon(option.option),
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
+      label: t('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
       showDetail: true
     }
   }
@@ -215,17 +225,22 @@ function getActionPresentation(
       // Put variable titles in the truncating detail slot; labels with detail cannot shrink.
       detail: entry.title ? `${entry.title} · ${url}` : url,
       icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
+      label: t('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
       showDetail: true
     }
   }
   if (option.kind === 'agent') {
     return {
-      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
+      detail: [
+        option.option.label,
+        option.option.reason ??
+          (option.option.terminalWaiting ? terminalPendingLabel(t) : undefined)
+      ]
+        .filter(Boolean)
+        .join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
-        labelOverride ??
-        translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
+        labelOverride ?? t('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
       showDetail: true
     }
   }
@@ -234,11 +249,9 @@ function getActionPresentation(
     return {
       detail: classification.query,
       icon: <Search className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: translate(
-        'auto.components.tab.bar.TabBarCreateEntry.searchProvider',
-        'Search {{value0}}',
-        { value0: SEARCH_ENGINE_LABELS[classification.engine] }
-      ),
+      label: t('auto.components.tab.bar.TabBarCreateEntry.searchProvider', 'Search {{value0}}', {
+        value0: SEARCH_ENGINE_LABELS[classification.engine]
+      }),
       prioritizeFilename: false,
       showDetail: true
     }
@@ -247,7 +260,7 @@ function getActionPresentation(
     return {
       detail: classification.url,
       icon: <Globe className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL'),
+      label: t('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL'),
       showDetail: true
     }
   }
@@ -262,7 +275,7 @@ function getActionPresentation(
           ? classification.relativePath
           : classification.filePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
+      label: t('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       prioritizeFilename: true,
       showDetail: true
     }
@@ -270,7 +283,7 @@ function getActionPresentation(
   return {
     detail: classification.relativePath,
     icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,
-    label: translate('auto.components.tab.bar.TabBarCreateEntry.d62d63b807', 'Create file'),
+    label: t('auto.components.tab.bar.TabBarCreateEntry.d62d63b807', 'Create file'),
     showDetail: true
   }
 }

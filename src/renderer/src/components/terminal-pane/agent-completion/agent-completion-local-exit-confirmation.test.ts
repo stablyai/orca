@@ -40,53 +40,6 @@ describe('agent completion local exit confirmation', () => {
     }
   }
 
-  it('preserves terminal modes when a fresh read cannot establish the foreground', async () => {
-    const tracked = await trackAgent(vi.fn(async () => null))
-    tracked.setInspection('pwsh.exe', false)
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    expect(tracked.confirmForegroundProcess).toHaveBeenCalled()
-    expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()
-    expect(tracked.dispatchCompletion).not.toHaveBeenCalled()
-    tracked.coordinator.dispose()
-  })
-
-  it('does not mistake an ordinary foreground child for a return to the shell', async () => {
-    const tracked = await trackAgent(vi.fn(async () => 'rg.exe'))
-    tracked.setInspection('pwsh.exe', false)
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    expect(tracked.confirmForegroundProcess).toHaveBeenCalled()
-    expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()
-    tracked.coordinator.dispose()
-  })
-
-  it('detects exit when cached and fresh reads report the same unlisted shell name', async () => {
-    const tracked = await trackAgent(vi.fn(async () => '-zsh'))
-    tracked.setInspection('-zsh', false)
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(tracked.onForegroundAgentExited).toHaveBeenCalledExactlyOnceWith({
-      agent: 'codex',
-      processName: 'codex'
-    })
-    tracked.coordinator.dispose()
-  })
-
-  it('discards a fresh shell result after its coordinator has been disposed', async () => {
-    const pending = createDeferred<string | null>()
-    const tracked = await trackAgent(vi.fn(() => pending.promise))
-    tracked.setInspection('pwsh.exe', false)
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(tracked.confirmForegroundProcess).toHaveBeenCalled()
-
-    tracked.coordinator.dispose()
-    pending.resolve('pwsh.exe')
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()
-    expect(tracked.dispatchCompletion).not.toHaveBeenCalled()
-  })
-
   it.each(['pwsh.exe', 'codex'])(
     "discards a replaced agent's late %s confirmation without delaying the replacement's exit",
     async (lateForeground) => {

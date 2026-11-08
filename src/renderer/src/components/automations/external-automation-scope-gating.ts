@@ -4,7 +4,7 @@ import {
   EXTERNAL_AUTOMATION_SCOPE_CODES,
   type ExternalAutomationScopeCode
 } from '../../../../shared/external-automation-scope'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationHostFilterResolution } from './automation-host-filter-resolution'
 

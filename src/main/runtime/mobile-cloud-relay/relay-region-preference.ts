@@ -3,7 +3,10 @@ import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  writeSecureJsonFile
+} from '../../../shared/secure-storage/secure-file'
 import { fetchRelayRegionCatalog, relayDirectorHost } from './relay-region-catalog-fetch'
 import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
 import {

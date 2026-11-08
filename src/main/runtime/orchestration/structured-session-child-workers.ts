@@ -19,7 +19,7 @@ import {
   sessionIdFromStructuredWorkerIncarnation,
   structuredWorkerHostScope
 } from './terminal-authority/structured-sessions/structured-worker-identity'
-import { readWorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { structuredSessionChildMetadata } from './structured-session-child-metadata'
 
 const dispatchIds = z.array(

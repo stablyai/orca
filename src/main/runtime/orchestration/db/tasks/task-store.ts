@@ -1,6 +1,6 @@
 import type Database from '../../../../sqlite/sync-database'
 import type { TaskStatus, TaskRow } from '../orchestration-records'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration/orchestration-task-display'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'

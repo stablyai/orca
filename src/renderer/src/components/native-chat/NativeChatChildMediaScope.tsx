@@ -4,11 +4,11 @@ import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
+import { NativeChatMarkdownImageOwnerContext } from './media/images/native-chat-markdown-image-owner'
 import {
   NativeChatVisualOwnerContext,
   type NativeChatVisualOwner
-} from './native-chat-visual-owner'
+} from './media/visuals/native-chat-visual-owner'
 
 export function NativeChatChildMediaScope({
   target,

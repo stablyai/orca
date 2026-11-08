@@ -21,7 +21,7 @@ import {
   TINTED_HOST_PILL_OUTLINE_MIX_TOKEN,
   tintedSidebarHostPillOutlineMix
 } from '../lib/left-sidebar-appearance'
-import { useCodeEditorThemeStore } from '../store/code-editor-theme'
+import { useCodeEditorThemeStore } from '../store/appearance/code-editor-theme'
 import { synthesizeTerminalAppTheme, type TerminalAppTheme } from '../lib/terminal-app-theme'
 import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
 import {
@@ -29,10 +29,10 @@ import {
   usePluginTerminalPaletteRefresh,
   usePluginThemeStore,
   usePluginThemes
-} from '../store/plugin-themes'
-import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
-import { usePluginFontRegistration } from '../store/plugin-fonts'
-import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
+} from '../store/plugins/appearance/plugin-themes'
+import { usePluginIconThemeActivation } from '../store/plugins/appearance/plugin-icon-themes'
+import { usePluginFontRegistration } from '../store/plugins/appearance/plugin-fonts'
+import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'

@@ -1,4 +1,4 @@
-import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import { getAutomationRunRepoId } from '../../../shared/automations/history/automation-run-identity'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { createOrcadMigrationSourceScope, orcadMigrationOwnsRepoId } from './orcad-source-scope'

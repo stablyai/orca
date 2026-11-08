@@ -46,14 +46,15 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
   }
 }
 
-// Assets are only ever downloaded on this tap, so say the size first. The OS reports none up front; these are measured for en-US (iOS 456 MB, Android's system pack 63 MB).
-const PHONE_SPEECH_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
+// Assets are only ever downloaded on this tap, so say the size first when we know it. The OS reports none up front;
+// these were measured for en-US only (iOS 456 MB, Android's system pack 63 MB), so other languages show no size.
+const PHONE_SPEECH_EN_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
   ios: 450,
   android: 65
 }
 
-function downloadSizeText(t: Translate): string | undefined {
-  const size = PHONE_SPEECH_DOWNLOAD_MB[Platform.OS]
+function downloadSizeText(t: Translate, locale: string): string | undefined {
+  const size = /^en(-|$)/i.test(locale) ? PHONE_SPEECH_EN_DOWNLOAD_MB[Platform.OS] : undefined
   return size === undefined
     ? undefined
     : t('settings.voiceTranscribeOn.downloadSize', 'About {{size}} MB', {
@@ -124,7 +125,7 @@ export function VoiceTranscribeOnSection() {
   }
 
   const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
-  const downloadSize = downloadSizeText(t)
+  const downloadSize = downloadSizeText(t, onDeviceSpeechLocale())
 
   const download = () => {
     if (downloadingRef.current) {

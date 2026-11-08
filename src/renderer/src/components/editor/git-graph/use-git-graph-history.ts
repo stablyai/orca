@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import { useAppStore } from '@/store'
 import { useGitGraphScope } from '@/lib/git-graph-tab'
-import { gitGraphHistoryForTab } from './git-graph-history-controller'
+import { gitGraphHistoryForTab } from './git-graph-tab-controllers'
 import type {
   GitHistoryRefs,
   GitHistoryResult
@@ -18,19 +18,19 @@ export function useGitGraphHistory(worktreeId: string) {
   const scope = useGitGraphScope(worktreeId, controller.executionHostId)
   const view = useStore(controller.view)
   useEffect(() => controller.attach(), [controller])
-  const changeFilter = (refs: GitHistoryRefs) =>
-    useAppStore.setState((state) => ({
-      gitGraphFiltersByWorktree: {
-        ...state.gitGraphFiltersByWorktree,
-        [worktreeId]: Array.isArray(refs) ? [...new Set(refs)].sort() : refs
-      }
-    }))
+
   return {
     ...view,
     filter,
     scope,
     controller,
-    changeFilter,
+    changeFilter: (refs: GitHistoryRefs) =>
+      useAppStore.setState((state) => ({
+        gitGraphFiltersByWorktree: {
+          ...state.gitGraphFiltersByWorktree,
+          [worktreeId]: Array.isArray(refs) ? [...new Set(refs)].sort() : refs
+        }
+      })),
     refresh: controller.refresh,
     loadMore: controller.loadMore,
     reveal: controller.reveal

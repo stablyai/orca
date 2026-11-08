@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { readHostSshTargetLabels } from '../host-screen/host-ssh-target-labels-read'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 const NO_HOST_LABELS: ReadonlyMap<ExecutionHostId, string> = new Map()
 

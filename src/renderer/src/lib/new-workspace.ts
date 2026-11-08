@@ -17,8 +17,6 @@ export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
-export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
-
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
   : navigator.userAgent.includes('Mac')

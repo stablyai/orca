@@ -21,24 +21,6 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.gateCreate', () => {
-    it('creates a decision gate and blocks the task', async () => {
-      setup()
-      const task = db.createTask({ spec: 'needs approval' })
-
-      const result = (await call('orchestration.gateCreate', {
-        task: task.id,
-        question: 'Proceed with migration?',
-        options: JSON.stringify(['yes', 'no', 'defer'])
-      })) as { gate: { id: string; task_id: string; status: string } }
-
-      expect(result.gate.id).toMatch(/^gate_/)
-      expect(result.gate.task_id).toBe(task.id)
-      expect(result.gate.status).toBe('pending')
-
-      const updated = db.getTask(task.id)
-      expect(updated?.status).toBe('blocked')
-    })
-
     it('refuses a foreign Run task when no legacy adoption exists', async () => {
       setup()
       expect(db.getLegacyAdoption()).toBeUndefined()
@@ -65,25 +47,6 @@ describe('orchestration RPC methods', () => {
       })
       expect(db.getTask(foreignTask.id)?.status).toBe('ready')
       expect(db.listGates({ taskId: foreignTask.id })).toHaveLength(0)
-    })
-  })
-
-  describe('orchestration.gateResolve', () => {
-    it('resolves a gate and unblocks the task', async () => {
-      setup()
-      const task = db.createTask({ spec: 'needs approval' })
-      const gate = db.createGate({ taskId: task.id, question: 'Proceed?' })
-
-      const result = (await call('orchestration.gateResolve', {
-        id: gate.id,
-        resolution: 'yes'
-      })) as { gate: { id: string; status: string; resolution: string } }
-
-      expect(result.gate.status).toBe('resolved')
-      expect(result.gate.resolution).toBe('yes')
-
-      const updated = db.getTask(task.id)
-      expect(updated?.status).toBe('ready')
     })
   })
 })

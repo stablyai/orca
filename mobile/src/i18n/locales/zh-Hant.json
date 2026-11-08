@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "隨心輸入，@ 引用檔案，/ 使用命令",
-      "reconnecting": "正在重新連線…",
       "waitingForTerminal": "等待終端機…"
     },
     "diffCard": {
@@ -353,6 +352,13 @@
       "resume": "繼續",
       "resumeSending": "繼續傳送排隊的訊息",
       "title": "排隊的訊息"
+    },
+    "offlineQueue": {
+      "failed": "無法傳送 — 點按「傳送」重試",
+      "waitingFor": "{{host}} 恢復連線後傳送",
+      "waiting": "桌面端恢復連線後傳送",
+      "behind": "等待中 — 前面的訊息需要處理",
+      "closed": "Orca 關閉前未傳送"
     },
     "receipt": {
       "cancelled": "已取消",
@@ -1303,10 +1309,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 無法在行動版使用",
       "loadFolderFailed": "無法載入資料夾",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "載入中…",
       "openFolder": "開啟資料夾 {{name}}",
       "previewFile": "預覽檔案 {{name}}",
       "retryLoading": "重新嘗試載入 {{path}}",
+      "searchAll": "全部搜尋",
+      "searchAllIn": "搜尋整個 {{folder}}",
+      "searched": "已在 {{folder}} 中搜尋 {{total}} 項中的 {{loaded}} 項。",
+      "searching": "正在搜尋 {{folder}}… {{loaded}} / {{total}}",
+      "showMore": "再顯示 {{rows}} 項",
       "unavailable": "行動版無法使用"
     },
     "fileExplorerRowActions": {
@@ -1380,6 +1392,13 @@
       "openFailed": "無法開啟此 PDF",
       "opening": "正在開啟 PDF…",
       "updateRequired": "請更新 Orca Mobile 以開啟 PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "自你 {{time}} 的編輯後，已在電腦上變更",
+      "copyMyEdits": "複製我的編輯",
+      "discard": "放棄",
+      "restore": "還原",
+      "unsavedFrom": "{{time}} 的未儲存編輯"
     }
   },
   "home": {

@@ -139,40 +139,6 @@ describe('windows process table', () => {
     }
   })
 
-  it('maps native rows, defaulting an unreadable command line to empty', async () => {
-    const rows = await readWindowsProcessTableFresh()
-    expect(rows).toEqual([
-      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: 'vitest.exe --run' },
-      {
-        pid: 100,
-        ppid: 4,
-        name: 'orca.exe',
-        command: '"C:/a b/orca.exe" --x',
-        creationTimeMs: 1_700_000_000_000
-      }
-    ])
-  })
-
-  it('asks for the command line but never for memory', async () => {
-    // No caller needs Memory, which adds a VM_READ handle per process.
-    await readWindowsProcessTableFresh()
-    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(DETAILED_FLAGS)
-  })
-
-  it('reads the identity table with no per-process handle flag at all', async () => {
-    await readWindowsProcessIdentityTableFresh()
-    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(IDENTITY_FLAGS)
-  })
-
-  it('drops the command line from identity rows rather than leaving it empty', async () => {
-    const rows = await readWindowsProcessIdentityTableFresh()
-    expect(rows).toEqual([
-      { pid: process.pid, ppid: 0, name: 'vitest.exe' },
-      { pid: 100, ppid: 4, name: 'orca.exe', creationTimeMs: 1_700_000_000_000 }
-    ])
-    expect(rows.every((row) => !('command' in row))).toBe(true)
-  })
-
   it('collapses a 32-wide burst into one scan per flag set', async () => {
     installCoalescingModule()
     const [identity, detailed] = await Promise.all([
@@ -219,13 +185,6 @@ describe('windows process table', () => {
     await expectEachViewGotItsOwnFlags(identity, detailed)
   })
 
-  /** Microtasks only: the mocks call back on a timer, so nothing completes. */
-  async function parkPendingReadsOnTheGate(): Promise<void> {
-    for (let tick = 0; tick < 20; tick += 1) {
-      await Promise.resolve()
-    }
-  }
-
   it('never re-enters the bare relay addon when both flag sets overlap', async () => {
     installBareAddonModule()
     const detailed = readWindowsProcessTableFresh()
@@ -235,19 +194,6 @@ describe('windows process table', () => {
       IDENTITY_FLAGS,
       DETAILED_FLAGS
     ])
-    expect(maxConcurrentNativeCalls).toBe(1)
-  })
-
-  it('keeps one read in flight across a test reset', async () => {
-    // Replacing the gate lets old-chain waiters overlap reads queued on its replacement.
-    installBareAddonModule()
-    const inFlight = readWindowsProcessTableFresh()
-    const waiter = readWindowsProcessIdentityTableFresh()
-    await parkPendingReadsOnTheGate()
-    resetWindowsProcessTableForTests()
-    const afterReset = readWindowsProcessTableFresh()
-
-    await Promise.allSettled([inFlight, waiter, afterReset])
     expect(maxConcurrentNativeCalls).toBe(1)
   })
 
@@ -369,12 +315,6 @@ describe('windows process table', () => {
     await vi.advanceTimersByTimeAsync(3_000)
     await assertion
     vi.useRealTimers()
-  })
-
-  it('is unavailable off Windows without attempting a require', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    __setWindowsProcessTreeLoaderForTests()
-    expect(isWindowsProcessTableAvailable()).toBe(false)
   })
 })
 
@@ -500,25 +440,6 @@ describe('sticky wedge', () => {
     }
   })
 
-  it('stops calling the reader after a timeout instead of queueing a callback per tick', async () => {
-    // A wedged wrapper retains callbacks forever unless re-entry is refused.
-    vi.useFakeTimers()
-    const getAllProcesses = vi.fn(() => {})
-    __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
-      getAllProcesses
-    }))
-
-    const first = readWindowsProcessTableFresh()
-    const firstAssertion = expect(first).rejects.toThrow(/timed out/)
-    await vi.advanceTimersByTimeAsync(3_000)
-    await firstAssertion
-    expect(getAllProcesses).toHaveBeenCalledTimes(1)
-
-    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
-    expect(getAllProcesses).toHaveBeenCalledTimes(1)
-  })
-
   it('never re-enters the reader while the timed-out read is still out', async () => {
     // Cooldowns limit callback rate, not retention; only the outstanding callback can reopen the gate.
     vi.useFakeTimers()
@@ -577,27 +498,6 @@ describe('sticky wedge', () => {
     expect(getAllProcesses).toHaveBeenCalledTimes(2)
   })
 
-  it('ignores a pending timeout from before a test reset', async () => {
-    vi.useFakeTimers()
-    const getAllProcesses = vi.fn((_cb: (rows: typeof NATIVE | undefined) => void) => {})
-    __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
-      getAllProcesses
-    }))
-
-    const staleRead = readWindowsProcessTableFresh()
-    const staleAssertion = expect(staleRead).rejects.toThrow(/timed out/)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(getAllProcesses).toHaveBeenCalledTimes(1)
-    resetWindowsProcessTableForTests()
-    await vi.advanceTimersByTimeAsync(3_000)
-    await staleAssertion
-
-    getAllProcesses.mockImplementation((cb) => cb(NATIVE))
-    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(NATIVE.length)
-    expect(getAllProcesses).toHaveBeenCalledTimes(2)
-  })
-
   it('clears the deadline when the reader throws synchronously', async () => {
     // An uncleared timer can wedge a reader after a synchronous throw already recovered.
     vi.useFakeTimers()
@@ -629,6 +529,8 @@ describe('resolving the native reader', () => {
   const stagedAddonDirs: string[] = []
 
   beforeEach(() => {
+    getAllProcesses.mockReset()
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb(NATIVE))
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   })

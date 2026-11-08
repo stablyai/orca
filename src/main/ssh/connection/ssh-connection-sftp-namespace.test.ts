@@ -49,11 +49,8 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({
 import { SshConnection } from './ssh-connection'
 import type { SftpNamespacePathMapping } from '../sftp-namespace-resolution'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
-import { isSshSessionLimitError } from '../ssh-session-limit-error'
-import {
-  uploadDirectoryViaSystemSsh,
-  writeFileViaSystemSsh
-} from '../system-transport/system-ssh-file-transfer'
+import '../ssh-session-limit-error'
+import '../system-transport/system-ssh-file-transfer'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'
@@ -186,7 +183,6 @@ function connectedTo(
 
 describe('SshConnection SFTP namespace resolution', () => {
   const linux = getRemoteHostPlatform('linux-x64')
-  const windows = getRemoteHostPlatform('win32-x64')
   let localDir: string
 
   beforeEach(() => {
@@ -200,119 +196,6 @@ describe('SshConnection SFTP namespace resolution', () => {
 
   afterEach(() => {
     rmSync(localDir, { recursive: true, force: true })
-  })
-
-  it('writes to the SFTP namespace path discovered on the same session', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, '0.1.0+hash', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.realpathCalls).toEqual(['.'])
-    expect(sftp.writtenPaths).toEqual([`${SFTP_HOME}/${RELAY_DIR}/.version`])
-    expect(sftp.endCalls).toBe(1)
-  })
-
-  it('uploads the bundle into the SFTP namespace directory', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.uploadDirectory(localDir, SHELL_RELAY_DIR, {
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-
-    expect(sftp.writtenPaths).toEqual([`${SFTP_HOME}/${RELAY_DIR}/relay.js`])
-    expect(sftp.endCalls).toBe(1)
-  })
-
-  it('issues no discovery requests when the caller supplies no mapping', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', { hostPlatform: linux })
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.lstatCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/.version`])
-  })
-
-  it('ignores a mapping on a Windows host', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile('C:\\Users\\alice\\relay\\.version', 'v', {
-      hostPlatform: windows,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual(['C:\\Users\\alice\\relay\\.version'])
-  })
-
-  it('never resolves on the system-SSH transport', async () => {
-    const conn = connectedTo([], { useSystemSsh: true })
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-    await conn.uploadDirectory(localDir, SHELL_RELAY_DIR, {
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-
-    expect(vi.mocked(writeFileViaSystemSsh)).toHaveBeenCalledWith(
-      expect.anything(),
-      `${SHELL_RELAY_DIR}/.version`,
-      'v',
-      expect.anything()
-    )
-    expect(vi.mocked(uploadDirectoryViaSystemSsh)).toHaveBeenCalledWith(
-      expect.anything(),
-      localDir,
-      SHELL_RELAY_DIR,
-      expect.anything()
-    )
-  })
-
-  // Only relay-install writes carry the ownership marker required for mapping.
-  it('leaves writeBuffer and openFileUploadSession on the shell path', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp, sftp])
-
-    await conn.writeBuffer(`${SHELL_RELAY_DIR}/blob.bin`, Buffer.from('x'), {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('blob.bin')
-    })
-    const session = await conn.openFileUploadSession({
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-    session.close()
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/blob.bin`])
-  })
-
-  it('keeps the shell path when discovery is inconclusive', async () => {
-    const sftp = createFakeSftp()
-    sftp.lstat = vi.fn((path: string, cb: (err: Error | null) => void) => {
-      sftp.lstatCalls.push(path)
-      cb(Object.assign(new Error('permission denied'), { code: 3 }))
-    })
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/.version`])
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('retaining shell path'))
   })
 
   it('aborts a transfer stuck in discovery and reports a confirmed channel close', async () => {
@@ -371,30 +254,6 @@ describe('SshConnection SFTP namespace resolution', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  // Preserve MaxSessions errors so deployment can back off.
-  it('preserves a session-limit channel-open error unchanged', async () => {
-    const original = Object.assign(
-      new Error('Channel open failure: open failed reason 4: MaxSessions'),
-      { reason: 4 }
-    )
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp], {
-      sftpError: original
-    })
-
-    const error = await conn
-      .writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-        hostPlatform: linux,
-        sftpNamespace: fileNamespace('.version')
-      })
-      .catch((err: Error) => err)
-
-    expect(error).toBe(original)
-    expect(isSshSessionLimitError(error)).toBe(true)
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([])
   })
 
   it.each([

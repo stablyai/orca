@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { NativeChatSubagentRun } from './NativeChatSubagentRun'
+import { NativeChatSubagentRun } from './subagents/NativeChatSubagentRun'
 import { useNativeChatSessionChildren } from './use-native-chat-session-children'
 import {
   NativeChatChildNavigationContext,
@@ -11,7 +11,7 @@ import {
 } from './native-chat-child-navigation'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
 import { subagentStateLabel } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
-import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import { sayNativeChatSubagentGroupTranslated as say } from './subagents/native-chat-subagent-group-words-text'
 import { NativeChatChildMetadata } from './NativeChatChildMetadata'
 
 export function nativeChatWorkerStateLabel(worker: OrchestrationSessionChild): string {

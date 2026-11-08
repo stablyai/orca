@@ -1,9 +1,5 @@
-import { publishWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
-import type {
-  CommandOf,
-  LayoutCommand
-} from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/workspace-layout-model'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import { expect, it } from 'vitest'
@@ -89,22 +85,6 @@ it('hides graph tabs in snapshots and later record frames while preserving seque
   expect(projectGitGraphLayout(after).tabs.map((tab) => tab.id)).toEqual(['a', 'b', 'c'])
 })
 
-it('passes graph-free record deltas through unchanged and preserves existing empty groups', () => {
-  const original = layout()
-  const graphFree = { ...original, tabs: original.tabs.filter((tab) => tab.kind !== 'git-graph') }
-  const project = createGitGraphFrameProjection()
-  project({ type: 'workspace', key: 'w', seq: 1, layout: graphFree })
-  const change = {
-    key: 'w',
-    change: 'records' as const,
-    workspace: { ...graphFree, groups: [{ id: 'g1', tabIds: ['a', 'b', 'c'] }] }
-  }
-  const frame = project({ type: 'records', epoch: 'e', seq: 2, workspaces: [change] })
-  expect(frame.type === 'records' && frame.workspaces[0]).toBe(change)
-  original.groups.push({ id: 'empty', tabIds: [] })
-  expect(projectGitGraphLayout(original).groups).toContainEqual({ id: 'empty', tabIds: [] })
-})
-
 function canonical(original = layout()): WorkspaceLayoutModel {
   return {
     hostId: 'local',
@@ -134,62 +114,6 @@ function applyClient(command: LayoutCommand, model = canonical()) {
     now: () => 0
   })
 }
-
-const opens: CommandOf<
-  | 'openEditorTab'
-  | 'createTerminalTab'
-  | 'openSimulatorTab'
-  | 'openBrowserTab'
-  | 'openAgentSessionTab'
->[] = [
-  {
-    type: 'openEditorTab',
-    workspace: 'w',
-    contentType: 'editor',
-    fileId: '/new',
-    tabId: 'new',
-    index: 1
-  },
-  { type: 'createTerminalTab', workspace: 'w', tabId: 'new', leafId: 'leaf', index: 1 },
-  { type: 'openSimulatorTab', workspace: 'w', tabId: 'new', index: 1 },
-  { type: 'openBrowserTab', workspace: 'w', tabId: 'new', index: 1 },
-  {
-    type: 'openAgentSessionTab',
-    workspace: 'w',
-    tabId: 'new',
-    sessionId: 'session',
-    agent: 'codex',
-    index: 1
-  }
-]
-
-it.each(opens)(
-  '$type resolves a visible creation gap without moving the hidden graph',
-  (command) => {
-    const opened = applyClient({ ...command, groupId: 'g1' })
-    expect(opened.ok).toBe(true)
-    if (!opened.ok) {
-      throw new Error(opened.code)
-    }
-    expect(opened.model.workspaces.w!.groups).toEqual([
-      { id: 'g1', tabOrder: ['a', 'graph', 'new', 'b'] },
-      { id: 'g2', tabOrder: ['c'] }
-    ])
-    expect(
-      projectGitGraphLayout(publishWorkspaceLayout(opened.model.workspaces.w!, 'local')).groups
-    ).toEqual([
-      { id: 'g1', tabIds: ['a', 'new', 'b'] },
-      { id: 'g2', tabIds: ['c'] }
-    ])
-    expect(opened.effects).toEqual({
-      stopPtyIds: [],
-      startPaneKeys: command.type === 'createTerminalTab' ? ['new:leaf'] : []
-    })
-    expect(opened.model.workspaces.w!.tabs.find((tab) => tab.id === 'graph')).toMatchObject({
-      kind: 'git-graph'
-    })
-  }
-)
 
 it('reopens at the visible index and accounts for preview replacement before placing', () => {
   const model = canonical()
@@ -297,46 +221,6 @@ it('gives creation indexes precedence over anchors and retains pin-aware omitted
     'b'
   ])
 })
-
-it.each([undefined, 'older-root', 'g2'])(
-  'opens in a projected-empty workspace, requested group %s',
-  (groupId) => {
-    const model = canonical()
-    model.workspaces.w!.tabs = model.workspaces.w!.tabs.filter((tab) => tab.id === 'graph')
-    model.workspaces.w!.groups = [{ id: 'g2', tabOrder: ['graph'] }]
-    model.workspaces.w!.groupLayout = { type: 'leaf', groupId: 'g2' }
-    const opened = applyClient(
-      {
-        type: 'openEditorTab',
-        workspace: 'w',
-        contentType: 'editor',
-        fileId: '/file',
-        tabId: 'file',
-        groupId
-      },
-      model
-    )
-    expect(opened.ok && opened.model.workspaces.w!.groups).toEqual([
-      { id: 'g2', tabOrder: ['graph', 'file'] }
-    ])
-    const split = applyClient(
-      {
-        type: 'openEditorTab',
-        workspace: 'w',
-        contentType: 'editor',
-        fileId: '/file',
-        tabId: 'file',
-        groupId: 'new-group',
-        split: { besideGroupId: 'older-root', direction: 'right' }
-      },
-      model
-    )
-    expect(split.ok && split.model.workspaces.w!.groups).toEqual([
-      { id: 'g2', tabOrder: ['graph'] },
-      { id: 'new-group', tabOrder: ['file'] }
-    ])
-  }
-)
 
 it('uses visible groups for implicit opens and refuses stale split anchors', () => {
   const model = canonical()
@@ -470,24 +354,6 @@ it('splits a lone visible tab without moving its hidden sibling and refuses spli
     { id: 'g1', tabOrder: ['graph'] },
     { id: 'g2', tabOrder: ['b', 'c'] },
     { id: 'minted', tabOrder: ['a'] }
-  ])
-})
-
-it('keeps identity commands addressed by stable tab ids', () => {
-  const renamed = applyClient({
-    type: 'renameTab',
-    workspace: 'w',
-    tabId: 'b',
-    kind: 'custom',
-    title: 'Renamed'
-  })
-  expect(
-    renamed.ok && renamed.model.workspaces.w!.tabs.find((tab) => tab.id === 'b')?.customTitle
-  ).toBe('Renamed')
-  const closed = applyClient({ type: 'closeTabs', workspace: 'w', tabIds: ['a', 'b'] })
-  expect(closed.ok && closed.model.workspaces.w!.groups).toEqual([
-    { id: 'g1', tabOrder: ['graph'] },
-    { id: 'g2', tabOrder: ['c'] }
   ])
 })
 

@@ -141,7 +141,9 @@ export const WorkItemDetails = RepoSelector.extend({
   iid: z.number().int().positive(),
   type: z.enum(['issue', 'mr']),
   projectRef: GitLabProjectRef,
-  includeReviewDetails: z.boolean().optional()
+  includeReviewDetails: z.boolean().optional(),
+  // Omitted means true so older phones keep author marks; desktop sends false to skip the `glab api user` read.
+  markViewerComments: z.boolean().optional()
 })
 
 export const WorkItemByPath = RepoSelector.extend({

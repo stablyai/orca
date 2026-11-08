@@ -3,7 +3,7 @@ import type { AgentProviderSessionMetadata } from '../../../shared/agent-session
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
-import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
