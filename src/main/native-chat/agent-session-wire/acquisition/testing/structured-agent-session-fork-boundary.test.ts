@@ -743,7 +743,7 @@ it('refuses an imported ACP tip with assistant prose but no native terminal evid
         role,
         blocks: [{ type: 'text', text: role === 'user' ? 'Remember 57319' : 'Remembered' }]
       },
-      { fence: 1 }
+      { fence: 1, turnScope: { kind: 'thread' } }
     )
   }
   const record = agentSessionRecordFixture({
