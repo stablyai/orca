@@ -1,6 +1,6 @@
 import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
-import type { NativeSyntheticEvent, ViewProps } from 'react-native'
+import { Platform, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
 
 /** One raw JSON envelope, exactly as the page posted it. Parsing is the caller's. */
@@ -64,6 +64,13 @@ export function shareImage(uri: string, mime: string): Promise<void> {
 // iOS asks for add-only Photos access; Android writes to Pictures/Orca. Rejects with code native_image_permission_denied when refused.
 export function saveImageToPhotos(uri: string, mime: string): Promise<void> {
   return requireNativeModule<ImageModule>('OrcaMobileWebShell').saveImageToPhotos(uri, mime)
+}
+
+// iOS only: starts WebKit's helper processes ahead of the first page. Later calls are no-ops.
+export function warmUpWebShell(): void {
+  if (Platform.OS === 'ios') {
+    requireNativeModule<{ warmUp: () => void }>('OrcaMobileWebShell').warmUp()
+  }
 }
 
 export {
