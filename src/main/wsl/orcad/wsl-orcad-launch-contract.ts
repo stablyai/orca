@@ -7,9 +7,6 @@ import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import type { readWslOrcadIncumbent } from './wsl-orcad-incumbent'
 
-/** An update this app carries that the host may not take yet; the incumbent keeps serving. */
-export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
-
 export type WslOrcadLaunch =
   | {
       outcome: 'ready'
@@ -25,9 +22,9 @@ export type WslOrcadLaunch =
       /** An orcad the record did not name (e.g. left by a failed Remove), now recorded. */
       adoptedInstance?: { version: string; pid: number }
       /** Set when `fullVersion` is the incumbent because the update must wait. */
-      deferredUpdate?: WslOrcadDeferredUpdate
+      deferredUpdate?: WslHostDeferredUpdate
     }
-  | ({ outcome: 'deferred'; distro: string } & WslOrcadDeferredUpdate)
+  | ({ outcome: 'deferred'; distro: string } & WslHostDeferredUpdate)
 
 export type WslOrcadDeployOptions = {
   /** The WSL environment's id; keys host-scoped state (wake dedupe). Defaults per distro. */

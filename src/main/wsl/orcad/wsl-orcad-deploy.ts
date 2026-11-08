@@ -1,8 +1,5 @@
-import type {
-  WslOrcadDeferredUpdate,
-  WslOrcadLaunch,
-  WslOrcadDeployOptions
-} from './wsl-orcad-launch-contract'
+import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslOrcadLaunch, WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
 import { getAppEnvironment } from '../../../shared/app-environment'
 
@@ -208,7 +205,7 @@ async function launchOverTransport(
         return retried
       }
     }
-    const deferredUpdate: WslOrcadDeferredUpdate = {
+    const deferredUpdate: WslHostDeferredUpdate = {
       candidateVersion: deployed.fullVersion,
       code: await wslOrcadDeferralCode(slot, deployed, appVersion),
       reason: deployed.reason,
