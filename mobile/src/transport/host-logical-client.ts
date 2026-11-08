@@ -1,9 +1,11 @@
 import { AppState, Platform } from 'react-native'
+import { wipeHostCacheStore } from '../device-store/device-store'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
+import { wipeCacheOnRevocation } from './host-revocation-cache-wipe'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
@@ -20,8 +22,12 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   const appStateSubscription = AppState.addEventListener('change', (state) => {
     endpointLifecycle.setForeground(state === 'active')
   })
+  const stopRevocationWipe = wipeCacheOnRevocation(logical, () => {
+    void wipeHostCacheStore(host.id).catch(() => undefined)
+  })
   const closeLogical = logical.close
   logical.close = () => {
+    stopRevocationWipe()
     appStateSubscription.remove()
     endpointLifecycle.stop()
     closeLogical()

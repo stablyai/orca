@@ -1431,6 +1431,9 @@
       "offline": "{{host}} is offline",
       "reconnecting": "Reconnecting to {{host}}…",
       "asOf": "Showing what was here as of {{time}}"
+    },
+    "offlineAsOfTime": {
+      "yesterday": "yesterday, {{time}}"
     }
   },
   "pullRequest": {
@@ -2803,7 +2806,8 @@
     "contentState": {
       "connectingTo": "Connecting to {{host}}…",
       "connecting": "Connecting…",
-      "tabsStalled": "Tabs are taking longer than expected"
+      "tabsStalled": "Tabs are taking longer than expected",
+      "tabsAsOf": "Tabs as of {{time}}"
     },
     "presentation": {
       "loadingTabs": "Loading tabs",

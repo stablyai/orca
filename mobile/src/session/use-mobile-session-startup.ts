@@ -75,8 +75,9 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    // Paint the last strip until the host's snapshot replaces it (which treats it as the previous strip); offline keeps the empty-state body.
-    const lastTabs = connState === 'connected' ? readLastSessionTabs() : undefined
+    // Paint the last strip, from memory or the phone's store, until the host's snapshot replaces it (which treats
+    // it as the previous strip). Nothing is active yet, so the body still says connecting or offline.
+    const lastTabs = readLastSessionTabs()
     setSessionTabs(lastTabs ? withoutSessionTabHostOwnership(lastTabs) : [])
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()

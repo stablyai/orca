@@ -60,7 +60,8 @@ export type DeviceStore = {
     table: DeviceStoreTable,
     ops: readonly DeviceStoreWriteOp[]
   ): Promise<DeviceStoreWriteResult>
-  wipeHost(hostId: string): Promise<void>
+  // Every table by default; a revoked host loses only its cached screens and keeps drafts until removal.
+  wipeHost(hostId: string, tables?: readonly DeviceStoreTable[]): Promise<void>
   // Loads the key unless it is already loaded; an unavailable store retries here.
   open(): Promise<'ready' | 'unavailable'>
   // The launch pass over both roots. Later runs redo only a pass that missed files.
@@ -260,9 +261,9 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
       }
       return result
     },
-    wipeHost(hostId) {
+    wipeHost(hostId, tables = DEVICE_STORE_TABLES) {
       return enqueue(async () => {
-        for (const table of DEVICE_STORE_TABLES) {
+        for (const table of tables) {
           const hostUri = hostDirectoryUri(roots, table, hostId)
           await fs.delete(hostUri)
           forgetIndexedDirectory(indexes[table], hostUri)
@@ -331,4 +332,9 @@ export function startDeviceStore(): void {
 // Removal doesn't wait on this; the launch orphan sweep catches a crash in between.
 export function wipeHostStore(hostId: string): Promise<void> {
   return processDeviceStore().wipeHost(hostId)
+}
+
+// A definite revocation verdict (K6): cached screens go at once, drafts stay until the host is removed.
+export function wipeHostCacheStore(hostId: string): Promise<void> {
+  return processDeviceStore().wipeHost(hostId, ['cache'])
 }
