@@ -130,6 +130,8 @@ describe('persisted state survives a save/load round trip', () => {
     expect(loaded.getSettings()).not.toHaveProperty('agentWorkspaceTrustExistingReposMigrated')
     loaded.updateSettings({ agentWorkspaceTrustEnabled: true })
     loaded.flush()
-    expect(readPersistedStateJson(dataFile)).not.toContain('agentWorkspaceTrustExistingReposMigrated')
+    expect(readPersistedStateJson(dataFile)).not.toContain(
+      'agentWorkspaceTrustExistingReposMigrated'
+    )
   })
 })
