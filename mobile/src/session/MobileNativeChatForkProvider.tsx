@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
@@ -25,7 +25,7 @@ export function MobileNativeChatForkProvider({
     latestController.current = controller
   })
   const createFork = useCallback(
-    (agent: AgentSessionHandleProvider, forkFrom: StructuredAgentSessionForkSource) =>
+    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) =>
       forkMobileStructuredChat(latestController.current, agent, forkFrom),
     []
   )

@@ -1,6 +1,6 @@
 import { agentSessionForkSourceFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -43,7 +43,7 @@ export type MobileStructuredAgentLaunchResult =
   | { kind: 'unknown'; message: string }
 
 function createParamsFor(
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   worktree: string,
   forkFrom: StructuredAgentSessionForkSource | undefined,
   tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
@@ -58,25 +58,22 @@ function createParamsFor(
   })
 }
 
-function unknownCreateResult(
-  agent: AgentSessionHandleProvider,
-  error: unknown
-): MobileStructuredAgentLaunchResult {
+function unknownCreateResult(agent: TuiAgent, error: unknown): MobileStructuredAgentLaunchResult {
   const message = error instanceof Error ? error.message.trim() : ''
   return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
 
-function unconfirmedMessage(agent: AgentSessionHandleProvider): string {
+function unconfirmedMessage(agent: TuiAgent): string {
   return `The ${TUI_AGENT_DISPLAY_NAMES[agent]} chat result could not be confirmed.`
 }
 
-function failedMessage(agent: AgentSessionHandleProvider): string {
+function failedMessage(agent: TuiAgent): string {
   return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
 }
 
 // Only definitive refusal permits failure/fallback; uncertain creates may already own a session and must not create a sibling.
 function classifyCreateRefusal(
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   code: string,
   message: string
 ): MobileStructuredAgentLaunchResult {
@@ -89,7 +86,7 @@ function classifyCreateRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   /** Sent only to a host advertising forks. */
   forkFrom?: StructuredAgentSessionForkSource,
   /** Sent only to a host advertising create placement; the replay keeps it. */

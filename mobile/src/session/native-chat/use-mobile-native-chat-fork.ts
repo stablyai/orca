@@ -15,10 +15,8 @@ import {
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
 import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
-import {
-  isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
-} from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../src/shared/agent-session/structured-agent-session-host-capability'
 import {
@@ -162,10 +160,7 @@ export function useMobileNativeChatFork(input: {
   agentWorking: boolean
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
-  createFork: (
-    agent: AgentSessionHandleProvider,
-    forkFrom: StructuredAgentSessionForkSource
-  ) => Promise<void>
+  createFork: (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => Promise<void>
 }): MobileNativeChatFork {
   const host: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
     ? 'unknown'
@@ -206,7 +201,7 @@ export function useMobileNativeChatFork(input: {
       const turnKey = turns.keyById.get(message.id)
       const offered =
         !!sessionId &&
-        isAgentSessionHandleProvider(agent ?? '') &&
+        isTuiAgent(agent ?? '') &&
         nativeChatRowOffersFork(
           {
             message,
@@ -241,7 +236,7 @@ export function useMobileNativeChatFork(input: {
         offerFor(message) !== 'available' ||
         !sessionId ||
         !agent ||
-        !isAgentSessionHandleProvider(agent)
+        !isTuiAgent(agent)
       ) {
         return
       }
