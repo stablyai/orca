@@ -157,6 +157,16 @@ describe('path: and name: selectors on folder workspaces', () => {
   })
 })
 
+describe('path: on repo-backed rows', () => {
+  it('keeps two folder-project sessions at one path apart', async () => {
+    const runtime = createRuntime([], [folderProject, { ...folderProject, id: 'repo-folder-2' }])
+
+    await expect(runtime.showManagedWorktree('path:/work/hub')).rejects.toThrow(
+      'selector_ambiguous'
+    )
+  })
+})
+
 describe('explicit create parents named by path:', () => {
   it('record a folder parent on a child in another host of the same Orca', async () => {
     const runtime = createRuntime([folder({ id: 'hub-a' })], [sshRepo])

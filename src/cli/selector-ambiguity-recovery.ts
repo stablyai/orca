@@ -77,3 +77,14 @@ function isWorkspaceChoice(row: unknown): row is WorkspaceChoice {
     typeof row.selector === 'string'
   )
 }
+
+/** A runtime ambiguity that already names its selector and every choice, such as a parent's. */
+export function namesItsChoices(data: unknown): boolean {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'selector' in data &&
+    'candidates' in data &&
+    Array.isArray(data.candidates)
+  )
+}

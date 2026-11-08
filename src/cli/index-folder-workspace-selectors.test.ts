@@ -126,4 +126,47 @@ describe('path: selectors on folder workspaces', () => {
       expect(callMock).toHaveBeenCalledWith('workspacePorts.scanHost', { worktree: scanned })
     }
   )
+
+  it('reports an ambiguous parent with its own choices, not as the child', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const choices = {
+      selector: 'path:/work/hub',
+      candidates: [
+        { kind: 'worktree', hostId: 'local', path: '/work/hub', selector: 'identity:wt2:local:a' },
+        { kind: 'folder workspace', hostId: 'local', path: '/work/hub', selector: 'folder:hub-a' }
+      ],
+      nextSteps: ['Run `orca worktree ps --json` to compare the choices.']
+    }
+    callMock.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'worktree.show' && params?.worktree === 'path:/work/hub') {
+        throw new RuntimeRpcFailureError({
+          id: 'req_show',
+          ok: false,
+          error: {
+            code: 'selector_ambiguous',
+            message: 'More than one workspace matches.',
+            data: choices
+          },
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+      return okFixture('req_other', {})
+    })
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/c',
+        '--parent-worktree',
+        'path:/work/hub',
+        '--json'
+      ],
+      '/tmp'
+    )
+
+    const { error } = JSON.parse(String(log.mock.calls.at(-1)?.[0]))
+    expect(error.data).toEqual(choices)
+  })
 })

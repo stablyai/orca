@@ -160,6 +160,7 @@ describe('orca cli worktree awareness', () => {
           err.mockClear()
           const worktree = stage === 'child' ? 'current' : 'name:x'
           const parent = stage === 'parent' ? 'current' : 'name:existing-parent'
+          // `current` resolves from the worktree list; only name:x makes the folder lookup first.
           if (stage !== 'child') {
             queueNoFolderAtSelector(callMock)
           }

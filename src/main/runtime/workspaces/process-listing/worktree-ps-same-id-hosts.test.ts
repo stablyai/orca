@@ -10,7 +10,11 @@ import {
   buildRuntimeWorktreeSummaryPathIndex,
   createRuntimeWorktreePsSummaryLookup
 } from './runtime-worktree-summary-paths'
-import { applyRuntimeWorktreePsTerminalActivity } from './runtime-worktree-ps-activity'
+import {
+  applyRuntimeWorktreePsSessionActivity,
+  applyRuntimeWorktreePsTerminalActivity
+} from './runtime-worktree-ps-activity'
+import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 const ID = 'repo-a::/srv/app'
 
@@ -113,6 +117,40 @@ describe('worktree ps rows that share an id on different hosts', () => {
     ).toEqual([
       { hostId: 'local', identity: 'wt2:local:inst-local', live: 0 },
       { hostId: 'ssh:server', identity: 'wt2:ssh%3Aserver:inst-ssh', live: 1 }
+    ])
+  })
+
+  it("marks each host's own row active from that host's session", () => {
+    const summaries = buildRuntimeWorktreePsSummaries({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: summaries read only these store methods.
+      store: store as never,
+      resolvedWorktrees: [row('local', 'inst-local'), row('ssh:server', 'inst-ssh')],
+      platformByRepoId: new Map()
+    })
+    const sessions: Record<string, unknown> = {
+      local: getDefaultWorkspaceSession(),
+      'ssh:server': { ...getDefaultWorkspaceSession(), activeWorktreeId: ID }
+    }
+
+    applyRuntimeWorktreePsSessionActivity({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session activity reads only workspace sessions.
+      store: { getWorkspaceSession: (hostId: string) => sessions[hostId] } as never,
+      summaries,
+      // One entry per repo id, as the listing builds it: the SSH copy's repo is shadowed.
+      repoById: new Map([['repo-a', store.getRepos()[0]]]),
+      ptysById: new Map(),
+      tabs: new Map(),
+      paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
+      getTerminalHandlesForPty: () => [],
+      getSummary: createRuntimeWorktreePsSummaryLookup(
+        summaries,
+        buildRuntimeWorktreeSummaryPathIndex(summaries, new Map())
+      )
+    })
+
+    expect([...summaries.values()].map((summary) => [summary.hostId, summary.isActive])).toEqual([
+      ['local', false],
+      ['ssh:server', true]
     ])
   })
 })
