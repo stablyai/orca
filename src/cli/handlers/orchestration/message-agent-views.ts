@@ -5,7 +5,7 @@ import {
   type OrchestrationCheckOutput,
   type OrchestrationMessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
-import { formatReportFollowUpCommand } from '../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import { formatReportFollowUpLine } from '../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import { formatFieldPairs, orchestrationCliName, type OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
@@ -21,7 +21,7 @@ export type MessageView = {
   priority?: string
   readOnly?: true
   handled?: boolean
-  /** The command that continues a finished task's worker, chosen by the runtime. */
+  /** What to do after a finished task's report, with its command; the runtime chooses it. */
   followUp?: string
   // Kept nested so sender-written payload can never stand in for Orca's own fields.
   payload?: Record<string, unknown> | string
@@ -48,7 +48,7 @@ export function toMessageView(
       : {}),
     ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {}),
     ...(message.follow_up && !isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
-      ? { followUp: formatReportFollowUpCommand(message.follow_up, orchestrationCliName()) }
+      ? { followUp: formatReportFollowUpLine(message.follow_up, orchestrationCliName()) }
       : {}),
     ...payloadView(message)
   }
@@ -129,7 +129,7 @@ function actionLineFor(message: OrchestrationMessageSummary, view: MessageView, 
     return undefined
   }
   if (view.followUp) {
-    return `Follow up: ${view.followUp}`
+    return view.followUp
   }
   if (view.type !== 'question') {
     return undefined

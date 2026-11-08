@@ -21,23 +21,23 @@ function quoteServerName(name: string): string {
   return /^[\w.:@/-]+$/.test(name) ? name : `"${name.replace(/["\\$`]/g, '\\$&')}"`
 }
 
-/** One sentence naming the action; `sendQualifier` says how the send must differ from the refused one. */
-export function formatReportFollowUpNext(
-  action: ReportFollowUpAction,
-  cli = 'orca',
-  sendQualifier = ''
-): string {
+/** The action line every view prints under a finished task's report, and the refusal repeats. */
+export function formatReportFollowUpLine(action: ReportFollowUpAction, cli = 'orca'): string {
   const command = formatReportFollowUpCommand(action, cli)
   switch (action.kind) {
     case 'send':
       return action.active
-        ? `Its follow-up Dispatch ${action.dispatchId} is running; to message it: ${command}.`
-        : `To give its worker more work, send${sendQualifier}: ${command}.`
+        ? `Its follow-up ${action.dispatchId} is running; to message it: ${command}`
+        : `To give this worker more work: ${command}`
     case 'worker_start_on':
-      return `${action.server} cannot continue a finished worker yet; to do more there, start a new worker: ${command}.`
+      return `To start more work on ${action.server}: ${command}`
     case 'worker_start':
-      return `It has no worker to continue; to do more, start a new worker: ${command}.`
+      return `To start a new worker: ${command}`
   }
+}
+
+export function formatReportFollowUpNext(action: ReportFollowUpAction): string {
+  return `${formatReportFollowUpLine(action)}.`
 }
 
 export function formatFinishedReportReplyRefusal(

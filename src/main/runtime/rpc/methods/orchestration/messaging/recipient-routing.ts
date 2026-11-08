@@ -45,7 +45,11 @@ export function assertDispatchMailboxDeliverable(
     'dispatch_inactive',
     `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox.${
       followUp
-        ? ` ${formatReportFollowUpNext(followUp, 'orca', ' with --type status, dispatch or handoff (status is the default)')}`
+        ? ` ${formatReportFollowUpNext(followUp)}${
+            followUp.kind === 'send' && !followUp.active
+              ? ' Only --type status, dispatch or handoff continues a worker; status is the default.'
+              : ''
+          }`
         : ''
     }`,
     followUp ? { followUp } : undefined

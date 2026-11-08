@@ -3,7 +3,7 @@ import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/agent-session-message-source'
 import {
-  formatReportFollowUpCommand,
+  formatReportFollowUpLine,
   type ReportFollowUpAction
 } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
@@ -103,9 +103,7 @@ export function formatMessageBannerWithContent(
   const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
   if (authority === 'current' && options.followUp) {
-    lines.push(
-      `[Follow up: ${formatReportFollowUpCommand(options.followUp, options.cliCommand ?? 'orca')}]`
-    )
+    lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
   } else if (authority === 'current') {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')

@@ -1,5 +1,5 @@
 import {
-  formatReportFollowUpCommand,
+  formatReportFollowUpLine,
   type ReportFollowUpAction
 } from './orchestration-report-follow-up'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../orchestration-rpc-contract'
@@ -178,7 +178,7 @@ function formatLegacyAwareCheckMessages(
         lines.push(formatQuotedMessageField('payload', message.payload))
       }
       if (!legacyReadOnly && message.follow_up) {
-        lines.push(`[Follow up: ${formatReportFollowUpCommand(message.follow_up)}]`)
+        lines.push(`[${formatReportFollowUpLine(message.follow_up)}]`)
       } else if (!legacyReadOnly) {
         const replyTarget = message.to_handle ?? checkedTerminal
         const replyFrom =
