@@ -66,9 +66,8 @@ export function useNativeChatSideChat(
 /** What the transcript needs to find the response `/btw` forks through; undefined where nothing
  *  listens, so it does no fork work at all. */
 export function useNativeChatSideChatForkOffer(
-  turnKeys: readonly (string | undefined)[]
+  latestTurnKey: string | undefined
 ): NativeChatSideChatForkOffer | undefined {
-  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const fork = useContext(NativeChatForkContext)
   const listening = useContext(NativeChatSideChatForkPointContext) !== undefined
   const mode = fork?.support.kind === 'known' ? fork.support.fork : undefined

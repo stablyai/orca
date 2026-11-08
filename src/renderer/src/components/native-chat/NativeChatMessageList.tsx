@@ -179,6 +179,7 @@ export function NativeChatMessageList({
     () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
     [showCiResultLines, turnRows]
   )
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
@@ -203,7 +204,7 @@ export function NativeChatMessageList({
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
-  const forkOffer = useNativeChatSideChatForkOffer(turnKeys)
+  const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
   const transcript = useNativeChatTranscriptSlots({
     typography,
     messages: rows,
@@ -353,7 +354,7 @@ export function NativeChatMessageList({
     revealedDiff: navigationRequest.revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
-    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
+    latestTurnKey,
     deliveryNotices,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,

@@ -70,7 +70,7 @@ function conversation(size: number, text: string): Conversation {
 
 function Transcript({ conversation: c }: { conversation: Conversation }): null {
   const latestTurnKey = c.turnKeys.findLast((key) => key !== undefined)
-  const forkOffer = useNativeChatSideChatForkOffer(c.turnKeys)
+  const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
   const input: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId'> = {
     messages: c.messages,
     turnKeys: c.turnKeys,
