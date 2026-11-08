@@ -73,7 +73,7 @@ it.each(['claude', 'codex'] as const)(
     // A speed edit copies the current Arguments into the draft; later settings must still win.
     fireEvent.click(
       agent === 'claude'
-        ? panel().querySelector('[role="switch"]')!
+        ? getByRole(document.body, 'button', { name: 'Fast' })
         : getByRole(document.body, 'radio', { name: 'Fast' })
     )
     changePrompt(

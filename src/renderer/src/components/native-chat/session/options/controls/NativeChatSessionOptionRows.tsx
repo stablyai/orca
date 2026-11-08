@@ -1,7 +1,9 @@
 import { useId, useLayoutEffect, useRef } from 'react'
+import { Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
@@ -120,6 +122,20 @@ function OptionRow(props: {
           {nativeChatSessionOptionActionLabel(descriptor, say)}
         </Button>
       </div>
+    )
+  }
+  if (descriptor.kind.type === 'boolean' && layout === 'inline' && descriptor.id === 'fastMode') {
+    return (
+      <Toggle
+        variant="chip"
+        size="xs"
+        pressed={!gone && descriptor.kind.currentValue}
+        disabled={off}
+        onPressedChange={onSet}
+      >
+        <Zap className="size-3" />
+        {say('fast')}
+      </Toggle>
     )
   }
   if (descriptor.kind.type === 'boolean') {
