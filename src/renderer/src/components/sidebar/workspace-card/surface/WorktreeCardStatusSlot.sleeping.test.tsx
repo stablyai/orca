@@ -41,6 +41,7 @@ describe('WorktreeCardStatusSlot sleeping precedence', () => {
       state: 'draft'
     })
     expect(container.querySelector('.lucide-moon')).toBeNull()
+    expect(container.querySelector('svg')).not.toBeNull()
   })
 
   it('still shows the moon for a sleeping workspace without a review', () => {
