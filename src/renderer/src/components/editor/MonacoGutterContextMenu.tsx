@@ -15,7 +15,7 @@ import { getRuntimeGitRemoteFileUrl } from '@/runtime/source-control/git/runtime
 import { formatPathLineReference } from './line-copy-path'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getRemoteUrlLineRange } from './selection-copy'
 
@@ -42,6 +42,7 @@ export function MonacoGutterContextMenu({
   relativePath,
   worktreeId
 }: MonacoGutterContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -64,10 +65,7 @@ export function MonacoGutterContextMenu({
           }}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
-          {translate(
-            'auto.components.editor.MonacoGutterContextMenu.4eaa991bde',
-            'Copy Path to Line'
-          )}
+          {t('auto.components.editor.MonacoGutterContextMenu.4eaa991bde', 'Copy Path to Line')}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
@@ -75,10 +73,7 @@ export function MonacoGutterContextMenu({
           }
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
-          {translate(
-            'auto.components.editor.MonacoGutterContextMenu.2e0b1cdc05',
-            'Copy Rel. Path to Line'
-          )}
+          {t('auto.components.editor.MonacoGutterContextMenu.2e0b1cdc05', 'Copy Rel. Path to Line')}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={async () => {
@@ -125,10 +120,7 @@ export function MonacoGutterContextMenu({
           }}
         >
           <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-          {translate(
-            'auto.components.editor.MonacoGutterContextMenu.7b57b1b468',
-            'Copy Remote URL'
-          )}
+          {t('auto.components.editor.MonacoGutterContextMenu.7b57b1b468', 'Copy Remote URL')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

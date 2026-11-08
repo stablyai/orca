@@ -113,6 +113,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    /** path: and name: in parentWorktree may name a folder workspace. */
+    matchFolderWorkspaces?: true
     crossStoreParent?: CrossStoreParentRef
     crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string

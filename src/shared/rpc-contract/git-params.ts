@@ -249,6 +249,10 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
     )
 })
 
+export const GitSwitchBranch = WorktreeSelector.extend({
+  target: z.object({ kind: z.enum(['local', 'remote', 'new']), name: z.string().min(1) })
+})
+
 export const GitCheckout = WorktreeSelector.extend({
   branch: z
     .unknown()

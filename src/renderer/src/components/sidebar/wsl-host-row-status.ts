@@ -68,8 +68,8 @@ export function getWslHostsTurnedOffLabel(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsTurnOnLabel(): string {
-  return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
+export function getWslHostsTurnOnLabel(t: Translate = translate): string {
+  return t('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
 export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
@@ -86,8 +86,8 @@ export function getWslHostsPausedLabel(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsPausedShortLabel(): string {
-  return translate(
+export function getWslHostsPausedShortLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.pausedShort',
     'Adding WSL distros is paused in this build.'
   )

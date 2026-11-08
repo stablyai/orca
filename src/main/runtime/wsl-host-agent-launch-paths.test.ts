@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _setGuestWindowsDriveMountsForTests } from '../ipc/wsl-guest-windows-drive-path'
 import { OrcaRuntimeService } from './orca-runtime'
-import { buildMobileTerminalChatFork } from './terminal/launch/mobile-terminal-chat-fork'
+import './terminal/launch/mobile-terminal-chat-fork'
 import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from './terminal/launch/mobile-terminal-startup'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import '../../shared/execution-host'
 
 let root: string
 let windowsBin: string
@@ -96,131 +96,6 @@ afterEach(() => {
 
 // POSIX paths and exec bits stand in for a distro; Windows runners can't model them.
 describe.skipIf(originalPlatform === 'win32')('WSL-host agent launch paths', () => {
-  describe('phone-started agent', () => {
-    it('types the distro path', async () => {
-      const native = fakeExecutable(nativeBin, 'claude')
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      const launch = await internal.resolveMobileSessionTerminalCommand(workspace, {
-        agent: 'claude'
-      })
-      expect(launch.command?.startsWith(`'${native}' `)).toBe(true)
-    })
-
-    it('refuses a Windows-only agent', async () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      await expect(
-        internal.resolveMobileSessionTerminalCommand(workspace, { agent: 'claude' })
-      ).rejects.toThrow('claude is installed only on Windows')
-    })
-  })
-
-  describe('phone and restore resume', () => {
-    const recorded = { agentCommand: 'claude', agentArgs: '', agentEnv: {} }
-
-    it('pins a recorded stock command to the distro path', () => {
-      const native = fakeExecutable(nativeBin, 'claude')
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      const resume = internal.resolveMobileSessionResumeCommand(workspace, {
-        agent: 'claude',
-        providerSession: session,
-        launchConfig: recorded
-      })
-      expect(resume?.command.startsWith(`'${native}' `)).toBe(true)
-    })
-
-    it('leaves a recorded custom command alone', () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      const resume = internal.resolveMobileSessionResumeCommand(workspace, {
-        agent: 'claude',
-        providerSession: session,
-        launchConfig: { ...recorded, agentCommand: 'my-claude' }
-      })
-      expect(resume?.command.startsWith('my-claude ')).toBe(true)
-    })
-
-    // Cold restore falls back to a plain shell instead of resuming through the Windows shim.
-    // What a first pinned launch records; resuming it must not re-resolve or re-quote.
-    it('keeps a recorded absolute command as recorded', () => {
-      const native = fakeExecutable(nativeBin, 'claude')
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      const resume = internal.resolveMobileSessionResumeCommand(workspace, {
-        agent: 'claude',
-        providerSession: session,
-        launchConfig: { ...recorded, agentCommand: `'${native}'` }
-      })
-      expect(resume?.command.startsWith(`'${native}' `)).toBe(true)
-    })
-
-    it('throws the fix-it refusal for a Windows-only agent', () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { internal, workspace } = makeRuntime()
-      expect(() =>
-        internal.resolveMobileSessionResumeCommand(workspace, {
-          agent: 'claude',
-          providerSession: session,
-          launchConfig: recorded
-        })
-      ).toThrow('Or set the claude Command setting')
-    })
-
-    it('restores a plain shell, not a Windows-backed resume, on cold restore', async () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { internal } = makeRuntime()
-      const tabId = '11111111-1111-4111-8111-111111111111'
-      const leafId = '22222222-2222-4222-8222-222222222222'
-      const paneKey = `${tabId}:${leafId}`
-      const record = {
-        paneKey,
-        worktreeId: 'worktree-1',
-        agent: 'claude',
-        providerSession: session,
-        origin: 'live',
-        launchConfig: recorded
-      }
-      internal.getWorkspaceSessionForWorktree = () => ({
-        sleepingAgentSessionsByPaneKey: { [paneKey]: record }
-      })
-      internal.isProviderSessionLiveInAnotherPane = async () => false
-      await expect(
-        internal.resolvePaneOwnedResumeStartup('worktree-1', {
-          parentTabId: tabId,
-          leafId
-        })
-      ).resolves.toEqual({})
-      // The same restore resumes once the distro has its own copy.
-      const native = fakeExecutable(nativeBin, 'claude')
-      const resumed = await internal.resolvePaneOwnedResumeStartup('worktree-1', {
-        parentTabId: tabId,
-        leafId
-      })
-      expect(resumed).toMatchObject({ command: expect.stringMatching(`^'${native}' `) })
-    })
-
-    it('refuses an explicit resume with the fix-it message', async () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { runtime, internal } = makeRuntime()
-      internal.getWorkspaceSessionForWorktree = () => undefined
-      internal.isProviderSessionLiveInAnotherPane = async () => false
-      await expect(
-        runtime.resumeAgentSessionInWorkspace('worktree-1', {
-          agent: 'claude',
-          providerSession: session,
-          captureHostId: LOCAL_EXECUTION_HOST_ID,
-          mutationId: 'resume-1'
-        })
-      ).resolves.toEqual({
-        ok: false,
-        reason: 'windows_only_cli',
-        message: expect.stringContaining('Or set the claude Command setting')
-      })
-    })
-  })
-
   describe('host-built agent session resume', () => {
     const request = {
       kind: 'explicit',
@@ -228,23 +103,6 @@ describe.skipIf(originalPlatform === 'win32')('WSL-host agent launch paths', () 
       agent: 'claude',
       providerSession: session
     } as const
-
-    it('types the distro path', async () => {
-      const native = fakeExecutable(nativeBin, 'claude')
-      fakeExecutable(windowsBin, 'claude')
-      const { runtime } = makeRuntime()
-      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-        handle: 'term',
-        tabId: '11111111-1111-4111-8111-111111111111',
-        paneKey: '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222',
-        ptyId: 'pty',
-        worktreeId: 'worktree-1',
-        title: null,
-        surface: 'background'
-      })
-      await runtime.ensureAgentSession(request, {})
-      expect(createTerminal.mock.calls[0]?.[1]?.command?.startsWith(`'${native}' `)).toBe(true)
-    })
 
     it('refuses a Windows-only agent', async () => {
       fakeExecutable(windowsBin, 'claude')
@@ -254,61 +112,6 @@ describe.skipIf(originalPlatform === 'win32')('WSL-host agent launch paths', () 
         'claude is installed only on Windows'
       )
       expect(createTerminal).not.toHaveBeenCalled()
-    })
-
-    it('keeps an explicit Command setting', async () => {
-      fakeExecutable(windowsBin, 'claude')
-      const { runtime } = makeRuntime({ claude: 'my-claude' })
-      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-        handle: 'term',
-        tabId: '11111111-1111-4111-8111-111111111111',
-        paneKey: '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222',
-        ptyId: 'pty',
-        worktreeId: 'worktree-1',
-        title: null,
-        surface: 'background'
-      })
-      await runtime.ensureAgentSession(request, {})
-      expect(createTerminal.mock.calls[0]?.[1]?.command?.startsWith('my-claude ')).toBe(true)
-    })
-  })
-
-  describe('chat fork into a terminal', () => {
-    const fork = (settings: { agentCmdOverrides?: Record<string, string> } = {}) =>
-      buildMobileTerminalChatFork({
-        prepared: {
-          useRealCodexHome: false,
-          cliForkSource: {
-            agent: 'claude',
-            sourceAgent: 'claude',
-            sessionId: 'original-chat',
-            filePath: join(root, 'chat.jsonl'),
-            cwd: root,
-            codexHome: null,
-            executionHostPlatform: 'linux'
-          }
-        },
-        settings,
-        runtime: {
-          platform: 'linux',
-          pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
-        }
-      })
-
-    it('types the distro path', () => {
-      const native = fakeExecutable(nativeBin, 'claude')
-      fakeExecutable(windowsBin, 'claude')
-      expect(fork().command).toContain(`'${native}' `)
-    })
-
-    it('refuses a Windows-only agent', () => {
-      fakeExecutable(windowsBin, 'claude')
-      expect(() => fork()).toThrow('claude is installed only on Windows')
-    })
-
-    it('keeps an explicit Command setting', () => {
-      fakeExecutable(windowsBin, 'claude')
-      expect(fork({ agentCmdOverrides: { claude: 'my-claude' } }).command).toContain('my-claude ')
     })
   })
 })

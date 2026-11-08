@@ -14,6 +14,7 @@ import {
   type SidebarProjectDropRoute
 } from './sidebar-project-drop'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { userNamedFileAccess } from '@/lib/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/windows-path-access'
 import { addOnThisComputerLabel } from '@/lib/wsl-host-windows-drive-refusal-toast'
@@ -79,6 +80,7 @@ export function useSidebarProjectDrop(): {
   dropHandlers: SidebarProjectDropHandlers
   affordance: ReturnType<typeof getSidebarProjectDropAffordance>
 } {
+  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -219,11 +221,14 @@ export function useSidebarProjectDrop(): {
   return {
     dropOwnerRef,
     dropHandlers,
-    affordance: getSidebarProjectDropAffordance({
-      isDragOver,
-      isHandlingDrop,
-      remoteRuntimeActive,
-      wslDropsOnly: focusedRuntimeId !== null && !remoteRuntimeActive
-    })
+    affordance: getSidebarProjectDropAffordance(
+      {
+        isDragOver,
+        isHandlingDrop,
+        remoteRuntimeActive,
+        wslDropsOnly: focusedRuntimeId !== null && !remoteRuntimeActive
+      },
+      t
+    )
   }
 }

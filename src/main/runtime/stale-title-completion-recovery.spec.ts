@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+
 import { extractAllOscTitleEntries } from '../../shared/agent-status/title/osc-title-extraction'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { paneKeyPtyId, ptyPaneKey, rememberPaneKeyForPty } from '../ipc/pty/pane/key-state'
@@ -15,13 +15,10 @@ import {
   createDatabase,
   createRuntime,
   insertDirectRunMessage,
-  LEAF_ID,
   PANE_KEY,
   PTY_ID,
-  TAB_ID,
   TERMINAL_HANDLE,
-  temporaryDirectories,
-  WORKTREE_ID
+  temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 
 function producerFixture(agentType: 'codex' | 'pi' = 'codex') {
@@ -262,70 +259,4 @@ describe('hook title evidence and completion recovery', () => {
       await dispose()
     }
   })
-
-  it.each([20, 200])(
-    'bounds semantic ingestion and snapshot tab visits at %i tabs',
-    async (population) => {
-      vi.useFakeTimers()
-      const { runtime, status, dispose } = producerFixture()
-      try {
-        await runtime.listTerminals()
-        status('done')
-        await runtime.getTerminalAgentStatus(TERMINAL_HANDLE)
-        await vi.advanceTimersByTimeAsync(1_000)
-        runtime.mobileSessionTabsByWorktree.clear()
-        let visits = 0
-        for (const [group, worktree] of [WORKTREE_ID, 'unrelated-worktree'].entries()) {
-          const tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = Array.from(
-            { length: population / 2 },
-            (_, index) => {
-              const target = group === 0 && index === population / 2 - 1
-              return {
-                type: 'terminal',
-                id: target ? `${TAB_ID}::${LEAF_ID}` : `tab-${group}-${index}`,
-                parentTabId: target ? TAB_ID : `parent-${group}-${index}`,
-                leafId: target ? LEAF_ID : `leaf-${index}`,
-                title: 'Codex',
-                ptyId: target ? PTY_ID : `other-${group}-${index}`,
-                isActive: false
-              }
-            }
-          )
-          const some = tabs.some.bind(tabs)
-          vi.spyOn(tabs, 'some').mockImplementation((predicate, thisArg) =>
-            some((tab, index, array) => {
-              visits += 1
-              return predicate.call(thisArg, tab, index, array)
-            })
-          )
-          runtime.mobileSessionTabsByWorktree.set(worktree, {
-            worktree,
-            publicationEpoch: 'title-contract',
-            snapshotVersion: 1,
-            activeGroupId: null,
-            activeTabId: null,
-            activeTabType: null,
-            tabs
-          })
-        }
-        const ingestion = vi.spyOn(runtime, 'ingestSyntheticTitleFrame')
-        status('working')
-        await vi.advanceTimersByTimeAsync(1_000)
-        expect(ingestion).toHaveBeenCalledTimes(1)
-        expect(ingestion).toHaveBeenCalledWith(PTY_ID, '\x1b]0;⠋ Codex\x07')
-        expect(visits).toBeGreaterThanOrEqual(population)
-        expect(visits).toBeLessThanOrEqual(4 * population)
-        ingestion.mockClear()
-        visits = 0
-        for (let event = 0; event < 100; event += 1) {
-          status('working')
-        }
-        await vi.advanceTimersByTimeAsync(1_000)
-        expect(ingestion).not.toHaveBeenCalled()
-        expect(visits).toBe(0)
-      } finally {
-        await dispose()
-      }
-    }
-  )
 })

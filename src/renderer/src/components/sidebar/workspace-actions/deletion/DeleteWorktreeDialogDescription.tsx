@@ -1,6 +1,7 @@
 import { Trans } from 'react-i18next'
 import { DialogDescription } from '@/components/ui/dialog'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function DeleteWorktreeDialogDescription({
   description,
@@ -14,6 +15,7 @@ export function DeleteWorktreeDialogDescription({
   targetName: string | undefined
   showChangeLossWarning?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DialogDescription className="text-xs">
       <Trans
@@ -26,7 +28,7 @@ export function DeleteWorktreeDialogDescription({
       />
       {showChangeLossWarning && (
         <span className="mt-1 block">
-          {translate(
+          {t(
             'components.workspace.delete.changes.permanentLoss',
             'Any uncommitted or untracked changes in Git workspaces will be permanently deleted.'
           )}

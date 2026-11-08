@@ -1,7 +1,7 @@
 import { createGitHistoryApi } from './web-git-history-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../runtime/rpc/calls/abortable-runtime-environment-call'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'

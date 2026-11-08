@@ -75,7 +75,7 @@ export function WorktreeLineageSubMenu({ model }: { model: WorktreeContextMenuMo
           })}
         >
           <FolderTree className="size-3.5" />
-          {getWorktreeParentPickerLabel(validParentWorktreeId)}
+          {getWorktreeParentPickerLabel(validParentWorktreeId, t)}
         </DropdownMenuItem>
         {validParentWorktreeId ? (
           <DropdownMenuItem onSelect={model.handleOpenParent} disabled={isDeleting}>

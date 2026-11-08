@@ -1,13 +1,18 @@
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from '../search/settings-search-keywords'
 
-export function getRepositoryGitAuthorSearchEntries(repo: Repo): SettingsSearchEntry[] {
+export function getRepositoryGitAuthorSearchEntries(
+  repo: Repo,
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: translate('auto.components.settings.repository.search.eec3995dc6', 'Git AI Author'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.eec3995dc6', 'Git AI Author'),
+      description: t(
         'auto.components.settings.repository.search.6cc5c65e64',
         'Project-specific git generation overrides.'
       ),
@@ -40,8 +45,8 @@ export function getRepositoryGitAuthorSearchEntries(repo: Repo): SettingsSearchE
       ]
     },
     {
-      title: translate('auto.components.settings.repository.search.31bd0a2420', 'MCP Configs'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.31bd0a2420', 'MCP Configs'),
+      description: t(
         'auto.components.settings.repository.search.3c31801626',
         'Inspect project-level MCP server config files.'
       ),

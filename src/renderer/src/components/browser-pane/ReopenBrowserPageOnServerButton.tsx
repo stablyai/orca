@@ -3,19 +3,20 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { reopenBrowserPageOnServer } from './browser-reopen-on-server'
 
 /** Deferred so a fast local round-trip never flashes a spinner. */
 const REOPEN_PENDING_FEEDBACK_DELAY_MS = 200
 
-export function reopenOnServerLabel(): string {
-  return translate('browser.reopenOnServer.action', 'Reopen on server')
+export function reopenOnServerLabel(t: Translate = translate): string {
+  return t('browser.reopenOnServer.action', 'Reopen on server')
 }
 
 /** Honest about what a new page cannot carry over: it is not a migration. */
-export function reopenOnServerCaveat(): string {
-  return translate(
+export function reopenOnServerCaveat(t: Translate = translate): string {
+  return t(
     'browser.reopenOnServer.caveat',
     'This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.'
   )
@@ -32,6 +33,7 @@ export function ReopenBrowserPageOnServerButton({
   lastCommittedUrl: string | null | undefined
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [pending, setPending] = useState(false)
   const [showPending, setShowPending] = useState(false)
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -80,7 +82,7 @@ export function ReopenBrowserPageOnServerButton({
       className={className}
       disabled={pending}
       aria-busy={pending}
-      title={reopenOnServerCaveat()}
+      title={reopenOnServerCaveat(t)}
       onClick={reopen}
     >
       {/* Both labels share one grid cell, so the swap cannot resize the button mid-action. */}
@@ -89,7 +91,7 @@ export function ReopenBrowserPageOnServerButton({
           className={cn('col-start-1 row-start-1', showPending && 'invisible')}
           aria-hidden={showPending}
         >
-          {reopenOnServerLabel()}
+          {reopenOnServerLabel(t)}
         </span>
         <span
           className={cn(
@@ -99,7 +101,7 @@ export function ReopenBrowserPageOnServerButton({
           aria-hidden={!showPending}
         >
           <Loader2 className="size-3.5 animate-spin" />
-          {translate('browser.reopenOnServer.pending', 'Reopening…')}
+          {t('browser.reopenOnServer.pending', 'Reopening…')}
         </span>
       </span>
     </Button>

@@ -23,8 +23,9 @@ import {
   useStructuredAgentSessionHostCapability,
   useStructuredAgentSessionOwnPermissionState,
   structuredAgentSessionHostKey
-} from '@/runtime/structured-agent-session-host-capability'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { recomputeOn } from '@/lib/recompute-on'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
 
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
@@ -78,7 +79,8 @@ export function useStructuredAgentSessionOptionState(args: {
       })
     )
   )
-  const { optionState } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const readerSnapshot = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const { optionState } = readerSnapshot
   const authority = structuredSessionSelectionAuthority(target)
   const controller = structuredSessionSelectionController(target, sessionId, agent)
   const hostKey = structuredAgentSessionHostKey(target)
@@ -86,7 +88,7 @@ export function useStructuredAgentSessionOptionState(args: {
     () => [agent, sessionId, hostKey, identity, controller],
     [agent, sessionId, hostKey, identity, controller]
   )
-  const acceptedSupport = reader.supportFor(owner)
+  const acceptedSupport = recomputeOn([readerSnapshot], () => reader.supportFor(owner))
   // Projected once per accepted answer so consumers keep stable references between answers.
   const conversationSupport = useMemo(
     () =>

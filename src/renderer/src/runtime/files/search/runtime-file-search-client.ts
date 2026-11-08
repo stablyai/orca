@@ -18,10 +18,10 @@ import {
   hasCachedLegacyQuickOpenInventory,
   searchLegacyQuickOpenInventory,
   validateLegacyQuickOpenRecentCandidates
-} from '../../runtime-legacy-quick-open-inventory'
+} from './runtime-legacy-quick-open-inventory'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 const QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE =
   'Quick Open search requires a newer paired Orca host. Update the remote host and reconnect.'

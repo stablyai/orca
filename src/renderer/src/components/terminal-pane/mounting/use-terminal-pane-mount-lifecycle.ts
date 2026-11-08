@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { e2eConfig } from '@/lib/e2e-config'
 import { isTerminalTabParked } from '../parking/output-watchers/terminal-parked-watcher-registry'
 import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'

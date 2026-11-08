@@ -144,7 +144,7 @@ function mount(insertion?: {
     manager.setActivePane(first.id, { focus: false })
     vi.spyOn(manager, 'setActivePane')
   }
-  const controller: Controller = {
+  let controller: Controller = {
     tabId: insertion ? 'tab' : 'retained-tab',
     worktreeId: insertion ? 'workspace' : 'worktree',
     managerRef: { current: manager },
@@ -179,7 +179,10 @@ function mount(insertion?: {
     link,
     accepted,
     sendInput,
-    update: () => view.rerender(content())
+    update: (patch: Partial<Controller> = {}) => {
+      controller = { ...controller, ...patch }
+      view.rerender(content())
+    }
   }
 }
 
@@ -213,35 +216,20 @@ it('uses numeric expansion and exact activity leaf identity without dismissing a
   expect(manager.getActivePane()?.id).toBe(second.id)
   act(update)
   expect(screen.getByRole('menu')).toBe(popup)
-  act(() => {
-    controller.expandedPaneId = second.id
-    update()
-  })
+  act(() => update({ expandedPaneId: second.id }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(a.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
   expect(b.getByRole('button', { name: 'More for Worker' })).toBeInTheDocument()
-  act(() => {
-    controller.expandedPaneId = null
-    update()
-  })
+  act(() => update({ expandedPaneId: null }))
   await user.click(a.getByRole('button', { name: 'More for Worker' }))
-  act(() => {
-    controller.isolatedPaneKey = makePaneKey(controller.tabId, second.leafId)
-    update()
-  })
+  act(() => update({ isolatedPaneKey: makePaneKey(controller.tabId, second.leafId) }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(a.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
   await user.click(b.getByRole('button', { name: 'More for Worker' }))
-  act(() => {
-    controller.isolatedPaneKey = makePaneKey('other-tab', second.leafId)
-    update()
-  })
+  act(() => update({ isolatedPaneKey: makePaneKey('other-tab', second.leafId) }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(b.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
-  act(() => {
-    controller.isolatedPaneKey = null
-    update()
-  })
+  act(() => update({ isolatedPaneKey: null }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(rig.open).not.toHaveBeenCalled()
   expect(rig.copy).not.toHaveBeenCalled()
