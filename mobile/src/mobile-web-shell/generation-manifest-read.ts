@@ -28,5 +28,13 @@ export async function readWaitingStage(
   const directory = joinUri(stagingUri, buildId)
   const text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME)).catch(() => null)
   const manifest = text === null ? null : parseGenerationManifest(text)
-  return manifest?.buildId === buildId ? { hostKey, buildId, directory, manifest } : null
+  if (text === null || manifest?.buildId !== buildId) {
+    return null
+  }
+  // Deletes are not atomic, so a kill mid-delete can leave the manifest without its assets; only every byte counts as whole.
+  const expected =
+    new TextEncoder().encode(text).byteLength +
+    manifest.assets.reduce((sum, asset) => sum + asset.byteLength, 0)
+  const { size } = await fs.summarizeDirectory(directory)
+  return size === expected ? { hostKey, buildId, directory, manifest } : null
 }

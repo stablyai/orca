@@ -190,9 +190,16 @@ export async function stageUpdate(
     send({ type: 'download-failed', flow, cause: NO_CONNECTION })
     return
   }
-  // Another page on this host fetches or already staged it; restaging would rewrite the waiting tree.
-  const release = store.claimUpdate(hostKey, opened.manifest.buildId)
+  // Wait out another page fetching it, and skip it once staged; restaging would rewrite the waiting tree.
+  const leaving = new AbortController()
+  args.downloads.add(leaving)
+  const release = await store.claimUpdate(hostKey, opened.manifest.buildId)
+  args.downloads.delete(leaving)
   if (release === null) {
+    return
+  }
+  if (leaving.signal.aborted) {
+    release()
     return
   }
   try {

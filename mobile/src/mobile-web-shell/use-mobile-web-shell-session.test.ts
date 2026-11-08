@@ -180,7 +180,7 @@ function createFakeStore(): {
       deferred += 1
     },
     holdGeneration: () => () => {},
-    claimUpdate: () => () => {},
+    claimUpdate: async () => () => {},
     abortStagedGeneration: async () => {
       aborted += 1
     },

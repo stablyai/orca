@@ -52,8 +52,8 @@ export type GenerationStore = {
   deferCommit(staged: StagedGeneration): void
   // A mounted page reading this host's active build; release when it stops reading it.
   holdGeneration(hostKey: string): () => void
-  // A release while this page fetches the build for a deferred commit; null when another page already fetched or fetches it.
-  claimUpdate(hostKey: string, buildId: string): (() => void) | null
+  // A release once this page may fetch the build for a deferred commit, after any page already fetching it; null when it already waits.
+  claimUpdate(hostKey: string, buildId: string): Promise<(() => void) | null>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.

@@ -522,6 +522,16 @@ describe('an update staged behind a live page', () => {
     expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
   })
 
+  it('lets a page that waited on another page fetch the build itself when that page gives up', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeFileSystem() })
+    const first = await store.claimUpdate(HOST, SECOND_BUILD)
+    const second = store.claimUpdate(HOST, SECOND_BUILD)
+
+    first?.()
+
+    expect(await second).not.toBeNull()
+  })
+
   it('commits at the next launch when the app ends while the page still reads the old build', async () => {
     const fs = createFakeFileSystem()
     const first = createGenerationStore({ fileSystem: fs })

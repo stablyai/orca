@@ -19,16 +19,17 @@ import {
 
 // The host admits four window reads per connection; one reader per asset would serialize large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
-// Shells on one host share its client, so their fetches share its slots; per-fetch limits got the second fetch refused.
-const clientReadSlots = new WeakMap<RpcClient, PrioritySemaphore>()
+// Shells on one host share its client, so their fetches share its read slots; per-fetch limits got the second fetch refused.
+type ConnectionReads = { readonly slots: PrioritySemaphore; lastWindowAt: number }
+const connectionReads = new WeakMap<RpcClient, ConnectionReads>()
 
-function readSlotsOf(client: RpcClient): PrioritySemaphore {
-  let slots = clientReadSlots.get(client)
-  if (slots === undefined) {
-    slots = new PrioritySemaphore(MAX_CONCURRENT_WINDOW_READS)
-    clientReadSlots.set(client, slots)
+function connectionReadsOf(client: RpcClient): ConnectionReads {
+  let reads = connectionReads.get(client)
+  if (reads === undefined) {
+    reads = { slots: new PrioritySemaphore(MAX_CONCURRENT_WINDOW_READS), lastWindowAt: 0 }
+    connectionReads.set(client, reads)
   }
-  return slots
+  return reads
 }
 
 // Time fetch-wide inactivity; a queued read on a slow moving link can exceed a per-request stall budget (#29697).
@@ -85,7 +86,7 @@ export async function fetchMobileWebBundle(args: {
   throwIfCallerAborted(args.signal)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
-  const slots = readSlotsOf(args.client)
+  const connection = connectionReadsOf(args.client)
   const candidates = new Set(
     args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
   )
@@ -107,13 +108,19 @@ export async function fetchMobileWebBundle(args: {
       stallTimer = null
     }
   }
-  const armStallClock = (): void => {
+  const armStallClock = (delayMs = MOBILE_WEB_BUNDLE_WINDOW_STALL_MS): void => {
     disarmStallClock()
     // A read that lands after the fetch settled must not leave a timer behind.
     if (stopped.signal.aborted) {
       return
     }
     stallTimer = setTimeout(() => {
+      // Windows still arriving for another fetch on this connection mean this one waits for slots, not on a dead link.
+      const idleMs = Date.now() - connection.lastWindowAt
+      if (idleMs < MOBILE_WEB_BUNDLE_WINDOW_STALL_MS) {
+        armStallClock(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS - idleMs)
+        return
+      }
       stopped.abort()
       failStalled(
         markRpcDeliveryUnknown(
@@ -122,7 +129,7 @@ export async function fetchMobileWebBundle(args: {
           )
         )
       )
-    }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+    }, delayMs)
   }
   const reportProgress = (): void => {
     args.onProgress?.({
@@ -139,6 +146,7 @@ export async function fetchMobileWebBundle(args: {
       { timeoutMs: WINDOW_READ_BACKSTOP_MS }
     )
     throwIfCallerAborted(args.signal)
+    connection.lastWindowAt = Date.now()
     armStallClock()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
@@ -178,14 +186,19 @@ export async function fetchMobileWebBundle(args: {
     const worker = async (): Promise<void> => {
       try {
         while (!stopped.signal.aborted) {
+          // Take work before a slot, so a fetch with nothing left never waits behind another's reads.
+          const read = queue.shift()
+          if (read === undefined) {
+            return
+          }
           // Rejects only when this fetch stopped while waiting; the failure that stopped it is already reported.
-          const release = await slots.acquire(0, stopped.signal).catch(() => null)
+          const release = await connection.slots.acquire(0, stopped.signal).catch(() => null)
           if (release === null) {
             return
           }
           try {
-            const read = queue.shift()
-            if (read === undefined) {
+            // A sibling may fail between the grant and this resume.
+            if (stopped.signal.aborted) {
               return
             }
             throwIfCallerAborted(args.signal)

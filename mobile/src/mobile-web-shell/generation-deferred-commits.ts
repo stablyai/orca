@@ -8,8 +8,8 @@ export type DeferredCommits = {
   defer(staged: StagedGeneration): StagedGeneration | null
   // The waiting stage to commit now, when no page reads this host's build.
   takeUnread(hostKey: string): StagedGeneration | null
-  // A release while this page fetches the build, or null when another page fetches it or it already waits, so it downloads once.
-  claim(hostKey: string, buildId: string): (() => void) | null
+  // A release once this page may fetch the build, or null when it already waits; a page fetching it first is waited out, so it downloads once.
+  claim(hostKey: string, buildId: string): Promise<(() => void) | null>
   // Forgets the stage waiting for this host, and returns it.
   drop(hostKey: string): StagedGeneration | null
 }
@@ -17,7 +17,7 @@ export type DeferredCommits = {
 export function createDeferredCommits(): DeferredCommits {
   const readers = new Map<string, number>()
   const waiting = new Map<string, StagedGeneration>()
-  const fetching = new Set<string>()
+  const fetching = new Map<string, Promise<void>>()
   const drop = (hostKey: string): StagedGeneration | null => {
     const found = waiting.get(hostKey)
     if (found === undefined) {
@@ -42,13 +42,21 @@ export function createDeferredCommits(): DeferredCommits {
       waiting.set(staged.hostKey, staged)
       return replaced?.directory === staged.directory ? null : replaced
     },
-    claim: (hostKey, buildId) => {
+    claim: async (hostKey, buildId) => {
       const key = `${hostKey}/${buildId}`
-      if (fetching.has(key) || waiting.get(hostKey)?.buildId === buildId) {
+      // The page fetching it may leave or fail before it stages, so check again once it settles.
+      for (let first = fetching.get(key); first !== undefined; first = fetching.get(key)) {
+        await first
+      }
+      if (waiting.get(hostKey)?.buildId === buildId) {
         return null
       }
-      fetching.add(key)
-      return () => fetching.delete(key)
+      let settle = (): void => {}
+      fetching.set(key, new Promise<void>((resolve) => (settle = resolve)))
+      return () => {
+        fetching.delete(key)
+        settle()
+      }
     },
     takeUnread: (hostKey) => ((readers.get(hostKey) ?? 0) > 0 ? null : drop(hostKey)),
     drop
