@@ -12,7 +12,7 @@ import {
   type UseQueryResult
 } from '@tanstack/react-query'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
 import {
   hostQueryKey,

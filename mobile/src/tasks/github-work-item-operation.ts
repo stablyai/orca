@@ -1,4 +1,5 @@
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-types'
 import { hasReachedAppVersion } from '../../../src/shared/app-version'
 import {
@@ -12,8 +13,8 @@ import {
   GITHUB_TARGET_CHECK_TIMED_OUT,
   supportsExactGitHubOperations,
   githubOperationResponse
-} from '../transport/github-target-invocation'
-import { openRpcRequestBudget } from '../transport/rpc-request-budget'
+} from '../source-control/review/github-target-invocation'
+import { openRpcRequestBudget } from '../transport/rpc/rpc-request-budget'
 import { readGitHubWorkItemByNumber } from './mobile-task-source-search-operations'
 import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,

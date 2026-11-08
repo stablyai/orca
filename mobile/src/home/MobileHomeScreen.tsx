@@ -20,14 +20,14 @@ import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient
-} from '../transport/host-client-hooks'
-import { hostEndpointLabel } from '../transport/host-endpoint-label'
-import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostCatalogEntry, HostProfile } from '../transport/types'
-import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
-import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
+} from '../transport/connection/host-client-hooks'
+import { hostEndpointLabel } from '../transport/hosts/host-endpoint-label'
+import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-auto-connect'
+import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
+import { loadHostCatalog } from '../transport/hosts/host-store'
+import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
+import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
+import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { homeAgentNeedsYou, type HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'

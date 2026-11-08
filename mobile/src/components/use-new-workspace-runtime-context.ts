@@ -1,9 +1,9 @@
-import { optionalSettingsRead } from '../transport/settings-read-operations'
+import { optionalSettingsRead } from '../settings/mobile-settings-read-operations'
 import { useCallback, useEffect, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcAcceptedResult } from '../transport/rpc/rpc-accepted-result'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,

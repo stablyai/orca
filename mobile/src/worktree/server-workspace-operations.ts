@@ -7,8 +7,8 @@ import {
   type MobileRelayHost,
   type MobileRelayHostRelay
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { worktreeCatalogSchema } from './worktree-catalog-reply-schema'
 
 const HEALTH = [

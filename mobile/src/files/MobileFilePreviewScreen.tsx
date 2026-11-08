@@ -8,11 +8,11 @@ import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import {
   loadMobileFilePreview,
   previewError,

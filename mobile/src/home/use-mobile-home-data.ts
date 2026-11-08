@@ -12,9 +12,9 @@ import {
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
-} from '../transport/host-catalog-selection'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostCatalogEntry } from '../transport/types'
+} from '../transport/hosts/host-catalog-selection'
+import { loadHostCatalog } from '../transport/hosts/host-store'
+import type { HostCatalogEntry } from '../transport/hosts/host-profile'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
 import {
   withoutHomeAgentStates,

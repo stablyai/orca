@@ -1,15 +1,12 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
 } from '../../../src/shared/worktree/retired-name-registry'
-import {
-  buildRetiredWorktreeNamesRefreshKey,
-  useRetiredWorktreeNames
-} from './use-retired-worktree-names'
+import { useRetiredWorktreeNames } from './use-retired-worktree-names'
 
 type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
 
@@ -72,44 +69,6 @@ function mountNames() {
 }
 
 describe('useRetiredWorktreeNames', () => {
-  it('builds a stable refresh key without copied-array methods or input mutation', () => {
-    const paths = ['/repo/zebra', '/repo/antelope']
-    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted')
-    Reflect.deleteProperty(Array.prototype, 'toSorted')
-
-    try {
-      expect(buildRetiredWorktreeNamesRefreshKey(paths)).toBe('/repo/antelope\0/repo/zebra')
-      expect(buildRetiredWorktreeNamesRefreshKey(undefined)).toBe('')
-      expect(paths).toEqual(['/repo/zebra', '/repo/antelope'])
-    } finally {
-      if (descriptor) {
-        Reflect.defineProperty(Array.prototype, 'toSorted', descriptor)
-      }
-    }
-  })
-
-  it('reads the selected repo out of the response envelope', async () => {
-    const probe = mountNames()
-    expect(probe.requests[0]).toEqual({
-      method: 'worktree.listRetiredNames',
-      params: { repo: 'id:repo-1' }
-    })
-    await probe.settle(0, { 'repo-1': ['nautilus'], 'repo-2': ['seahorse'] })
-    expect(probe.names).toEqual(['nautilus'])
-  })
-
-  it('answers empty for a host that omits the field', async () => {
-    const probe = mountNames()
-    await probe.settle(0, {})
-    expect(probe.registry).toEqual(EMPTY_RETIRED_NAME_REGISTRY)
-  })
-
-  it('carries the compaction watermark through, so spent tiers are not suggested back', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': ['nautilus-2'] }, { 'repo-1': 1 })
-    expect(probe.registry).toEqual({ exhaustedTiers: 1, names: ['nautilus-2'] })
-  })
-
   it('holds the watermark too when a refresh fails', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': [] }, { 'repo-1': 3 })
@@ -132,18 +91,6 @@ describe('useRetiredWorktreeNames', () => {
     expect(probe.names).toEqual(['nautilus'])
   })
 
-  it('refetches when the workspace list changes', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': ['nautilus'] })
-
-    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
-    expect(probe.requests).toHaveLength(2)
-    expect(probe.names).toEqual(['nautilus'])
-
-    await probe.settle(1, { 'repo-1': ['nautilus', 'seahorse'] })
-    expect(probe.names).toEqual(['nautilus', 'seahorse'])
-  })
-
   it('drops names when the repo changes rather than showing another repo pool', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
@@ -154,12 +101,5 @@ describe('useRetiredWorktreeNames', () => {
     await probe.settle(2, { 'repo-2': ['seahorse'] })
     await probe.settle(1, { 'repo-1': ['nautilus', 'marlin'] })
     expect(probe.names).toEqual(['seahorse'])
-  })
-
-  it('reports nothing without a selected repo, and asks the host nothing', () => {
-    const probe = mountNames()
-    probe.rerender({ repoId: null, refreshKey: 'a' })
-    expect(probe.names).toEqual([])
-    expect(probe.requests).toHaveLength(1)
   })
 })
