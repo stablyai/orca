@@ -135,7 +135,6 @@ export function MobileAutomationsScreen() {
           }
         }}
         {...hostPicker.drawerProps}
-        searchable={hostOptions.length > 6}
       />
     </View>
   )
