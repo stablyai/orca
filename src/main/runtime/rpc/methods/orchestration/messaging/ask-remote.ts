@@ -1,14 +1,14 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { WorkerDispatchState } from '../../../../orchestration/types'
+import type { WorkerDispatchState } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import type { AskParams } from '../schemas'
-import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import type { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
-} from '../../../../orchestration/question-answer-delivery'
+} from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 export async function askRemoteRunHome(args: {
   params: z.infer<typeof AskParams>

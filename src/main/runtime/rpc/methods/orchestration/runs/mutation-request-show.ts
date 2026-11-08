@@ -1,7 +1,7 @@
 import {
   describeMutationRequestState,
   type OrchestrationMutationRequestShowResult
-} from '../../../../../../shared/orchestration-mutation-request'
+} from '../../../../../../shared/orchestration/orchestration-mutation-request'
 import { defineMethod } from '../../../core'
 import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
 

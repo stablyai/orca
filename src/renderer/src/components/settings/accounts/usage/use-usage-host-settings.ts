@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useTranslate } from '@/i18n/use-translate'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
@@ -34,6 +34,7 @@ export function useUsageHostSettings(
   localSettings: GlobalSettings,
   updateLocalSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 ): UsageHostSettingsModel {
+  const t = useTranslate()
   const ownerEnvironmentId = owner.kind === 'environment' ? owner.environmentId : null
   const [remote, setRemote] = useState<{
     environmentId: string
@@ -90,7 +91,7 @@ export function useUsageHostSettings(
         })
       } catch (error) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.useUsageHostSettings.updateFailed',
             'Could not update the setting on {{host}}.',
             { host: hostLabel ?? '' }

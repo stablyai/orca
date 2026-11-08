@@ -1,11 +1,13 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { planEntry, planOf, planOp } from '../bundled-skill-plan-fixtures.test-support'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
@@ -20,9 +22,12 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
     bundledSkillTarget: TARGET
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
-  runtimeEnvironmentSupportsCapability: mocks.capability,
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
+  runtimeEnvironmentSupportsCapability: mocks.capability
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: mocks.rpc
 }))
 

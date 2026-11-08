@@ -1,6 +1,6 @@
 import { RecordingParamsMismatch, RecordingStreamGuard } from './recording-mismatch'
-import type { RpcResponse } from '../../transport/types'
-import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import { captureValue } from './recording-values'
 import type { Rejection } from './recording-scenario'
 

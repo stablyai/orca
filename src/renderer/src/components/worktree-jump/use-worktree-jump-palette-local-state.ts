@@ -1,13 +1,13 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import {
   buildPaletteFilterFromSidebarScope,
   type PaletteFilterState
 } from '@/components/cmd-j/palette-filter'
 import { useAppStore } from '@/store/index'
-import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
-import { getWorktreePaletteCreateActionState } from '@/lib/worktree-palette-create-action'
+import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
+import { getWorktreePaletteCreateActionState } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import type { CmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { PaletteItem } from './worktree-jump-palette-model'

@@ -1,5 +1,5 @@
-import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
-import type { AppState } from '@/store'
+import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
+import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 /** Claude reopens one branch of a shared transcript on resume, which may be the other pane's. */

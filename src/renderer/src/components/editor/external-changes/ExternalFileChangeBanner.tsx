@@ -4,13 +4,14 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { attemptEditorFileSave } from '../save/commands/editor-file-save-attempt'
 import {
@@ -158,6 +159,7 @@ export function ExternalFileChangeBanner({
   /** A binary custom editor's tab: its edits can't be compared or kept as text. */
   binary?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [compareOpen, setCompareOpen] = useState(false)
   // A sibling of this code model may own its unsaved text.
   const isModelDirty = useAppStore((state) => {
@@ -196,7 +198,7 @@ export function ExternalFileChangeBanner({
           <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           {/* Wrap the overwrite warning so truncation cannot hide it. */}
           <span className="min-w-0 font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.editor.ExternalFileChangeBanner.7c41e90d12',
               'This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.'
             )}
@@ -205,19 +207,16 @@ export function ExternalFileChangeBanner({
         <div className="flex shrink-0 items-center gap-1">
           {binary ? null : (
             <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
-              {translate('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
+              {t('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
             </Button>
           )}
           <Button type="button" size="xs" variant="outline" onClick={handleReload}>
-            {translate(
-              'auto.components.editor.ExternalFileChangeBanner.3fa2b8d417',
-              'Reload from Disk'
-            )}
+            {t('auto.components.editor.ExternalFileChangeBanner.3fa2b8d417', 'Reload from Disk')}
           </Button>
           {/* Only unsaved model edits can overwrite newer disk content. */}
           {(binary ? file.isDirty : isModelDirty) && (
             <Button type="button" size="xs" variant="outline" onClick={handleOverwrite}>
-              {translate('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}
+              {t('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}
             </Button>
           )}
           {binary ? null : (
@@ -226,15 +225,12 @@ export function ExternalFileChangeBanner({
               size="xs"
               variant="ghost"
               onClick={handleKeepEdits}
-              title={translate(
+              title={t(
                 'auto.components.editor.ExternalFileChangeBanner.keepHint',
                 'Keeps your version. Your next save replaces the version on disk.'
               )}
             >
-              {translate(
-                'auto.components.editor.ExternalFileChangeBanner.a95d02c644',
-                'Keep My Edits'
-              )}
+              {t('auto.components.editor.ExternalFileChangeBanner.a95d02c644', 'Keep My Edits')}
             </Button>
           )}
         </div>

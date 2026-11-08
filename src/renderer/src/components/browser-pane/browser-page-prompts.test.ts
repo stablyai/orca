@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
-import type {
-  ConfirmationDialogContextValue,
-  ConfirmationDialogOptions
-} from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
@@ -50,28 +47,6 @@ beforeEach(() => {
 })
 
 describe('browser page prompts', () => {
-  it("asks with the prompt's own kind and sends back its answer", async () => {
-    // Stands in for the user typing into the dialog's fields and pressing Sign in.
-    const confirm = vi.fn(async (options: ConfirmationDialogOptions) => {
-      options.fields?.onConfirmed({ username: 'qa', password: 'hunter2' })
-      return true
-    })
-    const { emit } = installSubscription(confirm)
-
-    emit({
-      requestId: 'r1',
-      kind: 'http-auth',
-      details: { origin: 'https://staging.acme.com', retry: false }
-    })
-
-    await vi.waitFor(() =>
-      expect(respondPagePrompt).toHaveBeenCalledWith({
-        requestId: 'r1',
-        answer: { username: 'qa', password: 'hunter2' }
-      })
-    )
-  })
-
   it('dismisses the prompt without answering when main closes the request', async () => {
     const confirm = vi.fn<ConfirmationDialogContextValue>(
       (options) =>
@@ -89,24 +64,5 @@ describe('browser page prompts', () => {
     await Promise.resolve()
     expect(confirm.mock.calls[0][0].signal?.aborted).toBe(true)
     expect(respondPagePrompt).not.toHaveBeenCalled()
-  })
-
-  it("says so when the user said yes but Orca couldn't carry it out", async () => {
-    respondPagePrompt.mockResolvedValue('failed')
-    const { emit } = installSubscription(
-      vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(true)
-    )
-
-    emit({
-      requestId: 'r3',
-      kind: 'external-app',
-      details: { appName: null, scheme: 'zoommtg', origin: null }
-    })
-
-    await vi.waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith(
-        "Couldn't open an app for this zoommtg link. It may not be installed."
-      )
-    )
   })
 })

@@ -17,8 +17,11 @@ import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/ho
 
 const rpc = vi.hoisted(() => vi.fn<RestartRpc>())
 const stream: ResumeStatusStream = vi.hoisted(() => ({ emit: () => {}, snapshot: new Map() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: ResumeStatusStream['emit']

@@ -1,29 +1,31 @@
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
 import type {
   AutomationListResult,
   AutomationListScopeSelector
-} from '../../../../shared/automation-list-scope'
-import { validateAutomationListResponse } from '../../../../shared/automation-list-response'
+} from '../../../../shared/automations/ownership/automation-list-scope'
+import { validateAutomationListResponse } from '../../../../shared/automations/ownership/automation-list-response'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 /** The one classifier every client shares; re-exported so call sites keep importing it from here. */
-export { matchAutomationOwnerConflict } from '../../../../shared/automation-owner-conflict'
+
 import type {
   AutomationDestination,
   AutomationOwnerPrecondition
-} from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   toRuntimeAutomationCreateInput,
   toRuntimeAutomationUpdateInput
@@ -155,18 +157,55 @@ export async function listAutomationsForOwner(
 }
 
 /** Owned and orphan history reads do not probe. Old hosts may ignore preconditions and return their stored rows; read-only calls cannot mutate behind an unhonored fence. */
-async function listRunsFenced(
+async function listRunsPageFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
   expectedOwner: AutomationOwnerPrecondition,
   options: { limit?: number; cursor?: string } = {}
+): Promise<AutomationRunsPage> {
+  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
+    authority,
+    'automation.runs',
+    { automationId, expectedOwner, preview: true, ...options }
+  )
+  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+}
+
+/** Every run as previews; old hosts ignore `preview` and answer once with full rows and no cursor. */
+async function listRunsFenced(
+  authority: AutomationAuthorityRef,
+  automationId: string,
+  expectedOwner: AutomationOwnerPrecondition
 ): Promise<AutomationRun[]> {
-  const result = await callAuthority<{ runs: AutomationRun[] }>(authority, 'automation.runs', {
-    automationId,
+  const runs: AutomationRun[] = []
+  let cursor: string | undefined
+  do {
+    const page = await listRunsPageFenced(
+      authority,
+      automationId,
+      expectedOwner,
+      cursor ? { cursor } : {}
+    )
+    runs.push(...page.runs)
+    cursor = page.nextCursor ?? undefined
+  } while (cursor)
+  return runs
+}
+
+/** One full run for Details; null when an old host ignored `runId`, whose list rows were never cut. */
+export async function readFullAutomationRun(
+  authority: AutomationAuthorityRef,
+  expectedOwner: AutomationOwnerPrecondition,
+  run: Pick<AutomationRun, 'automationId' | 'id'>
+): Promise<AutomationRun | null> {
+  const result = await callAuthority<{ run?: AutomationRun }>(authority, 'automation.runs', {
+    automationId: run.automationId,
     expectedOwner,
-    ...options
+    runId: run.id,
+    // An old host ignores `runId` and lists; one row keeps that answer small.
+    limit: 1
   })
-  return result.runs
+  return result.run?.id === run.id ? result.run : null
 }
 
 export async function listAutomationRunsForOwner(
@@ -181,12 +220,7 @@ export async function listAutomationRunsPageForOwner(
   automationId: string,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
-  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
-    owner.authority,
-    'automation.runs',
-    { automationId, expectedOwner: ownerPrecondition(owner), ...options }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+  return await listRunsPageFenced(owner.authority, automationId, ownerPrecondition(owner), options)
 }
 
 /** Share owned/orphan mutation transport and capability probing; only the fence precondition differs. */
@@ -263,12 +297,7 @@ export async function listOrphanAutomationRunsPage(
   automationId: string,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
-  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
-    authority,
-    'automation.runs',
-    { automationId, expectedOwner: ORPHAN_OWNER_PRECONDITION, ...options }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+  return await listRunsPageFenced(authority, automationId, ORPHAN_OWNER_PRECONDITION, options)
 }
 
 export async function runAutomationNowForOwner(

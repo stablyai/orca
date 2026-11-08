@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
+import { makeDetectedResult } from '@/store/slices/worktrees/listing/worktrees-detected-listing-fixtures'
 import { makeFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance

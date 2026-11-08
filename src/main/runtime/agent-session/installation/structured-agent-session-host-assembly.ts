@@ -1,14 +1,14 @@
 // Loaded on first host install: the host, router and every provider adapter stay out of startup.
 
-import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/at-rest-command-context'
-import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'
+import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
+import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
+import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import {
   createStructuredAgentSessionProviderNaming,
   withProviderNaming
-} from '../../../native-chat/agent-session-wire/structured-agent-session-provider-naming'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-naming'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { scheduleNativeChatVisualsSweep } from '../../../native-chat/native-chat-visuals-sweep'
 import type { InstalledRuntime } from '../structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from '../records/agent-session-recovery-capsule'
@@ -25,6 +25,7 @@ import { createStructuredAgentSessionDispatchFollowUps } from '../structured-age
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { observePRWatchCommittedRows } from '../pr-watch-runtime'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -82,6 +83,7 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+    observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming

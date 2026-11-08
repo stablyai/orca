@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeTerminalQuickCommands } from '@/store/slices/terminal-quick-command-hosts'
+import type { RuntimeTerminalQuickCommands } from '@/store/terminals/terminal-quick-command-hosts'
 
 const testState = vi.hoisted(() => ({
   executionHostId: 'runtime:build' as ExecutionHostId,
@@ -26,7 +26,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.resolveExecutionHostId()
 }))
 

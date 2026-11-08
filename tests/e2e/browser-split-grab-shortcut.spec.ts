@@ -42,6 +42,39 @@ function grabBanner(page: Page, browserTabId: string) {
   return browserOverlay(page, browserTabId).getByText(/Click or hover an element|Grab failed/)
 }
 
+async function readGuestGrab(page: Page, browserTabId: string, expression: string) {
+  return page.evaluate(
+    async ({ tabId, script }) => {
+      const webview = document.querySelector<Electron.WebviewTag>(
+        `[data-browser-overlay-tab-id="${tabId}"] webview`
+      )
+      return webview ? Boolean(await webview.executeJavaScript(script)) : false
+    },
+    { tabId: browserTabId, script: expression }
+  )
+}
+
+// Hover like a user: the banner shows before the picker arms, which records hover a frame later.
+async function hoverGuestGrabTarget(page: Page, browserTabId: string, x: number, y: number) {
+  await expect
+    .poll(() => readGuestGrab(page, browserTabId, 'Boolean(window.__orcaGrab?.onPick)'))
+    .toBe(true)
+  await page.evaluate(
+    async ({ tabId, x, y }) => {
+      const webview = document.querySelector<Electron.WebviewTag>(
+        `[data-browser-overlay-tab-id="${tabId}"] webview`
+      )
+      await webview?.sendInputEvent({ type: 'mouseMove', x, y })
+    },
+    { tabId: browserTabId, x, y }
+  )
+  await expect
+    .poll(() =>
+      readGuestGrab(page, browserTabId, 'Boolean(window.__orcaGrab?.getCurrentElement())')
+    )
+    .toBe(true)
+}
+
 function annotateBanner(page: Page, browserTabId: string) {
   return browserOverlay(page, browserTabId).getByText(
     'Click an element to add feedback for the agent.'
@@ -239,11 +272,11 @@ test.describe('browser split grab shortcut', () => {
     // Why: a click-copy rearms the picker when its toast closes; outlasting the toast proves Escape ended it.
     await pressInGuest('C', [guestModifier])
     await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await hoverGuestGrabTarget(orcaPage, fixture.firstBrowserTabId, 60, 30)
     await orcaPage.evaluate(async (browserTabId) => {
       const webview = document.querySelector<Electron.WebviewTag>(
         `[data-browser-overlay-tab-id="${browserTabId}"] webview`
       )
-      await webview?.sendInputEvent({ type: 'mouseMove', x: 60, y: 30 })
       await webview?.sendInputEvent({
         type: 'mouseDown',
         x: 60,

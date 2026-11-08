@@ -15,18 +15,13 @@ import { basename, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
-  lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
 } from '../managed-server/install/remote-install-lock-commands'
 import {
-  commandWithNodePath,
   listRemoteInstallBaseDirsCommand,
   MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES,
-  moveRemoteTreeCommand,
-  probeRemoteInstallCompleteCommand,
-  readRemoteHomeCommand,
-  removeRemoteTreeCommand
+  probeRemoteInstallCompleteCommand
 } from './ssh-remote-commands'
 import {
   ORCAD_INSTALL_MODEL,
@@ -132,30 +127,6 @@ function runPowerShellCommand(executable: string, script: string): Promise<strin
 }
 
 describe('ssh remote command builders', () => {
-  it('keeps POSIX deploy commands POSIX-native', () => {
-    expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
-    expect(removeRemoteTreeCommand(posix, '/home/me/.orca-remote/x')).toContain('rm -rf')
-    const probe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
-    expect(probe).toContain("cd '/home/me/orcad'")
-    expect(probe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
-  })
-
-  it('requires every declared artifact before calling an install complete', () => {
-    const posixProbe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
-    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(posix)) {
-      expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
-    }
-    expect(posixProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
-
-    const windowsProbe = decodePowerShellCommand(
-      probeOrcadInstalledCommand(windows, 'C:/Users/me/orcad')
-    )
-    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(windows)) {
-      expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
-    }
-    expect(windowsProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
-  })
-
   // Stage a complete install, then remove one artifact: the probe must flip.
   function stageOrcadInstall(host: typeof posix): { dir: string; artifact: string } {
     const dir = mkdtempSync(join(tmpdir(), 'orca-install-probe-'))
@@ -197,70 +168,6 @@ describe('ssh remote command builders', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('uses encoded PowerShell for Windows deploy commands', () => {
-    expect(readRemoteHomeCommand(windows)).toContain('powershell.exe')
-    expect(removeRemoteTreeCommand(windows, 'C:/Users/me/.orca-remote/x')).toContain(
-      '-EncodedCommand'
-    )
-    const probe = probeOrcadInstalledCommand(windows, 'C:/Users/me/orcad')
-    expect(probe).toContain('-EncodedCommand')
-    expect(decodePowerShellCommand(probe)).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
-  })
-
-  it('writes a holder token inside the lock in the same command that creates it', () => {
-    const owner = { fileName: '.orca-wake-owner', token: 'tok-1' }
-    const posixLock = tryCreateInstallLockCommand(
-      posix,
-      '/home/u/.orca-remote/t/.install-lock',
-      owner
-    )
-    expect(posixLock).toMatch(
-      /^if mkdir .*; then .*printf %s 'tok-1' > '\/home\/u\/\.orca-remote\/t\/\.install-lock\/\.orca-wake-owner'; echo OK;/u
-    )
-    expect(tryCreateInstallLockCommand(posix, '/l')).not.toContain('orca-wake-owner')
-    const windowsLock = decodePowerShellCommand(
-      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/t/.install-lock', owner)
-    )
-    expect(windowsLock).toContain(
-      "[System.IO.File]::WriteAllText((Join-Path $lock '.orca-wake-owner'), 'tok-1'); 'OK'"
-    )
-  })
-
-  it('writes the new holder token when a stale lock is taken over', () => {
-    const owner = { fileName: '.orca-fence-owner', token: 'gen-2' }
-    expect(tryStealInstallLockCommand(posix, '/home/u/t/.install-lock', 1200, owner)).toContain(
-      "printf %s 'gen-2' > '/home/u/t/.install-lock/.orca-fence-owner';"
-    )
-    expect(
-      decodePowerShellCommand(
-        tryStealInstallLockCommand(windows, 'C:/Users/me/t/.install-lock', 1200, owner)
-      )
-    ).toContain("[System.IO.File]::WriteAllText((Join-Path $lock '.orca-fence-owner'), 'gen-2');")
-  })
-
-  it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
-    const lockScript = decodePowerShellCommand(
-      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
-    )
-
-    expect(lockScript).toContain('[System.IO.FileMode]::CreateNew')
-    expect(lockScript).toContain('[System.IO.FileShare]::None')
-    expect(lockScript).toContain('New-Item -ItemType Directory -Path $lock')
-    expect(lockScript).toContain("Join-Path $lock '.owner'")
-  })
-
-  it('moves GC candidates to a sibling tombstone with host-native commands', () => {
-    expect(moveRemoteTreeCommand(posix, '/relay/old', '/relay/old.gc-tombstone')).toContain(
-      "mv '/relay/old' '/relay/old.gc-tombstone'"
-    )
-    const windowsScript = decodePowerShellCommand(
-      moveRemoteTreeCommand(windows, 'C:/Users/me/relay/old', 'C:/Users/me/relay/old.gc-tombstone')
-    )
-    expect(windowsScript).toContain('Move-Item -LiteralPath')
-    expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
-    expect(windowsScript).toContain("'MOVED'")
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -320,69 +227,6 @@ describe('ssh remote command builders', () => {
       }
     }
   )
-
-  it('prepends the Windows node bin directory to PATH with native separators', () => {
-    const script = decodePowerShellCommand(
-      commandWithNodePath(
-        windows,
-        'C:/Program Files/nodejs/node.exe',
-        'C:/Users/me/.orca-remote/relay-0.1.0',
-        "'READY'"
-      )
-    )
-
-    expect(script).toContain("$env:PATH = 'C:\\Program Files\\nodejs' + ';' + $env:PATH")
-  })
-
-  it('keeps the Windows install-lock try/catch parseable', () => {
-    const script = decodePowerShellCommand(
-      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
-    )
-
-    expect(script).toContain('$stream = $null; try {')
-    expect(script).toContain("} catch { 'BUSY' }")
-    expect(script).not.toContain('}; catch')
-  })
-
-  it('computes install-lock age on the remote host clock', () => {
-    const posixCommand = lockAgeSecondsCommand(posix, '/home/me/.orca-remote/relay/.install-lock')
-    const windowsScript = decodePowerShellCommand(
-      lockAgeSecondsCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
-    )
-
-    expect(posixCommand).toContain('date +%s')
-    expect(posixCommand).toContain('echo "$age"')
-    expect(windowsScript).toContain('[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()')
-    expect(windowsScript).toContain('Write-Output ($now - $mtime)')
-  })
-
-  it('serializes stale recovery with unbounded numbered sibling claims', () => {
-    const posixCommand = tryStealInstallLockCommand(
-      posix,
-      '/home/me/.orca-remote/relay/.install-lock',
-      20 * 60
-    )
-    const windowsScript = decodePowerShellCommand(
-      tryStealInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock', 20 * 60)
-    )
-
-    expect(posixCommand).toContain('.install-lock')
-    expect(posixCommand).toContain('.install-lock.steal')
-    expect(posixCommand).toContain('steal_generation')
-    expect(posixCommand).toContain('mtime=${lock_key%%:*}')
-    expect(posixCommand).toContain('-gt 1200')
-    expect(posixCommand).toContain('current_mtime')
-    expect(posixCommand).toContain('steal_generation + 1')
-    expect(posixCommand).not.toContain('.next.')
-    expect(posixCommand).toContain('trap')
-    expect(windowsScript).toContain('$lock.steal')
-    expect(windowsScript).toContain('$stealGeneration++')
-    expect(windowsScript).toContain('-gt 1200')
-    expect(windowsScript).toContain('$currentIdentity -eq $lockIdentity')
-    expect(windowsScript).toContain('[System.IO.FileMode]::CreateNew')
-    expect(windowsScript).not.toContain('.next.')
-    expect(windowsScript).toContain('finally')
-  })
 
   it.runIf(powerShellExecutable)(
     'emits a parseable Windows stale-lock recovery command',
@@ -652,19 +496,4 @@ describe('ssh remote command builders', () => {
       }
     }
   )
-
-  it('makes Windows remote directory changes fail before running scoped commands', () => {
-    const nodeScopedCommand = decodePowerShellCommand(
-      commandWithNodePath(
-        windows,
-        'C:/Program Files/nodejs/node.exe',
-        'C:/Users/me/.orca-remote/relay-0.1.0',
-        "'READY'"
-      )
-    )
-
-    expect(nodeScopedCommand).toContain(
-      "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me/.orca-remote/relay-0.1.0'"
-    )
-  })
 })

@@ -5,9 +5,9 @@ import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
   resolvePullRequestGenerationCancel,
-  resolvePullRequestGenerationSuccess,
-  type PullRequestGenerationSlice
-} from '@/store/slices/pull-request-generation'
+  resolvePullRequestGenerationSuccess
+} from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationSlice } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 
 const seed = {
   base: 'main',

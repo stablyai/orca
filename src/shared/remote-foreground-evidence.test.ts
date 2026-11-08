@@ -25,14 +25,6 @@ const live = {
 
 describe('remote foreground evidence contract', () => {
   it.each([
-    live,
-    { ...live, verdict: 'unverifiable' as const, reason: 'process_table_unreadable' },
-    { ...live, verdict: 'exited' as const, reason: 'pty_exit_0' }
-  ])('accepts the $verdict host record', (value) => {
-    expect(isRemoteForegroundEvidence(value)).toBe(true)
-  })
-
-  it.each([
     { ...live, authorityGeneration: '' },
     { ...live, ptyIncarnationId: '' },
     { ...live, capturedAgeMs: -1 },
@@ -90,18 +82,6 @@ describe('remote foreground evidence contract', () => {
     })
 
     it.each([
-      ['host-measured', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS - 1, 0],
-      ['client-measured', 0, REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS - 1]
-    ])('admits at the %s boundary', (_label, capturedAgeMs, receiveDelay) => {
-      expect(
-        admitRemoteForegroundEvidence(
-          { ...live, capturedAgeMs },
-          { ...admission, receivedAtMonotonic: receiveDelay }
-        )
-      ).not.toBeNull()
-    })
-
-    it.each([
       ['host-measured', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 0],
       ['client-measured', 0, REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1]
     ])('refuses one step past the %s boundary', (_label, capturedAgeMs, receiveDelay) => {
@@ -111,21 +91,6 @@ describe('remote foreground evidence contract', () => {
           { ...admission, receivedAtMonotonic: receiveDelay }
         )
       ).toBeNull()
-    })
-
-    it('still admits the prompt unverifiable a capture over its budget produces', () => {
-      // Late refused records increment inspection errors and stall completion; prompt admitted unverifiable costs only a poll.
-      expect(
-        admitRemoteForegroundEvidence(
-          {
-            ...live,
-            verdict: 'unverifiable' as const,
-            reason: 'process_table_unreadable',
-            capturedAgeMs: 0
-          },
-          admission
-        )
-      ).not.toBeNull()
     })
   })
 

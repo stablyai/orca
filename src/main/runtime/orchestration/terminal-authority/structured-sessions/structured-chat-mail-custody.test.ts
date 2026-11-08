@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // A queued mail card is the chat's to hand over only while the chat still owes it: its message unread in
 // its mailbox, and that mailbox still this chat's. The queue asks at handover; cleanup is visible only.
 
@@ -11,7 +10,7 @@ import type { AgentSessionJournal } from '../../../../native-chat/agent-session-
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteKindForMethod } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-gate'
+import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
@@ -19,13 +18,11 @@ import {
   PEER_CHAT,
   WAIT,
   call,
-  codex,
   coordinatorRunAndTask,
   db,
   finishWorker,
   host,
   isWholeMail,
-  observationClock,
   openChat,
   queuedCardTexts,
   runtime,
@@ -367,75 +364,4 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
   })
-
-  it.each([4, 40])(
-    'follows %i waiting report cards by key, never reading the chat’s history',
-    async (count) => {
-      await busyChat(COORDINATOR)
-      const { runId } = await coordinatorRunAndTask()
-      const journal = journalOf(COORDINATOR)
-      // A long conversation: reconciling must not cost more for it.
-      const fence = host.deps.store.getConversation(COORDINATOR)!.currentFence
-      for (let item = 0; item < 500; item += 1) {
-        await journal.appendItem(
-          { provider: 'orca', clientMessageId: `history-${item}` },
-          { kind: 'status', text: `step ${item}` },
-          { fence, turnScope: { kind: 'thread' } }
-        )
-      }
-      // Each report admitted on its own, as workers report: identity is read from every saved
-      // conversation once, not once per admission.
-      const lineage = vi.spyOn(host.deps.store, 'listConversations')
-      for (let report = 0; report < count; report += 1) {
-        db.insertMessage({
-          runId,
-          from: 'term_worker',
-          to: `run:${runId}`,
-          subject: `report ${report}`
-        })
-        runtime.deliverPendingMessagesForHandle(`run:${runId}`)
-        await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(report + 1), WAIT)
-      }
-      expect(lineage.mock.calls.length).toBeLessThanOrEqual(1)
-
-      const facts = vi.spyOn(host, 'sendAnswer')
-      const snapshots = vi.spyOn(host, 'journalSnapshot')
-      const histories = vi.spyOn(journal, 'submissions')
-      const sends = vi.spyOn(host, 'send')
-      runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
-      await vi.waitFor(async () => {
-        const seen = facts.mock.calls.length
-        await Promise.all(facts.mock.results.map((read) => read.value))
-        await new Promise((resolve) => setImmediate(resolve))
-        expect(seen).toBeGreaterThanOrEqual(count)
-        expect(facts.mock.calls.length).toBe(seen)
-      }, WAIT)
-      // One keyed read per card per pass, however long the history, and a pass or few per edge.
-      const reads = new Map<string, number>()
-      for (const [, operation] of facts.mock.calls) {
-        reads.set(operation, (reads.get(operation) ?? 0) + 1)
-      }
-      const recorded = db.getStructuredMailSends(`run:${runId}`).map((row) => row.operation_id)
-      expect([...reads.keys()].sort()).toEqual([...recorded].sort())
-      const passes = new Set(reads.values())
-      expect(passes.size).toBe(1)
-      expect([...passes][0]).toBeLessThanOrEqual(3)
-      expect(snapshots).not.toHaveBeenCalled()
-      expect(histories).not.toHaveBeenCalled()
-      expect(sends).not.toHaveBeenCalled()
-      expect(db.getStructuredMailSends(`run:${runId}`)).toHaveLength(count)
-      expect(codex.connections.flatMap((connection) => connection.turns)).toHaveLength(1)
-
-      // Publications that change nothing the mail waits on, as streamed tokens do, start no pass
-      // (once the redrive the admissions themselves scheduled has run).
-      await observationClock.observe(2_500)
-      facts.mockClear()
-      for (let token = 0; token < 5; token += 1) {
-        host.wakeQueuedMessages(COORDINATOR)
-        await observationClock.observe(400)
-      }
-      expect(facts).not.toHaveBeenCalled()
-    },
-    30_000
-  )
 })

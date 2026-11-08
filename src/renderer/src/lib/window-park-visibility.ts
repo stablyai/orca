@@ -2,7 +2,7 @@ import { isWindowVisible } from './window-visibility-interval'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
-} from '@/components/terminal-pane/stale-document-visibility'
+} from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 
 // macOS can latch visibilityState hidden without later events; stale-latch proof prevents parking visible work forever, including terminal output.
 export function getWindowParkVisible(): boolean {

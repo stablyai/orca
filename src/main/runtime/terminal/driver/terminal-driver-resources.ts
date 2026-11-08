@@ -1,4 +1,4 @@
-import type { RuntimeServiceCommandSurface } from '../../runtime-service-command-surface'
+import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 import {
   remoteCliBrowserScopeWorkspaceId,
@@ -11,13 +11,13 @@ import type { RuntimeAccountController } from '../../agent-session/environment/r
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
 } from '../../../../shared/runtime-terminal-contracts'
-import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
 import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
@@ -29,23 +29,23 @@ import type {
 } from '../layout/terminal-layout-state'
 
 import { RuntimeTerminalDriverController } from './runtime-terminal-driver-controller'
-import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
+import { RuntimeEdgeCommandController } from '../../construction/runtime-edge-command-controller'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
-import { RemoteDesktopTerminalFloor } from '../../remote-desktop-terminal-floor'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
+import { RemoteDesktopTerminalFloor } from '../layout/remote-desktop-terminal-floor'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 import type { StatsCollector } from '../../../stats/collector'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
-import { ServeBrowserTabs } from '../../serve-browser-tabs'
+import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
+import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
@@ -234,7 +234,14 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),
       getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getSettings: () => this.requireStore().getSettings()
+      getSettings: () => this.requireStore().getSettings(),
+      updateEmulatorSettings: (updates) => {
+        const store = this.requireStore()
+        if (!store.updateSettings) {
+          throw new Error('This host cannot save emulator preferences.')
+        }
+        store.updateSettings(updates, { notifyListeners: true })
+      }
     }
   })
 

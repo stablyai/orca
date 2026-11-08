@@ -1,7 +1,7 @@
 // Use the buffer polyfill: Metro cannot resolve node:buffer in React Native.
 import { Buffer } from 'buffer'
 
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'

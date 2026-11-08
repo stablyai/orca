@@ -15,7 +15,7 @@ import { i18n } from './i18n'
 import * as rendererI18n from './i18n'
 import { useLanguageReadiness } from './language-readiness'
 import * as languageReadiness from './language-readiness'
-import { usePluginLanguagePackStore } from '../store/plugin-language-packs'
+import { usePluginLanguagePackStore } from '../store/plugins/localization/plugin-language-packs'
 import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { I18nProvider } from './I18nProvider'
 

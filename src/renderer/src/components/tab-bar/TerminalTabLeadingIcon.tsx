@@ -10,7 +10,7 @@ import {
   terminalTabActivityToAgentDotState,
   type TerminalTabActivityStatus
 } from './terminal-tab-activity-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalTabLeadingIconProps = {
   agent: TerminalAgent | null
@@ -52,11 +52,12 @@ export function TerminalTabLeadingIcon({
   isActive,
   progress
 }: TerminalTabLeadingIconProps): React.JSX.Element {
+  const t = useTranslate()
   if (showUnreadActivity) {
     return (
       <span
         data-testid="tab-activity-bell"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
           'Unread agent completion'
         )}

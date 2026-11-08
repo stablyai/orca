@@ -1,6 +1,6 @@
 import type { GitFileStatus, GitStatusEntry } from '../../../shared/git/status/git-status-types'
-import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { splitPathSegments } from '../../../shared/cross-platform-path'
+import { joinPath } from '@/lib/path'
+import { normalizeRelativePath, splitPathSegments } from '../../../shared/cross-platform-path'
 
 export const STATUS_COLORS: Record<GitFileStatus, string> = {
   modified: 'var(--git-decoration-modified)',

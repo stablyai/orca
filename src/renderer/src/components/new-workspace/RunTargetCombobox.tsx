@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption,
@@ -53,6 +53,7 @@ export default function RunTargetCombobox({
   onConnectHost,
   onSetLocation
 }: RunTargetComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
   const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -202,9 +203,11 @@ export default function RunTargetCombobox({
   )
 
   const fieldLabel = selectedRecipe
-    ? `${getEphemeralVmLabel()} / ${selectedRecipe.name}`
+    ? `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
     : (selectedHost?.label ?? '')
-  const fieldDetail = selectedRecipe ? getRecipeDetail(selectedRecipe) : (selectedHost?.path ?? '')
+  const fieldDetail = selectedRecipe
+    ? getRecipeDetail(selectedRecipe, t)
+    : (selectedHost?.path ?? '')
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -252,10 +255,7 @@ export default function RunTargetCombobox({
         <div
           id={listId}
           role="listbox"
-          aria-label={translate(
-            'auto.components.new.workspace.RunTargetCombobox.listLabel',
-            'Run targets'
-          )}
+          aria-label={t('auto.components.new.workspace.RunTargetCombobox.listLabel', 'Run targets')}
           className="flex min-h-0 flex-col"
         >
           <div
@@ -265,7 +265,7 @@ export default function RunTargetCombobox({
           >
             {rows.filter((row) => row.kind !== 'add-host').length === 0 ? (
               <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.NewWorkspaceComposerCard.noRunTargets',
                   'No run targets are ready for this project.'
                 )}

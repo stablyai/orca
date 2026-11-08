@@ -6,17 +6,17 @@ import {
   agentProviderSessionsEqual,
   isResumableTuiAgent
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   readWorkerResumeSession,
   type WorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { DispatchContextRow } from '../../../../orchestration/types'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {

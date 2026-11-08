@@ -8,7 +8,15 @@ import {
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
-import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
+import {
+  connectionManager,
+  getCurrentMainWindow,
+  persistedStore,
+  portForwardManager
+} from './ssh-ipc-context'
+import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
+import { clearHostSettingOverride } from '../../../shared/host-setting-overrides'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { forgetPortForwardRestoreState } from './ssh-managed-port-forward-restore'
 import { errorMessage } from '../../../shared/error-message'
@@ -58,6 +66,22 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       )
     }
   })
+  // Every removal (Settings, CLI, paired client, a recipe VM's cleanup) ends here: the window
+  // drops the target's live state, and its rename must not outlive it.
+  broadcastSshTargetRemoved(getCurrentMainWindow, targetId)
+  dropRemovedSshTargetDisplayLabel(targetId)
+}
+
+function dropRemovedSshTargetDisplayLabel(targetId: string): void {
+  if (!persistedStore) {
+    return
+  }
+  const settings = persistedStore.getSettings()
+  const current = settings.hostSettingOverrides
+  const next = clearHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel')
+  if (current && next !== current) {
+    persistedStore.updateSettings({ hostSettingOverrides: next }, { notifyListeners: true })
+  }
 }
 
 export async function teardownSshTargetTransport(targetId: string): Promise<void> {

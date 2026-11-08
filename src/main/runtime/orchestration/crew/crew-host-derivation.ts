@@ -1,13 +1,13 @@
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
-import type { FleetDurableWorker } from '../../../../shared/orchestration-fleet-projection'
-import { createFleetStatusIndex } from '../../../../shared/orchestration-fleet-status-index'
+import type { FleetDurableWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { createFleetStatusIndex } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
 import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
 export function createCrewHostDerivation(
   deps: CrewReadDependencies,

@@ -24,6 +24,7 @@ import { agentSessionFailureSentence } from '../../../../../src/shared/agent-ses
 import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
+  MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
@@ -42,9 +43,9 @@ import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../sr
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
-import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -98,6 +99,7 @@ export function MobileNativeChatNoticeRow({
   const detailId = useId()
   const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
+  const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -189,6 +191,30 @@ export function MobileNativeChatNoticeRow({
         </View>
       )
     }
+    case 'forked-from': {
+      const { sourceName, sourceSessionId } = look
+      return (
+        // No label on the row: it would replace the text and hide the source link from screen readers.
+        <View style={styles.divider}>
+          <View style={styles.rule} />
+          <Text style={styles.dividerLabel}>
+            {copy.forkedFrom}{' '}
+            {openForkSource ? (
+              <Text
+                accessibilityRole="link"
+                style={styles.dividerLink}
+                onPress={() => openForkSource(sourceSessionId)}
+              >
+                {sourceName}
+              </Text>
+            ) : (
+              sourceName
+            )}
+          </Text>
+          <View style={styles.rule} />
+        </View>
+      )
+    }
     case 'command-output':
       return (
         <Text
@@ -264,12 +290,12 @@ export function MobileNativeChatNoticeRow({
               )}
               onPress={() => runInTerminal(signInCommand)}
               style={({ pressed }) => [
-                chatViewStyles.retryPill,
+                sheetPrimaryButtonStyles.button,
                 styles.action,
-                pressed && chatViewStyles.retryPillPressed
+                pressed && sheetPrimaryButtonStyles.pressed
               ]}
             >
-              <Text style={chatViewStyles.retryPillLabel}>
+              <Text style={sheetPrimaryButtonStyles.label}>
                 {t('chat.notice.signIn', 'Sign in')}
               </Text>
             </Pressable>
@@ -324,6 +350,9 @@ const styles = themedStyleSheet(() => ({
   dividerLabel: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  dividerLink: {
+    textDecorationLine: 'underline'
   },
   faint: {
     color: colors.textMuted

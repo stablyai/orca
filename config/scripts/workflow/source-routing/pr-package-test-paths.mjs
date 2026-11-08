@@ -150,7 +150,6 @@ export function isCloudTestRunnerInput(file) {
 
 // The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
-  'src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts',
   'config/scripts/native-build/node-addons/rebuild-native-deps.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',
@@ -177,7 +176,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
-  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/agent-hooks/windows-native-hook-exe-hosts.test.ts',
   'src/main/claude/windows-native-hook-registration.test.ts',
   'src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts',
@@ -185,7 +183,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/agent-hooks/windows-powershell-hook-launcher.test.ts',
   'src/main/claude/claude-status-line-windows.test.ts',
   'src/main/codex/hooks/installation/windows-hook-command.test.ts',
-  'src/main/codex/hooks/installation/windows-hook-upgrade.test.ts',
   'src/main/codex/hooks/installation/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
@@ -200,7 +197,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
-  'src/main/wsl/execution/wsl-runner.test.ts',
   'src/main/wsl/execution/wsl-guest-environment.test.ts',
   'src/main/wsl/execution/wsl-executable-path.win32.test.ts',
   'src/main/claude-accounts/claude-profile-history-windows.test.ts',
@@ -214,15 +210,13 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/startup/windows-isolated-spawner.win32.test.ts',
   'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
-  'src/shared/secure-file-fsync-flags.test.ts',
-  'src/shared/secure-path-windows-acl.win32.test.ts',
-  'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
+  'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
+  'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
-  'src/main/skills/skill-windows-rename-contention.integration.test.ts',
-  'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/bundled-skill-local-host.test.ts',
+  'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [

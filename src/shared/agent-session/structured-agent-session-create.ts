@@ -15,10 +15,14 @@ export type StructuredAgentSessionResumeSource = {
   cliSource?: { workspaceId: string; paneKey: string }
 }
 
+/** The source chat and the response whose turn the fork copies through. */
+export type StructuredAgentSessionForkSource = { sessionId: string; throughItemId: string }
+
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: StructuredAgentId
+  forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
@@ -55,6 +59,7 @@ export function structuredAgentSessionCreateParams(args: {
   sessionId: string
   worktree: string
   agent: StructuredAgentId
+  forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -65,10 +70,14 @@ export function structuredAgentSessionCreateParams(args: {
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
+  if (args.forkFrom && (args.resumeFrom || args.options || args.optionsMode)) {
+    throw new Error('A fork inherits its source options and cannot also resume a conversation.')
+  }
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
     ...(args.tabId ? { tabId: args.tabId } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
     ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),

@@ -1,19 +1,19 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getRepoMapFromState } from '@/store/selectors'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   isAutomaticDeselection,
   subscribeWorktreeDeselectionIntent,
   type EnclosingWorktreeRemoval
-} from '@/store/active-worktree-deselection-intent'
-import {
-  findIndexedWorktreeOwnerForHost,
-  worktreeOwnerHostIds
-} from '@/lib/worktree-runtime-owner-index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+} from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
+import { createSleepingSweepHiddenCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
+import { getSidebarSleepingSweepRetainedIds } from '@/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -21,19 +21,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-
-type SuccessorState = Pick<
-  AppState,
-  | 'worktreesByRepo'
-  | 'repos'
-  | 'deleteStateByWorktreeId'
-  | 'lastVisitedAtByWorktreeId'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'activeView'
-  | 'activePendingCreationId'
->
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type RemovedActiveRow = {
   id: string
@@ -80,14 +68,21 @@ function isHostedOnRuntimeOwnedSshTarget(
 
 // Like closing a tab: the most recently visited other workspace of the project, else its main one.
 export function pickActiveWorktreeSuccessor(
-  state: SuccessorState,
-  removed: RemovedActiveRow
+  state: AppState,
+  removed: RemovedActiveRow,
+  sleepingSweepRetainedIds: ReadonlySet<string>
 ): Worktree | null {
-  const repoById = getRepoMapFromState(state)
+  const repoById = getIndexedRepoMap(state.repos)
+  // Activating seeds a terminal, so a row "Hide sleeping" keeps out of the sidebar would be woken.
+  const isHiddenAsleep =
+    state.persistedUIReady && state.workspaceSessionReady && !state.showSleepingWorkspaces
+      ? createSleepingSweepHiddenCheck(state, sleepingSweepRetainedIds)
+      : null
   const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
-      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
+      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
+      !isHiddenAsleep?.(worktree)
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {
@@ -101,7 +96,7 @@ export function pickActiveWorktreeSuccessor(
   return siblings.find((worktree) => worktree.isMainWorktree) ?? null
 }
 
-function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
+function listedActiveRow(state: AppState): RemovedActiveRow | null {
   const id = state.activeWorktreeId
   const row = id ? findListedRow(state, id, state.activeWorkspaceExecutionHostId) : undefined
   return row && id
@@ -114,7 +109,7 @@ function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
     : null
 }
 
-function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
+function isSelectionEmptyTerminalView(state: AppState): boolean {
   return (
     state.activeView === 'terminal' &&
     state.activePendingCreationId === null &&
@@ -217,7 +212,11 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
         return
       }
       witness = null
-      const successor = pickActiveWorktreeSuccessor(state, removed)
+      const successor = pickActiveWorktreeSuccessor(
+        state,
+        removed,
+        getSidebarSleepingSweepRetainedIds()
+      )
       if (successor) {
         // Keep successor focus from replacing the removed row's spatial context.
         activateAndRevealWorktree(successor.id, {

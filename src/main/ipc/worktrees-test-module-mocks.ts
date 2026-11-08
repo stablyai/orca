@@ -55,6 +55,7 @@ export const getBaseRefDefaultMock: ModuleMock = vi.fn()
 export const resolveDefaultBaseRefWithLocalGitMock: ModuleMock = vi.fn()
 export const getDefaultRemoteMock: ModuleMock = vi.fn()
 export const getBranchConflictKindMock: RepoBranchMock = vi.fn()
+export const getBranchConflictKindStrictMock: RepoBranchMock = vi.fn()
 export const getPRForBranchMock: RepoBranchMock = vi.fn()
 export const getHostedReviewForBranchMock: ModuleMock = vi.fn()
 export const getWorkItemMock: ModuleMock = vi.fn()
@@ -135,7 +136,8 @@ export const gitRepoModuleMock = () => ({
       return null
     }
     return getBranchConflictKindMock(repoPath, branch, base, options)
-  }
+  },
+  getBranchConflictKindStrict: getBranchConflictKindStrictMock
 })
 
 export const githubClientModuleMock = () => ({
