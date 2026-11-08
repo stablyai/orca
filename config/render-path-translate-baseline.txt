@@ -790,8 +790,6 @@
 7 src/renderer/src/components/right-sidebar/use-right-sidebar-activity-items.ts
 16 src/renderer/src/components/runtime-access/RuntimeHostAccessForm.tsx
 8 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
-22 src/renderer/src/components/settings/terminal/TerminalPane.tsx
-5 src/renderer/src/components/settings/terminal/appearance/TerminalSettingsPreview.tsx
 3 src/renderer/src/components/setup-guide/SetupGuideModal.tsx
 1 src/renderer/src/components/setup-guide/SetupGuideProgressRing.tsx
 18 src/renderer/src/components/shared/MacFolderAccessFixDialog.tsx
