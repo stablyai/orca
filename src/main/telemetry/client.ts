@@ -167,8 +167,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
 
   // Read persisted consent live to respect current preferences/env precedence.
   const settings = storeRef.getSettings()
-  const consent = resolveConsent(settings)
-  if (consent.effective !== 'enabled') {
+  if (resolveConsent(settings).effective !== 'enabled') {
     return false
   }
 
@@ -197,12 +196,13 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
         : {}
 
   // Node SDK requires per-capture person-profile suppression.
+  const switchCohort = settings.telemetry?.chatUiSwitchNoteCohort
   const message = {
     distinctId: commonProps.install_id,
     event: name,
     properties: {
       ...commonProps,
-      chat_ui_switch_note_v1: settings.telemetry?.chatUiSwitchNoteCohort,
+      ...(switchCohort && { chat_ui_switch_note_v1: switchCohort }),
       ...result.props,
       ...mainOwnedProps,
       $process_person_profile: false

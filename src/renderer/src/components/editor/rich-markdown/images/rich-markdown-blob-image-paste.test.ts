@@ -87,7 +87,16 @@ beforeEach(() => {
   }))
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { runtime: { call: saves }, fs: { importExternalPaths: imports } }
+    value: {
+      runtime: {
+        call: saves,
+        subscribe: async (args: unknown, onResponse: (response: unknown) => void) => {
+          void saves(args).then(onResponse)
+          return { unsubscribe: () => {} }
+        }
+      },
+      fs: { importExternalPaths: imports }
+    }
   })
   vi.stubGlobal(
     'fetch',
