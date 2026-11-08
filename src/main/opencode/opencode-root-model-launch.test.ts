@@ -1,5 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { prepareOpenCodePtyLaunch } from './opencode-pty-launch'
+import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { OPENCODE_STARTUP_PROMPT_BODY_ENV } from '../../shared/agent-launch/startup/opencode-startup-prompt'
 
 const run = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: run }))
@@ -45,4 +47,19 @@ it('keeps the overlay when the caller asked to drop inherited OpenCode config', 
     model: 'opencode/big-pickle'
   })
   expect(result.envToDelete).not.toContain('OPENCODE_CONFIG_CONTENT')
+})
+
+it('rewrites a PowerShell launch whose prompt only the env body can identify', async () => {
+  run.mockResolvedValue({ code: 0, stdout: '2.0.21', timedOut: false })
+  const prompt = 'Use "a;b"\nthen run `pnpm test`'
+  const tail = ` --prompt ${quoteStartupArg(prompt, 'powershell')}`
+  const result = await prepareOpenCodePtyLaunch({
+    command: `opencode '--model' 'opencode/big-pickle'${tail}`,
+    env: { [OPENCODE_STARTUP_PROMPT_BODY_ENV]: prompt },
+    envToDelete: [],
+    cwd: '/repo/powershell',
+    isFreshLaunch: true,
+    shell: 'powershell'
+  })
+  expect(result.command).toBe(`opencode --standalone${tail}`)
 })
