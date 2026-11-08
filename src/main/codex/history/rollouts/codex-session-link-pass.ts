@@ -170,6 +170,10 @@ class RolloutLinkWalk {
       outcome = await linkCodexSessionFileAsync(join(sourceDir, name), join(targetDir, name), {
         hardlinkOnly: this.hardlinkOnly
       })
+      if (outcome === 'existing' && !(await isTargetPresent(join(targetDir, name)))) {
+        // A dangling link another writer made after the listing is not readable history.
+        return 'failed'
+      }
       if (outcome === 'linked' || outcome === 'existing') {
         return outcome
       }
@@ -245,6 +249,14 @@ async function readTargetEntry(targetPath: string): Promise<TargetEntry | null> 
       return null
     }
     throw error
+  }
+}
+
+async function isTargetPresent(targetPath: string): Promise<boolean> {
+  try {
+    return (await readTargetEntry(targetPath)) === 'present'
+  } catch {
+    return false
   }
 }
 
