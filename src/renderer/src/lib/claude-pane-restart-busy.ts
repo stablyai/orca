@@ -1,6 +1,6 @@
-import type { AppState } from '@/store'
-import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { agentTurnSettledForStop } from './agent-hibernation-pane-eligibility'
+import type { AppState } from '@/store/types'
+import { lastInputBlocksHibernation } from './agent-session/hibernation/agent-hibernation-input-guard'
+import { agentTurnSettledForStop } from './agent-session/hibernation/agent-hibernation-pane-eligibility'
 import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 
 /** Whether restarting the pane's Claude now would lose work: a turn, a permission prompt or question, subagents, an unfinished dispatch, an unclean turn end or an unsent draft. */

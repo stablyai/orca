@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   recordTerminalInputActivity,
   resetTerminalInputActivityCoalescingForTests
