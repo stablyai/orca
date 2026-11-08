@@ -6,9 +6,12 @@ import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmissi
 import type { RelayDatabase, SqlRow } from './database.js'
 import { z } from 'zod'
 import {
+  EDGE_ADMIN_LOCKED_TIMEOUT_MS,
   EdgeAdminUnavailableError,
   edgeLocationHint,
   type EdgeAdmin,
+  type EdgeAssignBody,
+  type EdgeAssignResult,
   type EdgeDeviceRow
 } from './edge-admin-client.js'
 
@@ -69,10 +72,15 @@ export class EdgeMoveBusyError extends Error {
 
 export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 
-// The move cannot happen on this ask (old-cell units still held, or the edge did not take the
-// push) and nothing changed: the host stays where it is and moves on a later ask.
+// Edge admin calls one director may have in flight while it holds assignment row locks (pushes of
+// moves). A move that would exceed it is deferred rather than queued behind a slow edge.
+export const EDGE_LOCKED_CALLS_MAX = 8
+
+// The move cannot happen on this ask (old-cell units still held, the edge did not take the push, or
+// this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
+// stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(reason: 'units_held' | 'push_failed') {
+  constructor(reason: 'units_held' | 'push_failed' | 'edge_busy') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
@@ -140,6 +148,8 @@ export class EdgeAssignments {
   // When this director's exports started failing as unavailable; any usable answer clears it.
   private exportFailingSince: number | undefined
   private exportLastFailureAt: number | undefined
+  // Edge admin calls in flight under an assignment row lock (pushes), capped at EDGE_LOCKED_CALLS_MAX.
+  private lockedCalls = 0
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -305,7 +315,7 @@ export class EdgeAssignments {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let result
       try {
-        result = await this.admin.assign({
+        result = await this.lockedAssign({
           ...identity,
           cellId: EDGE_CELL_ID,
           assignmentEpoch,
@@ -324,6 +334,19 @@ export class EdgeAssignments {
       )
     }
     throw new EdgeMoveDeferredError('push_failed')
+  }
+
+  // A push made under the row lock. Past EDGE_LOCKED_CALLS_MAX in flight the move is deferred at
+  // once rather than adding another row lock held on a slow edge.
+  private async lockedAssign(body: EdgeAssignBody): Promise<EdgeAssignResult> {
+    if (!this.admin) throw new Error('relay_edge_admin_missing')
+    if (this.lockedCalls >= EDGE_LOCKED_CALLS_MAX) throw new EdgeMoveDeferredError('edge_busy')
+    this.lockedCalls += 1
+    try {
+      return await this.admin.assign(body, { timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS })
+    } finally {
+      this.lockedCalls -= 1
+    }
   }
 
   // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its
@@ -389,20 +412,25 @@ export class EdgeAssignments {
 
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
   // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
-  // that its phones see HOST_OFFLINE until the next move.
+  // that its phones see HOST_OFFLINE until the next move. Anything but applied/unchanged fails:
+  // unavailable, `conflict`, or `stale` (the edge holds a newer epoch, so it still claims the host).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) return true
     // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
     const attempts = this.exportFailingSince === undefined ? 3 : 1
+    let outcome = 'unavailable'
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
-        const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
-        if (result.outcome !== 'conflict') return true
+        outcome = (await this.admin.assign({ ...identity, cellId, assignmentEpoch })).outcome
       } catch (error) {
         if (!(error instanceof EdgeAdminUnavailableError)) throw error
+        outcome = error.message
       }
+      if (outcome === 'applied' || outcome === 'unchanged') return true
+      // The same epoch stays stale; only a later move (a newer epoch) can land.
+      if (outcome === 'stale') break
     }
-    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', cellId, assignmentEpoch }))
+    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', outcome, cellId, assignmentEpoch }))
     return false
   }
 

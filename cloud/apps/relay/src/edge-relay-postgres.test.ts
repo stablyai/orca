@@ -1,8 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { RelayCellAdmissionSelector } from './cell-admission-selector.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
-import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveBusyError, EdgeMoveDeferredError } from './edge-relay.js'
+import {
+  EDGE_CELL_ID,
+  EDGE_LOCKED_CALLS_MAX,
+  EdgeAssignments,
+  EdgeMoveBusyError,
+  EdgeMoveDeferredError
+} from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
@@ -161,5 +167,35 @@ describePostgres('relay edge on PostgreSQL', () => {
       ['phone-a', 1_850_000_000_000, 2],
       ['phone-c', null, 2]
     ])
+  })
+
+  it('defers a move past the cap of pushes in flight under row locks, without waiting', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    let calls = 0
+    const admin = {
+      assign: async (body: EdgeAssignBody) => {
+        calls += 1
+        await gate
+        return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
+      },
+      exportHost: async () => ({ outcome: 'busy' as const }),
+      drain: async () => ({ outcome: 'idle' as const })
+    }
+    const edge = new EdgeAssignments(database, edgeConfig, Date.now, admin)
+    await edge.ensureEdgeCell()
+    const capHosts = Array.from({ length: EDGE_LOCKED_CALLS_MAX + 1 }, (_, index) => ({
+      userId: 'edge-pg-user',
+      relayHostId: `edgepgcap${String(index).padStart(6, '0')}`
+    }))
+    const held = capHosts.slice(0, EDGE_LOCKED_CALLS_MAX).map((host) => edge.moveToEdge(host, 0))
+    await vi.waitFor(() => expect(calls).toBe(EDGE_LOCKED_CALLS_MAX))
+    const last = capHosts.at(-1)!
+    await expect(edge.moveToEdge(last, 0)).rejects.toThrow('relay_edge_move_deferred:edge_busy')
+    // The deferred move rolled back: no row was left behind for the last host.
+    expect(await database.query(`SELECT 1 FROM relay_assignments WHERE relay_host_id = ?`, [last.relayHostId])).toEqual([])
+    release()
+    await Promise.all(held)
+    expect((await edge.moveToEdge(last, 0)).cellId).toBe(EDGE_CELL_ID)
   })
 })
