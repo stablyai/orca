@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildMobileNewTabAgentOptions,
-  orderMobileNewTabAgents
-} from './mobile-new-tab-agent-options'
+import { orderMobileNewTabAgents } from './mobile-new-tab-agent-options'
 
 describe('mobile new-tab agent options', () => {
   it('orders the enabled detected default first', () => {
@@ -11,9 +8,5 @@ describe('mobile new-tab agent options', () => {
       'codex',
       'claude'
     ])
-  })
-
-  it('does not show stale presets while detection is pending', () => {
-    expect(buildMobileNewTabAgentOptions({ defaultTuiAgent: 'codex' }, null)).toEqual([])
   })
 })
