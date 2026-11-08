@@ -58,10 +58,10 @@
 1 src/main/runtime/terminal/input/agent-prompt-permission-hold.ts
 1 src/main/runtime/terminal/output/terminal-derived-agent-facts.ts
 1 src/main/runtime/terminal/wait/terminal-idle-polls.ts
-1 src/main/ssh/legacy-relay/legacy-relay-cli-call-limits.ts
-1 src/main/ssh/legacy-relay/legacy-relay-daily-activity.ts
-1 src/main/ssh/ssh-channel-multiplexer.ts
-1 src/main/ssh/ssh-tcp-forwarding-probe.ts
+1 src/main/ssh/legacy-relay/bridge/legacy-relay-daily-activity.ts
+1 src/main/ssh/legacy-relay/cli/legacy-relay-cli-call-limits.ts
+1 src/main/ssh/port-forwarding/ssh-tcp-forwarding-probe.ts
+1 src/main/ssh/protocol/ssh-channel-multiplexer.ts
 1 src/main/startup/configure-process.ts
 1 src/main/startup/event-loop-stall-probe.ts
 1 src/main/startup/synthetic-title-runtime.ts
