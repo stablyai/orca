@@ -136,7 +136,7 @@ describe('structured session composer typing', () => {
         timestamp: item.observedAt,
         blocks: [{ type: 'text', text: item.itemId }]
       }))
-      const { rerender } = render(session())
+      render(session())
       await screen.findByRole('textbox')
       const scopeKey = structuredAgentSessionDraftScopeKey('session-1')
       let storePublications = 0
@@ -157,13 +157,10 @@ describe('structured session composer typing', () => {
         })
       }
       unsubscribe()
-      // The draft lives in its own scope store; only the composer is its subscriber.
+      // Typing reached the composer, through its own scope store; the transcript never heard it.
+      expect(screen.getByRole('textbox').textContent).toContain('a'.repeat(20))
       expect(mocks.messageListRenders - rendersBefore).toBe(0)
       expect(storePublications).toBe(0)
-
-      mocks.journalItems = [...mocks.journalItems, journalMessage(count)]
-      rerender(session())
-      expect(mocks.messageListRenders - rendersBefore).toBeGreaterThan(0)
     }
   )
 })

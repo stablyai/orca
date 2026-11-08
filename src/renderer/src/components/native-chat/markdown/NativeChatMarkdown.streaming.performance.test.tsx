@@ -57,7 +57,7 @@ describe('streaming native chat markdown parse budget', () => {
         rerender(reply(content))
         widestAppend = Math.max(widestAppend, markdownInput.chars)
       }
-      // The growing block plus the one it may join (2 x 200 + token), with 100 chars of remend slack.
+      // Only the unsettled tail: two 200-char blocks, the last grown by 20 x 5-char tokens, plus a separator.
       expect(widestAppend).toBeLessThanOrEqual(505)
       expect(container.querySelector('p')).toBe(firstParagraph)
       expect(container.textContent).toContain(TOKEN.repeat(20).trim())

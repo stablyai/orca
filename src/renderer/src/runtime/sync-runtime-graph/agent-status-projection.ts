@@ -103,6 +103,3 @@ export function buildRuntimeMobileAgentStatusProjection(
   }
   return projection
 }
-
-export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
