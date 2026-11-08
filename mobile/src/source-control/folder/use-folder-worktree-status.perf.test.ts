@@ -1,6 +1,7 @@
 import { createElement, Fragment } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import type { RuntimeClientEventStreamMessage } from '../../../../src/shared/runtime-client-events'
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -12,23 +13,34 @@ import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
 const STATUS = { branch: 'feature', entries: [] }
 
+type StatusRead = { worktree: string; includeLineStats?: boolean }
+
 function countingClient() {
-  const reads: string[] = []
+  const reads: StatusRead[] = []
+  let eventStreams = 0
   let emit: (event: RuntimeClientEventStreamMessage) => void = () => {}
   const client: RpcClient = stubRpcClient({
     getLastConnectedAt: () => 1,
     sendRequest: async (method, params) => {
       if (method === 'git.status') {
-        reads.push((params as { worktree: string }).worktree)
+        reads.push(params as StatusRead)
       }
       return { id: 'call', ok: true, result: STATUS, _meta: { runtimeId: 'runtime-1' } }
     },
-    subscribe: (_method, _params, onEvent) => {
-      emit = (event) => onEvent(event)
+    subscribe: (method, _params, onEvent) => {
+      if (method === 'runtime.clientEvents.subscribe') {
+        eventStreams += 1
+        emit = (event) => onEvent(event)
+      }
       return () => {}
     }
   })
-  return { client, reads, emit: (event: RuntimeClientEventStreamMessage) => emit(event) }
+  return {
+    client,
+    reads,
+    eventStreams: () => eventStreams,
+    emit: (event: RuntimeClientEventStreamMessage) => emit(event)
+  }
 }
 
 let renderer: ReactTestRenderer | null = null
@@ -41,32 +53,46 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-function Row(props: { client: RpcClient; worktreeId: string; subscribed: boolean }): null {
+const REFRESHERS = new Set<() => void>()
+
+function Row(props: {
+  client: RpcClient
+  worktreeId: string
+  routeHost: ExecutionHostId | undefined
+  subscribed: boolean
+}): null {
   useFolderWorktreeStatus({
     hostId: 'host-1',
     client: props.client,
-    routeHost: undefined,
+    routeHost: props.routeHost,
     worktreeId: props.worktreeId,
     subscribed: props.subscribed,
     refreshers: REFRESHERS
   })
   return null
 }
-const REFRESHERS = new Set<() => void>()
 
-/** One folder's N attached worktrees in repo-a and N in repo-b. */
-async function mountFolder(n: number, client: RpcClient) {
-  const ids = ['repo-a', 'repo-b'].flatMap((repo) =>
-    Array.from({ length: n }, (_, i) => `${repo}::/w${i}`)
+type RowSpec = { worktreeId: string; routeHost: ExecutionHostId | undefined }
+
+/** One folder's attached worktrees: N in repo-a and N in repo-b on the desktop, N spread over S relayed servers. */
+function folderRows(n: number, servers: number): RowSpec[] {
+  const local = ['repo-a', 'repo-b'].flatMap((repo) =>
+    Array.from({ length: n }, (_, i) => ({ worktreeId: `${repo}::/w${i}`, routeHost: undefined }))
   )
+  const relayed = Array.from({ length: n }, (_, i) => ({
+    worktreeId: `repo-s::/w${i}`,
+    routeHost: `runtime:env-${i % servers}` as ExecutionHostId
+  }))
+  return [...local, ...relayed]
+}
+
+async function mountFolder(rows: RowSpec[], client: RpcClient) {
   const render = (subscribed: boolean) =>
     queries.wrap(
       createElement(
         Fragment,
         null,
-        ids.map((worktreeId) =>
-          createElement(Row, { key: worktreeId, client, worktreeId, subscribed })
-        )
+        rows.map((row) => createElement(Row, { key: row.worktreeId, client, ...row, subscribed }))
       )
     )
   await act(async () => {
@@ -84,14 +110,29 @@ function passSignalFloor(): void {
   vi.setSystemTime(Date.now() + 5_000)
 }
 
-describe.each([10, 100])('folder Source Control rows at N=%i', (n) => {
-  it('read git.status once per worktree a signal names, and not at all while hidden', async () => {
+describe.each([
+  { n: 10, servers: 3 },
+  { n: 100, servers: 30 }
+])('folder Source Control rows at N=$n over $servers servers', ({ n, servers }) => {
+  it('read each status once without line stats, on one desktop event stream', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     const host = countingClient()
-    const setSubscribed = await mountFolder(n, host.client)
+    await mountFolder(folderRows(n, servers), host.client)
     host.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
     await settleQueryNotifications()
-    expect(host.reads).toHaveLength(2 * n)
+
+    expect(host.reads).toHaveLength(3 * n)
+    expect(host.reads.every((read) => read.includeLineStats === false)).toBe(true)
+    // Relayed servers' statuses get no desktop signal, so they open no event stream of their own.
+    expect(host.eventStreams()).toBe(1)
+  })
+
+  it('read once per worktree a signal names, and not at all while hidden', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const host = countingClient()
+    const setSubscribed = await mountFolder(folderRows(n, servers), host.client)
+    host.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
+    await settleQueryNotifications()
 
     host.reads.length = 0
     passSignalFloor()
@@ -105,7 +146,7 @@ describe.each([10, 100])('folder Source Control rows at N=%i', (n) => {
       host.emit({ type: 'gitStatusChanged', repoId: 'repo-a', worktreeIds: ['repo-a::/w0'] })
     )
     await settleQueryNotifications()
-    expect(host.reads).toEqual(['id:repo-a::/w0'])
+    expect(host.reads.map((read) => read.worktree)).toEqual(['id:repo-a::/w0'])
 
     await setSubscribed(false)
     host.reads.length = 0

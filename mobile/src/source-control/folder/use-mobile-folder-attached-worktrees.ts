@@ -1,4 +1,5 @@
-import { useContext, useMemo } from 'react'
+import { useContext, useMemo, useState } from 'react'
+import { replaceEqualDeep } from '@tanstack/react-query'
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
 import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import {
@@ -14,12 +15,13 @@ import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { relaysToServers } from '../../worktree/execution-host-scoped-rpc-client'
 import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
 import { WorkspaceServerContext } from '../../worktree/workspace-server-context'
-import type { Worktree } from '../../worktree/workspace-list-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   findFolderWorkspaceRow,
-  getFolderAttachedWorktrees
+  getFolderAttachedWorktrees,
+  toFolderListRow,
+  type FolderListRow
 } from './mobile-folder-attached-worktrees'
 
 const NO_CAPABILITIES: readonly string[] = []
@@ -27,8 +29,8 @@ const NO_SERVER_HOSTS: readonly MobileRelayHost[] = []
 
 export type MobileFolderAttachedWorktrees = {
   /** Undefined until the host's list is read; null when the list has no such folder. */
-  folder: Worktree | null | undefined
-  worktrees: Worktree[]
+  folder: FolderListRow | null | undefined
+  worktrees: FolderListRow[]
   desktopCapabilities: readonly string[]
   /** The servers the desktop relays to, for rows it can't open. */
   serverHosts: readonly MobileRelayHost[]
@@ -73,19 +75,38 @@ export function useMobileFolderAttachedWorktrees(
   const ownRows = catalog.data?.worktrees
   const serverRows = servers.data?.worktrees
   const serverHosts = servers.data?.hosts
+  const projected = useMemo(
+    () => ownRows && [...ownRows, ...(serverRows ?? [])].map(toFolderListRow),
+    [ownRows, serverRows]
+  )
+  // Agent, terminal and badge updates rewrite rows constantly; keep the last projection while lineage and labels are unchanged.
+  const [held, setHeld] = useState({ source: projected, rows: projected })
+  let rows = held.rows
+  if (held.source !== projected) {
+    rows = replaceEqualDeep(held.rows, projected)
+    setHeld({ source: projected, rows })
+  }
+  const serverRowsRead = serverRows !== undefined
   const resolved = useMemo(() => {
     // A server's folder is unknown, not missing, until its rows are read.
-    if (!ownRows || (executionHost && relays && !serverRows)) {
+    if (!rows || (executionHost && relays && !serverRowsRead)) {
       return { folder: undefined, worktrees: [] }
     }
-    const rows = [...ownRows, ...(serverRows ?? [])]
     const folder = findFolderWorkspaceRow(rows, folderWorktreeId, executionHost)
     const stores: MobileLineageStores = { ownInstallationId, servers: serverHosts ?? [] }
     return {
       folder: folder ?? null,
       worktrees: folder ? getFolderAttachedWorktrees(rows, folder, stores) : []
     }
-  }, [ownRows, serverRows, serverHosts, folderWorktreeId, executionHost, ownInstallationId, relays])
+  }, [
+    rows,
+    serverRowsRead,
+    serverHosts,
+    folderWorktreeId,
+    executionHost,
+    ownInstallationId,
+    relays
+  ])
   const refetchCatalog = catalog.refetch
   const refetchServers = servers.refetch
   return {

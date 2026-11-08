@@ -3,11 +3,11 @@ import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import { useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { scopeRpcClientToExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
-import { gitStatusQuery } from '../mobile-git-status-query'
+import { gitStatusSummaryQuery, serverGitStatusSummaryQuery } from '../mobile-git-status-query'
 
 const NO_INPUT = {}
 
-/** One attached worktree's git.status: the same cache entry its own Source Control reads, on its own server when relayed. */
+/** One attached worktree's status summary, read on its own server when relayed. */
 export function useFolderWorktreeStatus(args: {
   hostId: string
   /** The paired desktop's client while connected and the row can be read, else null. */
@@ -20,7 +20,7 @@ export function useFolderWorktreeStatus(args: {
   const { hostId, client, routeHost, worktreeId, subscribed, refreshers } = args
   const rowClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : client
   const status = useHostQuery(
-    gitStatusQuery,
+    routeHost ? serverGitStatusSummaryQuery : gitStatusSummaryQuery,
     { hostId, client: rowClient },
     { exec: routeHost ?? 'local', worktree: worktreeId },
     NO_INPUT,

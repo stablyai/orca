@@ -19,7 +19,7 @@ import { WorkspaceExecutionScope } from '../../navigation/workspace-route'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
 import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
@@ -48,7 +48,7 @@ export function MobileFolderSourceControlPanel({
   const router = useWorkspaceRouteHandoff()
   const insets = useSafeAreaInsets()
   const pager = useOptionPager<string>()
-  const [opened, setOpened] = useState<Worktree | null>(null)
+  const [opened, setOpened] = useState<FolderListRow | null>(null)
   const pageOpen = pager.page !== null
   // A covered screen stops observing, as the single-worktree screen does, and so does the list under an open child.
   const [focused, setFocused] = useState(true)
@@ -77,10 +77,14 @@ export function MobileFolderSourceControlPanel({
         }
       : null
   )
-  const open = (worktree: Worktree) => {
-    setOpened(worktree)
-    pager.open(getWorktreeRowIdentity(worktree))
-  }
+  const openPage = pager.open
+  const open = useCallback(
+    (worktree: FolderListRow) => {
+      setOpened(worktree)
+      openPage(getWorktreeRowIdentity(worktree))
+    },
+    [openPage]
+  )
   const onClose = onRequestClose ?? (() => router.back())
 
   const header = (
@@ -101,7 +105,8 @@ export function MobileFolderSourceControlPanel({
     reload: refetch
   })
   const body =
-    folder === undefined && connState !== 'connected' ? (
+    // A connection still coming up shows loading; offline is for one that dropped or was refused.
+    folder === undefined && (connState === 'disconnected' || connState === 'auth-failed') ? (
       <MobileOfflineState onReconnect={retry} />
     ) : folder === undefined && loadError ? (
       <MobileLoadErrorState error={loadError} onRetry={retry} />
@@ -138,7 +143,7 @@ export function MobileFolderSourceControlPanel({
               }
               subscribed={observing}
               refreshers={refreshers}
-              onOpen={() => open(worktree)}
+              onOpen={open}
             />
           ))}
         </ListGroup>

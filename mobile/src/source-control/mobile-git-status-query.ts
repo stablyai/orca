@@ -28,12 +28,14 @@ export type GitStatusRead =
 async function readGitStatus(
   client: RpcClient,
   worktreeId: string,
-  revalidating: boolean
+  revalidating: boolean,
+  lineStats = true
 ): Promise<GitStatusRead> {
   for (let attempt = 0; ; attempt += 1) {
     // Changes rows show each file's +/- counts, so ask the host for line stats.
     const reply = await gitStatusHostPayloadRead.request(client, {
       worktree: `id:${worktreeId}`,
+      ...(lineStats ? {} : { includeLineStats: false }),
       // Rows are already shown: reuse counts while HEAD and entries match, and never wake a stopped WSL distro.
       ...(revalidating && { reuseLineStats: true, admissionTier: 'background' as const })
     })
@@ -92,4 +94,28 @@ export const gitStatusQuery = defineHostQuery({
       z.object({ kind: z.literal('unavailable') })
     ])
   }
+})
+
+const fetchStatusSummary = (
+  client: RpcClient,
+  target: HostQueryTarget,
+  _input: Record<string, never>,
+  previous: GitStatusRead | undefined
+) => readGitStatus(client, target.worktree ?? '', previous !== undefined, false)
+
+/** Branch, sync and change count only, for a list that shows no per-file counts; older hosts ignore the opt-out. */
+export const gitStatusSummaryQuery = defineHostQuery({
+  family: 'git.statusSummary',
+  staleTime: 3_000,
+  refetchOnWindowFocus: true,
+  signal: { events: ['gitStatusChanged'], floorMs: 1_000, matches: namesThisStatus },
+  fetch: fetchStatusSummary
+})
+
+// A relayed server's statuses get no desktop signal (namesThisStatus), so its reads hold no event stream.
+export const serverGitStatusSummaryQuery = defineHostQuery({
+  family: 'git.statusSummary.server',
+  staleTime: 3_000,
+  refetchOnWindowFocus: true,
+  fetch: fetchStatusSummary
 })

@@ -2,16 +2,41 @@ import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import type { Worktree } from '../../worktree/workspace-list-types'
 import {
   getMobileWorkspaceLineageChildren,
+  type MobileLineageRow,
   type MobileLineageStores
 } from '../../worktree/mobile-workspace-lineage'
 import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
 
+/** What the folder list reads of a host row: lineage, then what a row shows. Agent and terminal fields churn, so they're left out. */
+export type FolderListRow = MobileLineageRow &
+  Pick<Worktree, 'repo' | 'displayName' | 'branch' | 'createdAt'>
+
+export function toFolderListRow(row: Worktree): FolderListRow {
+  return {
+    worktreeId: row.worktreeId,
+    hostId: row.hostId,
+    repoId: row.repoId,
+    workspaceKind: row.workspaceKind,
+    isArchived: row.isArchived,
+    parentWorktreeId: row.parentWorktreeId,
+    worktreeInstanceId: row.worktreeInstanceId,
+    lineageWorktreeInstanceId: row.lineageWorktreeInstanceId,
+    parentWorktreeInstanceId: row.parentWorktreeInstanceId,
+    crossStoreParent: row.crossStoreParent,
+    workspaceLineage: row.workspaceLineage,
+    repo: row.repo,
+    displayName: row.displayName,
+    branch: row.branch,
+    createdAt: row.createdAt
+  }
+}
+
 /** The folder workspace row a Source Control route names; a route without a server means the paired desktop's own. */
-export function findFolderWorkspaceRow(
-  rows: readonly Worktree[],
+export function findFolderWorkspaceRow<Row extends FolderListRow>(
+  rows: readonly Row[],
   folderWorktreeId: string,
   executionHost: ExecutionHostId | undefined
-): Worktree | undefined {
+): Row | undefined {
   return rows.find(
     (row) =>
       row.worktreeId === folderWorktreeId &&
@@ -21,13 +46,13 @@ export function findFolderWorkspaceRow(
 }
 
 /** Worktrees attached to the folder, as the host list nests them, with their worktree descendants; oldest first, like desktop. */
-export function getFolderAttachedWorktrees(
-  rows: readonly Worktree[],
-  folder: Worktree,
+export function getFolderAttachedWorktrees<Row extends FolderListRow>(
+  rows: readonly Row[],
+  folder: Row,
   stores?: MobileLineageStores
-): Worktree[] {
+): Row[] {
   const childrenByParent = getMobileWorkspaceLineageChildren(rows, stores)
-  const members = new Map<string, Worktree>()
+  const members = new Map<string, Row>()
   const queue = [folder]
   for (let i = 0; i < queue.length; i++) {
     for (const child of childrenByParent.get(getWorktreeRowIdentity(queue[i])) ?? []) {

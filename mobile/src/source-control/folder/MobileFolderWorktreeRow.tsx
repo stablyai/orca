@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { ListRow } from '../../components/list/ListGroup'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { workspaceRouteExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import { formatBranchLabel } from '../mobile-source-control-screen-state'
 import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
@@ -10,16 +11,17 @@ type Props = {
   hostId: string
   /** The paired desktop's, which decide whether it relays to the row's server. */
   desktopCapabilities: readonly string[]
-  worktree: Worktree
+  worktree: FolderListRow
   /** The desktop relays to the row's server but can't reach it (e.g. it needs an update). */
   unreachable: boolean
   subscribed: boolean
   refreshers: Set<() => void>
-  onOpen: () => void
+  onOpen: (worktree: FolderListRow) => void
 }
 
 /** One attached worktree: desktop's card header (repo, name, branch, ahead/behind, change count); tapping opens its Source Control. */
-export function MobileFolderWorktreeRow({
+// Memoized: the host catalog changes often, and a row only re-renders when its own inputs do.
+export const MobileFolderWorktreeRow = memo(function MobileFolderWorktreeRow({
   hostId,
   desktopCapabilities,
   worktree,
@@ -43,8 +45,9 @@ export function MobileFolderWorktreeRow({
   })
 
   const read = status.data?.kind === 'ready' ? status.data.status : undefined
-  // A failed or unsupported read must not look like a clean worktree.
-  const unread = status.data?.kind === 'unavailable' || (!read && status.error !== null)
+  // A failed, partial or unsupported read must not look like a clean worktree, even over an older good read.
+  const unread =
+    status.data?.kind === 'unavailable' || status.error !== null || read?.readError !== undefined
   const branch = read
     ? formatBranchLabel(read.branch, read.head)
     : worktree.branch.replace(/^refs\/heads\//, '')
@@ -73,7 +76,7 @@ export function MobileFolderWorktreeRow({
       }
       navigates={openable}
       disabled={!openable}
-      onPress={onOpen}
+      onPress={() => onOpen(worktree)}
     />
   )
-}
+})
