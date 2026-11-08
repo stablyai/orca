@@ -80,14 +80,7 @@ export function useDocumentEditDraft({
   }, [canDecide, draftKey, live])
 
   useEffect(() => {
-    if (
-      state.phase !== 'ready' ||
-      state.offer ||
-      !editable ||
-      !draftKey ||
-      base === null ||
-      !baseHash
-    ) {
+    if (state.phase !== 'ready' || state.offer || !editable || !draftKey || baseHash === null) {
       return
     }
     saveDocumentEditDraft(
