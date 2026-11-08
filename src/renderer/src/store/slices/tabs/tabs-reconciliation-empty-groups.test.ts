@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore, makeTab } from '../store-test-helpers'
-import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { captureEditorOpenLinkIntent } from '../editor/tabs/editor-open-target-group'
-import { drawTabsFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

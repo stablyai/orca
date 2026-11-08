@@ -8,12 +8,12 @@ import {
   type ExecutionHostTarget
 } from '@/lib/execution-host-facts'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { getIndexedReposById } from '@/store/worktree-repo-index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {

@@ -32,15 +32,21 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', (
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-cancel', () => ({
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
-vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
-  enqueueSessionOptionSettingsWrite: mocks.remember
-}))
+vi.mock(
+  '@/components/native-chat/session/options/native-chat-session-option-settings-write',
+  () => ({
+    enqueueSessionOptionSettingsWrite: mocks.remember
+  })
+)
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
 }))
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  stopStructuredAgentSessionSends: mocks.stopSends
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    stopStructuredAgentSessionSends: mocks.stopSends
+  })
+)
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession
 }))
@@ -68,11 +74,11 @@ import {
   beginStructuredAgentSessionTabClose,
   retireStructuredAgentSessionTab
 } from './structured-agent-session-tab-retirement'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import {
-  getStructuredAgentSessionReadOwner,
   findStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
-} from '@/components/native-chat/structured-agent-session-read-owner'
+} from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import {
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents,
@@ -87,7 +93,7 @@ import {
 } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { retirePurgedTabLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
 import { useAppStore } from '@/store'
-import { agentSessionTabFixture } from '@/components/native-chat/native-chat-workspace-test-fixtures'
+import { agentSessionTabFixture } from '@/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 
 const layoutOwner: StructuredLaunchSlotOwner = {
   unifiedTabsByWorktree: {},

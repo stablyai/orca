@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
-      "reconnecting": "다시 연결 중…",
       "waitingForTerminal": "터미널 대기 중…"
     },
     "diffCard": {
@@ -353,6 +352,13 @@
       "resume": "재개",
       "resumeSending": "대기 중인 메시지 전송 재개",
       "title": "대기 중인 메시지"
+    },
+    "offlineQueue": {
+      "failed": "보내지 못했습니다 — 보내기를 탭해 다시 시도하세요",
+      "waitingFor": "{{host}}에 다시 연결되면 보냅니다",
+      "waiting": "데스크톱에 다시 연결되면 보냅니다",
+      "behind": "대기 중 — 앞의 메시지를 확인해야 합니다",
+      "closed": "Orca가 닫히기 전에 보내지 못했습니다"
     },
     "receipt": {
       "cancelled": "취소",
@@ -1303,10 +1309,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
       "loadFolderFailed": "폴더를 불러올 수 없습니다.",
+      "loadedOfTotal": "{{total}}개 중 {{loaded}}개",
       "loading": "로드 중…",
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
+      "searchAll": "모두 검색",
+      "searchAllIn": "{{folder}} 전체 검색",
+      "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
+      "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
+      "showMore": "{{rows}}개 더 보기",
       "unavailable": "모바일에서 사용 불가"
     },
     "fileExplorerRowActions": {
@@ -1469,7 +1481,8 @@
       "microphonePermissionDenied": "마이크 권한이 거부되었습니다.",
       "noSpeech": "음성이 감지되지 않았습니다.",
       "phoneUnavailable": "이 휴대폰의 받아쓰기가 준비되지 않았습니다. 음성 설정에서 다운로드하거나 자동을 선택하세요.",
-      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요."
+      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요.",
+      "phoneBusy": "이 휴대폰의 받아쓰기가 아직 시작 중입니다. 잠시 후 다시 시도하세요."
     }
   },
   "host": {
@@ -2836,7 +2849,8 @@
       "phoneDownloading": "다운로드 중… {{progress}}%",
       "phoneUnsupported": "이 휴대폰에서는 사용할 수 없음",
       "download": "이 휴대폰에 다운로드",
-      "downloadSize": "약 {{size}}MB"
+      "downloadSize": "약 {{size}}MB",
+      "phoneChecking": "확인 중…"
     }
   },
   "sourceControl": {

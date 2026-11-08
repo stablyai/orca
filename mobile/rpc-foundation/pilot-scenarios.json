@@ -1058,7 +1058,7 @@
                   "displayName": "Emoji",
                   "repoIcon": {
                     "type": "emoji",
-                    "emoji": "\ud83d\udc33"
+                    "emoji": "🐳"
                   },
                   "connectionId": "ssh-1"
                 },
@@ -7395,34 +7395,6 @@
       ]
     },
     {
-      "id": "components-codex-capability",
-      "operation": "components.codex-reset-capability",
-      "family": "components.codex-reset-capability",
-      "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "probe",
-          "id": "probe"
-        },
-        {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["accounts.codex-reset-credit.v1"]
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
       "family": "host.view-settings",
@@ -7885,7 +7857,7 @@
             "ok": false,
             "error": {
               "code": "worktree_archive_hook_failed",
-              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 \u2014 exited 1.",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
               "data": {
                 "worktreePath": "/repos/marlin/wt-1",
                 "outcome": "exited",
@@ -14949,18 +14921,6 @@
           }
         },
         {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
-          }
-        },
-        {
           "checkpoint": "held"
         },
         {
@@ -14968,7 +14928,7 @@
           "id": "worktrees-loaded"
         },
         {
-          "complete": "status.get#2",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -15002,6 +14962,278 @@
         },
         {
           "checkpoint": "ready"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-revisit",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "leave",
+          "id": "leave"
+        },
+        {
+          "advance": 31000
+        },
+        {
+          "action": "return",
+          "id": "return"
+        },
+        {
+          "checkpoint": "cached"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                },
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "revalidated"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-refresh",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "refresh",
+          "id": "refresh"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": true,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-association",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "frame": "agentSession.subscribeStatus#1",
+          "params": {},
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "snapshot",
+              "sessions": [
+                {
+                  "sessionId": "native",
+                  "agent": "pi",
+                  "workspaceId": "worktree-1",
+                  "latestPrompt": "",
+                  "status": null,
+                  "updatedAt": 1,
+                  "providerSession": {
+                    "key": "session_id",
+                    "id": "/provider"
+                  },
+                  "conversationName": "Budget plan"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature",
+                  "structuredSession": {
+                    "sessionId": "native",
+                    "workspaceId": "worktree-1"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "associated"
         }
       ]
     },
@@ -19529,7 +19761,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": false,
@@ -19587,7 +19820,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": true,
@@ -20247,13 +20481,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20278,6 +20505,13 @@
                 }
               ]
             }
+          }
+        },
+        {
+          "bind": "platform-status",
+          "request": "status.get#1",
+          "params": {
+            "$undefined": true
           }
         },
         {
@@ -20309,13 +20543,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20340,6 +20567,13 @@
                 }
               ]
             }
+          }
+        },
+        {
+          "bind": "platform-status",
+          "request": "status.get#1",
+          "params": {
+            "$undefined": true
           }
         },
         {

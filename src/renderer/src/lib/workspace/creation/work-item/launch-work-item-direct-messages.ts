@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
 import {
   planAgentCliArgsSuffix,
   type AgentStartupShell
@@ -57,4 +59,20 @@ export function invalidTerminalArgsMessage(
         'The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.',
         { value0: getAgentLabel(agent) }
       )
+}
+
+export function directWorkItemFailureReporter(
+  onFailureNotified?: () => void,
+  getAgent?: () => TuiAgent | undefined
+) {
+  return (message: string): false => {
+    const agent = getAgent?.()
+    if (agent) {
+      notifyAgentLaunchFailure(agent, message)
+    } else {
+      toast.error(message)
+    }
+    onFailureNotified?.()
+    return false
+  }
 }

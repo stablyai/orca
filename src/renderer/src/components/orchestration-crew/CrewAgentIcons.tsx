@@ -9,7 +9,7 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
-} from '../native-chat/native-chat-agent-message-sender-view'
+} from '../native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'

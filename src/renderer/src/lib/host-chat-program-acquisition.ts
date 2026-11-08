@@ -2,7 +2,7 @@ import {
   useAppViewExternalStore,
   useAppStateViewActive,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'

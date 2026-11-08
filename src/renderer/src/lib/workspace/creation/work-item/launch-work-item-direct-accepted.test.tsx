@@ -7,13 +7,13 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import * as preparation from './launch-work-item-direct-route-preparation'
 import * as preflight from './launch-work-item-direct-preflight'
 import { adoptAgentSessionLaunchVerdict } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '../../../agent-session/launch/routing/agent-launch-request-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import { readDirectSetupRequest } from './direct-work-item-setup-test-fixture'
 import { DirectWorkItemSetupDialog } from '@/components/new-workspace/DirectWorkItemSetupDialog'
 
@@ -29,7 +29,7 @@ import {
   clearHostAgentMenuSettingsForTests
 } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 
 vi.mock('@/lib/repo-slug-index', () => ({
   useRepoSlugIndex: () => ({
@@ -221,8 +221,10 @@ it.each(['terminal', 'structured'] as const)(
     act(() => {
       start = view.result.current.startWithDetectedAgents({ detectedAgents: ['codex'] })
     })
-    await vi.waitFor(() => expect(mocks.createWorktree).toHaveBeenCalledOnce())
-    expect(view.result.current.isCreateAccepted).toBe(true)
+    await vi.waitFor(() => {
+      expect(mocks.createWorktree).toHaveBeenCalledOnce()
+      expect(view.result.current.isCreateAccepted).toBe(true)
+    })
     act(() => view.result.current.cancelStart())
     view.rerender({ open: false, connectionId: 'another-context' })
     view.rerender({ open: true, connectionId: 'another-context' })

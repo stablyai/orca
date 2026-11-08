@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { useAppStore } from '@/store'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { Button } from '../../ui/button'
 
 const RESULT_PREVIEW_LIMIT = 200

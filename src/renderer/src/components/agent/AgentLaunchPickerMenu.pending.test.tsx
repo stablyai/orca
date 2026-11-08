@@ -1,4 +1,4 @@
-import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

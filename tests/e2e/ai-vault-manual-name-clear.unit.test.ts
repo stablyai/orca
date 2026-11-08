@@ -51,7 +51,7 @@ import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({

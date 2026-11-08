@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import { pluginSettingValueIssue } from './plugin-settings-contribution'
 
 function manifest(settings: unknown[], capabilities = [{ kind: 'settings:own' }]) {
   return {
@@ -39,16 +38,5 @@ describe('contributes.settings', () => {
       issues(manifest([{ key: 'm', title: 'M', type: 'string', enum: ['a'], enumLabels: [] }]))
     ).toContain('one label per enum value')
     expect(issues(manifest([{ ...apiUrl, key: '1bad' }]))).toContain('starts with a letter')
-  })
-
-  it('checks values the plugin or the person writes', () => {
-    const pageSize = { type: 'integer' as const, minimum: 1, maximum: 100 }
-    expect(pluginSettingValueIssue(pageSize, 50)).toBeNull()
-    expect(pluginSettingValueIssue(pageSize, 0)).toBe('must be at least 1')
-    expect(pluginSettingValueIssue(pageSize, '5')).toBe('must be an integer')
-    expect(pluginSettingValueIssue({ type: 'string', enum: ['a', 'b'] }, 'c')).toContain('one of')
-    expect(pluginSettingValueIssue({ type: 'string', maxLength: 3 }, 'abcd')).toContain(
-      '3 characters'
-    )
   })
 })

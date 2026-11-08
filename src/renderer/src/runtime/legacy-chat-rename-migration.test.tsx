@@ -18,14 +18,16 @@ import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layo
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { renameTab } from '../../../shared/workspace-layout/workspace-layout-tab-commands'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { makeWorktree, makeUnifiedTab, TEST_REPO } from '@/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { WorkspaceAttachmentOrigins } from '@/components/sidebar/workspace-card/review/WorkspaceAttachmentOrigins'
 import { useAppStore } from '@/store'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'
 import { readStructuredChatTabName } from './structured-chat-tab-name'
-import '@/store/pinned-tab-close-guard'
+import '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
@@ -56,11 +58,14 @@ const mock = vi.hoisted(() => ({
   deactivates: vi.fn(),
   send: vi.fn()
 }))
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mock.send
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mock.send
+  })
+)
 vi.mock('@/store', async () => ({
-  useAppStore: (await import('@/store/slices/store-test-helpers')).createTestStore()
+  useAppStore: (await import('@/store/testing/app-store-test-fixture')).createTestStore()
 }))
 vi.mock('./rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mock.rpc

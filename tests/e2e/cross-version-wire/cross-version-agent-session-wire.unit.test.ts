@@ -764,8 +764,8 @@ describe('cross-version structured agent sessions', () => {
       )
     })
 
-    // Create replies at spawn, so the first send carries handshake proof; unproven starts must time out as rejected messages.
-    it("answers a released client's send once the startup limit ends a start that never proves itself", async () => {
+    // Unproven starts return the person's message to the queue instead of leaving a legacy RPC waiting.
+    it("answers a released client's send with its returned row once the startup limit ends", async () => {
       const released = baseline.capabilities.filter(
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
       )
@@ -780,7 +780,12 @@ describe('cross-version structured agent sessions', () => {
 
       expect(reply).toMatchObject({
         ok: true,
-        result: { value: { submission: { dispatchState: 'rejected' } } }
+        result: { value: { queued: { state: 'returned' } } }
+      })
+      const [replayed] = await call('agentSession.send', params, released)
+      expect(replayed).toMatchObject({
+        ok: true,
+        result: { replayed: true, value: { queued: { state: 'returned' } } }
       })
     })
   })

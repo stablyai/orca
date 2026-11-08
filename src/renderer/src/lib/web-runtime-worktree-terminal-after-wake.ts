@@ -1,3 +1,4 @@
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { useAppStore } from '@/store'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
@@ -26,18 +27,18 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
     unknownHostCountIsEmpty?: boolean
   }
-): void {
+): boolean {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   if (!worktree) {
-    return
+    return false
   }
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    return
+    return false
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
@@ -50,26 +51,26 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         (isWebTerminalSurfaceTabId(tab.id) || tabHasLivePty(state.ptyIdsByTabId, tab.id))
     )
   ) {
-    return
+    return false
   }
 
   if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
-      return
+      return false
     }
 
     const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
     if (hasMirroredHostTabs) {
       // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
-      return
+      return false
     }
 
     const hostTerminalTabCount =
       getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) ??
       (opts?.unknownHostCountIsEmpty ? 0 : null)
     if (hostTerminalTabCount !== null && hostTerminalTabCount > 0) {
-      return
+      return false
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
       // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
@@ -90,7 +91,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         .catch((error) => {
           console.error('web runtime terminal after wake failed', worktreeId, error)
         })
-      return
+      return false
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
@@ -101,45 +102,63 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           Object.hasOwn(state.tabsByWorktree, worktreeId)
         )
       ) {
-        return
+        return false
       }
     } else if (renderableTabCount === 0) {
-      return
+      return false
     }
   }
 
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
-    return
+    return false
   }
 
   const startup = opts?.startup
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal(
-    {
-      worktreeId,
-      environmentId: runtimeEnvironmentId,
-      ...(startup
-        ? {
-            command: startup.command,
-            ...(startup.env ? { env: startup.env } : {}),
-            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {})
-          }
-        : launchAgent
-          ? { agent: launchAgent }
-          : {}),
-      activate: opts?.activate !== false,
-      selectWorktree: false
-    },
-    // This flow toasts every failure itself, including a disconnected host.
-    { notifyFailure: false }
-  )
+  const creation =
+    startup?.freshAgentLaunch && launchAgent
+      ? launchAgentInWebHostTab({
+          ...startup.freshAgentLaunch,
+          submitFollowup: true,
+          agent: launchAgent,
+          environmentId: runtimeEnvironmentId,
+          worktreeId,
+          activate: opts?.activate !== false,
+          selectWorktree: false,
+          buildStartup: () =>
+            startup.freshAgentLaunch?.legacy?.() ?? {
+              startupPlan: null,
+              pasteDraftAfterLaunch: null,
+              submitPastedPrompt: false
+            }
+        }).then((result) => result.outcome)
+      : createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            ...(startup
+              ? {
+                  command: startup.command,
+                  ...(startup.env ? { env: startup.env } : {}),
+                  ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+                  ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+                  ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+                  ...(startup.startupCommandDelivery
+                    ? { startupCommandDelivery: startup.startupCommandDelivery }
+                    : {})
+                }
+              : launchAgent
+                ? { agent: launchAgent }
+                : {}),
+            activate: opts?.activate !== false,
+            selectWorktree: false
+          },
+          // This flow toasts every failure itself, including a disconnected host.
+          { notifyFailure: false }
+        )
+  void creation
     .then((outcome) => {
-      if (outcome.status === 'failed') {
+      if (outcome.status === 'failed' && !startup?.freshAgentLaunch) {
         toast.error(outcome.message, {
           id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
         })
@@ -148,4 +167,5 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     .finally(() => {
       endWebRuntimeWakeTerminalRespawn(worktreeId)
     })
+  return true
 }

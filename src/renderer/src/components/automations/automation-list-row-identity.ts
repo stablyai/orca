@@ -25,7 +25,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import '../../store/workspace-record-selectors'
+
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type AutomationListRow = {

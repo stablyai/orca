@@ -9,20 +9,20 @@ import {
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { StructuredAgentSessionCreateRefusalError } from './launch/structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionLaunchFailure,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
 } from './launch/structured-agent-session-launch-registry'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
+import { structuredSessionNotices } from '../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 import type { AgentTerminalLaunchCompletion } from './launch/structured-agent-session-launch-admission'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   nativeChatPendingAttachmentSnapshot
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { makeEmptyHostSnapshot } from '@/runtime/host-session-mirror-frame-fixtures'
 import * as unlisted from './launch/pane/structured-agent-session-unlisted-created-chats'
@@ -34,7 +34,7 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
@@ -61,21 +61,21 @@ vi.mock('./launch/structured-agent-session-launch-create-call', async (original)
 }))
 vi.mock('sonner', () => ({ toast: { info: mocks.toast, error: vi.fn() } }))
 vi.mock('../focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
-import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/native-chat-composer-draft-persistence'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { restorePersistedStructuredLaunchState } from './launch/structured-agent-session-launch-reload'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from './launch/structured-agent-session-local-launch-cancel'
 import {
   startStructuredAgentLaunch,

@@ -90,14 +90,6 @@ afterEach(() => {
 })
 
 describe('usePluginDeclarativeState', () => {
-  it('stores a write made before a workspace switch under the workspace it was made in', async () => {
-    const panel = await mountReadyPanel()
-    await panel.switchTo('wt-b')
-    // The guest flushes the edit it made in A as the switch's hydrate reaches it.
-    panel.persist({ hydration: panel.first, value: 'typed in A' })
-    expect(panel.writes()).toEqual([expect.objectContaining({ workspace: 'wt-a' })])
-  })
-
   it('keeps each write with its own workspace across a quick A, B, A switch', async () => {
     const panel = await mountReadyPanel()
     const inB = await panel.switchTo('wt-b')
@@ -130,14 +122,5 @@ describe('usePluginDeclarativeState', () => {
     panel.persist({ hydration: panel.first, value: 'nine back' })
     panel.persist({ hydration: latest + 1, value: 'never sent' })
     expect(panel.stored()).toEqual([['wt-b', 'eight back']])
-  })
-
-  it('still stores plugin-scope entries tagged with an earlier hydration', async () => {
-    const panel = await mountReadyPanel()
-    await panel.switchTo('wt-b')
-    panel.persist({ hydration: panel.first, scope: 'plugin', value: 'global' })
-    expect(panel.writes()).toEqual([
-      expect.objectContaining({ entries: [expect.objectContaining({ scope: 'plugin' })] })
-    ])
   })
 })

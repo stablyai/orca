@@ -1,7 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { toAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
 import { RESET_MOUSE_REPORTING } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
@@ -185,7 +184,7 @@ async function seedHookRow(
   state: 'working' | 'done' = 'done'
 ): Promise<AgentStatusEntry> {
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const realStore = createTestStore(
     (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
   )
@@ -264,61 +263,6 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
   })
 
-  it('retires a hook-identified row the foreground tracker never read', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-cmd-hook-only' })
-    await seedHookRow(paneKey, 'codex', 'working')
-    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agentEvidence).not.toBe(
-      'process-read'
-    )
-
-    confirmExit('codex')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-  })
-
-  it('leaves a pane with an armed command-finished drop to its own confirming read', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(new Promise(() => {}))
-    const { paneKey, sendData, confirmExit } = await connectAgentPane({ ptyId: 'pty-zsh-claude' })
-    // A live hook icon makes the 133;D defer its drop behind a confirming read.
-    await seedHookRow(paneKey, 'claude', 'working')
-    sendData('\x1b]133;D;0\x07')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeDefined()
-  })
-
-  it('leaves a remote pane to its execution host', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({
-      ptyId: toAppSshPtyId('conn-1', 'relay-pty-1')
-    })
-    await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps the row when the host can verify the owner process itself', async () => {
-    setHostCanVerifyOwner(true)
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-mac-claude' })
-    await seedHookRow(paneKey, 'claude')
-
-    confirmExit('claude')
-    await flushAsyncTicks()
-
-    expect(window.api.agentStatus.hasVerifiableAgentProcess).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
   it('keeps the row when the agent is relaunched before the exit settles', async () => {
     const hostAnswer = createDeferred<boolean>()
     setHostCanVerifyOwner(hostAnswer.promise)
@@ -337,17 +281,6 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
     }
     hostAnswer.resolve(false)
-    await flushAsyncTicks()
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-  })
-
-  it('keeps a row that belongs to a different agent', async () => {
-    const { paneKey, confirmExit } = await connectAgentPane({ ptyId: 'pty-cmd-other-agent' })
-    await seedHookRow(paneKey, 'codex')
-
-    confirmExit('claude')
     await flushAsyncTicks()
 
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()

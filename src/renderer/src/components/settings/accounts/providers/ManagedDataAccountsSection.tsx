@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
@@ -16,6 +16,7 @@ import {
   DialogDescription,
   DialogFooter
 } from '../../../ui/dialog'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type Snapshot = { opencode?: ManagedDataAccountsState; devin?: ManagedDataAccountsState }
 
@@ -26,6 +27,7 @@ export function ManagedDataAccountsSection({
   provider: ManagedDataAccountProvider
   target: RuntimeClientTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const [state, setState] = useState<ManagedDataAccountsState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -86,64 +88,63 @@ export function ManagedDataAccountsSection({
 
   const command = `orca account add --agent ${provider}`
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold">
-        {provider === 'opencode'
-          ? translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode')
-          : translate('auto.lib.agent.catalog.fc80296033', 'Devin')}
-      </h3>
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'accounts.managedData.description',
-          'Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.'
+    <SettingsGroup
+      title={
+        provider === 'opencode'
+          ? t('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode')
+          : t('auto.lib.agent.catalog.fc80296033', 'Devin')
+      }
+      description={t(
+        'accounts.managedData.description',
+        'Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.'
+      )}
+    >
+      <div className="space-y-3 py-3">
+        <code className="text-xs">{command}</code>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void window.api.ui
+                .writeClipboardText(command)
+                .then(() => setCopied(true))
+                .catch((cause: unknown) => setError(String(cause)))
+            }}
+          >
+            {copied
+              ? t('accounts.managedData.copied', 'Copied')
+              : t('accounts.managedData.add', 'Copy add account command')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              void refresh()
+            }}
+          >
+            {t('accounts.managedData.refresh', 'Refresh accounts')}
+          </Button>
+        </div>
+        {!state && !error && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'accounts.managedData.upgrade',
+              'If accounts do not appear, update or restart the Orca host.'
+            )}
+          </p>
         )}
-      </p>
-      <code className="text-xs">{command}</code>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void window.api.ui
-              .writeClipboardText(command)
-              .then(() => setCopied(true))
-              .catch((cause: unknown) => setError(String(cause)))
-          }}
-        >
-          {copied
-            ? translate('accounts.managedData.copied', 'Copied')
-            : translate('accounts.managedData.add', 'Copy add account command')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => {
-            void refresh()
-          }}
-        >
-          {translate('accounts.managedData.refresh', 'Refresh accounts')}
-        </Button>
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
       </div>
-      {!state && !error && (
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'accounts.managedData.upgrade',
-            'If accounts do not appear, update or restart the Orca host.'
-          )}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
       {state && (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs">
-              {translate('accounts.managedData.system', 'System default')}
-            </span>
+          <div data-settings-row="" className="flex items-center justify-between gap-3 py-2">
+            <span className="text-xs">{t('accounts.managedData.system', 'System default')}</span>
             <Button
               variant="ghost"
               size="xs"
@@ -153,21 +154,23 @@ export function ManagedDataAccountsSection({
               }}
             >
               {state.activeAccountId === null
-                ? translate('accounts.managedData.active', 'Active')
-                : translate('accounts.managedData.select', 'Select')}
+                ? t('accounts.managedData.active', 'Active')
+                : t('accounts.managedData.select', 'Select')}
             </Button>
           </div>
           {state.accounts.map((account) => (
-            <div key={account.id} className="flex items-center justify-between gap-3">
+            <div
+              key={account.id}
+              data-settings-row=""
+              className="flex items-center justify-between gap-3 py-2"
+            >
               <div className="space-y-1">
                 <span className="text-xs">{account.label}</span>
                 <p className="text-xs text-muted-foreground">{account.integrations.join(', ')}</p>
               </div>
               <div className="flex items-center gap-2">
                 {state.activeAccountId === account.id ? (
-                  <Badge variant="secondary">
-                    {translate('accounts.managedData.active', 'Active')}
-                  </Badge>
+                  <Badge variant="secondary">{t('accounts.managedData.active', 'Active')}</Badge>
                 ) : (
                   <Button
                     variant="ghost"
@@ -177,7 +180,7 @@ export function ManagedDataAccountsSection({
                       void mutate('select', account.id)
                     }}
                   >
-                    {translate('accounts.managedData.select', 'Select')}
+                    {t('accounts.managedData.select', 'Select')}
                   </Button>
                 )}
                 <Button
@@ -186,7 +189,7 @@ export function ManagedDataAccountsSection({
                   disabled={busy}
                   onClick={() => setRemoveId(account.id)}
                 >
-                  {translate('accounts.managedData.remove', 'Remove')}
+                  {t('accounts.managedData.remove', 'Remove')}
                 </Button>
               </div>
             </div>
@@ -204,10 +207,10 @@ export function ManagedDataAccountsSection({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {translate('accounts.managedData.removeTitle', 'Remove managed account?')}
+              {t('accounts.managedData.removeTitle', 'Remove managed account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'accounts.managedData.removeDescription',
                 'Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.'
               )}
@@ -215,7 +218,7 @@ export function ManagedDataAccountsSection({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveId(null)}>
-              {translate('accounts.managedData.cancel', 'Cancel')}
+              {t('accounts.managedData.cancel', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -227,11 +230,11 @@ export function ManagedDataAccountsSection({
                 }
               }}
             >
-              {translate('accounts.managedData.remove', 'Remove')}
+              {t('accounts.managedData.remove', 'Remove')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsGroup>
   )
 }

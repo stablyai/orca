@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const { storeRef } = vi.hoisted(() => {
   const storeRef: { current: ReturnType<typeof createTestStore> | null } = { current: null }

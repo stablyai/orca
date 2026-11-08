@@ -7,8 +7,8 @@ import {
   CHAT_DEMO_MODEL,
   getChatDemoCopy
 } from '@/components/feature-tips/chat-ui-here-feature-tip-demo'
-import { nativeChatPermissionModeLabel } from '@/components/native-chat/native-chat-permission-mode-labels'
-import { nativeChatToolRowVerb } from '@/components/native-chat/native-chat-tool-line-label'
+import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
+import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses

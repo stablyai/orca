@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]

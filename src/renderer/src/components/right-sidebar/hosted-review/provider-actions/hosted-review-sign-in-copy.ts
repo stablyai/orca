@@ -1,5 +1,6 @@
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   resolveSupportedHostedReviewCopyProvider,
   type LocalizedHostedReviewCopy,
@@ -38,22 +39,25 @@ export function authRequiredDetail(
 }
 
 /** Short sign-in step for space-constrained surfaces like the Create PR dropdown hint. */
-export function hostedReviewSignInHint(provider: HostedReviewProvider | undefined): string {
+export function hostedReviewSignInHint(
+  provider: HostedReviewProvider | undefined,
+  t: Translate = translate
+): string {
   const supported = resolveSupportedHostedReviewCopyProvider(provider)
   if (supported === 'bitbucket') {
-    return translate(
+    return t(
       'sourceControl.createReviewFailure.signInHintBitbucket',
       'Connect Bitbucket in Settings > Integrations'
     )
   }
   if (supported === 'github' || supported === 'gitlab') {
-    return translate(
+    return t(
       'sourceControl.createReviewFailure.signInHintCommand',
       'Run {{command}} in this environment',
       { command: SIGN_IN_COMMANDS[supported] }
     )
   }
-  return translate(
+  return t(
     'sourceControl.createReviewFailure.signInHintVariable',
     'Set {{variable}} in this environment',
     { variable: SIGN_IN_VARIABLES[supported] }

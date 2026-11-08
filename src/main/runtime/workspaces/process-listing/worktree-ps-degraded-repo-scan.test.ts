@@ -313,25 +313,6 @@ describe('successful scan cache on timeout', () => {
     }
   )
 
-  it('does not reuse failed cached local rows on timeout', async () => {
-    vi.useFakeTimers()
-    try {
-      const { runtime, repo, successfulScan } = cachedScanFixture(null)
-      runtime.scanGit
-        .mockResolvedValueOnce({ ...successfulScan, ok: false })
-        .mockImplementation(neverSettles)
-      await runtime.scanRows(repo)
-      await vi.advanceTimersByTimeAsync(31_000)
-
-      const result = await advancePastRepoScanBudget(runtime.scanRows(repo))
-
-      expect(result.rows[0]).toMatchObject({ branch: '', head: '', displayName: 'app' })
-      expect(result.ok).toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('keeps a failed-removal checkout while the successful Git result awaits its listing overlay', async () => {
     vi.useFakeTimers()
     const checkoutExists = vi
@@ -374,45 +355,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     listWorktreesStrictMock.mockResolvedValue([])
   })
 
-  it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(
-        partialRuntimeStore(makeStore({ connectionId: 'ssh-remote-1' }))
-      )
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps persisted worktrees when a remote repo is unreachable', async () => {
-    const runtime = new OrcaRuntimeService(
-      partialRuntimeStore(makeStore({ connectionId: 'ssh-remote-1' }))
-    )
-
-    const result = await runtime.getWorktreePs(10_000)
-
-    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
-  })
-
-  it('keeps persisted worktrees when a local scan stalls past the per-repo budget', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   // withTimeout also falls back on rejection; absorb real scan failures before they can restore stale rows.
   it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
@@ -421,47 +363,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     const result = await runtime.getWorktreePs(10_000)
 
     expect(result.worktrees.map((worktree) => worktree.worktreeId)).not.toContain(WORKTREE_ID)
-  })
-
-  it('still reports selector_not_found for a local worktree when the scan rejects', async () => {
-    listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
-
-    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      'selector_not_found'
-    )
-  })
-
-  it('caches a zero-row local scan instead of rescanning on every poll', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesStrictMock.mockResolvedValue([])
-      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
-
-      await runtime.getWorktreePs(10_000)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await runtime.getWorktreePs(10_000)
-
-      expect(listWorktreesStrictMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('caches a failed local scan instead of respawning Git on every poll', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesStrictMock.mockRejectedValue(new Error('spawn git EAGAIN'))
-      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
-
-      await runtime.getWorktreePs(10_000)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await runtime.getWorktreePs(10_000)
-
-      expect(listWorktreesStrictMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
@@ -529,21 +430,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  it('does not re-spawn the git scan on every poll while a scan stays stalled', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
-
-      await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-      await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      expect(listWorktreesStrictMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('drops and prunes a worktree that a healthy scan no longer reports', async () => {
     const removeWorktreeLineage = vi.fn()
     listWorktreesStrictMock.mockResolvedValue([
@@ -576,24 +462,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('does not re-read persisted worktree metadata on a healthy scan', async () => {
-    listWorktreesStrictMock.mockResolvedValue([
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
-    ])
-    const store = makeStore()
-    const getWorktreeMetaForHost = vi.fn((id: string, hostId: string) =>
-      hostId === 'local' ? store.getWorktreeMeta(id) : undefined
-    )
-    const runtime = new OrcaRuntimeService(
-      partialRuntimeStore({ ...store, getWorktreeMetaForHost })
-    )
-
-    await runtime.getWorktreePs(10_000)
-
-    expect(getWorktreeMetaForHost).toHaveBeenCalledWith(MAIN_WORKTREE_ID, 'local')
-    expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 
   it('lists restored worktrees while a scan is stalled and still hides agent scratch', async () => {

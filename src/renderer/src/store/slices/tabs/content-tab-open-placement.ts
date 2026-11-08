@@ -6,7 +6,7 @@ import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspac
 import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../../types'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import type { TabSplitTarget } from './tabs-slice-contract'
 

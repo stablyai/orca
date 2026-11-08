@@ -13,6 +13,7 @@ import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
@@ -33,7 +34,8 @@ export function getSelectedAgentRuntime(
   settings: GlobalSettings,
   wslSupportedPlatform: boolean,
   wslAvailable: boolean,
-  wslCapabilitiesLoading: boolean
+  wslCapabilitiesLoading: boolean,
+  t: Translate = translate
 ): LocalAgentRuntime {
   const defaultRuntime = normalizeGlobalWindowsRuntimeDefault(
     settings.localWindowsRuntimeDefault ??
@@ -48,7 +50,7 @@ export function getSelectedAgentRuntime(
       wslDistro: selectedDistro,
       label: selectedDistro
         ? `WSL ${selectedDistro}`
-        : translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
+        : t('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }

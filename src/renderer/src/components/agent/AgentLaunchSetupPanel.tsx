@@ -21,7 +21,7 @@ import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chip
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
-import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
+import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'

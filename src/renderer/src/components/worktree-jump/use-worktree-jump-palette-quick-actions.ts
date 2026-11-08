@@ -11,7 +11,7 @@ import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-con
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
+import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,

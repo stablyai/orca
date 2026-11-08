@@ -5,7 +5,7 @@ import {
   ignoresSharedSetupScripts,
   type SetupScriptPromptInspection
 } from '@/lib/setup-script-prompt'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 
 export type SetupScriptPromptState = SetupScriptPromptInspection & {

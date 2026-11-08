@@ -7,7 +7,7 @@ import {
   type LayoutFrameApplyObservation
 } from './workspace-layout-frame-apply-observer'
 import { fullLayoutFrameBuildPatch } from './workspace-layout-frame-builds'
-import type { LayoutFrameSlices } from '@/store/workspace-layout-frame-slices'
+import type { LayoutFrameSlices } from '@/store/workspace-layout/frames/workspace-layout-frame-slices'
 import type { AppState } from '@/store/types'
 
 const FRAME_SLICES: readonly (keyof LayoutFrameSlices)[] = [

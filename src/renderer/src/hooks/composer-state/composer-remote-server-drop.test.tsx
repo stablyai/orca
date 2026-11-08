@@ -9,9 +9,9 @@ import {
   markRuntimeEnvironmentCompatible
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,

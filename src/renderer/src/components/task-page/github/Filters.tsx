@@ -19,7 +19,7 @@ import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../task-pag
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
 import {
   deriveGitHubPRStateChip,

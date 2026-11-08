@@ -74,8 +74,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
   const { postJson, sendJson, send, sendError } = frames
 
+  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   const subscriptions = new BridgeHostSubscriptions({
     client,
+    holdReplay: verdict.holdReplay,
     post: sendJson,
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
@@ -87,7 +89,6 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     terminalTimers: options.terminalTimers
   })
 
-  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   // Use the event’s state; listeners can run before the mirrored getter updates.
   const snapshot = (state?: ConnectionState) => verdict.snapshot(client, state)
 

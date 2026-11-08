@@ -17,7 +17,7 @@ import type {
 import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   buildCopyText,
   CommentLocationLabel,
@@ -76,6 +76,7 @@ export function CommentRow({
   onQueueForAgent?: () => void
   onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const images = useGitHubImagePending()
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
@@ -166,7 +167,7 @@ export function CommentRow({
           title={
             replyDisabled
               ? replyDisabledReason
-              : translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
+              : t('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
           }
           disabled={replyDisabled}
           onClick={(event) => {
@@ -174,7 +175,7 @@ export function CommentRow({
             onReply(comment)
           }}
         >
-          {translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
+          {t('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
         </button>
       )}
       <CopyButton text={buildCopyText(comment)} />
@@ -207,7 +208,7 @@ export function CommentRow({
         {relativeTime ? <span>{relativeTime}</span> : null}
         {automated ? (
           <span className={presentation.botBadge}>
-            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+            {t('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         ) : null}
         <CommentLocationLabel
@@ -252,7 +253,7 @@ export function CommentRow({
         ) : null}
         {automated && (
           <span className={presentation.botBadge}>
-            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+            {t('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         )}
         {!isReply && (
@@ -320,10 +321,7 @@ export function CommentRow({
                 disabled={submittingEdit}
                 onClick={handleCancelEdit}
               >
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.b062f55f29',
-                  'Cancel'
-                )}
+                {t('auto.components.right.sidebar.checks.panel.content.b062f55f29', 'Cancel')}
               </Button>
               <Button
                 type="button"
@@ -331,7 +329,7 @@ export function CommentRow({
                 disabled={!canSaveEdit}
                 onClick={(event) => void handleSaveEdit(event)}
               >
-                {translate('auto.components.right.sidebar.checks.panel.content.f6a40263ff', 'Save')}
+                {t('auto.components.right.sidebar.checks.panel.content.f6a40263ff', 'Save')}
               </Button>
             </div>
           </div>

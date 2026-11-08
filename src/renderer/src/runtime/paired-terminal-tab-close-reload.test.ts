@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite

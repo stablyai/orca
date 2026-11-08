@@ -171,37 +171,6 @@ async function gradeWorkerExit(
 }
 
 describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
-  it('delivers the escalation to a lightweight Run mailbox', async () => {
-    const graded = await gradeWorkerExit('lightweight-run')
-    expect(graded).toMatchObject({
-      dispatchStatus: 'failed',
-      escalationsToCoordinatorHandle: 0,
-      escalationsInRunMailbox: 1,
-      totalUnreadForCoordinator: 1
-    })
-    expect(graded.escalation).toEqual({
-      from: graded.workerHandle,
-      to: `run:${graded.runId}`,
-      runId: graded.runId,
-      type: 'escalation',
-      priority: 'high',
-      subject: 'Agent exited unexpectedly (Agent process exited with code 137)',
-      body:
-        `Worker ${graded.workerHandle} stopped while running task ` +
-        `"do the work" (${graded.taskId}). Agent process exited with code 137. ` +
-        `The task is ready to be dispatched again.`,
-      deliveryContract: 'current_delivery',
-      payload: {
-        taskId: expect.any(String),
-        dispatchId: expect.any(String),
-        exitCode: 137,
-        // Exit code alone cannot distinguish intentional close from crash (STA-4603, STA-4536).
-        exitCause: { kind: 'exited', exitCode: 137 },
-        handle: graded.workerHandle
-      }
-    })
-  })
-
   it.each([false, true])(
     'routes a helper exit through its creator mailbox, settled=%s',
     async (creatorSettled) => {

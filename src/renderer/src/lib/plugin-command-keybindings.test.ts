@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import {
   findPluginCommandForKeybinding,

@@ -9,17 +9,15 @@ import PendingNativeChatCreation from '@/components/worktree-creation/PendingNat
 import {
   changePrompt,
   promptValue
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import type * as Admission from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as Launch from '../../agent-session/launch/structured-agent-session-launch-create-call'
 import { resetStructuredAgentLaunchRegistryForTests } from '../../agent-session/launch/structured-agent-session-launch-registry'
@@ -35,7 +33,7 @@ import {
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (
-    await import('../../../components/native-chat/NativeChatStructuredSession.test-harness')
+    await import('../../../components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness')
   ).createStructuredSessionMocks()
 )
 const host = vi.hoisted(() => ({
@@ -69,19 +67,19 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null
 }))
-vi.mock('../../../components/native-chat/use-structured-agent-session', () =>
+vi.mock('../../../components/native-chat/session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
 )
-vi.mock('../../../components/native-chat/use-native-chat-font-size', () =>
+vi.mock('../../../components/native-chat/appearance/use-native-chat-font-size', () =>
   moduleFactories.useNativeChatFontSize()
 )
-vi.mock('../../../components/native-chat/use-native-chat-file-link-context', () =>
+vi.mock('../../../components/native-chat/links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
 )
 vi.mock('../../../components/native-chat/NativeChatMessageList', () =>
   moduleFactories.nativeChatMessageList()
 )
-vi.mock('../../../components/native-chat/NativeChatEmptyState', () =>
+vi.mock('../../../components/native-chat/host-access/NativeChatEmptyState', () =>
   moduleFactories.nativeChatEmptyState()
 )
 vi.mock('../../../components/worktree-creation/WorktreeSetupSteps', () => ({

@@ -10,7 +10,8 @@ import {
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
 import { toast } from 'sonner'
-import { type AppState, useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'

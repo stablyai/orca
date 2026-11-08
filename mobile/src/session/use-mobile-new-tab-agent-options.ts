@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { hashKey, useQueryClient } from '@tanstack/react-query'
 import type { RpcClient } from '../transport/rpc-client'
-import { runtimeStatusProbeEpoch } from '../transport/runtime-status-probe'
+import { hostConnectionEpoch } from '../query/host-status-query'
 import type { ConnectionState } from '../transport/types'
 import { hostQueryKey } from '../query/host-query-key'
 import {
@@ -19,7 +19,7 @@ import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
 const refreshedTargets = new WeakMap<RpcClient, { epoch: string; targets: Set<string> }>()
 
 function refreshedThisConnection(client: RpcClient): Set<string> {
-  const epoch = runtimeStatusProbeEpoch(client)
+  const epoch = hostConnectionEpoch(client)
   let entry = refreshedTargets.get(client)
   if (entry?.epoch !== epoch) {
     entry = { epoch, targets: new Set() }

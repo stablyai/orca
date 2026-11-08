@@ -9,7 +9,7 @@ import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearComment } from '../../../shared/linear/issue-types'
 import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
 import {
@@ -18,7 +18,7 @@ import {
   type LinearLocalComment
 } from '@/components/linear-item-drawer-types'
 import { renderLinearItemDrawerSheet } from '@/components/linear-item-drawer-sheet'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'

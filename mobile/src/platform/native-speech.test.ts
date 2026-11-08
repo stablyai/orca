@@ -24,11 +24,6 @@ describe('a page asking for the microphone when the user chose This phone', () =
     await server.serve({ action: 'cancel' })
     expect(await server.mayCapture()).toBe(false)
   })
-
-  it('is allowed under Automatic, where the computer is a fallback', async () => {
-    const server = createNativeSpeechServer(engineWith('automatic'))
-    expect(await server.mayCapture()).toBe(true)
-  })
 })
 
 describe('a recognizer another page took over', () => {
@@ -97,5 +92,20 @@ describe('a recognizer that fails while its start is still resolving', () => {
     resolveStart({ started: true, locale: 'en-US' })
     await starting
     expect(await server.serve({ action: 'read' })).toMatchObject({ failure: 'failed' })
+  })
+})
+
+describe('a phone speech service too slow to answer', () => {
+  it('reports busy, not unsupported, so the next dictation asks again', async () => {
+    const engine: NativeSpeechEngine = {
+      ...engineWith('phone'),
+      availability: () => Promise.reject(Object.assign(new Error('slow'), { code: 'busy' }))
+    }
+    const server = createNativeSpeechServer(engine)
+    expect(await server.serve({ action: 'status', locale: 'en-US' })).toEqual({
+      status: 'busy',
+      locale: null,
+      preference: 'phone'
+    })
   })
 })

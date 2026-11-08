@@ -333,7 +333,12 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(accepted).toBe(true)
     expect(acceptSend).not.toHaveBeenCalled()
-    expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
+    expect(holdUnconfirmedSend).toHaveBeenCalledWith(
+      ORIGIN,
+      'look',
+      expect.any(Function),
+      expect.any(String)
+    )
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })

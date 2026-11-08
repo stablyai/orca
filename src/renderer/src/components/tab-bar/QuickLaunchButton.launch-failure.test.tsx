@@ -14,7 +14,7 @@ import { launchOnceHostAnswered } from '@/lib/agent-session/launch/new-tab/launc
 import { i18n } from '@/i18n/i18n'
 import fr from '@/i18n/locales/fr.json'
 
-vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   captureNativeChatComposerFocusIntent: () => undefined
 }))
 afterEach(cleanup)

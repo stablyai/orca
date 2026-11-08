@@ -71,10 +71,7 @@
       },
       "providers": {
         "title": "プロバイダー",
-        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。",
-        "antigravityNotSignedIn": "サインインしていません。チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。",
         "antigravityAccount": "アカウント",
-        "antigravitySignInNeeded": "チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。",
         "searchAgents": "Agent",
         "searchTerminal": "ターミナル",
         "searchCli": "CLI"
@@ -19215,7 +19212,6 @@
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
         "listLabel": "キュー内のメッセージ",
-        "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",
@@ -20996,6 +20992,29 @@
       "loading": "サブモジュールの変更を読み込み中…",
       "empty": "サブモジュールに変更はありません",
       "loadFailed": "サブモジュールの変更を読み込めませんでした"
+    },
+    "branchPicker": {
+      "switch": "ブランチを切り替え: {{branch}}",
+      "search": "ブランチを検索",
+      "recover": "{{branch}} に切り替え",
+      "create": "{{branch}} からブランチ {{name}} を作成",
+      "open": "ワークスペースを開く",
+      "occupied": "{{path}} でチェックアウト済み",
+      "remote": "リモート",
+      "statusFailed": "このチェックアウトの変更を読み取れませんでした。切り替える前にソース管理を更新してください。",
+      "statusUnknown": "切り替える前に、このチェックアウトの変更を読み取ってください。",
+      "conflict": "ブランチを切り替える前に {{operation}} を完了または中止してください。",
+      "dirty_one": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
+      "dirty_other": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
+      "agentWorking": "このワークスペースで Agent が作業中です。完了してからブランチを切り替えるか、停止している場合はそのタブを閉じてください。",
+      "listFailed": "ローカルブランチを一覧表示できませんでした。ピッカーを開き直してください。",
+      "discoveryFailed": "リモートブランチが見つかりませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
+      "switchFailed": "ブランチを切り替えられませんでした。もう一度お試しください。",
+      "switchFailedTitle": "ブランチを切り替えられませんでした",
+      "switchFailedIn": "{{workspace}} でブランチを切り替えられませんでした",
+      "switchedIn": "{{workspace}} で",
+      "thisComputer": "このコンピューター",
+      "updateHost": "ここからブランチを切り替えるには、{{host}} の Orca を更新してください。"
     }
   },
   "rendererRecovery": {
@@ -21230,7 +21249,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity チャット",
-      "chatDescription": "チャットは上の agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。",
       "chatSignIn": "サインイン",
       "chatChangeAccount": "アカウントを変更",
       "chatRetry": "サインインを再試行",
@@ -21243,14 +21261,11 @@
       "chatVerifying": "サインインを完了しています…",
       "chatPasteHelp": "サインイン後の最後のページが読み込まれない場合は、ブラウザーからそのページの完全なアドレスをコピーしてここに貼り付けてください。",
       "chatContinue": "続行",
-      "chatSignedInOn": "{{host}} でサインイン済みです。",
       "chatCancelled": "サインインをキャンセルしました。",
       "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
-      "chatNotSignedIn": "{{host}} でサインインしていません。",
       "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
-      "scope": "{{host}} でネイティブ agy アカウントを管理します。",
       "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
       "docs": "サインイン手順",
       "retry": "再試行",
@@ -21281,11 +21296,9 @@
       "personal": "Google アカウント",
       "gcpProject": "Google Cloud プロジェクト",
       "gcpLocation": "Google Cloud ロケーション",
-      "signInAgainWith": "{{method}} を使用するには、再度サインインしてください。",
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
-      "signInWith": "{{host}} で {{method}} を使ってサインインします。",
       "lastReading": "{{reading}} · {{time}} に取得",
       "noReading": "使用量は不明：未取得"
     },

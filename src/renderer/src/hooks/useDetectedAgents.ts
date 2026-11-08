@@ -1,11 +1,11 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */

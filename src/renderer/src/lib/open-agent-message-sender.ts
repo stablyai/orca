@@ -18,13 +18,13 @@ import {
   showLookupFailure,
   type LookupFailure
 } from './open-located-agent-message-sender'
-import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
+import { unnamedSenderLabel } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
-} from '@/components/native-chat/native-chat-agent-message-sender-target'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,

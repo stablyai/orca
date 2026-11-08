@@ -87,7 +87,7 @@ import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-inten
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
 
 import {

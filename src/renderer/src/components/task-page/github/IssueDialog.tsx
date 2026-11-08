@@ -13,7 +13,7 @@ import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import IssueSourceSelector from '@/components/github/IssueSourceSelector'
 import {
   Select,

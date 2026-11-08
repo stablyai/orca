@@ -58,9 +58,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           // The read every Source Control write makes once it succeeds.
           if (name === 'written') {
-            return performHookAction(() =>
-              loaders.loadStatus({ preserveReadyOnFailure: true, force: true })
-            )
+            return performHookAction(() => loaders.loadStatus({ force: true }))
           }
           throw new Error(`Unknown changes load action: ${name}`)
         },
