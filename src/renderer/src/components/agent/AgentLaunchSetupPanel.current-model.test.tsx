@@ -104,3 +104,13 @@ it('returns to the current model after a search is cleared, so Enter uses it', (
   expect(onUse).toHaveBeenCalledTimes(1)
   expect(onDraftChange).not.toHaveBeenCalled()
 })
+
+it('returns to the current model when a search is cleared without a key, as with Cut', async () => {
+  render(listed)
+  const search = document.querySelector<HTMLInputElement>('[cmdk-input]')!
+  fireEvent.change(search, { target: { value: 'opus' } })
+  fireEvent.pointerMove(search)
+  await act(async () => {})
+  fireEvent.change(search, { target: { value: '' } })
+  expect(highlighted()).toBe('opencode/gpt-5.3-codex')
+})

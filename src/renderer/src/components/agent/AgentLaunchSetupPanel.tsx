@@ -98,7 +98,8 @@ export function AgentLaunchSetupPanel({
     legacy,
     modelInArguments
   )
-  const highlight = useSetupModelHighlight(modelRows.start, modelQuery)
+  const modelList = useRef<HTMLDivElement>(null)
+  const highlight = useSetupModelHighlight(modelList, modelRows.start, modelQuery)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -189,9 +190,8 @@ export function AgentLaunchSetupPanel({
       <Command
         surface="inline"
         density="model"
-        value={highlight.value}
-        onValueChange={highlight.onValueChange}
-        onPointerMoveCapture={highlight.onPointerMoveCapture}
+        ref={modelList}
+        {...highlight.command}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
