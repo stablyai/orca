@@ -28,7 +28,7 @@ import {
   installChromeWebStoreBridge
 } from './browser-extension-web-store-bridge'
 
-// Why: raw require keeps the sandboxed preload standalone in the main-process CJS build.
+// Why: raw require stays a plain require('electron') in the standalone sandboxed CJS bundle.
 const electron: { contextBridge: ContextBridge; ipcRenderer: IpcRenderer } = require('electron')
 const { contextBridge, ipcRenderer } = electron
 
