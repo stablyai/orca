@@ -199,6 +199,7 @@ export const ORCHESTRATION_EVENTS_METHODS = [
         collectStates()
         collectMessages()
       }
+      observers.noteReader()
       return { cursor: cursorFor(messageSequence, stateSequence), events }
     }
   })

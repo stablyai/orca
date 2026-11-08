@@ -204,4 +204,18 @@ describe('orchestration.events', () => {
     state.db.completeDispatch(dispatchId)
     expect((await polling).events).toEqual([{ type: 'end', reason: 'dispatch_closed' }])
   })
+
+  it('resolves a pane Dispatch only while read, and once bound only on a state change', async () => {
+    const state = h.setup()
+    const workers = attachWorkers(state)
+    workers.dispatch('term_worker')
+    const resolve = vi.spyOn(state.runtime, 'getAgentStatusOrchestrationContextForPaneKey')
+    workers.hook('term_worker', 'working', 'Bash')
+    expect(resolve).not.toHaveBeenCalled()
+
+    await poll(state.ctx, state.activeRunId!, 'term_coord')
+    workers.hook('term_worker', 'blocked')
+    workers.hook('term_worker', 'blocked', 'Edit')
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
 })

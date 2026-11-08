@@ -7,6 +7,8 @@ import { normalizeOptionalField } from '../../../../shared/agent-status/contract
 const STATE_JOURNAL_LIMIT = 512
 const TRACKED_PANE_LIMIT = 2048
 const BLOCKED_ON_MAX_LENGTH = 200
+// A reader gone longer than this resumes from a snapshot, so hook rows cost nothing meanwhile.
+const READER_GRACE_MS = 2 * 60 * 1000
 
 export type RunWorkerStateEvent = {
   type: 'worker_state'
@@ -54,8 +56,9 @@ export class RunEventObservers {
   private readonly journal: (RunWorkerStateEvent & { sequence: number })[] = []
   private readonly paneStates = new Map<
     string,
-    { dispatchId: string; state: AgentStatusIpcPayload['state'] }
+    { dispatchId: string | null; state: AgentStatusIpcPayload['state'] }
   >()
+  private lastReadAt = -Infinity
 
   get wakeCount(): number {
     return this.wakes
@@ -63,6 +66,11 @@ export class RunEventObservers {
 
   get stateCursor(): number {
     return this.stateSequence
+  }
+
+  /** Marks a reader present; a pending poll counts as present on its own. */
+  noteReader(): void {
+    this.lastReadAt = Date.now()
   }
 
   wake(): void {
@@ -101,23 +109,36 @@ export class RunEventObservers {
     row: AgentStatusIpcPayload | null,
     readContext: () => AgentStatusOrchestrationContext | undefined
   ): void {
+    if (this.listeners.size === 0 && Date.now() - this.lastReadAt > READER_GRACE_MS) {
+      if (this.paneStates.size > 0 || this.journal.length > 0) {
+        // Changes go unrecorded from here, so no cursor minted so far may replay past them.
+        this.paneStates.clear()
+        this.journal.length = 0
+        this.stateSequence += 1
+      }
+      return
+    }
     if (!row) {
       this.paneStates.delete(paneKey)
       return
     }
-    // Resolve first: a state seen before the Dispatch binds the pane must still be sent once it does.
-    const context = readContext()
-    if (!context?.orchestrationRunId) {
+    const known = this.paneStates.get(paneKey)
+    // An unbound pane re-resolves each row: its Dispatch may bind after the state was first seen.
+    if (known?.state === row.state && known.dispatchId !== null) {
       return
     }
-    const known = this.paneStates.get(paneKey)
-    if (known?.dispatchId === context.dispatchId && known.state === row.state) {
+    const context = readContext()
+    const dispatchId = context?.orchestrationRunId ? context.dispatchId : null
+    if (known?.state === row.state && dispatchId === null) {
       return
     }
     this.paneStates.delete(paneKey)
-    this.paneStates.set(paneKey, { dispatchId: context.dispatchId, state: row.state })
+    this.paneStates.set(paneKey, { dispatchId, state: row.state })
     if (this.paneStates.size > TRACKED_PANE_LIMIT) {
       this.paneStates.delete(this.paneStates.keys().next().value!)
+    }
+    if (!context?.orchestrationRunId) {
+      return
     }
     this.journal.push({
       ...runWorkerStateEvent(context.orchestrationRunId, context, row),
