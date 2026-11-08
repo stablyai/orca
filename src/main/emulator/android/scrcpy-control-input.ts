@@ -148,6 +148,9 @@ export function sendScrcpyDisplayScroll(
   rotation: number,
   scroll: [number, number, number, number]
 ): boolean {
-  const size = rotation % 2 ? { width: display.height, height: display.width } : display
+  // scrcpy 2.4 validates control positions against its 8-pixel-aligned video size.
+  const width = display.width & ~7
+  const height = display.height & ~7
+  const size = rotation % 2 ? { width: height, height: width } : { width, height }
   return control ? sendScrcpyScroll(control, ...scroll, size) : false
 }

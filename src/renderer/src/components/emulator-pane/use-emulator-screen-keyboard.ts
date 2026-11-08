@@ -90,6 +90,9 @@ export function useEmulatorScreenKeyboard({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       const commandKey = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+      const shortcutKey = ['KeyA', 'KeyZ', 'KeyY'].includes(event.code)
+        ? event.code.slice(3).toLowerCase()
+        : event.key.toLowerCase()
       if (
         canInteract &&
         captureActiveRef.current &&
@@ -97,9 +100,9 @@ export function useEmulatorScreenKeyboard({
         commandKey &&
         !event.altKey &&
         !event.nativeEvent.isComposing &&
-        ['a', 'z', 'y'].includes(event.key.toLowerCase())
+        ['a', 'z', 'y'].includes(shortcutKey)
       ) {
-        scrcpyKeyboard.sendKey(event.key.toLowerCase(), event.shiftKey, true)
+        scrcpyKeyboard.sendKey(shortcutKey, event.shiftKey, true)
         event.preventDefault()
         event.stopPropagation()
         return

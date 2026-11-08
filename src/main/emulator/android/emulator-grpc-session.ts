@@ -150,11 +150,11 @@ export class EmulatorGrpcSession {
         return
       }
       const { width, height } = image.format
+      clearTimeout(this.firstFrameTimer)
       // The emulator publishes an empty image while the display is asleep.
       if (!width && !height) {
         return
       }
-      clearTimeout(this.firstFrameTimer)
       if (
         !width ||
         !height ||

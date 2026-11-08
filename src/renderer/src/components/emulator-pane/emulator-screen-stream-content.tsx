@@ -72,6 +72,7 @@ export function EmulatorScreenStreamContent({
   if ((androidDeviceId || nativeDeviceId) && showStream && !video.error && !native.error) {
     return (
       <canvas
+        key={nativeDeviceId ? 'native' : 'scrcpy'}
         ref={nativeDeviceId ? native.canvasRef : video.canvasRef}
         className={mediaClassName}
         style={mediaStyle}
