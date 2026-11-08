@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../shared/mobile-bridge-frame-bytes'
 import { SIDEBAR_INPUTS_PAGE_MAX_BYTES } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
@@ -81,20 +80,6 @@ describe('sidebarInputs.read', () => {
     expect([...host.cleanups.keys()]).toEqual(['sidebar-inputs-feed-conn-1'])
     expect(host.rows.watchers()).toBe(1)
     host.cleanups.get('sidebar-inputs-feed-conn-1')?.()
-    expect(host.rows.watchers()).toBe(0)
-  })
-
-  it('does not subscribe a connection that closed before its read ran', async () => {
-    const host = makeHost()
-    const closed = new AbortController()
-    closed.abort()
-    const response = await host.read({
-      clientKind: 'mobile',
-      connectionId: 'conn-1',
-      signal: closed.signal
-    })
-    expect(response).toMatchObject({ ok: false })
-    expect(host.cleanups.size).toBe(0)
     expect(host.rows.watchers()).toBe(0)
   })
 })

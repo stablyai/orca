@@ -3,9 +3,9 @@ import type { RuntimeCreateAgentSessionResult } from '../../../../../../shared/a
 import {
   createAgentSessionCreateOperation,
   type AgentSessionCreateOperation
-} from '../../../../runtime/agent-session-create-operation'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+} from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()

@@ -145,4 +145,34 @@ describe('Antigravity AI Vault discovery', () => {
     expect(result.sessions[0]?.title).toMatch(/\.\.\.$/)
     expect(result.sessions[0]?.cwd).toBeNull()
   })
+
+  it('offers the artifacts folder only once the conversation has top-level artifact files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-artifacts-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const conversationDir = join(roots.antigravityBrainDir, sessionId)
+    await writeAntigravityTranscript(roots.antigravityBrainDir, sessionId, [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-07-15T11:39:10.000Z',
+        content: '<USER_REQUEST>ORCA_28795_REPRO</USER_REQUEST>'
+      }
+    ])
+    for (const dir of ['scratch', '.user_uploaded']) {
+      await mkdir(join(conversationDir, dir), { recursive: true })
+      await writeFile(join(conversationDir, dir, 'notes.md'), 'x')
+    }
+    await writeFile(join(conversationDir, '.DS_Store'), '')
+
+    const before = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
+    expect(before.sessions[0]?.antigravityArtifactPath).toBeUndefined()
+
+    await writeFile(join(conversationDir, 'implementation_plan.md'), '# plan')
+    const after = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
+    expect(after.sessions[0]?.antigravityArtifactPath).toBe(
+      join(conversationDir, 'implementation_plan.md')
+    )
+  })
 })

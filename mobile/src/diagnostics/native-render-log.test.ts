@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../transport/hosts/host-profile'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios', Version: '27' } }))
 vi.mock('expo-constants', () => ({ default: { expoConfig: { version: '0.0.60' } } }))
@@ -37,7 +37,7 @@ it.each([null, pairedHost])(
   'retains a native render failure in the copied report after restart, host %s',
   async (host) => {
     const { recordNativeRenderError, NATIVE_APP_LOG_ID } = await import('./native-render-log')
-    const { connectionLogStore } = await import('../transport/persisted-connection-log-store')
+    const { connectionLogStore } = await import('./connection/persisted-connection-log-store')
     const failure = new Error('Private prompt\n    at PRIVATE PROMPT\ntoken=do-not-share')
     failure.stack = `${failure.name}: ${failure.message}\n    at UnauthorizedAboutRoute (/Users/private/project/about.tsx:12:3)`
     recordNativeRenderError(failure, 'about')
@@ -66,7 +66,7 @@ it('keeps a log entry when the thrown error has an unreadable stack', async () =
     }
   })
   recordNativeRenderError(failure, 'pair-scan')
-  const { connectionLogStore } = await import('../transport/persisted-connection-log-store')
+  const { connectionLogStore } = await import('./connection/persisted-connection-log-store')
   expect(connectionLogStore.get(NATIVE_APP_LOG_ID)).toEqual([
     expect.objectContaining({ level: 'error', detail: '/pair-scan: Error\n' })
   ])

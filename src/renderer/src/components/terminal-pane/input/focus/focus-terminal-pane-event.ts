@@ -1,7 +1,7 @@
 import type { FocusTerminalPaneDetail } from '@/constants/terminal'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { flashFocusedPaneRim } from '../../focused-pane-rim-flash'
+import { flashFocusedPaneRim } from './focused-pane-rim-flash'
 
 type FocusTerminalPaneManager = {
   getNumericIdForLeaf(leafId: string): number | null

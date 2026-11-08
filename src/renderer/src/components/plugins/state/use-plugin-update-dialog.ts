@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import type { PluginPageNavigation } from './use-plugin-page-navigation'
 

@@ -2,7 +2,10 @@ import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-me
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { gitLabApiFor, type GitLabCapabilityChecks } from '@/runtime/gitlab-owner-api'
+import {
+  gitLabApiFor,
+  type GitLabCapabilityChecks
+} from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'

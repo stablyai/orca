@@ -31,12 +31,12 @@ import {
   installIpcPtyWindow,
   type PtyStreamPayload,
   type PtyExitPayload
-} from '../../pty-transport-test-harness'
+} from '../../pty-transport/ipc/pty-transport-test-harness'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { PtyPreconnectInputEntry } from '../../pty-transport/input/pty-preconnect-input-buffer'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import type { PtyPaneStartup } from '../../pty-connection-types'
+import type { PtyPaneStartup } from '../startup/pty-pane-startup'
 import type * as PtyTransportModule from '../../pty-transport/ipc/pty-transport'
 import type * as PtyPreHandlerBufferModule from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import type * as PtyDispatcherModule from '../../pty-transport/delivery/pty-dispatcher'
@@ -514,7 +514,7 @@ describe('Git Bash console-capacity pane retention', () => {
       let accepted: boolean | Promise<boolean> | undefined
       if (kind === 'quick-command') {
         const { sendTerminalQuickCommandToPane } =
-          await import('../../terminal-quick-command-dispatch')
+          await import('../../quick-commands/terminal-quick-command-dispatch')
         expect(
           sendTerminalQuickCommandToPane({
             command: { id: 'status', label: 'Status', command: 'git status', appendEnter: true },

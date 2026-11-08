@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { getTaskSourceCacheScope } from '../../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { isWorkspaceRepositoryAttachment } from '../metadata/worktree-attachment-editing'
 import {

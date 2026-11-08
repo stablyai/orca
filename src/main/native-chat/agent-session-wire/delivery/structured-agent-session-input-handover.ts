@@ -148,6 +148,7 @@ export async function beginStructuredAgentSessionInputHandover(
               signal
             ))
           ) {
+            // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
             return deps.serialize(sessionId, () =>
               failed(
                 {
@@ -200,6 +201,7 @@ export async function beginStructuredAgentSessionInputHandover(
           }
           const started = await waitForPromiseWithSignal(claim.outcome, signal)
           if (!started.ok) {
+            // oxlint-disable-next-line typescript/return-await -- this already records the failure; the catch must not record a second one
             return deps.serialize(sessionId, () =>
               failed(
                 started.aborted

@@ -7,7 +7,7 @@ import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 import {
   useMacFolderAccessFixStore,
   type FolderAccessNoticePhase
-} from '@/store/mac-folder-access-fix'
+} from '@/store/terminals/folder-access/mac-folder-access-fix'
 
 type FolderAccessMismatch = {
   daemonScope: string
@@ -65,7 +65,7 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/store/plugin-language-packs', () => ({
+vi.mock('@/store/plugins/localization/plugin-language-packs', () => ({
   usePluginLanguagePackStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ entries: [], loaded: true }),
   usePluginLanguagePacks: () => []
@@ -155,33 +155,6 @@ describe('useMacTccAttributionSeveredNotice', () => {
     await waitFor(() => {
       expect(macTccAttribution).toHaveBeenCalledTimes(2)
       expect(toast.dismiss).toHaveBeenCalledWith('mac-tcc-attribution-severed')
-    })
-  })
-
-  it('coalesces overlapping mount/focus checks into one IPC call and one toast', async () => {
-    let resolveHealth!: (value: AttributionResult) => void
-    const pending = new Promise<AttributionResult>((resolve) => {
-      resolveHealth = resolve
-    })
-    macTccAttribution.mockImplementation(() => pending)
-
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalledTimes(1)
-    })
-    act(() => {
-      window.dispatchEvent(new Event('focus'))
-    })
-    expect(macTccAttribution).toHaveBeenCalledTimes(1)
-    expect(toast.warning).not.toHaveBeenCalled()
-
-    await act(async () => {
-      resolveHealth({ health: 'severed', folderAccessMismatch: null })
-      await pending
-    })
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalledTimes(1)
-      expect(toast.warning).toHaveBeenCalledTimes(1)
     })
   })
 

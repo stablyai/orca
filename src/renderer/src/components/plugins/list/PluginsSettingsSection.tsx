@@ -4,12 +4,12 @@ import { toast } from 'sonner'
 import type { PluginHostInstallSource } from '../../../../../preload/api/plugin-host-api'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { PluginDevelopmentDialog } from '../dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../dialogs/PluginInstallDialog'
 import { sourceInstallTrustPrompt } from '../presentation/plugin-install-trust'
-import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
+import { confirmPluginInstallTrust } from '@/store/plugins/installation/plugin-install-trust-request'
 import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
@@ -42,6 +42,7 @@ export function PluginsSettingsSection({
   settings,
   updateSettings
 }: PluginsSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [plugins, setPlugins] = useState<PluginHostListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -88,10 +89,7 @@ export function PluginsSettingsSection({
     setError(
       errorMessage(
         cause,
-        translate(
-          'auto.components.settings.PluginsSettingsSection.loadFailed',
-          'Could not load plugins.'
-        )
+        t('auto.components.settings.PluginsSettingsSection.loadFailed', 'Could not load plugins.')
       )
     )
   }
@@ -196,7 +194,7 @@ export function PluginsSettingsSection({
   })
   const pluginLogs = usePluginLogs(mounted, mountedRef, plugins)
 
-  const sectionPresentation = getPluginsSectionPresentation()
+  const sectionPresentation = getPluginsSectionPresentation(t)
 
   if (!mounted) {
     return <SettingsSection id="plugins" {...sectionPresentation} />
@@ -282,7 +280,7 @@ export function PluginsSettingsSection({
         // Why: the stop may have landed before the start failed; show what is true now.
         void loadPluginList(window.api.plugins.list())
         toast.error(
-          translate(
+          t(
             'auto.components.settings.PluginsSettingsSection.restartFailed',
             "Couldn't restart {{value0}}.",
             {

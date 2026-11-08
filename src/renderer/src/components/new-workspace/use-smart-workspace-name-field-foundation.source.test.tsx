@@ -1,4 +1,4 @@
-import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
+import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { referenceLinearIssue } from '../sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
     >(async () => [])
   }
 }))
-vi.mock('@/runtime/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
+vi.mock('@/runtime/linear/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
 vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
   listGitLabWorkItemsForSource: mocks.listGitlabWorkItems,
   lookupGitLabWorkItemByPathForSource: vi.fn()

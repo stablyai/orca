@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import '@/store/slices/editor'
+
 import { createEditorSlice } from '@/store/slices/editor/create-editor-slice'
 import type { AppState } from '@/store/types'
 import {
@@ -17,12 +17,12 @@ import {
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
-import { emptyTabLayoutState } from '../../../store/slices/editor-slice-test-harness'
+import { emptyTabLayoutState } from '../../../store/slices/editor/editor-slice-test-harness'
 import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
 
 const mocks = vi.hoisted(() => ({

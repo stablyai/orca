@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Check, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { copyArtifactLink, openArtifactInBrowser } from './artifact-link-actions'
 
 export function ArtifactPublishedLinkPanel({
@@ -16,6 +16,7 @@ export function ArtifactPublishedLinkPanel({
   sharingEnabled: boolean
   onUpdate: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   const mountedRef = useRef(false)
@@ -52,8 +53,8 @@ export function ArtifactPublishedLinkPanel({
   }
 
   const copyLabel = copied
-    ? translate('auto.components.artifacts.copySuccess', 'Artifact link copied')
-    : translate('auto.components.artifacts.ArtifactPublishedLinkPanel.copyLink', 'Copy link')
+    ? t('auto.components.artifacts.copySuccess', 'Artifact link copied')
+    : t('auto.components.artifacts.ArtifactPublishedLinkPanel.copyLink', 'Copy link')
 
   return (
     <div ref={setPanelRef} className="space-y-3">
@@ -89,7 +90,7 @@ export function ArtifactPublishedLinkPanel({
               size="icon-xs"
               className="text-muted-foreground hover:text-foreground"
               onClick={() => openArtifactInBrowser(shareUrl)}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.artifacts.ArtifactPublishedLinkPanel.openLink',
                 'Open link'
               )}
@@ -98,10 +99,7 @@ export function ArtifactPublishedLinkPanel({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate(
-              'auto.components.artifacts.ArtifactPublishedLinkPanel.openLink',
-              'Open link'
-            )}
+            {t('auto.components.artifacts.ArtifactPublishedLinkPanel.openLink', 'Open link')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -117,11 +115,8 @@ export function ArtifactPublishedLinkPanel({
         >
           {publishing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           {publishing
-            ? translate(
-                'auto.components.artifacts.ArtifactPublishedLinkPanel.updating',
-                'Updating…'
-              )
-            : translate(
+            ? t('auto.components.artifacts.ArtifactPublishedLinkPanel.updating', 'Updating…')
+            : t(
                 'auto.components.artifacts.ArtifactPublishedLinkPanel.update',
                 'Update shared content'
               )}

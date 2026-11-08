@@ -9,7 +9,7 @@ import {
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'

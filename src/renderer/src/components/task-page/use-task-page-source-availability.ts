@@ -11,7 +11,7 @@ import {
   type TaskSourceContext,
   normalizeTaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import { useTaskPageSourceSummary } from './use-task-page-source-summary'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude

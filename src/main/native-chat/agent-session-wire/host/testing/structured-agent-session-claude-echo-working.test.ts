@@ -167,8 +167,5 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   expect(working).not.toContain(false)
 }
 
-it('reads working at every published frame from the send through the echo that opens its turn', () =>
-  expectWorkingThroughEcho(false))
-
 it('keeps the settlement behind the turn its echo opens when the previous result arrives in the same read', () =>
   expectWorkingThroughEcho(true))

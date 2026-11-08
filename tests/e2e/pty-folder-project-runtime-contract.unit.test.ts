@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import type * as WslDistroGate from '../../src/main/wsl/discovery/wsl-background-distro-gate'
 import type { PtyApi } from '../../src/preload/api/pty-api'
-import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import type { Project, ProjectHostSetup } from '../../src/shared/project-types'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../src/shared/constants'
 import {
@@ -30,8 +30,8 @@ import type {
   IpcPtyTransportOptions,
   PtyTransport
 } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
-import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
-import { makeTab } from '../../src/renderer/src/store/slices/store-session-test-harness'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeTab } from '../../src/renderer/src/store/terminals/terminal-tab.test-fixture'
 import {
   existsSyncMock,
   wslUncDirectoryExistsAsyncMock
@@ -54,7 +54,9 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock(
   '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({

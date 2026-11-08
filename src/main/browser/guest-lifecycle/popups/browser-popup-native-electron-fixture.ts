@@ -136,6 +136,7 @@ export class BrowserPopupNativeFixture {
         title: window.isDestroyed() ? '' : window.getTitle(),
         fullscreen: !window.isDestroyed() && window.isFullScreen(),
         focused: !window.isDestroyed() && window.isFocused(),
+        size: window.isDestroyed() ? [] : window.getSize(),
         contentSize: window.isDestroyed() ? [] : window.getContentSize()
       }))
     }

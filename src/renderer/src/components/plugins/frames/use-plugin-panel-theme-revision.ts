@@ -15,7 +15,9 @@ export function usePluginPanelThemeRevision(): number {
   // Compare baked shell values: unrelated root-style writes must not remount iframes and destroy panel state.
   const snapshotRef = useRef<string | null>(null)
   useEffect(() => {
-    snapshotRef.current ??= readPanelThemeSnapshot()
+    if (snapshotRef.current == null) {
+      snapshotRef.current = readPanelThemeSnapshot()
+    }
     const observer = new MutationObserver(() => {
       const snapshot = readPanelThemeSnapshot()
       if (snapshot === snapshotRef.current) {

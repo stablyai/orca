@@ -7,6 +7,8 @@ export type PairedMobileDevice = {
   lastSeenAt: number
   // The device's last sign-in used the older E2EE framing.
   usesLegacyEncryption?: boolean
+  // Paired by an app from before single-use pairing codes.
+  olderPairingMethod?: true
 }
 
 type PairedMobileDevicesSnapshot = {

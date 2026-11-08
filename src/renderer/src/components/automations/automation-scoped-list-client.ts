@@ -1,29 +1,31 @@
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
 import type {
   AutomationListResult,
   AutomationListScopeSelector
-} from '../../../../shared/automation-list-scope'
-import { validateAutomationListResponse } from '../../../../shared/automation-list-response'
+} from '../../../../shared/automations/ownership/automation-list-scope'
+import { validateAutomationListResponse } from '../../../../shared/automations/ownership/automation-list-response'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 /** The one classifier every client shares; re-exported so call sites keep importing it from here. */
-export { matchAutomationOwnerConflict } from '../../../../shared/automation-owner-conflict'
+
 import type {
   AutomationDestination,
   AutomationOwnerPrecondition
-} from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   toRuntimeAutomationCreateInput,
   toRuntimeAutomationUpdateInput

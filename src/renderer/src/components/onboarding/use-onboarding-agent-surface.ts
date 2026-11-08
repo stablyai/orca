@@ -4,12 +4,13 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { recomputeOn } from '@/lib/recompute-on'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { relearnHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { AgentSurface } from './use-onboarding-flow-types'
 
 type AgentSurfaceArgs = {
@@ -27,7 +28,7 @@ export function useChatAgentDetection() {
   const refreshNativeDetectedAgents = useAppStore((s) => s.refreshNativeDetectedAgents)
   const refreshLocalAgents = useAppStore((s) => s.refreshDetectedAgents)
   const nativeDetected = useAppStore(readNativeDetectedAgents)
-  useHostStructuredAgentsVersion()
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
   useChatProgramFacts(CHAT_HOST)
   useEffect(() => {
     // Chat UI may still be off, so the background sync has not asked the local host yet.
@@ -43,7 +44,9 @@ export function useChatAgentDetection() {
     [refreshLocalAgents, refreshNativeDetectedAgents]
   )
   // Claude and Codex, then the agents this computer's host registered for chat.
-  const chatAgents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+  const chatAgents = recomputeOn([hostAgentsVersion], () =>
+    chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+  )
   // Custom commands and downloaded runtimes can run Chat without a CLI on PATH.
   const chatReady = useAppStore((state) => {
     const context = resolveChatProgramContext(state, CHAT_HOST)

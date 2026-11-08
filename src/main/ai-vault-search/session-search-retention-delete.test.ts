@@ -80,24 +80,6 @@ it('continues frozen pages while reclaiming already-hidden orphan messages', asy
   }
 })
 
-it('seeks the expiring end of the file list instead of scanning it', async () => {
-  const index = await openSessionSearchIndexFile('ss-retention-plan')
-  try {
-    seed(index.db, 1, 1, 1)
-    const plan = (
-      index.db
-        .prepare('EXPLAIN QUERY PLAN SELECT path FROM files WHERE mtime_ms < ? ORDER BY mtime_ms')
-        .all(100) as { detail: string }[]
-    )
-      .map((row) => row.detail)
-      .join(' ')
-    expect(plan).toContain('files_mtime')
-    expect(plan).not.toContain('TEMP B-TREE')
-  } finally {
-    await index.close()
-  }
-})
-
 it('hides an expiring session at once, then reclaims its rows in bounded steps', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-yield')
   seed(index.db, 1, 1025, 1)

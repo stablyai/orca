@@ -1,92 +1,34 @@
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import type {
+  ListPanelProps,
+  EditorDialogProps,
+  DeleteDialogProps
+} from './automations-page-child-props.test-fixture'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
-} from '../../../../shared/protocol-version'
-import type { AppState } from '@/store'
-import type { AutomationHostCatalogView } from './use-automation-host-catalog'
-import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
-import type { ExternalAutomationListEntry } from './external-automation-list-entries'
-import type { AutomationListRow } from './automation-list-row-identity'
-import type { AutomationListViewItem } from './automation-list-view'
+} from '../../../../shared/automations/automation-runtime-capabilities'
+import type { AppState } from '@/store/types'
+
 import { AutomationDestinationField } from './AutomationDestinationField'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AutomationTemplate } from './automation-templates'
+
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
   selfScopedList
 } from './automations-page-runtime-fixtures'
-
-export type { DetailPaneProps } from './automations-page-fixtures'
-
-export { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
-
-export type ListPanelProps = {
-  sortedListItems: readonly AutomationListViewItem[]
-  selectedExternal: ExternalAutomationListEntry | null
-  externalActionKey: string | null
-  requestExternalAction: (
-    manager: ExternalAutomationListEntry['manager'],
-    job: ExternalAutomationListEntry['job'],
-    action: 'run' | 'pause' | 'resume' | 'delete',
-    scope: ExternalAutomationListEntry['scope']
-  ) => void
-  hasListItems: boolean
-  hasFilteredListItems: boolean
-  selectedRowKey: string | null
-  selectedExternalKey: string | null
-  hostCatalog: AutomationHostCatalogView
-  searchCounts: { hostRowCount: number; visibleRowCount: number; searchActive: boolean }
-  externalManagersUncheckedNotice: string | null
-  isActionEnabled: (row: AutomationListRow, action: string) => boolean
-  onSelectHost: (filter: unknown) => void
-  selectAutomationRow: (rowKey: string | null) => void
-  selectExternalKey: (entryKey: string | null) => void
-  onOpenDetail: () => void
-  onRefresh: () => void
-  onOpenRuns: () => void
-  runNow: (row: AutomationListRow) => void
-  openEditDialog: (row: AutomationListRow) => void
-  toggleAutomation: (row: AutomationListRow) => void
-  requestDeleteAutomation: (row: AutomationListRow) => void
-  openCreateDialog: () => void
-  canCreateAutomation: boolean
-}
-
-export type EditorDialogProps = {
-  launchAuthority?: AutomationAuthorityRef
-  open: boolean
-  isEditing: boolean
-  isSaving: boolean
-  createDestination?: AutomationCreateDestinationControl
-  editDestination?: AutomationCreateDestinationControl
-  notice?: { message: string; recovery: string | null } | null
-  onNoticeRecover?: (action: string) => void
-  repos?: { id: string }[]
-  worktrees: Worktree[]
-  draft?: { projectId: string; workspaceId: string }
-  canSave?: boolean
-  onSave: () => void
-  onProjectChange: (projectId: string) => void
-  onDraftChange: (updater: (current: unknown) => unknown) => void
-  onApplyTemplate: (template: AutomationTemplate) => void
-}
-
-export type DeleteDialogProps = {
-  deleteTarget: Automation | null
-  onConfirm: () => void
-}
 
 type AutomationsPageMocks = {
   state: AutomationsPageFixtureState
@@ -130,13 +72,17 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useRepoMap: () => mocks.repoMap,
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoMap: () => mocks.repoMap
+}))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
   useWorktreeMap: () => mocks.worktreeMap
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
 
@@ -163,7 +109,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi.fn(async () => ({ hooks: null, ok: true }))
 }))
 

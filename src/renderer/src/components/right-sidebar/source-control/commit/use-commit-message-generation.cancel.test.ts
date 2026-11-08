@@ -16,7 +16,7 @@ const host = vi.hoisted(() => {
   } = { succeed: null, cancel: vi.fn<() => void>() }
   return held
 })
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   generateRuntimeCommitMessage: () =>
     new Promise((resolve) => {
       host.succeed = (message) => resolve({ success: true, message })

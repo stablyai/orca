@@ -10,7 +10,7 @@ import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
-} from '../../recently-closed-tabs'
+} from '../../../terminals/recently-closed-terminal-tabs'
 import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
@@ -38,6 +38,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareRequestStatusHeadByWorktree',
   'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
+  'gitGraphFiltersByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
@@ -223,6 +224,15 @@ export function buildWorktreeRenameState(
         ])
       )
     : s.sleepingAgentSessionsByPaneKey
+  // Groups keep their ids across the rename, so their chooser marks move with them.
+  const splitLandingGroupIds = Object.values(s.splitLandingGroupIds ?? {}).includes(oldWorktreeId)
+    ? Object.fromEntries(
+        Object.entries(s.splitLandingGroupIds).map(([groupId, worktreeId]) => [
+          groupId,
+          worktreeId === oldWorktreeId ? newWorktreeId : worktreeId
+        ])
+      )
+    : s.splitLandingGroupIds
 
   return {
     ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
@@ -240,6 +250,7 @@ export function buildWorktreeRenameState(
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
       : {}),
+    ...(splitLandingGroupIds !== s.splitLandingGroupIds ? { splitLandingGroupIds } : {}),
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),

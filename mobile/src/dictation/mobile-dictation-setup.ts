@@ -3,10 +3,11 @@ import {
   hostDictationErrorMessage
 } from '../../../src/shared/host-dictation-error-messages'
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RpcResponse } from '../transport/types'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import '../transport/connection/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
   dictationConfigWrite,
   dictationModelDelete,
@@ -58,6 +59,10 @@ export function dictationFailureMessage(message: string): string {
   switch (message) {
     case 'dictation_already_active':
       return translate('dictation.setup.alreadyActive', fallback)
+    case 'dictation_session_limit':
+      return translate('dictation.setup.sessionLimit', fallback)
+    case 'dictation_model_busy':
+      return translate('dictation.setup.modelBusy', fallback)
     case 'dictation_requires_mobile_client':
       return translate('dictation.setup.repairRequired', fallback)
     case 'dictation_owner_mismatch':

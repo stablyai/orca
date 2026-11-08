@@ -2,7 +2,7 @@ import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-sca
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
-import { createJsonTokenReader } from '../../../shared/json-token-reader'
+import { createJsonTokenReader } from '../../../shared/json-stream/json-token-reader'
 
 /** Fold one root array while retaining only the root fields the agent parser uses. */
 export async function readStreamedSessionDocument<T>(args: {

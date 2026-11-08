@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 export type BrowserPageParams = { worktree: string; page: string }

@@ -1,4 +1,5 @@
-import type { Automation, AutomationDispatchResult } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationDispatchResult } from '../../shared/automations/history/automation-run'
 import type { Repo } from '../../shared/repo-types'
 import { checkCreatedWorktreeSetupTrust } from '../workspace-hooks/created-worktree-setup-trust'
 import { loadHooks } from '../workspace-hooks/hooks'
@@ -13,7 +14,7 @@ export async function automationRunSetupSkip(
   automation: Pick<Automation, 'workspaceMode' | 'setupDecision' | 'setupTrustHash'>,
   repo: Repo,
   workspaceId: string
-): Promise<Pick<AutomationDispatchResult, 'setupSkippedReason'>> {
+): Promise<Pick<AutomationDispatchResult, 'setupSkippedReason' | 'setupSkippedContent'>> {
   if (automation.workspaceMode !== 'new_per_run' || !automation.setupTrustHash) {
     return {}
   }
@@ -23,9 +24,9 @@ export async function automationRunSetupSkip(
       repo,
       loadHooks(worktree.path),
       automation.setupDecision,
-      automation.setupTrustHash
+      { approvedSetupHash: automation.setupTrustHash }
     )
-    return mismatch ? { setupSkippedReason: 'setup-changed' } : {}
+    return mismatch ? { setupSkippedReason: 'setup-changed', setupSkippedContent: mismatch } : {}
   } catch {
     // Reporting only; the run itself already started.
     return {}

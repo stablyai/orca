@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { installMouseHideWhileTyping } from '../../mouse-hide-while-typing'
+import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { UseTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../../mounting/use-terminal-pane-lifecycle-refs'
 

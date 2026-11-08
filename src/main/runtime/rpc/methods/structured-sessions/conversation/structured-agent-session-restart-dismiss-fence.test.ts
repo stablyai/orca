@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 // Drive desktop's real dispatch context: all-readable agents use one dismissal fence; older clients must preserve offers they cannot render.
 
 import { readFile } from 'node:fs/promises'

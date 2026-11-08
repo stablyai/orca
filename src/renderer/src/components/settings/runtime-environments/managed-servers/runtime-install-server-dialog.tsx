@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
@@ -37,6 +37,7 @@ export function RuntimeInstallServerDialog({
   onOpenChange,
   onDeployed
 }: RuntimeInstallServerDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const [name, setName] = useState('')
@@ -66,13 +67,9 @@ export function RuntimeInstallServerDialog({
         toast.message(managedServerOutcomeLabel(result))
       } else {
         toast.success(
-          translate(
-            'auto.components.settings.serverList.setUpDone',
-            'Orca is set up on {{name}}.',
-            {
-              name: result.environment.name
-            }
-          )
+          t('auto.components.settings.serverList.setUpDone', 'Orca is set up on {{name}}.', {
+            name: result.environment.name
+          })
         )
         const sameSession = session === sessionRef.current
         if (mountedRef.current && (!openRef.current || sameSession)) {
@@ -96,7 +93,7 @@ export function RuntimeInstallServerDialog({
   const handleOpenChange = (next: boolean): void => {
     if (!next && deploying) {
       toast.message(
-        translate(
+        t(
           'auto.components.settings.serverList.settingUpInBackground',
           'Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.',
           { name: serverName }
@@ -121,7 +118,7 @@ export function RuntimeInstallServerDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {translate(
+              {t(
                 'auto.components.settings.serverList.setUpOnSshHost',
                 'Set up Orca on an SSH host'
               )}
@@ -129,14 +126,14 @@ export function RuntimeInstallServerDialog({
             <DialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  {translate(
+                  {t(
                     'auto.components.settings.managedServers.description',
                     'Orca installs itself on an empty SSH host and keeps itself up to date.'
                   )}
                 </p>
                 {}
                 <p>
-                  {translate(
+                  {t(
                     'auto.components.settings.managedServers.reassurance',
                     'Runs on each host, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to the host.'
                   )}
@@ -146,25 +143,25 @@ export function RuntimeInstallServerDialog({
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={hostFieldId}>
-              {translate('auto.components.settings.managedServers.deploy.host', 'SSH host')}
+              {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
             </Label>
             <SshTargetSelect
               id={hostFieldId}
               targets={emptyTargets}
               value={targetId}
               onChange={setTargetId}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.serverList.installHostPlaceholder',
                 'Choose an SSH host without Orca'
               )}
             />
             <p className="text-xs text-muted-foreground">
               {emptyTargets.length === 0
-                ? translate(
+                ? t(
                     'auto.components.settings.serverList.installNoHosts',
                     'No SSH hosts without an Orca server.'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.serverList.installHostHelp',
                     'Only hosts without an Orca server.'
                   )}{' '}
@@ -176,12 +173,12 @@ export function RuntimeInstallServerDialog({
                   openSettingsTarget({ pane: 'ssh', repoId: null })
                 }}
               >
-                {translate('auto.components.settings.serverList.addSshHost', 'Add an SSH host')}
+                {t('auto.components.settings.serverList.addSshHost', 'Add an SSH host')}
               </button>
             </p>
             {loadFailed ? (
               <p className="text-xs text-destructive">
-                {translate(
+                {t(
                   'auto.components.settings.managedServers.loadFailed',
                   'Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.'
                 )}
@@ -190,9 +187,9 @@ export function RuntimeInstallServerDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor={nameFieldId}>
-              {translate('auto.components.settings.managedServers.deploy.name', 'Server name')}{' '}
+              {t('auto.components.settings.managedServers.deploy.name', 'Server name')}{' '}
               <span className="font-normal text-muted-foreground">
-                {translate('auto.components.settings.RuntimeHostAccessForm.optional', '(optional)')}
+                {t('auto.components.settings.RuntimeHostAccessForm.optional', '(optional)')}
               </span>
             </Label>
             <Input
@@ -200,7 +197,7 @@ export function RuntimeInstallServerDialog({
               value={name}
               placeholder={
                 targetLabel ||
-                translate(
+                t(
                   'auto.components.settings.serverList.installNamePlaceholder',
                   'Same as the SSH host'
                 )
@@ -211,20 +208,20 @@ export function RuntimeInstallServerDialog({
           <DialogFooter>
             <Button type="button" variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
               {deploying
-                ? translate('auto.components.settings.serverList.close', 'Close')
-                : translate('auto.components.settings.serverList.cancel', 'Cancel')}
+                ? t('auto.components.settings.serverList.close', 'Close')
+                : t('auto.components.settings.serverList.cancel', 'Cancel')}
             </Button>
             <Button type="submit" size="sm" disabled={!canSubmit}>
               {deploying ? <LoadingSpinner className="size-3.5" /> : null}
               {deploying
-                ? translate(
+                ? t(
                     'auto.components.settings.sshHostServer.deploying',
                     'Setting up Orca on {{host}}…',
                     {
                       host: targetLabel
                     }
                   )
-                : translate('auto.components.settings.serverList.setUp', 'Set up')}
+                : t('auto.components.settings.serverList.setUp', 'Set up')}
             </Button>
           </DialogFooter>
         </form>

@@ -10,7 +10,7 @@ import {
   createManager,
   type MockTransport
 } from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type * as UseNotificationDispatchModule from '../../use-notification-dispatch'
+import type * as UseNotificationDispatchModule from '../../notifications/use-notification-dispatch'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -21,6 +21,7 @@ import type { StoreState } from '../test-fixtures/pty-connection-test-store-stat
 
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -42,7 +43,6 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -58,6 +58,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      // Each test binds the once-per-load settings subscription to its own store.
+      await loadFreshTerminalModules()
     })
 
     afterEach(async () => {
@@ -70,7 +72,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
-      >('../../use-notification-dispatch')
+      >('../../notifications/use-notification-dispatch')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 

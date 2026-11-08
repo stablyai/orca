@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Conecte-se ao host SSH deste espaço de trabalho e tente novamente.",
+    "sshUnavailable": "A inicialização no terminal não está disponível neste host SSH. Abra um terminal no espaço de trabalho e inicie o agente nele.",
+    "reconnectServer": "Reconecte-se ao servidor Orca deste espaço de trabalho e tente novamente.",
+    "updateServer": "Atualize o Orca no servidor deste espaço de trabalho e tente novamente.",
+    "checkSettings": "Verifique as configurações de inicialização do agente e tente novamente.",
+    "invalidArgs": "Os argumentos da CLI de {{value0}} têm uma aspa não fechada. Corrija-os e tente novamente.",
     "opencode": {
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
@@ -290,6 +296,31 @@
       "loading": "Carregando alterações do submódulo…",
       "empty": "Nenhuma alteração no submódulo",
       "loadFailed": "Não foi possível carregar as alterações do submódulo"
+    },
+    "branchPicker": {
+      "switch": "Trocar de branch: {{branch}}",
+      "search": "Pesquisar branches",
+      "recover": "Trocar para {{branch}}",
+      "copy": "Copiar nome do branch",
+      "create": "Criar branch {{name}} a partir de {{branch}}",
+      "open": "Abrir espaço de trabalho",
+      "occupied": "Em uso em {{path}}",
+      "remote": "remoto",
+      "statusFailed": "O Orca não conseguiu ler as alterações desta cópia de trabalho. Atualize o Controle de código-fonte antes de trocar.",
+      "statusUnknown": "Leia as alterações desta cópia de trabalho antes de trocar.",
+      "conflict": "Conclua ou cancele o {{operation}} antes de trocar de branch.",
+      "dirty_one": "Faça commit ou descarte {{count}} arquivo alterado antes de trocar de branch.",
+      "dirty_other": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "dirty_many": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "agentWorking": "Um agente está trabalhando neste workspace. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
+      "listFailed": "O Orca não conseguiu listar os branches locais. Tente reabrir o seletor.",
+      "discoveryFailed": "O Orca não encontrou branches remotos. Você ainda pode trocar para branches locais ou criar um branch.",
+      "switchFailed": "O Orca não conseguiu trocar de branch. Tente novamente.",
+      "switchFailedTitle": "Não foi possível trocar de branch",
+      "switchFailedIn": "Não foi possível trocar de branch em {{workspace}}",
+      "switchedIn": "Em {{workspace}}",
+      "thisComputer": "este computador",
+      "updateHost": "Atualize o Orca em {{host}} para trocar de branch daqui."
     }
   },
   "githubChecks": {
@@ -1439,10 +1470,7 @@
         "searchAgents": "agentes",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Os chats do Antigravity executam um servidor que o Orca baixa neste host, separado da CLI agy.",
-        "antigravityNotSignedIn": "Sessão não iniciada. Os chats exigem login no Antigravity, separado da sua conta agy do terminal.",
-        "antigravityAccount": "Conta",
-        "antigravitySignInNeeded": "Os chats exigem login no Antigravity, separado da sua conta agy do terminal."
+        "antigravityAccount": "Conta"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -1619,7 +1647,6 @@
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
-        "invalidArgs": "Os argumentos de CLI de {{value0}} são inválidos. Corrija-os em Configurações → IA de Controle de Versão.",
         "model": "Modelo",
         "agentDefault": "Padrão do agente",
         "effortDefault": "Padrão",
@@ -1846,7 +1873,7 @@
         "insecureOrigin": "O Orca recusou o pareamento nesta página: ela usa http sem criptografia em outra máquina, então qualquer pessoa no caminho da rede poderia substituí-la e obter o código de pareamento. Abra o cliente web por https, em localhost neste computador ou por um túnel SSH. Para permitir mesmo assim, o operador do servidor pode reiniciar o Orca com ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca não oferece mais suporte à chave de login deste navegador (ele pode ter voltado a uma versão anterior). Atualize o servidor ou pareie este navegador novamente.",
         "unauthorized": "Não autorizado. Pareie este cliente web novamente.",
-        "unauthorizedNewLink": "Não autorizado. Peça um novo link de pareamento."
+        "unauthorizedLinkUsedOrExpired": "Não autorizado. Este link de pareamento pode ter expirado ou já ter sido usado. Crie um novo link de pareamento no Orca e abra-o."
       }
     },
     "i18n": {
@@ -2151,13 +2178,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "O espaço de trabalho de destino não está mais disponível.",
-        "16a21d6413": "A reconexão SSH requer credenciais interativas.",
-        "386db94f3e": "O projeto de destino não está mais disponível.",
-        "3ad7d77f57": "O espaço de trabalho de destino está em um host diferente do destino de execução desta automação.",
-        "workspaceHostUnresolved": "O espaço de trabalho de destino abrange mais de um host, então esta execução não tem um único host para usar."
-      },
       "useComposerState": {
         "b2ead86962": "Falha ao resolver a base do PR.",
         "3db83fc58a": "Nenhum caminho de projeto está disponível neste host para anexos.",
@@ -2400,9 +2420,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Não foi possível encontrar um espaço de trabalho para estas verificações.",
-              "fb6c294e85": "Não foi possível montar o comando de inicialização do agente.",
               "03c1d61f83": "Não foi possível abrir o espaço de trabalho vinculado a estas verificações.",
-              "822bf52295": "Não foi possível determinar a plataforma de inicialização do espaço de trabalho.",
               "dfb4dd7c00": "Não foi possível encontrar o espaço de trabalho vinculado a estas verificações.",
               "9f00d7df0c": "O prompt de correção de verificações está vazio. Atualize as configurações de IA do Controle de Versão.",
               "2ebf794906": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -2441,8 +2459,8 @@
             "direct": {
               "3de6371df3": "Não foi possível montar o comando de inicialização do agente.",
               "67e103dd60": "Espaço de trabalho criado, mas não pôde ser ativado.",
-              "19c7683acf": "O agente selecionado não está disponível no espaço de trabalho criado.",
-              "8bc45efdbc": "Falha ao resolver o head do PR.",
+              "19c7683acf": "O agente selecionado está indisponível. Verifique as configurações do agente do espaço de trabalho e tente novamente.",
+              "8bc45efdbc": "Não foi possível ler o pull request. Verifique se você consegue abri-lo e tente novamente.",
               "agent": {
                 "ceeeb509b5": "O agente demorou muito para iniciar. O espaço de trabalho está pronto — cole o {{value0}} quando o agente estiver inativo."
               }
@@ -6262,6 +6280,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "Tokens de acesso de repositório, projeto e espaço de trabalho são criados na página de configurações correspondente do Bitbucket e precisam de acesso de leitura a pull requests.",
               "basicHint": "Crie um token de API da Atlassian para sua conta e depois combine-o com o endereço de e-mail que o possui.",
+              "scopesTitle": "Selecione estes escopos do token de API do Bitbucket:",
+              "scopeUser": "Verificar sua conta",
+              "scopeRepository": "Ler status de build",
+              "scopeReadPullRequest": "Ler pull requests",
+              "scopeWritePullRequest": "Criar pull requests",
+              "scopesWriteNote": "Para uso somente leitura, omita o escopo de escrita. Escrita não inclui leitura; selecione cada escopo separadamente.",
               "docsLink": "Documentação de token de API do Bitbucket",
               "storageNote": "Armazenado nesta máquina com armazenamento criptografado quando o keychain do sistema operacional está disponível. As variáveis de ambiente ORCA_BITBUCKET_* sempre têm prioridade sobre o que você salva aqui.",
               "cancel": "Cancelar",
@@ -6583,7 +6607,11 @@
               "micDefault": "padrão do sistema",
               "dictationLanguageTitle": "Idioma do ditado",
               "dictationLanguageDescription": "Informe ao modelo de voz qual idioma você fala.",
-              "dictationLanguageKeyword": "idioma"
+              "dictationLanguageKeyword": "idioma",
+              "modelUnloadTitle": "Descarregar modelo de voz",
+              "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
+              "modelUnloadKeyword": "descarregar",
+              "modelMemoryKeyword": "memória"
             }
           }
         },
@@ -6983,7 +7011,8 @@
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
           "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
-          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo.",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o app Orca neste telefone."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -7364,16 +7393,9 @@
           "b661b034ec": "· Padrão:",
           "builtin_themes": "Integrado",
           "ceefb9d7f1": "Nenhum tema encontrado.",
-          "imported_from": "Importado de {{value0}}",
           "imported_themes": "Importado",
-          "9119fb2268": "Atual",
-          "4e11f87ca6": "Exibindo",
-          "fbb428db98": "Selecionado:",
           "search_terminal_themes": "Pesquisar temas de terminal",
-          "cb330ef7f8": " de {{value0}}",
-          "c822571b2e": " correspondendo a \"{{value0}}\"",
-          "plugin_themes": "Plugins",
-          "from_plugin": "De {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "auto": {
           "rename": {
@@ -8103,6 +8125,7 @@
           "6f6d5188ed": "Revogar {{value0}}",
           "434e4a6af6": "Link atual",
           "df142657a5": "Ainda não usado",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o Orca no dispositivo que usa este link.",
           "b18d1764ef": "Usado por último em {{value0}}",
           "sshAccessCaveat": "Revogar aqui não impede que alguém com acesso SSH a este computador pareie novamente. Para impedir o acesso, remova o acesso SSH dessa pessoa.",
           "linkName": "Link · {{value0}}",
@@ -10229,7 +10252,6 @@
                     },
                     "d481ab22f9": "O agente de IA salvo não está disponível. Use Personalizar inicialização para escolher outro agente.",
                     "9bbd9077a2": "Nenhum agente de IA habilitado. Configure agentes em Configurações.",
-                    "5540ff50cc": "Não foi possível construir o comando de inicialização do agente.",
                     "216f762bd7": "Não foi possível resolver a conexão do espaço de trabalho.",
                     "success": "Foi iniciado um agente de IA para a falha de {{value0}}."
                   }
@@ -10716,6 +10738,7 @@
             "openLog": "Abrir Registro",
             "revealLog": "Mostrar Registro",
             "openWorkingDirectory": "Abrir Diretório de Trabalho",
+            "revealArtifactsFolder": "Mostrar Pasta de Artefatos",
             "copySessionId": "Copiar ID da Sessão",
             "copyLogPath": "Copiar Caminho do Registro",
             "messageCount": "{{value0}} msgs",
@@ -10958,7 +10981,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Ainda sem commits",
-            "781a8bcf7b": "Carregando gráfico...",
             "d0fb0f4bf2": "Atualizar commits",
             "9f7535d22b": "Refs são nomes de branch ou tag que apontam para esse commit exato. Eles só aparecem onde o Git tem uma ref nomeada para o commit.",
             "9289ba0cb9": "O que são refs?",
@@ -11160,7 +11182,6 @@
             "f8a2c4d1e0": "Modo de busca do Explorador"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Carregando arquivos…",
             "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit",
             "c3d4e5f6a7": "Abrir todas as alterações juntas"
           },
@@ -11540,13 +11561,11 @@
           "c39c37676a": "Crie um grupo e mova este projeto para dentro dele.",
           "6664418e98": "Novo Grupo de Projeto",
           "e091caab15": "O projeto não pôde ser encontrado",
-          "439fa94d53": "Atualizar",
           "579b1a8e61": "Remover do Pai",
           "8d9cd19d09": "Abrir Worktree Pai",
           "d35dfeae58": "Remover do grupo",
           "76865d827f": "Mover para o grupo",
           "503ec0f8e6": "Novo grupo a partir do projeto",
-          "3350101edb": "Copiar Caminho",
           "f4475537d8": "Excluir",
           "f5ac91531d": "Remover Projeto do Orca",
           "b42391d8bf": "Excluindo…",
@@ -11564,10 +11583,16 @@
           "workspaceSection": "Espaço de Trabalho",
           "primaryDeleteDisabled": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
           "deleteWorktree": "Excluir Worktree",
-          "sleepWithDescendants": "Suspender com Descendentes ({{value0}})",
           "sleepWithDescendantsDescription": "Fecha os painéis ativos neste espaço de trabalho e em todos os descendentes aninhados para liberar memória e CPU.",
+          "sleepThisWorkspace": "Este Espaço de Trabalho",
+          "sleepDescendantsOption": "Com Descendentes ({{value0}})",
           "deleteWithDescendants": "Excluir com Descendentes…",
-          "copyWorktreeName": "Copiar nome da worktree"
+          "editDetails": "Editar Detalhes…",
+          "copySubmenu": "Copiar",
+          "copyPathOption": "Caminho",
+          "copyNameOption": "Nome da worktree",
+          "lineageSubmenu": "Pai e Filhos",
+          "projectGroupSubmenu": "Grupo de Projeto"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} já existe.",
@@ -12183,8 +12208,6 @@
           "removeBatchGit_one": "Remover <target>{{count}} espaço de trabalho</target> do git e excluir sua pasta de espaço de trabalho.",
           "removeBatchGit_other": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
           "removeBatchGit_many": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
-          "removeSingleFolder": "Remover <target/> do Orca. A pasta do projeto no disco não será excluída.",
-          "removeSingleGit": "Remover <target/> do git e excluir sua pasta de espaço de trabalho.",
           "removeWithChildrenFolder_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
@@ -12193,7 +12216,9 @@
           "removeWithChildrenMixed_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeWithChildrenGit_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeWithChildrenGit_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
-          "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho."
+          "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
+          "removeSingleFolderFromOrca": "Remove-o do Orca. A pasta no disco é mantida.",
+          "deleteSingleWorktreeAndBranch": "Exclui o worktree e sua branch (mantida se não mesclada)."
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Mostrar na lista de worktrees",
@@ -12621,16 +12646,13 @@
           "loadedPathsNotice": "Os caminhos carregados podem estar incompletos ou desatualizados.",
           "loadedChangedPaths": "Caminhos alterados carregados",
           "unresolvedConflict": "Conflito não resolvido",
-          "changeCount_one": "{{count}} alteração não commitada ou não rastreada",
-          "changeCount_other": "{{count}} alterações não commitadas ou não rastreadas",
-          "changeCount_many": "{{count}} alterações não commitadas ou não rastreadas",
-          "changes": "Alterações não commitadas ou não rastreadas",
           "moreLoadedPaths_one": "e mais {{count}} caminho carregado",
           "moreLoadedPaths_other": "e mais {{count}} caminhos carregados",
-          "moreLoadedPaths_many": "e mais {{count}} caminhos carregados"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Não perguntar novamente"
+          "moreLoadedPaths_many": "e mais {{count}} caminhos carregados",
+          "changesLost_one": "{{count}} alteração não commitada será perdida",
+          "changesLost_other": "{{count}} alterações não commitadas serão perdidas",
+          "changesLost_many": "{{count}} alterações não commitadas serão perdidas",
+          "uncountedChangesLost": "As alterações não commitadas serão perdidas"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Revelar espaço de trabalho ativo"
@@ -14393,7 +14415,10 @@
           "reuseLiveSession": "Reutilizar sessão ativa",
           "freshEachRun": "Nova a cada execução",
           "precheckEnabled": "Ativada, {{timeout}}",
-          "precheckNone": "Nenhuma"
+          "precheckNone": "Nenhuma",
+          "migrate": "Migrar",
+          "migrateNotice": "{{host}} foi atualizado para um novo host remoto. Migre esta automação para que ela continue em execução.",
+          "needsMigration": "Requer migração"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -17176,7 +17201,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Configurações do agente…",
             "ec2adf093e": "Iniciar {{value0}} em um novo terminal",
-            "465e432ef1": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
@@ -18583,7 +18607,6 @@
             "3f4ca29961": "Maximizar espaço de trabalho flutuante",
             "1c79cba25d": "Restaurar espaço de trabalho flutuante",
             "648352c51f": "Abrir {{value0}} no espaço de trabalho flutuante",
-            "82da3701e7": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "109870e023": "Maximizar",
             "b5686fee1e": "Restaurar"
           }
@@ -19053,7 +19076,6 @@
         "a2a279b32a": "O salvamento expirou ou falhou. Corrija os erros antes de fechar.",
         "46e08bc5c8": "Este arquivo tem alterações não salvas.",
         "61ed600d29": "\"{{value0}}\" tem alterações não salvas. Você quer salvar antes de fechar?",
-        "e57db40c11": "Não foi possível construir o comando de inicialização para {{value0}}.",
         "5b2c1a9e44": "Nenhuma CLI de agente detectada — instale uma ou escolha um agente padrão em Configurações.",
         "quitSnapshotSaveFailed": "Saída cancelada: o snapshot da sessão não pôde ser salvo ({{value0}}).",
         "reloadSnapshotSaveFailed": "Recarregamento cancelado: não foi possível salvar o snapshot da sessão ({{value0}})."
@@ -20104,17 +20126,6 @@
           "reviewStatus": "Veja o estado da issue, o status de revisão e as verificações de CI em cada worktree",
           "managePullRequests": "Leia, comente e faça merge de pull requests sem sair do Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Instalar",
-        "thisDevice": "Este dispositivo",
-        "title": "Instalar Antigravity",
-        "description": "Pressione Enter no terminal para executar o instalador oficial. Fechar este terminal interrompe qualquer comando ainda em execução.",
-        "target": "Local de instalação: {{location}}",
-        "terminal": "Instalador do Antigravity",
-        "detected": "O Antigravity foi detectado no PATH. Feche o terminal quando o instalador terminar.",
-        "close": "Fechar terminal",
-        "recheck": "Verificar agentes novamente"
       }
     },
     "jiraUserPicker": {
@@ -20921,7 +20932,6 @@
       "visualLoading": "Carregando visualização",
       "visualOpenInNewTab": "Abrir em nova aba",
       "queuedMessages": {
-        "behindReturnedHold": "Aguardando — uma mensagem anterior precisa de atenção",
         "steer": "Orientar",
         "send": "Enviar",
         "steerHint": "Enviar sem interromper o modelo",
@@ -21159,6 +21169,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",
@@ -21185,7 +21196,9 @@
         "many_one": "Criada {{count}} pull request",
         "many_other": "Criadas {{count}} pull requests",
         "many_many": "Criadas {{count}} pull requests"
-      }
+      },
+      "splitRight": "Dividir à direita",
+      "splitDown": "Dividir para baixo"
     },
     "tab": {
       "bar": {
@@ -21474,11 +21487,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
-          "clean": "Nenhuma alteração sem commit ou não rastreada",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
-          "unavailableDetails": "Detalhes indisponíveis"
+          "unavailableDetails": "Detalhes indisponíveis",
+          "none": "Nenhuma alteração não commitada"
         },
         "unsavedEdits": {
           "discarded_one": "As alterações não salvas em {{count}} arquivo serão descartadas:",
@@ -21624,6 +21637,13 @@
           "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
           "title": "Idioma do ditado",
           "auto": "Detectar automaticamente"
+        },
+        "modelUnload": {
+          "title": "Descarregar modelo de voz",
+          "description": "Quanto tempo o modelo local fica na memória depois que você para de ditar. Enquanto está carregado, o ditado começa na hora; “Imediatamente” libera a memória, então cada ditado espera o modelo carregar.",
+          "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
+          "never": "Nunca",
+          "immediately": "Imediatamente"
         }
       }
     },
@@ -21778,6 +21798,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "Não foi possível formatar {{file}}. Salvando sem formatação: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "Novo agente"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Abra um painel ao lado do chat",
+          "action": "Dividir painel"
+        }
       }
     }
   },
@@ -22015,7 +22048,6 @@
     },
     "antigravity": {
       "chatTitle": "Chats do Antigravity",
-      "chatDescription": "Os chats usam seu próprio login do Antigravity, separado da sua conta agy acima. Entre uma vez neste dispositivo.",
       "chatSignIn": "Entrar",
       "chatChangeAccount": "Trocar conta",
       "chatRetry": "Tentar entrar novamente",
@@ -22028,14 +22060,11 @@
       "chatVerifying": "Concluindo login…",
       "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
-      "chatSignedInOn": "Conectado em {{host}}.",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatNotSignedIn": "Não conectado em {{host}}.",
       "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
-      "scope": "Gerencie a conta nativa do agy em {{host}}.",
       "signIn": "Inicie o agy neste host e conclua o login no navegador. Depois, salve a conta atual. Para adicionar outra conta, use /logout no agy e entre novamente.",
       "docs": "Instruções de login",
       "retry": "Tentar novamente",
@@ -22066,11 +22095,9 @@
       "personal": "Conta Google",
       "gcpProject": "Projeto do Google Cloud",
       "gcpLocation": "Local do Google Cloud",
-      "signInAgainWith": "Entre novamente para usar {{method}}.",
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
-      "signInWith": "Entra com {{method}} em {{host}}.",
       "lastReading": "{{reading}} · Lido {{time}}",
       "noReading": "Uso desconhecido: ainda não consultado"
     },
@@ -22191,7 +22218,10 @@
     "alwaysForceDeleteTooltip": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho."
+    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
+    "moreDeleteOptions": "Mais opções de exclusão",
+    "alwaysDelete": "Sempre excluir",
+    "alwaysDeleteTooltip": "Pular esta confirmação em futuras exclusões."
   },
   "worktree": {
     "nestedRemoval": {
@@ -23246,6 +23276,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
+    "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
     "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
@@ -23438,6 +23469,7 @@
       "noRunnableHost": "Esta automação não tem host onde ser executada.",
       "wslMoveInProgress": "O projeto desta automação está sendo movido para seu host WSL, por isso o Orca ignorou esta execução. As execuções serão retomadas quando a movimentação terminar.",
       "wslMoveOwnedByHost": "O projeto desta automação agora é executado em seu host WSL, que também executa esta automação. O Orca não executa mais esta cópia local.",
+      "managedHostServer": "Requer migração para {{host}}",
       "missedGraceWindow": "Quando o Orca verificou novamente, o período de tolerância para recuperar esta execução perdida já havia expirado.",
       "targetMissing": "O host da automação não está mais registrado, então esta automação não tem onde ser executada.",
       "targetReplaced": "O host da automação foi removido e registrado novamente, então esta automação precisa ser vinculada novamente antes de poder ser executada.",
@@ -23479,6 +23511,17 @@
         "effortRepeated": "Os argumentos extras definem o esforço mais de uma vez."
       },
       "hostUpdateRequired": "Atualize o Orca neste host para usar argumentos extras."
+    },
+    "setupTrust": {
+      "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",
+      "reviewBody": "Uma execução pulou a configuração porque os comandos de configuração no <code>orca.yaml</code> da branch mudaram. Ao aprovar, as próximas execuções usarão esses comandos. Aprove apenas se você confia em <repo/>.",
+      "approve": "Aprovar",
+      "approved": "Configuração aprovada. As próximas execuções desta automação vão executá-la.",
+      "skippedSinceApproved": "A configuração não foi executada nesta execução porque os comandos de configuração no orca.yaml da branch mudaram. Eles já foram aprovados, então as próximas execuções vão executá-los.",
+      "skippedReview": "A configuração não foi executada: a branch desta execução tem comandos de configuração no orca.yaml diferentes dos aprovados para esta automação. Revise-os para que as próximas execuções executem a configuração.",
+      "reviewAction": "Revisar e aprovar a configuração",
+      "listSkipped": "Configuração pulada",
+      "listSkippedTitle": "A última execução pulou a configuração porque os comandos de configuração no orca.yaml da branch mudaram. Revise-os no menu de ações."
     }
   },
   "codeHost": {
@@ -23836,5 +23879,67 @@
     "discussionAction": "Participar da discussão",
     "checkAction": "Verificar compatibilidade",
     "settingsStatus": "O Orca {{version}} requer o macOS {{macos}} ou posterior. Esta é a versão mais recente para este Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Copiar hash do commit",
+    "parents": "Commits pais",
+    "files": "Arquivos",
+    "currentBranch": "Branch atual",
+    "allBranches": "Todas as branches",
+    "chosenBranches": "Branches escolhidas",
+    "searchRefs": "Buscar branches e tags",
+    "oldServer": "Esta versão do Orca no servidor mostra apenas a branch atual",
+    "copyBranch": "Copiar nome da branch",
+    "switchWorkspace": "Mudar para o espaço de trabalho",
+    "workspaceClosed": "Esta branch não está mais aberta em outro espaço de trabalho.",
+    "workspaceCheckFailed": "Não foi possível verificar este espaço de trabalho. Tente novamente quando estiver conectado.",
+    "refresh": "Atualizar commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Grafo",
+    "resizeColumn": "Redimensionar coluna do grafo",
+    "message": "Mensagem",
+    "author": "Autor",
+    "date": "Data",
+    "loadMore": "Carregar mais",
+    "noCommits": "Ainda não há commits",
+    "historyChanged": "O histórico mudou novamente. Atualize o grafo do Git para tentar de novo.",
+    "loadFailed": "Não foi possível carregar o histórico do Git",
+    "updateHost": "Atualize o Orca em {{host}} para abrir o grafo do Git",
+    "title": "Grafo do Git",
+    "revertConflicts": "Conflitos de reversão",
+    "revertInProgress": "Reversão em andamento",
+    "abortOperationTitle": "Abortar {{operation}}?",
+    "abortOperationDescription": "Isso cancela a operação em andamento e pode descartar as resoluções de conflitos feitas durante ela.",
+    "abortOperation": "Abortar {{operation}}",
+    "recoveryFailed": "Não foi possível concluir a operação. Atualize o controle de código-fonte e tente novamente.",
+    "continueOperation": "Continuar {{operation}}",
+    "reverting": "Revertendo",
+    "updateActionsHost": "Atualize o Orca em {{host}} para executar ações em commits",
+    "thisHost": "este host",
+    "cannotApplyMerge": "Não é possível fazer cherry-pick ou reverter um commit de mesclagem por aqui",
+    "confirmCommitAction": "{{action}} {{commit}}?",
+    "cancelAction": "Cancelar",
+    "checkoutCommit": "Fazer checkout do commit",
+    "cherryPick": "Cherry-pick",
+    "revert": "Reverter",
+    "actionLanded": "Agora em {{commit}} em {{branch}}",
+    "detachedHead": "HEAD destacado",
+    "actionWarning": "A ação foi concluída, mas o Git relatou um problema.",
+    "actionConflicted": "Resolva os conflitos no controle de código-fonte e continue ou aborte a operação.",
+    "alreadyApplied": "Já aplicado, não há nada para fazer cherry-pick",
+    "nothingToRevert": "Nada a reverter; as alterações já foram desfeitas.",
+    "actionRefused": "A ação não foi concluída.",
+    "actionUnavailable": "Este espaço de trabalho não está mais disponível para a ação. Reabra o gráfico do Git e tente novamente.",
+    "ownerChanged": "O host do espaço de trabalho mudou. Reabra o gráfico do Git e tente novamente.",
+    "showAllBranches": "Mostrar todas as branches",
+    "actionDirty": "Faça commit ou guarde suas alterações no stash e tente novamente.",
+    "actionFailed": "O Git não criou um commit. Verifique a cópia de trabalho e tente novamente.",
+    "operationInProgress": "Conclua ou aborte a operação {{operation}} em andamento antes de tentar novamente.",
+    "checkoutBranch": "Mudar para a branch",
+    "createBranch": "Criar branch aqui",
+    "branchCreated": "{{branch}} criada em {{commit}}",
+    "branchName": "Nome da branch",
+    "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
+    "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
   }
 }

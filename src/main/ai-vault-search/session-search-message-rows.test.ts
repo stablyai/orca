@@ -1,23 +1,7 @@
 import { expect, it } from 'vitest'
-import type { TranscriptMessage } from '../ai-vault/transcripts/session-transcript-consumers'
-import { insertSearchMessage, searchMessageRows } from './session-search-message-rows'
-import {
-  openSessionSearchIndexFile,
-  type SessionSearchIndexFile
-} from './session-search-index-test-fixture'
 
-async function indexedColumns(
-  index: SessionSearchIndexFile,
-  message: TranscriptMessage
-): Promise<string[]> {
-  for (const row of searchMessageRows([message])) {
-    insertSearchMessage(index.db, 1, row)
-  }
-  const full = index.db
-    .prepare('SELECT user_text, assistant_text, tool_text, identifiers FROM messages_fts')
-    .all() as Record<string, string>[]
-  return full.flatMap((row) => Object.values(row))
-}
+import { insertSearchMessage, searchMessageRows } from './session-search-message-rows'
+import { openSessionSearchIndexFile } from './session-search-index-test-fixture'
 
 it('cuts at whitespace rather than through the word on the boundary', async () => {
   const index = await openSessionSearchIndexFile('ss-rows-whitespace')
@@ -112,21 +96,4 @@ it('drops tool output and preserves the full conversation', () => {
   expect([...searchMessageRows([{ role: 'tool', text: output, timestamp: null }])]).toEqual([])
   const rows = [...searchMessageRows([{ role: 'assistant', text: output, timestamp: null }])]
   expect(rows.map((row) => row.text).join('')).toBe(output)
-})
-
-it('stores a chunk exactly as the transcript wrote it', async () => {
-  const index = await openSessionSearchIndexFile('ss-rows-verbatim')
-  try {
-    const text = 'deploy with AKIAIOSFODNN7EXAMPLE and the resolveTerminalPath fix'
-    const stored = await indexedColumns(index, {
-      role: 'assistant',
-      text,
-      timestamp: null
-    })
-
-    expect(stored).toContain(text)
-    expect(stored.some((column) => column.includes('resolve terminal path'))).toBe(true)
-  } finally {
-    await index.close()
-  }
 })

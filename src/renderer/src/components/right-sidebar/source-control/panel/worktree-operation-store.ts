@@ -1,8 +1,8 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   clearSessionCommitDraftForWorktree,
   loadSessionCommitDrafts,
@@ -183,6 +183,13 @@ export function writeWorktreeCommitDraft(
   store.setState({ draft: next })
   if (store !== UNOWNED_STORE && !retiredStores.has(store)) {
     saveSessionCommitDrafts({ ...loadSessionCommitDrafts(), [draftKey]: next })
+  }
+}
+
+/** A landed switch clears the last action error, which belonged to the previous branch. */
+export function clearLandedBranchSwitchError(store: WorktreeOperationStore): void {
+  if (store.getState().remoteActionError) {
+    store.setState({ remoteActionError: null })
   }
 }
 

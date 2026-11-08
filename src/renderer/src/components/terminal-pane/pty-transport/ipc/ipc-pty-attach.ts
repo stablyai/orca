@@ -3,7 +3,7 @@ import { ensurePtyDispatcher, getEagerPtyBufferHandle } from '../delivery/pty-di
 import {
   hasTerminalDisplayContent,
   trimIncompleteTerminalControlTail
-} from '../../terminal-output-visibility'
+} from '../output/terminal-output-visibility'
 import type { createPtyOutputProcessor } from '../output/pty-output-processor'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import type { PtyTransport } from '../pty-transport-types'

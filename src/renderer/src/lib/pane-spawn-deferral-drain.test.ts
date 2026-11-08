@@ -6,7 +6,9 @@ const { callRuntimeRpc } = vi.hoisted(() => ({
   }))
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 
 const { queueDeferredRestoreRetry, cancelDeferredRestoreRetry, resetDeferredRestoreDrainForTests } =
   await import('./pane-spawn-deferral-drain')

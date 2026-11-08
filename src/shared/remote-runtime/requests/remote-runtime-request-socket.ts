@@ -27,6 +27,7 @@ import {
   releaseRemoteRuntimePreparedRequest,
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
+import { readSealedFrame } from '../remote-runtime-sealed-frame'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
 import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import type {
@@ -253,20 +254,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         if (settled) {
           return
         }
-        if (isBinary) {
-          finishError(
-            new RemoteRuntimeClientError(
-              'invalid_runtime_response',
-              'Remote Orca runtime returned an unexpected binary frame.',
-              {
-                pairingStage:
-                  router.state === 'awaiting_ready' ? 'host-identity' : router.pairingStage
-              }
-            )
-          )
-          return
-        }
-        router.handleTextFrame(data.toString())
+        router.handleFrame(readSealedFrame(data, isBinary))
       }
 
       ws.once('open', onOpen)

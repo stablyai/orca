@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneIssueCommandSplit } from './terminal-pane-lifecycle-types'
 import { splitPaneWithOneShotStartup } from '../layout/split/pane-split-startup'
 

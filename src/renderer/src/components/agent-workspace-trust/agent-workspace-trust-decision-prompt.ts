@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getRepoRowIdentity, repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoRowIdentity, repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import {
   TUI_AGENT_CONFIG,
   isTuiAgent
@@ -7,7 +7,7 @@ import {
 import {
   needsAgentWorkspaceTrustDecision,
   type AgentWorkspaceTrustDecision
-} from '../../../../shared/agent-workspace-trust-decision'
+} from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId

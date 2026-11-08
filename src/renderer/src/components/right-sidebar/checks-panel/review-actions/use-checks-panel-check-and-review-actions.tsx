@@ -1,8 +1,8 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import {
   buildFixBrokenChecksPrompt,
@@ -11,7 +11,7 @@ import {
   hasGitHubCheckHandle
 } from '../../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 
-import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
+import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
 import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'

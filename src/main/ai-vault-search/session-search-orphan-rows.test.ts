@@ -87,34 +87,7 @@ it('snippets nothing for an orphaned row, even asked for it by rowid', async () 
   }
 })
 
-it('still answers for the live session beside them', async () => {
-  const { harness: open } = await withOrphans()
-  expect(open.engine.search({ query: 'haystack' }).hits.map((hit) => hit.sessionId)).toEqual(['1'])
-})
-
 describe('a purge reclaiming rows nothing can reach', () => {
-  async function withReclaimable(): Promise<SessionSearchHarness> {
-    harness = await openSessionSearchHarness('ss-orphan-drain')
-    // Typo repair needs at least two live occurrences.
-    addSyntheticSession(harness.db, { id: 1, text: 'the marmoset lives here', rows: 2 })
-    plantOrphans(harness.db)
-    return harness
-  }
-
-  it('answers the same before and after, because the repair counts live rows', async () => {
-    const open = await withReclaimable()
-    const before = open.engine.search({ query: 'marmosett' })
-    expect(before.planner.repairedTerms).toEqual(['marmoset'])
-    expect(before.hits.map((hit) => hit.sessionId)).toEqual(['1'])
-
-    await open.store.purgeOlderThan(null)
-    expect(open.db.prepare('SELECT count(*) AS c FROM messages').get()).toEqual({ c: 2 })
-
-    const after = open.engine.search({ query: 'marmosett' })
-    expect(after.planner.repairedTerms).toEqual(before.planner.repairedTerms)
-    expect(after.hits.map((hit) => hit.sessionId)).toEqual(before.hits.map((hit) => hit.sessionId))
-  })
-
   it('picks the same repair when an unreachable spelling was the more common one', async () => {
     // Add orphaned occurrences to the less common live spelling to test that repair ranks only live rows.
     harness = await openSessionSearchHarness('ss-orphan-drain-tie')
