@@ -89,7 +89,6 @@ export function importJournalDomainProfile(
 }
 
 const PAGE_ROWS = 128
-const PAGE_BYTES = 1024 * 1024
 
 /** The fixed schema above is the whole copy surface; no JSON is interpreted or rewritten. */
 function copyProfileTable(
@@ -109,46 +108,20 @@ function copyProfileTable(
   const insert = destination.prepare(
     `INSERT INTO ${table}(rowid,${names}) VALUES(${columns.map(() => '?').join(',')},?)`
   )
-  let after: bigint | undefined
-  for (;;) {
-    const page = source.prepare(`SELECT rowid,${names} FROM ${table}
-      ${after === undefined ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT ?`)
-    page.setReadBigInts(true)
-    const rows = page.all(...(after === undefined ? [] : [after]), PAGE_ROWS)
-    if (rows.length === 0) {
-      return
-    }
-    let first = 0
-    while (first < rows.length) {
-      let end = first
-      let bytes = 0
-      while (end < rows.length) {
-        const row = rows[end]!
-        const size = columns.reduce((total, column) => {
-          const value = row[column]
-          return (
-            total +
-            (value == null
-              ? 0
-              : typeof value === 'object'
-                ? value.byteLength
-                : Buffer.byteLength(String(value)))
-          )
-        }, 0)
-        if (end > first && bytes + size > PAGE_BYTES) {
-          break
-        }
-        bytes += size
-        end++
+  runJournalTransaction(destination, () => {
+    let after: bigint | undefined
+    for (;;) {
+      const page = source.prepare(`SELECT rowid,${names} FROM ${table}
+        ${after === undefined ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT ?`)
+      page.setReadBigInts(true)
+      const rows = page.all(...(after === undefined ? [] : [after]), PAGE_ROWS)
+      if (rows.length === 0) {
+        return
       }
-      runJournalTransaction(destination, () => {
-        for (let index = first; index < end; index++) {
-          const row = rows[index]!
-          insert.run(row.rowid, ...columns.map((column) => row[column]!))
-        }
-      })
-      first = end
+      for (const row of rows) {
+        insert.run(row.rowid, ...columns.map((column) => row[column]!))
+      }
+      after = BigInt(String(rows.at(-1)!.rowid))
     }
-    after = BigInt(String(rows.at(-1)!.rowid))
-  }
+  })
 }

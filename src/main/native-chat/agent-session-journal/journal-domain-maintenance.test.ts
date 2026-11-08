@@ -343,12 +343,16 @@ it('packs retired payload bytes across tables and lets one oversized row progres
     sequence,sequence_index,owner_fence,payload_json) VALUES('chat','before',?,1,1,1,0,1,?)`)
   insert.run('first', JSON.stringify({ text: 'α'.repeat(150 * 1024) }))
   insert.run('second', JSON.stringify({ text: 'α'.repeat(150 * 1024) }))
+  db.prepare(`UPDATE journal_items SET original_stop_note_json=?
+    WHERE item_id='second'`).run('x'.repeat(600 * 1024))
   const receipt = db.prepare(`INSERT INTO journal_send_receipts VALUES('chat','before',?,?)`)
   receipt.run('first', JSON.stringify({ text: 'x'.repeat(600 * 1024) }))
   receipt.run('oversized', JSON.stringify({ text: 'x'.repeat(2 * 1024 * 1024) }))
   const prune = () =>
     maintain(db, { kind: 'domain-retired-prune', sessionId: 'chat', epoch: 'epoch' })
-  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 2, more: true })
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 1, more: true })
+  expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([{ item_id: 'second' }])
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 1, more: true })
   expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
   expect(
     db.prepare('SELECT message_id FROM journal_send_receipts ORDER BY message_id').all()

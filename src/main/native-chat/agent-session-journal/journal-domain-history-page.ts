@@ -23,7 +23,6 @@ import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import { readJournalDomainForwardHistory } from './journal-domain-history-after'
 import { readJournalDomainHistoryRoster } from './journal-domain-history-roster'
-import { projectJournalDomainStopNote } from './journal-domain-stop-notes'
 import {
   admitJournalDomainHistoryGroups,
   selectJournalDomainHistoryWindow,
@@ -194,11 +193,7 @@ function formHistoryGroups(
   for (const group of groups) {
     const formed = group.map((header) =>
       reader.form(
-        projectJournalDomainStopNote(
-          db,
-          head,
-          JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.payload_json))
-        )
+        JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.payload_json))
       )
     )
     const bytes = historyContentBytes(formed, [], sizes)
@@ -271,7 +266,7 @@ function currentRows(
         WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
         ORDER BY item.sequence, item.sequence_index, item.ordinal`)
       .all(JSON.stringify(wanted), head.sessionId, head.epoch)
-      .map((row) => projectJournalDomainStopNote(db, head, JSON.parse(String(row.payload_json)))),
+      .map((row) => JSON.parse(String(row.payload_json))),
     submissions: itemSubmissions(db, head, wanted)
   }
 }

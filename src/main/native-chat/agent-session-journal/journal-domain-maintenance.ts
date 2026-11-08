@@ -13,21 +13,21 @@ export type JournalDomainMaintenanceResult =
 
 const RETIRED_PAGE_BYTES = 1024 * 1024
 // Only a ready head naming another epoch proves retirement; an interrupted import has no head.
-const RETIRED_TABLES: readonly { name: string; key: string; payload?: string }[] = [
-  { name: 'journal_items', key: 'item_id', payload: 'payload_json' },
+const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly string[] }[] = [
+  { name: 'journal_items', key: 'item_id', payload: ['payload_json', 'original_stop_note_json'] },
   { name: 'journal_item_subagent_names', key: 'subagent_id,item_id' },
   { name: 'journal_item_tombstones', key: 'item_id' },
-  { name: 'journal_item_aliases', key: 'provider_item_id', payload: 'echo_json' },
+  { name: 'journal_item_aliases', key: 'provider_item_id', payload: ['echo_json'] },
   {
     name: 'journal_submission_attempts',
     key: 'message_id,attempt_sequence,attempt_index',
-    payload: 'payload_json'
+    payload: ['payload_json']
   },
-  { name: 'journal_send_receipts', key: 'message_id', payload: 'payload_json' },
-  { name: 'journal_queue_cards', key: 'message_id', payload: 'payload_json' },
+  { name: 'journal_send_receipts', key: 'message_id', payload: ['payload_json'] },
+  { name: 'journal_queue_cards', key: 'message_id', payload: ['payload_json'] },
   { name: 'journal_edit_leases', key: 'owner_id,caller_key,edit_id' },
   { name: 'journal_provider_activity', key: 'fence' },
-  { name: 'journal_events', key: 'sequence', payload: 'changes_json' }
+  { name: 'journal_events', key: 'sequence', payload: ['changes_json'] }
 ]
 
 export function pruneJournalDomainRetiredPage(
@@ -44,7 +44,7 @@ export function pruneJournalDomainRetiredPage(
   let bytes = 0
   for (const { name, key, payload } of RETIRED_TABLES) {
     const columns = ['session_id', 'epoch', ...key.split(',')]
-    const sizes = [...columns, ...(payload ? [payload] : [])]
+    const sizes = [...columns, ...(payload ?? [])]
       .map((column) => `COALESCE(octet_length(${column}),0)`)
       .join('+')
     const remove = db.prepare(

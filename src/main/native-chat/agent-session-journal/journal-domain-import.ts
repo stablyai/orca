@@ -20,6 +20,7 @@ import { journalInputOrder } from './input-order/journal-input-order'
 import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { memoryJournalMap } from './journal-memory-collections'
 import type { JournalReducerState } from './projection/journal-reducer'
+import { journalDomainStopNote } from './journal-domain-stop-notes'
 
 /** The chat head, written last: its row is the chat's ready mark. */
 export type JournalDomainImportHead = {
@@ -35,6 +36,8 @@ export type JournalDomainImportItem = {
   executionOwner: number | null
   hidden: boolean
   item: AgentJournalRenderItem
+  turnItemId: string | null
+  originalStopNoteJson: string | null
 }
 
 export type JournalDomainImportAttempt = {
@@ -150,7 +153,7 @@ function* importPages(
       ownerFence: state.itemFences.get(key) ?? 0,
       executionOwner: state.itemExecutionOwners.get(key) ?? null,
       hidden: !journalInputPresentationMember(state, key),
-      item
+      ...journalDomainStopNote(item, (id) => state.items.get(id))
     }))
   )
   yield* paged(

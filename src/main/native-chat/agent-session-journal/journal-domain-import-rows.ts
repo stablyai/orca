@@ -45,9 +45,17 @@ export function insertJournalDomainImportPage(
       const insert =
         db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
-        subagent_group_key,turn_marker,wire_bytes)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
-      for (const { ordinal, ownerFence, executionOwner, hidden, item } of page.rows) {
+        subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+      for (const {
+        ordinal,
+        ownerFence,
+        executionOwner,
+        hidden,
+        item,
+        turnItemId,
+        originalStopNoteJson
+      } of page.rows) {
         const payload = JSON.stringify(item)
         const metadata = journalDomainHistoryMetadata(item, payload)
         const result = insert.run(
@@ -65,7 +73,9 @@ export function insertJournalDomainImportPage(
           metadata.subagentRow,
           metadata.subagentGroupKey,
           metadata.turnMarker,
-          metadata.wireBytes
+          metadata.wireBytes,
+          turnItemId,
+          originalStopNoteJson
         )
         if (Number(result.changes) > 0) {
           writeJournalDomainItemNames(

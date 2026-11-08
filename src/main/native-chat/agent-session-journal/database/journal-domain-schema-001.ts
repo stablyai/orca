@@ -78,6 +78,7 @@ CREATE TABLE journal_items (
   turn_marker INTEGER NOT NULL DEFAULT 0,
   wire_bytes INTEGER,
   turn_item_id TEXT,
+  original_stop_note_json TEXT,
   PRIMARY KEY(session_id, epoch, item_id)
 );
 CREATE TABLE journal_item_subagent_names (
