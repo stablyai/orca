@@ -10,7 +10,7 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
 } from '../navigation/file-explorer-operation-owner'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
 
 type UseFileExplorerHandlersParams = {

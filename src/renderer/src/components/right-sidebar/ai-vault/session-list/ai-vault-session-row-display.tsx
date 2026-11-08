@@ -9,7 +9,7 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 
-import { useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { resolveRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import {
@@ -18,6 +18,7 @@ import {
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SessionTime } from './ai-vault-session-time'
 import { sessionModelLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import './ai-vault-session-filters'
@@ -49,6 +50,7 @@ export function SessionMetadata({
   vaultScope: AiVaultScope
   sourceHostLabel?: string
 }) {
+  const t = useTranslate()
   const modelLabel = sessionModelLabel(session)
   const origin = antigravitySessionOrigin(session.filePath)
   return (
@@ -67,7 +69,7 @@ export function SessionMetadata({
           <WorktreeHostContextBadge
             label={sourceHostLabel}
             className="min-w-0 shrink"
-            title={translate('aiVault.searchHitSourceHost', 'Found on {{value0}}', {
+            title={t('aiVault.searchHitSourceHost', 'Found on {{value0}}', {
               value0: sourceHostLabel
             })}
           />
@@ -75,35 +77,33 @@ export function SessionMetadata({
         {isAntigravityReferenceSession(session) ? (
           <Badge
             variant="outline"
-            title={translate(
+            title={t(
               'aiVault.antigravityReferenceDescription',
               'Continues in a new Antigravity CLI conversation using this transcript as a reference.'
             )}
           >
             {origin === 'antigravity-ide'
-              ? translate('aiVault.antigravityIdeToCli', 'IDE → CLI')
+              ? t('aiVault.antigravityIdeToCli', 'IDE → CLI')
               : origin === 'antigravity-acp'
-                ? translate('aiVault.antigravityChatToCli', 'Chat → CLI')
-                : translate('aiVault.antigravity2ToCli', '2.0 → CLI')}
+                ? t('aiVault.antigravityChatToCli', 'Chat → CLI')
+                : t('aiVault.antigravity2ToCli', '2.0 → CLI')}
           </Badge>
         ) : null}
         <span className="shrink-0 tabular-nums">
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
-            '{{value0}} msgs',
-            { value0: session.messageCount }
-          )}
+          {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
+            value0: session.messageCount
+          })}
         </span>
         {session.subagentTranscriptCount > 0 ? (
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>
             <span className="shrink-0 tabular-nums">
               {session.subagentTranscriptCount === 1
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.AiVaultSessionRow.subagentCountSingular',
                     '1 subagent'
                   )
-                : translate(
+                : t(
                     'auto.components.right.sidebar.AiVaultSessionRow.subagentCountPlural',
                     '{{value0}} subagents',
                     { value0: session.subagentTranscriptCount }
@@ -115,10 +115,7 @@ export function SessionMetadata({
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>
             <span className="shrink-0 rounded-sm border border-dashed border-border/70 px-1 py-0 text-[10px] font-medium leading-4 text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.recoverableBadge',
-                'Not saved'
-              )}
+              {t('auto.components.right.sidebar.AiVaultSessionRow.recoverableBadge', 'Not saved')}
             </span>
           </>
         ) : null}
@@ -149,6 +146,7 @@ function SessionWorktreeLine({
   worktreeInfo: AiVaultSessionWorktreeInfo
   vaultScope: AiVaultScope
 }): React.JSX.Element {
+  const t = useTranslate()
   const repoId = worktreeInfo.worktreeId
     ? (splitWorktreeIdForFilesystem(worktreeInfo.worktreeId)?.repoId ?? null)
     : null
@@ -158,7 +156,7 @@ function SessionWorktreeLine({
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status, { vaultScope }) ? (
         <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
-          {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
+          {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId, t)}
         </span>
       ) : null}
       <Badge
@@ -178,19 +176,20 @@ function SessionWorktreeLine({
 }
 
 export function conversationRoleLabel(
-  role: AiVaultSession['previewMessages'][number]['role']
+  role: AiVaultSession['previewMessages'][number]['role'],
+  t: Translate = translate
 ): string {
   if (role === 'user') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.userRole', 'You')
+    return t('auto.components.right.sidebar.AiVaultSessionRow.userRole', 'You')
   }
   if (role === 'assistant') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.agentRole', 'Agent')
+    return t('auto.components.right.sidebar.AiVaultSessionRow.agentRole', 'Agent')
   }
   if (role === 'tool') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.toolRole', 'Tool')
+    return t('auto.components.right.sidebar.AiVaultSessionRow.toolRole', 'Tool')
   }
   if (role === 'system') {
-    return translate('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
+    return t('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
   }
-  return translate('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
+  return t('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
 }

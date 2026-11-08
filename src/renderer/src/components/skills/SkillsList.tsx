@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { SkillRow } from './SkillRow'
@@ -55,6 +55,7 @@ export function SkillsList({
   onShare: (skill: DiscoveredSkill) => void
   onDelete: (skill: DiscoveredSkill) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const listRef = useRef<HTMLDivElement>(null)
   // Anchor ranges by stable skill ID so filtering cannot silently move the anchor to another row.
   const anchorIdRef = useRef<string | null>(null)
@@ -64,9 +65,7 @@ export function SkillsList({
   const revealSkill = async (skill: DiscoveredSkill): Promise<void> => {
     const result = await window.api.shell.openInFileManager(skill.skillFilePath, ownerHostId)
     if (!result.ok) {
-      toast.error(
-        translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
-      )
+      toast.error(t('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file'))
     }
   }
   const selectedNames = selectedShareSkillNameKeys(allSkills, selectedIds)
@@ -75,7 +74,7 @@ export function SkillsList({
   const isMac = navigator.userAgent.includes('Mac')
 
   const deleteReasonFor = (skill: DiscoveredSkill): string | null =>
-    deleteSupported ? skillDeleteEligibilityReason(skill) : deleteUnsupportedReason
+    deleteSupported ? skillDeleteEligibilityReason(skill, t) : deleteUnsupportedReason
 
   const handleSelection = (index: number, selected: boolean, range: boolean): void => {
     const skill = skills[index]
@@ -150,7 +149,7 @@ export function SkillsList({
         role="listbox"
         data-focus-behavior="page"
         aria-multiselectable={selectionMode !== null || undefined}
-        aria-label={translate('auto.components.skills.SkillsList.listLabel', 'Skills')}
+        aria-label={t('auto.components.skills.SkillsList.listLabel', 'Skills')}
         aria-orientation="vertical"
       >
         {skills.map((skill, index) => {
@@ -171,15 +170,15 @@ export function SkillsList({
               deleteDisabledReason={deleteReasonFor(skill)}
               disabledLabel={
                 deleting
-                  ? translate('auto.components.skills.SkillRow.notDeletable', 'Not deletable')
-                  : translate('auto.components.skills.SkillRow.notShareable', 'Not shareable')
+                  ? t('auto.components.skills.SkillRow.notDeletable', 'Not deletable')
+                  : t('auto.components.skills.SkillRow.notShareable', 'Not shareable')
               }
               // Remote sharing has one page-level cause; valid remote deletion keeps row-specific reasons.
               disabledReason={
                 deleting
-                  ? skillDeleteEligibilityReason(skill)
+                  ? skillDeleteEligibilityReason(skill, t)
                   : local
-                    ? skillShareEligibilityReason(skill, local, duplicateNameSelected)
+                    ? skillShareEligibilityReason(skill, local, duplicateNameSelected, t)
                     : null
               }
               focusable={focusTargetId === skill.id}

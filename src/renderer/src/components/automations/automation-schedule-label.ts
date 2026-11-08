@@ -2,31 +2,28 @@ import {
   describeAutomationSchedule,
   formatAutomationScheduleTime,
   type AutomationScheduleDescriptor
-} from '../../../../shared/automation-schedules'
+} from '../../../../shared/automations/scheduling/automation-schedules'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
 /** Translate whole schedule sentences for locale grammar; the shared English formatter also serves the CLI. */
 export function formatUiAutomationScheduleDescriptor(
-  descriptor: AutomationScheduleDescriptor
+  descriptor: AutomationScheduleDescriptor,
+  t: Translate = translate,
+  intlLocale?: string
 ): string {
   if (descriptor.kind === 'invalid') {
-    return translate(
-      'auto.components.automations.automation.schedule.label.086a5a9fe2',
-      'Invalid schedule'
-    )
+    return t('auto.components.automations.automation.schedule.label.086a5a9fe2', 'Invalid schedule')
   }
   if (descriptor.kind === 'custom') {
     if (descriptor.expression) {
       return descriptor.expression
     }
-    return translate(
-      'auto.components.automations.automation.schedule.label.ba20c92073',
-      'Custom schedule'
-    )
+    return t('auto.components.automations.automation.schedule.label.ba20c92073', 'Custom schedule')
   }
   if (descriptor.kind === 'hourly') {
-    return translate(
+    return t(
       'auto.components.automations.automation.schedule.label.a95afb7483',
       'Hourly at :{{minute}}',
       { minute: String(descriptor.minute).padStart(2, '0') }
@@ -34,27 +31,35 @@ export function formatUiAutomationScheduleDescriptor(
   }
   const time = formatAutomationScheduleTime(descriptor.hour, descriptor.minute)
   if (descriptor.kind === 'daily') {
-    return translate(
+    return t(
       'auto.components.automations.automation.schedule.label.280ccd2701',
       'Daily at {{time}}',
       { time }
     )
   }
   if (descriptor.kind === 'weekdays') {
-    return translate(
+    return t(
       'auto.components.automations.automation.schedule.label.3f1422adc1',
       'Weekdays at {{time}}',
       { time }
     )
   }
-  return translate(
+  return t(
     'auto.components.automations.automation.schedule.label.cc71e252ba',
     '{{day}}s at {{time}}',
-    { day: getUiWeekdayNames()[descriptor.dayOfWeek], time }
+    { day: getUiWeekdayNames(intlLocale)[descriptor.dayOfWeek], time }
   )
 }
 
 /** Convenience wrapper for callers that hold the raw cron/RRULE expression. */
-export function formatUiAutomationSchedule(scheduleExpression: string): string {
-  return formatUiAutomationScheduleDescriptor(describeAutomationSchedule(scheduleExpression))
+export function formatUiAutomationSchedule(
+  scheduleExpression: string,
+  t?: Translate,
+  intlLocale?: string
+): string {
+  return formatUiAutomationScheduleDescriptor(
+    describeAutomationSchedule(scheduleExpression),
+    t,
+    intlLocale
+  )
 }

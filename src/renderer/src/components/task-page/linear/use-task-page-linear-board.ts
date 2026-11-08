@@ -1,5 +1,5 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearListProjectionModel } from './use-task-page-linear-list-projection'
 import React, { useMemo, useCallback } from 'react'
@@ -8,8 +8,8 @@ import {
   writeLinearBoardIssueDragData,
   readLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'

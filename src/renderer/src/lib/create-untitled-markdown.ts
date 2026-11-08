@@ -3,9 +3,9 @@ import {
   createRuntimePath,
   deleteRuntimePath,
   writeRuntimeFile
-} from '../runtime/runtime-file-mutation-client'
-import { runtimePathExists } from '../runtime/runtime-file-metadata-client'
-import { detectLanguage } from './language-detect'
+} from '../runtime/files/mutations/runtime-file-mutation-client'
+import { runtimePathExists } from '../runtime/files/metadata/runtime-file-metadata-client'
+import { detectLanguage } from '../../../shared/editor-language/editor-language-detect'
 import {
   applyMarkdownTemplatePlaceholders,
   getMarkdownTemplateTitleForFileName,
@@ -15,8 +15,8 @@ import {
 } from './markdown-document-templates'
 import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
 import { basename, joinPath } from './path'
-import type { EditorFileOperationProvenance } from './editor-file-operation-owner'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import type { EditorFileOperationProvenance } from './editor-file-operation-provenance'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 
 export type UntitledMarkdownFileInfo = {
   filePath: string

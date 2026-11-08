@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
-import { usePluginLanguagePackStore, usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import {
+  usePluginLanguagePackStore,
+  usePluginLanguagePacks
+} from '@/store/plugins/localization/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
 import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'

@@ -77,7 +77,7 @@ vi.mock('electron', () => ({
 vi.mock('../desktop-browser-bridge/remote-cli-driven-workspaces', () => ({
   isRemoteCliDrivenGuest: mocks.isRemoteCliDrivenGuest
 }))
-vi.mock('../browser-manager', () => ({
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     handleGuestWillDownload: mocks.handleGuestWillDownload,
     installCertificateRequestGuard: vi.fn(),

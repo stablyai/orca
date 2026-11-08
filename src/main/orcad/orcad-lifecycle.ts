@@ -13,6 +13,7 @@ import {
 } from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
@@ -39,6 +40,8 @@ export type OrcadShutdownTrigger = (
   stoppedExitCode?: number
 ) => boolean
 
+let installedShutdown: OrcadShutdownTrigger | null = null
+
 /** Deduplicate launcher/child signals into one bounded stop; onFailed retracts clean-stop records. */
 export function installOrcadShutdownSignals(
   stop: () => Promise<void>,
@@ -55,7 +58,8 @@ export function installOrcadShutdownSignals(
     }
   }
   const shutdown: OrcadShutdownTrigger = (signal, onFailed, stoppedExitCode = 0) => {
-    if (stoppedExitCode !== 0) {
+    // Yielding a lost lock is not a crash; the successor owns the lock now.
+    if (stoppedExitCode !== 0 && stoppedExitCode !== SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE) {
       markOrcadRunFailed()
     }
     if (stopping) {
@@ -86,6 +90,7 @@ export function installOrcadShutdownSignals(
       })
     return true
   }
+  installedShutdown = shutdown
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   // Survive terminal hangups; INT/TERM request graceful shutdown.
@@ -145,7 +150,17 @@ export async function startOrcadWithHost<T extends object>(
   start: (registerCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
   runQuitHandlers: () => void | Promise<void>
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
-  const instanceLock = acquireOrcadInstanceLock(userDataPath)
+  const instanceLock = acquireOrcadInstanceLock(userDataPath, {
+    // Yield the data root to the process that took its lock; supervisors stand by on this code.
+    onExclusivityLost: () => {
+      console.error('[orcad] Stopping so only one runtime writes this data root.')
+      installedShutdown?.(
+        'instance lock lost',
+        undefined,
+        SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
+      )
+    }
+  })
   const previous = instanceLock.previousUnexpectedExit
   recordOrcadPreviousUnexpectedExit(previous)
   if (previous) {

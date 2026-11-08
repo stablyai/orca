@@ -75,6 +75,8 @@ export type PairedE2EEClientHandshakeArgs = {
   // Runtime clients pass their structure-limited parser and size-limited serializer.
   parseJson?: (text: string) => unknown
   serializeJson?: (value: unknown) => string
+  // Runtime clients need capabilities on v2 token auth; hosts before this field answer bad_auth.
+  v2TokenCapabilities?: boolean
   clientKeyPair?: PairedE2EEKeyPair
   clientNonce?: Uint8Array
 }
@@ -190,9 +192,13 @@ function createV2Handshake(args: PairedE2EEClientHandshakeArgs): PairedE2EEClien
       // Why read first: throws before the ready, so nothing is signed without a transcript.
       const transcriptHashB64 = session.transcriptHashB64
       if (credential.kind === 'token') {
-        // Why no capabilities: v2 token auth is an exact key set on every host.
+        // Why opt-in: mobile v2 token auth stays the exact key set every v2 host accepts.
+        const capabilities = args.v2TokenCapabilities ? options?.clientCapabilities : undefined
         return session.sealText(
-          serializeJson(pairedE2EEV2TokenAuth(transcriptHashB64, credential.deviceToken))
+          serializeJson({
+            ...pairedE2EEV2TokenAuth(transcriptHashB64, credential.deviceToken),
+            ...(capabilities ? { clientCapabilities: capabilities } : {})
+          })
         )
       }
       const signature = await credential.sign(

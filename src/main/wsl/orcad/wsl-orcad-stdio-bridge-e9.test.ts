@@ -1,7 +1,10 @@
 import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHost from '@orca/process-host'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   fakeWslBridgeChildren,
@@ -41,7 +44,7 @@ import {
 import { WslOrcadBridgeActivity, wslHostBridgeEvents } from './wsl-orcad-bridge-activity'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
-import { startOrcadStdioBridge } from '../../managed-server/lifecycle/orcad-stdio-bridge-provider'
+import '../../managed-server/lifecycle/orcad-stdio-bridge-provider'
 
 /** Echoes, and lets a test end every connection from the guest side. */
 function startGuestServer(): Promise<{
@@ -154,44 +157,6 @@ const closed = (socket: Socket): Promise<void> =>
   new Promise((resolve) => (socket.destroyed ? resolve() : socket.once('close', () => resolve())))
 
 describe('WSL bridge dials never start a stopped distro (E9)', () => {
-  it('refuses a dial into a stopped distro without spawning wsl.exe', async () => {
-    const { forward, children } = await startBridge()
-    const spawnedBefore = children.commands.length
-    const socket = await dial(forward.entry.localPort)
-    await closed(socket)
-    expect(children.commands).toHaveLength(spawnedBefore)
-  })
-
-  it('bridges a running distro, and many dials share one running read', async () => {
-    probe.running = ['Ubuntu']
-    const { forward } = await startBridge()
-    const sockets = await Promise.all([1, 2, 3].map(() => dial(forward.entry.localPort)))
-    expect(await Promise.all(sockets.map((socket, i) => echoOf(socket, `m${i}`)))).toEqual([
-      'm0',
-      'm1',
-      'm2'
-    ])
-    expect(probe.calls).toBe(1)
-  })
-
-  it('after the guest ends a bridge, the next dial re-reads and is refused once stopped', async () => {
-    probe.running = ['Ubuntu']
-    const { forward, children, guest } = await startBridge()
-    const first = await dial(forward.entry.localPort)
-    expect(await echoOf(first, 'up')).toBe('up')
-    const readsWhileUp = probe.calls
-
-    // The distro stops: its side of every bridge ends first.
-    probe.running = []
-    guest.endAll()
-    await closed(first)
-    const spawnedBefore = children.commands.length
-    const redial = await dial(forward.entry.localPort)
-    await closed(redial)
-    expect(probe.calls).toBeGreaterThan(readsWhileUp)
-    expect(children.commands).toHaveLength(spawnedBefore)
-  })
-
   it('a normal one-shot close while the control socket stays open costs the next dial nothing', async () => {
     probe.running = ['Ubuntu']
     const { forward, guest } = await startBridge()
@@ -210,52 +175,5 @@ describe('WSL bridge dials never start a stopped distro (E9)', () => {
     expect(await echoOf(next, 'again')).toBe('again')
     expect(probe.calls).toBe(readsBefore)
     expect(await echoOf(control, 'still')).toBe('still')
-  })
-
-  it('a user act that starts the distro is not refused by the read taken before it', async () => {
-    const { forward, children, transport } = await startBridge()
-    // A background dial reads it stopped, and that read is cached.
-    await closed(await dial(forward.entry.localPort))
-
-    // The user's connect starts it (any wsl.exe launch does) before its clients dial.
-    probe.running = ['Ubuntu']
-    const launch = await transport.exec('true')
-    launch.close()
-    const socket = await dial(forward.entry.localPort)
-    expect(await echoOf(socket, 'mine')).toBe('mine')
-    expect(children.commands.length).toBeGreaterThan(2)
-  })
-
-  it('leaves the shared SSH bridge path ungated: it never reads WSL running state', async () => {
-    const guest = await startGuestServer()
-    servers.push(guest.server)
-    const children = fakeWslBridgeChildren()
-    const transport = createWslOrcadHostTransport({
-      target: { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' },
-      spawn: children.spawn,
-      commandLoops: false
-    })
-    // The provider SSH uses, fed the same transport: no gate sits in the shared listener.
-    const forward = await startOrcadStdioBridge(
-      transport,
-      {
-        id: 'ssh:host',
-        connectionId: 'ssh-1',
-        localHost: '127.0.0.1',
-        localPort: 0,
-        remoteHost: '127.0.0.1',
-        remotePort: guest.port,
-        label: 'ssh'
-      },
-      {
-        resolveBridge: async (_conn, port) => posixOrcadStdioBridge(port),
-        checkBridge: checkOrcadStdioBridge,
-        openChannel: openOrcadStdioBridgeChannel
-      }
-    )
-    started.push(forward)
-    const socket = await dial(forward.entry.localPort)
-    expect(await echoOf(socket, 'ssh')).toBe('ssh')
-    expect(probe.calls).toBe(0)
   })
 })

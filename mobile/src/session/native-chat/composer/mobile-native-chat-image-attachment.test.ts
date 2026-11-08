@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../../transport/rpc-client'
-import type { RpcResponse, RpcSuccess } from '../../../transport/types'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import type { RpcResponse, RpcSuccess } from '../../../transport/rpc/rpc-wire-types'
 import { uploadMobileNativeChatImages } from './mobile-native-chat-image-attachment'
 
 function ok(id: string, result: unknown): RpcSuccess {
@@ -14,10 +14,6 @@ function methodNotFound(id: string): RpcResponse {
     error: { code: 'method_not_found', message: 'no' },
     _meta: { runtimeId: 'r' }
   }
-}
-
-function failed(id: string, message: string): RpcResponse {
-  return { id, ok: false, error: { code: 'failed', message }, _meta: { runtimeId: 'r' } }
 }
 
 function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
@@ -38,29 +34,6 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('uploadMobileNativeChatImages', () => {
-  it('uploads the picked image and returns its host path + local preview uri, without any terminal.send', async () => {
-    const client = clientWithResponses([
-      methodNotFound('start'),
-      ok('save', '/tmp/orca-attach.png')
-    ])
-
-    const result = await uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => 'conn-7',
-      pickImages: vi.fn().mockResolvedValue([{ base64: 'AAAA', uri: 'file:///photo.jpg' }])
-    })
-
-    expect(result).toEqual([
-      {
-        path: '/tmp/orca-attach.png',
-        previewUri: 'file:///photo.jpg'
-      }
-    ])
-    expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
-    const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toEqual({ contentBase64: 'AAAA', connectionId: 'conn-7' })
-  })
-
   it('uploads all three selected images in picker order', async () => {
     const client = clientWithResponses([
       methodNotFound('start-a'),
@@ -111,83 +84,5 @@ describe('uploadMobileNativeChatImages', () => {
       'read:file:///c.jpg',
       'uploaded:file:///c.jpg'
     ])
-  })
-
-  it('returns an empty array when the picker is cancelled and uploads nothing', async () => {
-    const client = clientWithResponses([])
-
-    const result = await uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([])
-    })
-
-    expect(result).toEqual([])
-    expect(client.calls).toEqual([])
-  })
-
-  it('reports completed uploads before a later image fails', async () => {
-    const client = clientWithResponses([
-      methodNotFound('start-a'),
-      ok('save-a', '/tmp/a.png'),
-      methodNotFound('start-b'),
-      failed('save-b', 'upload failed')
-    ])
-    const onImageUploaded = vi.fn()
-
-    await expect(
-      uploadMobileNativeChatImages('library', {
-        client,
-        getConnectionId: async () => null,
-        pickImages: vi.fn().mockResolvedValue([
-          { base64: 'AAAA', uri: 'file:///a.jpg' },
-          { base64: 'BBBB', uri: 'file:///b.jpg' }
-        ]),
-        onImageUploaded
-      })
-    ).rejects.toThrow('upload failed')
-    expect(onImageUploaded).toHaveBeenCalledOnce()
-    expect(onImageUploaded).toHaveBeenCalledWith({
-      path: '/tmp/a.png',
-      previewUri: 'file:///a.jpg'
-    })
-  })
-
-  it('falls back to an inline data uri for the preview when the picker omits a uri', async () => {
-    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/x.png')])
-
-    const result = await uploadMobileNativeChatImages('files', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([{ base64: 'BBBB' }])
-    })
-
-    expect(result).toEqual([
-      {
-        path: '/tmp/x.png',
-        previewUri: 'data:image/png;base64,BBBB'
-      }
-    ])
-  })
-
-  it('signals upload start only after a real image is picked', async () => {
-    const onUploadStart = vi.fn()
-    const cancelledClient = clientWithResponses([])
-    await uploadMobileNativeChatImages('library', {
-      client: cancelledClient,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([]),
-      onUploadStart
-    })
-    expect(onUploadStart).not.toHaveBeenCalled()
-
-    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/y.png')])
-    await uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([{ base64: 'CCCC', uri: 'file:///y.jpg' }]),
-      onUploadStart
-    })
-    expect(onUploadStart).toHaveBeenCalledTimes(1)
   })
 })

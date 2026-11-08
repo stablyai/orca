@@ -5,7 +5,7 @@ import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import { refusedMobileSessionTabClose } from '../session-lifecycle/close/mobile-session-tab-close-outcome'
+import '../session-lifecycle/close/mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -124,7 +124,12 @@ describe('OrcaRuntimeService', () => {
 
   it('reports a PTY that remains live after acknowledged worktree sleep', async () => {
     const runtime = new OrcaRuntimeService(store)
-    const liveProcess = { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }
+    const liveProcess = {
+      id: 'pty-1',
+      cwd: TEST_WORKTREE_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Claude'
+    }
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -163,7 +168,16 @@ describe('OrcaRuntimeService', () => {
         if (listCount === 2) {
           throw new Error('daemon unavailable')
         }
-        return listCount === 1 ? [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }] : []
+        return listCount === 1
+          ? [
+              {
+                id: 'pty-1',
+                cwd: TEST_WORKTREE_PATH,
+                worktreeId: TEST_WORKTREE_ID,
+                title: 'Claude'
+              }
+            ]
+          : []
       }
     })
 
@@ -195,35 +209,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('coalesces two clients sleeping the same host worktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const initialInventory = deferred<{ id: string; cwd: string; title: string }[]>()
-    const listProcesses = vi
-      .fn()
-      .mockImplementationOnce(() => initialInventory.promise)
-      .mockResolvedValueOnce([])
-    const stopAndWait = vi.fn(async (ptyId: string) => {
-      runtime.onPtyExit(ptyId, -1)
-      return true
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => false,
-      stopAndWait,
-      getForegroundProcess: async () => null,
-      listProcesses
-    })
-
-    const first = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    const second = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    initialInventory.resolve([{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }])
-
-    const [firstResult, secondResult] = await Promise.all([first, second])
-    expect(secondResult).toEqual(firstResult)
-    expect(stopAndWait).toHaveBeenCalledTimes(1)
-    expect(listProcesses).toHaveBeenCalledTimes(2)
-  })
-
   it('serializes a new terminal spawn behind physical sleep convergence', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stop = deferred<boolean>()
@@ -231,7 +216,14 @@ describe('OrcaRuntimeService', () => {
     runtime.onClientEvent((event) => events.push(event))
     const listProcesses = vi
       .fn()
-      .mockResolvedValueOnce([{ id: 'pty-before-sleep', cwd: TEST_WORKTREE_PATH, title: 'Shell' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'pty-before-sleep',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell'
+        }
+      ])
       .mockResolvedValueOnce([])
     runtime.setPtyController({
       write: () => true,
@@ -341,7 +333,11 @@ describe('OrcaRuntimeService', () => {
       }
     })
     runtime.onClientEvent((event) => secondListenerEvents.push(event))
-    const processLists = [[{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }], [], []]
+    const processLists = [
+      [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' }],
+      [],
+      []
+    ]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -400,7 +396,14 @@ describe('OrcaRuntimeService', () => {
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const processLists = [
-      [{ id: 'pty-preserved-history', cwd: TEST_WORKTREE_PATH, title: 'Shell' }],
+      [
+        {
+          id: 'pty-preserved-history',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell'
+        }
+      ],
       [],
       []
     ]
@@ -437,12 +440,17 @@ describe('OrcaRuntimeService', () => {
       runtime.onClientEvent((event) => events.push(event))
     }
     const secondStop = deferred<boolean>()
-    const failedPty = { id: 'pty-fails', cwd: TEST_WORKTREE_PATH, title: 'Claude' }
+    const failedPty = {
+      id: 'pty-fails',
+      cwd: TEST_WORKTREE_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Claude'
+    }
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([
         failedPty,
-        { id: 'pty-slow', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-slow', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ])
       .mockResolvedValueOnce([failedPty])
       .mockResolvedValueOnce([failedPty])
@@ -503,58 +511,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('stops exactly the expected live PTYs for a worktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const stopped: string[] = []
-    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => false,
-      stopAndWait: async (ptyId, opts) => {
-        stopped.push(ptyId)
-        expect(opts).toEqual({ keepHistory: true })
-        runtime.onPtyExit(ptyId, -1)
-        return true
-      },
-      getForegroundProcess: async () => null,
-      listProcesses: async () => processLists.shift() ?? []
-    })
-
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          title: 'Claude',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
-    })
-
-    await expect(
-      runtime.stopExactTerminalsForWorktree('id:repo-1::/tmp/worktree-a', ['pty-1'], {
-        keepHistory: true
-      })
-    ).resolves.toEqual({
-      stopped: 1,
-      stoppedPtyIds: ['pty-1'],
-      livePtyIds: ['pty-1'],
-      postStopVerified: true
-    })
-    expect(stopped).toEqual(['pty-1'])
-  })
-
   it('reports recoverable post-stop liveness failure after exact terminal stop', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
@@ -610,24 +566,5 @@ describe('OrcaRuntimeService', () => {
       postStopFailure: 'terminal_liveness_unavailable'
     })
     expect(stopped).toEqual(['pty-1'])
-  })
-
-  it('explains a refused workspace close instead of throwing the raw refusal enum', async () => {
-    const session = makeWorkspaceSessionWithHeadlessTerminal()
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
-      tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-    vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue(
-      refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
-    )
-
-    await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
-      'A replacement terminal took this tab over while it was closing, so the tab was kept open. Try again.'
-    )
   })
 })

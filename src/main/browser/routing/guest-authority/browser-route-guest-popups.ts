@@ -5,27 +5,21 @@ import {
   normalizeBrowserPopupUrl
 } from '../../guest-lifecycle/popups/browser-popup-new-tab-intent'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import {
-  trackBrowserGuestInputGesture,
-  type BrowserGuestInputGesture
-} from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import { trackBrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import type { BrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
 } from './browser-route-guest-popup-ownership'
-import {
-  ROUTE_POPUP_WINDOW_OPTIONS,
-  type BrowserRouteGuestPopupWindow
-} from './browser-route-guest-popup-window-options'
-import {
-  openPopupWithOriginBar,
-  type PopupChildWindowOptions
-} from '../../guest-lifecycle/popups/popup-origin-bar-window'
+import { ROUTE_POPUP_WINDOW_OPTIONS } from './browser-route-guest-popup-window-options'
+import type { BrowserRouteGuestPopupWindow } from './browser-route-guest-popup-window-options'
+import { openPopupWithOriginBar } from '../../guest-lifecycle/popups/presentation/popup-origin-bar-window'
+import type { PopupChildWindowOptions } from '../../guest-lifecycle/popups/presentation/browser-popup-window-contract'
 import {
   allowNativeBrowserPopup,
   isNativeBrowserPopupRequest
-} from '../../guest-lifecycle/popups/browser-popup-native-window'
-import { allowPageUnload } from '../../guest-lifecycle/browser-guest-unload-policy'
+} from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
+import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
 
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
 

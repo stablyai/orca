@@ -11,11 +11,9 @@ import {
 import { findIncompleteManagedOrcadMigration } from './orcad-managed-migration-status'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../activation/orcad-activation-fence-hold'
 import { resolveLinkedOrcadContext } from './orcad-managed-runtime-context'
-import {
-  runManagedOrcadUpdate,
-  withManagedOrcadLifecycle
-} from '../../ssh/orcad-runtime-maintenance'
-import type { OrcadUpdateDeferCode } from '../../ssh/orcad-update-plan'
+import { runManagedOrcadUpdate } from './orcad-runtime-maintenance'
+import { withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
+import type { OrcadUpdateDeferCode } from '../activation/orcad-update-plan'
 import { readLocalFullVersion } from '../install/remote-versioned-install'
 
 export type ManagedOrcadAutoUpdateOutcome =

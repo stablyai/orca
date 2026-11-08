@@ -14,8 +14,9 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { speechModelDescription } from './speech-model-description'
+import { isOfferedSpeechModel } from '../../../../../shared/speech-model-retirement'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -40,6 +41,7 @@ export function VoiceSpeechModelSection({
   onOpenOpenAiDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
@@ -53,11 +55,11 @@ export function VoiceSpeechModelSection({
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
-        <Label>{translate('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
+        <Label>{t('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
         <p className="text-xs text-muted-foreground">
           {selectedModel && selectedIsReady
             ? `${selectedModel.label} — ${speechModelDescription(selectedModel)}`
-            : translate(
+            : t(
                 'auto.components.settings.VoicePane.e24f7d43d2',
                 'Select a speech model. Local models run offline; cloud models require an API key.'
               )}
@@ -73,7 +75,7 @@ export function VoiceSpeechModelSection({
           >
             {selectedModel && selectedIsReady
               ? selectedModel.label
-              : translate('auto.components.settings.VoicePane.fbe5990716', 'Select Model')}
+              : t('auto.components.settings.VoicePane.fbe5990716', 'Select Model')}
             <ChevronDown className="size-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
@@ -81,6 +83,11 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+            const isRetired = !isOfferedSpeechModel(manifest)
+            // Retired models stay listed only while downloaded, so their files can be deleted.
+            if (isRetired && !isReady) {
+              return null
+            }
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
@@ -93,7 +100,9 @@ export function VoiceSpeechModelSection({
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
-                  if (isReady) {
+                  if (isRetired) {
+                    event.preventDefault()
+                  } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
@@ -102,7 +111,7 @@ export function VoiceSpeechModelSection({
                     event.preventDefault()
                     void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
                       toast.error(
-                        translate(
+                        t(
                           'auto.components.settings.VoicePane.cfde55c7b0',
                           'Failed to download model.'
                         ),
@@ -125,36 +134,31 @@ export function VoiceSpeechModelSection({
                     <Cloud className="size-3.5 text-muted-foreground" />
                   ) : null}
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className={`min-w-0 flex-1 ${isRetired ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
                     {!isCloud && (
                       <span className="text-[10px] px-1 py-px rounded-full leading-none bg-muted text-muted-foreground">
                         {manifest.streaming
-                          ? translate('auto.components.settings.VoicePane.d504ab05f0', 'streaming')
-                          : translate('auto.components.settings.VoicePane.8f4d2a51d7', 'offline')}
+                          ? t('auto.components.settings.VoicePane.d504ab05f0', 'streaming')
+                          : t('auto.components.settings.VoicePane.8f4d2a51d7', 'offline')}
                       </span>
                     )}
                     {manifest.recommended && (
                       <span className="text-[10px] px-1 py-px rounded-full leading-none bg-status-success-background text-status-success">
-                        {translate('auto.components.settings.VoicePane.1ba81c0ff0', 'recommended')}
+                        {t('auto.components.settings.VoicePane.1ba81c0ff0', 'recommended')}
                       </span>
                     )}
                     <span className="text-[10px] text-muted-foreground/60">
                       {isDownloading && mState?.progress !== undefined
                         ? mState.status === 'extracting'
-                          ? translate(
-                              'auto.components.settings.VoicePane.61a16c8141',
-                              'Extracting...'
-                            )
+                          ? t('auto.components.settings.VoicePane.61a16c8141', 'Extracting...')
                           : `${Math.round(mState.progress * 100)}%`
                         : isCloud
                           ? null
-                          : translate(
-                              'auto.components.settings.VoicePane.91980ce124',
-                              '{{value0}} MB',
-                              { value0: sizeMb }
-                            )}
+                          : t('auto.components.settings.VoicePane.91980ce124', '{{value0}} MB', {
+                              value0: sizeMb
+                            })}
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
@@ -166,7 +170,7 @@ export function VoiceSpeechModelSection({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.VoicePane.6fa734ed95',
                       'Delete {{value0}}',
                       {
@@ -194,7 +198,7 @@ export function VoiceSpeechModelSection({
                         .then(onRefreshModelStates)
                         .catch(() =>
                           toast.error(
-                            translate(
+                            t(
                               'auto.components.settings.VoicePane.68de13f72c',
                               'Failed to delete model.'
                             )

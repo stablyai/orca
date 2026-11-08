@@ -5,8 +5,9 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
-import { BrowserManagerRegistration } from './browser-manager-registration'
+import { safeOrigin } from '../browser-event-origin'
+import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
+import { BrowserManagerRegistration } from './registration/browser-manager-registration'
 import {
   isBrowserRouteGuestPopup,
   listBrowserRouteGuestPopups

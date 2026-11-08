@@ -19,10 +19,15 @@ export function isImeOwnedKeyboardEvent<KeyEvent extends ImeKeyboardEvent>(
   )
 }
 
+/** True when `code` is the physical Enter key or unknown, as IMEs report for processed keys. */
+export function isEnterOrUnknownCode(code: string | undefined): boolean {
+  return !code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter'
+}
+
 type ImeEnterGestureEvent = Pick<
   ReactKeyboardEvent,
   'key' | 'keyCode' | 'nativeEvent' | 'preventDefault' | 'shiftKey'
-> & { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
+> & { altKey?: boolean; code?: string; ctrlKey?: boolean; metaKey?: boolean }
 
 // Hangul has no candidate step, so the Enter that commits it is the user's own Enter.
 const HANGUL_ONLY = /^\p{Script=Hangul}+$/u
@@ -61,6 +66,9 @@ export function useImeEnterGestureOwnership(): {
     // Chorded Enter is deliberate submit, not bare IME redispatch; arm carry but do not swallow the chord.
     const hasChordModifier = (event: ImeEnterGestureEvent): boolean =>
       Boolean(event.altKey || event.ctrlKey || event.metaKey)
+    // Process/229 also reports IME mode keys like Hankaku/Zenkaku, which may never send keyup (#39289).
+    const isProcessedEnterKey = (event: ImeEnterGestureEvent): boolean =>
+      event.key === 'Process' && event.keyCode === 229 && isEnterOrUnknownCode(event.code)
     return {
       isComposing: () => stateRef.current.composing,
       ownsKeyDown: (event: ImeEnterGestureEvent): boolean => {
@@ -68,7 +76,7 @@ export function useImeEnterGestureOwnership(): {
           (isImeOwnedKeyboardEvent(event) || stateRef.current.composing) &&
           (isPlainEnter(event) ||
             (event.key === 'Enter' && event.keyCode === 229) ||
-            (event.key === 'Process' && event.keyCode === 229))
+            isProcessedEnterKey(event))
         if (markedEnter) {
           stateRef.current.pendingEnter = {}
           return true

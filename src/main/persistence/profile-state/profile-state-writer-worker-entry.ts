@@ -71,7 +71,7 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
         ) ?? null
       break
     case 'close':
-      authority.close()
+      authority.close({ refreshLegacyDocuments: request.refreshLegacyDocuments })
       stopping = true
       break
   }

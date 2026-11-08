@@ -1,7 +1,7 @@
 import { AlertTriangle, Copy, Loader2, Square, Trash2 } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/ephemeral-vm-recipes'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
@@ -29,6 +29,7 @@ export function EphemeralVmRuntimeRow({
   onStopCleanup,
   onCopyCleanupCommand
 }: EphemeralVmRuntimeRowProps): React.JSX.Element {
+  const t = useTranslate()
   const hasError = cleanupFailed || runtime.status === 'failed'
   const cleanupError = ephemeralVmCleanupErrorText(runtime)
   return (
@@ -65,10 +66,7 @@ export function EphemeralVmRuntimeRow({
             disabled={disabled}
           >
             <Copy className="size-3" />
-            {translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.copyCleanup',
-              'Copy command'
-            )}
+            {t('auto.components.settings.EphemeralVmRuntimesSection.copyCleanup', 'Copy command')}
           </Button>
         ) : null}
         {cleanupRunning ? (
@@ -86,11 +84,11 @@ export function EphemeralVmRuntimeRow({
               <Square className="size-3" />
             )}
             {isStopping
-              ? translate(
+              ? t(
                   'auto.components.settings.EphemeralVmRuntimesSection.stoppingCleanup',
                   'Stopping…'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.EphemeralVmRuntimesSection.stopCleanup',
                   'Stop cleanup'
                 )}
@@ -106,11 +104,8 @@ export function EphemeralVmRuntimeRow({
           >
             <Trash2 className="size-3" />
             {cleanupFailed
-              ? translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.retry',
-                  'Retry cleanup'
-                )
-              : translate('auto.components.settings.EphemeralVmRuntimesSection.cleanup', 'Cleanup')}
+              ? t('auto.components.settings.EphemeralVmRuntimesSection.retry', 'Retry cleanup')
+              : t('auto.components.settings.EphemeralVmRuntimesSection.cleanup', 'Cleanup')}
           </Button>
         )}
       </div>

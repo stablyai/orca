@@ -6,7 +6,7 @@ import {
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand,
+  isStructuredAgentSessionHostCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
@@ -16,7 +16,7 @@ import {
   structuredConversationCommandHold
 } from '../../../src/shared/structured-conversation-command-hold'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { translate } from '../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
@@ -49,10 +49,11 @@ export async function dispatchMobileStructuredCommand(input: {
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (
-    !isStructuredAgentSessionComposerCommand(
+    !isStructuredAgentSessionHostCommand(
       input.text,
+      input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.sessionCommands
+      input.controller.snapshot
     )
   ) {
     return input.pending.current ? 'rejected' : null

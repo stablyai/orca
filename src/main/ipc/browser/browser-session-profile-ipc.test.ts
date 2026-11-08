@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-vi.mock('../../browser/browser-manager', () => ({
+vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn() },
   browserManager: {
     getWebContentsIdByTabId: vi.fn(() => new Map())

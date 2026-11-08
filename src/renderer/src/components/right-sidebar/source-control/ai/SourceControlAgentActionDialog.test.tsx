@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
+import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import path from 'node:path'
 import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   mutationInFlight: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))
@@ -57,17 +57,18 @@ vi.mock('@/components/ui/select', () => ({
 vi.mock('../../../source-control/SourceControlActionVariableChips', () => ({
   SourceControlActionVariableChips: () => React.createElement('div')
 }))
-vi.mock('@/lib/source-control-agent-action-launch-check', () => ({
+vi.mock('@/lib/source-control/ai/source-control-agent-action-launch-check', () => ({
   checkSourceControlAgentActionLaunch: mocks.checkSourceControlAgentActionLaunch
 }))
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
-import { useAppStore, type AppState } from '@/store/index'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import { deferred } from '../panel/source-control-hook-test-harness'
 const recoveryContext = {
   target: { kind: 'local' as const },

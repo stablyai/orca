@@ -43,6 +43,7 @@ export function useTerminalEditorCloseFoundation(
     if (!accepted) {
       // Report checkpoint-vetoed quits instead of silently trapping the window (#15352); dirty-file vetoes provide no reason.
       showShutdownCheckpointFailureToast()
+      window.api.ui.cancelWindowClose()
       return
     }
     window.api.ui.confirmWindowClose()

@@ -10,8 +10,6 @@ import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
@@ -22,10 +20,12 @@ import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
+import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
 import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
-import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
+import { MobileNativeChatMessageMeta } from './MobileNativeChatMessageMeta'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
 import {
@@ -59,6 +59,7 @@ function MobileNativeChatMessageImpl({
   turnStatusAbove = false,
   turnExpanded,
   turnKey,
+  rewindable,
   onToggleTurn,
   activeTurnIsWorking,
   trailingRun,
@@ -92,6 +93,8 @@ function MobileNativeChatMessageImpl({
   turnStatusAbove?: boolean
   turnExpanded?: boolean
   turnKey?: string
+  /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
+  rewindable?: true
   onToggleTurn?: (turnKey: string) => void
   activeTurnIsWorking?: boolean
   trailingRun?: boolean
@@ -159,6 +162,12 @@ function MobileNativeChatMessageImpl({
         backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
       )
   const isSystem = message.role === 'system'
+  const pullRequestEvent = isSystem
+    ? drawnProse.find(
+        (block): block is Chat.NativeChatTextBlock =>
+          Chat.isTextBlock(block) && block.presentation === PULL_REQUEST_EVENT_PRESENTATION
+      )
+    : undefined
   const showToolRun = tools.length > 0
   const askPending = structuredActivityUi
     ? selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
@@ -238,7 +247,6 @@ function MobileNativeChatMessageImpl({
     )
   }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
-  const copyText = isChatTurn ? nativeChatMessageCopyText(message) : ''
   let proseOffset = 0
   const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
     const textKey = `${message.id}:text:${proseOffset}`
@@ -301,7 +309,14 @@ function MobileNativeChatMessageImpl({
           ) : (
             <>
               {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-              {isSystem ? (
+              {pullRequestEvent ? (
+                <MobileNativeChatPullRequestEventLine
+                  block={pullRequestEvent}
+                  messageId={message.id}
+                  fontScale={fontScale}
+                  onLongPress={onLongPress}
+                />
+              ) : isSystem ? (
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}
@@ -374,18 +389,11 @@ function MobileNativeChatMessageImpl({
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {/* Always shown, so the row never shifts when copy appears. */}
         {isChatTurn && !agentFrom ? (
-          <View style={styles.meta}>
-            {copyText.length > 0 ? (
-              <View style={styles.metaCopy}>
-                <MobileSourceCopyButton
-                  key={message.id}
-                  text={copyText}
-                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-                />
-              </View>
-            ) : null}
-            <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-          </View>
+          <MobileNativeChatMessageMeta
+            message={message}
+            fontScale={fontScale}
+            rewindable={rewindable}
+          />
         ) : null}
       </View>
       {turnStatusAbove ? null : statusRow}

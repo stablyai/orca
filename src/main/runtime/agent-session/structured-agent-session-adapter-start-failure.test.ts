@@ -2,15 +2,16 @@ import { claudeScriptedChild } from '../../claude/claude-scripted-child.test-fix
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import type * as TimersPromises from 'node:timers/promises'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   hostTestAttachParams,
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
@@ -19,12 +20,25 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 
+// The start retry backoff's promise delay must use the fake clock this suite jumps.
+vi.mock('node:timers/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof TimersPromises>()),
+  // ast-grep-ignore: test-no-real-time-wait -- Backed by the fake setTimeout installed per test.
+  setTimeout: (ms?: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+}))
+
 let directory: string | undefined
 let operations = 0
 const operationId = () => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 const caller = { callerKey: 'adapter-start-failure-test' }
 
+beforeEach(() => {
+  // Real time still passes, so file and database work settles; waits jump the clock.
+  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+})
+
 afterEach(async () => {
+  vi.useRealTimers()
   await stopStructuredAgentSessionRuntime()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
@@ -96,8 +110,14 @@ async function failedStart(
   }
   const expectedAttempts = unanswered || agent === 'grok' || agent === 'claude' ? 5 : 1
   for (let attempt = 1; attempt <= expectedAttempts; attempt++) {
-    // Retries back off 100·2^n ms (800 ms before the fifth spawn); the 1 s default leaves no room under load.
-    await vi.waitFor(() => expect(script.spawns()).toBe(attempt), { timeout: 5_000 })
+    // Retries back off 100·2^n ms (800 ms before the fifth spawn); each poll jumps 100 ms.
+    await vi.waitFor(
+      () => {
+        vi.advanceTimersByTime(100)
+        expect(script.spawns()).toBe(attempt)
+      },
+      { timeout: 5_000, interval: 10 }
+    )
     const fail = unanswered ? script.exitHandshake : script.failHandshake
     if (!fail) {
       throw new Error('fixture has no unanswered exit')

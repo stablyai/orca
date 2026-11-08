@@ -1,3 +1,4 @@
+import { canonicalTabGap, visibleLayoutGroups } from './workspace-layout-client-visibility'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { insertTabIdIntoOrder } from './tab-order'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -125,7 +126,8 @@ export function placeNewTab(
   key: string,
   tab: LayoutTab,
   placement: TabPlacement,
-  context: LayoutContext
+  context: LayoutContext,
+  replacingTabId?: string
 ): WorkspaceLayout {
   const tabs = [...workspace.tabs, tab]
   const anchorGroup = placement.afterTabId
@@ -134,6 +136,7 @@ export function placeNewTab(
   let group =
     workspace.groups.find((entry) => entry.id === placement.groupId) ??
     anchorGroup ??
+    (context.visibility ? visibleLayoutGroups(workspace, context.visibility)[0] : undefined) ??
     workspace.groups[0]
   const groups = [...workspace.groups]
   if (!group) {
@@ -143,10 +146,38 @@ export function placeNewTab(
   let tabOrder: string[]
   if (placement.index !== undefined) {
     tabOrder = group.tabOrder.filter((id) => id !== tab.id)
-    tabOrder.splice(Math.max(0, Math.min(placement.index, tabOrder.length)), 0, tab.id)
+    tabOrder.splice(
+      canonicalTabGap(
+        tabOrder,
+        workspace.tabs,
+        placement.index,
+        context.visibility,
+        replacingTabId
+      ),
+      0,
+      tab.id
+    )
   } else {
     const anchor = anchorGroup === group ? placement.afterTabId : undefined
-    tabOrder = insertTabIdIntoOrder(group.tabOrder, tabs, tab.id, tab.isPinned === true, anchor)
+    if (context.visibility) {
+      const visibleIds = new Set(workspace.tabs.filter(context.visibility).map((entry) => entry.id))
+      const shown = group.tabOrder.filter((id) => id !== replacingTabId && visibleIds.has(id))
+      const inserted = insertTabIdIntoOrder(shown, tabs, tab.id, tab.isPinned === true, anchor)
+      tabOrder = [...group.tabOrder]
+      tabOrder.splice(
+        canonicalTabGap(
+          tabOrder,
+          workspace.tabs,
+          inserted.indexOf(tab.id),
+          context.visibility,
+          replacingTabId
+        ),
+        0,
+        tab.id
+      )
+    } else {
+      tabOrder = insertTabIdIntoOrder(group.tabOrder, tabs, tab.id, tab.isPinned === true, anchor)
+    }
   }
   const placed = { ...group, tabOrder }
   return {

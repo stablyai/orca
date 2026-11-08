@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { basename } from '@/lib/path'
 import { canAutoSaveOpenFile } from '@/components/editor/autosave/editor-autosave'
 import { indexEditorExternalWatchBatchPaths } from '@/components/editor/external-changes/editor-external-watch-path-index'
@@ -9,7 +9,7 @@ import {
   isActiveMoveSourcePath
 } from '@/components/editor/editor-path-move-inflight'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
@@ -30,7 +30,7 @@ import {
   reconcileEditorTabsAfterOverflow,
   supersedeOverflowProbesForBatch
 } from './editor-external-watch-overflow'
-import { WATCH_BATCH_INTERVAL_MS } from '../../../shared/filesystem-watch-batch-window'
+import { WATCH_BATCH_INTERVAL_MS } from '../../../shared/file-watch/filesystem-watch-batch-window'
 
 function isTargetList(
   found: EditorExternalWatchTarget | readonly EditorExternalWatchTarget[] | undefined

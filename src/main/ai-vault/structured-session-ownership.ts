@@ -20,13 +20,13 @@ import {
   type SessionSearchTransport
 } from '../../shared/ai-vault/search/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
-} from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+} from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,

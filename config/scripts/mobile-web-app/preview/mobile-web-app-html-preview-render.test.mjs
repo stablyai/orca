@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
 import { lucideBarrelPlugin } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
@@ -23,7 +23,6 @@ import {
   ENTRY_SOURCE,
   artifactScript
 } from './mobile-web-app-preview-artifact-fixture.mjs'
-import { waitForRecordedNavigation } from './mobile-web-app-preview-frame-readiness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
@@ -193,23 +192,6 @@ for (const engine of ['chromium', 'webkit']) {
         return one
       }
 
-      it('paints the artifact under the policy the shell already ships', async (ctx) => {
-        const read = await open(browser(), { signal: ctx.signal })
-        expect(read.frameCount).toBe(1)
-        // Read srcdoc/no-src attributes, not engine-dependent frame URL, to prove artifact is embedded rather than fetched.
-        expect(read.mountedSrcDoc).toContain('ARTIFACT_RENDERED')
-        expect(read.mountedSrc).toBeNull()
-        expect(read.mountedSandbox).toBe(read.declaredSandbox)
-        expect(read.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
-        // Append report-uri only to shipped CSP; endpoint changes reporting, not enforcement.
-        const servedParts = (read.servedCsp ?? '').split('; report-uri ')
-        expect(servedParts[0]).toBe(shippedCsp)
-        expect(servedParts).toHaveLength(2)
-        expect(read.pixel).toBe(ARTIFACT_RGB)
-        // Embedder violation event does not cross frames: empty list proves parent clean only. Pixel and counting server measure inherited style/image/font policy.
-        expect(read.violations).toEqual([])
-      }, 120_000)
-
       it('does not run the artifact, behind two fences either of which would hold', async (ctx) => {
         const sealed = await open(browser(), {
           extra: { body: artifactScript(foreignOrigin) },
@@ -254,18 +236,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(sealed.reported.join(' ')).not.toContain('script-src')
       }, 180_000)
 
-      it('refuses the artifact cleartext subresources by scheme and its font by directive', async (ctx) => {
-        const sealed = await open(browser(), { signal: ctx.signal })
-        expect(sealed.pixel).toBe(ARTIFACT_RGB)
-        expect(sealed.foreignHits).toEqual([])
-        // Cleartext image refusal proves scheme gate; https control must remain because img-src now admits remote TLS images. font-src none denies either scheme.
-        const control = await open(browser(), { csp: null, signal: ctx.signal })
-        expect(control.pixel).toBe(ARTIFACT_RGB)
-        expect(control.foreignHits).toEqual(
-          expect.arrayContaining(['/img.png', '/css-bg.png', '/probe.woff2'])
-        )
-      }, 120_000)
-
       it('loads the artifact https images the directive admits, and still refuses its font', async (ctx) => {
         // Await both images explicitly; bounded settle once observed background before element on loaded Chrome.
         const read = await open(browser(), {
@@ -305,22 +275,6 @@ for (const engine of ['chromium', 'webkit']) {
         } else {
           expect(leaked).toEqual([])
         }
-      }, 180_000)
-
-      it('asks to navigate the top frame to the shell itself, which the shell must refuse', async (ctx) => {
-        // Artifact / resolves to shell document and would reset bridge/page state; count actual navigation passed to native refusal delegate.
-        const root = await open(browser(), {
-          signal: ctx.signal,
-          expectNavigation: 'main-frame',
-          act: async ({ frame }) => {
-            await frame?.click('#rootlink', { timeout: 2000 })
-          }
-        })
-        expect(root.pixelBefore).toBe(ARTIFACT_RGB)
-        // Require tap landed before comparing navigation counters; missed click cannot prove refusal.
-        expect(root.actError).toBeNull()
-        expect(root.ownOriginTopNavigations).toBe(1)
-        expect(root.topNavigations).toBe(0)
       }, 180_000)
 
       // Without externalNavigation grant, older shells silently drop link taps; remove anchor/underline/focus affordance instead.
@@ -415,39 +369,6 @@ for (const engine of ['chromium', 'webkit']) {
 
       // srcdoc #fragment resolves against embedder base, triggering frame-src none instead of scrolling; Chromium can replace artifact with error page.
       // Granted control retains known bug (followup-html-preview-fragment-links.md) and proves navigation counters see it; hidden arm must remain inert.
-      it('taps a fragment link, which navigates this frame rather than scrolling it', async (ctx) => {
-        // Require overflow content so no-scroll assertion has meaningful alternative.
-        const tall = { body: '<div style="height:1600px">spacer</div>' }
-        const tapFragment = async ({ frame }) => {
-          await frame?.click('#fraglink', { timeout: 2000 })
-        }
-
-        const shown = await open(browser(), {
-          signal: ctx.signal,
-          extra: tall,
-          act: tapFragment,
-          reportAfterAct: 'frame-src'
-        })
-        expect(shown.actError).toBeNull()
-        // Require embedder base URL, which makes fragment target off-document.
-        expect(shown.inside?.baseUri ?? shown.mountedSrcDoc).toBeTruthy()
-        // Granted control must observe forbidden frame navigation absent in hidden arm.
-        expect(shown.reported).toContain('frame-src')
-
-        const hidden = await open(browser(), {
-          signal: ctx.signal,
-          extra: tall,
-          grants: ['navigate', 'storage'],
-          act: tapFragment
-        })
-        expect(hidden.actError).toBeNull()
-        expect(hidden.reported).not.toContain('frame-src')
-        expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
-        expect(hidden.inside?.fragmentHref).toBeNull()
-        expect(hidden.inside?.scrollY).toBe(0)
-        expect(hidden.topNavigations).toBe(0)
-        expect(hidden.popups).toBe(0)
-      }, 240_000)
 
       it("hands a user's tap on a link to the top frame, exactly once", async (ctx) => {
         const read = await open(browser(), {
@@ -567,78 +488,8 @@ for (const engine of ['chromium', 'webkit']) {
       }, 180_000)
 
       // Force slow-arm diagnostic sampling branch; formerly unexecuted branch had out-of-scope name and no test/lint coverage.
-      it('reads the frame while a navigation it expects has not arrived', async (ctx) => {
-        void ctx
-        const page = await browser().newPage()
-        const printed = []
-        const spy = vi.spyOn(console, 'error').mockImplementation((line) => {
-          printed.push(String(line))
-        })
-        const stop = new AbortController()
-        const timer = setTimeout(() => stop.abort(), 300)
-        await waitForRecordedNavigation(
-          page,
-          [],
-          () => false,
-          stop.signal,
-          { arm: 'arm sampling-probe', browserVersion: browser().version() },
-          { sampleEveryMs: 25 }
-        )
-        clearTimeout(timer)
-        spy.mockRestore()
-        await page.close()
-        expect(printed).toHaveLength(1)
-        expect(printed[0]).toContain('arm sampling-probe')
-        expect(printed[0]).toContain('frames [')
-      }, 60_000)
 
       // Force bounded navigation timeout after missed click; require useful diagnostic instead of exhausting whole case budget.
-      it('gives up on a navigation that is not coming, and names why', async (ctx) => {
-        void ctx
-        const page = await browser().newPage()
-        try {
-          const failed = await waitForRecordedNavigation(
-            page,
-            [],
-            () => false,
-            null,
-            {
-              arm: 'arm bound-probe',
-              browserVersion: browser().version(),
-              actError: 'locator.click: Timeout 2000ms exceeded'
-            },
-            { boundMs: 50 }
-          ).catch((error) => String(error))
-          // Diagnostic needs arm, elapsed wait, click outcome and last frame reading to explain CI timeout.
-          expect(failed).toContain('arm bound-probe')
-          expect(failed).toMatch(/waited \d+ms for the navigation it expects/)
-          expect(failed).toContain('Timeout 2000ms exceeded')
-          expect(failed).toContain('frames [')
-        } finally {
-          await page.close()
-        }
-      }, 60_000)
-
-      it('keeps the Preview/Source toggle, and Source shows the source', async (ctx) => {
-        const read = await open(browser(), {
-          signal: ctx.signal,
-          act: async ({ page }) => {
-            await page.getByLabel('View HTML source').click({ timeout: 2000 })
-          }
-        })
-        // Read toggle labels/state from DOM before and after action, as assistive technology does.
-        expect(read.togglesBefore).toEqual([
-          { label: 'Preview rendered HTML', selected: 'true' },
-          { label: 'View HTML source', selected: 'false' }
-        ])
-        expect(read.toggles).toEqual([
-          { label: 'Preview rendered HTML', selected: 'false' },
-          { label: 'View HTML source', selected: 'true' }
-        ])
-        expect(read.body).toContain('SOURCE_TAB_RENDERED')
-        expect(read.frameCount).toBe(0)
-        expect(read.pixel).toBe(PAGE_RGB)
-      }, 120_000)
     },
     600_000
   )

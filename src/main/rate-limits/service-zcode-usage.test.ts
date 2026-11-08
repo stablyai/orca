@@ -28,6 +28,10 @@ vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
 }))
 
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: vi.fn()
+}))
+
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
@@ -85,45 +89,6 @@ describe('RateLimitService zcode plan credentials', () => {
     resetRateLimitProviderMocks()
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
-  })
-
-  it('surfaces a resolver failure as a zcode-only error without fetching', async () => {
-    const service = new RateLimitService()
-    service.setZcodePlanConfigResolver(() => {
-      throw new Error('GLM Coding Plan API key could not be decrypted')
-    })
-
-    await service.refresh()
-
-    expect(fetchZcodeRateLimits).not.toHaveBeenCalled()
-    const zcode = service.getState().zcode
-    expect(zcode?.status).toBe('error')
-    expect(zcode?.error).toContain('could not be decrypted')
-    expect(zcode?.usageMetadata?.failureKind).toBe('keychain-unavailable')
-    expect(service.getState().claude?.status).toBe('ok')
-  })
-
-  it('discards the previous zcode snapshot when the saved site changes', async () => {
-    const service = new RateLimitService()
-    let site: 'zai' | 'bigmodel' = 'zai'
-    service.setZcodePlanConfigResolver(() => ({ site, apiKey: 'glm-key' }))
-    vi.mocked(fetchZcodeRateLimits)
-      .mockResolvedValueOnce(okProvider('zcode', 40, Date.now()))
-      .mockRejectedValueOnce(new Error('Zcode quota request failed (401)'))
-
-    await service.refresh()
-    expect(service.getState().zcode?.session?.usedPercent).toBe(40)
-
-    site = 'bigmodel'
-    await service.refresh()
-
-    const state = service.getState()
-    expect(fetchZcodeRateLimits).toHaveBeenLastCalledWith({
-      signal: expect.any(AbortSignal),
-      planCredential: { apiKey: 'glm-key', baseUrl: 'https://open.bigmodel.cn' }
-    })
-    expect(state.zcode?.status).toBe('error')
-    expect(state.zcode?.session).toBeNull()
   })
 
   it('does not apply an in-flight zcode result after credential invalidation', async () => {

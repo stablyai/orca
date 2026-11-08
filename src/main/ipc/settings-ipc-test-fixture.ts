@@ -81,7 +81,7 @@ vi.mock('../ai-vault-search/session-search-enablement', () => ({
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 

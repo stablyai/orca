@@ -47,6 +47,17 @@ export type PluginHostNewFile = {
   icon?: string
 }
 
+export type PluginHostFont = {
+  /** The manifest's family name; clients register it as `pluginFontFamilyName`. */
+  family: string
+  faces: {
+    /** orca-plugin-image URL main serves while the plugin is enabled. */
+    url: string
+    weight: string
+    style: 'normal' | 'italic'
+  }[]
+}
+
 export type PluginHostListEntry = {
   pluginKey: string
   consentFingerprint: string | null
@@ -80,6 +91,8 @@ export type PluginHostListEntry = {
   customEditors?: PluginHostCustomEditor[]
   /** Absent on hosts that predate new-file templates. */
   newFiles?: PluginHostNewFile[]
+  /** Absent on hosts that predate plugin fonts. */
+  fonts?: PluginHostFont[]
   commands: {
     id: string
     title: string
@@ -112,6 +125,11 @@ export type PluginHostListEntry = {
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string
+    /** Structured install location; absent on older hosts and non-Git installs. */
+    url?: string
+    path?: string
+    /** The catalog's repository claim for this release; not verified authorship. */
+    authorRepository?: string
     resolvedCommit: string | null
     contentHash: string
     /** `ref` is the catalog's ref, so a client can join to the exact catalog source. */

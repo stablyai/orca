@@ -16,7 +16,7 @@ import {
   type GuestCdpSender
 } from '../input/guest-direct-key-input'
 import { withAgentInputInjection } from '../input/agent-input-injection'
-import type { AgentPointerInput } from '../../guest-lifecycle/browser-agent-activity'
+import type { AgentPointerInput } from '../../guest-lifecycle/page-activity/browser-agent-activity'
 import type { CapturePaintHold } from './cdp-screenshot'
 import { waitForGuestFirstPaint } from '../debugger/guest-first-paint'
 

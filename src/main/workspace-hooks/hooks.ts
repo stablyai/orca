@@ -14,7 +14,7 @@ import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { spawn } from 'node:child_process'
 import {
   forceTerminateProcessTree,
@@ -205,16 +205,11 @@ export function runHook(
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
-    // Forward unattended Git flags and indexed config to WSL; keep host askpass out of the guest.
+    // Forward unattended Git flags to WSL; keep host askpass out of the guest.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const guestEnv: Record<string, string> = { ...wslEnv }
     for (const [key, value] of Object.entries(guardedEnv)) {
-      if (
-        value !== undefined &&
-        (key === 'GIT_TERMINAL_PROMPT' ||
-          key === 'GCM_INTERACTIVE' ||
-          key.startsWith('GIT_CONFIG_'))
-      ) {
+      if (value !== undefined && (key === 'GIT_TERMINAL_PROMPT' || key === 'GCM_INTERACTIVE')) {
         guestEnv[key] = value
       }
     }

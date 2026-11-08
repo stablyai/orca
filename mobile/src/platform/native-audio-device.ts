@@ -2,6 +2,7 @@ import {
   addExpoTwoWayAudioEventListener,
   initialize,
   requestMicrophonePermissionsAsync,
+  speechFeed,
   tearDown,
   toggleRecording
 } from '@orca/expo-two-way-audio'
@@ -48,6 +49,7 @@ export const nativeAudioDeviceEngine: NativeAudioEngine = {
       const raw = event.data
       handler(raw instanceof Uint8Array ? raw : new Uint8Array(raw))
     }),
+  feedSpeech: (bytes) => speechFeed(bytes),
   onInterruption: (handler) =>
     addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
       // Ignore unknown engine interruption kinds instead of forwarding a value the page cannot describe.

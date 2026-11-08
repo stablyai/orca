@@ -1,3 +1,4 @@
+import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import { useEffect, type RefObject } from 'react'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -7,6 +8,7 @@ import { canOpenMarkdownPreview, isMarkdownPreviewShortcut } from './markdown-pr
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type UseMarkdownPreviewShortcutParams = {
+  activeViewStateId?: string | null
   activeFile: OpenFile | null
   panelRef: RefObject<HTMLDivElement | null>
   openMarkdownPreview: (
@@ -17,12 +19,13 @@ type UseMarkdownPreviewShortcutParams = {
       runtimeEnvironmentId?: string | null
       language: string
     },
-    options?: { sourceFileId?: string }
+    options?: { sourceFileId?: string; placementWorkspaceId?: string; targetGroupId?: string }
   ) => void
 }
 
 export function useMarkdownPreviewShortcut({
   activeFile,
+  activeViewStateId,
   panelRef,
   openMarkdownPreview
 }: UseMarkdownPreviewShortcutParams): void {
@@ -73,12 +76,19 @@ export function useMarkdownPreviewShortcut({
           runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
           language: shortcutLanguage
         },
-        { sourceFileId: activeFileId ?? undefined }
+        {
+          sourceFileId: activeFileId ?? undefined,
+          ...(activeFile
+            ? editorViewPlacement(useAppStore.getState(), activeFile, activeViewStateId)
+            : {})
+        }
       )
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [
+    activeFile,
+    activeViewStateId,
     activeFileDiffSource,
     activeFileMode,
     activeFilePath,

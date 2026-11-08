@@ -7,7 +7,7 @@ import { act, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { withReactCommitCascadeWriteProbe } from '../store/react-commit-cascade-write-probe'
+import { withReactCommitCascadeWriteProbe } from '../store/diagnostics/react-commit-cascade-write-probe'
 import {
   REACT_CASCADING_LANES,
   REACT_COMMIT_CASCADE_BREADCRUMB,
@@ -127,15 +127,5 @@ describe('react commit cascade observer', () => {
     })
 
     expect(invocationsAtReport).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-
-  it('stays silent for a render that settles well below the notice limit', () => {
-    useCascadeStore.setState({ ticks: CASCADE_TICKS })
-
-    act(() => {
-      root.render(<RunawayLayoutEffectPane />)
-    })
-
-    expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 })

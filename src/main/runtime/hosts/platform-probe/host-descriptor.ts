@@ -46,6 +46,16 @@ function readInstallation(filePath: string): InstallationRead {
   }
 }
 
+/** The profile's existing identity, never created or repaired; undefined when absent or unreadable. */
+export function readExistingHostInstallationId(userDataPath: string): string | undefined {
+  try {
+    const current = readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
+    return current.kind === 'valid' ? current.installationId : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
   const current = readInstallation(filePath)
@@ -117,6 +127,36 @@ export function publishHostDescriptor(
 
 export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescriptor | null {
   return publishedByRuntimeId.get(runtimeId) ?? null
+}
+
+/** The installationId a caller's parent ref names; desktops without a paired transport publish no
+ * descriptor, so the file is read, never created. */
+export function readCallerStoreInstallationId(
+  runtimeId: string,
+  userDataPath: string
+): string | undefined {
+  return (
+    getPublishedHostDescriptor(runtimeId)?.installationId ??
+    readExistingHostInstallationId(userDataPath)
+  )
+}
+
+/** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
+export async function readStoreInstallationId(
+  runtimeId: string | null,
+  userDataPath: string
+): Promise<string | undefined> {
+  const published = runtimeId ? getPublishedHostDescriptor(runtimeId)?.installationId : undefined
+  if (published) {
+    return published
+  }
+  try {
+    return await loadOrCreateHostInstallationId(userDataPath)
+  } catch (error) {
+    // Unknown identity leaves every cross-store child standalone.
+    console.warn('[runtime] Store installation id unavailable:', error)
+    return undefined
+  }
 }
 
 /** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */

@@ -85,6 +85,12 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
+  const [prevStream, setPrevStream] = useState({ previewUrl, streamKey })
+  if (prevStream.previewUrl !== previewUrl || prevStream.streamKey !== streamKey) {
+    setPrevStream({ previewUrl, streamKey })
+    setStreamError(false)
+    setStreamSize(null)
+  }
   const canInteract = isLive && !loading && !streamError
   const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
   const controlStream = useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
@@ -97,11 +103,6 @@ export function EmulatorDeviceFrame({
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({ ...controlStream, canInteract })
-
-  useEffect(() => {
-    setStreamError(false)
-    setStreamSize(null)
-  }, [previewUrl, streamKey])
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>

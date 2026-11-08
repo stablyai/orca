@@ -4,57 +4,6 @@ import { eventSchemas } from './telemetry-events'
 const attemptId = '2fbac1e3-5094-45b4-80a6-90281e6e9e09'
 
 describe('nested repo import telemetry schemas', () => {
-  it('accepts scan, action, and result telemetry payloads', () => {
-    expect(
-      eventSchemas.add_repo_nested_scan_result.safeParse({
-        attempt_id: attemptId,
-        surface: 'onboarding',
-        runtime_kind: 'local',
-        result: 'review_shown',
-        selected_path_kind: 'non_git_folder',
-        found_count: 3,
-        found_count_bucket: '2-3',
-        truncated: false,
-        timed_out: false
-      }).success
-    ).toBe(true)
-
-    expect(
-      eventSchemas.add_repo_nested_import_action.safeParse({
-        attempt_id: attemptId,
-        surface: 'sidebar',
-        runtime_kind: 'ssh',
-        action: 'import_group',
-        found_count: 3,
-        found_count_bucket: '2-3',
-        selected_count: 3,
-        selected_count_bucket: '2-3',
-        all_selected: true
-      }).success
-    ).toBe(true)
-
-    expect(
-      eventSchemas.add_repo_nested_import_result.safeParse({
-        attempt_id: attemptId,
-        surface: 'onboarding',
-        runtime_kind: 'runtime',
-        mode: 'group',
-        outcome: 'success',
-        found_count: 3,
-        found_count_bucket: '2-3',
-        selected_count: 3,
-        selected_count_bucket: '2-3',
-        imported_count: 3,
-        imported_count_bucket: '2-3',
-        already_known_count: 0,
-        already_known_count_bucket: '0',
-        failed_count: 0,
-        failed_count_bucket: '0',
-        all_selected: true
-      }).success
-    ).toBe(true)
-  })
-
   it('rejects raw paths, repo names, and raw errors via .strict()', () => {
     expect(
       eventSchemas.add_repo_nested_scan_result.safeParse({

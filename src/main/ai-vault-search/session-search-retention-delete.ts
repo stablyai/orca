@@ -5,6 +5,8 @@ import { deleteSearchMessages } from './session-search-message-rows'
 export const RETENTION_DELETE_ROWS_PER_STEP = 256
 // Reclaim freed pages incrementally to avoid a long vacuum after the purge.
 const RECLAIM_PAGES_PER_STEP = 2000
+// FTS merges free pages constantly and later writes reuse them; moving them each drain only churns the file.
+const RECLAIM_FREE_PAGE_SHARE = 0.25
 
 /** Hide expired sessions atomically, then reclaim their unreachable messages in bounded transactions. */
 export async function deleteExpiredSearchFiles(
@@ -64,12 +66,19 @@ export async function drainOrphanedMessages(
       db.exec('ROLLBACK')
       throw error
     }
-    db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+    reclaimFreePages(db)
     if (deleted < RETENTION_DELETE_ROWS_PER_STEP) {
       orphan = (nextOrphan.get() as { session_row_id: number } | undefined)?.session_row_id
     }
     await yieldStep()
   }
   // removeFile may free pages even when this drain has no orphaned messages.
-  db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+  reclaimFreePages(db)
+}
+
+function reclaimFreePages(db: SyncDatabase): void {
+  const free = Number(db.pragma('freelist_count', { simple: true }))
+  if (free > Number(db.pragma('page_count', { simple: true })) * RECLAIM_FREE_PAGE_SHARE) {
+    db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+  }
 }
