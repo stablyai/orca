@@ -35,14 +35,16 @@ const doubles = vi.hoisted((): Doubles => ({
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
 vi.mock('react-native', () => ({ AppState: {} }))
-vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
+vi.mock('../transport/encryption/mobile-session-id-encoding', () => ({
   encodeBase64Url: () => 'session-id'
 }))
 vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
-vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
-vi.mock('../transport/rpc-operation', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
+  useHostClient: () => doubles.connection
+}))
+vi.mock('../transport/rpc/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async () => {
     if (doubles.manifest === null) {

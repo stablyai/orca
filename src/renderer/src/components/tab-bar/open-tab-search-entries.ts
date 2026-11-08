@@ -10,14 +10,18 @@ import '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import { buildSearchableWorkspaceTabEntries as buildSearchableWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
 import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
-import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { Translate } from '@/i18n/use-translate'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -203,7 +207,8 @@ export function buildOpenTabSearchBrowserPages(
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
   agentState: OpenTabSearchAgentState,
-  chatNames: StructuredChatTabNames
+  chatNames: StructuredChatTabNames,
+  t?: Translate
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
@@ -231,13 +236,16 @@ export function buildOpenTabSearchEntries(
       chatNames
     }),
     browserPages: buildOpenTabSearchBrowserPages(state, scope),
-    simulatorTabs: buildSearchableSimulatorTabs({
-      ...scope,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-      activeGroupIdByWorktree: state.activeGroupIdByWorktree,
-      groupsByWorktree: state.groupsByWorktree,
-      activeWorktreeId: state.activeWorktreeId,
-      activeTabType: state.activeTabType
-    })
+    simulatorTabs: buildSearchableSimulatorTabs(
+      {
+        ...scope,
+        unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+        activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+        groupsByWorktree: state.groupsByWorktree,
+        activeWorktreeId: state.activeWorktreeId,
+        activeTabType: state.activeTabType
+      },
+      t
+    )
   }
 }

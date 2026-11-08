@@ -37,6 +37,7 @@ const RATCHET_INPUTS = {
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
   'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
+  'check-render-path-translate-ratchet.mjs': ['src/renderer/src/'],
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
@@ -261,6 +262,9 @@ const RATCHET_SHARED_MODULES = {
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'
+  ],
+  'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-render-path-translate-ratchet.mjs'
   ]
 }
 

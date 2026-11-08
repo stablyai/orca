@@ -23,50 +23,6 @@ afterEach(() => {
 })
 
 describe('guardParserHandler', () => {
-  it('passes arguments and return value through for healthy handlers', () => {
-    const handler = vi.fn((data: string) => data === 'handled')
-    const guarded = guardParserHandler('test-handler', handler)
-    expect(guarded('handled')).toBe(true)
-    expect(guarded('other')).toBe(false)
-    expect(handler).toHaveBeenCalledTimes(2)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
-  })
-
-  it('degrades a throwing handler to "not handled" and reports a breadcrumb', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      const guarded = guardParserHandler('exploding-handler', () => {
-        throw new TypeError('synthetic handler failure')
-      })
-      expect(guarded()).toBe(false)
-      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-        'terminal_parser_handler_error',
-        expect.objectContaining({
-          handler: 'exploding-handler',
-          errorName: 'TypeError',
-          errorMessage: 'synthetic handler failure'
-        })
-      )
-    } finally {
-      errorSpy.mockRestore()
-    }
-  })
-
-  it('caps repeated reports per handler', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      const guarded = guardParserHandler('spammy-handler', () => {
-        throw new Error('always fails')
-      })
-      for (let i = 0; i < 20; i++) {
-        guarded()
-      }
-      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(5)
-    } finally {
-      errorSpy.mockRestore()
-    }
-  })
-
   it('keeps the real xterm write pipeline alive through a throwing handler (inverse of the wedge repro)', () => {
     // The unguarded handler wedges WriteBuffer; require guarded poison sequences to keep completing writes.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

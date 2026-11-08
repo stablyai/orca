@@ -6,7 +6,7 @@ import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../../../terminal-agent-turn-news'
+} from '../../../push/notifications/terminal-agent-turn-news'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {

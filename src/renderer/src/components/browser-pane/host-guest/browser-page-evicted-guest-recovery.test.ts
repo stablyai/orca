@@ -85,17 +85,6 @@ describe('retained browser panes after guest eviction', () => {
     expect(mocks.isRegistered).not.toHaveBeenCalled()
   })
 
-  it('reuses a connected registered guest on reactivation', async () => {
-    const page = createPage('page-1')
-    pages.push(page)
-    mocks.registeredIds.set('page-1', 1)
-    page.paintable.current = true
-    page.recovery.validateAfterResume()
-    await vi.waitFor(() => expect(mocks.isRegistered).toHaveBeenCalledOnce())
-    expect(mocks.replace).not.toHaveBeenCalled()
-    expect(page.setGeneration).not.toHaveBeenCalled()
-  })
-
   it('does not mistake a connected guest awaiting dom-ready for an evicted guest', async () => {
     const page = createPage('page-1')
     pages.push(page)

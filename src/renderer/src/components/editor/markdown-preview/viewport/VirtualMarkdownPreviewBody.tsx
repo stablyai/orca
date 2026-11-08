@@ -10,7 +10,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Components } from 'react-markdown'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import { renderMarkdownPreviewTree } from '../render-tree/markdown-preview-render-tree'
@@ -88,6 +88,7 @@ export function VirtualMarkdownPreviewBody({
   scrollCacheKey: string
   activeAnnotationBlockKey: string | null
 }) {
+  const t = useTranslate()
   const [rendered, setRendered] = useState<{
     client: MarkdownPreviewDocumentClient
     blocks: MarkdownPreviewRenderedBlock[]
@@ -224,7 +225,7 @@ export function VirtualMarkdownPreviewBody({
           >
             {block?.oversized ? (
               <p className="text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'editor.markdownPreview.blockTooLarge',
                   'This block is too large to render. Open source view to read it.'
                 )}

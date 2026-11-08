@@ -20,12 +20,12 @@ import {
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
-  resolveQualifiedIndexedFolderWorkspace,
   selectFolderWorkspaces,
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot

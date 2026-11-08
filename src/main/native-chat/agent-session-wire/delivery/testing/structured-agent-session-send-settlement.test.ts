@@ -119,3 +119,45 @@ describe('structured send settlement compatibility wait', () => {
     await expect(second).resolves.toBeUndefined()
   })
 })
+
+it('a row wait follows a replacement handoff and resolves withdrawal or returned recovery', async () => {
+  let row: ReturnType<NonNullable<SendSettlementJournal['queuedSend']>> = {
+    clientMessageId: 'row',
+    queued: { messageId: 'row', position: 1, state: 'waiting' }
+  }
+  const state: SendSettlementJournal = {
+    ...journal('pending'),
+    queuedSend: () => row,
+    submission: () => undefined
+  }
+  const settlements = new StructuredAgentSessionSendSettlement(() => state)
+  const pending = settlements.wait('session-1', 'row')
+  const attempt = journal('pending').submission('client-1')!
+  row = { clientMessageId: 'row', submission: { ...attempt, clientMessageId: 'attempt-1' } }
+  settlements.publish('session-1', state)
+  row = { clientMessageId: 'row', queued: { messageId: 'row', position: 1, state: 'waiting' } }
+  settlements.publish('session-1', state)
+  row = {
+    clientMessageId: 'row',
+    submission: {
+      ...attempt,
+      clientMessageId: 'attempt-2',
+      dispatchState: 'accepted'
+    }
+  }
+  settlements.publish('session-1', state)
+  await expect(pending).resolves.toMatchObject({
+    value: {
+      submission: {
+        clientMessageId: 'attempt-2',
+        dispatchState: 'accepted'
+      }
+    }
+  })
+  for (const result of ['withdrawn', 'returned'] as const) {
+    row = { clientMessageId: 'row', queued: { messageId: 'row', position: 1, state: result } }
+    await expect(settlements.wait('session-1', 'row')).resolves.toMatchObject({
+      value: { queued: { state: result } }
+    })
+  }
+})

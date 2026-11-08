@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.
 export const MOBILE_RELAY_HOSTS_LIST_METHOD = 'mobileRelay.hosts.list'

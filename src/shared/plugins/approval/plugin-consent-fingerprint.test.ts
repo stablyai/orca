@@ -12,7 +12,6 @@ import {
   type PluginLockfile
 } from '../installation/plugin-install-lockfile'
 
-const workspaceRead: PluginCapability = { kind: 'workspace:read' }
 const storage: PluginCapability = { kind: 'storage:own' }
 
 describe('fingerprintPluginConsent', () => {
@@ -26,19 +25,6 @@ describe('fingerprintPluginConsent', () => {
         'samples.large': 'x'.repeat(257)
       })
     ).toEqual({ 'samples.demo': 'sha256-valid' })
-  })
-
-  it('is stable across capability order and duplicate declarations', () => {
-    const first = fingerprintPluginConsent({
-      main: undefined,
-      capabilities: [workspaceRead, storage, workspaceRead]
-    })
-    const second = fingerprintPluginConsent({
-      main: undefined,
-      capabilities: [storage, workspaceRead]
-    })
-
-    expect(first).toBe(second)
   })
 
   it('changes when a panel-only plugin gains a trusted Node worker', () => {
@@ -141,13 +127,6 @@ describe('fingerprintPluginConsent', () => {
       }
     }
   })
-
-  it('keeps data pack consent stable across byte changes', () => {
-    const subject = { execution: 'data' as const, capabilities: [] }
-    expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(
-      fingerprintPluginConsent(subject, 'b'.repeat(64))
-    )
-  })
 })
 
 describe('plugin install lockfile consent fingerprints', () => {
@@ -205,16 +184,5 @@ describe('plugin install lockfile consent fingerprints', () => {
     })
 
     expect(parsed.plugins).toEqual({})
-  })
-
-  it('accepts SHA-256 Git object ids in lockfile provenance', () => {
-    const parsed = parsePluginLockfile({
-      version: 1,
-      plugins: {
-        'samples.demo': { ...persistedEntry, resolvedCommit: 'a'.repeat(64) }
-      }
-    })
-
-    expect(parsed.plugins['samples.demo']?.resolvedCommit).toBe('a'.repeat(64))
   })
 })

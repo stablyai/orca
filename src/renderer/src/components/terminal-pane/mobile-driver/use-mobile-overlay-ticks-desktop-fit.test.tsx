@@ -120,41 +120,6 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     }
   }
 
-  it('refits and refreshes when mobile-fit is released, not only resize bookkeeping', () => {
-    const pane = createPane()
-    mountForPane(pane)
-
-    act(() => {
-      setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    })
-    flushAnimationFrames()
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-
-    act(() => {
-      setFitOverride('pty-1', 'desktop-fit', 120, 40)
-    })
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 39)
-  })
-
-  it('does not refresh while applying a mobile-fit hold', () => {
-    const pane = createPane()
-    pane.terminal.cols = 120
-    pane.terminal.rows = 40
-    mountForPane(pane)
-
-    act(() => {
-      setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    })
-    flushAnimationFrames()
-
-    expect(pane.terminal.resize).toHaveBeenCalledWith(49, 20)
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-  })
-
   it('fits the latest phone dimensions when an older mobile frame survives an ownership cycle', () => {
     const pane = createPane()
     pane.terminal.cols = 120

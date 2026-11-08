@@ -11,7 +11,7 @@ import {
   SetupScriptPromptBody
 } from './SetupScriptPromptCardViews'
 import { SetupScriptReviewDialog } from './SetupScriptReviewDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { DetectedSetupPreviewContent } from '@/lib/setup-script-prompt'
 
 type SetupScriptPromptCardShellProps = {
@@ -49,6 +49,7 @@ export function SetupScriptPromptCardShell({
   onImport,
   onSetupDraftChange
 }: SetupScriptPromptCardShellProps): React.JSX.Element {
+  const t = useTranslate()
   const [reviewOpen, setReviewOpen] = useState(false)
   const showDetected = !isInspectionError && !sharedSetupIgnored && detectedSetupPreview !== null
   return (
@@ -59,10 +60,7 @@ export function SetupScriptPromptCardShell({
       <div className="pointer-events-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold leading-snug">
-            {translate(
-              'auto.components.sidebar.SetupScriptPromptCard.ff1e819a11',
-              'Add a setup script'
-            )}
+            {t('auto.components.sidebar.SetupScriptPromptCard.ff1e819a11', 'Add a setup script')}
           </p>
           <DismissButton onDismiss={onDismiss} />
         </div>

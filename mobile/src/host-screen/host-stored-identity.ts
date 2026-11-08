@@ -1,4 +1,4 @@
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../transport/hosts/host-profile'
 import type { HostMachine } from '../../../src/shared/host-machine-line'
 
 export type HostStoredDescriptor = {

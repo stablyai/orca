@@ -14,9 +14,10 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import {
   useStructuredChatTabConversationName,
   useStructuredChatTabNamingFailure
-} from '@/runtime/structured-conversation-name'
+} from '@/runtime/native-chat/naming/structured-conversation-name'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -62,6 +63,7 @@ function TabBarItemRow({
   canCloseSplitPane,
   gitStatus
 }: TabBarItemRowProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
   const conversationName = useStructuredChatTabConversationName(
@@ -77,7 +79,7 @@ function TabBarItemRow({
     unifiedTabId: item.unifiedTabId,
     visibleTabId: item.id,
     tabType: item.type,
-    label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName),
+    label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName, t),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
     color: item.type === 'terminal' ? (item.data.color ?? null) : null
   }
@@ -170,7 +172,7 @@ function TabBarItemRow({
     onCloseAll: actions.closeAllFiles
   }
   if (item.type === 'simulator') {
-    const simulatorLabel = formatSimulatorTabLabel(item.data.label)
+    const simulatorLabel = formatSimulatorTabLabel(item.data.label, t)
     const simulatorFile: OpenFile & { tabId: string } = {
       id: item.id,
       tabId: item.id,

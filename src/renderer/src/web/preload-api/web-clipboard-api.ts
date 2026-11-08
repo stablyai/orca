@@ -122,7 +122,7 @@ const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 
 export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
   if (!dataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
-    return
+    throw new Error('Clipboard image must be a PNG data URL')
   }
   if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') {
     throw new Error('Image clipboard is unavailable in this browser context')

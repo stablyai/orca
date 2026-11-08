@@ -4,7 +4,7 @@
   "family": "git.changes-load",
   "namedDeltas": [],
   "values": {
-    "0c5501116f0f": {
+    "01ca1551d26f": {
       "name": "git.branchCompare#1",
       "ordinal": 9,
       "args": [
@@ -22,7 +22,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -34,12 +34,28 @@
           "id": "frame-5",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "entries": [
+              {
+                "added": 2,
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/dev",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+              "status": "ready"
+            }
           }
         }
       }
     },
-    "0c701854b060": {
+    "167f957de469": {
       "name": "git.branchCompare#1",
       "ordinal": 9,
       "args": [
@@ -57,7 +73,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -69,8 +85,7 @@
           "id": "frame-5",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
         }
       }
@@ -166,65 +181,29 @@
         }
       }
     },
-    "3528b2e25d30": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
     "38d7fa10de1a": {
       "name": "worktree.show#1",
       "ordinal": 7,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
-    "423feea10d9e": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
+    "3976c7351120": {
+      "name": "repo.list#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
-          "value": "git.branchCompare"
+          "value": "repo.list"
         },
         {
           "name": "params",
           "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -233,26 +212,10 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-5",
+          "id": "frame-4",
           "ok": true,
           "result": {
-            "entries": [
-              {
-                "added": 2,
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              }
-            ],
-            "summary": {
-              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-              "baseRef": "origin/dev",
-              "changedFiles": 1,
-              "compareRef": "feature",
-              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
-              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
-              "status": "ready"
-            }
+            "repos": []
           }
         }
       }
@@ -291,7 +254,7 @@
         }
       }
     },
-    "490123245d1b": {
+    "48c8b3fa98e9": {
       "name": "git.branchCompare#1",
       "ordinal": 9,
       "args": [
@@ -309,48 +272,96 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
-    "587de4c7f7fc": {
-      "name": "repo.list#1",
-      "ordinal": 6,
+    "4e7ba203f65a": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
-          "value": "repo.list"
+          "value": "git.branchCompare"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
       }
     },
-    "6d220bb7b42a": {
+    "55cd378cd23d": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-5",
+          "ok": false
+        }
+      }
+    },
+    "617610cd7106": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -367,7 +378,43 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/dev"
+            }
+          }
+        }
+      }
+    },
+    "680d7579d052": {
+      "name": "repo.list#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -435,7 +482,7 @@
         "startedAt": 0
       }
     },
-    "8c8e528ca222": {
+    "8ac3c8b29916": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -452,61 +499,13 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "baseRef": "origin/dev"
-            }
-          }
-        }
-      }
-    },
-    "8ce98a126c1c": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
     "8fda864c66d6": {
@@ -539,6 +538,39 @@
             "hasUpstream": true,
             "upstreamName": "origin/feature"
           }
+        }
+      }
+    },
+    "90c70c3ff46f": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
@@ -576,37 +608,36 @@
         }
       }
     },
-    "9536c968b88a": {
-      "name": "repo.list#1",
-      "ordinal": 6,
+    "9549d81f2c8f": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
-          "value": "repo.list"
+          "value": "git.branchCompare"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "repos": []
-          }
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
@@ -684,6 +715,38 @@
         "kind": "loading"
       }
     },
+    "c2d609bf02f3": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true
+        }
+      }
+    },
     "c526c7ec9130": {
       "branchCompareState": {
         "kind": "error",
@@ -718,6 +781,42 @@
         }
       }
     },
+    "c545baf4437a": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-5",
+          "ok": false
+        }
+      }
+    },
     "d16c7a42b81c": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -744,7 +843,7 @@
         "startedAt": 0
       }
     },
-    "d3d836600f76": {
+    "d649ee00c8bc": {
       "name": "git.branchCompare#1",
       "ordinal": 9,
       "args": [
@@ -762,75 +861,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-5",
-          "ok": false
-        }
-      }
-    },
-    "e69610238c47": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true
-        }
-      }
-    },
-    "e7807ea72026": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -848,15 +879,7 @@
         }
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f30f58fac92d": {
+    "e22a0fc75278": {
       "name": "git.branchCompare#1",
       "ordinal": 9,
       "args": [
@@ -874,45 +897,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "f648b042d810": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "fd7e63ce1860": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -921,14 +906,29 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-5",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
         }
       }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f648b042d810": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "fd9ae55b156c": {
       "branchCompareState": {
@@ -983,7 +983,7 @@
       {
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "9cb2ba41c834", "6d220bb7b42a", "587de4c7f7fc"],
+          "sender": ["891438a18444", "9cb2ba41c834", "8ac3c8b29916", "680d7579d052"],
           "payloads": ["f648b042d810", "973ac78137f2", "38d7fa10de1a", "9916ac6863ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -998,9 +998,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "423feea10d9e"
+            "617610cd7106",
+            "3976c7351120",
+            "01ca1551d26f"
           ],
           "payloads": [
             "f648b042d810",
@@ -1022,9 +1022,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "e69610238c47"
+            "617610cd7106",
+            "3976c7351120",
+            "c2d609bf02f3"
           ],
           "payloads": [
             "f648b042d810",
@@ -1046,9 +1046,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "0c5501116f0f"
+            "617610cd7106",
+            "3976c7351120",
+            "48c8b3fa98e9"
           ],
           "payloads": [
             "f648b042d810",
@@ -1070,9 +1070,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "3528b2e25d30"
+            "617610cd7106",
+            "3976c7351120",
+            "167f957de469"
           ],
           "payloads": [
             "f648b042d810",
@@ -1094,9 +1094,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "0c701854b060"
+            "617610cd7106",
+            "3976c7351120",
+            "4e7ba203f65a"
           ],
           "payloads": [
             "f648b042d810",
@@ -1118,9 +1118,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "8ce98a126c1c"
+            "617610cd7106",
+            "3976c7351120",
+            "e22a0fc75278"
           ],
           "payloads": [
             "f648b042d810",
@@ -1142,9 +1142,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "d3d836600f76"
+            "617610cd7106",
+            "3976c7351120",
+            "c545baf4437a"
           ],
           "payloads": [
             "f648b042d810",
@@ -1166,9 +1166,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "e7807ea72026"
+            "617610cd7106",
+            "3976c7351120",
+            "d649ee00c8bc"
           ],
           "payloads": [
             "f648b042d810",
@@ -1190,9 +1190,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "fd7e63ce1860"
+            "617610cd7106",
+            "3976c7351120",
+            "55cd378cd23d"
           ],
           "payloads": [
             "f648b042d810",
@@ -1214,9 +1214,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "f30f58fac92d"
+            "617610cd7106",
+            "3976c7351120",
+            "90c70c3ff46f"
           ],
           "payloads": [
             "f648b042d810",
@@ -1238,9 +1238,9 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "490123245d1b"
+            "617610cd7106",
+            "3976c7351120",
+            "9549d81f2c8f"
           ],
           "payloads": [
             "f648b042d810",

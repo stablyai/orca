@@ -40,7 +40,6 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -299,7 +298,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks7 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      // Import after resetModules to share pty-connection’s registry; static imports would assert against a different instance.
+      // Import dynamically to share pty-connection’s live registry; a static import can be a stale instance.
       const { createCommandFinishedStatusStore } =
         await import('./command-finished-status-store-test-fixture')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')

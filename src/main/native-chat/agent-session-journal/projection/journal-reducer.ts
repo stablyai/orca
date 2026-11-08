@@ -39,13 +39,14 @@ import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 
 import { projectJournalStopNote } from '../context-epochs/journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { retireRewoundJournalSubmission } from '../context-epochs/journal-rewind-submission-retirement'
 
 import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,
   type JournalQueuePauseMarks
-} from '../queued-messages/queued-message-pause'
+} from '../queued-messages/queued-message-pause-marks'
 import {
   createJournalQueueState,
   foldJournalQueueRow,
@@ -168,6 +169,14 @@ export function applyMarker5JournalRow(
   journalInputOrder(state).afterRow(state, row)
 }
 
+function isPullRequestEventRow(row: JournalRow): boolean {
+  return (
+    row.kind === 'item' &&
+    row.body.kind === 'status' &&
+    row.body.presentation === PULL_REQUEST_EVENT_PRESENTATION
+  )
+}
+
 function applyJournalRowFacts(
   state: JournalReducerState,
   row: JournalRow,
@@ -188,7 +197,10 @@ function applyJournalRowFacts(
   if (row.kind === 'queue') {
     return
   }
-  state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+  // A CI line is the host's note between turns, not activity in the chat.
+  if (!isPullRequestEventRow(row)) {
+    state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+  }
   if (row.kind === 'item') {
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return

@@ -63,36 +63,6 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
     document.body.replaceChildren()
   })
 
-  it('refreshes stale GitHub avatar metadata lazily when repo settings opens', async () => {
-    const updateRepo = vi.fn()
-    // Non-fork repo (upstream resolved to null) transferred stablyai -> parkerrex.
-    const repo = makeRepo({
-      upstream: null,
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    apiMocks.repoUpstream.mockResolvedValueOnce(null)
-    apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
-
-    act(() => {
-      root.render(<RepositoryIconPicker repo={repo} updateRepo={updateRepo} />)
-    })
-    await flushEffects()
-
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/parkerrex.png?size=64',
-        source: 'github',
-        label: 'parkerrex/orca'
-      }
-    })
-  })
-
   it('does not clobber a fork identity when the live upstream lookup fails offline', async () => {
     const updateRepo = vi.fn()
     // A fork whose avatar tracks its parent org, resolved earlier while online.

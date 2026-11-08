@@ -2,12 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('./mobile-tasks-dependencies', () => ({ colors: {} }))
 
-import {
-  githubKindFromQuery,
-  scopeGitHubTaskSearch,
-  normalizeGitHubPreset,
-  getTaskPresetQuery
-} from './mobile-tasks-item-mapping'
+import { githubKindFromQuery, normalizeGitHubPreset } from './mobile-tasks-item-mapping'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
 
 describe('mobile task search parity', () => {
   it('lets an explicit issue query override a saved PR preset', () => {

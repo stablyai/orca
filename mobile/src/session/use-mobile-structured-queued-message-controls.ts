@@ -21,7 +21,7 @@ import {
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   useMobileStructuredQueuedEdit,
   type MobileQueuedMessageInlineEditor

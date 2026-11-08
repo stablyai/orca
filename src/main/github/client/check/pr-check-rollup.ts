@@ -7,14 +7,25 @@ import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
 
 type ConnectionKind = 'contexts' | 'suites'
 
+/** Pages per connection for CI-line reads; a longer read is incomplete and decides nothing.
+ *  Other callers read every page. */
+export const PR_CHECK_PAGE_LIMIT = 10
+
+/** A suite waiting for approval reads as a blocker, tagged so it is never taken for a real check. */
+export const PENDING_APPROVAL_ROLLUP_ROW = {
+  status: 'COMPLETED',
+  conclusion: 'ACTION_REQUIRED',
+  pendingApproval: true
+} as const
+
 export function prCheckRollupFields(kind?: ConnectionKind): string {
   return `commits(last: 1) { nodes { commit {
     oid
     ${
       kind !== 'suites'
         ? `statusCheckRollup { contexts(first: 100, after: $checksCursor) {
-      nodes { __typename ... on CheckRun { status conclusion checkSuite { databaseId } }
-        ... on StatusContext { state } }
+      nodes { __typename ... on CheckRun { name databaseId status conclusion checkSuite { databaseId } }
+        ... on StatusContext { context state targetUrl createdAt } }
       pageInfo { hasNextPage endCursor }
     } }`
         : ''
@@ -44,13 +55,18 @@ const checkConclusion = z.enum([
 const contextSchema = z.discriminatedUnion('__typename', [
   z.object({
     __typename: z.literal('CheckRun'),
+    name: z.string().optional(),
+    databaseId: z.number().nullish(),
     status: z.enum(['COMPLETED', 'IN_PROGRESS', 'QUEUED', 'REQUESTED', 'WAITING', 'PENDING']),
     conclusion: checkConclusion.nullable(),
     checkSuite: z.object({ databaseId: z.number() })
   }),
   z.object({
     __typename: z.literal('StatusContext'),
-    state: z.enum(['ERROR', 'EXPECTED', 'FAILURE', 'PENDING', 'SUCCESS'])
+    context: z.string().optional(),
+    state: z.enum(['ERROR', 'EXPECTED', 'FAILURE', 'PENDING', 'SUCCESS']),
+    targetUrl: z.string().nullish(),
+    createdAt: z.string().nullish()
   })
 ])
 const connectionSchema = z.object({
@@ -96,7 +112,8 @@ const pageSchema = z.object({
 
 export async function collectPRCheckRollup(
   first: CheckPage,
-  readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>
+  readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>,
+  pageLimit = Number.POSITIVE_INFINITY
 ): Promise<unknown[]> {
   const initial = first.commits.nodes[0]?.commit
   if (
@@ -115,7 +132,7 @@ export async function collectPRCheckRollup(
     const cursors = new Set<string>()
     while (page?.pageInfo.hasNextPage) {
       const cursor = page.pageInfo.endCursor
-      if (!cursor || cursors.has(cursor)) {
+      if (!cursor || cursors.has(cursor) || cursors.size + 1 >= pageLimit) {
         throw new Error('Incomplete PR checks continuation')
       }
       cursors.add(cursor)
@@ -160,7 +177,7 @@ export async function collectPRCheckRollup(
           typeof suite.databaseId === 'number' && representedSuites.has(suite.databaseId)
         )
       )
-      .map(() => ({ status: 'COMPLETED', conclusion: 'ACTION_REQUIRED' }))
+      .map(() => ({ ...PENDING_APPROVAL_ROLLUP_ROW }))
   ]
 }
 
@@ -212,12 +229,13 @@ export async function readGraphQLPRCheckRollup(
   repository: GitHubApiRepository,
   number: number,
   headSha: string,
-  options: GhExecOptions
+  options: GhExecOptions,
+  pageLimit?: number
 ): Promise<unknown[]> {
   const readPage = createPRCheckRollupPageReader(repository, number, options)
   const first = await readPage()
   if (first.number !== number || first.headRefOid !== headSha) {
     throw new Error('PR head changed before checks observation')
   }
-  return collectPRCheckRollup(first, readPage)
+  return collectPRCheckRollup(first, readPage, pageLimit)
 }

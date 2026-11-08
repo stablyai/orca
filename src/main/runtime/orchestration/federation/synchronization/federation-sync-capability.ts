@@ -5,9 +5,9 @@ import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../shared/structured-worker-handle'
+import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { FederationRuntime } from '../federation-runtime'
 import type { FederatedDispatchRow } from '../../db/orchestration-records'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
@@ -55,7 +55,8 @@ function resolveFederatedHostCapability(
 export async function armHomeAutoReleaseForOlderHost(
   runtime: FederationRuntime,
   dispatchId: string,
-  pairingRevision: number | undefined
+  pairingRevision: number | undefined,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
   const federated = db.getFederatedDispatch(dispatchId)
@@ -84,7 +85,7 @@ export async function armHomeAutoReleaseForOlderHost(
       )
     )
   )
-  if (!hostReleases?.supported && releasable?.supported !== false) {
+  if (isCurrent() && !hostReleases?.supported && releasable?.supported !== false) {
     db.armFederatedHomeAutoRelease(dispatchId)
   }
 }

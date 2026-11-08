@@ -6,12 +6,12 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import type { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import { selectFileListWorktree } from '@/store/selectors'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type TabEntryAbsolutePathOwnerState = Pick<
   ReturnType<typeof useAppStore.getState>,

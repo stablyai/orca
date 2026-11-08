@@ -42,7 +42,7 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
-import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/native-chat-session-option-settings-write'
+import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/session/options/native-chat-session-option-settings-write'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../src/shared/native-chat/input/native-chat-session-options'
 

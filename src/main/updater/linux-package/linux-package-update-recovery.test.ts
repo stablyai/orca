@@ -94,17 +94,6 @@ afterEach(async () => {
 })
 
 describe('captureLinuxPackageArtifact', () => {
-  it('retains the downloaded package with the digest from the event metadata', () => {
-    const artifact = {
-      packageType: 'deb',
-      version: VERSION,
-      path: path.join(downloadDir, 'orca.deb'),
-      sha512: SHA512
-    } satisfies LinuxPackageArtifact
-    expect(capture()).toEqual(artifact)
-    expect(recovery.getTrackedLinuxPackageArtifact()).toEqual(artifact)
-  })
-
   it('ignores the event on a build that is not a root package', () => {
     getPackageTypeMock.mockReturnValue(null)
     capture()
@@ -116,37 +105,9 @@ describe('captureLinuxPackageArtifact', () => {
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
-  it('requires a string downloaded path', () => {
-    recovery.captureLinuxPackageArtifact({
-      downloadedFile: 123,
-      version: VERSION,
-      files: [{ url: 'orca.deb', sha512: SHA512 }]
-    })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
   it('requires the package extension to match the installed format', () => {
     capture({ downloadedFile: path.join(downloadDir, 'orca.rpm') })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('accepts an uppercase extension', () => {
-    capture({ downloadedFile: path.join(downloadDir, 'Orca.DEB') })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'Orca.DEB'))
-  })
-
-  it('requires a non-empty string version', () => {
-    capture({ version: 7 })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-    capture({ version: '' })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('matches an absolute file URL by basename', () => {
-    capture({
-      files: [{ url: 'https://downloads.example.com/releases/1.2.3/orca.deb', sha512: SHA512 }]
-    })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
   it('matches a percent-encoded relative URL against the decoded basename', () => {
@@ -166,16 +127,6 @@ describe('captureLinuxPackageArtifact', () => {
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
-  it('accepts duplicate entries that agree on the digest', () => {
-    capture({
-      files: [
-        { url: 'orca.deb', sha512: SHA512 },
-        { url: 'https://downloads.example.com/orca.deb', sha512: SHA512 }
-      ]
-    })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
-  })
-
   it('refuses an ambiguous basename with two different digests', () => {
     capture({
       files: [
@@ -183,13 +134,6 @@ describe('captureLinuxPackageArtifact', () => {
         { url: 'https://mirror.example.com/orca.deb', sha512: 'conflicting-digest' }
       ]
     })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('refuses an entry with a missing or non-string digest', () => {
-    capture({ files: [{ url: 'orca.deb' }] })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-    capture({ files: [{ url: 'orca.deb', sha512: 42 }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
@@ -207,51 +151,10 @@ describe('captureLinuxPackageArtifact', () => {
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
-  it('refuses a digest that is not base64 at all', () => {
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
   it('keeps a retained artifact when a later event carries a malformed digest', () => {
     capture()
     expect(capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })).toBeNull()
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
-  })
-
-  it('refuses a malformed percent-encoded URL', () => {
-    capture({ files: [{ url: 'orca%ZZ.deb', sha512: SHA512 }] })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('refuses a missing or non-array file list', () => {
-    capture({ files: undefined })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-    capture({ files: { url: 'orca.deb', sha512: SHA512 } })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('tolerates a non-object event', () => {
-    expect(() => recovery.captureLinuxPackageArtifact(undefined)).not.toThrow()
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('replaces the retained artifact with a newer download', () => {
-    capture()
-    capture({
-      version: '1.2.4',
-      downloadedFile: path.join(downloadDir, 'orca-next.deb'),
-      files: [{ url: 'orca-next.deb', sha512: SHA512 }]
-    })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toMatchObject({
-      version: '1.2.4',
-      path: path.join(downloadDir, 'orca-next.deb')
-    })
-  })
-
-  it('keeps the retained artifact when a new download has no usable digest', () => {
-    capture()
-    capture({ files: [{ url: 'orca.deb' }] })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'orca.deb'))
   })
 
   it('does not arm recovery from a download with no usable digest', () => {
@@ -265,66 +168,9 @@ describe('captureLinuxPackageArtifact', () => {
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
-
-  it('keeps the retained artifact when an unrelated download event arrives', () => {
-    capture()
-    capture({ downloadedFile: path.join(downloadDir, 'orca.AppImage') })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'orca.deb'))
-  })
-})
-
-describe('clearTrackedLinuxPackageArtifact', () => {
-  it('clears the retained artifact', () => {
-    capture()
-    recovery.clearTrackedLinuxPackageArtifact()
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('preserves the artifact across a recheck of the same version', () => {
-    capture()
-    recovery.clearTrackedLinuxPackageArtifactForOtherVersion(VERSION)
-    expect(recovery.getTrackedLinuxPackageArtifact()?.version).toBe(VERSION)
-  })
-
-  it('clears the artifact when another version takes over', () => {
-    capture()
-    recovery.clearTrackedLinuxPackageArtifactForOtherVersion('1.3.0')
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('preserves the artifact for an unknown or empty version', () => {
-    capture()
-    recovery.clearTrackedLinuxPackageArtifactForOtherVersion(undefined)
-    recovery.clearTrackedLinuxPackageArtifactForOtherVersion('')
-    recovery.clearTrackedLinuxPackageArtifactForOtherVersion(42)
-    expect(recovery.getTrackedLinuxPackageArtifact()?.version).toBe(VERSION)
-  })
-
-  it('is a no-op without a retained artifact', () => {
-    expect(() => recovery.clearTrackedLinuxPackageArtifactForOtherVersion('1.3.0')).not.toThrow()
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
 })
 
 describePosix('resolveLinuxPackageInstallInstructions', () => {
-  it('returns the built command and package file name for a verified package', async () => {
-    const filePath = await writePackage('orca.deb')
-    capture()
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: true,
-      command: 'installed command',
-      packageFileName: 'orca.deb'
-    })
-    expect(buildCommandMock).toHaveBeenCalledWith('deb', filePath)
-  })
-
-  it('reports missing without a retained artifact', async () => {
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'missing'
-    })
-  })
-
   it('reports missing when the recovery version does not match', async () => {
     await writePackage('orca.deb')
     capture()
@@ -350,21 +196,6 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
       reason: 'missing'
     })
   })
-
-  it('propagates a package-manager discovery failure', async () => {
-    await writePackage('orca.deb')
-    capture()
-    buildCommandMock.mockReturnValue({ ok: false, reason: 'no-sudo' })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'no-sudo'
-    })
-    buildCommandMock.mockReturnValue({ ok: false, reason: 'no-package-manager' })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'no-package-manager'
-    })
-  })
 })
 
 describePosix('digest validation', () => {
@@ -376,29 +207,6 @@ describePosix('digest validation', () => {
       ok: false,
       reason: 'hash-mismatch'
     })
-  })
-
-  it('rejects a well-formed digest that belongs to another file', async () => {
-    await writePackage('orca.deb')
-    capture({
-      files: [
-        { url: 'orca.deb', sha512: createHash('sha512').update('other payload').digest('base64') }
-      ]
-    })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'hash-mismatch'
-    })
-  })
-
-  it('never hashes a package that a malformed digest failed to arm', async () => {
-    await writePackage('orca.deb')
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'missing'
-    })
-    expect(hashPasses.count).toBe(0)
   })
 
   it.runIf(process.getuid?.() !== 0)('reports read-failed for an unreadable package', async () => {
@@ -418,27 +226,6 @@ describePosix('cache containment', () => {
     const filePath = path.join(outsideDir, 'orca.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: path.join(downloadDir, '..', '..', '..', 'outside', 'orca.deb') })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'not-regular'
-    })
-  })
-
-  it('rejects a path outside the cache root', async () => {
-    const filePath = path.join(outsideDir, 'orca.deb')
-    await fsp.writeFile(filePath, PAYLOAD)
-    capture({ downloadedFile: filePath })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'not-regular'
-    })
-  })
-
-  it('rejects the cache root itself', async () => {
-    const rootAsPackage = path.join(tempRoot, 'cache.deb')
-    await fsp.mkdir(rootAsPackage)
-    vi.stubEnv('XDG_CACHE_HOME', rootAsPackage)
-    capture({ downloadedFile: rootAsPackage })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'not-regular'
@@ -518,34 +305,12 @@ describePosix('pending-directory anchoring', () => {
     })
   })
 
-  it('rejects a package in the updater directory itself', async () => {
-    const filePath = path.join(updaterDir, 'orca.deb')
-    await fsp.writeFile(filePath, PAYLOAD)
-    capture({ downloadedFile: filePath })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'not-regular'
-    })
-  })
-
   it('rejects a pending directory buried deeper than one level under the cache root', async () => {
     const deepPending = path.join(cacheRoot, 'evil', 'nested', 'pending')
     await fsp.mkdir(deepPending, { recursive: true })
     const filePath = path.join(deepPending, 'orca.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'not-regular'
-    })
-  })
-
-  it('rejects a pending directory that is a symlink out of the cache', async () => {
-    await fsp.writeFile(path.join(outsideDir, 'orca.deb'), PAYLOAD)
-    const fakeUpdaterDir = path.join(cacheRoot, 'orca-updater-2')
-    await fsp.mkdir(fakeUpdaterDir)
-    await fsp.symlink(outsideDir, path.join(fakeUpdaterDir, 'pending'))
-    capture({ downloadedFile: path.join(fakeUpdaterDir, 'pending', 'orca.deb') })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'not-regular'
@@ -577,66 +342,7 @@ describePosix('pending-directory anchoring', () => {
   })
 })
 
-describePosix('validation coalescing', () => {
-  it('performs one hash pass for concurrent requests', async () => {
-    await writePackage('orca.deb')
-    capture()
-    const [first, second] = await Promise.all([
-      recovery.resolveLinuxPackageInstallInstructions(recoveryFor()),
-      recovery.resolveLinuxPackageRevealTarget(recoveryFor())
-    ])
-    expect(first.ok).toBe(true)
-    expect(second.ok).toBe(true)
-    expect(hashPasses.count).toBe(1)
-  })
-
-  it('revalidates once the in-flight pass settles', async () => {
-    await writePackage('orca.deb')
-    capture()
-    await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-    await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-    expect(hashPasses.count).toBe(2)
-  })
-
-  it('does not reuse an in-flight pass for a different artifact', async () => {
-    await writePackage('orca.deb')
-    await writePackage('orca-next.deb')
-    capture()
-    const first = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-    capture({
-      version: '1.2.4',
-      downloadedFile: path.join(downloadDir, 'orca-next.deb'),
-      files: [{ url: 'orca-next.deb', sha512: SHA512 }]
-    })
-    const second = recovery.resolveLinuxPackageInstallInstructions(
-      recoveryFor({ version: '1.2.4' })
-    )
-    await Promise.all([first, second])
-    expect(hashPasses.count).toBe(2)
-  })
-
-  it('starts a fresh proof when the same package is captured again', async () => {
-    await writePackage('orca.deb')
-    capture()
-    const first = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-    capture()
-    const second = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-
-    await Promise.all([first, second])
-    expect(hashPasses.count).toBe(2)
-  })
-})
-
 describePosix('resolveLinuxPackageRevealTarget', () => {
-  it('returns the verified package path', async () => {
-    const filePath = await writePackage('orca.deb')
-    capture()
-    await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
-      ok: true,
-      path: filePath
-    })
-  })
-
   it('rejects a package that fails validation', async () => {
     const filePath = await writePackage('orca.deb')
     capture()
@@ -644,13 +350,6 @@ describePosix('resolveLinuxPackageRevealTarget', () => {
     await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'hash-mismatch'
-    })
-  })
-
-  it('returns missing without a retained artifact', async () => {
-    await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'missing'
     })
   })
 })

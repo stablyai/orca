@@ -7,8 +7,8 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import { formatClipboardImagePasteError } from '@/components/terminal-pane/input/paste/terminal-pane-paste-execution'
 import { resolveTerminalPasteRuntimeEnvironmentId } from '@/components/terminal-pane/input/paste/terminal-paste-runtime'
 import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
-import { useNativeChatComposerAttachmentPreviews } from '@/components/native-chat/use-native-chat-composer-attachment-previews'
-import type { NativeChatComposerImageAttachment } from '@/components/native-chat/NativeChatComposerField'
+import { useNativeChatComposerAttachmentPreviews } from '@/components/native-chat/attachments/chips/use-native-chat-composer-attachment-previews'
+import type { NativeChatComposerImageAttachment } from '@/components/native-chat/attachments/chips/native-chat-image-attachment'
 
 const NO_PENDING: readonly NativeChatComposerImageAttachment[] = []
 

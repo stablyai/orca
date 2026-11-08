@@ -1,8 +1,15 @@
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { TaskSourceContext, WorkspaceRunContext } from '../../shared/task-source-context'
+import type {
+  TaskSourceContext,
+  WorkspaceRunContext
+} from '../../shared/work-items/task-source-context'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import { hostStableKey, parseHostStableKey } from '../../shared/automation-owner-key'
+import {
+  hostStableKey,
+  parseHostStableKey
+} from '../../shared/automations/ownership/automation-owner-key'
 import { sanitizeSshTargetGeneration } from '../../shared/ssh-target-generation'
 
 // Re-adopt automation references with repos, using the matched registration’s current generation.

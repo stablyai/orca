@@ -5,7 +5,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
 import { translateSessionTabMove } from '../../../shared/workspace-layout/old-client/old-client-method-translation'
 import { resolveSessionTabRow } from '../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'

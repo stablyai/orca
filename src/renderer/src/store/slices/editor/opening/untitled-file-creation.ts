@@ -13,7 +13,7 @@ import {
 } from '@/lib/create-untitled-markdown'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { findGroupForTab } from '../../tab-group-state'
+import { findGroupForTab } from '../../tabs/tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 

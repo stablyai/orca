@@ -14,10 +14,10 @@ import { formatRelativeTime } from '@/components/github/work-item-state-presenta
 import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
 import { loadPRFileContents } from '../cache/file-content'
 import { CommentReplyForm } from '../comments/reply-form'
@@ -58,6 +58,8 @@ export function ConversationCommentCard({
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div
       className={cn(
@@ -82,13 +84,13 @@ export function ConversationCommentCard({
           {comment.author}
         </span>
         <span className="shrink-0 text-[12px] text-muted-foreground">
-          · {formatRelativeTime(comment.createdAt)}
+          · {formatRelativeTime(comment.createdAt, intlLocale)}
         </span>
         {comment.path && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
             {comment.line
-              ? translate('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
+              ? t('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
                   value0: comment.line
                 })
               : ''}
@@ -96,7 +98,7 @@ export function ConversationCommentCard({
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            {translate('auto.components.PullRequestPage.76b2a0ac5b', 'resolved')}
+            {t('auto.components.PullRequestPage.76b2a0ac5b', 'resolved')}
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -107,16 +109,13 @@ export function ConversationCommentCard({
                 size="icon-xs"
                 className="size-7"
                 onClick={() => onToggleReply(comment.id)}
-                aria-label={translate(
-                  'auto.components.PullRequestPage.d6c6679de7',
-                  'Reply to comment'
-                )}
+                aria-label={t('auto.components.PullRequestPage.d6c6679de7', 'Reply to comment')}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.PullRequestPage.d6c6679de7', 'Reply to comment')}
+              {t('auto.components.PullRequestPage.d6c6679de7', 'Reply to comment')}
             </TooltipContent>
           </Tooltip>
           {comment.url && (
@@ -128,7 +127,7 @@ export function ConversationCommentCard({
                   size="icon-xs"
                   className="size-7"
                   onClick={(event) => openAppHttpLink(comment.url, { event })}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.PullRequestPage.0ac19bb52e',
                     'Open comment on GitHub'
                   )}
@@ -137,7 +136,7 @@ export function ConversationCommentCard({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('auto.components.PullRequestPage.0ac19bb52e', 'Open comment on GitHub')}
+                {t('auto.components.PullRequestPage.0ac19bb52e', 'Open comment on GitHub')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -175,11 +174,8 @@ export function ConversationCommentCard({
             className="mt-3"
             placeholder={
               comment.path
-                ? translate(
-                    'auto.components.PullRequestPage.408e634fbb',
-                    'Reply in this review thread'
-                  )
-                : translate('auto.components.PullRequestPage.31a7b202f2', 'Reply to @{{value0}}', {
+                ? t('auto.components.PullRequestPage.408e634fbb', 'Reply in this review thread')
+                : t('auto.components.PullRequestPage.31a7b202f2', 'Reply to @{{value0}}', {
                     value0: comment.author
                   })
             }

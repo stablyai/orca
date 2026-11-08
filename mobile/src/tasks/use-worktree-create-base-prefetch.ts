@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 import { worktreeCreateBasePrefetch } from './mobile-workspace-create-operations'
 

@@ -4,7 +4,7 @@ import {
   isLegacyReadOnlyMessage,
   type OrchestrationCheckOutput,
   type OrchestrationMessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import { formatFieldPairs, orchestrationCliName, type OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'

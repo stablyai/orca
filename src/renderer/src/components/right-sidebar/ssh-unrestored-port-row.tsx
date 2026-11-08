@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { UnrestoredPortForward } from '../../../../shared/ssh-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** A saved forward that isn't open, e.g. its local port is taken; removable so it stops retrying. */
 export function SshUnrestoredPortRow({
@@ -14,6 +14,7 @@ export function SshUnrestoredPortRow({
   targetId: string
   forward: UnrestoredPortForward
 }): React.JSX.Element {
+  const t = useTranslate()
   const [removing, setRemoving] = useState(false)
   const mountedRef = useMountedRef()
 
@@ -65,17 +66,17 @@ export function SshUnrestoredPortRow({
         >
           {forward.error
             ? forward.stopped
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.ssh.unrestored.port.row.b817a96fcf',
                   'Stopped: {{value0}}',
                   { value0: forward.error }
                 )
-              : translate(
+              : t(
                   'auto.components.right.sidebar.ssh.unrestored.port.row.04adb5f5e7',
                   "Couldn't start: {{value0}}",
                   { value0: forward.error }
                 )
-            : translate(
+            : t(
                 'auto.components.right.sidebar.ssh.unrestored.port.row.4c119f5e2a',
                 'Not started yet'
               )}
@@ -89,8 +90,8 @@ export function SshUnrestoredPortRow({
         )}
         onClick={(event) => void handleRemove(event)}
         disabled={removing}
-        aria-label={translate('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
-        title={translate('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
+        aria-label={t('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
+        title={t('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
       >
         <Trash2 size={13} />
       </button>

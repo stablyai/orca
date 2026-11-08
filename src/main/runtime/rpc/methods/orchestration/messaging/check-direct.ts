@@ -6,7 +6,7 @@ import { formatMessageBanner } from '../../../../orchestration/mailbox/formattin
 import { exposeMessages } from './mailbox-message-receipt'
 import { staleDelivery } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
 

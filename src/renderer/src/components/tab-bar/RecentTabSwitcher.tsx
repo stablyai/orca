@@ -19,7 +19,7 @@ import {
   normalizeCtrlTabOrderMode,
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +56,7 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
 }
 
 export default function RecentTabSwitcher(): React.JSX.Element | null {
+  const t = useTranslate()
   const [switcher, setSwitcher] = useState<SwitcherState | null>(null)
   const switcherRef = useRef<SwitcherState | null>(null)
 
@@ -173,13 +174,10 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
       <div
         className="w-[min(22.5rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating"
         role="listbox"
-        aria-label={translate(
-          'auto.components.tab.bar.RecentTabSwitcher.07ad4cd0b7',
-          'Switch tabs'
-        )}
+        aria-label={t('auto.components.tab.bar.RecentTabSwitcher.07ad4cd0b7', 'Switch tabs')}
       >
         <div className="border-b border-border px-2 py-1 text-2xs font-semibold text-muted-foreground">
-          {translate('auto.components.tab.bar.RecentTabSwitcher.329638ff6f', 'Switch Tab')}
+          {t('auto.components.tab.bar.RecentTabSwitcher.329638ff6f', 'Switch Tab')}
         </div>
         <div className="max-h-[min(18rem,60vh)] overflow-hidden py-0.5">
           {switcher.items.map((item, index) => {

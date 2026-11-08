@@ -39,7 +39,7 @@ export async function importCookiesFromSafari(
       return browserCookieImportFailure('allCookiesExpired', { browser: 'Safari' })
     }
 
-    return importValidatedCookies(valid, cookies.length, cookieImportTarget(targetPartition))
+    return await importValidatedCookies(valid, cookies.length, cookieImportTarget(targetPartition))
   } catch (err) {
     diag(`  Safari import failed: ${String(err)}`)
     return browserCookieImportFailure('importFailed', { browser: 'Safari' })

@@ -2,7 +2,7 @@ import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts
 import { structuredChatDisplayName } from '../../../../../../shared/structured-chat-row-name'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
-import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
+import { useStructuredConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 
 /** Native rows use live saved names, falling back to authoritative host titles across closed tabs and restarts. */
 export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {

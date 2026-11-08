@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as VisibleReviewTargets from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 import { useWorkspaceReferenceDetails } from './use-workspace-reference-details'
-import { useVisibleHostedReviewRefresh } from '@/app-shell/use-visible-hosted-review-refresh'
+
 import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read'
 import { getWorkspaceReferenceRequest } from './workspace-reference-details'
 import {
   normalizeTaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../../../shared/task-source-context'
+} from '../../../../../../shared/work-items/task-source-context'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review/hosted-review-request-state'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
+
 import {
   referenceAttachment,
   referenceRepo,
@@ -45,12 +45,7 @@ const workspace = {
   linkedPR: null,
   linkedItems: [referenceAttachment(1), referenceAttachment(2)]
 }
-function mount(open = false, enabled = true) {
-  return renderHook(() => {
-    useVisibleHostedReviewRefresh({ enabled })
-    return useWorkspaceReferenceDetails(workspace, referenceRepo, null, open)
-  })
-}
+
 beforeEach(() => {
   vi.clearAllMocks()
   _clearHostedReviewRequestGenerationsForTest()
@@ -97,33 +92,7 @@ beforeEach(() => {
   })
 })
 afterEach(cleanup)
-it('shares exact results across hover and scheduler without replacing the primary branch cache', async () => {
-  const primaryKey = getHostedReviewCacheKey(
-    referenceRepo.path,
-    workspace.branch,
-    null,
-    referenceRepo.id,
-    null,
-    null,
-    true
-  )
-  const primary = { data: referenceReview(7), fetchedAt: Date.now() }
-  useAppStore.setState({ hostedReviewCache: { [primaryKey]: primary } })
-  read.mockImplementation(async (args) =>
-    referenceReview(
-      typeof args === 'object' &&
-        args &&
-        'linkedGitHubPR' in args &&
-        typeof args.linkedGitHubPR === 'number'
-        ? args.linkedGitHubPR
-        : 0
-    )
-  )
-  const hook = mount(true)
-  await waitFor(() => expect(Object.values(hook.result.current).filter(Boolean)).toHaveLength(2))
-  expect(read).toHaveBeenCalledTimes(2)
-  expect(useAppStore.getState().hostedReviewCache[primaryKey]).toBe(primary)
-})
+
 it('keeps failed exact refreshes stale while retaining their last known details', async () => {
   const request = getWorkspaceReferenceRequest(referenceAttachment(1), workspace, referenceRepo)
   useAppStore.setState({

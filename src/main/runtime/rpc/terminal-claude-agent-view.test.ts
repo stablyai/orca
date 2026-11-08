@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../../agent-hooks/server'
 import type { OrcaRuntimeService } from '../orca-runtime'
