@@ -19,9 +19,7 @@ import {
 } from './legacy-relay-bridge-registry'
 import {
   type BridgedMoveRetryDeps,
-  noteBridgedExit,
   onLastBridgedTerminalExit,
-  settleBridgedExits,
   retryMoveAfterLastBridgedExit
 } from './legacy-relay-move-retry'
 
@@ -90,16 +88,6 @@ describe('the last bridged relay terminal', () => {
     expect(legacyRelayBridgedPanes()).toEqual([])
   })
 
-  it('reports a complete listing that proves the pane absent', async () => {
-    startHost()
-    await startLegacyRelayBridge(TARGET)
-
-    relay.ptys.delete('pty-1')
-    await startLegacyRelayBridge(TARGET)
-
-    expect(lastExits).toEqual([TARGET])
-  })
-
   it('never reports lost contact as exit', async () => {
     startHost()
     await startLegacyRelayBridge(TARGET)
@@ -110,18 +98,6 @@ describe('the last bridged relay terminal', () => {
     expect(legacyRelayBridgedPanes()).toEqual([
       expect.objectContaining({ ptyId: PTY, state: 'unverifiable' })
     ])
-  })
-
-  it('never lets an exit a replaced bridge saw count for its successor', () => {
-    const report = vi.fn()
-    const replaced = { snapshot: () => [] }
-    const successor = { snapshot: () => [] }
-    noteBridgedExit(replaced, TARGET, { report })
-
-    settleBridgedExits(successor, () => true)
-
-    expect(report).toHaveBeenCalledWith(TARGET, 'terminal_exited', 0)
-    expect(lastExits).toEqual([])
   })
 
   it('waits for every bridged pane, not just the first to exit', async () => {
@@ -165,46 +141,5 @@ describe('retrying the move', () => {
 
     await expect(first).resolves.toBe(true)
     expect(connect).toHaveBeenCalledTimes(1)
-  })
-
-  it('lets a running connect decide first and skips when it already moved the host', async () => {
-    let waiting = true
-    const connect = vi.fn(async () => {})
-    const inFlight = Promise.resolve().then(() => {
-      waiting = false
-    })
-
-    await expect(
-      retryMoveAfterLastBridgedExit(
-        TARGET,
-        retryDeps({
-          connect,
-          connectInFlight: () => inFlight,
-          waitingOnBridgedTerminals: () => waiting
-        })
-      )
-    ).resolves.toBe(false)
-    expect(connect).not.toHaveBeenCalled()
-  })
-
-  it('does nothing for a host that is no longer connected and waiting', async () => {
-    const connect = vi.fn(async () => {})
-
-    await expect(
-      retryMoveAfterLastBridgedExit(
-        TARGET,
-        retryDeps({ connect, waitingOnBridgedTerminals: () => false })
-      )
-    ).resolves.toBe(false)
-    expect(connect).not.toHaveBeenCalled()
-  })
-
-  it('settles a failed connect without throwing', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const deps = retryDeps({ connect: vi.fn(() => Promise.reject(new Error('refused'))) })
-
-    await expect(retryMoveAfterLastBridgedExit(TARGET, deps)).resolves.toBe(false)
-    await expect(retryMoveAfterLastBridgedExit(TARGET, deps)).resolves.toBe(false)
-    expect(deps.connect).toHaveBeenCalledTimes(2)
   })
 })

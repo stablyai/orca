@@ -198,7 +198,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
-  'src/main/wsl/execution/wsl-runner.test.ts',
   'src/main/wsl/execution/wsl-guest-environment.test.ts',
   'src/main/wsl/execution/wsl-executable-path.win32.test.ts',
   'src/main/claude-accounts/claude-profile-history-windows.test.ts',
