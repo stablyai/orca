@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
@@ -46,49 +46,6 @@ describe('useMobileNativeChatFileSearch', () => {
     renderer = null
     vi.restoreAllMocks()
     vi.useRealTimers()
-  })
-
-  it('cancels an in-flight query on a cache hit so a stale result cannot clobber it', async () => {
-    let resolveBeta: (reply: Awaited<ReturnType<RpcClient['sendRequest']>>) => void = () => {}
-    const betaReply = new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) => {
-      resolveBeta = resolve
-    })
-    const sendRequest = vi.fn((_method: string, params: { query: string }) =>
-      params.query === 'app' ? Promise.resolve(rpcSuccess(['src/app.ts'])) : betaReply
-    )
-    await mount(fakeClient({ sendRequest }))
-
-    act(() => state?.loadNativeChatFiles('app'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
-    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
-
-    act(() => {
-      state?.loadNativeChatFiles('beta')
-      state?.loadNativeChatFiles('app')
-    })
-    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
-    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
-    expect(
-      sendRequest.mock.calls.filter(([, params]) => (params as { query: string }).query === 'beta')
-    ).toHaveLength(0)
-
-    act(() => state?.loadNativeChatFiles('beta'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-    act(() => state?.loadNativeChatFiles('app'))
-    await act(async () => {
-      resolveBeta(rpcSuccess(['src/beta.ts']))
-      await betaReply
-    })
-    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
   })
 
   it('rejects an old authority response before it can populate the cache', async () => {

@@ -2,14 +2,14 @@ import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { editorTabsNeedingSavePrompt } from '@/store/slices/editor/tabs/editor-tab-close-target'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { afterPendingTabs } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import {
   hasEditorFrameFlush,
   runAfterEditorFramesFlush
 } from './editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
 import { destroyWorkspaceWebviews } from '../store/slices/browser/cleanup/browser-webview-cleanup'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalCloseController } from './use-terminal-close-actions'

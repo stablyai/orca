@@ -1,4 +1,4 @@
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
@@ -23,7 +23,7 @@ import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 

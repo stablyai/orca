@@ -57,7 +57,7 @@ it('steers the complete draft once with running choices while future picks and q
   expect(await rig.host.send(QUEUED_RIG_CALLER, params)).toMatchObject({ ok: true })
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
   expect(rig.dispatch.mock.calls[1]?.[0]).toMatchObject({ body, executionOptions: runningChoices })
-  expect((await rig.submission(operationId))?.options).toEqual(runningChoices)
+  expect((await rig.handoff(operationId))?.options).toEqual(runningChoices)
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   expect(journal?.queuedMessages.get(queued.value.queued.messageId)?.options).toMatchObject(
     queuedChoices
@@ -68,18 +68,26 @@ it('steers the complete draft once with running choices while future picks and q
   expect(rig.setOption).not.toHaveBeenCalled()
 })
 
-it('uses future choices for a steer draft accepted with no running turn', async () => {
-  const body = hostTestMessage('start a turn')
-  const fields = { body, options: { model: 'model-b', effort: 'low' }, steer: true as const }
-  expect(
-    await rig.host.send(QUEUED_RIG_CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId()),
-      ...fields
-    })
-  ).toMatchObject({ ok: true })
-  await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
-  expect(rig.dispatch.mock.calls[0]?.[0].executionOptions).toEqual(fields.options)
-})
+it.each(['options', 'selection'] as const)(
+  'uses %s for a steer draft accepted with no running turn',
+  async (kind) => {
+    const body = hostTestMessage('start a turn')
+    const choices = { model: 'model-b', effort: 'low' }
+    const fields = {
+      body,
+      steer: true as const,
+      ...(kind === 'selection' ? { selection: choices } : { options: choices })
+    }
+    expect(
+      await rig.host.send(QUEUED_RIG_CALLER, {
+        envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId()),
+        ...fields
+      })
+    ).toMatchObject({ ok: true })
+    await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
+    expect(rig.dispatch.mock.calls[0]?.[0].executionOptions).toEqual(choices)
+  }
+)
 
 it('reuses the opening submission choices before the provider publishes its running turn', async () => {
   const choices = { model: 'model-a', effort: 'high', serviceTier: 'default' }
@@ -105,7 +113,8 @@ it('reuses the opening submission choices before the provider publishes its runn
     userSend: true as const
   }
   expect(await rig.host.send(QUEUED_RIG_CALLER, params)).toMatchObject({ ok: true })
-  expect((await rig.submission(operation))?.options).toEqual(choices)
+  const queuedJournal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
+  expect(queuedJournal?.queuedMessages.get(operation)?.options).toEqual(choices)
   await rig.settleAccepted(first.id, 'opening')
   await openRigTurnFor(rig, first.id)
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))

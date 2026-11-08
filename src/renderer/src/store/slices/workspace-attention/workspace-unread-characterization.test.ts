@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
-import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import '../../../../../shared/constants'
 import {

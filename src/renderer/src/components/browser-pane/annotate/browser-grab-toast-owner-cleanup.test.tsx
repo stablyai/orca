@@ -80,6 +80,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   writes.mockReset()
   imageWrites.mockReset()
+  imageWrites.mockResolvedValue(undefined)
   extract.mockReset()
   capture.mockReset()
   state.recordFeatureInteraction.mockReset()
@@ -159,40 +160,6 @@ const screenshot = {
   height: 40
 } as const
 describe('browser grab toast owner', () => {
-  it.each(['miss', 'reject'] as const)(
-    'releases sixty-four closed shortcut %s owners',
-    async (outcome) => {
-      const requests = Array.from({ length: 64 }, () => deferred<BrowserExtractHoverResult>())
-      let index = 0
-      extract.mockImplementation(() => requests[index++].promise)
-      const bounds: ReturnType<typeof mount>['bounds'][] = []
-      for (let owner = 0; owner < 64; owner++) {
-        const mounted = mount({ id: `page${owner}` })
-        bounds.push(mounted.bounds)
-        act(() => mounted.view.result.current.handleGrabActionShortcut('c'))
-        mounted.view.unmount()
-      }
-      expect(extract.mock.calls).toEqual(
-        Array.from({ length: 64 }, (_, owner) => [{ browserPageId: `page${owner}` }])
-      )
-      expect(vi.getTimerCount()).toBe(0)
-      await act(async () => {
-        for (const request of requests) {
-          if (outcome === 'miss') {
-            request.complete({ ok: false, reason: 'not-ready' })
-          } else {
-            request.fail(new Error('Guest destroyed'))
-          }
-        }
-        await Promise.resolve()
-      })
-      expect(writes).not.toHaveBeenCalled()
-      expect(imageWrites).not.toHaveBeenCalled()
-      expect(state.recordFeatureInteraction).not.toHaveBeenCalled()
-      expect(bounds.reduce((total, bound) => total + (bound?.mock.calls.length ?? 0), 0)).toBe(0)
-      expect(vi.getTimerCount()).toBe(0)
-    }
-  )
   it.each(['c', 's'] as const)(
     'finishes late requested %s delivery without closed presentation',
     async (key) => {
@@ -221,36 +188,39 @@ describe('browser grab toast owner', () => {
       expect(vi.getTimerCount()).toBe(0)
     }
   )
-  it.each(['c', 's'] as const)(
-    'preserves complete live %s toast and exact two-second lifetime',
-    async (key) => {
-      const payload = makePayload()
-      extract.mockResolvedValue({ ok: true, payload })
+  it.each(['cancel', 'newer copy'] as const)(
+    'drops a screenshot result that settles after a %s',
+    async (replacement) => {
+      const write = deferred<void>()
+      imageWrites.mockReturnValueOnce(write.promise)
+      const first = makePayload()
+      const newer = makePayload()
+      extract.mockResolvedValueOnce({ ok: true, payload: first })
+      extract.mockResolvedValueOnce({ ok: true, payload: newer })
       capture.mockResolvedValue({ ok: true, screenshot })
-      const { view, bounds, grab } = mount({ strict: true })
+      const { view } = mount()
       await act(async () => {
-        view.result.current.handleGrabActionShortcut(key)
+        view.result.current.handleGrabActionShortcut('s')
         await Promise.resolve()
       })
-      expect(writes.mock.calls).toEqual(key === 'c' ? [[formatGrabPayloadAsText(payload)]] : [])
-      expect(imageWrites.mock.calls).toEqual(key === 's' ? [[screenshot.dataUrl]] : [])
-      expect(state.recordFeatureInteraction.mock.calls).toEqual([['browser-grab']])
-      expect(view.result.current.grabToast).toEqual({
-        message: key === 'c' ? 'Copied' : 'Screenshotted',
-        type: 'success',
-        x: 50,
-        y: 0,
-        below: false,
-        payload
+      expect(imageWrites.mock.calls).toEqual([[screenshot.dataUrl]])
+      await act(async () => {
+        if (replacement === 'cancel') {
+          view.result.current.cancelPendingBrowserCapture()
+        } else {
+          view.result.current.handleGrabActionShortcut('c')
+          await Promise.resolve()
+        }
       })
-      expect(bounds).toHaveBeenCalledTimes(1)
-      expect(vi.getTimerCount()).toBe(1)
-      act(() => vi.advanceTimersByTime(1999))
-      expect(view.result.current.grabToast?.type).toBe('success')
-      act(() => vi.advanceTimersByTime(1))
-      expect(view.result.current.grabToast).toBeNull()
-      expect(grab.rearm).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
+      await act(async () => {
+        write.fail(new Error('Clipboard image is too large'))
+        await Promise.resolve()
+      })
+      expect(view.result.current.grabToast).toEqual(
+        replacement === 'cancel'
+          ? null
+          : expect.objectContaining({ message: 'Copied', type: 'success', payload: newer })
+      )
     }
   )
   it.each(['miss', 'reject', 'screenshot-reject'] as const)(

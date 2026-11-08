@@ -1,13 +1,13 @@
 // C3: window draws immediately for synchronous callers; main records the same IDs before later pane commands. Main-created tabs retain main’s facts so window saves do not mutate them.
 
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { afterLayoutFrame } from '@/runtime/layout-frame-position'
-import { expectTabRowFields } from '@/runtime/layout-owner-pane-intents'
+import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { expectTabRowFields } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
+import { layoutFrameTerminalTab } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 import type {

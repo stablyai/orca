@@ -4,7 +4,7 @@ import {
   getLargeDiffRenderLimit,
   type LargeDiffRenderLimit
 } from '../../../../shared/large-diff-render-limit'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type {
   GitBranchChangeEntry,
   GitDiffResult

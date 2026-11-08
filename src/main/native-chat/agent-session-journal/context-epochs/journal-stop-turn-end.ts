@@ -12,7 +12,7 @@ import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import type {
   JournalQueuePauseMarks,
   JournalStopSettle
-} from '../queued-messages/queued-message-pause'
+} from '../queued-messages/queued-message-pause-marks'
 
 export type JournalLatestStop = NonNullable<JournalQueuePauseMarks['latestStop']>
 

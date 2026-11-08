@@ -10,7 +10,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -20,7 +20,10 @@ import {
   createWorktreeTabBucketProjection,
   type WorktreeTabBucketProjection
 } from '@/lib/worktree-tab-bucket-projection'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Keep finished snapshots after live status cleanup so closed terminals’ rows remain until user dismissal.
 

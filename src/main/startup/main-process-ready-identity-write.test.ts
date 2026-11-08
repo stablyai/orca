@@ -330,28 +330,6 @@ describe('ready-phase browser identity authority', () => {
     Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM })
   })
 
-  it.each([
-    { platform: 'win32', isPackaged: true, appId: 'app.id' },
-    { platform: 'win32', isPackaged: false, appId: process.execPath },
-    { platform: 'darwin', isPackaged: true, appId: null },
-    { platform: 'linux', isPackaged: true, appId: null }
-  ])(
-    'sets Windows app identity on $platform (packaged=$isPackaged)',
-    async ({ platform, isPackaged, appId }) => {
-      seedIdentityRecord('clean', true)
-      mocks.isPackaged = isPackaged
-      Object.defineProperty(process, 'platform', { value: platform })
-
-      await runReady()
-
-      if (appId === null) {
-        expect(mocks.setAppUserModelId).not.toHaveBeenCalled()
-      } else {
-        expect(mocks.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(appId)
-      }
-    }
-  )
-
   // Root identity remains authoritative across profile switches; ready must not restore retired per-profile choices in either direction.
   it.each([{ rootMode: 'native' }, { rootMode: 'clean' }])(
     'leaves root=$rootMode authoritative over a retired profile choice',

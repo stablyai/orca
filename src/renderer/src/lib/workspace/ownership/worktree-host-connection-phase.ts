@@ -4,11 +4,11 @@ import type { AppState } from '@/store/types'
 import '@/lib/connection-context'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import '@/store/slices/runtime-environment-ssh'
+import '@/store/slices/ssh/runtime-environment-ssh'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
-} from '@/store/slices/runtime-environment-ssh-selectors'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'

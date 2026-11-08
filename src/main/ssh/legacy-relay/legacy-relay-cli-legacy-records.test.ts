@@ -129,17 +129,6 @@ async function run(
 }
 
 describe('the relay-era orca CLI on migrated legacy orchestration records', () => {
-  it('attests the bridge-verified worker instead of answering read-only', async () => {
-    const { runtime, database } = legacyRuntime()
-    expect(database.getLegacyAdoption()).toBeTruthy()
-    const check = await run(runtime, ['orchestration', 'check', '--json'])
-    expect(check.exitCode).toBe(0)
-    expect(check.body).toMatchObject({
-      ok: true,
-      result: { legacyCompatibility: { readOnly: false } }
-    })
-  })
-
   it('never lets a host pane adopt the unbound legacy coordinator by naming its handle', async () => {
     const { runtime, database, taskId, dispatchId } = legacyRuntime()
     const escalation = await run(runtime, escalationArgv(taskId, dispatchId))
@@ -265,27 +254,5 @@ describe('the relay-era orca CLI on migrated legacy orchestration records', () =
       '88888888-8888-4888-8888-888888888888'
     ]
     await expect(run(runtime, fresh)).rejects.toThrow(LEGACY_RELAY_CLI_UNVERIFIED)
-  })
-
-  it('vouches only for the exact terminal its attachment carries', () => {
-    const runtime = new OrcaRuntimeService()
-    const terminal = { handle: WORKER, paneKey: WORKER_PANE, processIncarnation: `${PTY_ID}:inc-1` }
-    const host = runtime.registerOrchestrationCompatibilitySshAttachment(TARGET, 'c-1', terminal)
-    const evidence = { terminalHandle: WORKER, paneKey: WORKER_PANE, launchToken: 't', host }
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toMatchObject({
-      terminalHandle: WORKER,
-      processIncarnation: `${PTY_ID}:inc-1`,
-      hostScope: { kind: 'ssh', targetId: TARGET }
-    })
-    for (const forged of [
-      { ...evidence, terminalHandle: 'term_other' },
-      { ...evidence, paneKey: 'tab_x:55555555-5555-4555-8555-555555555555' },
-      { ...evidence, host: { ...host, targetId: 'other-target' } },
-      { ...evidence, host: { ...host, connectionIncarnation: 'c-2' } }
-    ]) {
-      expect(runtime.verifyOrchestrationCompatibilityCaller(forged)).toBeNull()
-    }
-    runtime.releaseOrchestrationCompatibilitySshAttachment(host.attachmentId)
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
   })
 })

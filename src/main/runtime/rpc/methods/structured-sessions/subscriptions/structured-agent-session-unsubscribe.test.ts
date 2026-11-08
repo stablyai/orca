@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 // Unsubscribe stops only that transcript's projection/sends; sibling streams continue.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

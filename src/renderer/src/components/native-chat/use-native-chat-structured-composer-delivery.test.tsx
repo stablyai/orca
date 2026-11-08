@@ -1,11 +1,11 @@
+import { clearNativeChatComposerDraftsForTests } from './drafts/native-chat-draft-reset'
 // @vitest-environment happy-dom
 import { cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from './native-chat-composer-draft-store'
+} from './drafts/native-chat-composer-draft-store'
 import { ATTACHMENT, harness } from './use-native-chat-structured-composer-send.test-fixture'
 
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('queued and immediate composer delivery', () => {
   it.each(['unknown', 'unsupported'] as const)(
-    'retains the default busy queue draft when support is %s',
+    'preserves default busy delivery on a legacy host with %s queue support',
     async (capability) => {
       const { send, structuredTransport, setDraft } = harness('codex')
       structuredTransport.queue = {
@@ -36,15 +36,14 @@ describe('queued and immediate composer delivery', () => {
         'immediate'
       )
       await send('Keep for later', [ATTACHMENT])
-      expect(structuredTransport.send).not.toHaveBeenCalled()
-      expect(setDraft).not.toHaveBeenCalled()
-      expect(readNativeChatComposerDraft('tab-1:pane')).toMatchObject({
-        text: 'Keep for later',
-        images: [ATTACHMENT]
-      })
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('cannot queue drafts yet')
+      expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(
+        'Keep for later',
+        [ATTACHMENT],
+        {}
       )
+      expect(setDraft).toHaveBeenCalledWith('')
+      expect(readNativeChatComposerDraft('tab-1:pane').images).toEqual([])
+      expect(structuredTransport.onError).toHaveBeenCalledExactlyOnceWith(null, undefined)
     }
   )
   it.each(['unknown', 'unsupported'] as const)(

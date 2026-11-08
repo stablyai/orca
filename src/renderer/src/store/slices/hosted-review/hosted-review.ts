@@ -9,7 +9,7 @@ import type {
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AppState } from '../../types'
-import { nextLookupGeneration } from '../../lookup-generation-sequence'
+import { nextLookupGeneration } from './refresh/lookup-generation-sequence'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey,

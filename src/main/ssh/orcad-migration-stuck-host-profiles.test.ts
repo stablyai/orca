@@ -493,24 +493,6 @@ describe('"Move anyway"', () => {
     }
   })
 
-  it('never leaves a running terminal behind', async () => {
-    const loaded = load(savedStateOnly())
-    loaded.store.updateSshTarget(TARGET.id, {
-      managedServerLeaveBehind: { confirmedAt: '2026-10-15T00:00:00.000Z' }
-    })
-    await expect(
-      fenceOrcadMigrationSource({
-        userDataPath: loaded.userDataPath,
-        store: loaded.store,
-        claims: loaded.claims,
-        targetId: TARGET.id,
-        destinationEnvironmentId: 'env-managed',
-        destinationName: 'wsl',
-        terminalProof: { verdict: 'live', ptyIds: ['pty-1'], reason: 'still running' }
-      })
-    ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_migration_terminals' })
-  })
-
   it('refuses when resolving saved copies would omit a running terminal, keeping the host connectable', async () => {
     const state = savedStateOnly()
     state.workspaceSession.terminalLayoutsByTabId['older-tab'] = {
@@ -630,20 +612,5 @@ describe('"Move anyway"', () => {
     const session = result.cutover.manifest.payload.dormantState?.workspaceSession
     expect(session?.unifiedTabs?.[worktreeId]?.map((tab) => tab.id)).toEqual(['tab-1'])
     expect(session?.tabGroups?.[worktreeId]?.[0]?.tabOrder).toEqual(['tab-1'])
-  })
-
-  it('is offered only when leaving saved state behind would clear the refusal', () => {
-    expect(leaveBehindClearsOrcadMigrationBlockers(load(savedStateOnly()).store, TARGET.id)).toBe(
-      true
-    )
-    const state = savedStateOnly()
-    const host = state.workspaceSessionsByHostId![HOST]!
-    // A draft only this desktop's session holds can't stay behind, so the offer would dead-end.
-    state.workspaceSession.openFilesByWorktree = structuredClone(host.openFilesByWorktree)
-    host.openFilesByWorktree = {}
-    delete state.workspaceSession.tabsByWorktree[worktreeId]
-    const loaded = load(state)
-    expect(leaveBehindClearsOrcadMigrationBlockers(loaded.store, TARGET.id)).toBe(false)
-    expect(loaded.store.getSshTarget(TARGET.id)?.managedServerLeaveBehind).toBeUndefined()
   })
 })

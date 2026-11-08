@@ -7,6 +7,7 @@ import { classifyRejectedWindowsPath } from '../../../../../../shared/windows-pa
 import { windowsPathOfWslDrvfsUncPath } from '../../../../../../shared/wsl-host-windows-drive-refusal'
 import type { WslHostWindowsPathAccess } from '@/lib/windows-path-access'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SidebarProjectDropPathResolution =
   | { status: 'ready'; path: string }
@@ -82,13 +83,16 @@ export function isSidebarProjectDropRefusedByFocus(
   return focusedRuntimeId !== null && wslHosts.length === 0
 }
 
-export function getSidebarProjectDropAffordance(args: {
-  isDragOver: boolean
-  isHandlingDrop: boolean
-  remoteRuntimeActive: boolean
-  /** A server is focused, so only a folder inside a WSL host's distro can be added. */
-  wslDropsOnly?: boolean
-}): SidebarProjectDropAffordance {
+export function getSidebarProjectDropAffordance(
+  args: {
+    isDragOver: boolean
+    isHandlingDrop: boolean
+    remoteRuntimeActive: boolean
+    /** A server is focused, so only a folder inside a WSL host's distro can be added. */
+    wslDropsOnly?: boolean
+  },
+  t: Translate = translate
+): SidebarProjectDropAffordance {
   if (!args.isDragOver && !args.isHandlingDrop) {
     return { visible: false }
   }
@@ -96,11 +100,8 @@ export function getSidebarProjectDropAffordance(args: {
     return {
       visible: true,
       tone: 'busy',
-      label: translate(
-        'auto.components.sidebar.sidebar.project.drop.18d3cf40e9',
-        'Checking folder'
-      ),
-      description: translate(
+      label: t('auto.components.sidebar.sidebar.project.drop.18d3cf40e9', 'Checking folder'),
+      description: t(
         'auto.components.sidebar.sidebar.project.drop.d0f8943f8b',
         'Preparing the project add flow'
       )
@@ -110,11 +111,8 @@ export function getSidebarProjectDropAffordance(args: {
     return {
       visible: true,
       tone: 'blocked',
-      label: translate(
-        'auto.components.sidebar.sidebar.project.drop.e344666fb8',
-        'Server runtime active'
-      ),
-      description: translate(
+      label: t('auto.components.sidebar.sidebar.project.drop.e344666fb8', 'Server runtime active'),
+      description: t(
         'auto.components.sidebar.sidebar.project.drop.740e8d0d46',
         'Use Add Project for host paths'
       )
@@ -124,11 +122,11 @@ export function getSidebarProjectDropAffordance(args: {
     return {
       visible: true,
       tone: 'ready',
-      label: translate(
+      label: t(
         'auto.components.sidebar.sidebar.project.drop.wslFolder',
         'Drop a WSL folder to add project'
       ),
-      description: translate(
+      description: t(
         'auto.components.sidebar.sidebar.project.drop.wslFolderDescription',
         'Folders under \\\\wsl.localhost'
       )
@@ -137,11 +135,11 @@ export function getSidebarProjectDropAffordance(args: {
   return {
     visible: true,
     tone: 'ready',
-    label: translate(
+    label: t(
       'auto.components.sidebar.sidebar.project.drop.ffc769ca29',
       'Drop folder to add project'
     ),
-    description: translate(
+    description: t(
       'auto.components.sidebar.sidebar.project.drop.669e12dd97',
       'Local folders and Git repositories'
     )

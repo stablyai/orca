@@ -22,30 +22,25 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import type { RpcClient } from '../transport/rpc-client'
+import { mobileStructuredSendQueues } from './mobile-structured-send-queue-rule'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
-import {
-  sendMobileStructuredAgentSessionMessage,
-  mobileStructuredSendQueues
-} from './mobile-structured-agent-session-send'
+import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import type { MobileStructuredSendsOut } from './use-mobile-structured-stop-offer'
 import { structuredSessionOperationId } from './structured-session-operation-id'
+import { UNCONFIRMED_SEND_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
 } from './mobile-structured-actionable-prompt'
-
-export { mobileStructuredSendQueues } from './mobile-structured-agent-session-send'
-
-export type StructuredMobileSendRequest = MobileNativeChatSendIntent
 
 export type StructuredMobileSendAttachment =
   | (StructuredAgentSessionAttachment & { kind?: 'image'; id?: string })
@@ -67,6 +62,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   accept: MobileStructuredSends['accept']
   acknowledge: MobileStructuredSends['acknowledge']
   reject: MobileStructuredSends['reject']
+  holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   commandPending: { current: boolean }
   /** This chat's message sends still out, which a command waits behind as on desktop. */
   sendsOut: MobileStructuredSendsOut
@@ -105,6 +101,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     controller,
     enabled,
     reject,
+    holdUnconfirmed,
     onSendError,
     queueCapable,
     steerCapable = false,
@@ -235,7 +232,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         return 'rejected'
       }
       const send = {
-        clientMessageId: structuredSessionOperationId(),
+        clientMessageId: intent?.clientMessageId ?? structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
         ...captured,
@@ -272,6 +269,9 @@ export function useMobileStructuredSendWithOutcome(args: {
       })
       if (outcome === 'rejected' || outcome === 'queued') {
         reject(send.clientMessageId)
+      } else if (outcome === 'unknown') {
+        // Answers and continuations have no box to return to: drop the bubble with a warning. The composer re-holds its sends to hand them back.
+        holdUnconfirmed(send.clientMessageId, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
       }
       return outcome
     },
@@ -285,6 +285,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       controller,
       enabled,
       reject,
+      holdUnconfirmed,
       onSendError,
       queueCapable,
       steerCapable,

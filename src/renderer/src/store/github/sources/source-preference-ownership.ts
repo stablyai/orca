@@ -1,17 +1,17 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { CacheEntry } from '../cache/cache-model'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { githubTaskBinding } from '@/lib/github-task-observation'
 import {
   bindingKey,
   type BindingIncarnation,
   type TaskBinding
 } from '../task-records/task-record-model'
-import { isHostIdentityContinued } from '../../host-catalog-fencing'
+import { isHostIdentityContinued } from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import { createSourceWrite, waitForWriteEnd, type SourceWrite } from './source-write'
 

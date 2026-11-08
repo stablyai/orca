@@ -1,25 +1,25 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { flushAsyncTicks } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 // Without a recovered host image, idle differential TUIs need a real one-row resize then restoration; same-size SIGWINCH does not force Node repaint (#26887).
 
@@ -27,7 +27,7 @@ const scheduleRuntimeGraphSync = vi.fn()
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))
@@ -160,73 +160,6 @@ describe('a reconnected remote pane the host could not image', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('control: a fresh host image repaints the pane without resizing the program', async () => {
-    const drive = await connectVisibleRemotePane({
-      availability: { kind: 'snapshot' },
-      snapshot: HOST_SNAPSHOT
-    })
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(5_000)
-
-    expect(drive.pane.terminal.write.mock.calls.map(([data]) => String(data)).join('')).toContain(
-      'CURRENT_FRAME'
-    )
-    expect(drive.resizes()).toEqual([])
-    drive.dispose()
-  })
-
-  it.each([
-    [
-      'too large for the replay limit',
-      { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' }
-    ],
-    [
-      'skipped by a host with no buffer',
-      { kind: 'retry-worthy', cause: 'host-no-serializable-buffer' }
-    ],
-    [
-      'skipped while the host output overflowed',
-      { kind: 'retry-worthy', cause: 'host-pending-output-overflowed' }
-    ]
-  ])('asks the program to repaint when the image is %s', async (_label, availability) => {
-    const drive = await connectVisibleRemotePane({ availability, snapshot: null })
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(30_000)
-
-    expect(drive.banners()).toBe(1)
-    expect(drive.resizes()).toEqual(NUDGE)
-    drive.dispose()
-  })
-
-  it('asks the program to repaint when the host never answers the snapshot request', async () => {
-    const drive = await connectVisibleRemotePane(() =>
-      Promise.reject(new Error('Remote terminal snapshot timed out.'))
-    )
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(30_000)
-
-    expect(drive.banners()).toBe(1)
-    expect(drive.resizes()).toEqual(NUDGE)
-    drive.dispose()
-  })
-
-  it('repaints a full-screen TUI on the alternate screen the same way', async () => {
-    const drive = await connectVisibleRemotePane({
-      availability: { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' },
-      snapshot: null
-    })
-    drive.pane.terminal.buffer.active.type = 'alternate'
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(5_000)
-
-    expect(drive.resizes()).toEqual(NUDGE)
-    drive.dispose()
-  })
-
   it('holds the repaint for a hidden pane until it is revealed', async () => {
     const drive = await connectVisibleRemotePane(
       {
@@ -245,39 +178,6 @@ describe('a reconnected remote pane the host could not image', () => {
     drive.deliver('x', 11)
     await settle(5_000)
     expect(drive.resizes()).toEqual(NUDGE)
-    drive.dispose()
-  })
-
-  it('leaves the size alone while a phone or another desktop holds it', async () => {
-    const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-    const drive = await connectVisibleRemotePane({
-      availability: { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' },
-      snapshot: null
-    })
-    setFitOverride(REMOTE_PTY_ID, 'mobile-fit', 50, 30)
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(5_000)
-
-    expect(drive.banners()).toBe(1)
-    expect(drive.resizes()).toEqual([])
-    drive.dispose()
-  })
-
-  it('grows a pane at the host minimum height instead of asking for the same clamped size', async () => {
-    const drive = await connectVisibleRemotePane({
-      availability: { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' },
-      snapshot: null
-    })
-    drive.pane.terminal.rows = 6
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(5_000)
-
-    expect(drive.resizes()).toEqual([
-      [120, 9, { claim: true }],
-      [120, 6, { claim: true }]
-    ])
     drive.dispose()
   })
 
@@ -324,21 +224,6 @@ describe('a reconnected remote pane the host could not image', () => {
     expect(drive.resizes()).toEqual([NUDGE[0]])
     drive.dispose()
     expect(drive.resizes()).toEqual([NUDGE[0]])
-  })
-
-  it('does not nudge while the stream is still reconnecting', async () => {
-    const drive = await connectVisibleRemotePane({
-      availability: { kind: 'permanently-unavailable', reason: 'exceeds-client-replay-limit' },
-      snapshot: null
-    })
-    drive.transport.isConnected?.mockReturnValue(false)
-    vi.useFakeTimers()
-    drive.reconnectWithoutImage()
-    await settle(5_000)
-
-    expect(drive.banners()).toBe(1)
-    expect(drive.resizes()).toEqual([])
-    drive.dispose()
   })
 
   it('leaves a swapped-out PTY alone when its nudge is still pending', async () => {

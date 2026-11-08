@@ -1,10 +1,11 @@
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-permission-modes-capability'
 // @vitest-environment happy-dom
 import { act, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   mocks,
   REOPENED,
@@ -15,7 +16,7 @@ import {
   renderOptions,
   descriptor,
   modelChoiceCount
-} from './use-structured-agent-session-options.test-fixture'
+} from './session/options/structured/use-structured-agent-session-options.test-fixture'
 
 afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
 beforeEach(() => {
@@ -57,4 +58,25 @@ describe('future-message option compatibility', () => {
       }
     }
   )
+})
+
+it('keeps a reported permission mode editable while legacy busy model picks are locked', async () => {
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
+  answer({
+    options: async () => ({
+      ...LIVE_OPTIONS,
+      current: { ...LIVE_OPTIONS.current, permissionMode: 'ask' }
+    }),
+    modelCatalog: async () => HOST_CATALOG
+  })
+  const mutation = mutateWith(async () => ({ key: 'permissionMode', value: 'full-access' }))
+  const { result } = renderOptions({ ...REOPENED, isWorking: true }, mutation.mutate)
+  await waitFor(() =>
+    expect(descriptor(result.current.optionSnapshot, 'permissionMode')?.settable).toBe(true)
+  )
+  expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(false)
+  await act(async () =>
+    expect(await result.current.setStructuredOption('permissionMode', 'full-access')).toBe(true)
+  )
+  expect(mutation.calls).toHaveBeenCalledOnce()
 })

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import { parseRetryAfterHeaderMs } from '../../../shared/retry-after-header'
 import {

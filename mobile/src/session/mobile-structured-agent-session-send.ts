@@ -1,9 +1,3 @@
-import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
-import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import {
-  structuredAgentSessionFollowUpsQueue,
-  structuredAgentSessionQueueEnabled
-} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -14,7 +8,7 @@ import {
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
@@ -85,24 +79,4 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     input.onAccepted?.(result.cursor)
   }
   return outcome.outcome
-}
-
-/** The desktop's rule: the alternate flips the setting first, then the queue's own rules decide. */
-export function mobileStructuredSendQueues(
-  queueCapable: boolean,
-  queueFollowUps: boolean,
-  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'queuedMessages'>,
-  send: { alternate?: boolean; isWorking: boolean; stopping: boolean } = {
-    isWorking: false,
-    stopping: false
-  }
-): boolean {
-  return (
-    queueCapable &&
-    structuredAgentSessionQueueEnabled(
-      structuredAgentSessionFollowUpsQueue(queueFollowUps, send),
-      state,
-      selectAgentSessionCurrentRequests(state)
-    )
-  )
 }

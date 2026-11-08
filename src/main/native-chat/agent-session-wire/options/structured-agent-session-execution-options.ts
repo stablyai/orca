@@ -57,13 +57,17 @@ export function captureStructuredExecutionOptions(
 
 /** Steering reuses acceptance facts, never the next-message picker or a later provider report. */
 export function captureStructuredSteerOptions(
-  ctx: AgentSessionTurnContext,
-  supplied?: Readonly<Record<string, string>>
+  ctx: Pick<
+    AgentSessionTurnContext,
+    'journal' | 'fence' | 'currentWork' | 'agents' | 'agent' | 'persistedOptions'
+  >,
+  supplied?: Readonly<Record<string, string>>,
+  selection?: Readonly<Record<string, string>>
 ): ReturnType<typeof captureStructuredExecutionOptions> {
   const turn = ctx.journal.newestTurn()
   const work = contextStructuredAgentSessionCurrentWork(ctx)
   if (!work.working()) {
-    return captureStructuredExecutionOptions(ctx, supplied)
+    return captureStructuredExecutionOptions(ctx, supplied, selection)
   }
   const candidates = ctx.journal
     .submissions()

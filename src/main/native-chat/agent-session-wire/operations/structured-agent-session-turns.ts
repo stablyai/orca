@@ -90,6 +90,33 @@ export function agentSessionAttachmentExpiredRefusal(error: AgentSessionAttachme
   }
 }
 
+/** Both journal admission writes preserve refusal and receipt replay semantics before provider effects. */
+export function agentSessionAdmissionWriteRefusal(
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'logger'>,
+  error: unknown
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  if (error instanceof CommandReceiptExistsError) {
+    throw error
+  }
+  ctx.logger.warn('recording a message failed', {
+    scope: 'send-journal-write',
+    sessionId: ctx.sessionId,
+    error
+  })
+  if (isAgentSessionAttachmentExpiredError(error)) {
+    return agentSessionAttachmentExpiredRefusal(error)
+  }
+  // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
+  if (
+    isAgentSessionRefusalError(error) ||
+    classifyJournalOpenFailure(error) === 'journalCorrupt' ||
+    isJournalWrittenByNewerOrca(error)
+  ) {
+    return { ok: false, refusal: journalOpenRefusal(error) }
+  }
+  return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
+}
+
 /** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
  * Delivery runs separately; a fresh send after terminal rejection needs a fresh ID. */
 export async function performSend(
@@ -125,7 +152,7 @@ export async function performSend(
   const captured = keepCurrentOptions
     ? { options: undefined }
     : input.steer
-      ? captureStructuredSteerOptions(ctx, input.options)
+      ? captureStructuredSteerOptions(ctx, input.options, input.selection)
       : captureStructuredExecutionOptions(ctx, input.options, input.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
@@ -137,26 +164,7 @@ export async function performSend(
       ctx.operationReceipt
     )
   } catch (error) {
-    if (error instanceof CommandReceiptExistsError) {
-      throw error
-    }
-    ctx.logger.warn('recording a message failed', {
-      scope: 'send-journal-write',
-      sessionId: ctx.sessionId,
-      error
-    })
-    if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal(error)
-    }
-    // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
-    if (
-      isAgentSessionRefusalError(error) ||
-      classifyJournalOpenFailure(error) === 'journalCorrupt' ||
-      isJournalWrittenByNewerOrca(error)
-    ) {
-      return { ok: false, refusal: journalOpenRefusal(error) }
-    }
-    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
+    return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {
     ok: true,

@@ -2,13 +2,13 @@ import { renderHook } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
+import type { NativeChatComposerImageAttachment } from './attachments/chips/native-chat-image-attachment'
 import {
   useNativeChatStructuredComposerSend,
   type NativeChatStructuredComposerSend,
   type UseNativeChatStructuredComposerSendArgs
-} from './use-native-chat-structured-composer-send'
+} from './composer/submit/use-native-chat-structured-composer-send'
 
 export const ATTACHMENT: NativeChatComposerImageAttachment = { id: 'a1', path: '/tmp/shot.png' }
 

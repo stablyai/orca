@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync } 
 import { join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState

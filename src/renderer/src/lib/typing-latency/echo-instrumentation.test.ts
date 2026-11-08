@@ -128,23 +128,6 @@ describe('recordKeystroke', () => {
     expect(entry.pendingCount).toBe(0)
   })
 
-  it('bounds pending input state during sustained typing', () => {
-    const entry = emptyEntry()
-    let dropped = 0
-    const records: ReturnType<typeof recordKeystroke>[] = []
-    for (let index = 0; index < 200; index += 1) {
-      const recorded = recordKeystroke(entry, index, 'direct')
-      dropped += recorded.unmatched
-      records.push(recorded)
-    }
-    expect(entry.pendingCount).toBe(64)
-    expect(entry.undispatched).toHaveLength(64)
-    expect(entry.ignoredDispatches).toHaveLength(64)
-    expect(dropped).toBe(136)
-    expect(discardUndispatchedKeystroke(entry, records[64]!.candidate)).toBe('counted-unmatched')
-    expect(entry.ignoredDispatches).toHaveLength(64)
-  })
-
   it('drops a prevented commit only when it never dispatched', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)

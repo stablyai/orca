@@ -3,17 +3,18 @@ import type {
   AutomationOwnerPrecondition,
   AutomationDestination,
   AutomationUpdatePreconditions
-} from '../../../../shared/automation-owner-precondition'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-run-context'
+} from '../../integrations/automations/runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,
   type AutomationListResult
-} from '../../../../shared/automation-list-scope'
+} from '../../../../shared/automations/ownership/automation-list-scope'
 import type { AutomationService } from '../../../automations/service'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 

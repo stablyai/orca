@@ -1,6 +1,6 @@
 import { capturedAutomationOwner } from './automation-captured-owner'
 import { toast } from 'sonner'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getAutomationTargetAvailability } from './automation-target-availability'

@@ -1,7 +1,13 @@
-import type { RpcClient } from '../../transport/rpc-client'
-import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
-import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { PendingNativeChatImage } from './composer/mobile-native-chat-image-attachment'
+import type { PendingNativeChatFile } from './composer/mobile-native-chat-file-attachment'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import '../../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
+import {
+  nativeChatTerminalWrite,
+  nativeChatTerminalDraftRead
+} from '../../terminal/session/mobile-session-terminal-operations'
 import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
 import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import {
@@ -9,7 +15,8 @@ import {
   countAgentTuiInputLines,
   buildAgentTuiClearInputForText
 } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
-import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
+
+import type { AgentJournalSkillRef } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
@@ -40,9 +47,25 @@ export type MobileNativeChatSendIntent = {
   /** Continues this usage-limit cut; the host refuses it once the chat has moved on. */
   usageLimitContinuationOfTurnItemId?: string
   delivery?: 'immediate'
+  /** A structured send's journal id, minted by the caller so it can be saved before the send leaves. */
+  clientMessageId?: string
   onCreated?: (clientMessageId: string) => void
   /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
   onHandBack?: () => void
+  /** The chips this send carries, saved with it so a kill mid-send can return them. */
+  carried?: {
+    images: readonly PendingNativeChatImage[]
+    files: readonly PendingNativeChatFile[]
+  }
+  /** A message the phone queued offline: it carries its own inputs and the send never touches the composer. */
+  // Spelled out, not taken from the queue module: this type is read by programs that must not load the page's storage.
+  queued?: {
+    id: string
+    images: readonly PendingNativeChatImage[]
+    files: readonly PendingNativeChatFile[]
+    skills: readonly AgentJournalSkillRef[]
+    skillOrigin: string | null
+  }
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

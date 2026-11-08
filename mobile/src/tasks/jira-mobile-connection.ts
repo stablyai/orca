@@ -1,6 +1,6 @@
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RpcResponse } from '../transport/types'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { jiraConnectionStatusSchema } from './jira-reply-schema'
 import { jiraConnectionStatusProbe, jiraConnectionStatusRead } from './mobile-jira-operations'
 

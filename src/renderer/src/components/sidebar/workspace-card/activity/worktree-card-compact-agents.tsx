@@ -10,7 +10,7 @@ import {
   summarizeAgentIdentities,
   summarizeAgents
 } from './worktree-card-agent-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import './worktree-card-compact-agent-row'
 
@@ -78,13 +78,14 @@ export function CompactAgentSummaryButton({
   expanded,
   onToggle
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
-  const summary = summarizeAgents(agents, subjectLabel)
+  const t = useTranslate()
+  const summary = summarizeAgents(agents, subjectLabel, t)
   const groups = buildSummaryAgentGroups(agents)
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
     .reduce((count, group) => count + group.agents.length, 0)
-  const agentIdentitySummary = summarizeAgentIdentities(agents)
+  const agentIdentitySummary = summarizeAgentIdentities(agents, t)
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -113,12 +114,12 @@ export function CompactAgentSummaryButton({
       )}
       aria-label={
         expanded
-          ? translate(
+          ? t(
               'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
               'Collapse {{value0}}',
               { value0: subjectLabel }
             )
-          : translate(
+          : t(
               'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
               'Expand {{value0}}. {{value1}}',
               { value0: summary, value1: agentIdentitySummary }

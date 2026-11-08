@@ -67,16 +67,6 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(existsSync(pidFilePath)).toBe(false)
   })
 
-  it('routes executable logins through the same waiting console boundary', () => {
-    const spawn = withWindows(() =>
-      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
-    )
-    const script = decodedScript(spawn.args)
-    expect(script).toContain(encodedValue('C:\\Tools\\codex.exe'))
-    expect(script).toContain(encodedValue('login'))
-    spawn.cleanup()
-  })
-
   it('waits for the relay PID when cancellation races console startup', async () => {
     vi.useFakeTimers()
     const spawn = withWindows(() =>

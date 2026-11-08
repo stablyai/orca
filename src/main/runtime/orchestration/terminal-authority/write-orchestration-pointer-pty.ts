@@ -11,7 +11,7 @@ import type { TerminalAgent } from '../../../../shared/agent-status/identity/ter
 import { selectRuntimeHookAgentRowForPane } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
-import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalSummary } from '../../../../shared/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLatestLeafTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
