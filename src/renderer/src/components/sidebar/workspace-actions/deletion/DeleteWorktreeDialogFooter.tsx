@@ -10,6 +10,7 @@ import { deleteWorkspacesCountLabel } from '../context-menu/workspace-batch-acti
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
   isDeleting,
+  isDetachingChildren = false,
   canForceDelete,
   isBatchDelete,
   worktreeCount,
@@ -24,6 +25,7 @@ export function DeleteWorktreeDialogFooter({
 }: {
   isMainWorktree: boolean
   isDeleting: boolean
+  isDetachingChildren?: boolean
   canForceDelete: boolean
   isBatchDelete: boolean
   worktreeCount: number
@@ -38,20 +40,22 @@ export function DeleteWorktreeDialogFooter({
   confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
   const t = useTranslate()
-  const label = isDeleting
-    ? canForceDelete
-      ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
-      : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
-    : isBatchDelete
-      ? deleteWorkspacesCountLabel(worktreeCount, t)
-      : canDeleteAllLineage
-        ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
-        : canForceDelete
-          ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
-          : t(
-              'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
-              'Delete Workspace'
-            )
+  const label = isDetachingChildren
+    ? t('worktree.delete.detachingChildren', 'Detaching children...')
+    : isDeleting
+      ? canForceDelete
+        ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
+        : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
+      : isBatchDelete
+        ? deleteWorkspacesCountLabel(worktreeCount, t)
+        : canDeleteAllLineage
+          ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
+          : canForceDelete
+            ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
+            : t(
+                'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
+                'Delete Workspace'
+              )
 
   return (
     <>
