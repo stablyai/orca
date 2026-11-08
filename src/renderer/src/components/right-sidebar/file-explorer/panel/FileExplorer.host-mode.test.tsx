@@ -55,7 +55,9 @@ vi.mock('../tree/FileExplorerFilesTreePane', () => ({
   }
 }))
 vi.mock('./FileExplorerToolbar', () => ({
-  FileExplorerToolbar: () => <div data-testid="toolbar" />
+  FileExplorerToolbar: ({ hostMode }: { hostMode: { onToggle: () => void } }) => (
+    <button type="button" data-testid="host-toggle" onClick={hostMode.onToggle} />
+  )
 }))
 vi.mock('../host-mode/FileExplorerHostBar', () => ({
   FileExplorerHostBar: () => <div data-testid="host-bar" />
@@ -65,7 +67,9 @@ vi.mock('../host-mode/FileExplorerHostList', () => ({
 }))
 vi.mock('./FileExplorerBackgroundMenu', () => ({ FileExplorerBackgroundMenu: () => null }))
 vi.mock('../content-search/SearchResultsPane', () => ({ SearchResultsPane: () => null }))
-vi.mock('../content-search/SearchQueryRow', () => ({ SearchQueryRow: () => <div data-testid="contents-query" /> }))
+vi.mock('../content-search/SearchQueryRow', () => ({
+  SearchQueryRow: () => <div data-testid="contents-query" />
+}))
 vi.mock('../content-search/SearchFilters', () => ({ SearchFilters: () => null }))
 vi.mock('../content-search/useFileSearchPanel', () => ({
   useFileSearchPanel: () => ({
@@ -136,6 +140,8 @@ vi.mock('../host-mode/use-file-explorer-host-mode', async () => {
       h.setHostActive = setActive
       return {
         active,
+        enter: () => setActive(true),
+        exit: () => setActive(false),
         filterQuery: '',
         setFilterQuery: vi.fn(),
         available: true,
@@ -191,7 +197,9 @@ describe('FileExplorer Host mode', () => {
     expect(container.querySelector('[data-testid="host-list"]')).toBeNull()
 
     for (const active of [true, false, true, false]) {
-      await act(async () => h.setHostActive(active))
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[data-testid="host-toggle"]')?.click()
+      )
       expect(container.querySelector('[data-testid="host-list"]') !== null).toBe(active)
     }
 
