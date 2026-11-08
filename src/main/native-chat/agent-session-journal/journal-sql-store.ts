@@ -1,3 +1,6 @@
+import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
@@ -40,6 +43,7 @@ export type JournalSqlStorePrepare = (
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal extends SqlJournalAppends {
+  private readonly goalAttachments: JournalGoalAttachmentInverse
   readonly reads: JournalSqlReads
   readonly stopMarks: SqlJournalStopMarks
   readonly queuedMessages: SqlJournalQueuedMessages
@@ -59,6 +63,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     opened: JournalWriterCommit
   ) {
     super()
+    this.goalAttachments = new JournalGoalAttachmentInverse(identity.sessionId)
     this.reads = journalSqlReads(database.readers, identity.sessionId)
     this.stopMarks = new SqlJournalStopMarks(this.reads, (run) => this.readInOrder(run))
     this.queuedMessages = new SqlJournalQueuedMessages(
@@ -133,6 +138,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       const facts: JournalWriterHostFacts = {
         identity: this.identity,
         openedThrough: this.openedThrough,
+        goals: this.goalAttachments.snapshot(),
         ...this.queuedMessages.facts(mail),
         ...settled(this.stopMarks.fact()),
         ...preparation.facts
@@ -168,11 +174,18 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         }
         this.target = { ...this.target, epoch }
       }
+      if (commit.goals) {
+        this.goalAttachments.adopt(commit.goals)
+      }
       this.acknowledged = { ...commit.cursor }
       this.listener?.(commit)
       return commit
     })
     return this.epochReplacements.notifyFor(operation.kind, written)
+  }
+
+  keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {
+    return this.readInOrder(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
   }
 
   /** Mark preexisting cards; failed writes retain a conservative reopenFloor and throw. */

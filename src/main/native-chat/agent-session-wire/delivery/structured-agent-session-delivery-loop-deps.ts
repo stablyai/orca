@@ -49,7 +49,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   conversationFence: (sessionId: string) => number
   /** Settle sends covered by partial close; later sends remain eligible. False means settlement failed. */
   closeWhatTheUserClosed: (sessionId: string) => Promise<boolean>
-  failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
+  failureTextContext: (sessionId: string) => Promise<AgentSessionFailureWordsContext>
   logger: StructuredAgentSessionLogger
   record: (sessionId: string) => AgentSessionRecord | null
   currentWork: (sessionId: string) => Promise<StructuredAgentSessionObservedWork | null>

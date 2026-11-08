@@ -11,6 +11,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 /** One named input-evidence population; each answer is a plain record of the same kind. */
 export type JournalInputSingleRead =
   | { kind: 'first-queued' }
+  | { kind: 'latest-submission'; fence: number }
   | { kind: 'entered-submissions' }
   | { kind: 'sending-submissions' }
   | { kind: 'recoverable-submissions' }
@@ -49,7 +50,7 @@ type SubmissionsKind =
 
 export type JournalInputSingleReadResult =
   | {
-      kind: 'first-queued' | 'input-for-item' | 'submission-at'
+      kind: 'first-queued' | 'input-for-item' | 'submission-at' | 'latest-submission'
       submission: AgentJournalSubmission | undefined
     }
   | { kind: SubmissionsKind; submissions: AgentJournalSubmission[] }
@@ -126,6 +127,8 @@ function answerSingle(
   const list = (submissions: Iterable<AgentJournalSubmission>) =>
     Array.from(submissions, (submission) => plain(submission))
   switch (operation.kind) {
+    case 'latest-submission':
+      return { kind: operation.kind, submission: plain(order.latestSubmission(operation.fence)) }
     case 'first-queued':
       return { kind: operation.kind, submission: plain(order.firstQueued()) }
     case 'entered-submissions':

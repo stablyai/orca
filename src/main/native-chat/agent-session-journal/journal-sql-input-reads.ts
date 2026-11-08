@@ -43,6 +43,19 @@ function readInput(
   operation: JournalInputSingleRead
 ): JournalInputSingleReadResult {
   switch (operation.kind) {
+    case 'latest-submission': {
+      const row = scope.db
+        .prepare(`SELECT payload_json FROM journal_submission_attempts
+        WHERE session_id=? AND epoch=? AND current=1 AND dispatch_fence=?
+        ORDER BY submitted_at DESC,ordinal DESC LIMIT 1`)
+        .get(...scope.prefix, operation.fence)
+      return {
+        kind: operation.kind,
+        submission: row
+          ? scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json)
+          : undefined
+      }
+    }
     case 'first-queued':
       return { kind: operation.kind, submission: journalDomainFirstQueuedInput(scope) }
     case 'entered-submissions':

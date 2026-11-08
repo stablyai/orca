@@ -10,6 +10,7 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
+import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-gate'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -94,7 +95,8 @@ export function sendStructuredAgentSessionTurn(
               (await shouldQueueStructuredAgentSessionSend({
                 record,
                 journal: ctx.journal,
-                work: await contextStructuredAgentSessionCurrentWork(ctx)
+                work: await contextStructuredAgentSessionCurrentWork(ctx),
+                readWork: (operation) => readContextStructuredAgentSessionWork(ctx, operation)
               }))
             ) {
               return {

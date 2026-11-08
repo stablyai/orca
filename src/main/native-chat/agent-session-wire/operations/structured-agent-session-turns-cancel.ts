@@ -194,7 +194,7 @@ async function cancelAndNote(
   let interruptFailed = false
   let refusal: AgentSessionCancelOutcome['refusal']
   try {
-    const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
+    const dispatchStatus = await latestJournalDispatchObservation(ctx.journal, ctx.fence)
     const outcome: AgentSessionCancelOutcome = stoppedBefore
       ? { cancelled: false }
       : await ctx.adapter.cancelTurn({

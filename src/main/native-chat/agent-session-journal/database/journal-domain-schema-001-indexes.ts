@@ -91,6 +91,7 @@ CREATE INDEX journal_submission_accepted_position ON journal_submission_attempts
   WHERE current=1 AND accepted_sequence IS NOT NULL;
 CREATE INDEX journal_submission_signed_out ON journal_submission_attempts(session_id,epoch,dispatch_fence)
   WHERE current=1 AND signed_out=1;
+CREATE INDEX journal_submission_latest_fence ON journal_submission_attempts(session_id,epoch,dispatch_fence,submitted_at,ordinal) WHERE current=1;
 CREATE INDEX journal_submission_order ON journal_submission_attempts(session_id, epoch, submitted_at, ordinal, message_id)
   WHERE current=1;
 `

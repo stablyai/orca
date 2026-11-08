@@ -298,7 +298,7 @@ export class StructuredAgentSessionDeliveryLoop {
       await recordStructuredAgentSessionDeliveryFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
         failure,
-        this.deps.failureTextContext(sessionId),
+        await this.deps.failureTextContext(sessionId),
         clientMessageId
       )
     }

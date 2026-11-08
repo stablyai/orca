@@ -183,7 +183,7 @@ function acceptUnderSerialize(
         const record = context.deps.store.requireWritableRecord(ctx.sessionId)
         const refusal =
           record &&
-          conversationCommandBlocked(
+          (await conversationCommandBlocked(
             ctx,
             record,
             {
@@ -191,7 +191,7 @@ function acceptUnderSerialize(
               open: context.childWorkOpen(ctx.sessionId)
             },
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
-          )
+          ))
         const blocked =
           structuredAgentSessionSendBlock(record) ??
           (refusal ? { ok: false as const, refusal } : null)

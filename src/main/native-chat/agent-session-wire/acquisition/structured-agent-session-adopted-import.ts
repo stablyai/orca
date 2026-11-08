@@ -95,11 +95,12 @@ export async function importAdoptedTranscript(
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
-      await attached.journal.replaceEpochItems(
-        params.adopt ? 'legacy_import' : 'session_created',
-        record.lease.runtimeFence,
-        prepared ?? []
-      )
+      await attached.journal.write({
+        kind: 'epoch-replace',
+        reason: params.adopt ? 'legacy_import' : 'session_created',
+        fence: record.lease.runtimeFence,
+        items: prepared ?? []
+      })
     }
     return
   }
@@ -133,11 +134,14 @@ async function applyAdoptedTranscript(
               : { kind: 'start' }
           })
         : undefined
-    await attached.journal.replaceEpochItems(
-      'legacy_import',
-      record.lease.runtimeFence,
-      prepared,
-      receipt ? () => receipt : undefined
+    await attached.journal.write(
+      {
+        kind: 'epoch-replace',
+        reason: 'legacy_import',
+        fence: record.lease.runtimeFence,
+        items: prepared
+      },
+      receipt ? () => ({ receipt }) : undefined
     )
     return
   }

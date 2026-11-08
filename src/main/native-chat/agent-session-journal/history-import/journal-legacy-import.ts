@@ -80,7 +80,12 @@ export async function importLegacyTranscriptIntoJournal(input: {
     const current = input.journal.cursor()
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
   }
-  const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, prepared.items)
+  const { cursor } = await input.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence: input.fence,
+    items: prepared.items
+  })
   return { ok: true, epoch: cursor.epoch, cursor, imported: prepared.items.length, replaced: true }
 }
 

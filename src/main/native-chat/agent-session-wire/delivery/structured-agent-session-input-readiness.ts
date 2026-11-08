@@ -92,7 +92,7 @@ export async function assertStructuredAgentSessionInputReady(input: {
           : null) ?? {
           failure: agentSessionFailureFact('cancelled', { neverReachedAgent: true })
         },
-        deps.failureTextContext(sessionId)
+        await deps.failureTextContext(sessionId)
       )
     })
   }

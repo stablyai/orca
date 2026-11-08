@@ -65,6 +65,7 @@ export async function beginStructuredAgentSessionInputHandover(
     })
     return null
   }
+  const failureTextContext = await deps.failureTextContext(sessionId)
   return beginSubmissionHandover(
     {
       sessionId,
@@ -72,7 +73,7 @@ export async function beginStructuredAgentSessionInputHandover(
       fence: awaitedChild.fence,
       adapter: deps.adapter,
       agents: deps.agents,
-      failureTextContext: deps.failureTextContext(sessionId),
+      failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
@@ -113,7 +114,7 @@ export async function beginStructuredAgentSessionInputHandover(
         ) =>
           failedStructuredAgentSessionInputContinuation(
             session.journal,
-            deps.failureTextContext(sessionId),
+            failureTextContext,
             cause,
             fence,
             startKey

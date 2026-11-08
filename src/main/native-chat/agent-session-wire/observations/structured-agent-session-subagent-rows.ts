@@ -98,7 +98,9 @@ export class StructuredAgentSessionSubagentRows {
           : [agentJournalItemKey(subagentJournalItemIdentity(child.providerId))]
       )
     )
-    const savedById = new Map(savedItems.map((item) => [item.itemId, item.body]))
+    const savedById = new Map(
+      savedItems.flatMap(({ item }) => (item ? [[item.itemId, item.body] as const] : []))
+    )
     if (this.deps.journal(sessionId) !== journal) {
       return
     }

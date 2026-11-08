@@ -3,7 +3,7 @@ import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionDeadGenerationInput } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
-import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-current-work'
+import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-work-policy'
 
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionWorkEvidence } from '../observations/structured-agent-session-work-evidence'
