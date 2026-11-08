@@ -41,20 +41,42 @@ export async function readWorktreeDiffStamp(
   return readStamp(worktreePath, filePath, includeWorkingTree ? [filePath] : [], options)
 }
 
-/** Stamp one read spanning several working files, such as a whole-worktree numstat. */
+/** Stamp one read spanning several working files, such as a whole-worktree numstat; host paths stamp settings files. */
 export async function readWorktreePathsDiffStamp(
   worktreePath: string,
   filePaths: readonly string[],
-  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {},
+  hostFilePaths: readonly string[] = []
 ): Promise<WorktreeDiffStamp | null> {
-  return readStamp(worktreePath, filePaths, filePaths, options)
+  return readStamp(worktreePath, [filePaths, hostFilePaths], filePaths, options, hostFilePaths)
+}
+
+/** Stamp files by absolute host path (for example Git config); null when any cannot be stamped. */
+export async function readHostFilesStamp(
+  filePaths: readonly string[]
+): Promise<WorktreeDiffStamp | null> {
+  const capturedAtMs = Date.now()
+  try {
+    const components = await Promise.all(filePaths.map(readWorkingTreeComponent))
+    return {
+      value: JSON.stringify([filePaths, ...components.map((component) => component.text)]),
+      newestMtimeMs: Math.max(
+        Number.NEGATIVE_INFINITY,
+        ...components.map((component) => component.mtimeMs)
+      ),
+      capturedAtMs
+    }
+  } catch {
+    return null
+  }
 }
 
 async function readStamp(
   worktreePath: string,
   readIdentity: unknown,
   workingTreePaths: readonly string[],
-  options: Pick<GitRuntimeOptions, 'wslDistro'>
+  options: Pick<GitRuntimeOptions, 'wslDistro'>,
+  hostFilePaths: readonly string[] = []
 ): Promise<WorktreeDiffStamp | null> {
   const capturedAtMs = Date.now()
   try {
@@ -74,7 +96,8 @@ async function readStamp(
         ? workingTreePaths.map((filePath) =>
             readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
           )
-        : [Promise.resolve(ABSENT)])
+        : [Promise.resolve(ABSENT)]),
+      ...hostFilePaths.map(readWorkingTreeComponent)
     ])
     if (!head) {
       return null
