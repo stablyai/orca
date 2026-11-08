@@ -7,12 +7,12 @@ import { GitStatusReadLeaseOwner } from '../../../shared/git/status/git-status-r
 import { invalidateGitUpstreamStatusReads } from './upstream'
 import { clearSubmodulePathsCache } from './submodule-paths'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
-import { SettledDiffCache } from './settled-diff-cache'
+import { FILE_DIFF_CACHE_LIMITS, SettledDiffCache } from './settled-diff-cache'
 
 export const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 
 /** Settled diff results, valid only while their stamped git state holds. */
-export const settledDiffCache = new SettledDiffCache()
+export const settledDiffCache = new SettledDiffCache(FILE_DIFF_CACHE_LIMITS)
 
 export const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 

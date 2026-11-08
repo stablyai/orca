@@ -30,15 +30,25 @@ export type SettledDiffCacheStats = {
   retainedCharacters: number
 }
 
-type CacheEntry = { stamp: string; result: GitDiffResult; characters: number }
+export type SettledDiffCacheLimits<T> = {
+  maxEntries: number
+  maxCharacters: number
+  maxEntryCharacters: number
+  characterCount: (result: T) => number
+}
 
-export class SettledDiffCache {
-  private readonly entries = new BoundedMap<string, CacheEntry>({
-    maxEntries: MAX_SETTLED_DIFF_CACHE_ENTRIES,
-    maxBytes: MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
-    maxEntryBytes: MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
-    sizeOf: (entry) => entry.characters
-  })
+export const FILE_DIFF_CACHE_LIMITS: SettledDiffCacheLimits<GitDiffResult> = {
+  maxEntries: MAX_SETTLED_DIFF_CACHE_ENTRIES,
+  maxCharacters: MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
+  maxEntryCharacters: MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
+  characterCount: (result) => result.originalContent.length + result.modifiedContent.length
+}
+
+type CacheEntry<T> = { stamp: string; result: T; characters: number }
+
+export class SettledDiffCache<T> {
+  private readonly entries: BoundedMap<string, CacheEntry<T>>
+  private readonly characterCount: (result: T) => number
   private generation = 0
   private hits = 0
   private misses = 0
@@ -48,12 +58,22 @@ export class SettledDiffCache {
   private clockSkewedWrites = 0
   private invalidatedDuringRead = 0
 
+  constructor(limits: SettledDiffCacheLimits<T>) {
+    this.characterCount = limits.characterCount
+    this.entries = new BoundedMap<string, CacheEntry<T>>({
+      maxEntries: limits.maxEntries,
+      maxBytes: limits.maxCharacters,
+      maxEntryBytes: limits.maxEntryCharacters,
+      sizeOf: (entry) => entry.characters
+    })
+  }
+
   /** Capture before reading; a generation change prevents publishing across a mutation. */
   beginRead(): number {
     return this.generation
   }
 
-  get(key: string, stamp: WorktreeDiffStamp | null): GitDiffResult | undefined {
+  get(key: string, stamp: WorktreeDiffStamp | null): T | undefined {
     if (!stamp) {
       this.unprovable += 1
       return undefined
@@ -67,12 +87,7 @@ export class SettledDiffCache {
     return entry.result
   }
 
-  set(
-    key: string,
-    stamp: WorktreeDiffStamp | null,
-    result: GitDiffResult,
-    readGeneration: number
-  ): void {
+  set(key: string, stamp: WorktreeDiffStamp | null, result: T, readGeneration: number): void {
     if (!stamp) {
       return
     }
@@ -87,7 +102,7 @@ export class SettledDiffCache {
       }
       return
     }
-    const characters = resultCharacterCount(result)
+    const characters = this.characterCount(result)
     if (this.entries.set(key, { stamp: stamp.value, result, characters })) {
       this.stores += 1
     }
@@ -123,8 +138,4 @@ export class SettledDiffCache {
     this.clockSkewedWrites = 0
     this.invalidatedDuringRead = 0
   }
-}
-
-function resultCharacterCount(result: GitDiffResult): number {
-  return result.originalContent.length + result.modifiedContent.length
 }
