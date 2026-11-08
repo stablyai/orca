@@ -10,6 +10,11 @@ import { projectStructuredItemToNativeChat } from '../../../../../../shared/agen
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
+vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
+  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
+    .loadNodeOniguruma
+}))
+
 afterEach(cleanup)
 
 /** Read lucide classes so identity-changing glyph swaps remain observable. */
