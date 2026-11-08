@@ -19,6 +19,7 @@ import {
   sessionActivityEvidence
 } from '../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
 import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-report-mailbox'
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
@@ -154,7 +155,10 @@ export function buildCrewSnapshot(
           evidence.binding.terminalHandle === target.terminalHandle &&
           evidence.binding.paneKey === target.paneKey &&
           (evidence.binding.kind !== 'worker' || evidence.binding.dispatchId === assignment?.id)))
-    const session = worker ? observeSession(worker) : undefined
+    // Chats keep their own status row: their reach check queries SQLite on every Crew rebuild.
+    const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
+      ? observeSession(worker!)
+      : undefined
     const fresh = session
       ? sessionActivityEvidence(session)
       : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'

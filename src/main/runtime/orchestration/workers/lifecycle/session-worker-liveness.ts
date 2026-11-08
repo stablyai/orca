@@ -77,7 +77,7 @@ export type DispatchSessionObserver = (
   dispatch: Pick<DispatchContextRow, 'id' | 'assignee_handle' | 'process_incarnation'>
 ) => FleetSessionObservation | undefined
 
-/** One verdict per Dispatch, so a batched attention pass reads the verdict its pane projection took. */
+/** Structured workers' verdicts for per-pane attention, once per Dispatch so the batched pass reads the same one. */
 export function createDispatchSessionLivenessReader(
   ...args: Parameters<typeof createSessionWorkerLivenessReader>
 ): {
@@ -88,6 +88,10 @@ export function createDispatchSessionLivenessReader(
   const byDispatch = new Map<string, FleetSessionObservation | undefined>()
   return {
     observe: (dispatch) => {
+      // A chat's reach check queries SQLite; this runs per publication, so chats keep their status row here.
+      if (!isStructuredWorkerHandle(dispatch.assignee_handle)) {
+        return undefined
+      }
       if (!byDispatch.has(dispatch.id)) {
         byDispatch.set(
           dispatch.id,
