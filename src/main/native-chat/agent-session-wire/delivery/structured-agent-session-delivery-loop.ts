@@ -35,7 +35,7 @@ type Prepared =
       before: Promise<void>
     }
 
-type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
+type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 export class StructuredAgentSessionDeliveryLoop {
   private readonly running = new Map<string, DeliveryProgress>()
@@ -151,7 +151,7 @@ export class StructuredAgentSessionDeliveryLoop {
       await owned(async () => {
         try {
           const session = this.deps.sessions.get(sessionId)
-          const selected = session && oldestQueuedSubmission(session)
+          const selected = session && (await oldestQueuedSubmission(session))
           await this.fail(sessionId, { startKey: null, cause }, selected?.clientMessageId ?? null)
         } finally {
           this.stop(sessionId)
@@ -190,16 +190,16 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     if (this.deps.startFlights?.get(sessionId)) {
-      return { start: progress.claim(sessionId, this.deps, oldest.clientMessageId) }
+      return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
     }
-    const failedStart = startThatFailedWhileQueued(session, oldest)
+    const failedStart = await startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
     await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
-      return { start: progress.claim(sessionId, this.deps, oldest.clientMessageId) }
+      return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
     }
     return {
       ok: true,

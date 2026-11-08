@@ -28,7 +28,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** Track from enqueue so quit drains any child the start may create. */
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
+  startProviderChild: (
+    sessionId: string,
+    startedFor: string
+  ) => Promise<StructuredAgentSessionStartClaim>
   /** Retire mismatched login/permission children under serialization. */
   retireOutgrownChild: (
     sessionId: string,

@@ -26,7 +26,7 @@ import { structuredAgentSessionEndedChildFailure } from '../termination/structur
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
 
-type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
+type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 /** The scheduler's selected input keeps one handover while its exact child binding changes. */
 export async function beginStructuredAgentSessionInputHandover(

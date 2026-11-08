@@ -30,7 +30,7 @@ export function structuredAgentSessionNextHandover(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>,
   fence: number,
   work?: StructuredAgentSessionCurrentWork | null
-): ReturnType<typeof oldestQueuedSubmission> {
+): Awaited<ReturnType<typeof oldestQueuedSubmission>> {
   return structuredAgentSessionSendOpeningTurnInJournal(session.journal, fence, work)
     ? undefined
     : selectableStructuredSubmission(session.journal, work ?? null)

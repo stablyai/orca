@@ -27,9 +27,13 @@ export class DeliveryProgress {
   }
 
   /** Read any existing flight before this step can register its own; only a joined claim proves startup. */
-  claim(sessionId: string, reads: StructuredAgentSessionDeliveryLoopDeps, startedFor: string) {
+  async claim(
+    sessionId: string,
+    reads: StructuredAgentSessionDeliveryLoopDeps,
+    startedFor: string
+  ) {
     const flight = reads.startFlights?.get(sessionId)
-    const claim = reads.startProviderChild(sessionId, startedFor)
+    const claim = await reads.startProviderChild(sessionId, startedFor)
     this.joined = flight?.outcome === claim.outcome ? flight : undefined
     return claim
   }

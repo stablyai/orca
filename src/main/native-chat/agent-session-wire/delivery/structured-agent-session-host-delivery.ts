@@ -64,7 +64,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
+  startProviderChild: (
+    sessionId: string,
+    startedFor: string
+  ) => Promise<StructuredAgentSessionStartClaim>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   startFlights?: StructuredAgentSessionDeliveryLoopDeps['startFlights']
   readiness: (
@@ -169,7 +172,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         ? true
         : holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
             mark: 'settled',
-            which: acceptedNoLaterThan(session.journal, ended.endedAt)
+            which: await acceptedNoLaterThan(session.journal, ended.endedAt)
           })
     },
     failureTextContext: (sessionId) =>
