@@ -12,7 +12,7 @@ import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-jo
 import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
-  releaseAgentSessionRecordStore
+  retireAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
@@ -41,8 +41,9 @@ vi.mock(
   })
 )
 afterEach(async () => {
-  const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await retireAgentSessionRecordStore(async (opened) => {
+    await opened?.journalDatabase.close()
+  })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -555,8 +556,9 @@ it('keeps imported and local peer authority through real CLI import, settlement,
       await pendingDone
     }
     homeJournal.close()
-    const released = await releaseAgentSessionRecordStore()
-    released?.journalDatabase.close()
+    await retireAgentSessionRecordStore(async (opened) => {
+      await opened?.journalDatabase.close()
+    })
     home.close()
     worker.close()
     hostRef.current = null
@@ -599,11 +601,12 @@ it('publishes a restored session peer in the first completed Crew frame', async 
         now: fixtureNow
       })
     }
-    const released = await releaseAgentSessionRecordStore()
-    if (!released) {
-      throw new Error('Expected fixture-owned seeded slot')
-    }
-    released.journalDatabase.close()
+    await retireAgentSessionRecordStore(async (opened) => {
+      if (!opened) {
+        throw new Error('Expected fixture-owned seeded slot')
+      }
+      await opened.journalDatabase.close()
+    })
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,
@@ -633,8 +636,9 @@ it('publishes a restored session peer in the first completed Crew frame', async 
   } finally {
     controller.abort()
     await subscription
-    const opened = await releaseAgentSessionRecordStore()
-    opened?.journalDatabase.close()
+    await retireAgentSessionRecordStore(async (opened) => {
+      await opened?.journalDatabase.close()
+    })
     h.close()
     profilePath.mockRestore()
   }

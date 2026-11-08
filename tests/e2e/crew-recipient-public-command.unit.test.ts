@@ -3,7 +3,7 @@ import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/r
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/addressing/orchestration-party'
 import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-stream'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
-import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
+import { retireAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -21,8 +21,9 @@ vi.mock(
   })
 )
 afterEach(async () => {
-  const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await retireAgentSessionRecordStore(async (opened) => {
+    await opened?.journalDatabase.close()
+  })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })

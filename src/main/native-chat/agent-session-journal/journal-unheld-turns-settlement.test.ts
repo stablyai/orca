@@ -8,7 +8,10 @@ import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agen
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { AgentSessionJournal } from './journal-store'
 import { SqlAgentSessionJournal } from './journal-sql-store'
-import { openTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from './store-lifecycle/journal-host-database-test-support'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -18,7 +21,10 @@ const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
 afterEach(async () => {
   await Promise.all(databases.splice(0).map((database) => database.close()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  for (const root of roots.splice(0)) {
+    await closeTestJournalHostDatabase(root)
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 const identity = {
