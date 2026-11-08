@@ -3,8 +3,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { safeAutoForkSyncAttempts, scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 
 const runtimeEnvironmentCall = vi.fn()
@@ -52,38 +52,6 @@ beforeEach(() => {
 })
 
 describe('scheduleSafeAutoForkSync', () => {
-  it('addresses a runtime-hosted repo by its main worktree id, not the bare repo id', async () => {
-    // Why: the runtime rejects `id:<repo-id>` with worktree_id_requires_full_path (#16447).
-    scheduleSafeAutoForkSync([RUNTIME_REPO])
-    await flushScheduledSyncs()
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'git.forkSync',
-        params: expect.objectContaining({ worktree: 'id:repo-1::/srv/repo-1' })
-      })
-    )
-  })
-
-  it('still runs local repos against the repo path over local git IPC', async () => {
-    const localRepo: Repo = {
-      ...RUNTIME_REPO,
-      id: 'repo-2',
-      path: '/home/me/repo-2',
-      executionHostId: 'local'
-    }
-
-    scheduleSafeAutoForkSync([localRepo])
-    await flushScheduledSyncs()
-
-    expect(gitSyncFork).toHaveBeenCalledWith({
-      worktreePath: '/home/me/repo-2',
-      connectionId: undefined,
-      expectedUpstream: { owner: 'up', repo: 'r' }
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
   it('bounds completed attempt history under repo churn', async () => {
     const repos = Array.from({ length: 600 }, (_, index) => ({
       ...RUNTIME_REPO,

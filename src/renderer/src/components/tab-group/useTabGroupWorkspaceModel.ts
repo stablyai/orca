@@ -1,7 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { useTabGroupItemProjections } from './useTabGroupItemProjections'
 import { useTabGroupTabCloseCommands } from './useTabGroupTabCloseCommands'

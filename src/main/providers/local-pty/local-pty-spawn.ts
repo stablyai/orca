@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/jcode-runtime-dir'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { prepareMacosTccLoginShell } from '../macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
 import { normalizeLocalCallerSessionId } from './local-pty-launch-context'
 import { createLocalPtyLaunchPlan, DeferredLocalPtyLaunchPlan } from './local-pty-launch-plan'
-import { holdPassiveRestoreOfStoppedWslDistro } from '../../daemon/daemon-wsl-passive-restore-hold'
+import { holdPassiveRestoreOfStoppedWslDistro } from '../../daemon/providers/wsl/daemon-wsl-passive-restore-hold'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import {
   validateWorkingDirectory,
@@ -26,7 +26,7 @@ import {
 } from './local-pty-spawn-state'
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
-import { updateHistoryEnvForFallback } from '../../terminal-history'
+import { updateHistoryEnvForFallback } from '../../pty/history/terminal-history'
 import type { PtySpawnOptions } from '../pty-provider-contract'
 import type { PtySpawnResult } from '../pty-spawn-result'
 

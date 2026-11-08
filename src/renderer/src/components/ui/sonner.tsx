@@ -7,10 +7,12 @@ import {
 } from 'lucide-react'
 import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
-import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
-import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
+import {
+  NOTIFICATION_CARD_STACK_BOTTOM,
+  NOTIFICATION_CARD_STACK_HEIGHT_VAR
+} from '@/lib/notification-card-stack-height'
 import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
 import { useToasterModalLayer } from './toaster-modal-layer'
 
@@ -18,6 +20,12 @@ import { useToasterModalLayer } from './toaster-modal-layer'
 export const INLINE_ACTION_CLASS_NAMES = {
   content: '!basis-0',
   actionButton: '!m-0 !self-center'
+}
+
+// Why: a two-way choice ends at the right edge, the way the Windows terminal weight notice keeps Okay
+// at the end; the global footer rule otherwise starts actions under the copy.
+export const TRAILING_ACTIONS_CLASS_NAMES = {
+  cancelButton: '!ml-auto'
 }
 
 // Why: scope to real modals; Radix menus/selects also set body pointer-events:none.

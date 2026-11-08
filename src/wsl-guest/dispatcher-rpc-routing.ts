@@ -3,10 +3,8 @@ import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   SkillInstallFailureSchema
 } from '../shared/skill-install-failure'
-import {
-  TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
-  TerminalUnavailableCauseSchema
-} from '../shared/terminal-unavailable-cause'
+import { TerminalUnavailableCauseSchema } from '../shared/terminal/runtime-policy/terminal-unavailable-cause'
+import { TERMINAL_UNAVAILABLE_ERROR_CODE as TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../shared/runtime-capability-degradation'
 import {
   RelayErrorCode,
   type JsonRpcNotification,

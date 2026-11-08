@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 
 // Browser Files lack paths; use claim tokens ending in the filename so path-based chips still display basename correctly.
 const TOKEN_PREFIX = 'orca-browser-file:'
@@ -17,6 +17,10 @@ export function takeBrowserAttachmentFile(token: string): File | null {
   const file = heldFiles.get(token) ?? null
   heldFiles.delete(token)
   return file
+}
+
+export function readBrowserAttachmentFile(token: string): File | null {
+  return heldFiles.get(token) ?? null
 }
 
 /** Releases whatever an attach left unclaimed (refused, abandoned, failed); other paths are ignored. */

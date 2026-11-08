@@ -18,7 +18,9 @@ it('loads a fresh production import graph before requiring native PTY code', () 
   const directory = mkdtempSync(join(tmpdir(), 'orcad-load-order-'))
   directories.push(directory)
   const bundle = join(directory, 'orcad.js')
-  const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(REPO_ROOT, 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const built = runProcessSync({
     program: process.execPath,
     args: [

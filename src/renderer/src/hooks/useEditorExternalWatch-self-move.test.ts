@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
 }))
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -20,16 +20,16 @@ import {
 } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
-import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { getOpenFilesForExternalFileChange } from '@/components/editor/autosave/editor-autosave'
+import { __clearSelfWriteRegistryForTests } from '@/components/editor/external-changes/editor-self-write-registry'
 import {
   __clearEditorPathMovesForTests,
   beginEditorPathMove,
   settleEditorPathMove
 } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 
 const findTarget = (worktreePath: string, runtimeEnvironmentId: string | null = null) =>
   worktreePath === '/repo'

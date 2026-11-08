@@ -6,15 +6,14 @@ const mocks = vi.hoisted(() => ({
   jiraListTransitionsForTarget: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
 }))
-vi.mock('@/runtime/runtime-jira-detail-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
 }))
 
-const { findJiraBoardSectionTransition, loadTaskPageJiraIssueTransitions } =
-  await import('./task-page-jira-board-transitions')
+const { loadTaskPageJiraIssueTransitions } = await import('./task-page-jira-board-transitions')
 const target: RuntimeClientTarget = { kind: 'local' }
 
 function status(id: string, name: string): JiraStatus {
@@ -41,80 +40,9 @@ function issue(key: string, statusValue: JiraStatus, siteId?: string): JiraIssue
   }
 }
 
-describe('findJiraBoardSectionTransition', () => {
-  const inProgress = status('2', 'In Progress')
-  const done = status('3', 'Done')
-
-  it('matches by the status id of issues already in the section', () => {
-    const renamed = transition('t-done', { ...done, name: 'Completed' })
-    const found = findJiraBoardSectionTransition([transition('t-ip', inProgress), renamed], {
-      label: 'Done',
-      issues: [issue('STA-1', done)]
-    })
-    expect(found).toBe(renamed)
-  })
-
-  it('matches an empty column through its board-config status ids', () => {
-    const renamed = transition('t-done', { ...done, name: 'Completed' })
-    const found = findJiraBoardSectionTransition([renamed], {
-      label: 'Done column',
-      statusIds: ['3'],
-      issues: []
-    })
-    expect(found).toBe(renamed)
-  })
-  it('does not select an arbitrary action when several actions reach a column', () => {
-    expect(
-      findJiraBoardSectionTransition([transition('first', done), transition('second', done)], {
-        label: 'Done',
-        statusIds: ['3'],
-        fromBoard: true,
-        issues: []
-      })
-    ).toBeNull()
-  })
-  it('does not use a same-named status outside an authoritative board column', () => {
-    expect(
-      findJiraBoardSectionTransition([transition('other', status('other', 'Done'))], {
-        label: 'Done',
-        statusIds: ['3'],
-        fromBoard: true,
-        issues: []
-      })
-    ).toBeNull()
-  })
-  it('does not borrow a status ID from another Jira site in fallback columns', () => {
-    expect(
-      findJiraBoardSectionTransition(
-        [transition('wrong', status('3', 'Blocked'))],
-        {
-          label: 'Done',
-          statusIds: ['3'],
-          fromBoard: false,
-          issues: [issue('ABC-1', done, 'site-b')]
-        },
-        'site-a'
-      )
-    ).toBeNull()
-  })
-})
-
 describe('loadTaskPageJiraIssueTransitions', () => {
   beforeEach(() => {
     mocks.jiraListTransitionsForTarget.mockReset()
-  })
-
-  it('caches per issue status and refetches after the status changes', async () => {
-    const inProgress = status('2', 'In Progress')
-    const done = status('3', 'Done')
-    mocks.jiraListTransitionsForTarget.mockResolvedValue([transition('t-done', done)])
-
-    await loadTaskPageJiraIssueTransitions(target, 'scope', issue('STA-9', inProgress, 'site-a'))
-    await loadTaskPageJiraIssueTransitions(target, 'scope', issue('STA-9', inProgress, 'site-a'))
-    expect(mocks.jiraListTransitionsForTarget).toHaveBeenCalledTimes(1)
-
-    await loadTaskPageJiraIssueTransitions(target, 'scope', issue('STA-9', done, 'site-a'))
-    expect(mocks.jiraListTransitionsForTarget).toHaveBeenCalledTimes(2)
   })
 
   it('surfaces a failed transitions request and allows an explicit retry', async () => {

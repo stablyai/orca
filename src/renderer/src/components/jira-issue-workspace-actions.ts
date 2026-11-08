@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { Clipboard, ExternalLink, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   JiraIssue,
   JiraIssueUpdate,
@@ -17,7 +18,7 @@ import {
   type IssueCopyTarget
 } from './issue-copy-target-messages'
 import type { JiraIssueWorkspaceAction } from './jira-issue-workspace-content'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function useJiraIssueWorkspaceActions({
   displayed,
@@ -97,28 +98,28 @@ export async function copyJiraTextToClipboard(
   }
 }
 
-export function getJiraIssueWorkspaceActions(issue: JiraIssue): JiraIssueWorkspaceAction[] {
+export function getJiraIssueWorkspaceActions(
+  issue: JiraIssue,
+  t: Translate = translate
+): JiraIssueWorkspaceAction[] {
   return [
     {
-      label: translate('auto.components.JiraIssueWorkspace.69da9a208c', 'Open in Jira'),
+      label: t('auto.components.JiraIssueWorkspace.69da9a208c', 'Open in Jira'),
       icon: ExternalLink,
       action: () => openAppHttpLink(issue.url)
     },
     {
-      label: translate('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),
+      label: t('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),
       icon: Clipboard,
       action: () => void copyJiraTextToClipboard(issue.url, 'url')
     },
     {
-      label: translate('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
+      label: t('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
       icon: Clipboard,
       action: () => void copyJiraTextToClipboard(issue.key, 'key')
     },
     {
-      label: translate(
-        'auto.components.JiraIssueWorkspace.80efa101c5',
-        'Copy suggested branch name'
-      ),
+      label: t('auto.components.JiraIssueWorkspace.80efa101c5', 'Copy suggested branch name'),
       icon: GitBranch,
       action: () =>
         void copyJiraTextToClipboard(
@@ -127,7 +128,7 @@ export function getJiraIssueWorkspaceActions(issue: JiraIssue): JiraIssueWorkspa
         )
     },
     {
-      label: translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
+      label: t('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
       icon: Clipboard,
       action: () => void copyJiraTextToClipboard(buildJiraIssuePrompt(issue), 'prompt')
     }

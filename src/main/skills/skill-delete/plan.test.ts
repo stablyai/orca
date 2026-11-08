@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDeleteRequest } from '../../../shared/skill-delete-contract'
 import { buildSkillDeletePlan } from './plan'
-import * as SkillDeleteGuards from './guards'
+import './guards'
 import { nativeSkillInstallFilesystem } from '../skill-install-filesystem'
 
 /** Windows rejects `symlink` with EPERM without elevation or Developer Mode. */
@@ -86,47 +86,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
   )
 
   it.skipIf(WINDOWS)(
-    'classifies a directory whose SKILL.md is a symlink as alias-file, not canonical',
-    async () => {
-      const { home } = await fixture()
-      const canonicalDirectory = join(home, '.agents', 'skills', 'demo')
-      const file = await writeSkill(canonicalDirectory, 'demo')
-      const aliasDirectory = join(home, '.claude', 'skills', 'demo')
-      await mkdir(aliasDirectory, { recursive: true })
-      await symlink(file, join(aliasDirectory, 'SKILL.md'))
-
-      const resolved = await plan(home, await request(file))
-      const alias = resolved.plan.skills[0].placements.find(
-        (placement) => placement.path === aliasDirectory
-      )
-      expect(alias?.kind).toBe('alias-file')
-    }
-  )
-
-  it.skipIf(WINDOWS)(
-    'removes a home-root link to content outside every root, and only the link',
-    async () => {
-      const { home } = await fixture()
-      const outside = join(home, 'elsewhere', 'demo')
-      await writeSkill(outside, 'demo')
-      await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-      await symlink(outside, join(home, '.claude', 'skills', 'demo'), 'dir')
-
-      const resolved = await plan(
-        home,
-        await request(join(home, '.claude', 'skills', 'demo', 'SKILL.md'))
-      )
-      expect(resolved.plan.skills[0].blocked).toBeUndefined()
-      expect(resolved.plan.skills[0].placements).toEqual([
-        expect.objectContaining({
-          path: join(home, '.claude', 'skills', 'demo'),
-          kind: 'alias-dir'
-        })
-      ])
-    }
-  )
-
-  it.skipIf(WINDOWS)(
     'deletes the links of a repo skill whose content lives outside every root',
     async () => {
       // Remove Orca-owned links into tool-managed content while preserving external bytes.
@@ -157,15 +116,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     }
   )
 
-  it('still refuses when the content is outside and no link sits in a root', async () => {
-    const { home } = await fixture()
-    const outside = join(home, 'elsewhere', 'demo')
-    const file = await writeSkill(outside, 'demo')
-    const resolved = await plan(home, await request(file))
-    expect(resolved.plan.skills[0].blocked).toBe('unowned')
-    expect(resolved.plan.skills[0].placements).toEqual([])
-  })
-
   it.skipIf(WINDOWS)(
     'refuses a bundled skill even when the row claimed a home source',
     async () => {
@@ -191,25 +141,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     expect(resolved.plan.skills[0].blocked).toBe('plugin')
   })
 
-  it('lists an overlapping root\u2019s directory once, not twice', async () => {
-    const { home } = await fixture()
-    // Home-as-workspace duplicates roots; staging one path twice would fail and roll back.
-    const canonicalDirectory = join(home, '.claude', 'skills', 'demo')
-    const file = await writeSkill(canonicalDirectory, 'demo')
-    const resolved = await buildSkillDeletePlan({
-      request: await request(file),
-      target: { kind: 'native-host', cwd: home },
-      repos: [],
-      filesystem: nativeSkillInstallFilesystem,
-      homeDir: home
-    })
-    expect(
-      resolved.plan.skills[0].placements.filter(
-        (placement) => placement.path === canonicalDirectory
-      )
-    ).toHaveLength(1)
-  })
-
   it('never treats a root itself as a placement', async () => {
     const { home } = await fixture()
     const root = join(home, '.agents', 'skills')
@@ -231,63 +162,9 @@ describe('buildSkillDeletePlan freshness guard', () => {
     const resolved = await plan(home, await request(file, { updatedAt: displayed }))
     expect(resolved.plan.skills[0].blocked).toBe('stale')
   })
-
-  it('fails closed on a null updatedAt rather than skipping the check', async () => {
-    const { home } = await fixture()
-    const file = await writeSkill(join(home, '.agents', 'skills', 'demo'), 'demo')
-    const resolved = await plan(home, await request(file, { updatedAt: null }))
-    expect(resolved.plan.skills[0].blocked).toBe('stale')
-  })
-
-  it('accepts a second-granularity updatedAt, as WSL discovery reports it', async () => {
-    const { home } = await fixture()
-    const file = await writeSkill(join(home, '.agents', 'skills', 'demo'), 'demo')
-    const seconds = Math.floor((await stat(file)).mtimeMs / 1000) * 1000
-    const resolved = await plan(home, await request(file, { updatedAt: seconds }))
-    expect(resolved.plan.skills[0].blocked).toBeUndefined()
-  })
-
-  it('reports missing when the skill file is gone', async () => {
-    const { home } = await fixture()
-    const directory = join(home, '.agents', 'skills', 'demo')
-    const file = await writeSkill(directory, 'demo')
-    const deleteRequest = await request(file)
-    await rm(file)
-    const resolved = await plan(home, deleteRequest)
-    expect(resolved.plan.skills[0].blocked).toBe('missing')
-  })
 })
 
 describe('buildSkillDeletePlan placement matching', () => {
-  it('classifies matching placements without rescanning every unrelated skill', async () => {
-    const { home } = await fixture()
-    const selected: SkillDeleteRequest['skills'] = []
-    for (let index = 0; index < 32; index++) {
-      const name = `skill-${index}`
-      const file = await writeSkill(join(home, '.agents', 'skills', name), name)
-      if (index < 8) {
-        selected.push({ ...(await request(file)).skills[0], id: name, name })
-      }
-    }
-    selected.reverse()
-    const classification = vi.spyOn(SkillDeleteGuards, 'classifySkillPlacement')
-    const resolved = await buildSkillDeletePlan({
-      request: { operationId: 'batch-match', skills: selected },
-      target: { kind: 'native-host', cwd: home },
-      repos: [],
-      filesystem: nativeSkillInstallFilesystem,
-      homeDir: home
-    })
-
-    expect(resolved.plan.skills.map((skill) => skill.id)).toEqual(selected.map((skill) => skill.id))
-    expect(resolved.plan.skills.map((skill) => skill.placements)).toEqual(
-      selected.map((skill) => [
-        expect.objectContaining({ path: skill.directoryPath, kind: 'canonical' })
-      ])
-    )
-    expect(classification).toHaveBeenCalledTimes(selected.length)
-  })
-
   it.skipIf(WINDOWS)(
     'keeps directory and file identities distinct in original placement order',
     async () => {

@@ -37,9 +37,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
+    compactInstructions?: boolean
     optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
+    appliesOnAttach?: boolean
+    heldPick?: boolean
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
     invokeAction: (id: string) => Promise<boolean>
   }
@@ -115,7 +118,10 @@ export function useMobileNativeChatSessionOptionController(args: {
             optionPickerRequest: structured.optionPickerRequest,
             optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
+            compactInstructions: structured.compactInstructions,
             pendingId: structuredPendingId,
+            appliesOnAttach: structured.appliesOnAttach,
+            heldPick: structured.heldPick,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
             recordCommand: () => {}
@@ -127,6 +133,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       setStructuredOption,
       structuredPendingId,
       structuredSnapshot,
+      structured.appliesOnAttach,
+      structured.heldPick,
+      structured.compactInstructions,
       structured.conversationCommands,
       structured.optionPickerRequest,
       structured.optionSurface

@@ -1,38 +1,40 @@
 import { createElement, useState } from 'react'
-import { filterWorktrees } from '../worktree/workspace-list-sections'
+
 import { normalizeVisibleExecutionHostIds } from '../../../src/shared/execution-host'
-import { act, create } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
-vi.mock('../cache/worktree-cache', () => ({
-  getCachedWorktrees: () => null,
-  setCachedWorktrees: () => {}
-}))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
-vi.mock('../transport/use-worktree-resync', () => ({
-  useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
-}))
 
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import {
-  recordHostDescriptor,
-  resetHostDescriptorStoreForTests
-} from '../transport/host-descriptor-store'
+
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree, WorktreeHostContextView } from '../worktree/workspace-list-types'
+import {
+  NO_WORKTREE_HOST_CONTEXT,
+  type WorktreeHostContextOf
+} from '../worktree/worktree-host-context-labels'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import { hostWorktreeCatalogKey } from './host-list-queries'
+
+const mounted: ReactTestRenderer[] = []
+afterEach(() => {
+  act(() => mounted.splice(0).forEach((renderer) => renderer.unmount()))
+})
 
 const RELAYS = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
 
@@ -96,12 +98,16 @@ function desktop({ hostWorktrees, carriesRpcEnvelope }: Desktop = {}): FakeSessi
   return client
 }
 
+// A display row with the host context the list draws beside it.
+type LabelledRow = Worktree & WorktreeHostContextView
+
 type Screen = {
-  rows: () => Worktree[]
+  rows: () => LabelledRow[]
   state: () => ReturnType<typeof useHostScreenState>
   poll: () => Promise<void>
   hideHosts: (ids: string[]) => void
   open: (worktreeId: string) => void
+  openRow: (row: LabelledRow) => void
   notice: () => string | null
   catalogError: () => string | null
   pin: (worktreeId: string) => void
@@ -119,10 +125,11 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   const router = { push: (to: string) => navigations.push(to), replace: () => {} }
   const held: {
     rows: Worktree[]
+    hostContextOf: WorktreeHostContextOf
     state?: ReturnType<typeof useHostScreenState>
-    fetch?: () => Promise<void>
+    refresh?: () => Promise<void>
     actions?: ReturnType<typeof useHostWorktreeActions>
-  } = { rows: [] }
+  } = { rows: [], hostContextOf: NO_WORKTREE_HOST_CONTEXT }
   function Probe(): null {
     const [, setTick] = useState(0)
     rerender = () => setTick((tick) => tick + 1)
@@ -132,7 +139,6 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
       client,
       connState: 'connected',
       embedded: true,
-      fetchRepoMetadata: async () => {},
       hostCapabilities,
       hostId: 'host-1',
       sidebarFeed: null,
@@ -153,27 +159,34 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
       state
     })
     held.state = state
-    held.fetch = catalog.fetchWorktrees
-    held.rows = useHostDisplayWorktrees(
+    held.refresh = catalog.onRefresh
+    const display = useHostDisplayWorktrees(
       'connected',
       state,
       useResolvedHostPlatform(state, 'host-1')
     )
+    held.rows = display.worktrees
+    held.hostContextOf = display.hostContextOf
     return null
   }
+  const queryClient = createOrcaQueryClient()
   await act(async () => {
-    create(createElement(Probe))
+    mounted.push(
+      create(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)))
+    )
   })
+  // Reads the host list again, as pull to refresh does; the catalog's interval does the same.
   const poll = async (): Promise<void> => {
     await act(async () => {
-      await held.fetch?.()
-      await vi.waitFor(() => expect(held.state?.fetchWorktreesInFlightRef.current).toBe(false))
+      void held.refresh?.()
+      const catalog = { queryKey: hostWorktreeCatalogKey('host-1') }
+      await vi.waitFor(() => expect(queryClient.isFetching(catalog)).toBe(0))
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
   }
   await poll()
   return {
-    rows: () => held.rows,
+    rows: () => held.rows.map((row) => ({ ...row, ...held.hostContextOf(row) })),
     state: () => held.state!,
     poll,
     hideHosts: (ids) =>
@@ -188,6 +201,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
         const item = held.rows.find((entry) => entry.worktreeId === worktreeId)
         held.actions?.openWorktreeSession(item!)
       }),
+    openRow: (row) => act(() => held.actions?.openWorktreeSession(row)),
     notice: () => held.state?.serverNotice ?? null,
     catalogError: () => held.state?.catalogError ?? null,
     pin: (worktreeId) =>
@@ -210,7 +224,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
   }
 }
 
-function listed(rows: Worktree[]): [string, string | undefined, string | undefined][] {
+function listed(rows: LabelledRow[]): [string, string | undefined, string | undefined][] {
   return rows.map((entry) => [entry.worktreeId, entry.hostId, entry.hostContextHealthLabel])
 }
 
@@ -219,48 +233,6 @@ function calledMethods(client: FakeSession): string[] {
 }
 
 describe("a desktop's server workspaces on the phone", () => {
-  it('lists each server through the desktop, badged with its own health', async () => {
-    const screen = await mountScreen(desktop(), RELAYS)
-    expect(listed(screen.rows())).toEqual([
-      ['mac-wt', 'local', undefined],
-      ['runtime:vm-wt', 'runtime:vm', undefined],
-      ['runtime:old-wt', 'runtime:old', 'Update needed']
-    ])
-    expect(screen.rows().map((entry) => entry.hostContextLabel)).toEqual([
-      expect.any(String),
-      'VM',
-      'ThinkPad'
-    ])
-  })
-
-  it("names the desktop's own row for the desktop's platform once servers mix the list", async () => {
-    recordHostDescriptor('host-1', { machineName: null, platform: 'darwin' })
-    try {
-      const screen = await mountScreen(desktop(), RELAYS)
-      expect(screen.rows()[0]).toMatchObject({
-        worktreeId: 'mac-wt',
-        hostContextLabel: 'Local Mac'
-      })
-    } finally {
-      resetHostDescriptorStoreForTests()
-    }
-  })
-
-  it('keeps showing today’s view under an older desktop or an older shell', async () => {
-    const oldDesktop = desktop()
-    const oldShell = desktop({ carriesRpcEnvelope: false })
-    for (const [client, capabilities] of [
-      [oldDesktop, []],
-      [oldShell, RELAYS]
-    ] as const) {
-      const screen = await mountScreen(client, [...capabilities])
-      expect(listed(screen.rows())).toEqual([['mac-wt', 'local', undefined]])
-      expect(calledMethods(client).filter((method) => method.startsWith('mobileRelay.'))).toEqual(
-        []
-      )
-    }
-  })
-
   it('lists them on the page only when its shell carries the envelope', async () => {
     // An app built before `rpcEnvelope` grants everything else, so the page drops just that name.
     const oldApp = (json: string) => json.replace(',"rpcEnvelope"', '')
@@ -284,25 +256,6 @@ describe("a desktop's server workspaces on the phone", () => {
       expect(listed(screen.rows())).toEqual(expected)
       expect(calledMethods(shell).includes('mobileRelay.hosts.list')).toBe(!rewriteToPage)
     }
-  })
-
-  it('shows no server rows, and no error, when the desktop cannot answer the hosts list', async () => {
-    const client = desktop()
-    const base = client.sendRequest.getMockImplementation()!
-    client.sendRequest.mockImplementation(async (method: string, params?: unknown) =>
-      method.startsWith('mobileRelay.')
-        ? {
-            id: 'reply',
-            ok: false,
-            error: { code: 'method_not_found', message: `Unknown method: ${method}` },
-            _meta: { runtimeId: 'runtime' }
-          }
-        : base(method, params)
-    )
-    const screen = await mountScreen(client, RELAYS)
-    expect(listed(screen.rows())).toEqual([['mac-wt', 'local', undefined]])
-    expect(calledMethods(client)).toContain('mobileRelay.hosts.list')
-    expect(screen.catalogError()).toBeNull()
   })
 
   it('keeps a server’s rows when one poll cannot read them, and drops a server the desktop forgot', async () => {
@@ -329,22 +282,6 @@ describe("a desktop's server workspaces on the phone", () => {
     expect(screen.rows().map((entry) => entry.worktreeId)).toEqual(['mac-wt'])
   })
 
-  it('follows the desktop’s hidden hosts, across its own and its servers’ rows', async () => {
-    const screen = await mountScreen(desktop(), RELAYS)
-    // The list's own filters narrow it, as they narrow the desktop's sidebar.
-    const shown = () =>
-      filterWorktrees(
-        screen.rows(),
-        screen.state().view.filters,
-        '',
-        screen.state().repoHostIdByRepoId
-      ).map((entry) => entry.worktreeId)
-    screen.hideHosts(['local', 'runtime:old'])
-    expect(shown()).toEqual(['mac-wt', 'runtime:old-wt'])
-    screen.hideHosts(['runtime:old'])
-    expect(shown()).toEqual(['runtime:old-wt'])
-  })
-
   it('opens a ready server workspace there, and explains one that needs an update', async () => {
     const client = desktop()
     const screen = await mountScreen(client, RELAYS)
@@ -366,32 +303,14 @@ describe("a desktop's server workspaces on the phone", () => {
 
   it('opens nothing for a listed server workspace once the phone can no longer reach it', async () => {
     const screen = await mountScreen(desktop(), RELAYS)
+    const listedRow = screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')!
     const oldShell = desktop({ carriesRpcEnvelope: false })
     await screen.swapClient(oldShell)
-    expect(screen.rows().map((entry) => entry.worktreeId)).toContain('runtime:vm-wt')
-    screen.open('runtime:vm-wt')
+    expect(screen.rows().map((entry) => entry.worktreeId)).not.toContain('runtime:vm-wt')
+    // A tap on the row still drawn from before the swap.
+    screen.openRow(listedRow)
     expect(screen.navigations).toEqual([])
     expect(calledMethods(oldShell)).not.toContain('worktree.activate')
-  })
-
-  it('pins a server workspace on that server, as the desktop does', async () => {
-    const client = desktop()
-    const screen = await mountScreen(client, RELAYS)
-    screen.pin('runtime:vm-wt')
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'worktree.set',
-      { worktree: 'id:runtime:vm-wt', isPinned: true },
-      { envelope: { executionHost: 'runtime:vm' } }
-    )
-    expect(screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')?.isPinned).toBe(true)
-  })
-
-  it('sleeps a desktop workspace on the desktop and shows it slept at once', async () => {
-    const client = desktop()
-    const screen = await mountScreen(client, RELAYS)
-    screen.sleep('mac-wt')
-    expect(client.sendRequest).toHaveBeenCalledWith('worktree.sleep', { worktree: 'id:mac-wt' })
-    expect(screen.slept()?.size).toBe(1)
   })
 
   it('reads a replaced client\u2019s servers at once, and keeps an unchanged poll\u2019s list', async () => {

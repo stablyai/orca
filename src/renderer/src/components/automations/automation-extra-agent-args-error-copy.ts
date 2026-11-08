@@ -3,7 +3,7 @@ import {
   EXTRA_AGENT_ARGS_FAILURE_COPY as EN,
   type ExtraAgentArgsFailure,
   type ExtraAgentArgsFailureCode
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 
 const COPY: Record<ExtraAgentArgsFailureCode, (params: Record<string, string>) => string> = {
   unsupportedAgent: () =>

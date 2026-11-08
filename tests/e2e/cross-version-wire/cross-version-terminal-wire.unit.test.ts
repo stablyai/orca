@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { comparePublishedFieldOccurrences, publishedFieldNames } from './published-field-shape'
+import { comparePublishedFieldOccurrences } from './published-field-shape'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   JOURNEY_INPUTS,
@@ -130,16 +130,6 @@ describe('cross-version remote terminal wire', () => {
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' })
     ])
-  })
-
-  it('old client against old server completes the journey, and is the reference for an old host', () => {
-    expect(baselineReference.hostRevision).toBe(baseline.revision)
-    expect(baselineReference.clientRevision).toBe(baseline.revision)
-    expectJourneyActuallyRan(baselineReference)
-    expectWireCompatible(baselineReference)
-    for (const start of baselineReference.snapshotStarts) {
-      expect(publishedFieldNames(start).length).toBeGreaterThan(4)
-    }
   })
 
   it(

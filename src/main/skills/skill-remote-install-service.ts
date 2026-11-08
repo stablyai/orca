@@ -239,7 +239,7 @@ export async function installSkillBundleOnRemoteRuntime(input: {
       })
       throw new Error('skill-bundle-remote-download-unavailable')
     }
-    return retrySkillTransferRpc({
+    return await retrySkillTransferRpc({
       signal: input.signal,
       retryable: retryableRemoteInstallTransportError,
       call: async () => {

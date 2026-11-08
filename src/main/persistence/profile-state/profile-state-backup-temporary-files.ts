@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { lstat, readdir, rm } from 'node:fs/promises'
-import { durableWriteTempPath } from '../../durable-file-write'
+import { durableWriteTempPath } from '../../filesystem/durable-file-write'
 import { profileStateAccessBootIdentity } from './profile-state-access-identity'
 import { profileStateAccessPidNamespace } from './profile-state-access-owner'
 import { basename, dirname, join } from 'node:path'

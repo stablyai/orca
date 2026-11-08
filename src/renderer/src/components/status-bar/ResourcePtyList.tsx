@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { VirtualizedList } from '@/components/virtualized-list'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyRow } from './ResourcePtyRow'
 
@@ -32,6 +32,7 @@ export function ResourcePtyList({
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
+  const t = useTranslate()
   const items = useMemo(() => {
     const result: ListItem[] = []
     for (const group of groups) {
@@ -72,9 +73,7 @@ export function ResourcePtyList({
                 key={item.key}
                 className="flex justify-between px-3 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide"
               >
-                <span>
-                  {item.name ?? translate('resourceManager.pty.unassigned', 'Unassigned')}
-                </span>
+                <span>{item.name ?? t('resourceManager.pty.unassigned', 'Unassigned')}</span>
                 <span>{item.count}</span>
               </h3>
             )

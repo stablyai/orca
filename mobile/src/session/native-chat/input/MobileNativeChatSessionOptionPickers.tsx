@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
+  Clock,
   FilePenLine,
   Hand,
   LockKeyhole,
@@ -46,7 +47,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
-} from '../../../../../src/shared/agent-chat-permission-mode'
+} from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 
@@ -117,13 +118,16 @@ export function MobileNativeChatSessionOptionPickers({
   const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
+  // Aliases of listed models wait behind a toggle, as compact pickers do without search.
+  const [moreModelsShown, setMoreModelsShown] = useState(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
-  const { snapshot, pendingId } = controller
+  const { pendingId } = controller
+  const snapshot = controller.snapshot.filter((descriptor) => descriptor.id !== 'interactionMode')
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
@@ -160,10 +164,10 @@ export function MobileNativeChatSessionOptionPickers({
   }, [showWorkingNotice])
 
   const options = sortNativeChatSessionOptions(snapshot)
-  if (!model && !permission) {
+  if (!model && !permission && options.length === 0) {
     return null
   }
-  const home = model ?? permission!
+  const home = model ?? permission ?? options[0]!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // Structured picks and permission mode affect the next send, not the running turn.
@@ -218,6 +222,7 @@ export function MobileNativeChatSessionOptionPickers({
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}
+        leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
             ? permissionColor
@@ -247,7 +252,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          setMoreModelsShown(false)
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
@@ -257,7 +265,9 @@ export function MobileNativeChatSessionOptionPickers({
                 subtitle={
                   pendingId !== null
                     ? t('chat.sessionOptionPickers.applying', 'Applying…')
-                    : undefined
+                    : controller.appliesOnAttach
+                      ? t('chat.sessionOptionPickers.onAttach', 'Applies when the chat attaches')
+                      : undefined
                 }
                 trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
               />
@@ -302,6 +312,10 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
+                  moreChoices: {
+                    shown: moreModelsShown,
+                    onToggle: () => setMoreModelsShown((shown) => !shown)
+                  },
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t

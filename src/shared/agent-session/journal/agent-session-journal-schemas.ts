@@ -5,7 +5,7 @@
 // Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
 // History pages lack row v: extensions must also remain safe for older clients.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -149,6 +149,12 @@ const Resolution = z.object({
     )
     .optional(),
   resolvedBy: z.string().nullable(),
+  resolvedByDevice: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('current') }),
+      z.object({ kind: z.literal('named'), name: z.string() })
+    ])
+    .optional(),
   resolvedAt: z.number().nullable()
 })
 
@@ -172,7 +178,9 @@ const MessageBody = z.object({
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
-  command: z.object({ name: z.string().min(1) }).optional(),
+  command: z
+    .object({ name: z.string().min(1), instructions: z.string().min(1).optional() })
+    .optional(),
   skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
   // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
   state: z.string().min(1).optional(),
@@ -255,7 +263,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     providerFrame: ProviderFrame.optional(),
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
-    orcaStop: z.object({ cause: z.string().min(1) }).optional()
+    orcaStop: z.object({ cause: z.string().min(1) }).optional(),
+    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),

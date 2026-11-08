@@ -1,6 +1,6 @@
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
-import type { AgentType } from '../../shared/agent-status-types'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
@@ -23,6 +23,7 @@ export type ReadTranscriptResult =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
   // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }

@@ -1,20 +1,21 @@
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
-  FOLLOW_UP_MESSAGE_TYPES,
-  listDispatchesWithFollowUpMail
+  listDispatchesWithFollowUpMail,
+  receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
-import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
+import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrcaSessionParty } from '../../../../orchestration/addressing/orchestration-party'
+import { readStructuredAgentSessionRecord } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { createHash } from 'node:crypto'
-import { escalateWorkerFailure } from '../../../../orchestration/worker-failure-escalation'
-import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
+import { escalateWorkerFailure } from '../../../../orchestration/workers/reports/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import {
   planWorkerFollowUp,
   startWorkerFollowUp,
@@ -52,6 +53,12 @@ export function continueUnreadWorkerMail(
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
   body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
+}
+
+// A chat is handed each message whole right after this Task, one at a time.
+const CHAT_FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
 async function continueUnreadMail(
@@ -108,7 +115,9 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: FOLLOW_UP_TASK,
+            message: receivesMailWhole(plan.latest.assignee_handle)
+              ? CHAT_FOLLOW_UP_TASK
+              : FOLLOW_UP_TASK,
             takesMailOf: dispatchId
           })
         : plan
@@ -163,19 +172,24 @@ export function passHeldWorkerMail(
   db: OrchestrationDb,
   followUpId: string
 ): void {
-  const custody = custodyOf(db, followUpId)
-  if (custody === 'starting') {
-    return
-  }
-  const worker = db.getWorkerDispatch(followUpId)
+  // The follow-up's claim and the moves below re-address mail a chat may still hold as a card: the
+  // lineage's mailboxes are the only ones whose cards can go stale.
   const seen = new Set([followUpId])
-  let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id
   for (
-    ;
+    let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id;
     source && !seen.has(source);
     source = db.getDispatchContextById(source)?.follow_up_of_dispatch_id
   ) {
     seen.add(source)
+  }
+  const lineageMailboxes = [...seen].map((id) => `dispatch:${id}`)
+  const custody = custodyOf(db, followUpId)
+  if (custody === 'starting') {
+    runtime.withdrawStaleChatMail(lineageMailboxes)
+    return
+  }
+  const worker = db.getWorkerDispatch(followUpId)
+  for (const source of [...seen].slice(1)) {
     const first = db.getDispatchContextById(source)?.follow_up_mail_at
       ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
       : undefined
@@ -206,6 +220,11 @@ export function passHeldWorkerMail(
   } else {
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
+  }
+  runtime.withdrawStaleChatMail(lineageMailboxes)
+  if (custody === 'ready') {
+    // Its Task is in: a chat's moved mail follows it, each message whole.
+    runtime.deliverPendingMessagesForHandle(`dispatch:${followUpId}`)
   }
   if (custody === 'reported') {
     continueUnreadWorkerMail(runtime, db, followUpId)

@@ -1,9 +1,12 @@
-import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../src/shared/workspace-session/workspace-session-schema'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { DaemonClient } from '../../src/main/daemon/client'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
+import {
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../src/main/daemon/launch/daemon-spawner'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'

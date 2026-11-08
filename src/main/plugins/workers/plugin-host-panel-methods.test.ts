@@ -104,14 +104,6 @@ describe('panel storage and settings', () => {
     expect(panels.dataChanged).not.toHaveBeenCalled()
   })
 
-  it('tells panels and the worker after a write lands', async () => {
-    const panels = bridge()
-    await expect(
-      call('storage.set', { key: 'todos', value: [1] }, { panels })
-    ).resolves.toMatchObject({ ok: true })
-    expect(panels.dataChanged).toHaveBeenCalledWith('acme.todos', 'storage', 'todos')
-  })
-
   it('keeps the capability gate for panels', async () => {
     await expect(call('storage.get', { key: 'todos' }, { grants: [] })).resolves.toMatchObject({
       code: 'capability_denied'

@@ -3,8 +3,8 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
+import type { TerminalLayoutSnapshot } from '../../src/shared/workspace-layout/terminal-tab-types'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost

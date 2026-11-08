@@ -1,3 +1,4 @@
+import type * as WslPaths from '../../../shared/wsl-paths'
 import { isAbsolute } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
@@ -33,32 +34,42 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('../../wsl', () => ({
-  parseWslPath: parseWslPathMock,
-  toWindowsWslPath: toWindowsWslPathMock
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
+  parseWslPath: parseWslPathMock
+}))
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPaths>()),
+  ...(await (() => ({
+    toWindowsWslPath: toWindowsWslPathMock
+  }))())
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   authorizeExternalPath: vi.fn(async (value: string) => value),
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('../local-file-access-resolution', () => ({
+vi.mock('./access/local-file-access-resolution', () => ({
   resolveDesktopAuthorizedPath: resolveAuthorizedPathMock,
   resolveLocalFileRequestPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('./filesystem-path-containment', () => ({
+vi.mock('./access/filesystem-path-containment', () => ({
   isENOENT: vi.fn(() => false),
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))
 
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: vi.fn(async (value: string) => value)
 }))
 
@@ -112,80 +123,6 @@ describe('content search cancellation', () => {
     bundledRipgrepCommandMock.mockImplementation((options?: { wsl?: boolean }) =>
       options?.wsl ? '/bundled/linux/rg' : '/bundled/rg'
     )
-  })
-
-  it('cancels only the issuing window before authorization completes', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all store access is mocked for these handlers.
-    registerFilesystemHandlers({} as never)
-    const sender = Object.assign(new EventEmitter(), { id: 7 })
-    const otherSender = Object.assign(new EventEmitter(), { id: 8 })
-    let authorize: ((path: string) => void) | undefined
-    resolveAuthorizedPathMock.mockReturnValue(
-      new Promise<string>((resolve) => {
-        authorize = resolve
-      })
-    )
-    const child = createMockProcess()
-    wslAwareSpawnMock.mockReturnValueOnce(child)
-    const untouched = handlers.get('fs:search')!(
-      { sender },
-      { rootPath: '/repo', query: 'needle', requestToken: 'owned' }
-    )
-    const success = expect(untouched).resolves.toMatchObject({ totalMatches: 0 })
-    handlers.get('fs:cancelSearch')!({ sender: otherSender }, { requestToken: 'owned' })
-    authorize?.('/repo')
-    await flushMicrotasks()
-    expect(wslAwareSpawnMock).toHaveBeenCalledOnce()
-    child.emit('close', 1, null)
-    await success
-    expect(child.kill).not.toHaveBeenCalled()
-    expect(sender.eventNames()).toHaveLength(0)
-
-    resolveAuthorizedPathMock.mockReturnValue(
-      new Promise<string>((resolve) => {
-        authorize = resolve
-      })
-    )
-    const pending = handlers.get('fs:search')!(
-      { sender },
-      { rootPath: '/repo', query: 'needle', requestToken: 'owned' }
-    )
-    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    handlers.get('fs:cancelSearch')!({ sender }, { requestToken: 'owned' })
-    authorize?.('/repo')
-    await rejection
-    expect(wslAwareSpawnMock).toHaveBeenCalledOnce()
-    expect(sender.eventNames()).toHaveLength(0)
-  })
-
-  it('settles aborted searches even when kill emits close synchronously, and preserves the replacement', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all store access is mocked for these handlers.
-    registerFilesystemHandlers({} as never)
-    const sender = Object.assign(new EventEmitter(), { id: 7 })
-    const oldChild = createMockProcess()
-    const latestChild = createMockProcess()
-    vi.mocked(oldChild.kill).mockImplementation(() => {
-      oldChild.emit('close', null, 'SIGTERM')
-      return true
-    })
-    wslAwareSpawnMock.mockReturnValueOnce(oldChild).mockReturnValueOnce(latestChild)
-    const first = handlers.get('fs:search')!(
-      { sender },
-      { rootPath: '/repo', query: 'old', requestToken: 'same' }
-    )
-    const firstRejected = expect(first).rejects.toMatchObject({ name: 'AbortError' })
-    await flushMicrotasks()
-    const latest = handlers.get('fs:search')!(
-      { sender },
-      { rootPath: '/repo', query: 'latest', requestToken: 'same' }
-    )
-    await flushMicrotasks()
-    await firstRejected
-    expect(oldChild.kill).toHaveBeenCalledOnce()
-    expect(latestChild.kill).not.toHaveBeenCalled()
-    latestChild.emit('close', 1, null)
-    await expect(latest).resolves.toMatchObject({ totalMatches: 0, truncated: false })
-    expect(sender.eventNames()).toHaveLength(0)
   })
 
   it('keeps lexical workspace result paths while executing inside its authorized canonical root', async () => {

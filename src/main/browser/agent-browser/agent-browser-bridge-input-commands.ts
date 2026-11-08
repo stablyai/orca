@@ -6,7 +6,7 @@ import { assertClipboardTextWriteWithinLimitWithYield } from '../../../shared/cl
 import { iterateBrowserTextInsertionChunks } from '../../../shared/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeCoreCommands } from './agent-browser-bridge-core-commands'
-import { SELECT_OPTION_TARGET_FUNCTION } from '../browser-element-functions'
+import { SELECT_OPTION_TARGET_FUNCTION } from '../cdp/input/browser-element-functions'
 
 export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridgeCoreCommands {
   async select(

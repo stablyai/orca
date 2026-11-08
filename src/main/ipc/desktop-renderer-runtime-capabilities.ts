@@ -1,3 +1,5 @@
+import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../shared/git/commands/git-commit-action'
+import { GIT_GRAPH_TAB_CAPABILITY } from '../../shared/source-control/runtime/git-graph-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   type RuntimeCapability
@@ -7,14 +9,16 @@ import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
-} from '../../shared/agent-launch-runtime-capability'
+} from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
-} from '../../shared/terminal-quick-command-capabilities'
+} from '../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 
 /** Curate one capability set for unary/streaming desktop calls; remote-only gates can alter local semantics even on the same build. */
 export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapability[] = [
+  GIT_GRAPH_TAB_CAPABILITY,
+  GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   // Agent-launch authorization requires this even for the same-build desktop renderer.

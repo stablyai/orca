@@ -31,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -42,7 +45,13 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 const SSH_CALLER = {
@@ -84,6 +93,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
           identity: { key: 'wt2:b' }
         }
       ]),
+      noFolderWorkspacesFixture(),
       okFixture('req_create', {
         worktree: buildWorktree('/srv/app-child', 'child', 'abc', 'repo-1'),
         lineage: null,
@@ -95,7 +105,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
     await main(['worktree', 'create', '--name', 'child', '--json'], '/srv/app/src')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'worktree.create',
       expect.objectContaining({ repo: 'id:repo-1', cwdParentWorktree: 'identity:wt2:b' })
     )
@@ -195,7 +205,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
           }
         }
       }
-      // An explicit target keeps optional-parent and active/current workspace behavior.
+      // An explicit target keeps optional-parent inference; active/current refuse a two-owner path.
       delete process.env.ORCA_WORKTREE_ID
       for (const parent of [undefined, 'active', 'current']) {
         callMock.mockReset()
@@ -223,14 +233,20 @@ describe('worktree create from a worktree another host shares an id with', () =>
           ],
           path
         )
+        // Two registrations own the path: an explicit current refuses, inference flags the tie.
+        if (parent) {
+          expect(process.exitCode).toBe(1)
+          expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+          process.exitCode = priorExitCode
+          continue
+        }
         expect(process.exitCode).toBe(priorExitCode)
         expect(callMock).toHaveBeenCalledWith(
           'worktree.create',
           expect.objectContaining({
             repo: 'id:repo-b',
-            ...(parent
-              ? { parentWorktree: `id:${root.id}` }
-              : { cwdParentWorktree: `id:${root.id}` })
+            cwdParentWorktree: `id:${root.id}`,
+            cwdParentAmbiguous: true
           })
         )
       }
@@ -317,96 +333,39 @@ describe('worktree create from a worktree another host shares an id with', () =>
     }
   })
 
-  it.each([false, true])(
-    'bounds inferred-create traversal and ambiguity sorting at catalog scale (distinct=%s)',
-    async (distinct) => {
-      const path = resolve('/tmp/catalog-scale')
+  it.each(['folder:f1', 'active'])(
+    'lists the Git repositories of a folder parent when create has no repo (--parent-worktree %s)',
+    async (parent) => {
+      const path = resolve('/tmp/feature-folder')
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      const compare = String.prototype.localeCompare
       const priorExitCode = process.exitCode
-      const samples: { reads: number; comparisons: number }[] = []
+      const lists: Record<string, unknown> = {
+        'worktree.list': worktreeListFixture([]).result,
+        'folderWorkspace.list': {
+          folderWorkspaces: [{ id: 'f1', projectGroupId: 'g1', folderPath: path, name: 'feature' }]
+        },
+        'projectGroup.list': { groups: [{ id: 'g1', name: 'feature', parentPath: path }] },
+        'repo.list': {
+          repos: [
+            { id: 'repo-api', path: join(path, 'api'), displayName: 'api' },
+            { id: 'elsewhere', path: resolve('/tmp/other'), displayName: 'other' }
+          ]
+        }
+      }
       try {
-        for (const count of [1_000, 10_000]) {
-          const operations = { reads: 0, comparisons: 0 }
-          const sortSpy = vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (
-            this: string,
-            other: string
-          ) {
-            operations.comparisons++
-            return compare.call(this, other)
-          })
-          const rows = Array.from({ length: count }, (_, index) => {
-            const repo = distinct ? `repo-${(index * 7919) % count}` : 'repo-a'
-            return {
-              ...buildWorktree(path, 'main'),
-              get id() {
-                operations.reads++
-                return `${repo}::${path}::workspace:${index}`
-              },
-              get repoId() {
-                operations.reads++
-                return repo
-              },
-              get path() {
-                operations.reads++
-                return path
-              },
-              get hostId() {
-                operations.reads++
-                return 'local'
-              }
-            }
-          })
-          callMock.mockReset()
-          logSpy.mockClear()
-          process.exitCode = priorExitCode
-          queueFixtures(
-            callMock,
-            worktreeListFixture(rows),
-            okFixture('create', {
-              worktree: buildWorktree(join(path, 'child'), 'child', 'abc', 'repo-a'),
-              lineage: null,
-              warnings: []
-            })
-          )
-          await main(
-            ['worktree', 'create', '--name', 'child', '--no-parent', '--json'],
-            join(path, 'src')
-          )
-          sortSpy.mockRestore()
-          expect(callMock).toHaveBeenCalledWith('worktree.list', { limit: 10_000 })
-          expect(callMock.mock.calls.filter(([method]) => method === 'worktree.list')).toHaveLength(
-            1
-          )
-          expect(operations.reads).toBeGreaterThanOrEqual(count)
-          expect(operations.reads).toBeLessThanOrEqual(30 * count)
-          if (distinct) {
-            expect(process.exitCode).toBe(1)
-            expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
-            const output = JSON.parse(logSpy.mock.calls.flat().join('\n'))
-            expect(output.error.code).toBe('selector_ambiguous')
-            expect(output.error.data.projects).toHaveLength(count)
-            expect(operations.comparisons).toBeGreaterThan(0)
-            expect(operations.comparisons).toBeLessThanOrEqual(
-              2 * count * Math.ceil(Math.log2(count))
-            )
-          } else {
-            expect(process.exitCode).toBe(priorExitCode)
-            expect(callMock).toHaveBeenCalledWith(
-              'worktree.create',
-              expect.objectContaining({
-                repo: 'id:repo-a',
-                noParent: true
-              })
-            )
-            expect(operations.comparisons).toBe(0)
-          }
-          samples.push(operations)
-        }
-        expect(samples[1]!.reads).toBeLessThanOrEqual(11 * samples[0]!.reads)
-        if (distinct) {
-          expect(samples[1]!.comparisons).toBeLessThanOrEqual(16 * samples[0]!.comparisons)
-        }
+        callMock.mockImplementation(async (method: string) =>
+          okFixture(method, lists[method] ?? {})
+        )
+        await main(
+          ['worktree', 'create', '--name', 'fix-login', '--parent-worktree', parent],
+          join(path, 'api')
+        )
+        const output = [...errorSpy.mock.calls, ...logSpy.mock.calls].flat().join('\n')
+        expect(process.exitCode).toBe(1)
+        expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+        expect(output).toContain('--repo id:repo-api')
+        expect(output).not.toContain('id:elsewhere')
       } finally {
         process.exitCode = priorExitCode
       }

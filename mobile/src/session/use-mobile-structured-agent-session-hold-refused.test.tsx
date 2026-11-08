@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
@@ -94,7 +95,7 @@ it('subscribes when an older host refuses the hold, and shows the transcript (P2
   }
 
   act(() => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
   })
 
   await vi.waitFor(() =>

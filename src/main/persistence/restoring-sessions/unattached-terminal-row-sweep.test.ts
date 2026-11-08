@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sleepingRecord } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
   addWorkspace,

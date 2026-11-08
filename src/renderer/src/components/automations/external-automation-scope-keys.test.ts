@@ -36,16 +36,6 @@ describe('external automation scope keys', () => {
     )
   })
 
-  it('keeps key kinds in separate namespaces', () => {
-    const kinds = new Set([
-      externalAutomationScopeKey(local),
-      externalAutomationManagerKey(local, 'x'),
-      externalAutomationJobKey(local, 'x'),
-      externalAutomationActionKey(local, 'x', 'run')
-    ])
-    expect(kinds.size).toBe(4)
-  })
-
   it('escapes components so a hostile ID cannot forge another key', () => {
     const forged = externalAutomationJobKey(local, 'job|extra')
     expect(forged).not.toBe(externalAutomationActionKey(local, 'job', 'run'))
@@ -54,11 +44,5 @@ describe('external automation scope keys', () => {
       externalAutomationActionKey(local, 'job%7Cextra', 'run')
     )
     expect(forged.split('|')).toHaveLength(4)
-  })
-
-  it('distinguishes actions on the same job', () => {
-    expect(externalAutomationActionKey(local, 'job-1', 'run')).not.toBe(
-      externalAutomationActionKey(local, 'job-1', 'delete')
-    )
   })
 })

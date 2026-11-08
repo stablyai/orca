@@ -10,13 +10,13 @@ import {
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
 import {
   flattenTerminalQuickCommandHosts,
@@ -24,7 +24,7 @@ import {
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { useProjectHostSetupProjection } from '@/store/selectors'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 
 type TabBarQuickCommandsButtonProps = {
@@ -38,6 +38,7 @@ export function TabBarQuickCommandsButton({
   groupId,
   isFocused
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
+  const t = useTranslate()
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
@@ -121,19 +122,16 @@ export function TabBarQuickCommandsButton({
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
     const confirmed = await confirm({
-      title: translate(
+      title: t(
         'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
         'Delete "{{value0}}"?',
         { value0: command.label }
       ),
-      description: translate(
+      description: t(
         'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
         'This quick command will be removed from your saved list.'
       ),
-      confirmLabel: translate(
-        'auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166',
-        'Delete'
-      ),
+      confirmLabel: t('auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166', 'Delete'),
       confirmVariant: 'destructive'
     })
     if (!confirmed) {
@@ -171,22 +169,19 @@ export function TabBarQuickCommandsButton({
               type="button"
               onClick={() => addRepoCommand(defaultHostId)}
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
                 'Add quick command'
               )}
             >
               <Play className="size-3.5" />
               <span className="text-[12px] font-medium @max-[480px]/tab-strip:hidden">
-                {translate(
-                  'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Command'
-                )}
+                {t('auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831', 'Command')}
               </span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate(
+            {t(
               'auto.components.tab.bar.TabBarQuickCommandsButton.1d411fb6a5',
               'Save a quick command for this repo'
             )}

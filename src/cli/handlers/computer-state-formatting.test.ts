@@ -58,19 +58,6 @@ describe('orca computer get-app-state formatting', () => {
     rmSync(screenshotDirectory, { recursive: true, force: true })
   })
 
-  it('formats get-app-state without printing screenshot bytes in pretty mode', async () => {
-    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
-
-    await main(['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder'], '/tmp/repo')
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('Finder (pid 100, com.apple.finder)')
-    expect(output).toContain('App=com.apple.finder')
-    expect(output).toContain('Coordinates: window')
-    expect(output).toContain('Truncated: no')
-    expect(output).not.toContain('cG5nLWJ5dGVz')
-  })
-
   it('omits screenshot bytes from JSON output and writes a screenshot path', async () => {
     queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
 

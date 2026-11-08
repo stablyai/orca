@@ -1,5 +1,5 @@
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 
 export type AgentSendKeyboardDismissalTab = {

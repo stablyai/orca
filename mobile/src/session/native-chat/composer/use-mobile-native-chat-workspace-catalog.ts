@@ -6,15 +6,17 @@ import { useMobileNativeChatSkills } from './use-mobile-native-chat-skills'
 /** The workspace's files for `@` and its disk-scanned skills for `/` and `$`. */
 export function useMobileNativeChatWorkspaceCatalog(
   scope: {
+    hostId: string
     client: RpcClient | null
     worktreeId: string
     agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
   },
   agent: string | null
 ): ReturnType<typeof useMobileNativeChatFileSearch> & ReturnType<typeof useMobileNativeChatSkills> {
-  const { client, worktreeId } = scope
+  const { hostId, client, worktreeId } = scope
   const files = useMobileNativeChatFileSearch({ client, worktreeId })
   const skills = useMobileNativeChatSkills({
+    hostId,
     client,
     worktreeId,
     agent,

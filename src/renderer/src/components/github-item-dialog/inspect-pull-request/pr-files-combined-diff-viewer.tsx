@@ -1,14 +1,15 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
   PR_DIFF_OVERSCAN,
@@ -27,7 +28,7 @@ import {
   setAllPRFilesCombinedDiffSectionsCollapsed,
   togglePRFilesCombinedDiffSection
 } from './pr-files-combined-diff-load'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type PRFilesCombinedDiffSectionsProps = PRFilesCombinedDiffViewerProps & {
   signature: string
@@ -301,6 +302,9 @@ function PRFilesCombinedDiffSections({
 
   return (
     <PRFilesCombinedDiffBody
+      imageUploadAddress={() =>
+        githubCommentImageUploadAddress({ repoPath, repoId, sourceContext, type: 'pr', prRepo })
+      }
       files={files}
       repoPath={repoPath}
       repoId={repoId}

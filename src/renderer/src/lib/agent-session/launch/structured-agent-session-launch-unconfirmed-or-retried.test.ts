@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
+import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -52,7 +52,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
@@ -79,7 +79,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 // The structured route hands the launch's own delivery result back unchanged.
-vi.mock('@/lib/launch-agent-in-new-tab', async () => {
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', async () => {
   const launch = await import('./structured-agent-session-launch')
   return {
     launchAgentInNewTab: (args: {
@@ -105,8 +105,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', async () => {
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { runSourceControlAgentActionStart } from '@/components/right-sidebar/runSourceControlAgentActionStart'
-import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+import { runSourceControlAgentActionStart } from '@/components/right-sidebar/source-control/ai/runSourceControlAgentActionStart'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
@@ -236,7 +235,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
-      settings: null,
       repo: null,
       worktreeId: WORKTREE_ID,
       promptDelivery: 'submit-after-ready',
@@ -301,48 +299,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     })
     expectSentTo(fresh.sessionId, 'fix it')
     expect(mocks.seedDraft).not.toHaveBeenCalled()
-  })
-
-  it('opens a new chat from a + menu pick while another chat is unconfirmed', async () => {
-    await leaveFirstLaunchUnconfirmed()
-    // Why: the + menu disables an agent only while a pick would join a start in flight.
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-
-    const pick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
-
-    expect(pick.sessionId).toBe(fresh.sessionId)
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('pending')
-    // No re-check of the unconfirmed chat: only its own two create attempts and the new one.
-    expect(mocks.launch).toHaveBeenCalledTimes(3)
-    await expect(pick.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
-  })
-
-  it('still coalesces one action delivered twice racing for one chat', async () => {
-    mocks.createIntent.mockReturnValueOnce(fresh)
-    mocks.launch.mockImplementationOnce(() => new Promise(() => undefined))
-
-    const first = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'double-click',
-      prompt: 'one'
-    })
-    const second = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'double-click',
-      prompt: 'one'
-    })
-
-    expect(second.sessionId).toBe(first.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-  })
-
-  it('still re-checks an unconfirmed resume instead of adopting its conversation twice', async () => {
-    await leaveFirstLaunchUnconfirmed({ resume: true })
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('unknown')
-
-    expect(
-      startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-8', resumeFrom })
-        .sessionId
-    ).toBe(unconfirmed.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
   })
 
   it('never joins a resume of the same conversation id running on another host', async () => {

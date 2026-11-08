@@ -1,4 +1,4 @@
-import { getWorkerTerminalAutoReleaseScheduler } from '../../src/main/runtime/orchestration/worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../src/main/runtime/orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { vi } from 'vitest'
 import { z } from 'zod'
 import { dispatch } from '../../src/cli/dispatch'

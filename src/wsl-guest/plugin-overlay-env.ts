@@ -1,5 +1,5 @@
 import { resolveLoginShellEnvironment } from '../main/startup/login-shell-environment'
-import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup/shell-startup-env'
 import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,

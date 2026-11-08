@@ -3,7 +3,7 @@ import { access, mkdir, open, realpath, rm, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { durableWriteTempPath, renameDurable } from '../../durable-file-write'
+import { durableWriteTempPath, renameDurable } from '../../filesystem/durable-file-write'
 
 /** Caller owns the destination and keeps the source connection open until completion. */
 export async function writeProfileStateDatabaseSnapshotAsync(

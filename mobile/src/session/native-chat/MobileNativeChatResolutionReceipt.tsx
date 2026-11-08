@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
+  nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
@@ -10,6 +11,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatAwaitingInputRow'
+import { MobileNativeChatQuestionText } from './MobileNativeChatQuestionText'
 import { scaledType } from './transcript/mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './transcript/MobileNativeChatMessageTime'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -40,7 +42,12 @@ export function MobileNativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
-  const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
+  const device = nativeChatReceiptDevice(resolution, {
+    current: t('chat.receipt.thisPhone', 'this phone'),
+    computer: t('chat.receipt.computer', 'the computer'),
+    unknown: t('chat.receipt.otherDevice', 'another device')
+  })
+  const copy = nativeChatReceiptCopy(t, device)
   const cancelled = resolution.state === 'cancelled'
   const answers = nativeChatReceiptAnswers(body)
   const outcome = [
@@ -73,7 +80,14 @@ export function MobileNativeChatResolutionReceipt({
           <View
             key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
           >
-            {heading ? <Text style={text}>{heading}</Text> : null}
+            {heading ? (
+              <MobileNativeChatQuestionText
+                content={heading}
+                fontSize={typography.metaSize * fontScale}
+                tone="muted"
+                rangeSelectable
+              />
+            ) : null}
             <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>
               {answer.answer === '' ? copy.emptyAnswer : (answer.answer ?? copy.unavailable)}
             </Text>

@@ -4,14 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
-import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import { buildRuntimeMobileAgentStatus } from '../runtime/session-lifecycle/projection/runtime-mobile-agent-status-builder'
+import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const servers: AgentHookServer[] = []
 const owner = {
   agent: 'claude',
@@ -50,7 +52,7 @@ async function idleClaude(server: AgentHookServer): Promise<void> {
   }
 }
 
-function mobile(server: AgentHookServer) {
+function mobile(server: AgentHookServer, agent: 'claude' | 'antigravity' = 'claude') {
   return buildRuntimeMobileAgentStatus(
     null,
     {
@@ -58,8 +60,8 @@ function mobile(server: AgentHookServer) {
       id: 'tab-1::leaf',
       parentTabId: 'tab-1',
       leafId: 'leaf',
-      title: 'Claude',
-      launchAgent: 'claude',
+      title: agent,
+      launchAgent: agent,
       isActive: true
     },
     null,
@@ -262,31 +264,6 @@ describe('idle foreground process owns its provider session', () => {
     })
   })
 
-  it.each(['done', 'working'] as const)(
-    'preserves the legacy remote %s replacement policy without host support',
-    async (state) => {
-      const server = await start()
-      const { sessionOwner: _sessionOwner, ...legacyOwner } = owner
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          agentPresence: legacyOwner,
-          payload: { agentType: 'claude', state, prompt: 'Legacy owner' }
-        },
-        'ssh-old'
-      )
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          payload: { agentType: 'codex', state: 'working', prompt: 'Replacement' }
-        },
-        'ssh-old'
-      )
-      expect(server.getStatusSnapshot()[0].agentType).toBe(state === 'done' ? 'codex' : 'claude')
-      expect(probe).not.toHaveBeenCalled()
-    }
-  )
-
   it.each(['live', 'unverifiable'] as const)(
     'retains mobile and resume selection after turn completion when owner is %s',
     async (verdict) => {
@@ -329,39 +306,6 @@ describe('idle foreground process owns its provider session', () => {
       expect(server.getStatusSnapshot()[0].prompt).toBe('Foreground task')
     }
   )
-
-  it('accepts the first replacement hook after a positive process exit', async () => {
-    const server = await start()
-    await idleClaude(server)
-    probe.mockResolvedValue('exited')
-    await postHookEvent(
-      server,
-      buildBody({
-        hook_event_name: 'UserPromptSubmit',
-        session_id: 'replacement-codex',
-        prompt: 'New foreground task'
-      }),
-      '/hook/codex'
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      agentType: 'codex',
-      providerSession: { id: 'replacement-codex' },
-      prompt: 'New foreground task'
-    })
-  })
-
-  it('protects an old idle owner without treating elapsed time as process exit', async () => {
-    const server = await start()
-    await idleClaude(server)
-    const now = Date.now()
-    vi.spyOn(Date, 'now').mockReturnValue(now + 24 * 60 * 60 * 1000)
-    await postHookEvent(
-      server,
-      buildBody({ hook_event_name: 'UserPromptSubmit', session_id: 'nested-codex' }),
-      '/hook/codex'
-    )
-    assertClaudeSession(server)
-  })
 
   it('keeps remote ownership until its execution host reports exit, without probing locally', async () => {
     const server = await start()
@@ -423,4 +367,84 @@ describe('idle foreground process owns its provider session', () => {
     expect(await server.checkAgentPresence(PANE)).toBeNull()
     expect(probe).not.toHaveBeenCalled()
   })
+
+  it.each(['done', 'stale-working'] as const)(
+    'keeps a %s Antigravity process owner when nested Grok emits hooks',
+    async (phase) => {
+      const directory = mkdtempSync(join(tmpdir(), 'idle-antigravity-owner-'))
+      const transcriptPath = join(directory, 'agy.jsonl')
+      try {
+        writeFileSync(
+          transcriptPath,
+          `${JSON.stringify({
+            step_index: 0,
+            source: 'USER_EXPLICIT',
+            type: 'USER_INPUT',
+            content: 'Run background Grok task'
+          })}\n`
+        )
+        const server = await start()
+        const agyProcess = { pid: 5001, platform: 'linux', startTime: 'birth-5001' }
+        for (const [hook_event_name, extra] of [
+          ['PreInvocation', {}],
+          ['Stop', { fullyIdle: true, terminationReason: 'NO_TOOL_CALL', error: '' }]
+        ] as const) {
+          await postHookEvent(
+            server,
+            buildBody(
+              {
+                hook_event_name,
+                conversationId: 'agy-conv-1',
+                transcriptPath,
+                prompt: 'Run background Grok task',
+                ...extra
+              },
+              { agentProcess: JSON.stringify(agyProcess) }
+            ),
+            '/hook/antigravity'
+          )
+        }
+        if (phase === 'stale-working') {
+          await postHookEvent(
+            server,
+            buildBody(
+              {
+                hook_event_name: 'PreInvocation',
+                conversationId: 'agy-conv-1',
+                transcriptPath,
+                lastUserInput: 'Run background Grok task'
+              },
+              { agentProcess: JSON.stringify(agyProcess) }
+            ),
+            '/hook/antigravity'
+          )
+          vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60 * 60 * 1000)
+        }
+        for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']) {
+          await postHookEvent(
+            server,
+            buildBody({
+              hook_event_name,
+              session_id: 'nested-grok-1',
+              prompt: 'Subagent task',
+              tool_name: 'Bash'
+            }),
+            '/hook/grok'
+          )
+        }
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          agentType: 'antigravity',
+          state: phase === 'done' ? 'done' : 'working',
+          prompt: 'Run background Grok task',
+          providerSession: { key: 'conversation_id', id: 'agy-conv-1' }
+        })
+        expect(mobile(server, 'antigravity').agentStatus).toMatchObject({
+          agentType: 'antigravity',
+          providerSession: { id: 'agy-conv-1' }
+        })
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
 })

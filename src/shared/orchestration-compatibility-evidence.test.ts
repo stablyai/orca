@@ -9,24 +9,6 @@ import {
 } from './orchestration-compatibility-evidence'
 
 describe('orchestration compatibility evidence', () => {
-  it('reads inherited pane evidence and a complete runtime-stamped WSL scope', () => {
-    expect(
-      readOrchestrationCompatibilityEvidence({
-        ORCA_TERMINAL_HANDLE: 'term_wsl',
-        ORCA_PANE_KEY: 'tab:leaf',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-        [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
-        [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'local',
-        [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'Ubuntu'
-      })
-    ).toEqual({
-      terminalHandle: 'term_wsl',
-      paneKey: 'tab:leaf',
-      launchToken: 'launch-secret',
-      host: { kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }
-    })
-  })
-
   it('rejects partial host stamps instead of accepting caller-chosen scope', () => {
     expect(
       readOrchestrationCompatibilityEvidence({

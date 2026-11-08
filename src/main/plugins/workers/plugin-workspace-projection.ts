@@ -7,7 +7,7 @@ import {
   type pluginWorkspaceContextSchema
 } from '../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_AGENT_LIST_LIMIT } from '../../../shared/plugins/workers/plugin-host-api-panel-methods'
-import type { AgentStatusState } from '../../../shared/agent-status-types'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
 
 /** One terminal of a workspace, as main's runtime lists it. */
 export type PluginWorkspaceTerminal = {

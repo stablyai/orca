@@ -4,8 +4,8 @@ import {
   sanitizeBracketedPasteText,
   UNFRAMED_AGENT_INPUT_MAX_BYTES,
   wrapTerminalBracketedPasteText
-} from '../../terminal-bracketed-paste-text'
-import { getTerminalInputByteLength } from '../../terminal-input'
+} from '../../terminal/input/terminal-bracketed-paste-text'
+import { getTerminalInputByteLength } from '../../terminal/input/terminal-input'
 
 // PTY Enter is carriage return, not newline.
 const SUBMIT = '\r'

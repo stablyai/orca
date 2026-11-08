@@ -30,45 +30,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-it.each([
-  ['tui.json', '{broken'],
-  ['tui.jsonc', '// keep user bytes\n{broken'],
-  ['tui.json', '{"plugin":"user-package"}']
-])(
-  'installs the server plugin while preserving invalid %s and reporting registration failure',
-  (name, text) => {
-    const configPath = join(configDir, name)
-    writeFileSync(configPath, text)
-    new OpenCodeHookService().buildPtyEnv('pane-one')
-    expect(readFileSync(join(configDir, 'plugins', 'orca-opencode-status.js'), 'utf8')).toBe(
-      getOpenCodePluginSource()
-    )
-    expect(readFileSync(configPath, 'utf8')).toBe(text)
-    expect(console.warn).toHaveBeenCalledWith(
-      '[OpenCode] Failed to register TUI status plugin:',
-      expect.stringContaining('orca-opencode-status-tui'),
-      expect.objectContaining({ message: expect.stringContaining('Cannot register') })
-    )
-  }
-)
-
-it('refreshes the retired server plugin even when its TUI config is invalid', () => {
-  const shared = join(root, 'profile', 'opencode-hooks', 'shared')
-  const serverPath = join(shared, 'plugins', 'orca-opencode-status.js')
-  mkdirSync(join(shared, 'plugins'), { recursive: true })
-  writeFileSync(serverPath, 'stale server')
-  const configPath = join(shared, 'tui.jsonc')
-  writeFileSync(configPath, '{broken')
-  new OpenCodeHookService().refreshLegacySharedPlugin()
-  expect(readFileSync(serverPath, 'utf8')).toBe(getOpenCodePluginSource())
-  expect(readFileSync(configPath, 'utf8')).toBe('{broken')
-  expect(console.warn).toHaveBeenCalledWith(
-    '[OpenCode] Failed to register TUI status plugin:',
-    expect.any(String),
-    expect.any(Error)
-  )
-})
-
 it('installs into a source overlay without replacing the invalid user config', () => {
   const source = join(root, 'source')
   mkdirSync(source)

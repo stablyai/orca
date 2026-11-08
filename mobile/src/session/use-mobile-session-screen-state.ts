@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
+import { createLiveInputCapture } from './live-input-capture'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
@@ -8,9 +9,6 @@ import {
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/terminal-custom-keys'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
-import { listMobileTerminalAgentHandles } from './mobile-terminal-tab-agent'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -21,7 +19,6 @@ import type {
   FileDocState,
   MarkdownDocState,
   MobileDisplayMode,
-  MobileNewTabAgentLoadState,
   MobileSessionTab,
   Terminal
 } from './mobile-session-route-types'
@@ -29,7 +26,7 @@ import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-actio
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
-  const { worktreeId, hostId, initialCreateWarning } = scope
+  const { worktreeId, initialCreateWarning } = scope
   const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -39,26 +36,11 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
-  const [input, setInput] = useState('')
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const terminalTextScaleRevisionRef = useRef(0)
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
-  const [liveInputCapture, setLiveInputCapture] = useState('')
-  const agentHandleKey = listMobileTerminalAgentHandles(sessionTabs).join('\n')
-  const agentHandles = useMemo(
-    () => new Set(agentHandleKey ? agentHandleKey.split('\n') : []),
-    [agentHandleKey]
-  )
-  const {
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput
-  } = useTerminalLiveInputModePreference({ hostId, worktreeId, agentHandles })
+  const [liveInputCapture] = useState(createLiveInputCapture)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -89,9 +71,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
-    useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
@@ -113,8 +92,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
     Map<string, TerminalKeyboardAvoidanceMetrics>
@@ -142,23 +119,13 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     closedTabTombstonesRef,
     terminalsLoaded,
     setTerminalsLoaded,
-    input,
-    setInput,
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
-    autocompleteEnabled,
-    setAutocompleteEnabled,
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,
-    setLiveInputCapture,
-    clearTerminalLiveInputDefault,
-    defaultTerminalHandlesToLiveInput,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
-    pruneTerminalHandlesFromLiveInput,
-    toggleTerminalLiveInput,
+    setLiveInputCapture: liveInputCapture.set,
     activeHandle,
     setActiveHandle,
     coveredStreamRevision,
@@ -199,10 +166,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    createTabAgentLoadState,
-    setCreateTabAgentLoadState,
-    createTabAgentOptions,
-    setCreateTabAgentOptions,
     showCreateBrowserModal,
     setShowCreateBrowserModal,
     showHeaderMoreActions,
@@ -227,8 +190,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     deleteKeyTarget,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
-    keyboardHeight,
-    setKeyboardHeight,
     terminalModes,
     setTerminalModes,
     terminalKeyboardMetrics,

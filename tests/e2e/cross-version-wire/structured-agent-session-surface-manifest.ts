@@ -3,7 +3,7 @@
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
+} from '../../../src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   structuredAgentSessionMessageSendMutation,

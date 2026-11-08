@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal/appearance/terminal-ligatures'
 import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-addon'
 
 const ligatureAddonsByTerminal = new WeakMap<Terminal, TerminalLigaturesAddon>()

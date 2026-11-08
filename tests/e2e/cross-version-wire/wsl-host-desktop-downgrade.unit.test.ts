@@ -15,11 +15,11 @@ import { mapRuntimeError } from '../../../src/main/runtime/rpc/errors'
 import {
   withWslOrcadAccountEnv,
   type WslOrcadAccountEnvDependencies
-} from '../../../src/main/wsl/wsl-orcad-account-env'
+} from '../../../src/main/wsl/orcad/wsl-orcad-account-env'
 import {
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
-} from '../../../src/renderer/src/runtime/runtime-rpc-result'
+} from '../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-result'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

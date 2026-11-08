@@ -3,10 +3,12 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
+import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
+import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './voice-model-unload'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
@@ -19,9 +21,10 @@ import { getDefaultNotificationSettings } from './notification-settings-defaults
 import { getDefaultOnboardingState } from './onboarding-defaults'
 import {
   defaultTerminalFontFamily,
+  defaultTerminalFontWeight,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
-} from './terminal-platform-defaults'
+} from './terminal/appearance/terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -98,6 +101,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
+    terminalFontWeight: defaultTerminalFontWeight(),
+    // Fresh Windows profiles start on Regular, so a later 500 is a choice, not the old default.
+    terminalFontWeightWindowsRegular:
+      typeof process !== 'undefined' && process.platform === 'win32' ? 'done' : undefined,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
@@ -111,13 +118,14 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     enabled: false,
     sttModel: '',
     modelsDir: '',
-    language: 'en',
+    dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
-    microphoneDeviceLabel: null
+    microphoneDeviceLabel: null,
+    unloadModelAfterMinutes: DEFAULT_UNLOAD_MODEL_AFTER_MINUTES
   }
 }
 

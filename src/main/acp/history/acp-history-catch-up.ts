@@ -11,22 +11,26 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
-import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/journal-history-origin'
+import {
+  nativeCopyCoverage,
+  journalImportTime,
+  usableJournalHistoryOrigin
+} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
 import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   HISTORY_CATCH_UP_MAX_BYTES,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   runHistoryCatchUp
-} from '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   acpHistoryTurns,
   type AcpIdentifiedHistoryTurn,
@@ -57,7 +61,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
     timeoutMs: input.timeoutMs ?? 30_000,
     ...(input.logger ? { logger: input.logger } : {}),
     readView: (history) => journalView(input, history, candidates),
-    sameView: (a, b) => a.token === b.token,
+    sameView: (a, b) => a.token === b.token && a.origin === b.origin,
     prepare: async ({ journal, view, check, yieldTurn }) => {
       // Derive source keys once without saved facts, then capture before any saved read or yield.
       candidates = acpHistoryTurns(input.frames, input.identity, check)
@@ -73,7 +77,8 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
         candidates,
         baseline.importedAt,
         baseline.requests,
-        check
+        check,
+        baseline.covered
       )
       const batch = createHistoryCatchUpBatch()
       // The rows written name the import, so a later open's additions settle under their own id.
@@ -202,7 +207,7 @@ function journalView(
       all.push(item)
     }
   })
-  const submissions = history.submissions()
+  const submissions = history.currentRead().submissions
   const eligible = submissions.filter(
     (send) => send.handedOverAt !== undefined || send.handoverRecorded !== true
   )
@@ -284,14 +289,14 @@ function journalView(
   // Aliases are rejected; their target bodies cannot establish exact provider coverage.
   const requests = new Set(eligible.map((send) => `prompt:${send.clientMessageId}`))
   const origin = usableJournalHistoryOrigin(history.historyOrigin())
-  const handle = origin?.providerHandle
-  const importedAt =
-    origin &&
-    handle?.kind === 'opaque' &&
-    handle.agent === scope.agent &&
-    handle.value === scope.providerSessionId
-      ? origin.importedAt
-      : null
+  const handle = { kind: 'opaque' as const, agent: scope.agent, value: scope.providerSessionId }
+  const importedAt = journalImportTime(history.historyOrigin(), handle)
+  const covered = nativeCopyCoverage(
+    history.historyOrigin(),
+    scope.agent,
+    'acp-user-message',
+    handle
+  )
   const token = JSON.stringify([
     history.epoch,
     [...items.values()].map((item) => [item.itemId, item.revision]),
@@ -300,5 +305,5 @@ function journalView(
     importedAt,
     retained
   ])
-  return { items, canonical, requests, importedAt, retained, token }
+  return { items, canonical, requests, importedAt, covered, origin, retained, token }
 }

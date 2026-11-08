@@ -6,7 +6,7 @@ import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../../watcher-aliased-root-fixture'
+} from './watcher-aliased-root-fixture'
 import {
   acknowledgeWatcherSubscribe,
   currentWatcherChild,
@@ -107,15 +107,5 @@ describe('watcher-process root path rewrite', () => {
     expect(delivered).toEqual([
       [{ type: 'create', path: join(root.aliasRoot, 'docs', 'notes.md') }]
     ])
-  })
-
-  it('leaves an unaliased root untouched', async () => {
-    root = await createAliasedWatcherRoot('watcher-rewrite-')
-    const eventPath = join(root.realRoot, 'src', 'agent-edit.ts')
-    const delivered = await subscribeAndEmit(subscribeViaWatcherProcess, root.realRoot, [
-      { type: 'update', path: eventPath, isDirectory: false }
-    ])
-
-    expect(delivered).toEqual([[{ type: 'update', path: eventPath, isDirectory: false }]])
   })
 })

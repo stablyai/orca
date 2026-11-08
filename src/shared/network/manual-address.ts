@@ -1,4 +1,4 @@
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../remote-runtime/pairing/mobile-pairing-protocol-limits'
 import { isPairingWildcardHostname, normalizePairingUrl } from './pairing-url'
 
 // Why: pairing entry points must accept the same endpoint forms as the main process.

@@ -1,11 +1,11 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
+import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
@@ -32,7 +32,7 @@ export type BuildPtyHostEnvOptions = {
   networkProxySettings?: NetworkProxySettings
   /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
   routeBrowserOpensToClient?: boolean
-  /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
+  /** The daemon reapplies the Git credential guard after merging its inherited env, so askpass reflects the final pane env. */
   deferGitConfigGuardToDaemon?: boolean
 }
 

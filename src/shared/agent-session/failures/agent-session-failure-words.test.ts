@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  readAgentSessionFailureFact,
-  type AgentSessionFailureFact,
-  type SubmissionRejectionKind
-} from './agent-session-failure'
+import './agent-session-failure'
+import type { AgentSessionFailureFact, SubmissionRejectionKind } from './agent-session-failure'
 import {
   agentSessionFailureSentence,
   agentSessionFailureWords
@@ -66,26 +63,17 @@ describe('the words written beside a failure fact', () => {
   })
 })
 
-describe('an attachment problem as a reader meets it', () => {
-  it('keeps what it can place and drops what it cannot', () => {
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'tooMany', limit: 20 }
-      })
-    ).toEqual({ kind: 'attachmentInvalid', attachment: { reason: 'tooMany', limit: 20 } })
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'tooMany', limit: 'twenty' }
-      })
-    ).toEqual({ kind: 'attachmentInvalid', attachment: { reason: 'tooMany' } })
-    // A reason a newer host added reads as the generic attachment failure.
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'futureReason' }
-      })
-    ).toEqual({ kind: 'attachmentInvalid' })
+it('names the terminal-input plugin literally and supplies both recovery paths', () => {
+  const plugin = 'plugin-{{agent}}-$&'
+  const fact = {
+    kind: 'pluginInputRequired',
+    detail: { text: plugin, audience: 'person' }
+  } as const
+  expect(agentSessionFailureSentence(fact, 'row', { agentName: 'Claude' })).toBe(
+    'Claude stopped because the "plugin-{{agent}}-$&" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a Claude terminal.'
+  )
+  expect(classifyDispatchRejection({ reason: 'not delivered', rejection: fact })).toMatchObject({
+    category: 'undelivered',
+    verdict: 'failure'
   })
 })

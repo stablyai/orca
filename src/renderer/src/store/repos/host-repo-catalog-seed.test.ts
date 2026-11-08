@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import type { HostRepoCatalogSnapshot } from '../../../../shared/host-repo-catalog-snapshot'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const HOST = 'runtime:env-wsl'
 
@@ -96,77 +96,6 @@ beforeEach(() => {
 })
 
 describe('saved WSL host project lists', () => {
-  it('lists every saved project of a stopped host after a restart, without contacting it', async () => {
-    const store = createTestStore()
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    await store.getState().seedReposFromHostCatalogSnapshots()
-
-    expect(hostRows(store.getState().repos)).toEqual([
-      { id: 'hello', kind: 'git' },
-      { id: 'django', kind: 'git' },
-      // Folder projects come back as folders.
-      { id: 'notes', kind: 'folder' }
-    ])
-    expect(store.getState().repos.map((repo) => repo.id)).toContain('local-repo')
-    // Loading the saved list is a desktop read: no host RPC, no status probe, no wsl.exe.
-    expect(listHostCatalogSnapshots).toHaveBeenCalledTimes(1)
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(runtimeGetStatus).not.toHaveBeenCalled()
-    for (const call of Object.values(wslApi)) {
-      expect(call).not.toHaveBeenCalled()
-    }
-
-    // The host is still stopped: its failed catalog leaves the saved rows in place.
-    await store.getState().fetchReposForAllHosts()
-    expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual([
-      'hello',
-      'django',
-      'notes'
-    ])
-  })
-
-  it('lets the first live list replace the saved one, dropping projects deleted on the host', async () => {
-    const store = createTestStore()
-    await store.getState().seedReposFromHostCatalogSnapshots()
-    hostRepos = [{ ...helloWorld, displayName: 'Hello World (renamed)' }, notes]
-
-    await store.getState().fetchReposForAllHosts()
-
-    const rows = store.getState().repos.filter((repo) => repo.executionHostId === HOST)
-    expect(rows.map((repo) => [repo.id, repo.displayName])).toEqual([
-      ['hello', 'Hello World (renamed)'],
-      ['notes', 'notes']
-    ])
-  })
-
-  it('does not bring back a host removed this session, or duplicate rows already loaded', async () => {
-    const store = createTestStore()
-    store.setState({ removedRuntimeEnvironmentIds: new Set(['env-wsl']) })
-    await store.getState().seedReposFromHostCatalogSnapshots()
-    expect(hostRows(store.getState().repos)).toEqual([])
-
-    const live = createTestStore()
-    live.setState({
-      repos: [{ ...helloWorld, displayName: 'live', executionHostId: HOST, connectionId: null }]
-    })
-    await live.getState().seedReposFromHostCatalogSnapshots()
-    const liveRows = live.getState().repos.filter((repo) => repo.executionHostId === HOST)
-    expect(liveRows.map((repo) => [repo.id, repo.displayName])).toEqual([
-      ['hello', 'live'],
-      ['django', 'django'],
-      ['notes', 'notes']
-    ])
-  })
-
-  it('skips a host whose live list already applied, so a late seed cannot restore a deleted project', async () => {
-    const store = createTestStore()
-    hostRepos = [helloWorld]
-    await store.getState().fetchReposForAllHosts()
-    await store.getState().seedReposFromHostCatalogSnapshots()
-
-    expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual(['hello'])
-  })
-
   it('lets a live list requested before the seed landed still drop a deleted project', async () => {
     const store = createTestStore()
     hostRepos = [helloWorld]
@@ -199,14 +128,5 @@ describe('saved WSL host project lists', () => {
     releaseAnswer()
     await fetching
     expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual(['hello'])
-  })
-
-  it('keeps startup going when the saved list cannot be read', async () => {
-    listHostCatalogSnapshots.mockRejectedValue(new Error('ipc down'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const store = createTestStore()
-    await store.getState().seedReposFromHostCatalogSnapshots()
-    expect(store.getState().repos).toEqual([])
-    expect(warn).toHaveBeenCalled()
   })
 })

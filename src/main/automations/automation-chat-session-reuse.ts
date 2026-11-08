@@ -4,7 +4,7 @@ import type {
   AutomationChatAgentLaunch
 } from './automation-chat-agent-launch'
 import { automationRunRecency } from '../../shared/automation-session-reuse'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import {
@@ -99,6 +99,7 @@ export async function reuseAutomationChat(
       ) {
         return null
       }
+      // oxlint-disable-next-line typescript/return-await -- this is the failure resolution; its throw must not re-enter the catch
       return automationRunAcceptedTarget(
         runtime,
         run,

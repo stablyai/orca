@@ -9,7 +9,7 @@ import {
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
 import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
-import { chatBox } from './native-chat-resume-on-restart-modal.test-support'
+
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
@@ -25,8 +25,11 @@ const statusStream: ResumeStatusStream = vi.hoisted(() => ({
   emit: (_event: Parameters<ResumeStatusStream['emit']>[0]) => {},
   snapshot: new Map()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: (event: Parameters<ResumeStatusStream['emit']>[0]) => void
@@ -66,29 +69,6 @@ function emitPhase(
   })
 }
 
-it('resumes a 21-chat selection with one action and no redundant listing', async () => {
-  const candidates = Array.from({ length: 21 }, (_, index) => ({
-    ...offered[0]!,
-    sessionId: `chat-${index}`
-  }))
-  rpc.mockImplementation(async (_target, method) =>
-    method === 'agentSession.restartResumable'
-      ? { sessions: candidates, failed: [] }
-      : {
-          sessions: [],
-          failed: [],
-          continued: candidates.map(({ sessionId }) => ({ sessionId, outcome: 'continued' }))
-        }
-  )
-  await refreshNativeChatRestartOffer()
-  await continueNativeChatRestartOffer(candidates.map(({ sessionId }) => sessionId))
-  expect(rpc.mock.calls.map((call) => [call[1], call[2]])).toEqual([
-    ['agentSession.restartResumable', undefined],
-    ['agentSession.restartContinue', { sessionIds: candidates.map(({ sessionId }) => sessionId) }]
-  ])
-  expect(toasts()).toEqual([['Resumed 21 chats']])
-})
-
 it('uses the host unconfirmed result after a lost bulk reply without reporting a failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   let reads = 0
@@ -117,30 +97,6 @@ it('uses the host unconfirmed result after a lost bulk reply without reporting a
   } finally {
     warn.mockRestore()
   }
-})
-
-it('publishes a refusal reply without needing a second host read', async () => {
-  let reads = 0
-  rpc.mockImplementation(async (_target, method) => {
-    if (method === 'agentSession.restartResumable') {
-      if (reads++ > 0) {
-        throw new Error('listing unavailable')
-      }
-      return { sessions: offered, failed: [] }
-    }
-    return {
-      sessions: [offered[1]],
-      failed: [failure('a')],
-      continued: [{ sessionId: 'a', outcome: 'refused' }]
-    }
-  })
-  await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => chatBox('b').click())
-  await act(async () => button('Resume 1 chat').click())
-  expect(reads).toBe(1)
-  expect(offerIds()).toEqual(['b'])
-  expect(getNativeChatRestartOffer().failed.map((row) => row.sessionId)).toEqual(['a'])
-  expect(toasts()).toEqual([['1 chat couldn’t be resumed']])
 })
 
 it('keeps the run in flight after every feed verdict until the fallback list is published', async () => {

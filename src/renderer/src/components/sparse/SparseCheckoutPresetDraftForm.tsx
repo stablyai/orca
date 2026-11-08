@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { SparseDirectoryPicker } from './SparseDirectoryPicker'
 import { SparseSelectedDirectoryList } from './SparseSelectedDirectoryList'
 import { addSparseDirectoryEntries } from './sparse-directory-entry-input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { normalizeSparseDirectoryLines } from '@/lib/sparse-paths'
 import type { SparsePresetDirectoryParseResult } from '@/lib/sparse-preset-draft'
 
@@ -46,6 +46,7 @@ export function SparseCheckoutPresetDraftForm({
   repoRootPath,
   repoConnectionId
 }: SparseCheckoutPresetDraftFormProps): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const [nameTouched, setNameTouched] = useState(false)
   const visibleNameError = nameTouched || draft.name.length > 0 ? nameError : null
@@ -72,13 +73,13 @@ export function SparseCheckoutPresetDraftForm({
     >
       <div className="space-y-3">
         <div className="space-y-2">
-          <Label htmlFor={`${id}-name`}>{translate('sparsePreset.name', 'Name')}</Label>
+          <Label htmlFor={`${id}-name`}>{t('sparsePreset.name', 'Name')}</Label>
           <Input
             id={`${id}-name`}
             ref={setNameInputNode}
             value={draft.name}
             onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
-            placeholder={translate('sparsePreset.namePlaceholder', 'Web app and shared UI')}
+            placeholder={t('sparsePreset.namePlaceholder', 'Web app and shared UI')}
             disabled={submitting}
             autoComplete="off"
             spellCheck={false}
@@ -93,11 +94,9 @@ export function SparseCheckoutPresetDraftForm({
           ) : null}
         </div>
         <div className="space-y-2">
-          <Label id={`${id}-directories`}>
-            {translate('sparsePreset.directories', 'Directories')}
-          </Label>
+          <Label id={`${id}-directories`}>{t('sparsePreset.directories', 'Directories')}</Label>
           <p id={`${id}-help`} className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'sparsePreset.pathInstructions',
               'Pick folders from the repository, or type any repo-relative path.'
             )}
@@ -123,10 +122,10 @@ export function SparseCheckoutPresetDraftForm({
         </div>
         <details className="space-y-2 text-xs text-muted-foreground">
           <summary className="cursor-pointer">
-            {translate('sparsePreset.details', 'What gets checked out?')}
+            {t('sparsePreset.details', 'What gets checked out?')}
           </summary>
           <p>
-            {translate(
+            {t(
               'sparsePreset.coneHelp',
               'Git also keeps files at the repository root and along the parent folders of these directories.'
             )}
@@ -141,17 +140,17 @@ export function SparseCheckoutPresetDraftForm({
         ) : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
-            {translate('sparsePreset.cancel', 'Cancel')}
+            {t('sparsePreset.cancel', 'Cancel')}
           </Button>
           <Button
             type="submit"
             disabled={!canSave}
             aria-busy={submitting}
-            aria-label={translate('sparsePreset.save', 'Save preset')}
+            aria-label={t('sparsePreset.save', 'Save preset')}
           >
             <span className="relative">
               <span className="data-[saving=true]:invisible" data-saving={submitting}>
-                {translate('sparsePreset.save', 'Save preset')}
+                {t('sparsePreset.save', 'Save preset')}
               </span>
               {submitting ? (
                 <span className="absolute inset-0 flex items-center justify-center">

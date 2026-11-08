@@ -7,7 +7,7 @@ import {
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from './runtime-environments'
+} from './remote-runtime/host-catalog/runtime-environments'
 
 /** A client-configured notification source, not authority for executing work. */
 export type NotificationSourceId = ExecutionHostId
@@ -15,6 +15,15 @@ export type NotificationSourceId = ExecutionHostId
 export type NotificationWorkspaceOwner = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+  workspaceExecutionHostId?: ExecutionHostId | null
+}
+
+export function notificationWorkspaceExecutionHostForOwner(
+  owner: NotificationWorkspaceOwner | null
+): ExecutionHostId | null {
+  return owner?.workspaceExecutionHostId !== undefined
+    ? owner.workspaceExecutionHostId
+    : (owner?.executionHostId ?? null)
 }
 
 type NotificationSourceCatalog = {

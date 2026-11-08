@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -7,7 +7,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import { ActivityBarButton } from './activity-bar-buttons'
-import { getActiveChecksStatus } from './active-checks-status'
+import { getActiveChecksStatus } from './checks-panel/active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
@@ -15,7 +15,7 @@ import {
   computeMaxRightSidebarPanelWidth,
   RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH as ACTIVITY_BAR_SIDE_WIDTH
 } from './right-sidebar-width'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
@@ -30,10 +30,12 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
 /** Stays mounted while closed so the return-focus hook can remember pane focus before the sidebar opens. */
 function RightSidebarInner(): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
@@ -41,13 +43,22 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
+  const lastRouteRequestId = useRef(routeRequestId)
+  const [focusVaultSearch, setFocusVaultSearch] = useState(false)
   const userRightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   // `orca plugin shot --width` sizes the panel for one capture without touching the saved width.
   const captureWidth = usePluginViewCaptureStore((s) => s.panelWidth)
   const rightSidebarWidth = captureWidth ?? userRightSidebarWidth
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
-  const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
+  // Creation keeps the prior worktree active until handoff, so its panels would show that worktree.
+  const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
+  )
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
@@ -65,6 +76,43 @@ function RightSidebarInner(): React.JSX.Element {
     pluginFetchStatus,
     installedPluginTabKeys
   })
+
+  useEffect(() => {
+    if (lastRouteRequestId.current === routeRequestId) {
+      if (!rightSidebarOpen || creatingWorktree || effectiveTab !== 'vault') {
+        setFocusVaultSearch(false)
+      }
+      return
+    }
+    lastRouteRequestId.current = routeRequestId
+    setFocusVaultSearch(
+      rightSidebarOpen &&
+        !creatingWorktree &&
+        rightSidebarTab === 'vault' &&
+        effectiveTab === 'vault' &&
+        !settingsFocusRequested
+    )
+  }, [
+    routeRequestId,
+    rightSidebarOpen,
+    rightSidebarTab,
+    effectiveTab,
+    creatingWorktree,
+    settingsFocusRequested
+  ])
+
+  useEffect(() => {
+    if (!focusVaultSearch) {
+      return
+    }
+    const cancel = (): void => setFocusVaultSearch(false)
+    document.addEventListener('pointerdown', cancel, true)
+    document.addEventListener('keydown', cancel, true)
+    return () => {
+      document.removeEventListener('pointerdown', cancel, true)
+      document.removeEventListener('keydown', cancel, true)
+    }
+  }, [focusVaultSearch])
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -88,8 +136,22 @@ function RightSidebarInner(): React.JSX.Element {
 
   const panelContent = rightSidebarOpen ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
-      {/* Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes. */}
-      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      {creatingWorktree ? (
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+          {t(
+            'auto.components.right.sidebar.index.creatingWorkspace',
+            'Available when the workspace is ready'
+          )}
+        </div>
+      ) : (
+        // Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes.
+        <RightSidebarPanelContent
+          effectiveTab={effectiveTab}
+          rightSidebarOpen={rightSidebarOpen}
+          focusVaultSearch={focusVaultSearch}
+          onVaultSearchFocusHandled={() => setFocusVaultSearch(false)}
+        />
+      )}
     </div>
   ) : null
 
@@ -118,20 +180,15 @@ function RightSidebarInner(): React.JSX.Element {
           data-right-sidebar-toggle
           onMouseDown={(event) => event.preventDefault()}
           onClick={toggleRightSidebar}
-          aria-label={translate(
-            'auto.components.right.sidebar.index.e8e2e4ce74',
-            'Toggle right sidebar'
-          )}
+          aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate(
-          'auto.components.right.sidebar.index.9fffaf17c1',
-          'Toggle right sidebar ({{value0}})',
-          { value0: rightSidebarShortcut }
-        )}
+        {t('auto.components.right.sidebar.index.9fffaf17c1', 'Toggle right sidebar ({{value0}})', {
+          value0: rightSidebarShortcut
+        })}
       </TooltipContent>
     </Tooltip>
   ) : null
