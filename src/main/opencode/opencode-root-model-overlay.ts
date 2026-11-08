@@ -7,7 +7,7 @@ import { withOpenCodeStandaloneServer } from './opencode-private-server'
 
 const OPENCODE_EXECUTABLE = /^opencode2?(\.(exe|cmd))?$/i
 const MODEL_FLAGS = ['--model', '-m']
-const VALUE_FLAGS = ['--prompt', '--session', '-s', '--server']
+const VALUE_FLAGS = ['--prompt', '--session', '-s']
 // Root options that leave a new session on the primary agent; resuming one makes the overlay moot.
 const PROBE_NEUTRAL_FLAGS = new Set(['--auto', '--standalone'])
 // Provider/model ids only; anything a shell could expand stays on the command line.
@@ -62,7 +62,9 @@ export function planOpenCodeRootModelRewrite(
     !/^[ \t]*$/.test(command.slice(spans.at(-1)?.end ?? 0)) ||
     spans.some(
       (span, index) =>
-        index !== executable - 1 && hasUnquotedOperator(command.slice(span.start, span.end))
+        index !== executable - 1 &&
+        // A word starting with # comments out the rest of the line in posix and PowerShell.
+        (hasUnquotedOperator(command.slice(span.start, span.end)) || command[span.start] === '#')
     )
   ) {
     return null
@@ -102,6 +104,10 @@ export function planOpenCodeRootModelRewrite(
       continue
     }
     standaloneOption ||= token === '--standalone'
+    // Another server never reads this launch's config, so its model flag stays as typed.
+    if (token === '--server' || token.startsWith('--server=')) {
+      return null
+    }
     if (VALUE_FLAGS.includes(token)) {
       probeNeutral &&= token === '--prompt'
       index += 1
