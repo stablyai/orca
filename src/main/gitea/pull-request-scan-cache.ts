@@ -29,6 +29,27 @@ const activeScanCounts = new Map<string, number>()
 // every fast lookup, and an empty page is unambiguous on both server kinds.
 const HEAD_FILTER_UNSUPPORTED_TTL_MS = 6 * 60 * 60 * 1000
 const headFilterUnsupportedUntil = new Map<string, number>()
+// A probe that fails on transport (4xx/5xx/timeout) is an outage or a rejecting
+// host, not a verdict about the filter: remember it briefly so lookups do not
+// pay the failed probe before every scan while the host is unhealthy.
+const HEAD_FILTER_PROBE_FAILURE_COOLDOWN_MS = 3_000
+const headFilterProbeFailureUntil = new Map<string, number>()
+
+export function rememberGiteaHeadFilterProbeFailure(apiBaseUrl: string): void {
+  headFilterProbeFailureUntil.set(apiBaseUrl, Date.now() + HEAD_FILTER_PROBE_FAILURE_COOLDOWN_MS)
+}
+
+export function isGiteaHeadFilterProbeFailureCoolingDown(apiBaseUrl: string): boolean {
+  const until = headFilterProbeFailureUntil.get(apiBaseUrl)
+  if (until === undefined) {
+    return false
+  }
+  if (Date.now() >= until) {
+    headFilterProbeFailureUntil.delete(apiBaseUrl)
+    return false
+  }
+  return true
+}
 
 export function rememberGiteaHeadFilterUnsupported(apiBaseUrl: string): void {
   headFilterUnsupportedUntil.set(apiBaseUrl, Date.now() + HEAD_FILTER_UNSUPPORTED_TTL_MS)
@@ -180,15 +201,94 @@ export async function scanGiteaPullRequests(
  * hold a verified match or an unambiguous empty page, so the strict and
  * lenient lookups can share one key without inheriting a failed scan. A probe
  * failure is likewise never shared as a rejection: the shared promise resolves
- * to a miss and each caller falls back to its own bounded scan, whose
- * throwOnFailure mode decides the final outcome (absence for lenient, a thrown
- * error for strict).
+ * to a miss, cools the probe down for this host and lets each caller fall back
+ * to its own bounded scan, whose throwOnFailure mode decides the final outcome
+ * (absence for lenient, a thrown error for strict).
  */
+// Probe results live in their own small cache: the shared scan cache holds only
+// 32 slots and a per-branch probe key would evict other repos' scans on hosts
+// where the fast path answers (the Forgejo case this optimisation targets).
+const headFilterProbeCache = new Map<string, GiteaPullRequestScanEntry>()
+const headFilterProbeInFlight = new Map<string, Promise<RawGiteaPullRequest[] | null>>()
+const headFilterProbeGenerations = new Map<string, number>()
+const HEAD_FILTER_PROBE_CACHE_ENTRIES = 32
+
+function reusableHeadFilterProbeEntry(repoKey: string): GiteaPullRequestScanEntry | undefined {
+  const entry = headFilterProbeCache.get(repoKey)
+  if (!entry) {
+    return undefined
+  }
+  if (Date.now() >= entry.expiresAt) {
+    clearTimeout(entry.expirationTimer)
+    headFilterProbeCache.delete(repoKey)
+    return undefined
+  }
+  return entry
+}
+
+function rememberHeadFilterProbeEntry(repoKey: string, pullRequests: RawGiteaPullRequest[]): void {
+  const existing = headFilterProbeCache.get(repoKey)
+  if (existing) {
+    clearTimeout(existing.expirationTimer)
+  }
+  let entry!: GiteaPullRequestScanEntry
+  const expirationTimer = setTimeout(() => headFilterProbeCache.delete(repoKey), SCAN_TTL_MS)
+  expirationTimer.unref()
+  entry = { expiresAt: Date.now() + SCAN_TTL_MS, expirationTimer, pullRequests }
+  headFilterProbeCache.set(repoKey, entry)
+  // Keep the probe cache small: oldest entries (insertion order) yield first.
+  while (headFilterProbeCache.size > HEAD_FILTER_PROBE_CACHE_ENTRIES) {
+    const oldest = headFilterProbeCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    const evicted = headFilterProbeCache.get(oldest)
+    if (evicted) {
+      clearTimeout(evicted.expirationTimer)
+    }
+    headFilterProbeCache.delete(oldest)
+  }
+}
+
+export function invalidateGiteaHeadFilterProbes(repoKeyPrefix: string): void {
+  for (const key of headFilterProbeInFlight.keys()) {
+    if (key.startsWith(repoKeyPrefix)) {
+      headFilterProbeGenerations.set(key, (headFilterProbeGenerations.get(key) ?? 0) + 1)
+      headFilterProbeInFlight.delete(key)
+    }
+  }
+  for (const [key, entry] of headFilterProbeCache) {
+    if (key.startsWith(repoKeyPrefix)) {
+      clearTimeout(entry.expirationTimer)
+      headFilterProbeCache.delete(key)
+    }
+  }
+  // Drop in-flight probes too: a joined pre-invalidation probe would hand the
+  // stale page to the post-invalidation lookup (the shared scan cache fences
+  // this with generations; the probe cache is too small to bother).
+  for (const key of headFilterProbeInFlight.keys()) {
+    if (key.startsWith(repoKeyPrefix)) {
+      headFilterProbeInFlight.delete(key)
+    }
+  }
+}
+
 export async function cachedGiteaHeadFilteredScan(
   repoKey: string,
+  apiBaseUrl: string,
   probe: () => Promise<RawGiteaPullRequest[] | null>
 ): Promise<RawGiteaPullRequest[] | null> {
-  return cachedGiteaPullRequestScan(repoKey, async () => {
+  const cached = reusableHeadFilterProbeEntry(repoKey)
+  if (cached) {
+    noteProviderCacheAnswer()
+    return cached.pullRequests
+  }
+  const running = headFilterProbeInFlight.get(repoKey)
+  if (running) {
+    noteProviderCacheAnswer()
+    return running
+  }
+  const pending = (async () => {
     let pullRequests: RawGiteaPullRequest[] | null
     try {
       pullRequests = await probe()
@@ -196,10 +296,22 @@ export async function cachedGiteaHeadFilteredScan(
       // The fast path is an optimisation: its failure says nothing about the
       // answer, and the probe key is shared by strict and lenient lookups, so
       // a rejection here would leak into whichever caller joined second.
+      rememberGiteaHeadFilterProbeFailure(apiBaseUrl)
       return null
     }
-    return pullRequests === null ? null : { pullRequests, completed: true }
-  })
+    if (pullRequests === null) {
+      rememberGiteaHeadFilterProbeFailure(apiBaseUrl)
+      return null
+    }
+    rememberHeadFilterProbeEntry(repoKey, pullRequests)
+    return pullRequests
+  })()
+  headFilterProbeInFlight.set(repoKey, pending)
+  try {
+    return await pending
+  } finally {
+    headFilterProbeInFlight.delete(repoKey)
+  }
 }
 
 /** Invalidate after mutations to prevent stale missing-review results. */
@@ -215,6 +327,7 @@ function invalidateGiteaPullRequestScan(repoKey: string): void {
 
 /** Invalidate every scan variant cached for a repository (base, strict, head-filtered). */
 export function invalidateGiteaPullRequestScanTree(repoKey: string): void {
+  invalidateGiteaHeadFilterProbes(repoKey)
   const affected = new Set<string>()
   for (const key of scanCache.keys()) {
     if (key === repoKey || key.startsWith(`${repoKey}::`)) {
@@ -232,13 +345,16 @@ export function invalidateGiteaPullRequestScanTree(repoKey: string): void {
 }
 
 export function _resetGiteaPullRequestScanCache(): void {
+  headFilterProbeCache.clear()
+  headFilterProbeInFlight.clear()
+  headFilterProbeFailureUntil.clear()
+  headFilterUnsupportedUntil.clear()
   for (const repoKey of scanCache.keys()) {
     removeScanCacheEntry(repoKey)
   }
   inFlightScans.clear()
   scanGenerations.clear()
   activeScanCounts.clear()
-  headFilterUnsupportedUntil.clear()
 }
 
 export function _getGiteaPullRequestScanCacheSize(): number {

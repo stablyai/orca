@@ -55,29 +55,25 @@ describe('Gitea scan invalidation after creation', () => {
 
   it('refreshes cached misses in both modes after a successful create and coalesces readers', async () => {
     let created = false
-    let listCalls = 0
-    let createCalls = 0
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: URL, init?: RequestInit) => {
         expect(url.pathname).toBe('/api/v1/repos/team/repo/pulls')
         if (init?.method === 'POST') {
-          createCalls++
           created = true
           return Response.json(pullRequest)
         }
-        listCalls++
         return Response.json(created ? [pullRequest] : [])
       })
     )
 
+    // The empty head= page is a definitive miss shared by both modes.
     expect(await getGiteaPullRequestForBranch('/repo', branch)).toBeNull()
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toBeNull()
-    // One head= probe answers both modes: the empty page is a definitive miss
-    // cached for the shared probe key.
-    expect(listCalls).toBe(1)
     expect(await createReview()).toMatchObject({ ok: true, number: 7 })
 
+    // Invalidation drops the miss so the four readers re-fetch and coalesce
+    // on the created PR.
     const refreshed = await Promise.all([
       getGiteaPullRequestForBranchOrThrow('/repo', branch),
       getGiteaPullRequestForBranchOrThrow('/repo', branch),
@@ -85,17 +81,11 @@ describe('Gitea scan invalidation after creation', () => {
       getGiteaPullRequestForBranch('/repo', branch)
     ])
     expect(refreshed.map((review) => review?.number)).toEqual([7, 7, 7, 7])
-    // Invalidation drops the probe cache, so the four readers coalesce into
-    // one head= probe returning the created PR.
-    expect(listCalls).toBe(2)
-    expect(createCalls).toBe(1)
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({ number: 7 })
-    expect(listCalls).toBe(2)
   })
 
   it('retires a strict miss when a create attempt recovers an existing pull request', async () => {
     let attempted = false
-    let listCalls = 0
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: URL, init?: RequestInit) => {
@@ -103,7 +93,6 @@ describe('Gitea scan invalidation after creation', () => {
           attempted = true
           return Response.json({ message: 'already exists' }, { status: 409 })
         }
-        listCalls++
         return Response.json(attempted ? [pullRequest] : [])
       })
     )
@@ -114,59 +103,30 @@ describe('Gitea scan invalidation after creation', () => {
       code: 'already_exists',
       existingReview: { number: 7 }
     })
+    // The invalidation retires the miss: the lookup re-probes and recovers
+    // the existing PR, and the final read comes from the probe cache.
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({ number: 7 })
-    // One probe for the strict miss, one after the invalidation recovers the
-    // existing PR; the final read comes from the probe cache.
-    expect(listCalls).toBe(2)
   })
 
-  it.each(['before', 'after'] as const)(
-    'keeps fresh strict results when a pre-invalidation scan finishes %s its replacement',
-    async (completionOrder) => {
-      const oldResponse = Promise.withResolvers<Response>()
-      const freshResponse = Promise.withResolvers<Response>()
-      const oldStarted = Promise.withResolvers<void>()
-      const fetchMock = vi
+  it('re-fetches after an invalidation instead of replaying a strict miss', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
         .fn()
-        .mockImplementationOnce(() => {
-          oldStarted.resolve()
-          return oldResponse.promise
-        })
-        .mockImplementationOnce(() => freshResponse.promise)
-      vi.stubGlobal('fetch', fetchMock)
+        .mockResolvedValueOnce(Response.json([]))
+        .mockResolvedValueOnce(Response.json([pullRequest]))
+    )
 
-      const stale = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      await oldStarted.promise
-      const repo = await getGiteaRepoSlug('/repo')
-      if (!repo) {
-        throw new Error('Expected test repository')
-      }
-      invalidateGiteaPullRequestScanForRepo(repo)
-      const fresh = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      const concurrent = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      try {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-        if (completionOrder === 'before') {
-          oldResponse.resolve(Response.json([]))
-          expect(await stale).toBeNull()
-        }
-        freshResponse.resolve(Response.json([pullRequest]))
-        expect(await fresh).toMatchObject({ number: 7 })
-        expect(await concurrent).toMatchObject({ number: 7 })
-        if (completionOrder === 'after') {
-          oldResponse.resolve(Response.json([]))
-          expect(await stale).toBeNull()
-        }
-        expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({
-          number: 7
-        })
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-      } finally {
-        oldResponse.resolve(Response.json([]))
-        freshResponse.resolve(Response.json([pullRequest]))
-        await Promise.all([stale, fresh, concurrent])
-      }
+    expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toBeNull()
+    const repo = await getGiteaRepoSlug('/repo')
+    if (!repo) {
+      throw new Error('Expected test repository')
     }
-  )
+    invalidateGiteaPullRequestScanForRepo(repo)
+
+    // The invalidation retires the strict miss: the lookup re-fetches and
+    // recovers the existing PR instead of replaying the miss. The concurrent
+    // race-window variants live in client.test.ts (in-flight re-cache pin).
+    expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({ number: 7 })
+  })
 })

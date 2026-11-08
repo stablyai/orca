@@ -1,6 +1,7 @@
 import { matchesBranch, type RawGiteaPullRequest } from './pull-request-mappers'
 import {
   cachedGiteaHeadFilteredScan,
+  isGiteaHeadFilterProbeFailureCoolingDown,
   isGiteaHeadFilterUnsupported,
   rememberGiteaHeadFilterUnsupported,
   scanGiteaPullRequests
@@ -50,8 +51,13 @@ export async function fetchGiteaBranchPullRequestCandidates(
 // API base URL, and degrades this and future lookups to the bounded scan.
 // An all-matching response is safe either way without memoising a positive —
 // its first entry is exactly what find() over the recentupdate-ordered scan
-// returns — and an empty page means "no PR" on both server kinds. Null means
-// the fast path cannot answer and the bounded scan must run.
+// returns. An empty page means "no PR" on both server kinds: Forgejo's
+// listPullRequestStatement filters on `pull_request.head_branch=?` and only
+// constrains `base_repo_id` (no flow or ref restriction), and its API maps
+// head.label straight from that column, so every PR the branch matcher
+// accepts — ref or label, fork or AGit — also satisfies the server filter,
+// and an empty filtered page is the same answer a full scan would give.
+// Null means the fast path cannot answer and the bounded scan must run.
 async function probeHeadFiltered(
   deps: GiteaBranchPullRequestDeps,
   branchName: string
@@ -59,20 +65,29 @@ async function probeHeadFiltered(
   if (isGiteaHeadFilterUnsupported(deps.apiBaseUrl)) {
     return null
   }
-  return cachedGiteaHeadFilteredScan(`${deps.scanKey}::head::${branchName}`, async () => {
-    const filtered = await deps.fetchList({
-      state: 'all',
-      sort: 'recentupdate',
-      head: branchName,
-      limit: PULL_REQUEST_HEAD_FILTER_LIMIT
-    })
-    if (filtered === null) {
-      return null
+  if (isGiteaHeadFilterProbeFailureCoolingDown(deps.apiBaseUrl)) {
+    return null
+  }
+  return cachedGiteaHeadFilteredScan(
+    `${deps.scanKey}::head::${branchName}`,
+    deps.apiBaseUrl,
+    async () => {
+      const filtered = await deps.fetchList({
+        state: 'all',
+        sort: 'recentupdate',
+        head: branchName,
+        limit: PULL_REQUEST_HEAD_FILTER_LIMIT
+      })
+      if (filtered === null) {
+        // Transport failure (or a rejecting host): the probe cache cools this
+        // host down so lookups skip straight to the scan while it is unhealthy.
+        return null
+      }
+      if (filtered.some((item) => !matchesBranch(item, branchName))) {
+        rememberGiteaHeadFilterUnsupported(deps.apiBaseUrl)
+        return null
+      }
+      return filtered
     }
-    if (filtered.some((item) => !matchesBranch(item, branchName))) {
-      rememberGiteaHeadFilterUnsupported(deps.apiBaseUrl)
-      return null
-    }
-    return filtered
-  })
+  )
 }
