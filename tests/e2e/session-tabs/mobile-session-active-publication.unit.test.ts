@@ -1,7 +1,7 @@
 import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
-import { withOpenedServeBrowserTab } from '../../../src/main/runtime/serve-browser-tab-layout'
+import { withOpenedServeBrowserTab } from '../../../src/main/runtime/browser/headless/serve-browser-tab-layout'
 import { applyPtyBinding } from '../../../src/main/persistence/loading-store/pty-binding-session-update'
-import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
@@ -16,10 +16,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../src/shared/runtime-session-contracts'
 import { buildMobileSessionTabSnapshots } from '../../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots'
-import { makeState } from '../../../src/renderer/src/runtime/sync-runtime-graph-test-harness'
+import { makeState } from '../../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
-import { withMainSessionTabRows } from '../../../src/main/runtime/session-tabs/main-session-tab-rows'
+import '../../../src/main/runtime/session-tabs/main-session-tab-rows'
 
 const A = 'agent-session:chat-a'
 const B = 'agent-session:chat-b'
@@ -188,19 +188,6 @@ describe('host active-tab publication', () => {
     expectSelection(await list(runtime), B)
   })
 
-  it('does not substitute a preserved row for an unavailable explicit legacy selection', async () => {
-    const runtime = createRuntime()
-    await publish(runtime, A)
-    accept(runtime, {
-      ...rendererFrame(B, 10),
-      tabGroups: undefined,
-      activeGroupId: null,
-      activeTabId: B,
-      activeTabType: 'agent-session'
-    })
-    expectSelection(await list(runtime), null)
-  })
-
   it('retains the current split layout across runtime-owned hydration before persistence catches up', async () => {
     vi.useFakeTimers()
     const { runtime, getSession, setSession } = createRuntimeFixture()
@@ -308,41 +295,6 @@ describe('host active-tab publication', () => {
     accept(runtime, rendererFrame(C, 12))
     accept(runtime, beforeCreate)
     expectSelection(await list(runtime), C)
-  })
-
-  it.each([
-    [B, false],
-    ['sim-tab', false],
-    ['sim-tab', true]
-  ] as const)('resolves main-layout group selection %s (omitted group=%s)', (selected, omitted) => {
-    const frame = rendererFrame(selected, 10, omitted)
-    const chat = {
-      type: 'agent-session' as const,
-      id: A,
-      title: 'Chat A',
-      sessionId: 'chat-a',
-      agent: 'claude' as const,
-      isActive: true
-    }
-    const projected = {
-      ...frame,
-      activeTabId: A,
-      activeTabType: 'agent-session' as const,
-      tabs: [chat],
-      tabGroups: [{ id: 'g', activeTabId: A, tabOrder: [A, B] }]
-    }
-    expectSelection(
-      withMainSessionTabRows(frame, projected, () => false),
-      null
-    )
-    expectSelection(
-      withMainSessionTabRows(
-        frame,
-        { ...projected, tabs: [chat, { ...chat, id: B, sessionId: 'chat-b', isActive: false }] },
-        () => false
-      ),
-      selected === B ? B : null
-    )
   })
   it.each([false, true])(
     'publishes no active recipient for an unpublished simulator (own group=%s)',

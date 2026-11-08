@@ -6,7 +6,8 @@ type WireReady = Extract<RuntimeClientEventStreamMessage, { type: 'ready' }>
 
 export type SharedClientEvent =
   | Exclude<RuntimeClientEventStreamMessage, { type: 'ready' }>
-  | WireReady
+  // `replayed`: this listener heard a ready before, so events since then may have been missed.
+  | (WireReady & { replayed?: true })
   // Joined a stream already live on this connection: no snapshot and no per-subscription replay come.
   | { type: 'ready'; joined: true }
   | { type: 'error'; message?: string }
@@ -15,14 +16,24 @@ export type SharedClientEventListener = (event: SharedClientEvent) => void
 
 export type SharedClientEventsClient = Pick<
   RpcClient,
-  'subscribe' | 'getState' | 'getLastConnectedAt' | 'getGeneration'
+  'subscribe' | 'getState' | 'getLastConnectedAt' | 'getGeneration' | 'onStateChange'
 >
 
-type SharedStream = {
-  listeners: Set<{ listener: SharedClientEventListener }>
+// One `runtime.clientEvents.subscribe` on the transport; payloads from a wire that is no longer current are dropped.
+type Wire = {
   stop: (() => void) | null
-  // The connection the last wire `ready` arrived on; null until one does.
+  ready: boolean
+  // The connection this wire's last `ready` arrived on.
   readyOn: string | null
+}
+
+type Subscription = { listener: SharedClientEventListener; heardReady: boolean }
+
+type SharedStream = {
+  listeners: Set<Subscription>
+  wire: Wire | null
+  // A wire that failed before its ready opens again on the next connected edge, not in the same one.
+  stopWatching: () => void
 }
 
 const streams = new WeakMap<SharedClientEventsClient, SharedStream>()
@@ -30,78 +41,110 @@ const streams = new WeakMap<SharedClientEventsClient, SharedStream>()
 /**
  * One `runtime.clientEvents` wire stream per client, shared by every listener in this JS world.
  * Every wire event reaches every listener; a listener that joins after the wire's `ready` on the
- * current connection gets a `joined` ready instead. The stream closes once its last listener leaves.
+ * current connection gets a `joined` ready instead. When the wire ends or fails, listeners hear it
+ * and the stream opens a fresh wire for them; its `ready` comes `replayed`, since events were missed.
+ * The stream closes once its last listener leaves.
  */
 export function subscribeSharedClientEvents(
   client: SharedClientEventsClient,
   listener: SharedClientEventListener
 ): () => void {
-  const subscription = { listener }
-  const existing = streams.get(client)
-  const stream = existing ?? { listeners: new Set(), stop: null, readyOn: null }
-  stream.listeners.add(subscription)
-  if (existing) {
+  const subscription: Subscription = { listener, heardReady: false }
+  const joined = streams.get(client) ?? createStream(client)
+  joined.listeners.add(subscription)
+  if (joined.wire) {
     // Deferred like a wire reply, so a caller never hears back before subscribe returns.
     queueMicrotask(() => {
+      const readyOn = joined.wire?.readyOn ?? null
       if (
-        stream.listeners.has(subscription) &&
-        stream.readyOn !== null &&
-        stream.readyOn === connectionKey(client)
+        joined.listeners.has(subscription) &&
+        readyOn !== null &&
+        readyOn === connectionKey(client)
       ) {
+        subscription.heardReady = true
         listener({ type: 'ready', joined: true })
       }
     })
   } else {
-    streams.set(client, stream)
-    let stop: () => void
-    try {
-      stop = client.subscribe('runtime.clientEvents.subscribe', null, (payload) =>
-        deliver(client, stream, payload)
-      )
-    } catch (error) {
-      // A page bridge throws when it can't open a stream; later subscribers must retry the wire.
-      if (streams.get(client) === stream) {
-        streams.delete(client)
-      }
-      throw error
-    }
-    if (streams.get(client) === stream) {
-      stream.stop = stop
-    } else {
-      // The wire refused synchronously and the stream already ended.
-      stop()
-    }
+    openWire(client, joined)
   }
   return () => {
-    if (!stream.listeners.delete(subscription) || stream.listeners.size > 0) {
+    if (!joined.listeners.delete(subscription) || joined.listeners.size > 0) {
       return
     }
     // An effect that re-runs leaves and rejoins in one commit; keep the wire stream across it.
     queueMicrotask(() => {
-      if (stream.listeners.size > 0) {
+      if (joined.listeners.size > 0) {
         return
       }
-      if (streams.get(client) === stream) {
+      if (streams.get(client) === joined) {
         streams.delete(client)
       }
-      stream.stop?.()
-      stream.stop = null
+      joined.stopWatching()
+      const wire = joined.wire
+      joined.wire = null
+      wire?.stop?.()
     })
   }
 }
 
-function deliver(client: SharedClientEventsClient, stream: SharedStream, payload: unknown): void {
-  if (!isEvent(payload)) {
+function createStream(client: SharedClientEventsClient): SharedStream {
+  const stream: SharedStream = {
+    listeners: new Set(),
+    wire: null,
+    stopWatching: () => {}
+  }
+  stream.stopWatching = client.onStateChange((state) => {
+    if (state === 'connected' && stream.listeners.size > 0 && !stream.wire) {
+      openWire(client, stream)
+    }
+  })
+  streams.set(client, stream)
+  return stream
+}
+
+function openWire(client: SharedClientEventsClient, stream: SharedStream): void {
+  const wire: Wire = { stop: null, ready: false, readyOn: null }
+  stream.wire = wire
+  let stop: () => void
+  try {
+    stop = client.subscribe('runtime.clientEvents.subscribe', null, (payload) =>
+      deliver(client, stream, wire, payload)
+    )
+  } catch {
+    // A page bridge throws when it can't open a stream now; try again on the next connection.
+    if (stream.wire === wire) {
+      stream.wire = null
+    }
     return
   }
+  if (stream.wire === wire) {
+    wire.stop = stop
+  } else {
+    // The wire refused synchronously and already ended.
+    stop()
+  }
+}
+
+function deliver(
+  client: SharedClientEventsClient,
+  stream: SharedStream,
+  wire: Wire,
+  payload: unknown
+): void {
+  if (stream.wire !== wire || !isEvent(payload)) {
+    return
+  }
+  let reopen = false
   if (payload.type === 'ready') {
-    stream.readyOn = connectionKey(client)
+    wire.ready = true
+    wire.readyOn = connectionKey(client)
   } else if (payload.type === 'end' || payload.type === 'error') {
-    // The wire stream is over; the next subscriber opens a fresh one.
-    if (streams.get(client) === stream) {
-      streams.delete(client)
-    }
-    stream.readyOn = null
+    // A wire that went live may open again at once; one refused before ready waits for a new connection.
+    reopen = wire.ready
+    stream.wire = null
+    // Releases the transport's record too, so a path switch can't replay the dead subscribe.
+    wire.stop?.()
   }
   let failure: { error: unknown } | null = null
   // Snapshot: a listener added mid-dispatch hears its own joined ready, not this event too.
@@ -110,11 +153,25 @@ function deliver(client: SharedClientEventsClient, stream: SharedStream, payload
       continue
     }
     try {
-      subscription.listener(payload)
+      if (payload.type === 'ready') {
+        const replayed = subscription.heardReady
+        subscription.heardReady = true
+        subscription.listener(replayed ? { ...payload, replayed } : payload)
+      } else {
+        subscription.listener(payload)
+      }
     } catch (error) {
       // One throwing consumer must not starve the rest; rethrow to the transport afterwards.
       failure ??= { error }
     }
+  }
+  if (reopen) {
+    // Out of the transport's callback, and after any listener that left or rejoined on this event.
+    queueMicrotask(() => {
+      if (streams.get(client) === stream && stream.listeners.size > 0 && !stream.wire) {
+        openWire(client, stream)
+      }
+    })
   }
   if (failure) {
     throw failure.error

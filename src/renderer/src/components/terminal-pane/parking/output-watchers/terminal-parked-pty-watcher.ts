@@ -2,6 +2,7 @@ import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stab
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
+import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { subscribeToPtyExit } from '../../pty-transport/delivery/pty-dispatcher'
@@ -51,7 +52,9 @@ export function startParkedPtyWatcher(args: {
     !ptyId ||
     entry.disposersByPtyId.has(ptyId) ||
     !isTerminalLeafId(pane.leafId) ||
-    !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy)
+    !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy) ||
+    // A gone session has no process to watch; reveal respawns it.
+    terminalProviderSessionIsGone(ptyId)
   ) {
     return
   }

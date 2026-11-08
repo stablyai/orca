@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SnapshotModule from '../../../runtime/web-runtime-session-snapshot'
+import type * as SnapshotModule from '../../../runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { useAppStore } from '../../../store/index'
 import { openWorkspaceBrowserTab } from './workspace-browser-tab-open'
-import { resetWebSessionBrowserPlacementsForTests } from '../../../runtime/web-session-browser-placement'
+import { resetWebSessionBrowserPlacementsForTests } from '../../../runtime/browser/placement/web-session-browser-placement'
 import {
   resetWebSessionTabsSyncTestState,
   WT
@@ -20,16 +20,19 @@ import {
   runtimeStatusesFor,
   seedPairedWorktree,
   wrapperForRemotePage
-} from '../../../runtime/web-runtime-browser-creation-placement-test-rig'
+} from '../../../runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig'
 import {
   makeRepo,
   makeWorktree
 } from '../../../components/worktree-jump/worktree-jump-palette-test-fixtures'
 
-vi.mock('../../../runtime/web-runtime-session-snapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof SnapshotModule>()),
-  refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => publishHostSnapshot())
-}))
+vi.mock(
+  '../../../runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SnapshotModule>()),
+    refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => publishHostSnapshot())
+  })
+)
 
 const initialState = useAppStore.getInitialState()
 

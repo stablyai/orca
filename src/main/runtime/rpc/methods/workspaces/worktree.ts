@@ -27,7 +27,7 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector,
+  WorktreeShow,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
@@ -38,7 +38,7 @@ import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projectio
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
-import { runApprovedCreatedWorktreeSetup } from '../../../created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -88,9 +88,11 @@ export const WORKTREE_METHODS = [
   defineMethod({
     name: 'worktree.show',
     permission: 'workspace',
-    params: WorktreeSelector,
+    params: WorktreeShow,
     handler: async (params, { runtime }) => ({
-      worktree: await runtime.showManagedWorktree(params.worktree)
+      worktree: await runtime.showManagedWorktree(params.worktree, undefined, {
+        matchFolders: params.matchFolderWorkspaces === true
+      })
     })
   }),
   WORKTREE_SLEEP_METHOD,

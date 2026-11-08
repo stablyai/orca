@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import '@testing-library/jest-dom/vitest'
 import { createElement } from 'react'
 import { cleanup, screen } from '@testing-library/react'

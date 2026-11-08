@@ -38,7 +38,7 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: rpc.subscribe
 }))
 import { useAppStore } from '@/store'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { acquireAgentLaunchChoices, holdChatProgramFacts } from './host-chat-program-acquisition'
 import * as chat from './host-chat-program'

@@ -1,5 +1,5 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
@@ -16,7 +16,7 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
+import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
 
 describe('OrcaRuntimeService', () => {
   it('preserves non-ASCII terminal preview text in chunks with controls', async () => {

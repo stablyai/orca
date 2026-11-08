@@ -19,6 +19,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { useTranslate } from '@/i18n/use-translate'
 
 function pickerLaunchRow(entry: AgentPickerEntry, surface: AgentPickerSurface): NewTabAgentMenuRow {
   return {
@@ -89,6 +90,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   /** Base agent rows only; setup rows are presets, not default-agent choices. */
   onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const setupId = useId()
   const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
@@ -115,7 +117,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         <DropdownMenuItem
           disabled={disabled || launchBlocked || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
-          aria-description={launchBlocked ? terminalPendingLabel() : undefined}
+          aria-description={launchBlocked ? terminalPendingLabel(t) : undefined}
           onSelect={(event) => {
             onSelectAgent?.(entry.agent)
             if (

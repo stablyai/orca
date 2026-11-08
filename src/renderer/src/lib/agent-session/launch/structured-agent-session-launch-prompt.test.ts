@@ -11,12 +11,18 @@ vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
-    mocks.call(target, method, params),
-  structuredAgentSessionHostSupports: vi.fn(async () => true)
+    mocks.call(target, method, params)
 }))
+
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: vi.fn(async () => true)
+  })
+)
 
 import {
   resetStructuredAgentSessionSendsForTests,

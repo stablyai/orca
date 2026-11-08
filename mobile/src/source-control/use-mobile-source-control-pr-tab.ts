@@ -23,6 +23,7 @@ type Args = {
   activeTab: SourceControlHubTab
   /** The screen pushed over the hub, so Checks and Comments stay live while open. */
   hubPage: SourceControlHubScreen | null
+  hostId: string
   worktreeId: string
   prController: MobilePrSidebarController
   prBranch: string | null
@@ -44,6 +45,7 @@ export function useMobileSourceControlPrTab({
   state,
   activeTab,
   hubPage,
+  hostId,
   worktreeId,
   prController,
   prBranch,
@@ -60,8 +62,8 @@ export function useMobileSourceControlPrTab({
   const { client, connState, status, worktreeLabel, loadStatus, branchCompareResult } = state
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const refetchPr = prController.refetchPRSidebar
-  // Mid-probe false is still loading; do not flash unavailable.
-  const prTabState: PrSidebarState = !(ready && prController.prSidebarRepoProbeLoaded)
+  // Mid-probe false is still loading; do not flash unavailable. A known branch shows its PR without waiting for status.
+  const prTabState: PrSidebarState = !prController.prSidebarRepoProbeLoaded
     ? { kind: 'loading' }
     : !isHostedRepo
       ? {
@@ -72,10 +74,12 @@ export function useMobileSourceControlPrTab({
           )
         }
       : prBranch === null
-        ? {
-            kind: 'error',
-            message: t('pullRequest.prViewPanel.branchUnavailable', 'Current branch unavailable.')
-          }
+        ? ready
+          ? {
+              kind: 'error',
+              message: t('pullRequest.prViewPanel.branchUnavailable', 'Current branch unavailable.')
+            }
+          : { kind: 'loading' }
         : prController.prSidebarState
   const commitMessageRef = useRef(state.commitMessage)
   useLayoutEffect(() => {
@@ -123,9 +127,11 @@ export function useMobileSourceControlPrTab({
         : hubPage === 'checks' || activeTab === 'pr'
           ? 'checks'
           : false,
+    hostId,
     state: prTabState,
+    queries: prController.prQueries,
     refetch: refetchPr,
-    rereadAfterWrite: prController.rereadPRSidebarAfterWrite,
+    rereadSlices: prController.rereadPRSlices,
     client,
     hostConnection,
     connState,

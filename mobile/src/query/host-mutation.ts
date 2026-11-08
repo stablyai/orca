@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { useQueryClient, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -23,7 +23,11 @@ export type HostMutation<TVars, TResult> = {
   optimistic?: {
     keys: (hostId: string, vars: TVars) => QueryKey[]
     apply: (queryClient: QueryClient, hostId: string, vars: TVars) => void
+    /** Undoes only this write from the entries snapshotted before `apply`; by default they are restored whole. */
+    revert?: (queryClient: QueryClient, vars: TVars, snapshot: [QueryKey, unknown][]) => void
   }
+  /** Writes what the host confirmed (e.g. a re-read slice) into the cache. */
+  accept?: (queryClient: QueryClient, hostId: string, vars: TVars, result: TResult) => void
   /** Only the slices the write changed. */
   invalidates?: (hostId: string, vars: TVars) => QueryKey[]
 }
@@ -90,18 +94,26 @@ async function applyOptimistic<TVars>(
   vars: TVars
 ): Promise<() => void> {
   const keys = optimistic.keys(hostId, vars)
-  await Promise.all(keys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
+  // Only entries with data are patched; cancelling a first load would leave it with nothing to restart it.
+  const patched = (query: Query) => query.state.data !== undefined
+  await Promise.all(
+    keys.map((queryKey) => queryClient.cancelQueries({ queryKey, predicate: patched }))
+  )
   const snapshot = keys.flatMap((queryKey) => queryClient.getQueriesData({ queryKey }))
   optimistic.apply(queryClient, hostId, vars)
   return () => {
+    if (optimistic.revert) {
+      optimistic.revert(queryClient, vars, snapshot)
+      return
+    }
     for (const [queryKey, data] of snapshot) {
       queryClient.setQueryData(queryKey, data)
     }
   }
 }
 
-function invalidate<TVars>(
-  mutation: HostMutation<TVars, unknown>,
+function invalidate<TVars, TResult>(
+  mutation: HostMutation<TVars, TResult>,
   context: HostMutationContext,
   vars: TVars
 ): void {
@@ -134,6 +146,7 @@ export async function runHostMutation<TVars, TResult>(
       onPhase('unconfirmed')
       result = await confirmOnceConnected(mutation, context, vars, rollback)
     }
+    mutation.accept?.(context.queryClient, context.hostId, vars, result)
     invalidate(mutation, context, vars)
     return result
   } finally {

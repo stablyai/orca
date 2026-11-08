@@ -109,18 +109,23 @@ export function useResourceUsageDerivedModel({
   const unifiedRepos = useMemo(
     () =>
       open
-        ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
-            // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
-            ...resourceSessionBindings,
-            runtimePaneTitlesByTabId,
-            repoDisplayNameById,
-            repoConnectionIdById,
-            repoRuntimeHostIdById,
-            runtimeHostResources,
-            browserTabsByWorktree,
-            worktreeById,
-            ambiguousWorktreeIds
-          })
+        ? mergeSnapshotAndSessions(
+            resourceSnapshot,
+            sessions,
+            {
+              // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
+              ...resourceSessionBindings,
+              runtimePaneTitlesByTabId,
+              repoDisplayNameById,
+              repoConnectionIdById,
+              repoRuntimeHostIdById,
+              runtimeHostResources,
+              browserTabsByWorktree,
+              worktreeById,
+              ambiguousWorktreeIds
+            },
+            t
+          )
         : [],
     [
       open,
@@ -134,7 +139,8 @@ export function useResourceUsageDerivedModel({
       runtimeHostResources,
       browserTabsByWorktree,
       worktreeById,
-      ambiguousWorktreeIds
+      ambiguousWorktreeIds,
+      t
     ]
   )
 

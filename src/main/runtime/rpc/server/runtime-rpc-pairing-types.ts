@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../mobile-socket-wiring'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
 import type { PairingRelay } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'

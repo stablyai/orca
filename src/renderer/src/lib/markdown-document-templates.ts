@@ -1,4 +1,4 @@
-import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'

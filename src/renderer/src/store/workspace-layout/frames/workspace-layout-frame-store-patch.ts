@@ -1,4 +1,4 @@
-import { pendingEditorEntityIds } from '@/runtime/layout-owner-pending-tabs'
+import { pendingEditorEntityIds } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 // Patch framed workspaces, reusing equal objects to avoid rerenders and retaining window-owned terminal/editor/page state. Every built patch applies and records staged browser handover (L284).
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../../../shared/workspace-layout/workspace-layout-beside'

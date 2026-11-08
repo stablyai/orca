@@ -1,4 +1,5 @@
 import { AlertTriangle, GitBranch, Server, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { cn } from '@/lib/utils'
@@ -60,6 +61,8 @@ export function WorkspaceSpaceWorktreeRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [hoverOpen, setHoverOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteError = deleteState?.error ? describeWorktreeDeleteError(deleteState.error, t) : null
   const canForceDelete = deleteState?.canForceDelete ?? false
@@ -172,7 +175,12 @@ export function WorkspaceSpaceWorktreeRow({
             canOpen={decisionDetails.canOpenWorkspace}
           />
         ) : (
-          <HoverCard openDelay={250} closeDelay={120}>
+          <HoverCard
+            open={!contextMenuOpen && hoverOpen}
+            onOpenChange={(open) => setHoverOpen(!contextMenuOpen && open)}
+            openDelay={250}
+            closeDelay={120}
+          >
             <HoverCardTrigger asChild>
               <span
                 className="inline-flex"
@@ -208,7 +216,14 @@ export function WorkspaceSpaceWorktreeRow({
   )
 
   return (
-    <ContextMenu>
+    <ContextMenu
+      onOpenChange={(open) => {
+        setContextMenuOpen(open)
+        if (open) {
+          setHoverOpen(false)
+        }
+      }}
+    >
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
         <WorkspaceSpaceWorktreeMenuItems

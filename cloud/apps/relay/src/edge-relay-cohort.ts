@@ -5,37 +5,65 @@ import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contra
 import type { SqlRow } from './database/database.js'
 import { z } from 'zod'
 import type { EdgeDeviceRow } from './edge-admin-client.js'
+import { EDGE_CONTROL_DEFAULTS, edgeRolloutPermille, type EdgeControlFlags } from './edge-relay-control.js'
 
 export type EdgeRelayConfig = {
   cellUrl: string
   // Present: phase 2 (host data in the edge's objects); director → edge admin calls use it.
   adminSigningKey?: Uint8Array
-  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100.
+  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100: the boot default, which a
+  // runtime rolloutPermille replaces.
   rolloutPercent: number
+  // Runtime control (director/edge.json), read on every call; absent means the defaults.
+  control?: () => EdgeControlFlags
   allowHosts: ReadonlySet<string>
   // Accounts (relay token `sub`) whose hosts all join, e.g. the team's own accounts.
   allowUsers?: ReadonlySet<string>
   denyHosts: ReadonlySet<string>
   // Regions whose hosts may join the cohort, by the region the host asked for.
   regions: ReadonlySet<RelayRegion>
+  // How long the edge's export must keep failing (unavailable) before a leaving host is placed
+  // without it; default EDGE_EXPORT_SKIP_AFTER_MS, 0 skips on the first failure.
+  exportSkipAfterMs?: number
+}
+
+// An edge outage must not strand every leaving host on 503s: after this long of nothing but
+// failed exports, a leaving host keeps its Postgres devices and is placed anyway.
+export const EDGE_EXPORT_SKIP_AFTER_MS = 120_000
+// Export failures further apart than this are not one outage (see EdgeAssignments.leaveEdge).
+export const EDGE_EXPORT_FAILURE_GAP_MS = 30_000
+
+function edgeCohortHash(relayHostId: string): number {
+  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0)
 }
 
 export function edgeCohortBucket(relayHostId: string): number {
-  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0) % 100
+  return edgeCohortHash(relayHostId) % 100
 }
 
-// Deny wins, then allow (host or account), then region scope and the rollout share.
+// The percent bucket times ten plus a digit from the hash's higher part, so for every percent P a
+// host is under P × 10 permille exactly when it is under P percent: no host moves when the env
+// percent becomes the equal permille.
+export function edgeCohortBucketPermille(relayHostId: string): number {
+  const hash = edgeCohortHash(relayHostId)
+  return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
+}
+
+// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope;
+// within the region, account allow or the rollout share.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
   region: RelayRegion | undefined,
   userId?: string
 ): boolean {
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  if (flags.mode !== 'on') { return false }
   if (config.denyHosts.has(relayHostId)) { return false }
   if (config.allowHosts.has(relayHostId)) { return true }
-  if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
   if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) { return false }
-  return edgeCohortBucket(relayHostId) < config.rolloutPercent
+  if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
+  return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }
 
 // Another director holds the host's row, or the host is on the edge and cannot leave yet (its
@@ -48,10 +76,15 @@ export class EdgeMoveBusyError extends Error {
 
 export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 
-// The move cannot happen on this ask (old-cell units still held, or the edge did not take the
-// push) and nothing changed: the host stays where it is and moves on a later ask.
+// Edge admin calls one director may have in flight while it holds assignment row locks (pushes of
+// moves). A move that would exceed it is deferred rather than queued behind a slow edge.
+export const EDGE_LOCKED_CALLS_MAX = 8
+
+// The move cannot happen on this ask (old-cell units still held, the edge did not take the push, or
+// this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
+// stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(reason: 'units_held' | 'push_failed') {
+  constructor(reason: 'units_held' | 'push_failed' | 'edge_busy') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }

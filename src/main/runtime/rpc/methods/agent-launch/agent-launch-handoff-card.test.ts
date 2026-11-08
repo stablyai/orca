@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 /** An agent's own `orca agent launch` leaves one card in its chat; nothing else does, and the card never gates the launch. */
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

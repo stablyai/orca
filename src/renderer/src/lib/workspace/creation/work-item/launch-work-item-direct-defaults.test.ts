@@ -6,7 +6,7 @@ import { resolveProjectExecutionRuntime } from '../../../../../../shared/project
 
 import * as inventory from '../../../agent-detection-target-inventory'
 import * as localCapabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

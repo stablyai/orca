@@ -4,7 +4,7 @@ import {
   orchestrationMigrationData,
   type OrchestrationMigrationReason
 } from '../../../shared/orchestration-rpc-contract'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { errorResponse } from './errors'
 

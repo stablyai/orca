@@ -592,7 +592,9 @@ of its own.
 An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
 checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
 `runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
-partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
+partition whose subscribe reply is not a well-formed `ready`, plus the client-event partitions
+where the shared stream opens again after a refused frame and the script answers no `ready` for
+the reopened subscribe. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
 a product cleanup that never ran records `cancelled: false`, and because the drain precedes the

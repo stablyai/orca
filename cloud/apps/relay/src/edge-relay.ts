@@ -3,9 +3,20 @@ import type { RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell/admission/cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database/database.js'
-import { EdgeAdminUnavailableError, edgeLocationHint, type EdgeAdmin } from './edge-admin-client.js'
 import {
+  EDGE_ADMIN_LOCKED_TIMEOUT_MS,
+  EdgeAdminUnavailableError,
+  edgeLocationHint,
+  type EdgeAdmin,
+  type EdgeAssignBody,
+  type EdgeAssignResult
+} from './edge-admin-client.js'
+import { fenceEdge } from './edge-relay-fence.js'
+import {
+  EDGE_EXPORT_FAILURE_GAP_MS,
+  EDGE_LOCKED_CALLS_MAX,
   DEVICE_COLUMNS,
+  EDGE_EXPORT_SKIP_AFTER_MS,
   EdgeMoveBusyError,
   EdgeMoveDeferredError,
   ExportedDeviceSchema,
@@ -18,6 +29,8 @@ import {
 } from './edge-relay-cohort.js'
 
 export {
+  EDGE_EXPORT_SKIP_AFTER_MS,
+  EDGE_LOCKED_CALLS_MAX,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
   EdgeMoveBusyError,
   EdgeMoveDeferredError,
@@ -35,6 +48,11 @@ export const EDGE_CELL_ID = 'edge'
 
 export class EdgeAssignments {
   private seeded = false
+  // When this director's exports started failing as unavailable; any usable answer clears it.
+  private exportFailingSince: number | undefined
+  private exportLastFailureAt: number | undefined
+  // Edge admin calls in flight under an assignment row lock (pushes), capped at EDGE_LOCKED_CALLS_MAX.
+  private lockedCalls = 0
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -200,7 +218,7 @@ export class EdgeAssignments {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let result
       try {
-        result = await this.admin.assign({
+        result = await this.lockedAssign({
           ...identity,
           cellId: EDGE_CELL_ID,
           assignmentEpoch,
@@ -221,6 +239,19 @@ export class EdgeAssignments {
     throw new EdgeMoveDeferredError('push_failed')
   }
 
+  // A push made under the row lock. Past EDGE_LOCKED_CALLS_MAX in flight the move is deferred at
+  // once rather than adding another row lock held on a slow edge.
+  private async lockedAssign(body: EdgeAssignBody): Promise<EdgeAssignResult> {
+    if (!this.admin) { throw new Error('relay_edge_admin_missing') }
+    if (this.lockedCalls >= EDGE_LOCKED_CALLS_MAX) { throw new EdgeMoveDeferredError('edge_busy') }
+    this.lockedCalls += 1
+    try {
+      return await this.admin.assign(body, { timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS })
+    } finally {
+      this.lockedCalls -= 1
+    }
+  }
+
   // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its
   // devices back. The edge refuses while the desktop is connected and otherwise freezes the host
   // (30 s), so nothing changes after the snapshot. Returns false when the host is not on the edge.
@@ -233,13 +264,28 @@ export class EdgeAssignments {
       )
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return false }
+    // The edge is known dead (director/edge.json): no export to wait for.
+    if (this.config.control?.().mode === 'down') { return await this.skipExport(identity, 'mode_down') }
     let exported
     try {
       exported = await this.admin.exportHost(identity.relayHostId)
     } catch (error) {
-      if (error instanceof EdgeAdminUnavailableError) { throw new EdgeMoveBusyError() }
-      throw error
+      if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
+      const now = this.now()
+      // Only continuous failures count: a gap longer than EDGE_EXPORT_FAILURE_GAP_MS (desktops retry
+      // every 2 s) starts the clock again, so one old failure cannot skip an export on its own.
+      if (this.exportLastFailureAt === undefined || now - this.exportLastFailureAt > EDGE_EXPORT_FAILURE_GAP_MS) {
+        this.exportFailingSince = now
+      }
+      this.exportLastFailureAt = now
+      const failingForMs = now - (this.exportFailingSince ?? now)
+      if (failingForMs < (this.config.exportSkipAfterMs ?? EDGE_EXPORT_SKIP_AFTER_MS)) { throw new EdgeMoveBusyError() }
+      // The edge has been unreachable too long: place the host anyway rather than refusing every
+      // ask until the edge is back.
+      return await this.skipExport(identity, error.message, failingForMs)
     }
+    this.exportFailingSince = undefined
+    this.exportLastFailureAt = undefined
     if (exported.outcome === 'busy') { throw new EdgeMoveBusyError() }
     // An object with no assignment never held this host's data (or was erased): keep Postgres.
     if (!exported.assignment) { return true }
@@ -268,21 +314,35 @@ export class EdgeAssignments {
     return true
   }
 
+  // The host leaves without the edge's copy of its devices. The edge was their source of truth and
+  // revokes made there are unknown, so the Postgres rows are removed rather than resurrected: its
+  // phones pair again. Logs a count only.
+  private async skipExport(identity: Identity, reason: string, failingForMs?: number): Promise<true> {
+    const removed = await this.database.query(
+      `DELETE FROM relay_devices WHERE user_id = ? AND relay_host_id = ? RETURNING relay_device_id`,
+      [identity.userId, identity.relayHostId]
+    )
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_edge_export_skipped',
+        reason,
+        ...(failingForMs === undefined ? {} : { failingForMs }),
+        devicesRemoved: removed.length
+      })
+    )
+    return true
+  }
+
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
-  // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
-  // that its phones see HOST_OFFLINE until the next move.
+  // rather than HOST_OFFLINE. Until it lands the edge's freeze does the same; one that does not land
+  // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) { return true }
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
-        if (result.outcome !== 'conflict') { return true }
-      } catch (error) {
-        if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
-      }
-    }
-    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', cellId, assignmentEpoch }))
-    return false
+    // An edge whose exports are failing (or that is marked down) gets one try, so a skipped export
+    // is not slowed further.
+    const down = this.exportFailingSince !== undefined || this.config.control?.().mode === 'down'
+    const attempts = down ? 1 : 3
+    return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
   private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number): RelayAssignment {

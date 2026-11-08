@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { HeadlessEmulator } from '../headless-emulator'
 import { readTerminalCursorLineContext } from '../../../../shared/terminal/input/terminal-cursor-line-context'
-import { readRuntimeFixture } from '../../../runtime/agent-transcript-replay-test-harness'
+import { readRuntimeFixture } from '../../../runtime/terminal/wait/agent-transcript-replay-test-harness'
 
 function writeSync(terminal: Terminal, data: string): void {
   const core = (terminal as unknown as { _core: { writeSync(data: string): void } })._core

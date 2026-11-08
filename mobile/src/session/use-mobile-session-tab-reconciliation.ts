@@ -51,8 +51,12 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
   )
-  const { readLastSessionTabs, rememberLastSessionTabs, forgetLastSessionTab } =
-    useMobileSessionLastTabs(hostId, worktreeId)
+  const {
+    readLastSessionTabs,
+    watchLastSessionTabs,
+    rememberLastSessionTabs,
+    forgetLastSessionTab
+  } = useMobileSessionLastTabs(hostId, worktreeId)
   const consumeAcceptedSessionTabs = useCallback(
     (
       _result: SessionTabsResult,
@@ -207,6 +211,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   }, [client, connState])
   return {
     readLastSessionTabs,
+    watchLastSessionTabs,
     forgetLastSessionTab,
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,
