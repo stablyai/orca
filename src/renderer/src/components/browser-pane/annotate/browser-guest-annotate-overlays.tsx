@@ -60,6 +60,7 @@ export function BrowserGuestAnnotateOverlays({
     grabToast,
     grabToastTimerRef,
     dismissGrabToast,
+    copyGrabScreenshot,
     setGrabToast
   } = grabAnnotations
   const markupTarget = markupPortalContainer ?? containerRef.current
@@ -199,6 +200,7 @@ export function BrowserGuestAnnotateOverlays({
           grabToast={grabToast}
           grabToastTimerRef={grabToastTimerRef}
           dismissGrabToast={dismissGrabToast}
+          copyGrabScreenshot={copyGrabScreenshot}
           setGrabToast={setGrabToast}
         />
       ) : null}
