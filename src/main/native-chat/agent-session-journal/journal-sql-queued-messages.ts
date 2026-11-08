@@ -1,4 +1,3 @@
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -55,14 +54,14 @@ export type JournalSqlQueueReadResult =
   | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   /** The next card is mail from a sender whose availability the host has not answered. */
-  | { kind: 'mail-needed'; from: AgentMessageSource }
+  | { kind: 'mail-needed'; card: QueuedMessageRow }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
   | { kind: 'reopen-mark'; awaits: boolean; since: number }
 
 class MailNeeded extends Error {
-  constructor(readonly from: AgentMessageSource) {
+  constructor(readonly card: QueuedMessageRow) {
     super('queue read needs mail availability')
   }
 }
@@ -102,10 +101,12 @@ export function readJournalSqlQueue(
             now: Date.now(),
             steer: operation.steer,
             automatic: operation.automatic,
-            mailUnavailable: (from) => {
-              const known = facts.mail?.find(([sender]) => sender === journalMailSenderKey(from))
+            mailUnavailable: (card) => {
+              const known = facts.mail?.find(
+                ([sender]) => sender === journalMailSenderKey(card.body.from!)
+              )
               if (!known) {
-                throw new MailNeeded(from)
+                throw new MailNeeded(card)
               }
               return known[1]
             }
@@ -113,7 +114,7 @@ export function readJournalSqlQueue(
         }
       } catch (error) {
         if (error instanceof MailNeeded) {
-          return { kind: 'mail-needed', from: error.from }
+          return { kind: 'mail-needed', card: error.card }
         }
         throw error
       }
@@ -175,7 +176,7 @@ export type JournalSqlQueueWrite =
  */
 export class SqlJournalQueuedMessages {
   /** Mail the orchestration owner cannot confirm now; the host installs it once. */
-  mailUnavailable: ((from: AgentMessageSource) => boolean) | undefined
+  mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
   readonly editLeases: SqlQueuedMessageEditLeases
 
   constructor(
@@ -196,10 +197,10 @@ export class SqlJournalQueuedMessages {
   }
 
   /** Answer the writer's or a reader's mail question from the host's installed owner. */
-  answerMail(from: readonly AgentMessageSource[]): (readonly [string, boolean])[] {
-    return from.map((sender) => [
-      journalMailSenderKey(sender),
-      this.mailUnavailable?.(sender) ?? false
+  answerMail(cards: readonly QueuedMessageRow[]): (readonly [string, boolean])[] {
+    return cards.map((card) => [
+      journalMailSenderKey(card.body.from!),
+      this.mailUnavailable?.(card) ?? false
     ])
   }
 
@@ -227,7 +228,7 @@ export class SqlJournalQueuedMessages {
       steer,
       facts: this.facts()
     })
-    return result.kind === 'mail-needed' ? this.answerMail([result.from]) : []
+    return result.kind === 'mail-needed' ? this.answerMail([result.card]) : []
   }
 
   async nextInputCard(automatic = true, steer = false): Promise<QueuedMessageRow | null> {
@@ -245,7 +246,7 @@ export class SqlJournalQueuedMessages {
       if (result.kind !== 'mail-needed') {
         throw new Error(`journal queue reader answered ${result.kind} for next-input-card`)
       }
-      mail.push(...this.answerMail([result.from]))
+      mail.push(...this.answerMail([result.card]))
     }
   }
 

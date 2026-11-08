@@ -7,11 +7,7 @@ import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterOperation, JournalWriterTarget } from './journal-writer-command'
-import {
-  JournalHostFactsNeededError,
-  type JournalHostFactsNeeded,
-  type JournalWriterHostFacts
-} from './journal-writer-host-facts'
+import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import { journalSqlReads, type JournalSqlReads } from './journal-sql-reads'
 import type {
   JournalOperationReceipt,
@@ -36,14 +32,9 @@ export type JournalSqlStorePreparation = {
   settle?: (commit: JournalWriterCommit | undefined) => void
 }
 
-/** Return all host facts anew; a rollback invalidates staged store drafts from the prior attempt. */
+/** Capture host facts once before admission; adopt staged state only after acknowledgement. */
 export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
-) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
-
-export type JournalSqlStoreAnswerFacts = (
-  context: JournalReceiptStage,
-  needs: JournalHostFactsNeeded
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
@@ -128,75 +119,57 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   write(
     operation: JournalSqlStoreOperation,
-    prepare?: JournalSqlStorePrepare,
-    answerFacts?: JournalSqlStoreAnswerFacts
+    prepare?: JournalSqlStorePrepare
   ): Promise<JournalWriterCommit> {
     const written = this.admit(async (writer) => {
       const savedAt = this.now()
-      let needs: JournalHostFactsNeeded | undefined
-      const mail: (readonly [string, boolean])[] = []
-      for (;;) {
-        const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
-        const preparation: JournalSqlStorePreparation = needs
-          ? await answerFacts!(context, needs)
-          : ((await prepare?.(context)) ?? {})
-        const facts: JournalWriterHostFacts = {
-          identity: this.identity,
-          openedThrough: this.openedThrough,
-          ...this.queuedMessages.facts(mail),
-          ...settled(this.stopMarks.fact()),
-          ...preparation.facts
-        }
-        let staged: JournalStagedReceipt | undefined
-        let commit: JournalWriterCommit
-        try {
-          if (preparation.receipt) {
-            if (!preparation.receipt.stage) {
-              throw new Error('a SQL journal receipt requires worker staging')
-            }
-            staged = await preparation.receipt.stage(context)
-          }
-          commit = await writer.write({
-            target: this.target,
-            operation,
-            facts,
-            savedAt,
-            ...(staged ? { effects: staged.effects } : {})
-          })
-        } catch (error) {
-          preparation.settle?.(undefined)
-          staged?.settle(undefined)
-          if (!(error instanceof JournalHostFactsNeededError)) {
-            throw error
-          }
-          // Mail availability is the queue's installed host fact; anything else is the caller's.
-          const { mail: senders, ...rest } = error.needs
-          if (senders) {
-            mail.push(...this.queuedMessages.answerMail(senders))
-            if (Object.keys(rest).length === 0) {
-              continue
-            }
-          }
-          if (!answerFacts) {
-            throw error
-          }
-          needs = error.needs
-          continue
-        }
-        preparation.settle?.(commit)
-        staged?.settle(commit.receiptWritten ? commit.effects : undefined)
-        if (operation.kind === 'epoch-replace') {
-          // Public context identities need not equal the physical epoch a command targets.
-          const epoch = await this.database.sessionEpoch(this.identity.sessionId)
-          if (epoch === null) {
-            throw new Error('a committed journal replacement has no physical epoch')
-          }
-          this.target = { ...this.target, epoch }
-        }
-        this.acknowledged = { ...commit.cursor }
-        this.listener?.(commit)
-        return commit
+      const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
+      const mail =
+        operation.kind === 'submission' && operation.consume?.yieldsToPause
+          ? await this.queuedMessages.automaticMailFacts(operation.consume.steer)
+          : undefined
+      const preparation = (await prepare?.(context)) ?? {}
+      const facts: JournalWriterHostFacts = {
+        identity: this.identity,
+        openedThrough: this.openedThrough,
+        ...this.queuedMessages.facts(mail),
+        ...settled(this.stopMarks.fact()),
+        ...preparation.facts
       }
+      let staged: JournalStagedReceipt | undefined
+      let commit: JournalWriterCommit
+      try {
+        if (preparation.receipt) {
+          if (!preparation.receipt.stage) {
+            throw new Error('a SQL journal receipt requires worker staging')
+          }
+          staged = await preparation.receipt.stage(context)
+        }
+        commit = await writer.write({
+          target: this.target,
+          operation,
+          facts,
+          savedAt,
+          ...(staged ? { effects: staged.effects } : {})
+        })
+      } catch (error) {
+        preparation.settle?.(undefined)
+        staged?.settle(undefined)
+        throw error
+      }
+      preparation.settle?.(commit)
+      staged?.settle(commit.receiptWritten ? commit.effects : undefined)
+      if (operation.kind === 'epoch-replace') {
+        // Public context identities need not equal the physical epoch a command targets.
+        const epoch = await this.database.sessionEpoch(this.identity.sessionId)
+        if (epoch === null) {
+          throw new Error('a committed journal replacement has no physical epoch')
+        }
+        this.target = { ...this.target, epoch }
+      }
+      this.acknowledged = { ...commit.cursor }
+      this.listener?.(commit)
+      return commit
     })
     return this.epochReplacements.notifyFor(operation.kind, written)
   }

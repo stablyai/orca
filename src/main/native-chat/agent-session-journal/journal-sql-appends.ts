@@ -26,13 +26,8 @@ import type {
   ResolveDispatchInput
 } from './journal-store-contracts'
 import type { JournalSqlReads } from './journal-sql-reads'
-import type {
-  JournalSqlStoreAnswerFacts,
-  JournalSqlStoreOperation,
-  JournalSqlStorePrepare
-} from './journal-sql-store'
+import type { JournalSqlStoreOperation, JournalSqlStorePrepare } from './journal-sql-store'
 import type { JournalWriterCommit } from './journal-writer-changes'
-import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
 import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
@@ -49,8 +44,7 @@ export abstract class SqlJournalAppends {
 
   abstract write(
     operation: JournalSqlStoreOperation,
-    prepare?: JournalSqlStorePrepare,
-    answerFacts?: JournalSqlStoreAnswerFacts
+    prepare?: JournalSqlStorePrepare
   ): Promise<JournalWriterCommit>
 
   appendItem(
@@ -125,7 +119,7 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'prompt-mutate', input }, receipted(receipt)))
   }
 
-  /** `consume.owed` is asked only when the writer reaches the handover it guards. */
+  /** Capture the external handover decision on this chat's lane before writer admission. */
   appendSubmission(
     input: JournalSubmissionInput,
     consume?: JournalSubmissionConsume,
@@ -140,14 +134,10 @@ export abstract class SqlJournalAppends {
     return this.answerOf(
       this.write(
         { kind: 'submission', input, ...(selection ? { consume: selection } : {}) },
-        receipted(receipt),
-        owed &&
-          ((_context, needs) => {
-            if (!needs.owed || needs.stoppedCut || needs.rewound) {
-              throw new JournalHostFactsNeededError(needs)
-            }
-            return { facts: { owed: owed() }, ...(receipt ? { receipt } : {}) }
-          })
+        () => ({
+          ...(owed ? { facts: { owed: owed() } } : {}),
+          ...(receipt ? { receipt } : {})
+        })
       )
     )
   }

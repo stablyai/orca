@@ -1,8 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import {
-  orchestrationMailNotice,
-  type AgentMessageSource
-} from '../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalWriterOperation } from './journal-writer-command'
@@ -31,7 +28,7 @@ export type JournalDomainQueueSelection = {
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
   /** Asked only for the first eligible mail card; past unavailable mail, later mail is skipped. */
-  mailUnavailable: (from: AgentMessageSource) => boolean
+  mailUnavailable: (card: QueuedMessageRow) => boolean
 }
 
 /** Current ordered cards and exact edit holds are selected on one snapshot, a bounded page at a time. */
@@ -89,7 +86,7 @@ export function nextJournalDomainQueueCard(
       if (pastUnavailableMail && mail) {
         continue
       }
-      if (mail && card.body.from && selection.mailUnavailable(card.body.from)) {
+      if (mail && card.body.from && selection.mailUnavailable(card)) {
         pastUnavailableMail = true
         continue
       }
@@ -130,8 +127,8 @@ export function selectJournalDomainSubmissionCard(
         now: savedAt,
         steer: consume.steer === true,
         automatic: true,
-        mailUnavailable: (from) => {
-          const key = journalMailSenderKey(from)
+        mailUnavailable: (card) => {
+          const key = journalMailSenderKey(card.body.from!)
           const authority = facts.mail?.find(([sender]) => sender === key)
           if (!authority) {
             throw new Error('journal automatic mail selection requires supplied sender authority')

@@ -13,7 +13,6 @@ import { journalDatabasePath } from './database/journal-host-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import type { JournalSqlStoreOperation } from './journal-sql-store'
-import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
@@ -178,49 +177,9 @@ it('discards staged adoption and the row together when a receipt conflicts', asy
   })
 })
 
-it('releases a rolled-back stage before answering host facts and keeps the retry ahead of later commands', async () => {
+it('releases a failed receipt stage and admits the next command without replaying the failure', async () => {
   const { database, journal } = await fixture()
-  await database.serialize('session', (writer) => {
-    vi.spyOn(writer, 'write').mockRejectedValueOnce(
-      new JournalHostFactsNeededError({
-        rewound: { cursor: { epoch: 'proof', sequence: 8 }, cancel: null }
-      })
-    )
-  })
-  let released = false
-  let adopted = false
-  const retry = journal.write(
-    item('retried'),
-    () => ({
-      receipt: receipt((committed) => {
-        released = !committed
-      })
-    }),
-    (_context, needs) => {
-      expect(released).toBe(true)
-      return {
-        facts: { rewound: needs.rewound },
-        receipt: receipt((committed) => {
-          adopted = committed
-        })
-      }
-    }
-  )
-  const next = journal.write(item('later'))
-  await retry
-  expect(adopted).toBe(true)
-  await next
-  expect(await journal.reads.item('orca:item')).toMatchObject({
-    revision: 2,
-    body: { text: 'later' }
-  })
-})
-
-it('returns unanswered host-fact requests without replaying the command', async () => {
-  const { database, journal } = await fixture()
-  const needed = new JournalHostFactsNeededError({
-    rewound: { cursor: { epoch: 'proof', sequence: 8 }, cancel: null }
-  })
+  const needed = new Error('writer admission failed')
   await database.serialize('session', (writer) => {
     vi.spyOn(writer, 'write').mockRejectedValueOnce(needed)
   })

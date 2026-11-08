@@ -15,6 +15,7 @@ import { journalMailSenderKey } from './journal-writer-host-facts'
 import { JournalSqlScope } from './journal-sql-scope'
 import {
   readJournalSqlQueue,
+  SqlJournalQueuedMessages,
   type JournalSqlQueueFacts,
   type JournalSqlQueueRead
 } from './journal-sql-queued-messages'
@@ -145,7 +146,7 @@ function fixture() {
 const ids = (result: ReturnType<typeof readJournalSqlQueue>) =>
   result.kind === 'list' ? result.cards.map((card) => card.messageId) : result
 
-it('lists current and still-owed handoff cards, and selects past persisted holds and mail', () => {
+it('lists current and still-owed handoff cards, and selects past persisted holds and mail', async () => {
   const f = fixture()
   f.seed('withdrawn', 0, { state: 'withdrawn' })
   f.seed('sent', 1)
@@ -164,9 +165,24 @@ it('lists current and still-owed handoff cards, and selects past persisted holds
       { kind: 'next-input-card', automatic, steer: false },
       unavailable === undefined ? {} : { mail: [[journalMailSenderKey(from), unavailable]] }
     )
-  expect(next(true)).toEqual({ kind: 'mail-needed', from })
+  expect(next(true)).toMatchObject({
+    kind: 'mail-needed',
+    card: { messageId: 'mail', body: { from } }
+  })
   expect(next(true, false)).toMatchObject({ card: { messageId: 'mail' } })
   expect(next(true, true)).toMatchObject({ card: { messageId: 'next' } })
+  const queue = new SqlJournalQueuedMessages(
+    {
+      read: async ({ facts, ...operation }) => f.read(operation, facts),
+      write: async () => {
+        throw new Error('this reader fixture does not write')
+      }
+    },
+    () => null
+  )
+  queue.mailUnavailable = (card) => card.messageId === 'mail' && card.body.from?.kind === 'agent'
+  expect(await queue.automaticMailFacts()).toEqual([[journalMailSenderKey(from), true]])
+  expect(await queue.nextInputCard()).toMatchObject({ messageId: 'next' })
 
   f.hold('mail')
   expect(next(true, false)).toEqual({ kind: 'next-input-card', card: null })
