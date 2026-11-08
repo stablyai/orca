@@ -137,7 +137,7 @@ function rewriteShellHistoryMeta(dir: string, oldId: string, newId: string): voi
 }
 
 /**
- * A chat's workspace is its record's `location.workspaceId` and its journal session's
+ * A chat's workspace is its record's `location.workspaceId` and its chat head's
  * `workspace_id`; its provider still runs in the same distro, at the same folder. One transaction.
  */
 function rewriteChatJournal(databasePath: string, ids: ReadonlyMap<string, string>): void {
@@ -146,12 +146,13 @@ function rewriteChatJournal(databasePath: string, ids: ReadonlyMap<string, strin
   }
   const db = new Database(databasePath, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS })
   try {
-    db.pragma('synchronous = FULL')
+    db.pragma('synchronous = NORMAL')
+    db.pragma('checkpoint_fullfsync = ON')
     db.exec('BEGIN IMMEDIATE')
     try {
-      if (hasTable(db, 'journal_sessions')) {
+      if (hasTable(db, 'journal_chat_state')) {
         const update = db.prepare(
-          'UPDATE journal_sessions SET workspace_id = ? WHERE workspace_id = ?'
+          'UPDATE journal_chat_state SET workspace_id = ? WHERE workspace_id = ?'
         )
         for (const [oldId, newId] of ids) {
           update.run(newId, oldId)

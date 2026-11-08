@@ -149,7 +149,7 @@ function realStores(): WslDriveUncConversionStore[] {
     daemonHistoryDir: join(root, 'terminal-history'),
     shellHistoryRoots: [join(root, 'terminal-history-wsl', 'Ubuntu')],
     orchestrationDatabasePath: join(root, 'orchestration.db'),
-    chatJournalDatabasePath: join(root, 'agent-session-journal.db')
+    chatJournalDatabasePath: join(root, 'agent-session-domain.db')
   })
 }
 
@@ -191,14 +191,14 @@ function seedOutside(): void {
   mkdirSync(shell, { recursive: true })
   writeFileSync(join(shell, 'meta.json'), JSON.stringify({ worktreeId: OLD_ID }))
   writeFileSync(join(shell, '.bash_history'), 'make test\n')
-  const db = new Database(join(root, 'agent-session-journal.db'))
-  db.exec(`CREATE TABLE journal_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, epoch TEXT NOT NULL);
+  const db = new Database(join(root, 'agent-session-domain.db'))
+  db.exec(`CREATE TABLE journal_chat_state (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, epoch TEXT);
 CREATE TABLE agent_session_records (session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);
 CREATE TABLE agent_session_operations (operation_key TEXT PRIMARY KEY, row_json TEXT);
 CREATE TABLE agent_session_retired_claim_keys (key_id TEXT PRIMARY KEY, retired_at INTEGER);
 CREATE TABLE agent_session_tabs (tab_id TEXT PRIMARY KEY, session_id TEXT, position INTEGER);
 CREATE TABLE agent_session_store_meta (key TEXT PRIMARY KEY, value TEXT);`)
-  db.prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)').run('chat-alpha-1', OLD_ID, 'e1')
+  db.prepare('INSERT INTO journal_chat_state VALUES (?, ?, ?)').run('chat-alpha-1', OLD_ID, 'e1')
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run(
     'chat-alpha-1',
     JSON.stringify(encodeAgentSessionRecord(stoppedChat()))
@@ -208,10 +208,10 @@ CREATE TABLE agent_session_store_meta (key TEXT PRIMARY KEY, value TEXT);`)
 }
 
 function chatRows(): unknown[] {
-  const db = new Database(join(root, 'agent-session-journal.db'))
+  const db = new Database(join(root, 'agent-session-domain.db'))
   try {
     return [
-      ...db.prepare('SELECT workspace_id FROM journal_sessions').all(),
+      ...db.prepare('SELECT workspace_id FROM journal_chat_state').all(),
       ...db.prepare('SELECT record_json FROM agent_session_records ORDER BY session_id').all()
     ]
   } finally {
@@ -224,6 +224,8 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     seedProfile(profileState())
     seedOutside()
     journal()
+    const original = join(root, 'agent-session-journal.db')
+    writeFileSync(original, 'retained original bytes')
     const hashes = () =>
       Object.fromEntries(
         (readProfileProjectTransferState(PROFILE, root).documents ?? []).map((document) => [
@@ -235,6 +237,7 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     expect(run()).toEqual([
       { migrationId: 'conv-1', outcome: 'converted', repoIds: ['repo-a'], folderWorkspaceIds: [] }
     ])
+    expect(readFileSync(original, 'utf8')).toBe('retained original bytes')
     // Only the re-keyed fields were written; settings and everything else kept their bytes. The
     // repo's host setup is derived from its row, path included.
     const changed = Object.keys(before).filter((domain) => hashes()[domain] !== before[domain])
@@ -277,7 +280,7 @@ describe('runWslDriveUncConversionsAtStartup', () => {
         record_json: JSON.stringify(encodeAgentSessionRecord(stoppedChat(NEW_ID)))
       }
     ])
-    const db = new Database(join(root, 'agent-session-journal.db'))
+    const db = new Database(join(root, 'agent-session-domain.db'))
     try {
       const loaded = loadAgentSessionStoreRows(db)
       expect(loaded.records.get('chat-alpha-1')?.lease.deathEvidence).toEqual(
@@ -444,13 +447,13 @@ describe('runPendingWslDriveUncConversions', () => {
     ['off Windows', 'linux', '']
   ])(
     'leaves a journaled conversion untouched with the gate closed, %s',
-    (_case, platform, gate) => {
+    async (_case, platform, gate) => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
       Object.defineProperty(process, 'platform', { configurable: true, value: platform })
       seedProfile(profileState())
       journal()
 
-      runPendingWslDriveUncConversions({
+      await runPendingWslDriveUncConversions({
         userDataPath: root,
         profileUserDataPath: root,
         profileId: PROFILE

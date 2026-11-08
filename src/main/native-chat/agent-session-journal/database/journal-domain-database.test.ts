@@ -90,8 +90,8 @@ it('publishes an empty incremental store that retains new authoritative state on
   expect(filename).toBe(journalDomainDatabasePath(stateDirectory))
   const db = open(filename)
   db.exec(`INSERT INTO agent_session_records VALUES('new','{"title":"new chat"}');
-    INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('new','epoch',2,1)`)
+    INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+    VALUES('workspace','new','epoch',2,1)`)
   expect(db.pragma('auto_vacuum', { simple: true })).toBe(2)
   expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
   const reopened = open(await initializeJournalDomainDatabase(stateDirectory))
@@ -118,9 +118,9 @@ it('copies opaque profile metadata in source order from the committed WAL, witho
     { session_id: 'chat', record_json: '{"title":"original"}' },
     { session_id: 'a', record_json: 'unreadable opaque record' }
   ])
-  expect(current.prepare('SELECT * FROM journal_sessions').all()).toEqual([
-    { session_id: 'chat', workspace_id: 'workspace', epoch: 'epoch' }
-  ])
+  expect(
+    current.prepare('SELECT session_id,workspace_id,epoch FROM journal_chat_state').all()
+  ).toEqual([{ session_id: 'chat', workspace_id: 'workspace', epoch: null }])
   expect(
     current.prepare('SELECT tab_id,session_id,position FROM agent_session_tabs').get()
   ).toEqual({ tab_id: 'tab', session_id: 'chat', position: 1 })
@@ -184,9 +184,9 @@ it('accepts supported early schemas with no additive metadata tables without mig
   source.close()
   const before = hash(journalDatabasePath(stateDirectory))
   const current = open(await initializeJournalDomainDatabase(stateDirectory))
-  expect(current.prepare('SELECT * FROM journal_sessions').all()).toEqual([
-    { session_id: 'early', workspace_id: 'workspace', epoch: 'epoch' }
-  ])
+  expect(
+    current.prepare('SELECT session_id,workspace_id,epoch FROM journal_chat_state').all()
+  ).toEqual([{ session_id: 'early', workspace_id: 'workspace', epoch: null }])
   expect(current.prepare('SELECT record_json FROM agent_session_records').all()).toEqual([])
   expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
 })
@@ -207,11 +207,11 @@ it('publishes complete metadata under competing initialization without replacing
     result_json: '{"kind":"stop"}'
   })
   winner.exec(
-    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES('winner','epoch',7,1)`
+    `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace','winner','epoch',7,1)`
   )
   expect(
     open(await initializeJournalDomainDatabase(stateDirectory))
-      .prepare('SELECT session_id,last_sequence FROM journal_chat_state')
+      .prepare('SELECT session_id,last_sequence FROM journal_chat_state WHERE epoch IS NOT NULL')
       .get()
   ).toEqual({ session_id: 'winner', last_sequence: 7 })
   expect(readFileSync(join(foreign, 'snapshot.db'), 'utf8')).toBe('foreign evidence')

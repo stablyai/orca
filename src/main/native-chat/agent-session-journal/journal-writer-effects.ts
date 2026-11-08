@@ -19,6 +19,14 @@ import { promptAnswerReceipt, promptRowAnswer } from './writing/command-receipt-
 import { insertCommandReceiptIfAbsent } from './writing/command-receipt-table'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
 import type { JournalRow } from './durable-rows/journal-row-schema'
+import type { AgentSessionPromptResult } from '../../../shared/agent-session/agent-session-wire'
+
+export type JournalWriterCoordinate = {
+  kind: JournalRow['kind']
+  epoch: string
+  seq: number
+  promptAnswer?: AgentSessionPromptResult
+}
 
 export type JournalWriterEffect =
   | { kind: 'store'; writes: AgentSessionStoreRowWrites; insertOperationsIfAbsent: boolean }
@@ -59,7 +67,7 @@ export function applyJournalWriterEffect(
   db: Database.Database,
   stateDirectory: string,
   effect: JournalWriterEffect,
-  rows: readonly JournalRow[] = []
+  rows: readonly (JournalRow | JournalWriterCoordinate)[] = []
 ): JournalWriterEffectResult {
   switch (effect.kind) {
     case 'store': {
@@ -117,7 +125,7 @@ export function applyJournalWriterEffect(
 function boundReceipt(
   receipt: CommandReceipt,
   binding: JournalReceiptRowBinding,
-  row: JournalRow | undefined
+  row: JournalRow | JournalWriterCoordinate | undefined
 ): CommandReceipt {
   if (receipt.status !== 'accepted') {
     throw new Error('only an accepted receipt binds its row')
@@ -132,7 +140,11 @@ function boundReceipt(
     ...receipt,
     result:
       binding.answer === 'prompt-answer'
-        ? promptAnswerReceipt(promptRowAnswer(row))
+        ? promptAnswerReceipt(
+            'promptAnswer' in row && row.promptAnswer
+              ? row.promptAnswer
+              : promptRowAnswer('v' in row ? row : undefined)
+          )
         : { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
   }
 }

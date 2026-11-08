@@ -29,7 +29,7 @@ async function fixture(sessionIds = ['session']) {
   const { db } = openJournalDomainDatabase(filename)
   for (const sessionId of sessionIds) {
     db.prepare(
-      `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES(?,'epoch',1,1)`
+      `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,'epoch',1,1)`
     ).run(sessionId)
   }
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('session', '{}')
@@ -61,10 +61,10 @@ async function writeMessages(
       }))
     }
   })
-  if (!committed.messageCommit) {
+  if (!committed.publication) {
     throw new Error('text steps omitted their committed payload')
   }
-  return committed.messageCommit
+  return { ...committed.publication, cursor: committed.cursor }
 }
 
 it('uses the common writer transport and returns committed domain bodies in order', async () => {

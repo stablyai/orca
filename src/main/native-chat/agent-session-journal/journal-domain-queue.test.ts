@@ -44,8 +44,8 @@ function fixture() {
   })
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
-  db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('chat','epoch',10,1)`).run()
+  db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+    VALUES('workspace','chat','epoch',10,1)`).run()
   const seed = (messageId: string, position: number, fields: Partial<QueuedMessageRow> = {}) => {
     const { state = 'waiting', ...card } = {
       body: text(messageId),

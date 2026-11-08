@@ -9,6 +9,7 @@ import type {
   JournalDomainSubmissionAttempt,
   JournalDomainSubmissionTarget
 } from './journal-domain-submission-records'
+import { journalDomainSubmissionFactsJson } from './journal-domain-submission-records'
 import { readStoredRejectionFact } from './projection/journal-dispatch-reducer'
 import {
   boundInlineText,
@@ -21,20 +22,9 @@ export function writeJournalDomainDispatchAttempt(
   target: JournalDomainSubmissionTarget,
   attempt: JournalDomainSubmissionAttempt
 ): void {
-  const {
-    submission: next,
-    candidate,
-    handover,
-    handoverPlace,
-    carries,
-    rejection,
-    presentationMember,
-    normalizedHandOff
-  } = attempt
-  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state=?,candidate=?,payload_json=?,dispatch_fence=?,signed_out=?,
-      handover_sequence=?,handover_at=?,handover_fence=?,handover_scope_json=?,handover_place_sequence=?,handover_place_at=?,handover_place_scope_json=?,carries_json=?,
-      rejection_sequence=?,rejection_at=?,rejection_fence=?,rejection_reason=?,rejection_fact_json=?,rejection_recovered=?,
-      rejection_kept_message_id=?,rejection_answered_turn_json=?,presentation_member=?,normalized_handoff=?,
+  const { submission: next, candidate, handover } = attempt
+  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state=?,candidate=?,payload_json=?,dispatch_fence=?,signed_out=?,recovered=?,
+      handover_fence=?,facts_json=?,
       admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
       WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     next.dispatchState,
@@ -45,24 +35,9 @@ export function writeJournalDomainDispatchAttempt(
       next.dispatchState === 'rejected' &&
         readWholeAgentSessionFailureFact(next.rejection)?.kind === 'notSignedIn'
     ),
-    handover?.sequence ?? null,
-    handover?.at ?? null,
+    Number(next.recovered === true),
     handover?.fence ?? null,
-    handover ? JSON.stringify(handover.scope) : null,
-    handoverPlace?.sequence ?? null,
-    handoverPlace?.at ?? null,
-    handoverPlace?.scope === undefined ? null : JSON.stringify(handoverPlace.scope),
-    JSON.stringify(carries),
-    rejection?.sequence ?? null,
-    rejection?.at ?? null,
-    rejection?.fence ?? null,
-    rejection?.reason ?? null,
-    rejection?.fact ? JSON.stringify(rejection.fact) : null,
-    rejection ? Number(rejection.recovered) : null,
-    rejection?.keptMessageId ?? null,
-    rejection?.answeredInTurn === undefined ? null : JSON.stringify(rejection.answeredInTurn),
-    Number(presentationMember),
-    Number(normalizedHandOff),
+    journalDomainSubmissionFactsJson(attempt),
     Number(
       next.dispatchState === 'pending' ||
         next.dispatchState === 'unknown' ||

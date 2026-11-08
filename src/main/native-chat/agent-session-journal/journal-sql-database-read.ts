@@ -3,7 +3,6 @@ import { loadAgentSessionStoreRows } from '../../runtime/agent-session/records/a
 import type { AgentSessionStoreState } from '../../runtime/agent-session/records/agent-session-store-state'
 import { readCommandReceipt } from './writing/command-receipt-table'
 import type { CommandReceiptScope } from './writing/command-receipt-schema'
-import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
@@ -68,13 +67,24 @@ function read(
         receipt: readCommandReceipt(db, operation.scope, operation.operationId)
       }
     case 'epoch':
-      return { kind: 'epoch', epoch: readJournalSessionEpoch(db, operation.sessionId) }
+      return {
+        kind: 'epoch',
+        epoch:
+          db
+            .prepare(
+              'SELECT epoch FROM journal_chat_state WHERE session_id=? AND epoch IS NOT NULL'
+            )
+            .get(operation.sessionId)
+            ?.epoch?.toString() ?? null
+      }
     case 'sessions': {
       const rows =
         operation.after === null
-          ? db.prepare('SELECT session_id FROM journal_sessions ORDER BY session_id LIMIT 32').all()
+          ? db
+              .prepare('SELECT session_id FROM journal_chat_state ORDER BY session_id LIMIT 32')
+              .all()
           : db
-              .prepare(`SELECT session_id FROM journal_sessions
+              .prepare(`SELECT session_id FROM journal_chat_state
                 WHERE session_id>? ORDER BY session_id LIMIT 32`)
               .all(operation.after)
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
@@ -83,7 +93,9 @@ function read(
       const through =
         operation.through ??
         db
-          .prepare('SELECT session_id FROM journal_chat_state ORDER BY session_id DESC LIMIT 1')
+          .prepare(
+            'SELECT session_id FROM journal_chat_state WHERE epoch IS NOT NULL ORDER BY session_id DESC LIMIT 1'
+          )
           .get()?.session_id
       if (through === undefined) {
         return { kind: 'retired-heads', heads: [], through: null }
@@ -92,11 +104,11 @@ function read(
         operation.after === null
           ? db
               .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE session_id<=? ORDER BY session_id LIMIT 16`)
+                WHERE epoch IS NOT NULL AND session_id<=? ORDER BY session_id LIMIT 16`)
               .all(through)
           : db
               .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE session_id>? AND session_id<=? ORDER BY session_id LIMIT 16`)
+                WHERE epoch IS NOT NULL AND session_id>? AND session_id<=? ORDER BY session_id LIMIT 16`)
               .all(operation.after, through)
       return {
         kind: 'retired-heads',

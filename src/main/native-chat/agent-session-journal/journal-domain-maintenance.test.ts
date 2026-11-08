@@ -157,8 +157,8 @@ it('returns a free page inside the writer transaction and restores it on rollbac
 it('bounds a ready-head pass at its captured high key and skips changed or removed heads', () => {
   const db = fixture()
   const insert =
-    db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES(?,'epoch',0,0)`)
+    db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+    VALUES('workspace',?,'epoch',0,0)`)
   for (let index = 0; index < 20; index++) {
     insert.run(`session-${String(index).padStart(2, '0')}`)
   }
@@ -241,8 +241,8 @@ it.each([100, 1_000])(
     const db = fixture()
     db.exec('BEGIN IMMEDIATE')
     const head =
-      db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-      VALUES(?,'epoch',0,0)`)
+      db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+      VALUES('workspace',?,'epoch',0,0)`)
     const current = db.prepare(`INSERT INTO journal_item_tombstones VALUES(?,'epoch',?,1)`)
     for (let index = 0; index < size; index++) {
       const sessionId = `profile-${index}`
@@ -410,8 +410,8 @@ it('finishes a retired pass during activity while an already-started conversion 
   await paused.promise
   db.exec('BEGIN IMMEDIATE')
   const head =
-    db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES(?,'epoch',0,0)`)
+    db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+    VALUES('workspace',?,'epoch',0,0)`)
   const retired = db.prepare(`INSERT INTO journal_item_tombstones VALUES(?,'before',?,1)`)
   for (let chat = 0; chat < 20; chat++) {
     const sessionId = `retired-${String(chat).padStart(2, '0')}`

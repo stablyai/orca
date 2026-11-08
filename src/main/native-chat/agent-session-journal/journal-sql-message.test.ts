@@ -99,8 +99,8 @@ it('publishes exact committed snapshots and their final body in order', async ()
 it('commits ready revisions from different chats atomically before publishing either payload', async () => {
   const { db, batch, commit } = fixture()
   await commit(message('first', 'assistant', 'item'))
-  db.exec(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('other','epoch',0,1)`)
+  db.exec(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
+    VALUES('workspace','other','epoch',0,1)`)
   const other = { sessionId: 'other', epoch: 'epoch' }
   await commitJournalSqlMessages(
     db,

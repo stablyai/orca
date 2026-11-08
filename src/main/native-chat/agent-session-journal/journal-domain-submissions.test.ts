@@ -60,7 +60,7 @@ function fixture() {
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(
-    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES('chat','epoch',10,1)`
+    `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace','chat','epoch',10,1)`
   ).run()
   const facts: JournalDomainSubmissionFacts = {
     identity: {
@@ -367,7 +367,6 @@ it.each(['dispatch-first', 'echo-first'])(
       f.dispatch(accepted)
     }
     expect(f.item('send')).toMatchObject({
-      ordinal: 11,
       item: { sequence: 13, observedAt: now + 10, body: body('original') }
     })
     expect(f.attempt('send')).toMatchObject({
@@ -496,7 +495,6 @@ it('keeps effective handover scope separate from placement and replaces carried 
     carries: []
   })
   expect(f.item('send')).toMatchObject({
-    ordinal: 12,
     item: { revision: 0, sequence: 14, turnScope: { kind: 'thread' } }
   })
 })
@@ -505,10 +503,10 @@ it('keeps a restored presentation through an itemless handover replacement and r
   const f = fixture()
   f.seed('card')
   f.admit(f.submit('send', { body: body('card') }, { messageId: 'card', expect: 'waiting' }))
-  f.db
-    .exec(`UPDATE journal_submission_attempts SET handover_sequence=8,handover_at=80,handover_fence=1,
-    handover_scope_json='{"kind":"thread"}',handover_place_sequence=7,handover_place_at=70,
-    handover_place_scope_json='{"kind":"turn","turnItemId":"orca:past"}' WHERE message_id='send';
+  f.db.exec(`UPDATE journal_submission_attempts SET handover_fence=1,facts_json=json_set(facts_json,
+      '$.handover',json('{"sequence":8,"at":80,"fence":1,"scope":{"kind":"thread"}}'),
+      '$.handoverPlace',json('{"sequence":7,"at":70,"scope":{"kind":"turn","turnItemId":"orca:past"}}'))
+      WHERE message_id='send';
     DELETE FROM journal_items WHERE item_id='orca:send'`)
   f.dispatch({ clientMessageId: 'send', fence: 1, state: 'pending', turnScope: { kind: 'thread' } })
   expect(f.attempt('send')).toMatchObject({

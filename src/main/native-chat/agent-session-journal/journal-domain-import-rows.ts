@@ -20,7 +20,7 @@ export function journalDomainImportState(
   sessionId: string
 ): JournalDomainImportState {
   const ready = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(sessionId)
-  if (ready) {
+  if (ready?.epoch !== null && ready?.epoch !== undefined) {
     return { state: 'ready', epoch: String(ready.epoch) }
   }
   return { state: 'converting', epoch: null }
@@ -38,7 +38,11 @@ export function insertJournalDomainImportPage(
   if (!db.isTransaction) {
     throw new Error('journal domain import requires its writer transaction')
   }
-  if (db.prepare('SELECT 1 FROM journal_chat_state WHERE session_id=?').get(target.sessionId)) {
+  if (
+    db
+      .prepare('SELECT 1 FROM journal_chat_state WHERE session_id=? AND epoch IS NOT NULL')
+      .get(target.sessionId)
+  ) {
     return false
   }
   const prefix = [target.sessionId, target.epoch] as const
@@ -191,11 +195,21 @@ export function finishJournalDomainImport(
     throw new Error('journal domain import requires its writer transaction')
   }
   const { head } = header
-  db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,retained_sequence,
-    highest_fence,context_boundary,last_activity_at,derived_turn_item_id,queue_latest_stop_json,
+  db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,retained_sequence,
+    highest_fence,context_boundary,last_activity_at,derived_turn_item_id,history_origin_json,queue_latest_stop_json,
     queue_manual_stop_json,queue_resumed_sequence,queue_reopened_sequence,queue_clear_sequence,
-    queue_clear_operation_id,queue_clear_lifted,queue_failure_boundary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(session_id) DO NOTHING`).run(
+    queue_clear_operation_id,queue_clear_lifted,queue_failure_boundary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(session_id) DO UPDATE SET
+      epoch=excluded.epoch,last_sequence=excluded.last_sequence,retained_sequence=excluded.retained_sequence,
+      highest_fence=excluded.highest_fence,context_boundary=excluded.context_boundary,
+      last_activity_at=excluded.last_activity_at,derived_turn_item_id=excluded.derived_turn_item_id,
+      history_origin_json=excluded.history_origin_json,
+      queue_latest_stop_json=excluded.queue_latest_stop_json,queue_manual_stop_json=excluded.queue_manual_stop_json,
+      queue_resumed_sequence=excluded.queue_resumed_sequence,queue_reopened_sequence=excluded.queue_reopened_sequence,
+      queue_clear_sequence=excluded.queue_clear_sequence,queue_clear_operation_id=excluded.queue_clear_operation_id,
+      queue_clear_lifted=excluded.queue_clear_lifted,queue_failure_boundary=excluded.queue_failure_boundary
+    WHERE journal_chat_state.epoch IS NULL`).run(
+    header.workspaceId,
     header.sessionId,
     header.epoch,
     head.lastSequence,
@@ -204,6 +218,7 @@ export function finishJournalDomainImport(
     head.contextBoundary,
     head.lastActivityAt,
     head.derivedTurnItemId,
+    head.historyOrigin === null ? null : JSON.stringify(head.historyOrigin),
     head.queuePauseMarks.latestStop ? JSON.stringify(head.queuePauseMarks.latestStop) : null,
     head.queuePauseMarks.manualStop === undefined
       ? null

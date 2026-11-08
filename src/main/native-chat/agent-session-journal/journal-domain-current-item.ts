@@ -23,6 +23,21 @@ export type JournalDomainCurrentItemWrite = {
   writtenSequence?: number
 }
 
+export function nextJournalDomainItemOrdinal(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string }
+): number {
+  if (!db.isTransaction) {
+    throw new Error('journal item ordinal requires its writer transaction')
+  }
+  return Number(
+    db
+      .prepare(`SELECT COALESCE(MAX(ordinal),0)+1 AS ordinal
+    FROM journal_items WHERE session_id=? AND epoch=?`)
+      .get(target.sessionId, target.epoch)!.ordinal
+  )
+}
+
 /** The owning command chooses revision, placement and authority before its one event append. */
 export function writeJournalDomainCurrentItem(
   db: Database.Database,

@@ -80,7 +80,7 @@ export function acceptJournalSqlMessageEcho(
   }
   delete accepted.recovered
   db.prepare(`UPDATE journal_submission_attempts SET dispatch_state='accepted',candidate=0,payload_json=?,
-      echo_observed=1,dispatch_fence=?,signed_out=0,admission_body_json=NULL
+      echo_observed=1,dispatch_fence=?,signed_out=0,recovered=0,admission_body_json=NULL
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     JSON.stringify(accepted),
     row.fence,

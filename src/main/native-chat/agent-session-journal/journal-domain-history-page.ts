@@ -66,7 +66,7 @@ export function readJournalDomainHistoryPage(
 function readHead(db: Database.Database, sessionId: string): JournalDomainHistoryHead {
   const row = db
     .prepare(`SELECT epoch, last_sequence, retained_sequence, context_boundary FROM journal_chat_state
-    WHERE session_id=?`)
+    WHERE session_id=? AND epoch IS NOT NULL`)
     .get(sessionId)
   if (!row) {
     throw new Error('journal history targets a chat without domain state')

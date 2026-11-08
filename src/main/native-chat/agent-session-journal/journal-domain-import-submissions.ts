@@ -5,7 +5,10 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { JournalReducerState } from './projection/journal-reducer'
-import type { JournalDomainSubmissionAttempt } from './journal-domain-submission-records'
+import {
+  journalDomainSubmissionFactsJson,
+  type JournalDomainSubmissionAttempt
+} from './journal-domain-submission-records'
 import {
   journalInputSourceBody,
   journalInputSourceFamily,
@@ -94,16 +97,12 @@ export function insertJournalDomainImportedSubmission(
   target: { sessionId: string; epoch: string },
   attempt: JournalDomainImportAttempt
 ): void {
-  const { submission, admission, handover, handoverPlace, rejection } = attempt
+  const { submission, admission, handover } = attempt
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
     attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,
-    fingerprint,dispatch_state,candidate,admitted_personal,dispatch_fence,signed_out,payload_json,echo_observed,
-    admission_body_json,admission_provider_handle_json,admission_fence,admission_scope_json,admission_family_id,
-    admission_origin,admission_source_kind,admission_options_json,handover_sequence,handover_at,handover_fence,
-    handover_scope_json,handover_place_sequence,handover_place_at,handover_place_scope_json,carries_json,
-    rejection_sequence,rejection_at,rejection_fence,rejection_reason,rejection_fact_json,rejection_recovered,
-    rejection_kept_message_id,rejection_answered_turn_json,presentation_member,normalized_handoff)
-    VALUES(?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).run(
+    fingerprint,dispatch_state,candidate,admitted_personal,dispatch_fence,signed_out,recovered,payload_json,echo_observed,
+    admission_body_json,admission_family_id,handover_fence,facts_json)
+    VALUES(?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).run(
     target.sessionId,
     target.epoch,
     submission.clientMessageId,
@@ -122,33 +121,12 @@ export function insertJournalDomainImportedSubmission(
       submission.dispatchState === 'rejected' &&
         readWholeAgentSessionFailureFact(submission.rejection)?.kind === 'notSignedIn'
     ),
+    Number(submission.recovered === true),
     JSON.stringify(submission),
     Number(attempt.echoObserved),
     admission.body === null ? null : JSON.stringify(admission.body),
-    admission.providerHandle === null ? null : JSON.stringify(admission.providerHandle),
-    admission.fence,
-    admission.scope === null ? null : JSON.stringify(admission.scope),
     admission.familyId,
-    admission.origin,
-    admission.sourceKind,
-    admission.options === null ? null : JSON.stringify(admission.options),
-    handover?.sequence ?? null,
-    handover?.at ?? null,
     handover?.fence ?? null,
-    handover ? JSON.stringify(handover.scope) : null,
-    handoverPlace?.sequence ?? null,
-    handoverPlace?.at ?? null,
-    handoverPlace?.scope === undefined ? null : JSON.stringify(handoverPlace.scope),
-    JSON.stringify(attempt.carries),
-    rejection?.sequence ?? null,
-    rejection?.at ?? null,
-    rejection?.fence ?? null,
-    rejection?.reason ?? null,
-    rejection?.fact ? JSON.stringify(rejection.fact) : null,
-    rejection ? Number(rejection.recovered) : null,
-    rejection?.keptMessageId ?? null,
-    rejection?.answeredInTurn === undefined ? null : JSON.stringify(rejection.answeredInTurn),
-    Number(attempt.presentationMember),
-    Number(attempt.normalizedHandOff)
+    journalDomainSubmissionFactsJson(attempt)
   )
 }

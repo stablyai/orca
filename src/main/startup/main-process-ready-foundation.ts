@@ -146,7 +146,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves
   // nothing to fence.
-  runPendingWslDriveUncConversions({
+  await runPendingWslDriveUncConversions({
     userDataPath: getAppEnvironment().getPath('userData'),
     profileUserDataPath: getProfileUserDataPath(),
     profileId: profile.profile.id

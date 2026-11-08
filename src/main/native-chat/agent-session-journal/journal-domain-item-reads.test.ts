@@ -2,6 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type {
   AgentJournalItemBody,
+  AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -10,6 +11,16 @@ import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
+
+import { runJournalTransaction } from './database/journal-database'
+import {
+  insertJournalDomainImportPage,
+  finishJournalDomainImport
+} from './journal-domain-import-rows'
+import { applyJournalDomainItem } from './journal-domain-item'
+import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
+import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const databases: Database.Database[] = []
@@ -24,7 +35,7 @@ function chat() {
   databases.push(db)
   migrateJournalDomainSchema(db)
   db.prepare(
-    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES(?,?,900,1)`
+    `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,?,900,1)`
   ).run(target.sessionId, target.epoch)
   // Stored ordinal is admission order; sequence is the item's current render placement.
   const seed = (
@@ -119,7 +130,7 @@ function row(
 ): AgentJournalRenderItem {
   return { itemId, revision: 1, sequence, observedAt: sequence, body, ...extra }
 }
-const user = (text: string): AgentJournalItemBody => ({
+const user = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
   role: 'user',
   blocks: [{ type: 'text', text }]
@@ -290,4 +301,129 @@ it('exports visible rows and sends after the newest clear across bounded query p
   expect(context.cursor).toEqual({ epoch: 'epoch', sequence: 900 })
   expect(context.items.map((item) => item.itemId)).toEqual([...tail, 'orca:after'])
   expect(context.submissions.map((entry) => entry.clientMessageId)).toEqual(['after', 'rejected'])
+})
+
+it('visits every item after a grouped import, new writes and placement revisions', () => {
+  const { db, read } = chat()
+  db.prepare('DELETE FROM journal_chat_state').run()
+  runJournalTransaction(db, () => {
+    insertJournalDomainImportPage(db, target, {
+      kind: 'items',
+      rows: Array.from({ length: 5 }, (_, index) => ({
+        ordinal: index + 1,
+        ownerFence: 1,
+        executionOwner: null,
+        hidden: index === 4,
+        item: row(`imported-${index}`, 2, user(`imported-${index}`), { sequenceIndex: index }),
+        turnItemId: null,
+        originalStopNoteJson: null,
+        queueCommandTurn: false,
+        queueFailedOutcome: false,
+        queueFailedAt: 0,
+        queueFailureWitnessedThrough: 0,
+        queueFailureReportTurnItemId: null
+      }))
+    })
+    finishJournalDomainImport(db, {
+      ...target,
+      workspaceId: 'workspace',
+      head: {
+        lastSequence: 2,
+        highestFence: 1,
+        contextBoundary: 0,
+        lastActivityAt: 0,
+        derivedTurnItemId: null,
+        historyOrigin: null,
+        queueFailureBoundary: 0,
+        queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
+      }
+    })
+    const options = { fence: 1, turnScope: { kind: 'thread' as const } }
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'new' },
+        body: user('new'),
+        options
+      },
+      10
+    )
+    applyJournalDomainSubmission(
+      db,
+      '/unused',
+      target,
+      {
+        kind: 'submission',
+        input: {
+          clientMessageId: 'admitted',
+          body: user('admitted'),
+          payloadFingerprint: 'admitted',
+          fence: 1,
+          handoverRecorded: true
+        }
+      },
+      {
+        identity: {
+          sessionId: 'chat',
+          workspaceId: 'workspace',
+          hostId: 'host',
+          agent: 'codex',
+          providerHandle: codexProviderHandle('thread')
+        }
+      },
+      11
+    )
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'new' },
+        body: user('revised'),
+        options
+      },
+      12
+    )
+    applyJournalDomainDispatch(
+      db,
+      target,
+      {
+        kind: 'dispatch',
+        input: {
+          clientMessageId: 'admitted',
+          fence: 1,
+          state: 'pending',
+          turnScope: { kind: 'thread' }
+        }
+      },
+      13
+    )
+  })
+  expect(
+    db.prepare(`SELECT item_id,ordinal FROM journal_items WHERE ordinal>=5 ORDER BY ordinal`).all()
+  ).toEqual([
+    { item_id: 'imported-4', ordinal: 5 },
+    { item_id: 'orca:new', ordinal: 6 },
+    { item_id: 'orca:admitted', ordinal: 7 }
+  ])
+  const seen: string[] = []
+  let afterOrdinal = -1
+  for (;;) {
+    const page = read({ kind: 'items-by-kind', kinds: ['message'], afterOrdinal, limit: 1 })
+    seen.push(...page.items.map((item) => item.itemId))
+    if (page.nextOrdinal === null) {
+      break
+    }
+    afterOrdinal = page.nextOrdinal
+  }
+  expect(seen).toEqual([
+    'imported-0',
+    'imported-1',
+    'imported-2',
+    'imported-3',
+    'orca:new',
+    'orca:admitted'
+  ])
 })

@@ -12,7 +12,7 @@ export type JournalDomainMaintenanceResult =
   | { kind: 'compaction-state'; completedAt: number | null }
 
 const RETIRED_PAGE_BYTES = 1024 * 1024
-// Only a ready head naming another epoch proves retirement; an interrupted import has no head.
+// Only a ready head naming another epoch proves retirement; import shells have no epoch.
 const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly string[] }[] = [
   { name: 'journal_items', key: 'item_id', payload: ['payload_json', 'original_stop_note_json'] },
   { name: 'journal_item_subagent_names', key: 'subagent_id,item_id' },
@@ -37,7 +37,7 @@ export function pruneJournalDomainRetiredPage(
   target: { sessionId: string; epoch: string }
 ): JournalDomainMaintenanceResult {
   const head = db
-    .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
+    .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=? AND epoch IS NOT NULL')
     .get(target.sessionId)
   if (head?.epoch !== target.epoch) {
     return { kind: 'domain-retired', deleted: 0, more: false }

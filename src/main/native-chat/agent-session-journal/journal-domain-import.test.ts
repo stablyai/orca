@@ -20,6 +20,7 @@ import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { readJournalDomainItems } from './journal-sql-item-reads'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -132,8 +133,11 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
   expect(maintain(db, { kind: 'import-finish', header })).toBe('epoch')
   expect(
     db
-      .prepare(`SELECT message_id,attempt_sequence,admission_family_id,admission_origin,
-    handover_sequence,handover_place_sequence,rejection_sequence,rejection_kept_message_id,
+      .prepare(`SELECT message_id,attempt_sequence,admission_family_id,json_extract(facts_json,'$.admission.origin') AS admission_origin,
+    json_extract(facts_json,'$.handover.sequence') AS handover_sequence,
+    json_extract(facts_json,'$.handoverPlace.sequence') AS handover_place_sequence,
+    json_extract(facts_json,'$.rejection.sequence') AS rejection_sequence,
+    json_extract(facts_json,'$.rejection.keptMessageId') AS rejection_kept_message_id,
     echo_observed,admission_body_json IS NULL AS body_released
     FROM journal_submission_attempts ORDER BY message_id`)
       .all()
@@ -318,11 +322,35 @@ it('imports history from the separate original after interruption, taking the cu
     async () => {}
   )
   try {
+    expect(db.prepare('SELECT workspace_id,epoch FROM journal_chat_state').get()).toEqual({
+      workspace_id: 'workspace',
+      epoch: null
+    })
+    expect(readJournalSqlDatabase(db, { kind: 'epoch', sessionId: 'session' })).toEqual({
+      kind: 'epoch',
+      epoch: null
+    })
+    expect(readJournalSqlDatabase(db, { kind: 'sessions', after: null })).toEqual({
+      kind: 'sessions',
+      sessionIds: ['session']
+    })
+    expect(
+      readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
+    ).toEqual({
+      kind: 'retired-heads',
+      heads: [],
+      through: null
+    })
     expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
     await expect(conversions.ensure('session')).rejects.toThrow('interrupted before ready')
     expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([
       { message_id: 'send' }
     ])
+    // Discard preserves the catalog shell, including a workspace rekey since initialization.
+    db.prepare('UPDATE journal_chat_state SET workspace_id=? WHERE session_id=?').run(
+      'rekeyed-workspace',
+      'session'
+    )
     // A previous build may replace the original between failed new-build runs.
     const current = saved
       .filter((row) => row.kind === 'epoch' || (row.kind === 'item' && row.itemId === 'failed'))
@@ -336,12 +364,16 @@ it('imports history from the separate original after interruption, taking the cu
       publishJournalOutcomeEpoch(original, 'session', 'current-original', current)
     })
     expect(await conversions.ensure('session')).toBe('current-original')
+    expect(db.prepare('SELECT workspace_id,epoch FROM journal_chat_state').get()).toEqual({
+      workspace_id: 'rekeyed-workspace',
+      epoch: 'current-original'
+    })
     expect(db.prepare('SELECT epoch,item_id FROM journal_items').all()).toEqual([
       { epoch: 'current-original', item_id: 'failed' }
     ])
     expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([])
     expect(db.prepare('SELECT message_id FROM journal_submission_attempts').all()).toEqual([])
-    expect(db.prepare('SELECT session_id FROM journal_sessions').all()).toEqual([
+    expect(db.prepare('SELECT session_id FROM journal_chat_state').all()).toEqual([
       { session_id: 'session' }
     ])
     original.close()
@@ -353,6 +385,14 @@ it('imports history from the separate original after interruption, taking the cu
       epoch: 'current-original'
     })
     expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([{ item_id: 'failed' }])
+    db.prepare('UPDATE journal_chat_state SET epoch=? WHERE session_id=?').run(
+      'rollover',
+      'session'
+    )
+    expect(readJournalSqlDatabase(db, { kind: 'epoch', sessionId: 'session' })).toEqual({
+      kind: 'epoch',
+      epoch: 'rollover'
+    })
   } finally {
     await conversions.close()
     await pool.close()

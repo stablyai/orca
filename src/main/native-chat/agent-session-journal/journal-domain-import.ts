@@ -27,6 +27,7 @@ import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalDomainStopNote } from './journal-domain-stop-notes'
 import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause'
+import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import {
   isCommand,
   reportedTurnItemId,
@@ -40,6 +41,7 @@ export type JournalDomainImportHead = {
   contextBoundary: number
   lastActivityAt: number
   derivedTurnItemId: string | null
+  historyOrigin: JournalHistoryOrigin | null
   queuePauseMarks: Omit<JournalQueuePauseMarks, 'cleared'> & {
     cleared?: Omit<NonNullable<JournalQueuePauseMarks['cleared']>, 'messageIds'>
   }
@@ -78,6 +80,7 @@ export type JournalDomainImportPage =
 
 export type JournalDomainImportHeader = {
   sessionId: string
+  workspaceId: string
   epoch: string
   head: JournalDomainImportHead
 }
@@ -118,6 +121,10 @@ export function prepareJournalDomainImport(
   )
   return {
     sessionId,
+    workspaceId: String(
+      db.prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?').get(sessionId)!
+        .workspace_id
+    ),
     epoch: state.epoch,
     head: {
       lastSequence: state.lastSequence,
@@ -125,6 +132,7 @@ export function prepareJournalDomainImport(
       contextBoundary: state.contextBoundary,
       lastActivityAt: state.lastActivityAt,
       derivedTurnItemId: state.derivedTurnScope.snapshot(),
+      historyOrigin: state.historyOrigin,
       queuePauseMarks: {
         ...pauseMarks,
         ...(cleared

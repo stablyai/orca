@@ -36,7 +36,7 @@ export function message(
 export function messageFixture(db = new Database(':memory:')) {
   migrateJournalDomainSchema(db)
   db.prepare(
-    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES(?,?,10,1)`
+    `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,?,10,1)`
   ).run(target.sessionId, target.epoch)
   const batch = new JournalSqlBatch(db)
   const published: JournalSqlMessagesCommit[] = []

@@ -10,7 +10,10 @@ import type {
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import type { JournalWriterOperation } from './journal-writer-command'
 import { AgentSessionJournalError, assertJournalFence } from './writing/journal-write-guards'
-import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
+import {
+  writeJournalDomainCurrentItem,
+  nextJournalDomainItemOrdinal
+} from './journal-domain-current-item'
 import { selectJournalDomainSubmissionCard } from './journal-domain-submission-consume'
 import type {
   JournalDomainSubmissionCommit,
@@ -156,8 +159,8 @@ export function applyJournalDomainSubmission(
   }
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,
     item_id,ordinal,submitted_at,accepted_sequence,fingerprint,dispatch_state,candidate,admitted_personal,payload_json,
-    admission_body_json,admission_provider_handle_json,admission_fence,admission_family_id,admission_origin,admission_source_kind,admission_options_json,dispatch_fence)
-    VALUES(?,?,?,?,0,1,?,?,?,?,?,'pending',1,?,?,?,?,?,?,?,?,?,?)`).run(
+    admission_body_json,admission_family_id,facts_json,dispatch_fence)
+    VALUES(?,?,?,?,0,1,?,?,?,?,?,'pending',1,?,?,?,?,?,?)`).run(
     ...prefix,
     input.clientMessageId,
     sequence,
@@ -173,12 +176,23 @@ export function applyJournalDomainSubmission(
     ),
     JSON.stringify(submission),
     JSON.stringify(input.body),
-    JSON.stringify(agentSessionJournalProviderHandle(facts.identity)),
-    input.fence,
     familyId ?? null,
-    input.origin ?? null,
-    input.source?.kind ?? null,
-    input.options ? JSON.stringify(input.options) : null,
+    JSON.stringify({
+      admission: {
+        providerHandle: agentSessionJournalProviderHandle(facts.identity),
+        fence: input.fence,
+        scope: null,
+        origin: input.origin ?? null,
+        sourceKind: input.source?.kind ?? null,
+        options: input.options ?? null
+      },
+      handover: null,
+      handoverPlace: null,
+      carries: [],
+      rejection: null,
+      presentationMember: false,
+      normalizedHandOff: false
+    }),
     input.fence
   )
   const blocked = db
@@ -188,7 +202,7 @@ export function applyJournalDomainSubmission(
   if (!blocked) {
     result.items = writeJournalDomainCurrentItem(db, target, {
       item,
-      ordinal: sequence,
+      ordinal: nextJournalDomainItemOrdinal(db, target),
       hidden: false,
       ownerFence: input.fence
     })

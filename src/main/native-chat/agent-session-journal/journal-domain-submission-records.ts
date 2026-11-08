@@ -104,6 +104,34 @@ export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | un
   referencedUploads?: string[]
 }
 
+export type JournalDomainSubmissionStoredFacts = Pick<
+  JournalDomainSubmissionAttempt,
+  | 'handover'
+  | 'handoverPlace'
+  | 'carries'
+  | 'rejection'
+  | 'presentationMember'
+  | 'normalizedHandOff'
+> & {
+  admission: Omit<JournalDomainSubmissionAdmission, 'body' | 'familyId'>
+}
+
+export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissionAttempt): string {
+  const { body: _body, familyId: _family, ...admission } = attempt.admission
+  const { handover, handoverPlace, carries, rejection, presentationMember, normalizedHandOff } =
+    attempt
+  const facts: JournalDomainSubmissionStoredFacts = {
+    admission,
+    handover,
+    handoverPlace,
+    carries,
+    rejection,
+    presentationMember,
+    normalizedHandOff
+  }
+  return JSON.stringify(facts)
+}
+
 export function readJournalDomainSubmissionAttempt(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
@@ -112,17 +140,13 @@ export function readJournalDomainSubmissionAttempt(
 ): JournalDomainSubmissionAttempt | null {
   const row = db
     .prepare(`SELECT attempt_sequence,attempt_index,ordinal,candidate,admitted_personal,payload_json,
-    CASE WHEN ? THEN admission_body_json END AS admission_body_json,
-    admission_provider_handle_json,admission_fence,admission_scope_json,admission_family_id,
-    admission_origin,admission_source_kind,admission_options_json,handover_sequence,handover_at,handover_fence,
-    handover_scope_json,handover_place_sequence,handover_place_at,handover_place_scope_json,carries_json,rejection_sequence,rejection_at,rejection_fence,
-    rejection_reason,rejection_fact_json,rejection_recovered,rejection_kept_message_id,rejection_answered_turn_json,
-    presentation_member,normalized_handoff FROM journal_submission_attempts
-    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
+    CASE WHEN ? THEN admission_body_json END AS admission_body_json,admission_family_id,facts_json
+    FROM journal_submission_attempts WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
     .get(Number(includeAdmissionBody), target.sessionId, target.epoch, messageId)
   if (!row) {
     return null
   }
+  const facts: JournalDomainSubmissionStoredFacts = JSON.parse(String(row.facts_json))
   return {
     sequence: Number(row.attempt_sequence),
     index: Number(row.attempt_index),
@@ -130,63 +154,12 @@ export function readJournalDomainSubmissionAttempt(
     candidate: Boolean(row.candidate),
     admittedPersonal: Boolean(row.admitted_personal),
     submission: JSON.parse(String(row.payload_json)),
+    ...facts,
     admission: {
+      ...facts.admission,
       body: row.admission_body_json === null ? null : JSON.parse(String(row.admission_body_json)),
-      providerHandle:
-        row.admission_provider_handle_json === null
-          ? null
-          : JSON.parse(String(row.admission_provider_handle_json)),
-      fence: Number(row.admission_fence),
-      scope:
-        row.admission_scope_json === null ? null : JSON.parse(String(row.admission_scope_json)),
-      familyId: row.admission_family_id === null ? null : String(row.admission_family_id),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the typed admission writer or importer supplies this domain column.
-      origin: row.admission_origin as JournalDomainSubmissionAdmission['origin'],
-      sourceKind: row.admission_source_kind === null ? null : String(row.admission_source_kind),
-      options:
-        row.admission_options_json === null ? null : JSON.parse(String(row.admission_options_json))
-    },
-    handover:
-      row.handover_sequence === null
-        ? null
-        : {
-            sequence: Number(row.handover_sequence),
-            at: Number(row.handover_at),
-            fence: Number(row.handover_fence),
-            scope:
-              row.handover_scope_json === null ? null : JSON.parse(String(row.handover_scope_json))
-          },
-    handoverPlace:
-      row.handover_place_sequence === null
-        ? null
-        : {
-            sequence: Number(row.handover_place_sequence),
-            at: Number(row.handover_place_at),
-            scope:
-              row.handover_place_scope_json === null
-                ? undefined
-                : JSON.parse(String(row.handover_place_scope_json))
-          },
-    carries: row.carries_json === null ? [] : JSON.parse(String(row.carries_json)),
-    rejection:
-      row.rejection_sequence === null
-        ? null
-        : {
-            sequence: Number(row.rejection_sequence),
-            at: Number(row.rejection_at),
-            fence: Number(row.rejection_fence),
-            reason: row.rejection_reason === null ? null : String(row.rejection_reason),
-            fact:
-              row.rejection_fact_json === null ? null : JSON.parse(String(row.rejection_fact_json)),
-            recovered: Boolean(row.rejection_recovered),
-            keptMessageId:
-              row.rejection_kept_message_id === null ? null : String(row.rejection_kept_message_id),
-            ...(row.rejection_answered_turn_json === null
-              ? {}
-              : { answeredInTurn: JSON.parse(String(row.rejection_answered_turn_json)) })
-          },
-    presentationMember: Boolean(row.presentation_member),
-    normalizedHandOff: Boolean(row.normalized_handoff)
+      familyId: row.admission_family_id === null ? null : String(row.admission_family_id)
+    }
   }
 }
 

@@ -1,154 +1,202 @@
-import { applyJournalSqlMessageSteps, type JournalSqlMessage } from './journal-sql-message-commit'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type Database from '../../sqlite/sync-database'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterCommand } from './journal-writer-command'
-import type { JournalWriterCommit } from './journal-writer-changes'
-import { applyJournalWriterEffect, type JournalWriterEffectResult } from './journal-writer-effects'
-import { JournalWriterSession } from './journal-writer-session'
-import { runJournalWriterOperation } from './journal-writer-operations'
-import type { JournalOperationReceipt } from './writing/journal-row-writer'
-import { runJournalSqlSteps } from './journal-sql-steps'
-import {
-  claimJournalSqlProjection,
-  journalLogNeedsFounding,
-  recordJournalSqlWatermark
-} from './journal-sql-meta'
+import type { JournalWriterCommit, JournalWriterPublication } from './journal-writer-changes'
+import { applyJournalWriterEffect, type JournalWriterCoordinate } from './journal-writer-effects'
+import { applyJournalDomainItem } from './journal-domain-item'
+import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
+import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
+import { applyJournalSqlMessageSteps, type JournalSqlMessage } from './journal-sql-message-commit'
 
+/** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
   constructor(
     private readonly db: Database.Database,
     private readonly stateDirectory: string
   ) {}
 
-  async apply(command: JournalWriterCommand, savedAt: number): Promise<JournalWriterCommit> {
+  async apply(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
     if (!this.db.isTransaction) {
       throw new Error('journal SQL command requires its transaction')
     }
-    if (command.operation.kind === 'steps') {
-      const text = textSteps(command.operation.steps)
-      if (text) {
-        if (command.effects) {
-          throw new Error('journal text steps carry no host receipt')
-        }
-        const commit = applyJournalSqlMessageSteps(this.db, {
-          target: command.target,
-          steps: command.operation.dropped ? [] : text,
-          savedAt: command.savedAt ?? savedAt
-        })
-        if (command.operation.dropped) {
-          commit.outcomes = text.map(() => ({ kind: 'dropped' }))
-        }
-        return {
-          cursor: commit.cursor,
-          inputChanged: commit.inputChanged,
-          keys: [],
-          inputKeys: [],
-          effects: [],
-          items: commit.items.map((item) => ({
-            itemId: item.itemId,
-            deleted: false,
-            revision: item.revision,
-            sequence: item.sequence,
-            sequenceIndex: item.sequenceIndex ?? 0
-          })),
-          messageCommit: commit,
-          value: {
-            outcomes: commit.outcomes,
-            cursor: commit.cursor,
-            items: commit.items,
-            ...(commit.failure ? { failure: commit.failure } : {})
-          }
-        }
+    const savedAt = command.savedAt ?? now
+    const { operation, target } = command
+    switch (operation.kind) {
+      case 'item':
+      case 'item-claiming': {
+        const result = applyJournalDomainItem(
+          this.db,
+          target,
+          { ...operation, kind: 'item' },
+          savedAt
+        )
+        const itemId = agentJournalItemKey(operation.identity)
+        const written = result.items.find((item) => item.itemId === itemId) ?? result.items[0]
+        return this.finish(
+          command,
+          result,
+          written
+            ? {
+                cursor: result.cursor,
+                itemId: written.itemId,
+                revision: written.revision
+              }
+            : null,
+          result.outcome.kind === 'committed' && result.outcome.wrote
+            ? [
+                {
+                  kind: 'item',
+                  epoch: target.epoch,
+                  seq: result.cursor.sequence
+                }
+              ]
+            : [],
+          result.items.map((item) => item.itemId)
+        )
       }
-
-      const commit = await runJournalSqlSteps(
-        this.db,
-        { ...command, operation: command.operation },
-        command.facts ?? { identity: unidentified(command.target.sessionId) },
-        (facts) => this.session({ ...command, facts }, command.savedAt ?? savedAt)
-      )
-      recordJournalSqlWatermark(this.db, command.target.sessionId)
-      return commit
-    }
-    if (
-      command.operation.kind === 'open' &&
-      !journalLogNeedsFounding(this.db, command.target.sessionId)
-    ) {
-      claimJournalSqlProjection(this.db, command.target)
-    }
-    const session = this.session(command, command.savedAt ?? savedAt)
-    const effects: JournalWriterEffectResult[] = []
-    let receiptWritten = false
-    // A present (even empty) effect list is a receipt: operations branch on having one.
-    const receipt: JournalOperationReceipt | undefined = command.effects
-      ? {
-          write: (db) => {
-            receiptWritten = true
-            const rows = session.projected(session.lastRows)
-            for (const effect of command.effects!) {
-              effects.push(applyJournalWriterEffect(db, this.stateDirectory, effect, rows))
-            }
-          },
-          committed: () => undefined
+      case 'submission': {
+        if (!command.facts) {
+          throw new Error('journal submission omitted its identity facts')
         }
-      : undefined
-    const value = await runJournalWriterOperation(session, command.operation, receipt)
-    const { rows: _rows, goals, ...commit } = await session.finish()
-    recordJournalSqlWatermark(this.db, command.target.sessionId)
+        const result = applyJournalDomainSubmission(
+          this.db,
+          this.stateDirectory,
+          target,
+          operation,
+          command.facts,
+          savedAt
+        )
+        return this.finish(
+          command,
+          result,
+          result.value,
+          result.coordinates.map((position) => ({
+            kind: position.kind === 'queue-reopen' ? 'tombstone' : position.kind,
+            epoch: target.epoch,
+            seq: position.cursor.sequence
+          })),
+          result.items.map((item) => item.itemId)
+        )
+      }
+      case 'dispatch':
+      case 'accept-late':
+      case 'late-dispatch': {
+        const result = applyJournalDomainDispatch(this.db, target, operation, savedAt)
+        return this.finish(
+          command,
+          result,
+          result.value,
+          result.coordinates.map((position) => ({
+            kind: position.kind === 'queue-reopen' ? 'tombstone' : position.kind,
+            epoch: target.epoch,
+            seq: position.cursor.sequence
+          })),
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+        )
+      }
+      case 'queue-insert':
+      case 'queue-update':
+      case 'queue-hold':
+      case 'queue-withdraw':
+      case 'queue-move': {
+        const result = applyJournalDomainQueueCommand(
+          this.db,
+          this.stateDirectory,
+          target,
+          operation,
+          savedAt
+        )
+        const value =
+          result.result.kind === 'queue-insert'
+            ? result.result.card
+            : result.result.kind === 'queue-update'
+              ? result.result.update
+              : result.result.kind === 'queue-move'
+                ? result.result.move
+                : result.result.kind === 'queue-withdraw'
+                  ? result.result.cards
+                  : undefined
+        return this.finish(
+          command,
+          { ...result, items: [], receipts: [] },
+          value,
+          result.inputChanged
+            ? [{ kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
+            : []
+        )
+      }
+      case 'steps': {
+        const text = textSteps(operation.steps)
+        if (!text) {
+          throw new Error('journal non-text steps are not migrated')
+        }
+        const result = applyJournalSqlMessageSteps(this.db, {
+          target,
+          steps: operation.dropped ? [] : text,
+          savedAt
+        })
+        if (operation.dropped) {
+          result.outcomes = text.map(() => ({ kind: 'dropped' }))
+        }
+        return this.finish(
+          command,
+          result,
+          {
+            outcomes: result.outcomes,
+            cursor: result.cursor,
+            items: result.items,
+            ...(result.failure ? { failure: result.failure } : {})
+          },
+          []
+        )
+      }
+      default:
+        throw new Error(`journal command ${operation.kind} is not migrated`)
+    }
+  }
+
+  private finish(
+    command: JournalWriterCommand,
+    result: JournalWriterPublication & {
+      cursor: JournalWriterCommit['cursor']
+      inputChanged: boolean
+    },
+    value: unknown,
+    coordinates: readonly JournalWriterCoordinate[],
+    invalidatedItemIds: string[] = []
+  ): JournalWriterCommit {
+    const effects =
+      coordinates.length > 0
+        ? (command.effects ?? []).map((effect) =>
+            applyJournalWriterEffect(this.db, this.stateDirectory, effect, coordinates)
+          )
+        : []
     return {
-      ...commit,
+      cursor: result.cursor,
+      inputChanged: result.inputChanged,
+      keys: [],
+      inputKeys: [],
+      items: [
+        ...result.items.map((item) => ({
+          itemId: item.itemId,
+          deleted: false as const,
+          revision: item.revision,
+          sequence: item.sequence,
+          sequenceIndex: item.sequenceIndex ?? 0
+        })),
+        ...(result.removedItemIds ?? []).map((itemId) => ({
+          itemId,
+          deleted: true as const,
+          revision: 0
+        }))
+      ],
+      publication: { ...result, invalidatedItemIds },
+      value,
       effects,
-      ...(receiptWritten ? { receiptWritten: true as const } : {}),
-      ...(value === undefined ? {} : { value: plainAnswer(value) }),
-      ...(command.facts?.goals ? { goals } : {})
+      ...(coordinates.length > 0 && command.effects ? { receiptWritten: true as const } : {})
     }
   }
-
-  private session(command: JournalWriterCommand, savedAt: number): JournalWriterSession {
-    return new JournalWriterSession(
-      this.db,
-      this.stateDirectory,
-      command.target,
-      command.facts ?? { identity: unidentified(command.target.sessionId) },
-      savedAt
-    )
-  }
-}
-
-/** Core row commands never read the provider identity; reading it is a protocol bug. */
-function unidentified(sessionId: string): AgentSessionJournalIdentity {
-  const missing = (): never => {
-    throw new Error('journal SQL command omitted its identity facts')
-  }
-  return {
-    sessionId,
-    get workspaceId() {
-      return missing()
-    },
-    get hostId() {
-      return missing()
-    },
-    get agent() {
-      return missing()
-    },
-    get providerHandle() {
-      return missing()
-    }
-  }
-}
-
-/** Answers leave the worker by structured clone, which refuses the command's tracked proxies. */
-function plainAnswer(value: unknown): unknown {
-  if (typeof value !== 'object' || value === null) {
-    return value
-  }
-  if (Array.isArray(value)) {
-    return value.map(plainAnswer)
-  }
-  if (Object.getPrototypeOf(value) !== Object.prototype) {
-    return value
-  }
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainAnswer(child)]))
 }
 
 function textSteps(

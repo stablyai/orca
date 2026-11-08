@@ -5,10 +5,27 @@ import type { JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalReducerState } from './projection/journal-reducer'
-import type { JournalSqlMessagesCommit } from './journal-sql-message-commit'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalAcceptanceReceipt
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
+import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+
+export type JournalWriterPublication = {
+  items: AgentJournalRenderItem[]
+  cards: QueuedMessageRow[]
+  receipts: AgentJournalAcceptanceReceipt[]
+  removedItemIds?: string[]
+  invalidatedItemIds?: string[]
+  placements?: { messageId: string; position: number }[]
+  acceptedInputs?: JournalSqlAcceptedInputs
+  editDeadline?: number | null
+  referencedUploads?: string[]
+}
 
 export type JournalWriterCommit = {
-  messageCommit?: JournalSqlMessagesCommit
+  publication?: JournalWriterPublication
   cursor: AgentJournalCursor
   inputChanged: boolean
   keys: { collection: string; key: unknown; deleted: boolean }[]

@@ -30,7 +30,10 @@ import { journalRowBase } from './writing/journal-row-builders'
 import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
+import {
+  writeJournalDomainCurrentItem,
+  nextJournalDomainItemOrdinal
+} from './journal-domain-current-item'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   readJournalSqlAcceptedInputs,
@@ -195,7 +198,7 @@ export function applyJournalDomainItem(
           }
         }
       : {}),
-    ordinal: Number(stored?.ordinal ?? sequence),
+    ordinal: stored ? Number(stored.ordinal) : nextJournalDomainItemOrdinal(db, target),
     hidden: Boolean(stored?.hidden),
     writtenSequence: sequence,
     ownerFence: row.ownerFence!,

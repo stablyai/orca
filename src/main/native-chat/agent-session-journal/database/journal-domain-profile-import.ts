@@ -25,7 +25,7 @@ export function importJournalDomainProfile(
       `the original chat store uses unreleased schema ${version}`
     )
   }
-  copyProfileTable(source, destination, 'journal_sessions', ['session_id', 'workspace_id', 'epoch'])
+  copyChatCatalog(source, destination)
   copyProfileTable(
     source,
     destination,
@@ -89,6 +89,28 @@ export function importJournalDomainProfile(
 }
 
 const PAGE_ROWS = 128
+
+function copyChatCatalog(source: Database.Database, destination: Database.Database): void {
+  const insert = destination.prepare(
+    'INSERT INTO journal_chat_state(session_id,workspace_id) VALUES(?,?)'
+  )
+  runJournalTransaction(destination, () => {
+    let after: string | undefined
+    for (;;) {
+      const rows = source
+        .prepare(`SELECT session_id,workspace_id FROM journal_sessions
+          ${after === undefined ? '' : 'WHERE session_id>?'} ORDER BY session_id LIMIT ?`)
+        .all(...(after === undefined ? [] : [after]), PAGE_ROWS)
+      if (rows.length === 0) {
+        return
+      }
+      for (const row of rows) {
+        insert.run(row.session_id, row.workspace_id)
+      }
+      after = String(rows.at(-1)!.session_id)
+    }
+  })
+}
 
 /** The fixed schema above is the whole copy surface; no JSON is interpreted or rewritten. */
 function copyProfileTable(

@@ -27,7 +27,7 @@ import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
 import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
 import { getHistoryRoot, listWslHistoryRoots } from '../../pty/history/terminal-history-paths'
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { initializeJournalDomainDatabase } from '../../native-chat/agent-session-journal/database/journal-domain-database'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 
@@ -177,22 +177,26 @@ export function lastWslDriveUncConversionOutcomes(): WslDriveUncConversionOutcom
  * Never throws; a conversion it can't finish stays journaled for the next startup. Only Windows
  * starts a conversion, but the journal alone says one is due, so this runs on any platform.
  */
-export function runPendingWslDriveUncConversions(paths: {
+export async function runPendingWslDriveUncConversions(paths: {
   userDataPath: string
   profileUserDataPath: string
   profileId: string
-}): void {
+}): Promise<void> {
   if (!wslHostsGateOpen()) {
     return
   }
   try {
+    if (listWslDriveUncConversionsForProfile(paths.userDataPath, paths.profileId).length === 0) {
+      return
+    }
+    const chatJournalDatabasePath = await initializeJournalDomainDatabase(paths.profileUserDataPath)
     lastOutcomes = runWslDriveUncConversionsAtStartup({
       ...paths,
       stores: wslDriveUncConversionStores({
         daemonHistoryDir: getHistoryRoot(),
         shellHistoryRoots: [getHistoryRoot(), ...listWslHistoryRoots()],
         orchestrationDatabasePath: orchestrationDbFile(paths.userDataPath),
-        chatJournalDatabasePath: journalDatabasePath(paths.profileUserDataPath)
+        chatJournalDatabasePath
       })
     })
   } catch (error) {

@@ -1,9 +1,4 @@
 export const JOURNAL_DOMAIN_SCHEMA_001 = `
-CREATE TABLE journal_sessions (
-  session_id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  epoch TEXT NOT NULL
-);
 CREATE TABLE agent_session_records (
   session_id TEXT PRIMARY KEY,
   record_json TEXT NOT NULL
@@ -53,13 +48,15 @@ CREATE TABLE agent_session_attachment_sweeps (
 
 CREATE TABLE journal_chat_state (
   session_id TEXT PRIMARY KEY,
-  epoch TEXT NOT NULL,
-  last_sequence INTEGER NOT NULL,
+  workspace_id TEXT NOT NULL,
+  epoch TEXT,
+  last_sequence INTEGER NOT NULL DEFAULT 0,
   retained_sequence INTEGER NOT NULL DEFAULT 0,
-  highest_fence INTEGER NOT NULL,
+  highest_fence INTEGER NOT NULL DEFAULT 0,
   context_boundary INTEGER NOT NULL DEFAULT 0,
   last_activity_at INTEGER NOT NULL DEFAULT 0,
   derived_turn_item_id TEXT,
+  history_origin_json TEXT,
   queue_latest_stop_json TEXT,
   queue_manual_stop_json TEXT,
   queue_resumed_sequence INTEGER NOT NULL DEFAULT 0,
@@ -69,6 +66,7 @@ CREATE TABLE journal_chat_state (
   queue_clear_lifted INTEGER NOT NULL DEFAULT 0,
   queue_failure_boundary INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX journal_chat_ready ON journal_chat_state(session_id) WHERE epoch IS NOT NULL;
 CREATE TABLE journal_queue_clear_members (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
@@ -113,6 +111,7 @@ CREATE TABLE journal_items (
   signed_out INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(session_id, epoch, item_id)
 );
+CREATE INDEX journal_items_ordinal ON journal_items(session_id,epoch,ordinal);
 CREATE TABLE journal_item_subagent_names (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
@@ -165,35 +164,14 @@ CREATE TABLE journal_submission_attempts (
   dispatch_state TEXT NOT NULL,
   dispatch_fence INTEGER NOT NULL DEFAULT 0,
   signed_out INTEGER NOT NULL DEFAULT 0 CHECK(signed_out IN (0,1)),
+  recovered INTEGER NOT NULL DEFAULT 0 CHECK(recovered IN (0,1)),
   candidate INTEGER NOT NULL DEFAULT 0,
   admitted_personal INTEGER NOT NULL DEFAULT 0 CHECK(admitted_personal IN (0,1)),
   echo_observed INTEGER NOT NULL DEFAULT 0 CHECK(echo_observed IN (0,1)),
   admission_body_json TEXT,
-  admission_provider_handle_json TEXT,
-  admission_fence INTEGER NOT NULL DEFAULT 0,
-  admission_scope_json TEXT,
   admission_family_id TEXT,
-  admission_origin TEXT,
-  admission_source_kind TEXT,
-  admission_options_json TEXT,
-  handover_sequence INTEGER,
-  handover_at INTEGER,
   handover_fence INTEGER,
-  handover_scope_json TEXT,
-  handover_place_sequence INTEGER,
-  handover_place_at INTEGER,
-  handover_place_scope_json TEXT,
-  carries_json TEXT,
-  rejection_sequence INTEGER,
-  rejection_at INTEGER,
-  rejection_fence INTEGER,
-  rejection_reason TEXT,
-  rejection_fact_json TEXT,
-  rejection_recovered INTEGER,
-  rejection_kept_message_id TEXT,
-  rejection_answered_turn_json TEXT,
-  presentation_member INTEGER NOT NULL DEFAULT 0 CHECK(presentation_member IN (0,1)),
-  normalized_handoff INTEGER NOT NULL DEFAULT 0 CHECK(normalized_handoff IN (0,1)),
+  facts_json TEXT NOT NULL DEFAULT '{}',
   payload_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, message_id, attempt_sequence, attempt_index)
 );
@@ -203,6 +181,8 @@ CREATE INDEX journal_submission_echo ON journal_submission_attempts(session_id, 
 CREATE INDEX journal_submission_person_acceptance ON journal_submission_attempts(session_id, epoch, accepted_sequence DESC) WHERE dispatch_state='accepted' AND admitted_personal=1;
 CREATE INDEX journal_submission_family ON journal_submission_attempts(session_id,epoch,admission_family_id,attempt_sequence,attempt_index,ordinal) WHERE current=1;
 CREATE INDEX journal_submission_ordinal ON journal_submission_attempts(session_id,epoch,ordinal);
+CREATE INDEX journal_submission_recovery ON journal_submission_attempts(session_id,epoch,ordinal,message_id)
+  WHERE current=1 AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0));
 CREATE INDEX journal_submission_acceptance ON journal_submission_attempts(session_id, epoch, accepted_sequence DESC) WHERE dispatch_state='accepted';
 CREATE TABLE journal_send_receipts (
   session_id TEXT NOT NULL,

@@ -11,7 +11,7 @@ export function discardJournalDomainImportPage(
     throw new Error('journal import discard requires its writer transaction')
   }
   const ready = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(sessionId)
-  if (ready) {
+  if (ready?.epoch !== null && ready?.epoch !== undefined) {
     return { more: false, epoch: String(ready.epoch) }
   }
   let remaining = 512

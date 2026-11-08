@@ -9,11 +9,14 @@ import { JournalSqlActivity } from '../journal-sql-activity'
 import { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
 import type { JournalWriterCommand } from '../journal-writer-command'
 import type { JournalWriterCommit } from '../journal-writer-changes'
-import type { JournalWriterHostFacts } from '../journal-writer-host-facts'
 import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
+import {
+  initializeJournalDomainDatabase,
+  journalDomainDatabasePath
+} from './journal-domain-database'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 export class JournalSqlDatabase {
@@ -35,7 +38,7 @@ export class JournalSqlDatabase {
     }
   ) {
     this.readers = new JournalSqlReaderPool(
-      journalDatabasePath(stateDirectory),
+      journalDomainDatabasePath(stateDirectory),
       journalDatabasePath(stateDirectory),
       options.readerPath
     )
@@ -57,11 +60,8 @@ export class JournalSqlDatabase {
       onMaintenanceError: (error: unknown, sessionId?: string) => void
     }
   ): Promise<JournalSqlDatabase> {
-    const writer = new JournalSqlOwner(
-      journalDatabasePath(stateDirectory),
-      stateDirectory,
-      options.writerPath
-    )
+    const filename = await initializeJournalDomainDatabase(stateDirectory)
+    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
     try {
       return new JournalSqlDatabase(writer, stateDirectory, await writer.opened(), options)
     } catch (error) {
@@ -122,21 +122,49 @@ export class JournalSqlDatabase {
     return this.readEpoch(sessionId)
   }
 
-  openSession(identity: AgentSessionJournalIdentity, facts?: JournalWriterHostFacts) {
+  openSession(identity: AgentSessionJournalIdentity) {
     return this.serialize(identity.sessionId, async () => {
-      const epoch = await this.conversions.ensure(identity.sessionId)
-      const target = { sessionId: identity.sessionId, epoch: epoch ?? '', ownerToken: randomUUID() }
-      const commit = await this.writer.write({
-        target,
-        operation: { kind: 'open' },
-        facts: { ...facts, identity }
-      })
-      // Founding assigns the physical epoch on the writer; the public cursor may be logical.
-      const founded = await this.readEpoch(identity.sessionId)
-      if (founded === null) {
-        throw new Error('opened journal has no physical epoch')
+      let epoch = await this.conversions.ensure(identity.sessionId)
+      if (epoch === null) {
+        const founded = await this.writer.maintain({
+          kind: 'import-finish',
+          header: {
+            sessionId: identity.sessionId,
+            workspaceId: identity.workspaceId,
+            epoch: randomUUID(),
+            head: {
+              lastSequence: 0,
+              highestFence: 0,
+              contextBoundary: 0,
+              lastActivityAt: 0,
+              derivedTurnItemId: null,
+              historyOrigin: null,
+              queueFailureBoundary: 0,
+              queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
+            }
+          }
+        })
+        if (typeof founded !== 'string') {
+          throw new Error('founded journal has no physical epoch')
+        }
+        epoch = founded
       }
-      return { target: { ...target, epoch: founded }, commit }
+      const first = await this.readers.domainHistory({
+        sessionId: identity.sessionId,
+        direction: 'hydrate'
+      })
+      const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
+      const cursor = first.page.liveCursor ?? first.page.window.nextCursor
+      const commit: JournalWriterCommit = {
+        cursor,
+        value: { epoch, sequence: cursor.sequence },
+        inputChanged: false,
+        items: [],
+        keys: [],
+        inputKeys: [],
+        effects: []
+      }
+      return { target, commit }
     })
   }
 
