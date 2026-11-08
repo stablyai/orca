@@ -67,18 +67,6 @@ describe('pty:spawn replacing a pane owner', () => {
     pacer.release.mockClear()
   })
 
-  function exitPayloads(id: string): Record<string, unknown>[] {
-    return mainWindow.webContents.send.mock.calls
-      .filter(([channel, payload]) => channel === 'pty:exit' && payload?.id === id)
-      .map(([, payload]) => payload)
-  }
-
-  function exitPayloads(id: string): Record<string, unknown>[] {
-    return mainWindow.webContents.send.mock.calls
-      .filter(([channel, payload]) => channel === 'pty:exit' && payload?.id === id)
-      .map(([, payload]) => payload)
-  }
-
   it("keeps a user-resume restart's old owner running until the pacer has a token", async () => {
     const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
     registerWithFakes(mainWindow, runtime, store)

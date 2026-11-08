@@ -1,10 +1,10 @@
-import './mock-descendant-sweep'
+import '../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostPressureLevel, SpawnIntent } from '../../shared/host-spawn-admission'
-import { createUserResumeSpawnPacer } from '../ipc/pty/ipc/user-resume-spawn-pacer'
-import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
-import { TerminalHost } from './terminal-host'
-import { TerminalSpawnGate } from './terminal-spawn-gate'
+import type { HostPressureLevel, SpawnIntent } from '../../../../shared/host-spawn-admission'
+import { createUserResumeSpawnPacer } from '../../../ipc/pty/ipc/user-resume-spawn-pacer'
+import { createMockSubprocess } from '../../providers/adapter/testing/daemon-pty-adapter-test-harness'
+import { TerminalHost } from '../../terminal-host/terminal-host'
+import { TerminalSpawnGate } from '../terminal-spawn-gate'
 
 const cases = [
   { name: 'fast forks', firstForkMs: 40, preparationMs: 0, otherForkMs: 0 },
