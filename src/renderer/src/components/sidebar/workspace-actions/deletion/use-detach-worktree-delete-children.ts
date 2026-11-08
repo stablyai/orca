@@ -18,6 +18,14 @@ import {
   workspaceDeleteTargetsMatch
 } from './detach-worktree-delete-children'
 
+async function runWithDetachCleanup(action: () => Promise<void>, cleanup: () => void) {
+  try {
+    await action()
+  } finally {
+    cleanup()
+  }
+}
+
 export function useDetachWorktreeDeleteChildren({
   isOpen,
   parent,
@@ -102,47 +110,50 @@ export function useDetachWorktreeDeleteChildren({
     }
     setIsDetachingChildren(true)
     setDetachError(null)
-    try {
-      const currentLineage = assertCurrentTargets(false)
-      const currentRow = captureWorkspaceDeleteRowLookup(
-        useAppStore.getState().worktreesByRepo,
-        confirmedTargets
-      )
-      await detachWorktreeDeleteChildren(
-        currentLineage.directChildren,
-        useAppStore.getState().updateWorktreeLineage,
-        (child) => {
-          const state = useAppStore.getState()
-          const current = currentRow(state.worktreesByRepo, child)
-          const currentParent = currentRow(state.worktreesByRepo, parent)
-          if (
-            !current ||
-            current.instanceId !== child.instanceId ||
-            !currentParent ||
-            currentParent.instanceId !== parent.instanceId ||
-            !canPreserveWorkspaceDeleteChildren(currentParent, [current], isFolderWorkspace)
-          ) {
-            throw changedError()
-          }
-          const edge = getWorkspaceDeleteLineageRecord(current, state.worktreeLineageById)
-          return edge && isValidResolvedWorktreeLineageEdge(current, currentParent, edge)
-            ? current
-            : null
-        },
-        () => assertCurrentTargets(true)
-      )
-      onDetached()
-    } catch (error) {
-      setDetachError(
-        t(
-          'worktree.delete.detachFailed',
-          'Could not detach all child workspaces. The parent was not deleted. {{error}}',
-          { error: error instanceof Error ? error.message : String(error) }
-        )
-      )
-    } finally {
-      setIsDetachingChildren(false)
-    }
+    await runWithDetachCleanup(
+      async () => {
+        try {
+          const currentLineage = assertCurrentTargets(false)
+          const currentRow = captureWorkspaceDeleteRowLookup(
+            selectWorktreesByRepo(useAppStore.getState()),
+            confirmedTargets
+          )
+          await detachWorktreeDeleteChildren(
+            currentLineage.directChildren,
+            useAppStore.getState().updateWorktreeLineage,
+            (child) => {
+              const state = useAppStore.getState()
+              const current = currentRow(selectWorktreesByRepo(state), child)
+              const currentParent = currentRow(selectWorktreesByRepo(state), parent)
+              if (
+                !current ||
+                current.instanceId !== child.instanceId ||
+                !currentParent ||
+                currentParent.instanceId !== parent.instanceId ||
+                !canPreserveWorkspaceDeleteChildren(currentParent, [current], isFolderWorkspace)
+              ) {
+                throw changedError()
+              }
+              const edge = getWorkspaceDeleteLineageRecord(current, state.worktreeLineageById)
+              return edge && isValidResolvedWorktreeLineageEdge(current, currentParent, edge)
+                ? current
+                : null
+            },
+            () => assertCurrentTargets(true)
+          )
+          onDetached()
+        } catch (error) {
+          setDetachError(
+            t(
+              'worktree.delete.detachFailed',
+              'Could not detach all child workspaces. The parent was not deleted. {{error}}',
+              { error: error instanceof Error ? error.message : String(error) }
+            )
+          )
+        }
+      },
+      () => setIsDetachingChildren(false)
+    )
   }
 
   return {
