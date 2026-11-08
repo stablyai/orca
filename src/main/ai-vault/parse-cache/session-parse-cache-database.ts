@@ -17,6 +17,7 @@ import {
   readScopeCwdRows,
   writeScopeCwdRows
 } from './session-scope-cwds-table'
+import { parsePersistedCheckpoint } from './session-parse-checkpoint-row'
 import { parsePersistedSidecar } from './session-sidecar-stat'
 import {
   mergeSkippedTranscriptRecords,
@@ -24,7 +25,7 @@ import {
 } from '../transcripts/session-transcript-record-budget'
 
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -37,6 +38,8 @@ CREATE TABLE IF NOT EXISTS rows(
   sidecar TEXT,
   session TEXT NOT NULL,
   skipped_records TEXT NOT NULL,
+  -- JSON envelope of the parser-owned parse checkpoint; validated by the parser on use.
+  checkpoint TEXT,
   -- Wall-clock ms the transcript was last parsed or found still on disk. Rows
   -- past an age are re-checked, which is what ends a row whose transcript was
   -- deleted outside Orca.
@@ -61,7 +64,7 @@ export class SessionParseCacheDatabase {
     return this.run((db) => {
       const row = db
         .prepare(
-          'SELECT mtime_ms, size_bytes, platform, sidecar, session, skipped_records FROM rows WHERE path = ?'
+          'SELECT mtime_ms, size_bytes, platform, sidecar, session, skipped_records, checkpoint FROM rows WHERE path = ?'
         )
         .get(path)
       if (row === undefined) {
@@ -76,7 +79,8 @@ export class SessionParseCacheDatabase {
           sidecar: typeof row.sidecar === 'string' ? JSON.parse(row.sidecar) : undefined,
           session: typeof row.session === 'string' ? JSON.parse(row.session) : undefined,
           skippedRecords:
-            typeof row.skipped_records === 'string' ? JSON.parse(row.skipped_records) : undefined
+            typeof row.skipped_records === 'string' ? JSON.parse(row.skipped_records) : undefined,
+          checkpoint: typeof row.checkpoint === 'string' ? JSON.parse(row.checkpoint) : undefined
         }
       ])
       return entry?.[1]
@@ -106,7 +110,7 @@ export class SessionParseCacheDatabase {
   ): void {
     this.run((db) => {
       const insert = db.prepare(
-        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, skipped_records, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, skipped_records, checkpoint, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -119,6 +123,9 @@ export class SessionParseCacheDatabase {
             entry.sidecar === undefined ? null : JSON.stringify(entry.sidecar),
             JSON.stringify(entry.session),
             JSON.stringify(entry.skippedRecords ?? []),
+            entry.checkpoint === undefined || entry.checkpoint === null
+              ? null
+              : JSON.stringify(entry.checkpoint),
             seenAt
           )
         }
@@ -270,6 +277,7 @@ export function parsePersistedSessionParseCacheRow(
       })
     }
   }
+  const checkpoint = parsePersistedCheckpoint(entry.checkpoint)
   return [
     path,
     {
@@ -280,7 +288,8 @@ export function parsePersistedSessionParseCacheRow(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written only from AiVaultSession values by this build or one with the same schema version; a semantics change bumps the version and drops the rows.
       session: session as AiVaultSession | null,
       skippedRecords: mergeSkippedTranscriptRecords([], skippedRecords),
-      ...(sidecar === undefined ? {} : { sidecar })
+      ...(sidecar === undefined ? {} : { sidecar }),
+      ...(checkpoint === undefined ? {} : { checkpoint })
     }
   ]
 }

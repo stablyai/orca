@@ -5,7 +5,7 @@ import { createAntigravitySessionResumeState } from '../scanners/antigravity/ses
 import { createCodexSessionResumeState } from '../scanners/codex/session-scanner-codex-parser'
 import { createDroidSessionResumeState } from '../scanners/droid/session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from '../scanners/session-scanner-graph-parsers'
-import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-primary-parsers'
+import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-claude-checkpoint'
 import { createCodebuddySessionResumeState } from '../scanners/codebuddy/session-scanner-codebuddy-parser'
 import { createGeminiJsonlSessionResumeState } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from '../scanners/copilot/session-scanner-copilot-parser'
@@ -22,6 +22,8 @@ import {
   type SessionParseCacheEntry
 } from './session-parse-cache-store'
 import type { TranscriptMessageSink } from '../transcripts/session-transcript-consumers'
+import { checkpointResumeFor, sessionParseCheckpointOf } from './session-parse-checkpoint-restore'
+import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   mergeSkippedTranscriptRecords,
@@ -40,7 +42,7 @@ import {
   type TranscriptReadStats
 } from '../transcripts/session-transcript-reader'
 
-// Resume only append-only folds; return factories so cached resumes avoid allocating throwaway state.
+/** Select append-only parser factories; rewritten formats retain whole-file reads. */
 function resumableStateFactoryFor(
   candidate: SessionFileCandidate
 ): ((messages: TranscriptMessageSink) => ResumableSessionParseState) | null {
@@ -146,6 +148,7 @@ function sessionParseCacheCoversTranscript(
   )
 }
 
+/** Keep read requirements, sidecar enrichment and checkpoint publication inside one file lane. */
 async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
@@ -198,15 +201,25 @@ async function parseCachedInLane(
   }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
+    // A runtime resume point wins; after a restart the persisted checkpoint rebuilds one.
+    const resume =
+      entry?.platform === platform
+        ? (entry.resume ??
+          (entry.checkpoint
+            ? await checkpointResumeFor(candidate, entry.checkpoint, stats, signal)
+            : null))
+        : null
     const read = await readResumableTranscript({
       candidate,
       platform,
-      resume: entry?.platform === platform ? entry.resume : null,
+      resume,
       stateFactory,
       stats,
       signal,
       sessionForConsumers
     })
+    const checkpoint = sessionParseCheckpointOf(candidate, read.resume)
+    throwIfAiVaultScanCancelled(signal)
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
       mtimeMs: file.mtimeMs,
@@ -216,7 +229,8 @@ async function parseCachedInLane(
       // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
-      resume: read.resume
+      resume: read.resume,
+      checkpoint
     })
     return enriched.session
   }
@@ -241,6 +255,8 @@ async function parseCachedInLane(
     sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
     resume: null,
+    // Whole reads replace the document; no earlier boundary may be trusted afterwards.
+    checkpoint: null,
     skippedRecords
   })
   return enriched.session

@@ -287,7 +287,7 @@ describe('session parse cache persistence', () => {
     expect(reusedStats).toMatchObject({ reused: 1, fullParses: 0, bytesRead: 0 })
   })
 
-  it('falls through to a full parse when a file changed while the app was closed', async () => {
+  it('resumes a transcript that changed while the app was closed from its persisted checkpoint', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
@@ -296,7 +296,7 @@ describe('session parse cache persistence', () => {
     await flushSessionParseCachePersist()
 
     simulateRestart(cacheFile)
-    // Restored rows lack incremental state; changed transcripts need a full parse.
+    // The persisted checkpoint rebuilds the fold for a grown transcript (#39227).
     await appendFile(transcript, `${userRecord(2, 'follow-up')}\n${assistantRecord(3, 'more')}\n`)
     const stats = createSessionParseStats()
     const reparsed = await parseAgentSessionFileCached(
@@ -304,7 +304,7 @@ describe('session parse cache persistence', () => {
       process.platform,
       stats
     )
-    expect(stats).toMatchObject({ fullParses: 1, incremental: 0, reused: 0 })
+    expect(stats).toMatchObject({ fullParses: 0, incremental: 1, reused: 0 })
     expect(reparsed).toEqual(await parseClaudeSessionFile((await claudeCandidate(transcript)).file))
   })
 
