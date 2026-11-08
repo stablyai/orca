@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MobileAutomation } from './automation-reply-schema'
-import { newAutomationDraft, type AutomationDraft } from './automation-draft'
+import { automationDraftEdits, newAutomationDraft, type AutomationDraft } from './automation-draft'
 import {
-  automationDraftEdits,
   discardAutomationEditorDraft,
   laySavedEdits,
   readAutomationEditorDraft,

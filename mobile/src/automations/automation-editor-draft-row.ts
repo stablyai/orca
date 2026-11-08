@@ -6,7 +6,7 @@ import {
   resetDurableDraftRowsForTests,
   type DurableDraftRow
 } from '../drafts/durable-draft-rows'
-import { automationDraftChanged, type AutomationDraft } from './automation-draft'
+import type { AutomationDraft } from './automation-draft'
 
 // Only the fields the user changed are kept, so a field edited elsewhere since then is not reverted.
 export type AutomationDraftEdits = Partial<AutomationDraft>
@@ -31,7 +31,7 @@ const editsSchema = z
     precheckCommand: z.string(),
     precheckTimeout: z.string(),
     grace: z.string()
-  })
+  } satisfies Record<keyof AutomationDraft, z.ZodType>)
   .partial()
 
 type Slot = {
@@ -52,19 +52,6 @@ export function automationEditorDraftKey(executionHost?: string, automationId?: 
     'automation',
     '',
     `${executionHost ?? 'paired'}:${automationId ?? 'new'}`
-  )
-}
-
-export function automationDraftEdits(
-  original: AutomationDraft,
-  draft: AutomationDraft
-): AutomationDraftEdits | null {
-  if (!automationDraftChanged(original, draft)) {
-    return null
-  }
-  const before = new Map(Object.entries(original))
-  return Object.fromEntries(
-    Object.entries(draft).filter(([key, value]) => value !== before.get(key))
   )
 }
 

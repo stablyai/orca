@@ -9,7 +9,10 @@ import { automationUpdateParams } from './automation-draft'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetAutomationEditorDraftsForTests } from './automation-editor-draft-row'
+import {
+  automationEditorDraftKey,
+  resetAutomationEditorDraftsForTests
+} from './automation-editor-draft-row'
 import { AutomationManager } from './AutomationManager'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationRunDetails } from './AutomationRunDetails'
@@ -243,7 +246,7 @@ describe('mobile automation navigation and setup', () => {
           capabilities: [],
           onCancel: vi.fn(),
           onDraftChange: vi.fn(),
-          draftKey: 'draft:automation::paired:editor',
+          draftKey: automationEditorDraftKey(),
           onSave: save
         })
       )
@@ -345,7 +348,7 @@ describe('mobile automation navigation and setup', () => {
             capabilities: [],
             onCancel: vi.fn(),
             onDraftChange: vi.fn(),
-            draftKey: 'draft:automation::paired:editor',
+            draftKey: automationEditorDraftKey(),
             onSave: vi.fn()
           })
         )
@@ -423,7 +426,7 @@ describe('mobile automation navigation and setup', () => {
       capabilities: [],
       onCancel: vi.fn(),
       onDraftChange: vi.fn(),
-      draftKey: 'draft:automation::paired:editor',
+      draftKey: automationEditorDraftKey(),
       onSave: vi.fn()
     }
     await act(async () => {
@@ -580,7 +583,7 @@ describe('mobile automation navigation and setup', () => {
         capabilities: [],
         onCancel: vi.fn(),
         onDraftChange: vi.fn(),
-        draftKey: 'draft:automation::paired:editor',
+        draftKey: automationEditorDraftKey(),
         onSave
       }
       await act(async () => {
