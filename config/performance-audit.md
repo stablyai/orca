@@ -56,9 +56,9 @@ avoid new machine-dependent millisecond gates in the normal unit suite. A green
 source scan and these contracts cannot establish that the whole app is fast.
 
 Two count ratchets (counts per file may only fall) cover classes the audit only warns about:
-`pnpm check:main-sync-fs-ratchet` counts synchronous `node:fs` calls in production `src/main`
+`pnpm check:main-sync-fs-ratchet` counts synchronous `node:fs` calls (every `*Sync` export) in production `src/main` and `src/shared`
 (`config/main-sync-fs-baseline.txt`), and `pnpm check:recurring-timer-ratchet` counts `setInterval`
 calls in production `src/main`, `src/renderer`, `src/shared` and `src/cli`
-(`config/recurring-timer-baseline.txt`). Both run in `check:ratchets` on every PR. A new use either
+(`config/recurring-timer-baseline.txt`). Both run in `check:ratchets` on every non-draft PR that runs static analysis. A new use either
 moves off the hot path (async fs or a stat-fingerprint cache; a push signal, a visibility-gated or
 backing-off timer) or raises its file's count with reviewer sign-off.

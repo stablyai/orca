@@ -1,4 +1,5 @@
-# setInterval calls in production src/main, src/renderer, src/shared and src/cli, per file.
+# setInterval calls (global, or imported from node:timers / node:timers/promises) in production src/main,
+# src/renderer, src/shared and src/cli, per file. A self-rescheduling setTimeout is not counted; it must back off or pause while hidden.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
 1 src/cli/handlers/orchestration/check-keepalive.ts

@@ -35,7 +35,7 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-sync-fs-ratchet.mjs': ['src/main/'],
+  'check-main-sync-fs-ratchet.mjs': ['src/main/', 'src/shared/'],
   'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
