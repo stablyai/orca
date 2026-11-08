@@ -15,8 +15,15 @@ export type MetricEvent =
   | 'db_op'
   // Object backend daily sweep: label 'swept' | 'wiped'.
   | 'sweep'
-  // Director admin calls: label '<op>:<outcome or status>'.
+  // Director admin calls: label '<op>:<outcome or status>' ('<op>:replay' for a reused jti).
   | 'admin'
+  // Admin call accepted from a token without a jti (transitional, admin.ts): label '<op>'.
+  | 'admin_no_jti'
+  // Host auth-refresh frame: label 'extended' | 'unchanged' | 'invalid' | 'identity_changed'.
+  | 'auth_refresh'
+  // Control closed 4401 for expired authorization: value = seconds since its last extending
+  // refresh, label 'refreshed'; -1 and label 'never' when this socket never extended its token.
+  | 'auth_expired_close'
   // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'
