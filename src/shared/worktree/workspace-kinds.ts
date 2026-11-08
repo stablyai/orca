@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../repo-kind'
-import type { Repo } from '../repo-types'
+import type { DefaultBranchWorkspaceVisibility, Repo } from '../repo-types'
 import type { RuntimeWorktreePsSummary } from '../runtime-worktree-contracts'
 import { getWorktreeGitIdentityDisplay } from './git-identity-display'
 import type { Worktree } from './types'
@@ -64,12 +64,31 @@ export const WORKSPACE_KIND_SWITCH = {
 
 export type WorkspaceKindSwitches = Record<(typeof WORKSPACE_KIND_SWITCH)[WorkspaceKind], boolean>
 
-/** Query only kinds whose hiding switch is on. */
+export type DefaultBranchOverride = 'show' | 'hide' | null
+
+/** A project's show/hide choice for its default-branch row; null leaves the sidebar switch in charge. */
+export function resolveDefaultBranchOverride(
+  visibility: DefaultBranchWorkspaceVisibility | undefined,
+  isDefaultBranch: () => boolean
+): DefaultBranchOverride {
+  return (visibility === 'show' || visibility === 'hide') && isDefaultBranch() ? visibility : null
+}
+
+/** Query only kinds whose hiding switch is on; a project override replaces the default-branch switch. */
 export function isHiddenByKindSwitch(
   switches: WorkspaceKindSwitches,
-  isKind: (kind: WorkspaceKind) => boolean
+  isKind: (kind: WorkspaceKind) => boolean,
+  defaultBranchOverride: DefaultBranchOverride = null
 ): boolean {
-  return WORKSPACE_KINDS.some((kind) => switches[WORKSPACE_KIND_SWITCH[kind]] && isKind(kind))
+  if (defaultBranchOverride === 'hide') {
+    return true
+  }
+  return WORKSPACE_KINDS.some(
+    (kind) =>
+      !(kind === 'defaultBranch' && defaultBranchOverride === 'show') &&
+      switches[WORKSPACE_KIND_SWITCH[kind]] &&
+      isKind(kind)
+  )
 }
 
 const KIND_PREDICATES: Record<
@@ -84,10 +103,16 @@ const KIND_PREDICATES: Record<
 
 export function isHiddenByWorkspaceKindSwitch(
   worktree: WorkspaceKindFields,
-  repo: Pick<Repo, 'kind'> | undefined,
+  repo: Pick<Repo, 'kind' | 'defaultBranchWorkspaceVisibility'> | undefined,
   switches: WorkspaceKindSwitches
 ): boolean {
-  return isHiddenByKindSwitch(switches, (kind) => KIND_PREDICATES[kind](worktree, repo))
+  return isHiddenByKindSwitch(
+    switches,
+    (kind) => KIND_PREDICATES[kind](worktree, repo),
+    resolveDefaultBranchOverride(repo?.defaultBranchWorkspaceVisibility, () =>
+      isDefaultBranchWorkspace(worktree, repo)
+    )
+  )
 }
 
 /** What a host stamps on each worktree.ps row, so a phone's filters match this host's sidebar. */

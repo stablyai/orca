@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import { sanitizeDefaultBranchWorkspaceVisibility, type Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
@@ -56,6 +56,13 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     sanitized.forkSyncMode !== 'off'
   ) {
     delete sanitized.forkSyncMode
+  }
+  if (
+    'defaultBranchWorkspaceVisibility' in sanitized &&
+    sanitizeDefaultBranchWorkspaceVisibility(sanitized.defaultBranchWorkspaceVisibility) ===
+      undefined
+  ) {
+    delete sanitized.defaultBranchWorkspaceVisibility
   }
   if (
     'agentWorkspaceTrust' in sanitized &&

@@ -1,5 +1,5 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import { sanitizeDefaultBranchWorkspaceVisibility, type Repo } from '../../../shared/repo-types'
 import { editorFormatterSchema } from '../../../shared/editor-formatter'
 import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
@@ -78,6 +78,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'defaultBranchWorkspaceVisibility'
       | 'agentWorkspaceTrust'
       | 'defaultJiraProject'
       | 'customWorktreeVisibilitySources'
@@ -153,6 +154,16 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  if ('defaultBranchWorkspaceVisibility' in sanitized) {
+    const visibility = sanitizeDefaultBranchWorkspaceVisibility(
+      sanitized.defaultBranchWorkspaceVisibility
+    )
+    if (visibility === undefined) {
+      delete sanitized.defaultBranchWorkspaceVisibility
+    } else {
+      sanitized.defaultBranchWorkspaceVisibility = visibility
     }
   }
   if ('agentWorkspaceTrust' in sanitized) {

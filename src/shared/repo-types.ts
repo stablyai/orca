@@ -17,6 +17,14 @@ export type RepoKind = 'git' | 'folder'
  * Explicit upstream falls back to origin with a toast if that remote vanishes. */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
+/** Per-project override of the sidebar's "Hide default branch" filter; absent means follow. */
+export type DefaultBranchWorkspaceVisibility = 'follow' | 'show' | 'hide'
+
+export function sanitizeDefaultBranchWorkspaceVisibility(
+  value: unknown
+): DefaultBranchWorkspaceVisibility | undefined {
+  return value === 'follow' || value === 'show' || value === 'hide' ? value : undefined
+}
 
 export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd'
 
@@ -73,6 +81,7 @@ export type Repo = {
   agentWorkspaceTrust?: AgentWorkspaceTrustDecision
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
   gitRemoteIdentity?: GitRemoteIdentity | null
+  defaultBranchWorkspaceVisibility?: DefaultBranchWorkspaceVisibility
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */

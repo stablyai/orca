@@ -66,6 +66,7 @@ export type RepositoryApi = {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'forkSyncMode'
+        | 'defaultBranchWorkspaceVisibility'
         | 'agentWorkspaceTrust'
       >
     > & {

@@ -87,6 +87,10 @@ export function buildRuntimeWorktreePsSummaries(args: {
       isMainWorktree: worktree.isMainWorktree,
       hasHostSidebarActivity: false,
       ...getWorkspaceRowKindFacts(worktree, repo),
+      ...(repo?.defaultBranchWorkspaceVisibility === 'show' ||
+      repo?.defaultBranchWorkspaceVisibility === 'hide'
+        ? { defaultBranchVisibility: repo.defaultBranchWorkspaceVisibility }
+        : {}),
       ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
       ...(worktree.instanceId !== undefined ? { worktreeInstanceId: worktree.instanceId } : {}),
       ...(lineage?.worktreeInstanceId !== undefined

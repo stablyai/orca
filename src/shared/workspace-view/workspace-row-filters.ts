@@ -1,7 +1,9 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { DefaultBranchWorkspaceVisibility } from '../repo-types'
 import {
   isHiddenByKindSwitch,
+  resolveDefaultBranchOverride,
   type WorkspaceKind,
   type WorkspaceKindSwitches
 } from '../worktree/workspace-kinds'
@@ -63,6 +65,8 @@ export type WorkspaceRowFactReader<Row> = {
   isDetachedHead: (row: Row) => boolean
   isMainWorktree: (row: Row) => boolean
   isSleeping: (row: Row) => boolean
+  /** The row's project override of the default-branch filter; absent follows the sidebar filter. */
+  defaultBranchVisibility?: (row: Row) => DefaultBranchWorkspaceVisibility | undefined
 }
 
 /** Exempt the main checkout from sleeping sweeps, including detached/offline mains that may be a project’s only entry point (#8873). */
@@ -106,7 +110,10 @@ function buildWorkspaceRowPredicate<Row>(
     if (read.isFolderWorkspace(row)) {
       return true
     }
-    if (isHiddenByKindSwitch(filters, (kind) => KIND_READERS[kind](read, row))) {
+    const projectOverride = resolveDefaultBranchOverride(read.defaultBranchVisibility?.(row), () =>
+      read.isDefaultBranch(row)
+    )
+    if (isHiddenByKindSwitch(filters, (kind) => KIND_READERS[kind](read, row), projectOverride)) {
       return false
     }
     if (repoIds && !repoIds.has(read.repoId(row))) {
@@ -115,6 +122,7 @@ function buildWorkspaceRowPredicate<Row>(
     // Explicit hides still win; the exemption covers only the sleeping sweep.
     return (
       !filters.hideSleepingWorkspaces ||
+      projectOverride === 'show' ||
       isSleepingSweepExempt(read.isMainWorktree(row), filters.alwaysShowDefaultBranchWorkspace) ||
       !read.isSleeping(row)
     )

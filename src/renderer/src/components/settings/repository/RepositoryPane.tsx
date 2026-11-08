@@ -25,6 +25,7 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './execution/RepositoryForkSyncSection'
+import { RepositoryDefaultBranchVisibilitySection } from './RepositoryDefaultBranchVisibilitySection'
 import {
   getRepositoryAgentTrustSearchEntry,
   RepositoryAgentTrustSection
@@ -370,6 +371,12 @@ export function RepositoryPane({
                   requireAuthoritative: true
                 })
               }
+              forceVisible={forceFullPaneForRepoMatch}
+            />
+
+            <RepositoryDefaultBranchVisibilitySection
+              repo={repo}
+              updateRepo={updateSelectedRepo}
               forceVisible={forceFullPaneForRepoMatch}
             />
           </>

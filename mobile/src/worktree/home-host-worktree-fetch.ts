@@ -8,7 +8,7 @@ import {
 } from './home-worktree-info'
 import { selectHomeAttentionWorktrees } from './home-jump-back-in'
 import { pickResumeWorktree } from './resume-worktree'
-import { isWorktreeActive } from './workspace-list-sections'
+import { isWorktreeActive } from './phone-workspace-row-facts'
 import { WorktreeCatalogSnapshotClient } from './worktree-catalog-snapshot-client'
 
 // Cutover may stay connected, so retry reads without waiting for the connect gate; cap migration-loop retries.

@@ -138,6 +138,8 @@ export type RuntimeWorktreePsSummary = {
   /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.
    * Older hosts omit these facts. */
   defaultBranch?: boolean
+  /** The project's override of the "Hide default branch" filter; omitted when it follows the filter. */
+  defaultBranchVisibility?: 'show' | 'hide'
   automationCreated?: true
   /** The automation's name when it made the row; older hosts send only `automationCreated`. */
   automationName?: string
