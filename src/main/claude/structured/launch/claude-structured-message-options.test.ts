@@ -1,4 +1,4 @@
-import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquired,
@@ -11,6 +11,7 @@ import {
 } from '../claude-structured-session-test-support'
 import * as dispatchContent from '../claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'
+import { claudeStructuredPermissionOptions } from './claude-structured-launch-resolution'
 
 /** Claude ends a turn; a message sent before this joins the running turn on its choices. */
 const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
@@ -292,4 +293,42 @@ describe('Claude accepted message choices', () => {
       await adapter.closeAll()
     }
   })
+})
+
+it('applies explicit planning at fresh turns, preserves startup permission fallback, and leaves steers alone', async () => {
+  const claude = fakeClaude({ initPermissionMode: 'default' })
+  const adapter = await acquired(claude, {
+    options: claudeStructuredPermissionOptions('full-access')
+  })
+  const connection = claude.connections[0]!
+  claudeFrame(connection, {
+    type: 'system',
+    subtype: 'init',
+    model: 'claude-opus-5-5',
+    permissionMode: 'default'
+  })
+  const setMode = vi.spyOn(connection, 'setPermissionMode').mockResolvedValue(undefined)
+  const send = (id: string, mode?: 'plan' | 'default') =>
+    adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: id,
+      body: USER_MESSAGE,
+      fence: 7,
+      executionOptions: mode ? { interactionMode: mode } : {}
+    })
+  await send('own')
+  expect(setMode).not.toHaveBeenCalled()
+  claudeTurnEnds(connection)
+  await send('plan', 'plan')
+  expect(setMode).toHaveBeenLastCalledWith('plan', { timeoutMs: undefined })
+  await send('steer', 'default')
+  expect(setMode).toHaveBeenCalledTimes(1)
+  claudeTurnEnds(connection)
+  await send('build', 'default')
+  expect(setMode).toHaveBeenLastCalledWith('default', { timeoutMs: undefined })
+  claudeTurnEnds(connection)
+  claudeFrame(connection, { type: 'system', subtype: 'status', permissionMode: 'plan' })
+  await send('build-again', 'default')
+  expect(setMode).toHaveBeenCalledTimes(3)
+  await adapter.closeAll()
 })

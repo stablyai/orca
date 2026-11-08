@@ -14,7 +14,7 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
 
 export { clearNativeChatTranscriptCache }

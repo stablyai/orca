@@ -1,4 +1,4 @@
-import type { FileDocument } from '../../../shared/filesystem-entry-types'
+import type { FileDocument } from '../../../shared/file-listing/file-document'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
 import { detectLanguage } from './language-detect'

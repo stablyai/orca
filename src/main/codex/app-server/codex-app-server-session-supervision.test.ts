@@ -44,14 +44,14 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     const readPids = rig.readPids
     const reported: { pids?: { provider: number; grandchild: number } } = {}
     // Let PID discovery fail before the session deadline if a slow host never arms the stand-in.
-    const startBudgetMs = 8_000
+    const startBudgetMs = 5_000
     const session = runCodexAppServerSession(
       {
         command: standIn,
         cliPath: null,
         args: ['app-server'],
         env: rig.env,
-        timeoutMs: startBudgetMs + 2_000
+        timeoutMs: startBudgetMs + 1_000
       },
       async () => {
         reported.pids = await readPids(startBudgetMs)

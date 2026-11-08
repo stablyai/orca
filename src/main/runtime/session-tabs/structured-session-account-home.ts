@@ -2,6 +2,8 @@ import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/
 import { agentSessionPinnedLaunchDirectory } from '../agent-session/records/agent-session-record-launch-directory'
 import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../agent-session/launch/structured-agent-launch-support'
+import { agentWorkspaceTrustDecisionForWorkspace } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -18,12 +20,13 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     if (!registration) {
       return null
     }
-    return async ({ launchEnv, location }) =>
+    return async ({ launchEnv, location }, permissionMode?: string) =>
       registration.resolveAccountHome(
         {
           launchEnv,
           location: location ?? null,
           purpose,
+          ...(permissionMode ? { permissionMode } : {}),
           workspacePath:
             purpose === 'launch'
               ? async () =>
@@ -36,8 +39,18 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
           readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
           workspaceTrustSettings: () => this.requireStore().getSettings(),
+          workspaceTrustRepoDecision: (launchLocation) =>
+            launchLocation?.workspaceKind === 'folder'
+              ? undefined
+              : agentWorkspaceTrustDecisionForWorkspace(
+                  launchLocation?.workspaceId,
+                  this.requireStore()
+                ),
           // The chat host's own state root (ensureStructuredAgentSessionHost).
-          stateDirectory: getProfileUserDataPath()
+          stateDirectory: getProfileUserDataPath(),
+          hostLaunchEnvironment: (agent) =>
+            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
+          hostSettings: () => this.requireStore().getSettings()
         }
       )
   }

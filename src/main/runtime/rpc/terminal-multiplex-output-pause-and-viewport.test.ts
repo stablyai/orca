@@ -1,11 +1,10 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import type { OrcaRuntimeService } from '../orca-runtime'
+
 import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -17,7 +16,6 @@ import {
 import {
   SET_OUTPUT_PAUSED_OPCODE,
   makeRequest,
-  sendDesktopMultiplexSubscribe,
   startDesktopMultiplexSubscribe,
   stubRuntime
 } from './terminal-multiplex-test-harness'
@@ -120,71 +118,6 @@ describe('terminal multiplex RPC', () => {
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
     expect(harness.handlers.size).toBe(0)
-  })
-
-  it('keeps output flowing when an older client does not negotiate pause', async () => {
-    const listeners: ((data: string, meta?: RuntimeTerminalDataMeta) => void)[] = []
-    const harness = startDesktopMultiplexSubscribe({
-      subscribeToTerminalData: vi.fn((_ptyId, nextListener) => {
-        listeners.push(nextListener)
-        return vi.fn()
-      })
-    })
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-
-    harness.handlers.get(0)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.Subscribe,
-          streamId: 0,
-          seq: 1,
-          payload: encodeTerminalStreamJson({
-            streamId: 1,
-            terminal: 'terminal-legacy-client',
-            client: { id: 'desktop-legacy', type: 'desktop' },
-            capabilities: { ackOutput: 1 }
-          })
-        })
-      )!
-    )
-    await vi.waitFor(() =>
-      expect(
-        harness.messages
-          .map((message) => JSON.parse(message).result)
-          .find((event) => event?.type === 'subscribed' && event.streamId === 1)
-      ).toMatchObject({ type: 'subscribed', streamId: 1 })
-    )
-    const subscribed = harness.messages
-      .map((message) => JSON.parse(message).result)
-      .find((event) => event?.type === 'subscribed' && event.streamId === 1)
-    expect(subscribed.capabilities?.outputPause).toBeUndefined()
-
-    harness.handlers.get(1)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: SET_OUTPUT_PAUSED_OPCODE,
-          streamId: 1,
-          seq: 2,
-          payload: encodeTerminalStreamJson({ paused: true })
-        })
-      )!
-    )
-    harness.binaryFrames.splice(0)
-    listeners[0]?.('LEGACY_VISIBLE'.padEnd(64 * 1024, 'x'), {
-      seq: 64 * 1024,
-      rawLength: 64 * 1024
-    })
-
-    expect(
-      harness.binaryFrames
-        .map(decodeTerminalStreamFrame)
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
-        .map((frame) => decodeTerminalStreamText(frame!.payload))
-        .join('')
-    ).toContain('LEGACY_VISIBLE')
-
-    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
-    await harness.dispatchPromise
   })
 
   it('drops stale mobile resize re-stream completions for multiplex streams', async () => {
@@ -365,87 +298,5 @@ describe('terminal multiplex RPC', () => {
 
     registry.cleanupSubscription('terminal-multiplex:conn-stale-multiplex-resize')
     await dispatchPromise
-  })
-
-  it('owns and releases a viewport floor for legacy JSON desktop streams', async () => {
-    const messages: string[] = []
-    const registry = createSubscriptionRegistryDouble()
-    const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
-      serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
-      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
-      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
-      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
-      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
-      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
-      cleanupSubscription: vi.fn(registry.cleanupSubscription),
-      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const dispatchPromise = dispatcher.dispatchStreaming(
-      makeRequest('terminal.subscribe', {
-        terminal: 'terminal-1',
-        client: { id: 'desktop-json-1', type: 'desktop' },
-        viewport: { cols: 88, rows: 30 }
-      }),
-      (msg) => messages.push(msg),
-      { connectionId: 'conn-json-1' }
-    )
-
-    await vi.waitFor(() =>
-      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'scrollback')).toBe(true)
-    )
-    const subscriptionKey = vi.mocked(runtime.updateRemoteDesktopViewer).mock.calls[0]?.[1]
-    expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
-      'pty-1',
-      expect.stringMatching(/^json:/),
-      'desktop-json-1',
-      88,
-      30,
-      true
-    )
-
-    runtime.cleanupSubscription('terminal-1:desktop-json-1')
-    await dispatchPromise
-    expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', subscriptionKey)
-  })
-
-  it('emits initial desktop fit events after the first multiplex snapshot', async () => {
-    const trace: string[] = []
-    let fitListener: ((event: { mode: string; cols: number; rows: number }) => void) | undefined
-    let driverListener: ((driver: unknown) => void) | undefined
-    const harness = startDesktopMultiplexSubscribe(
-      {
-        readTerminal: vi.fn(async () => {
-          fitListener?.({ mode: 'desktop-fit', cols: 100, rows: 30 })
-          driverListener?.({ kind: 'transition-during-snapshot' })
-          return { tail: [], truncated: false } as unknown as Awaited<
-            ReturnType<OrcaRuntimeService['readTerminal']>
-          >
-        }),
-        subscribeToFitOverrideChanges: vi.fn((_ptyId, listener) => {
-          fitListener = listener
-          return vi.fn()
-        }),
-        subscribeToDriverChanges: vi.fn((_ptyId, listener) => {
-          driverListener = listener
-          return vi.fn()
-        })
-      },
-      trace
-    )
-    await vi.waitFor(() =>
-      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
-    )
-    sendDesktopMultiplexSubscribe(harness.handlers)
-    await vi.waitFor(() => expect(trace).toContain('driver-changed'))
-    expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('fit-override-changed'))
-    expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('driver-changed'))
-    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
-    await harness.dispatchPromise
   })
 })

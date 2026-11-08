@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { byteLabel } from './skill-share-preview-summary'
 import {
   checklistItemSummary,
@@ -12,14 +12,15 @@ import {
 import { isSkillBinaryFile, isSkillRunnableFile } from './skill-package-install-risk'
 
 function FileRow({ file }: { file: SkillChecklistFile }): React.JSX.Element {
+  const t = useTranslate()
   const binary = isSkillBinaryFile(file)
   const runnable = isSkillRunnableFile(file)
   const tags = [
-    binary ? translate('auto.components.skills.install.fileBinary', 'binary') : null,
+    binary ? t('auto.components.skills.install.fileBinary', 'binary') : null,
     runnable
       ? file.executable
-        ? translate('auto.components.skills.share.fileExecutable', 'executable')
-        : translate('auto.components.skills.install.fileRunnable', 'runnable')
+        ? t('auto.components.skills.share.fileExecutable', 'executable')
+        : t('auto.components.skills.install.fileRunnable', 'runnable')
       : null
   ].filter(Boolean)
   return (
@@ -48,10 +49,10 @@ function ChecklistRow({
   busy: boolean
   onSelectedChange?: (selected: boolean) => void
 }): React.JSX.Element {
-  const summary = checklistItemSummary(item.files)
+  const t = useTranslate()
+  const summary = checklistItemSummary(item.files, t)
   const description =
-    item.description ||
-    translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')
+    item.description || t('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')
   return (
     <li>
       {/* Unclamp the existing description on expansion instead of repeating it elsewhere. */}

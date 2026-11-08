@@ -2,12 +2,15 @@
 
 import type { Tab } from '../../../../../../shared/tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   expectContentRekey,
   framesShowTabRekeys,
   type TabRekey
-} from '@/runtime/layout-owner-content-rekeys'
+} from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import type { AppState } from '../../../types'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { OpenFile } from '../types/open-file'
@@ -15,11 +18,11 @@ import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
 } from '../types/restored-editor-owner'
-import { resolveRestoredEditorOwnerDestination } from '../actions/restored-editor-owner-destination'
+import { resolveRestoredEditorOwnerDestination } from '../hydration/restored-editor-owner-destination'
 import {
   buildRestoredEditorOwnerTransition,
   restoredEditorTargetGroupId
-} from '../actions/restored-editor-owner-transition'
+} from '../hydration/restored-editor-owner-transition'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
 

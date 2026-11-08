@@ -1,5 +1,5 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
@@ -11,7 +11,7 @@ import {
   useTeamMembers,
   useImmediateMutation
 } from '@/hooks/useIssueMetadata'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { formatLinearEstimateInput } from '@/components/linear-item-drawer-edit-controls'
 import type { LinearIssueEditSectionProps } from '@/components/linear-item-drawer-types'

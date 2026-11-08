@@ -1,19 +1,19 @@
-import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
-import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
+import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
 import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+} from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { applyNativeChatLaunchDraftResolved } from '../native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
@@ -34,7 +34,7 @@ import {
   findRegisteredTerminalTab,
   getMountedTerminalTabRegisteredAt,
   mountedTerminalTabEntries
-} from '../mounted-terminal-tab-registry'
+} from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'

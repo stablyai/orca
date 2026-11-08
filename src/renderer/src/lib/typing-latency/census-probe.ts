@@ -61,4 +61,4 @@ export function countMountedAgentRows(): number | null {
   }
 }
 
-export { readStoreListenerCount } from '@/store/store-listener-census'
+export { readStoreListenerCount } from '@/store/diagnostics/store-listener-census'

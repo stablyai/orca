@@ -33,6 +33,10 @@ The categories of behavior we observe:
 
 Fields include fixed enum values, version strings, numeric counts and revisions, and random local IDs. Conversation IDs allow repeated token summaries for the same conversation to be associated; they are pseudonymous. Plugin names are the public identifiers their catalog lists. No free-form strings from any UI input ever leave your machine.
 
+## Delivery and accuracy
+
+Remote structured-chat agent-start events are delivered on a best-effort basis to the originating desktop while it is connected. Events are not retained or replayed after reconnect. This can undercount remote usage; these events do not provide a complete record of agent starts.
+
 ## What we never send
 
 - No file paths, repo names, branch names, URLs, commit messages, or current working directory.

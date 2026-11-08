@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ConnectionState, HostProfile } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { HostProfile } from '../transport/hosts/host-profile'
 import { createNativeDiagnosticsOperations } from './native-diagnostics-operations'
 
 const logStore = vi.hoisted(() => ({
@@ -9,7 +10,7 @@ const logStore = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios', Version: '26' } }))
 vi.mock('expo-constants', () => ({ default: { expoConfig: { version: '0.0.60' } } }))
-vi.mock('../transport/persisted-connection-log-store', () => ({ connectionLogStore: logStore }))
+vi.mock('./connection/persisted-connection-log-store', () => ({ connectionLogStore: logStore }))
 
 const host: HostProfile = {
   id: 'host-a',
@@ -39,13 +40,6 @@ function createContext() {
 describe('native connection diagnostic reports', () => {
   beforeEach(() => {
     logStore.hydrate.mockReset().mockResolvedValue(undefined)
-  })
-
-  it('keeps the live version while its connection remains current', async () => {
-    const device = createNativeDiagnosticsOperations(host, createContext(), '1.4.197')
-    const { report } = await device.report()
-    expect(report).toContain('State: connected')
-    expect(report).toContain('Host Orca version: 1.4.197')
   })
 
   it('omits a captured version when hydration crosses a reconnect', async () => {

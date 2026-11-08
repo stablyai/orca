@@ -78,12 +78,12 @@ vi.mock('@/store/index', () => ({
       fetchInactiveClaudeAccountUsage: fake.write
     })
 }))
-vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityAccounts: vi.fn(),
   callAntigravityChatSignIn: vi.fn(),
   subscribeAntigravityChatSignIn: vi.fn()
 }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => {
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => {
   const empty = () => ({
     accounts: [],
     activeAccountId: null,
@@ -141,7 +141,7 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
 vi.mock('@/lib/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn(async () => 'no-running-sessions')
 }))
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({ target: { kind: 'local' }, wslHostDistro: null })
 }))
 vi.mock('@/lib/windows-terminal-capabilities', () => ({

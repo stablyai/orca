@@ -220,7 +220,8 @@ export async function getWorkItemDetails(
           ? getPRComments(
               repoPath,
               item.number,
-              { prRepo: resolvedRepository },
+              // An explicit refresh must not join or reuse a read that started before it.
+              { prRepo: resolvedRepository, noCache: canonical },
               connectionId,
               ...localGitOptionArgs(localGitOptions)
             )

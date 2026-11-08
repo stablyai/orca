@@ -19,7 +19,7 @@ describe('openRemoteRuntimeWebSocket', () => {
       {
         onClose: vi.fn(),
         onError: vi.fn(),
-        onTextFrame: vi.fn()
+        onFrame: vi.fn()
       }
     )
     if (!opened.ok) {
@@ -52,7 +52,7 @@ describe('openRemoteRuntimeWebSocket', () => {
     const address = server.address()
     const port = typeof address === 'object' && address ? address.port : 0
     const onError = vi.fn()
-    const onBinaryFrame = vi.fn()
+    const onFrame = vi.fn()
     const closed = new Promise<void>((resolve) => {
       const opened = openRemoteRuntimeWebSocket(
         pairedRuntimeConnectionFromOffer({
@@ -64,8 +64,7 @@ describe('openRemoteRuntimeWebSocket', () => {
         {
           onClose: () => resolve(),
           onError,
-          onTextFrame: vi.fn(),
-          onBinaryFrame
+          onFrame
         }
       )
       if (!opened.ok) {
@@ -75,7 +74,7 @@ describe('openRemoteRuntimeWebSocket', () => {
     try {
       await closed
       expect(onError).toHaveBeenCalledOnce()
-      expect(onBinaryFrame).not.toHaveBeenCalled()
+      expect(onFrame).not.toHaveBeenCalled()
     } finally {
       await new Promise((resolve) => server.close(resolve))
     }

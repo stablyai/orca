@@ -6,9 +6,9 @@ import {
   type RemovedWorkEntry,
   type ResetRemovedWork,
   type RunRemovedWork
-} from '../../../../../shared/orchestration-removed-work'
+} from '../../../../../shared/orchestration/orchestration-removed-work'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../federation/remote-attachment-liveness'
-import { DURABLE_EXIT_PROOF } from '../../../../../shared/orchestration-fleet-worker-projection'
+import { DURABLE_EXIT_PROOF } from '../../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeUtcTimestamp } from '../utc-timestamp'
 

@@ -1,5 +1,9 @@
-import type { AppState } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -8,7 +12,6 @@ import {
 } from '../../../../shared/execution-host'
 import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/desktop-sidebar-facts'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type WindowFactsState = Pick<
   AppState,
@@ -26,7 +29,7 @@ type WindowFactsState = Pick<
 /** The same facts from the window's own store, in main's shape, for the rows the local runtime owns. */
 export function readWindowDesktopSidebarFacts(state: WindowFactsState): DesktopSidebarFacts {
   const pinned = [
-    ...getAllWorktreesFromState(state)
+    ...getIndexedAllWorktrees(selectWorktreesByRepo(state))
       .filter((worktree) => worktree.isPinned)
       .map((worktree) => worktree.id),
     ...selectFolderWorkspaces(state)

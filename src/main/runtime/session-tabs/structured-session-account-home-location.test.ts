@@ -9,7 +9,8 @@ import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecyc
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 
-vi.mock('../../agent-launch/trust/agent-workspace-trust-spawn', () => ({
+vi.mock(import('../../agent-launch/trust/agent-workspace-trust-spawn'), async (importOriginal) => ({
+  ...(await importOriginal()),
   applyStructuredCodexWorkspaceTrust: vi.fn(async () => {})
 }))
 vi.mock('./structured-session-cli-writer-host', () => ({

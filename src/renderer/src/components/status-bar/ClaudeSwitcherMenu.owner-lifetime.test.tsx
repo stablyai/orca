@@ -4,11 +4,16 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { accountHost, accountTransport } from '@/runtime/provider-account-observation.test-fixture'
+import {
+  accountHost,
+  accountTransport
+} from '@/runtime/provider-accounts/observations/provider-account-observation.test-fixture'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('@/lib/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn()
 }))

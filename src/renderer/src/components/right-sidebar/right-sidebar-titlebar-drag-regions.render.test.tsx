@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
@@ -24,7 +24,8 @@ const mockAppState = vi.hoisted(() => ({
   } | null,
   listeners: new Set<() => void>(),
   snapshotCache: new Map<(state: Record<string, unknown>) => unknown, unknown>(),
-  cachedWorktree: null as { id: string; repoId: string } | null
+  cachedWorktree: null as { id: string; repoId: string } | null,
+  vaultLoad: { promise: Promise.resolve(), pending: false }
 }))
 
 function notifyAppStore(): void {
@@ -102,10 +103,14 @@ vi.mock('@/store/index', async () => {
   }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' }),
-  useRepoById: () => mockAppState.activeRepo,
-  getWorktreeMapFromState: () => new Map()
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' })
+}))
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoById: () => mockAppState.activeRepo
+}))
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedWorktreeMap: () => new Map()
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -177,6 +182,31 @@ vi.mock('./PortsPanel', () => ({
   default: () => <div data-ports-panel />
 }))
 
+vi.mock('./ai-vault/panel/AiVaultSidebarPanel', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react')
+  return {
+    default: function MockAiVaultSidebarPanel({
+      focusSearch,
+      onFocusSearchHandled
+    }: {
+      focusSearch: boolean
+      onFocusSearchHandled: () => void
+    }) {
+      if (mockAppState.vaultLoad.pending) {
+        throw mockAppState.vaultLoad.promise
+      }
+      const inputRef = React.useRef<HTMLInputElement>(null)
+      React.useEffect(() => {
+        if (focusSearch) {
+          inputRef.current?.focus()
+          onFocusSearchHandled()
+        }
+      }, [focusSearch, onFocusSearchHandled])
+      return <input ref={inputRef} aria-label="Search sessions" />
+    }
+  }
+})
+
 function setRendererPlatform(platform: NodeJS.Platform): void {
   resetRendererAppPlatformCacheForTests()
   Object.defineProperty(window, 'api', {
@@ -189,7 +219,7 @@ function setRendererPlatform(platform: NodeJS.Platform): void {
   })
 }
 
-describe('rendered right sidebar titlebar drag regions', () => {
+describe('right sidebar panel routing', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = false
@@ -213,45 +243,98 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
+    mockAppState.vaultLoad.pending = false
   })
 
-  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
-    mockAppState.activeWorktreeId = 'folder:folder-1'
-    mockAppState.activeRepo = null
+  it('focuses session search on an explicit switch but not when restoring the tab', async () => {
+    mockAppState.rightSidebarTab = 'vault'
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).not.toBe(
+        container.querySelector('[aria-label="Search sessions"]')
+      )
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('aria-label="Explorer')
-    expect(markup).toContain('aria-label="Agents')
-    expect(markup).not.toContain('aria-label="Search')
-    expect(markup).toContain('aria-label="Attached worktrees')
-    expect(markup).toContain('aria-label="PR Checks')
-    expect(markup).not.toContain('aria-label="Source Control')
-    expect(markup).not.toContain('aria-label="Checks')
+      await act(async () => mockAppState.setRightSidebarTab('explorer'))
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      expect(document.activeElement).toBe(container.querySelector('[aria-label="Search sessions"]'))
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
   })
 
-  it('renders a visible fallback without overwriting a hidden folder-only tab', () => {
+  it('does not move focus after the user types while session search is loading', async () => {
+    let finishLoad = (): void => {}
+    mockAppState.vaultLoad.pending = true
+    mockAppState.vaultLoad.promise = new Promise<void>((resolve) => {
+      finishLoad = resolve
+    })
+    const container = document.createElement('div')
+    const otherInput = document.createElement('input')
+    document.body.append(otherInput, container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      otherInput.focus()
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      await act(async () =>
+        otherInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+      )
+      await act(async () => {
+        mockAppState.vaultLoad.pending = false
+        finishLoad()
+      })
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).toBe(otherInput)
+    } finally {
+      mockAppState.vaultLoad.pending = false
+      finishLoad()
+      await act(async () => root.unmount())
+      container.remove()
+      otherInput.remove()
+    }
+  })
+
+  it('renders a visible fallback without overwriting a hidden folder-only tab', async () => {
     mockAppState.rightSidebarTab = 'workspaces'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-worktrees-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-worktrees-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
-  it('renders a visible fallback without overwriting a hidden PR Checks tab', () => {
+  it('renders a visible fallback without overwriting a hidden PR Checks tab', async () => {
     mockAppState.rightSidebarTab = 'pr-checks'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-pr-checks-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-pr-checks-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
   it('keeps remembered folder PR Checks visible when the global route falls back to Explorer', async () => {

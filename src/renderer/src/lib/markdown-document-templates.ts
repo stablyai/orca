@@ -1,10 +1,11 @@
-import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
-import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
-import { basename, joinPath, normalizeRelativePath } from './path'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
+import { runtimePathExists } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import { basename, joinPath } from './path'
+import { normalizeRelativePath } from '../../../shared/cross-platform-path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
 const MARKDOWN_TEMPLATE_MAX_DEPTH = 8

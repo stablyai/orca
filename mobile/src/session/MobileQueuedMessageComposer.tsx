@@ -59,8 +59,14 @@ export function MobileQueuedMessageComposer({
   // As on desktop, a host-set goal is an action, not text a queued message can hold.
   const hostSetsGoals = context?.structured?.threadGoal?.changes === 'host'
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals),
-    [agent, reported, hostSetsGoals]
+    () =>
+      prepareQueuedMessageEditText(
+        agent,
+        reported,
+        hostSetsGoals,
+        context?.interactionModeSupported === true
+      ),
+    [agent, reported, hostSetsGoals, context?.interactionModeSupported]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {
@@ -90,7 +96,12 @@ export function MobileQueuedMessageComposer({
         value={editor.text}
         onChangeText={editor.change}
         onSend={() => editor.save()}
-        editSession={{ cancel: editor.cancel, locked: editor.saving, refuseCommand }}
+        editSession={{
+          cancel: editor.cancel,
+          locked: editor.saving,
+          refuseCommand,
+          interactionModeSupported: context?.interactionModeSupported
+        }}
         sendSurfaceId={editor.scopeKey}
         getSendCompletionGeneration={() => 0}
         getComposerEditGeneration={() => 0}

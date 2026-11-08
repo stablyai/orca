@@ -3,7 +3,7 @@ import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,

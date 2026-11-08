@@ -1,19 +1,23 @@
 import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
 import type { OpenTabSearchEntries } from './open-tab-search-entries'
+import type { Translate } from '../../i18n/use-translate'
 
 const NO_RESULTS: readonly OpenTabSearchResult[] = []
 
-export function retainOpenTabResultsForQuery({
-  entries,
-  query,
-  results,
-  resultsQuery
-}: {
-  entries: OpenTabSearchEntries | null
-  query: string
-  results: readonly OpenTabSearchResult[]
-  resultsQuery: string
-}): readonly OpenTabSearchResult[] {
+export function retainOpenTabResultsForQuery(
+  {
+    entries,
+    query,
+    results,
+    resultsQuery
+  }: {
+    entries: OpenTabSearchEntries | null
+    query: string
+    results: readonly OpenTabSearchResult[]
+    resultsQuery: string
+  },
+  t?: Translate
+): readonly OpenTabSearchResult[] {
   // Preserve empty-result identity so memoized consumers do not churn on a replacement empty array.
   if (resultsQuery.trim() === query.trim() || results.length === 0) {
     return results
@@ -23,7 +27,9 @@ export function retainOpenTabResultsForQuery({
   }
   // Recheck with search engines because row text omits matchable fields; Enter must match the query currently shown.
   const liveResultIds = new Set(
-    searchOpenTabs({ ...entriesBehindResults(entries, results), query }).map((result) => result.id)
+    searchOpenTabs({ ...entriesBehindResults(entries, results), query }, t).map(
+      (result) => result.id
+    )
   )
   const retained = results.filter((result) => liveResultIds.has(result.id))
   // Why the same array: an unchanged list must not invalidate the row memos.

@@ -1,10 +1,10 @@
 import type { AppState } from '@/store/types'
 import {
   findIndexedRepoOwnerForHost,
-  resolveIndexedRepoOwner,
-  resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
-import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
+import { resolveIndexedWorktreeOwner } from './workspace/ownership/worktree-runtime-owner-index'
+import { resolveWorktreeExecutionHost } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -20,11 +20,10 @@ import {
 } from './folder-workspace-connection'
 import {
   selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 
 type ConnectionOwnerState = Pick<
@@ -170,7 +169,8 @@ export function getConnectionIdForWorktreeCopy(
   worktreeId: string,
   hostId: ExecutionHostId
 ): string | null | undefined {
-  if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+  const workspace = parseWorkspaceKey(worktreeId)
+  if (workspace?.type !== 'folder') {
     return resolveQualifiedWorktreeExecutionOwner(
       selectWorktreesByRepo(state),
       state.repos,
@@ -178,22 +178,6 @@ export function getConnectionIdForWorktreeCopy(
       hostId
     )?.connectionId
   }
-  const row = selectWorkspaceByHostTarget(
-    {
-      worktreesByRepo: selectWorktreesByRepo(state),
-      folderWorkspaces: selectFolderWorkspaces(state)
-    },
-    hostWorktreeTarget({ id: worktreeId, hostId })
-  )
-  if (!row) {
-    return undefined
-  }
-  const resolution = resolveWorktreeExecutionHost(
-    {
-      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
-      byHost: (id, repoHostId) => findIndexedRepoOwnerForHost(state.repos, id, repoHostId)
-    },
-    { repoId: row.repoId, hostId: row.hostId ?? hostId }
-  )
-  return resolution.kind === 'resolved' ? resolution.connectionId : undefined
+  const folder = resolveQualifiedIndexedFolderWorkspace(state, workspace.folderWorkspaceId, hostId)
+  return folder.kind === 'selected' ? folder.value.connectionId : undefined
 }

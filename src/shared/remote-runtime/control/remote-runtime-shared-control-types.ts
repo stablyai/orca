@@ -6,6 +6,10 @@ import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
+import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
+
+/** Text, or binary that may carry compressed text; nothing else reaches the shared control socket. */
+export type SharedControlFrame = RemoteRuntimeSealedFrame
 
 export type SharedControlConnectionState =
   | 'closed'

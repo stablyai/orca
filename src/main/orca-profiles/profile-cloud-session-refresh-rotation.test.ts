@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as ProfileCloudClient from './profile-cloud-client'
-import type * as SecureFile from '../../shared/secure-file'
+import type * as SecureFile from '../../shared/secure-storage/secure-file'
 import type * as Fs from 'node:fs'
 import type * as ProfileIndexStore from './profile-index-store'
 
@@ -47,7 +47,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../shared/secure-file', async (importOriginal) => {
+vi.mock('../../shared/secure-storage/secure-file', async (importOriginal) => {
   const original = await importOriginal<typeof SecureFile>()
   return {
     ...original,

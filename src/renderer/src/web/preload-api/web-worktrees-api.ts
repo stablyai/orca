@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../shared/worktree/approved-setup-hashes'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
@@ -15,7 +16,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   getRemoteRuntimeStatus,
   callRuntimeResult,
@@ -29,6 +30,7 @@ import {
 } from './web-runtime-session'
 import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceSleepOutcome } from '../../../../shared/workspace-sleep'
@@ -80,6 +82,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
+        ...pickApprovedSetupHashes(args),
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup
@@ -101,9 +104,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           ? { parentWorkspaceOrigin: 'manual' }
           : {}),
         ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {}),
+        ...(args.comment ? { comment: args.comment } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest,
         // Switch point: the host lists this creation under the window's id only on the dark path.
         ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? { creationId: args.creationId } : {})
       })
@@ -112,6 +115,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
       }
     },
+    runApprovedSetup: runApprovedSetupOnWebHost,
     // Why: adoption verifies a desktop-owned hidden SSH target and is intentionally not a remote-server operation.
     adoptProvisionedRoot: () =>
       Promise.reject(
@@ -257,13 +261,21 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
-        worktree: Worktree & { lineage?: WorktreeLineage | null }
+        worktree: Worktree & {
+          lineage?: WorktreeLineage | null
+          workspaceLineage?: WorkspaceLineage | null
+        }
       }>('worktree.set', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         parentWorktree: parentWorktreeId,
         noParent
       })
-      return result.worktree.lineage ?? null
+      return {
+        lineage: result.worktree.lineage ?? null,
+        ...(result.worktree.workspaceLineage !== undefined
+          ? { workspaceLineage: result.worktree.workspaceLineage }
+          : {})
+      }
     },
     persistSortOrder: async ({ orderedIds, hostIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })

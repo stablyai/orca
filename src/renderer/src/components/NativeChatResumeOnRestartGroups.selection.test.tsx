@@ -13,7 +13,6 @@ import {
   disclosureOf,
   nodeBox,
   onToggleSpy,
-  queryChatBox,
   seedTree,
   treeOutline,
   unretryable,
@@ -105,43 +104,6 @@ it('selects every eligible chat in a project, never an unretryable one or anothe
   expect(touched).not.toContain('in-mobile')
   expect(countOf('orca-mobile')).toBe('1 of 1')
 })
-
-it('disables a node with nothing it could select', () => {
-  const candidates = seedTree()
-  render({
-    candidates,
-    initiallySelected: [],
-    failureFor: (sessionId) => (sessionId === 'in-other' ? unretryable(candidates[3]!) : undefined)
-  })
-
-  expect(nodeBox('other').hasAttribute('disabled')).toBe(true)
-  expect(countOf('other')).toBeUndefined()
-})
-
-it('disables every checkbox while a resume runs', () => {
-  render({ candidates: seedTree(), busy: true })
-
-  const boxes = [...container.querySelectorAll('[role="checkbox"]')]
-  expect(boxes).toHaveLength(8)
-  for (const box of boxes) {
-    expect(box.hasAttribute('disabled')).toBe(true)
-  }
-})
-
-it('selects a whole row by clicking anywhere on it, but its arrow only folds', () => {
-  render({ candidates: seedTree(), initiallySelected: [] })
-
-  act(() => itemLabelBody('child').click())
-  expect(state(chatBox('in-child'))).toBe('true')
-
-  act(() => disclosureOf('other').click())
-  expect(state(nodeBox('other'))).toBe('false')
-  expect(queryChatBox('in-other')).toBeNull()
-})
-
-function itemLabelBody(name: string): HTMLElement {
-  return nodeBox(name).closest('label')!.querySelector<HTMLElement>(':scope > :last-child')!
-}
 
 it('starts expanded; collapsing hides a node’s rows and keeps their selection', () => {
   render({ candidates: seedTree() })

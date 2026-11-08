@@ -3,13 +3,13 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 import {
   HOST_TEST_SESSION,
   HOST_TEST_NOW
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import {
   WORKTREE,
   createChat,
   clear,
   snapshot
-} from '../../../src/main/runtime/rpc/methods/structured-chat-tab-table.test-fixture'
+} from '../../../src/main/runtime/rpc/methods/session-tabs/structured-chat-tab-table.test-fixture'
 
 describe('historical clients after a clear', () => {
   it.each(['v1.4.222', 'b6b4d68cd844c921c7c5191cef72d5adafc0dafa'])(

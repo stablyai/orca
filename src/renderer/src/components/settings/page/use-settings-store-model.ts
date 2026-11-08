@@ -3,9 +3,10 @@ import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
-import { useProjectHostSetupProjection } from '@/store/selectors'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
@@ -23,7 +24,8 @@ import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import {
   getFallbackTerminalFonts,
-  mergeFontSuggestions
+  mergeFontSuggestions,
+  withPluginFontSuggestions
 } from '../appearance/fonts/font-suggestions'
 import { useTerminalConfigImport } from '../terminal/configuration/useTerminalConfigImport'
 import { useWarpThemeImport } from '../terminal/themes/useWarpThemeImport'
@@ -139,8 +141,14 @@ export function useSettingsStoreModel() {
   // Keep import state above sections so remounts cannot close the modal.
   const terminalConfigImport = useTerminalConfigImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
-  const [fontSuggestions, setFontSuggestions] = useState<string[]>(
+  const [installedFontSuggestions, setInstalledFontSuggestions] = useState<string[]>(
     mergeFontSuggestions([], getFallbackTerminalFonts())
+  )
+  const pluginFontFamilies = usePluginFontFamilies()
+  // Why after the default: plugin fonts are few and would otherwise sink into the installed list.
+  const fontSuggestions = useMemo(
+    () => withPluginFontSuggestions(installedFontSuggestions, pluginFontFamilies),
+    [installedFontSuggestions, pluginFontFamilies]
   )
   const terminalFontSuggestions = useMemo(
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
@@ -243,7 +251,7 @@ export function useSettingsStoreModel() {
     terminalConfigImport,
     warpThemes,
     fontSuggestions,
-    setFontSuggestions,
+    setFontSuggestions: setInstalledFontSuggestions,
     terminalFontSuggestions,
     activeSectionId,
     setActiveSectionId,
