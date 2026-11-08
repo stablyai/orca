@@ -3,6 +3,7 @@ import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
 import { getSidebarEntries } from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
@@ -144,25 +145,38 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
-export const getFollowSymlinkedDirectoriesEntry = (): SettingsSearchEntry => ({
-  title: translate('settings.followSymlinkedDirectories', 'Follow symlinked directories'),
-  description: translate(
+export const getFollowSymlinkedDirectoriesEntry = (
+  t: Translate = translate
+): SettingsSearchEntry => ({
+  title: t('settings.followSymlinkedDirectories', 'Follow symlinked directories'),
+  description: t(
     'settings.followSymlinkedDirectoriesDescription',
     'Search linked folders in Quick Open and expand local linked folders in File Explorer.'
   ),
   keywords: [
-    ...translateSearchKeyword('settings.followSymlinkedDirectoriesKeywords.symlink', 'symlink'),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.symlink',
+      'symlink',
+      undefined,
+      t
+    ),
     ...translateSearchKeyword(
       'settings.followSymlinkedDirectoriesKeywords.linkedFolder',
-      'linked folder'
+      'linked folder',
+      undefined,
+      t
     ),
     ...translateSearchKeyword(
       'settings.followSymlinkedDirectoriesKeywords.quickOpen',
-      'quick open'
+      'quick open',
+      undefined,
+      t
     ),
     ...translateSearchKeyword(
       'settings.followSymlinkedDirectoriesKeywords.fileExplorer',
-      'file explorer'
+      'file explorer',
+      undefined,
+      t
     )
   ]
 })
