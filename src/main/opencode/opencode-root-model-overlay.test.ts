@@ -1,77 +1,78 @@
 import { describe, expect, it } from 'vitest'
+import {
+  quoteStartupArg,
+  type AgentStartupShell
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { planOpenCodeRootModelRewrite } from './opencode-root-model-overlay'
 
+const q = (args: string[], shell: AgentStartupShell) =>
+  args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+
 describe('planOpenCodeRootModelRewrite', () => {
-  it.each([
-    ["opencode '--model' 'opencode/big-pickle'", 'opencode --standalone', 'opencode/big-pickle'],
-    [
-      'opencode --model=anthropic/claude-opus-5-5',
-      'opencode --standalone',
-      'anthropic/claude-opus-5-5'
-    ],
-    [
-      "opencode -m openai/gpt-5.3-codex --prompt 'fix it'",
-      "opencode --standalone --prompt 'fix it'",
-      'openai/gpt-5.3-codex'
-    ],
-    ['opencode --standalone --model a/b --model c/d', 'opencode --standalone', 'c/d'],
-    [
-      "opencode --model a/b --prompt 'it'\"'\"'s broken; fix it'",
-      "opencode --standalone --prompt 'it'\"'\"'s broken; fix it'",
-      'a/b'
-    ],
-    ['opencode --model a/b --prompt="a;b"', 'opencode --standalone --prompt="a;b"', 'a/b'],
-    [
-      "opencode --model a/b --prompt '-make the build pass'",
-      "opencode --standalone --prompt '-make the build pass'",
-      'a/b'
-    ]
-  ])('moves the root model out of %s', (command, rewritten, model) => {
-    expect(planOpenCodeRootModelRewrite(command, 'posix')).toMatchObject({
-      command: rewritten,
-      model
-    })
-  })
-
-  it('keeps an escaped trailing space in the argument before the model', () => {
-    expect(
-      planOpenCodeRootModelRewrite('opencode --prompt hello\\  --model a/b', 'posix')
-    ).toMatchObject({ command: 'opencode --standalone --prompt hello\\ ' })
-  })
-
-  it.each([
-    ['cmd', "opencode '--auto&echo' --model a/b"],
-    ['powershell', "opencode --auto`';echo --model a/b"]
-  ] as const)('leaves a %s operator the posix rules would miss as typed', (shell, command) => {
-    expect(planOpenCodeRootModelRewrite(command, shell)).toBeNull()
-  })
-
-  it.each([
-    'opencode',
-    'opencode run --model a/b hi',
-    'opencode mini --model a/b',
-    'opencode ./pkg --model a/b',
-    'opencode --server http://127.0.0.1:4096 --model a/b',
-    'opencode --model "$MODEL"',
-    "opencode --model a/b --prompt '--standalone'",
-    'opencode --model a/b\n--model c/d',
-    'opencode --model a/b --auto; --model c/d',
-    "opencode '--auto'&&echo --model a/b",
-    'opencode --model a/b "--auto"; --model c/d',
-    'opencode --model a/b --prompt # --model c/d',
-    'opencode --standalone --server http://localhost:4096 --model a/b',
-    'opencode --model --prompt hi',
-    'claude --model opus'
-  ])('leaves %s unchanged', (command) => {
-    expect(planOpenCodeRootModelRewrite(command, 'posix')).toBeNull()
-  })
-
-  it('probes the primary agent only when other root options cannot change it', () => {
-    expect(
-      planOpenCodeRootModelRewrite("opencode --model a/b --prompt 'hi'", 'posix')
-    ).toMatchObject({ probeExecutable: 'opencode' })
-    for (const command of ['opencode --model a/b --unknown', 'opencode --model a/b -s ses_1']) {
-      expect(planOpenCodeRootModelRewrite(command, 'posix')?.probeExecutable).toBeUndefined()
+  it.each(['posix', 'powershell', 'cmd'] as const)(
+    'moves a launch-built %s model into the overlay and keeps the prompt as built',
+    (shell) => {
+      // Orca's cmd quoting diverges for quotes and ^&|<>()%!, so a cmd prompt with them stays as typed.
+      const prompt = shell === 'cmd' ? 'fix a;b then test' : 'it\'s broken; fix "a;b"'
+      const tail = ` --prompt ${quoteStartupArg(prompt, shell)}`
+      const command = `opencode ${q(['--auto', '--model', 'opencode/big-pickle'], shell)}${tail}`
+      expect(planOpenCodeRootModelRewrite(command, shell, prompt)).toEqual({
+        command: `opencode --standalone ${q(['--auto'], shell)}${tail}`,
+        model: 'opencode/big-pickle',
+        probeExecutable: 'opencode'
+      })
     }
+  )
+
+  it('keeps a PowerShell multiline prompt ending in backticks byte for byte', () => {
+    const prompt = 'Use "a;b"\nthen run `pnpm test`'
+    const tail = ` --prompt ${quoteStartupArg(prompt, 'powershell')}`
+    expect(
+      planOpenCodeRootModelRewrite(
+        `& opencode ${q(['--model', 'a/b'], 'powershell')}${tail}`,
+        'powershell',
+        prompt
+      )?.command
+    ).toBe(`& opencode --standalone${tail}`)
+  })
+
+  it('uses the last of repeated models and an existing --standalone', () => {
+    expect(
+      planOpenCodeRootModelRewrite(
+        `opencode2 --standalone ${q(['--model', 'a/b', '--model=c/d'], 'posix')}`,
+        'posix'
+      )
+    ).toMatchObject({ command: 'opencode2 --standalone', model: 'c/d' })
+  })
+
+  it.each([
+    ['posix', `opencode ${q(['run', '--model', 'a/b'], 'posix')}`],
+    ['posix', `opencode ${q(['./pkg', '--model', 'a/b'], 'posix')}`],
+    ['posix', `opencode ${q(['--server', 'http://127.0.0.1:4096', '--model', 'a/b'], 'posix')}`],
+    ['posix', `opencode ${q(['-s', 'ses_1', '--model', '$MODEL'], 'posix')}`],
+    // Hand-typed shapes Orca never emits keep today's behavior.
+    ['posix', 'opencode --model a/b'],
+    ['posix', `opencode ${q(['--model', 'a/b'], 'posix')}\n--model c/d`],
+    ['posix', `opencode ${q(['--model', 'a/b'], 'posix')}; --model c/d`],
+    ['posix', `opencode ${q(['--model', 'a/b'], 'posix')} --prompt # --model c/d`],
+    ['posix', `$OC ${q(['--model', 'a/b'], 'posix')}`],
+    ['cmd', `opencode ${q(['--model', 'a/b'], 'cmd')} --prompt "C:\\"`],
+    [
+      'cmd',
+      `opencode ${q(['--model', 'a/b'], 'cmd')} --prompt ${quoteStartupArg('fix "a"', 'cmd')}`
+    ],
+    ['cmd', `opencode ${q(['--model', 'a/b'], 'cmd')} --prompt ${quoteStartupArg('x\ny', 'cmd')}`],
+    ['posix', 'claude --model opus']
+  ] as const)('leaves %s `%s` as typed', (shell, command) => {
+    expect(planOpenCodeRootModelRewrite(command, shell, 'C:\\')).toBeNull()
+  })
+
+  it('probes the primary agent only for a new session on it', () => {
+    expect(
+      planOpenCodeRootModelRewrite(
+        `opencode ${q(['-s', 'ses_1', '--model', 'a/b'], 'posix')}`,
+        'posix'
+      )?.probeExecutable
+    ).toBeUndefined()
   })
 })

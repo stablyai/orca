@@ -1,42 +1,19 @@
 import { getCommandTokenPathBasename } from '../../shared/command-token-scanner'
 import {
+  quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { withOpenCodeStandaloneServer } from './opencode-private-server'
 
 const OPENCODE_EXECUTABLE = /^opencode2?(\.(exe|cmd))?$/i
 const MODEL_FLAGS = ['--model', '-m']
 const VALUE_FLAGS = ['--prompt', '--session', '-s']
+// Flags the launch builders append unquoted; every other argument Orca emits is quoteStartupArg'd.
+const BARE_FLAGS = new Set(['--prompt', '--standalone'])
+const LITERAL_HEAD = /^[A-Za-z0-9._/\\:-]+$/
 // Root options that leave a new session on the primary agent; resuming one makes the overlay moot.
 const PROBE_NEUTRAL_FLAGS = new Set(['--auto', '--standalone'])
-// Provider/model ids only; anything a shell could expand stays on the command line.
 const LITERAL_MODEL = /^[A-Za-z0-9._/:@#+-]+$/
-const SHELL_OPERATOR = /[;|&<>]/
-
-function hasUnquotedOperator(raw: string, shell: AgentStartupShell): boolean {
-  // cmd quotes only with "; PowerShell escapes with a backtick; posix with a backslash.
-  const escape = shell === 'cmd' ? '^' : shell === 'powershell' ? '`' : '\\'
-  const quotes = shell === 'cmd' ? '"' : `'"`
-  let quote: string | null = null
-  for (let index = 0; index < raw.length; index += 1) {
-    const char = raw[index]
-    if (quote) {
-      if (char === escape && quote === '"' && shell !== 'cmd') {
-        index += 1
-      } else if (char === quote) {
-        quote = null
-      }
-    } else if (char === escape) {
-      index += 1
-    } else if (quotes.includes(char)) {
-      quote = char
-    } else if (SHELL_OPERATOR.test(char)) {
-      return true
-    }
-  }
-  return false
-}
 
 export type OpenCodeRootModelRewrite = {
   /** The command without its root model option, with `--standalone` so a private server reads the overlay. */
@@ -46,33 +23,47 @@ export type OpenCodeRootModelRewrite = {
   probeExecutable?: string
 }
 
-/** OpenCode 2's root TUI has no `--model`; its per-launch model is config read by a server this launch starts. */
+/**
+ * OpenCode 2's root TUI has no `--model`; its per-launch model is config read by a server this launch starts.
+ * Only Orca's own emitted shape is rewritten: every argument quoted by quoteStartupArg or a known bare flag,
+ * so no shell syntax can hide another command. Anything else stays exactly as typed.
+ */
 export function planOpenCodeRootModelRewrite(
   command: string,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  promptBody?: string
 ): OpenCodeRootModelRewrite | null {
-  const parsed = tokenizeStartupCommand(command, shell)
-  if (!parsed.ok) {
+  if (shell === 'cmd') {
+    // cmd ends the line at a newline even inside quotes, and its quoting can split argv where it looks whole.
+    const whole = tokenizeStartupCommand(command, shell)
+    if (/[\r\n]/.test(command) || !whole.ok || whole.spans.some((span) => span.divergesFromShell)) {
+      return null
+    }
+  }
+  // The prompt operand is matched against the body Orca put in the env, never decoded.
+  const promptSuffix =
+    promptBody === undefined ? undefined : ` --prompt ${quoteStartupArg(promptBody, shell)}`
+  const suffix = promptSuffix && command.endsWith(promptSuffix) ? promptSuffix : ''
+  const prefix = command.slice(0, command.length - suffix.length)
+  const parsed = tokenizeStartupCommand(prefix, shell)
+  if (!parsed.ok || parsed.spans[0]?.start !== 0 || parsed.spans.at(-1)?.end !== prefix.length) {
     return null
   }
   const { tokens, spans } = parsed
-  const executable = shell === 'powershell' && tokens[0] === '&' ? 1 : 0
-  if (!OPENCODE_EXECUTABLE.test(getCommandTokenPathBasename(tokens[executable] ?? ''))) {
-    return null
-  }
-  // One plain command only: a newline or operator would let the scan rewrite a different command.
-  const gaps = spans.map((span, index) =>
-    command.slice(index ? spans[index - 1].end : 0, span.start)
-  )
+  const raw = (index: number) => prefix.slice(spans[index].start, spans[index].end)
+  const canonical = (index: number) =>
+    !spans[index].divergesFromShell && raw(index) === quoteStartupArg(tokens[index], shell)
+  const executable = shell === 'powershell' && raw(0) === '&' ? 1 : 0
+  const head = tokens[executable] ?? ''
   if (
-    gaps.some((gap, index) => !(index ? /^[ \t]+$/ : /^[ \t]*$/).test(gap)) ||
-    !/^[ \t]*$/.test(command.slice(spans.at(-1)?.end ?? 0)) ||
     spans.some(
-      (span, index) =>
-        index !== executable - 1 &&
-        // A word starting with # comments out the rest of the line in posix and PowerShell.
-        (hasUnquotedOperator(command.slice(span.start, span.end), shell) ||
-          command[span.start] === '#')
+      (span, index) => index > 0 && prefix.slice(spans[index - 1].end, span.start) !== ' '
+    ) ||
+    !OPENCODE_EXECUTABLE.test(getCommandTokenPathBasename(head)) ||
+    !(canonical(executable) || (raw(executable) === head && LITERAL_HEAD.test(head))) ||
+    tokens.some(
+      (token, index) =>
+        index > executable && !canonical(index) && !(raw(index) === token && BARE_FLAGS.has(token))
     )
   ) {
     return null
@@ -87,35 +78,24 @@ export function planOpenCodeRootModelRewrite(
     if (token === '--' || !token.startsWith('-')) {
       return null
     }
+    // Another server never reads this launch's config, so its model flag stays as typed.
+    if (token === '--server' || token.startsWith('--server=')) {
+      return null
+    }
     const flag = MODEL_FLAGS.find((name) => token === name || token.startsWith(`${name}=`))
     if (flag) {
       const inline = token !== flag
       const valueIndex = inline ? index : index + 1
       const value = inline ? token.slice(flag.length + 1) : tokens[valueIndex]
-      const raw = spans[valueIndex]
-        ? command.slice(spans[valueIndex].start, spans[valueIndex].end)
-        : ''
-      if (
-        value === undefined ||
-        value.startsWith('-') ||
-        !LITERAL_MODEL.test(value) ||
-        /[$%`]/.test(raw) ||
-        spans[index].divergesFromShell ||
-        spans[valueIndex].divergesFromShell
-      ) {
+      if (value === undefined || value.startsWith('-') || !LITERAL_MODEL.test(value)) {
         return null
       }
       model = value
-      // Cut from the previous token's end so its own trailing (escaped) characters stay intact.
       removals.push({ start: spans[index - 1].end, end: spans[valueIndex].end })
       index = valueIndex
       continue
     }
     standaloneOption ||= token === '--standalone'
-    // Another server never reads this launch's config, so its model flag stays as typed.
-    if (token === '--server' || token.startsWith('--server=')) {
-      return null
-    }
     if (VALUE_FLAGS.includes(token)) {
       probeNeutral &&= token === '--prompt'
       index += 1
@@ -126,18 +106,17 @@ export function planOpenCodeRootModelRewrite(
   if (!model) {
     return null
   }
-  let stripped = command
+  let stripped = prefix
   for (const removal of removals.toReversed()) {
     stripped = `${stripped.slice(0, removal.start)}${stripped.slice(removal.end)}`
   }
-  const standalone = standaloneOption ? stripped : withOpenCodeStandaloneServer(stripped, shell)
-  // Without its own server the overlay never reaches the TUI, so the flag must stay.
-  if (standalone === stripped && !standaloneOption) {
-    return null
-  }
+  const headEnd = spans[executable].end
+  const standalone = standaloneOption
+    ? stripped
+    : `${stripped.slice(0, headEnd)} --standalone${stripped.slice(headEnd)}`
   return {
-    command: standalone,
+    command: `${standalone}${suffix}`,
     model,
-    ...(probeNeutral ? { probeExecutable: tokens[executable] } : {})
+    ...(probeNeutral ? { probeExecutable: head } : {})
   }
 }

@@ -146,7 +146,8 @@ export async function prepareOpenCodePtyLaunch(options: {
       launchEnv,
       probeEnv,
       envToDelete: options.envToDelete,
-      cwd: options.cwd
+      cwd: options.cwd,
+      promptBody: body
     })
     // Only launches that would start the shared service may claim its port.
     const standalone = withOpenCodeStandaloneServer(command, options.shell)

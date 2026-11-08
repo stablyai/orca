@@ -38,7 +38,7 @@ it('starts OpenCode 2 on its own server with the picked model in its launch conf
 })
 
 it('keeps the overlay when the caller asked to drop inherited OpenCode config', async () => {
-  const result = await launch('2.0.21', 'opencode --model opencode/big-pickle', [
+  const result = await launch('2.0.21', "opencode '--model' 'opencode/big-pickle'", [
     'OPENCODE_CONFIG_CONTENT'
   ])
   expect(JSON.parse(result.env?.OPENCODE_CONFIG_CONTENT ?? '')).toMatchObject({
