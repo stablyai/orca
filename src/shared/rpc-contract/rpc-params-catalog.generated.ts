@@ -263,8 +263,8 @@ import {
 } from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
-  FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
 import {
@@ -663,6 +663,7 @@ import {
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -738,8 +739,8 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeShow,
   WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
@@ -848,6 +849,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
+  'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
@@ -1071,7 +1073,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.writeIfUnchanged': FileWriteIfUnchanged,
   'files.writeTerminalArtifact': TerminalArtifactFileWrite,
   'folderWorkspace.create': FolderWorkspaceCreate,
-  'folderWorkspace.delete': FolderWorkspaceSelector,
+  'folderWorkspace.delete': FolderWorkspaceDelete,
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,
@@ -1612,7 +1614,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,
-  'worktree.show': WorktreeSelectorOfWorktreeParams,
+  'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const

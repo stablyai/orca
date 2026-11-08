@@ -2,7 +2,7 @@ import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
-import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
+import { useStructuredAgentAcceptsImages } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'

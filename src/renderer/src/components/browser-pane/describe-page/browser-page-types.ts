@@ -76,6 +76,8 @@ export type BrowserPageGrabAnnotations = {
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
+  copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
   handleGrabCopy: () => void
   handleGrabCopyScreenshot: () => void
   grabMenuActionTakenRef: MutableRefObject<boolean>

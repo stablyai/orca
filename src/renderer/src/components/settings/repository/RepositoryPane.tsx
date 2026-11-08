@@ -178,7 +178,7 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject })
+  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject }, t)
   const identityEntryTitles = new Set([
     t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),

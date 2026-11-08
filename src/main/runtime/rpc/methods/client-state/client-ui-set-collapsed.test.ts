@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { getDefaultUIState } from '../../../../../shared/constants'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'

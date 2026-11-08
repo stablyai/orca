@@ -8,13 +8,13 @@ import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 
 const { status, continued } = vi.hoisted(() => ({ status: vi.fn(), continued: vi.fn() }))
-vi.mock('@/runtime/runtime-git-commit-actions-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-commit-actions-client', () => ({
   sequencerContinueRuntimeGit: continued
 }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitStatus: status
 }))
-vi.mock('@/runtime/git-commit-actions-capability', () => ({
+vi.mock('@/runtime/source-control/git/git-commit-actions-capability', () => ({
   useGitCommitActionsSupport: () => ({ supported: true }),
   gitCommitActionsSupported: async () => true
 }))

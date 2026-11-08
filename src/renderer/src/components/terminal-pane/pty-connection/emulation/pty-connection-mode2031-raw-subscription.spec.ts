@@ -32,7 +32,6 @@ export function registerPtyConnectionMode2031RawSubscriptionTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

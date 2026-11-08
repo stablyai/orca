@@ -23,7 +23,7 @@ import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
   isNativeChatComposerDraftUnsaved,
@@ -81,12 +81,12 @@ vi.mock(
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({

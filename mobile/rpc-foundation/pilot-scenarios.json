@@ -12213,6 +12213,166 @@
       ]
     },
     {
+      "id": "tk-list-linear-switch-back",
+      "operation": "tasks.task-list-linear",
+      "family": "tasks.task-list-linear",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load-0"
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1",
+                  "identifier": "ENG-1",
+                  "title": "A Linear issue",
+                  "url": "",
+                  "description": "",
+                  "state": {
+                    "name": "Todo",
+                    "type": "unstarted",
+                    "color": "#000"
+                  },
+                  "team": {
+                    "id": "team-1",
+                    "key": "ENG",
+                    "name": "Engineering"
+                  },
+                  "labels": [],
+                  "priority": 0,
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "workspaceId": "linear-workspace"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "first-filter-settled"
+        },
+        {
+          "action": "set-query",
+          "id": "set-query-1",
+          "args": {
+            "query": "bug"
+          }
+        },
+        {
+          "action": "load",
+          "id": "load-2"
+        },
+        {
+          "checkpoint": "second-filter-pending"
+        },
+        {
+          "complete": "linear.searchIssues#1",
+          "params": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2",
+                "identifier": "ENG-2",
+                "title": "A found issue",
+                "url": "",
+                "description": "",
+                "state": {
+                  "name": "Todo",
+                  "type": "unstarted",
+                  "color": "#000"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 0,
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "second-filter-settled"
+        },
+        {
+          "action": "set-query",
+          "id": "set-query-2",
+          "args": {
+            "query": ""
+          }
+        },
+        {
+          "action": "load",
+          "id": "load-3"
+        },
+        {
+          "checkpoint": "first-filter-back-pending"
+        },
+        {
+          "complete": "linear.listIssues#2",
+          "params": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1",
+                  "identifier": "ENG-1",
+                  "title": "A Linear issue",
+                  "url": "",
+                  "description": "",
+                  "state": {
+                    "name": "Todo",
+                    "type": "unstarted",
+                    "color": "#000"
+                  },
+                  "team": {
+                    "id": "team-1",
+                    "key": "ENG",
+                    "name": "Engineering"
+                  },
+                  "labels": [],
+                  "priority": 0,
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "workspaceId": "linear-workspace"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "first-filter-back-settled"
+        }
+      ]
+    },
+    {
       "id": "tk-linear-connect",
       "operation": "tasks.linear-connect",
       "family": "tasks.linear-connect",

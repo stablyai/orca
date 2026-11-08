@@ -128,6 +128,7 @@ export function buildManagedWorktreeCreateArgs(
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      ...(params.matchFolderWorkspaces ? { matchFolderWorkspaces: true as const } : {}),
       ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
       ...(params.crossStoreParentInferredFrom
         ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }

@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'

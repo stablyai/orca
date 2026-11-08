@@ -1,6 +1,7 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import {
   antigravityChatSignInRunning as running,
@@ -32,34 +33,29 @@ const otherClients = (flow: Flow | null): boolean => running(flow) && flow.flowI
 function chatSignInLine(
   flow: Flow | null,
   auth: AntigravityChatAuth,
-  openFailed: boolean
+  openFailed: boolean,
+  t: Translate = translate
 ): string | null {
   if (otherClients(flow)) {
-    return translate(
-      'accounts.antigravity.chatOtherClient',
-      'Sign-in is in progress in another client.'
-    )
+    return t('accounts.antigravity.chatOtherClient', 'Sign-in is in progress in another client.')
   }
   switch (flow?.phase) {
     case 'starting':
-      return translate('accounts.antigravity.chatStarting', 'Starting sign-in…')
+      return t('accounts.antigravity.chatStarting', 'Starting sign-in…')
     case 'waiting':
       return openFailed
-        ? translate(
-            'accounts.antigravity.chatOpenFailed',
-            'Copy the link and open it in your browser.'
-          )
-        : translate('accounts.antigravity.chatWaiting', 'Finish signing in in your browser.')
+        ? t('accounts.antigravity.chatOpenFailed', 'Copy the link and open it in your browser.')
+        : t('accounts.antigravity.chatWaiting', 'Finish signing in in your browser.')
     case 'verifying':
-      return translate('accounts.antigravity.chatVerifying', 'Finishing sign-in…')
+      return t('accounts.antigravity.chatVerifying', 'Finishing sign-in…')
     // A settled flow only stands in until the host answers whether it is signed in.
     case 'cancelled':
       return auth === 'unknown'
-        ? translate('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
+        ? t('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
         : null
     case 'expired':
       return auth === 'unknown'
-        ? translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
+        ? t('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
         : null
     case 'failed':
     case 'signedIn':
@@ -135,6 +131,7 @@ export function useAntigravityChatSignInControls(props: {
   label: string
   disabled: boolean
 }) {
+  const t = useTranslate()
   const { owner, label } = props
   const { status, flow, auth, openFailed, ...view } = useAntigravityChatSignIn(owner)
   const [pending, setPending] = useState(false)
@@ -143,17 +140,17 @@ export function useAntigravityChatSignInControls(props: {
     void request().finally(() => setPending(false))
   }
   const copy = useClipboardTextCopyFeedback(flow?.url ?? '')
-  const failed = translate('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
+  const failed = t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
   const error = view.error === null ? null : view.error || failed
-  const copyFailed = translate('accounts.antigravity.chatCopyFailed', 'Could not copy the link.')
-  const readFailed = translate(
+  const copyFailed = t('accounts.antigravity.chatCopyFailed', 'Could not copy the link.')
+  const readFailed = t(
     'accounts.antigravity.chatReadFailed',
     'Could not check the sign-in on {{host}}.',
     { host: label }
   )
   const ownFlow = running(flow) && flow.flowId !== null
   const action = signInAction(flow, auth, error)
-  const line = status === 'known' ? chatSignInLine(flow, auth, openFailed) : null
+  const line = status === 'known' ? chatSignInLine(flow, auth, openFailed, t) : null
   return {
     flow,
     auth: status === 'known' ? auth : 'unknown',
@@ -169,7 +166,7 @@ export function useAntigravityChatSignInControls(props: {
     action,
     pending,
     copy,
-    copyLabel: translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
+    copyLabel: t('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
     recoveryDisabled: props.disabled || pending || otherClients(flow),
     start: () => act(() => startAntigravityChatSignIn(owner)),
@@ -193,6 +190,7 @@ export function AntigravityChatSignInRow(props: {
   /** The chat server's install row, shown above sign-in because sign-in needs it. */
   runtime?: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
     label: props.label,
@@ -210,7 +208,7 @@ export function AntigravityChatSignInRow(props: {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium leading-none">
-                  {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
+                  {t('accounts.antigravity.chatTitle', 'Antigravity chats')}
                 </p>
                 {props.description ? (
                   <p className="mt-1.5 text-xs text-muted-foreground">{props.description}</p>

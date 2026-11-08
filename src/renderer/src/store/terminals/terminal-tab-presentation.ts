@@ -1,5 +1,5 @@
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import {
   applyGeneratedTabTitleUpdates,

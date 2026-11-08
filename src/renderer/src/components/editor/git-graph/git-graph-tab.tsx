@@ -1,4 +1,4 @@
-import { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
+import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import {
   GitGraphCommitActionControls,
   GitGraphCommitConfirmStrip

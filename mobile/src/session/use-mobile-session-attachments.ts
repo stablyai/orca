@@ -23,8 +23,6 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     activeHandle,
     pendingDiffNotesDelivery,
     showCreateTabDrawer,
-    setCreateTabAgentLoadState,
-    setCreateTabAgentOptions,
     selectModeActive,
     setCanPaste,
     ptyModesRef,
@@ -145,7 +143,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     }
   }, [clipboardContents, selectModeActive, setCanPaste])
 
-  useMobileNewTabAgentOptions({
+  const createTabAgents = useMobileNewTabAgentOptions({
     client,
     connState,
     hostId,
@@ -153,11 +151,11 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     worktreeId,
     open: showCreateTabDrawer || pendingDiffNotesDelivery !== null,
     // After the session's own first reads, so the list is ready by the first "+" tap.
-    prefetch: terminalsLoaded,
-    setLoadState: setCreateTabAgentLoadState,
-    setOptions: setCreateTabAgentOptions
+    prefetch: terminalsLoaded
   })
   return {
+    createTabAgentLoadState: createTabAgents.loadState,
+    createTabAgentOptions: createTabAgents.options,
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,

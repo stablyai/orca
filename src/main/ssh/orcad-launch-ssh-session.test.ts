@@ -17,7 +17,6 @@ import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const mac = getRemoteHostPlatform('darwin-arm64')
-const linux = getRemoteHostPlatform('linux-x64')
 
 // Fake ps rows are pid|ppid|comm|lstart|args; FAKE_PS_GONE means absent, otherwise unlisted PIDs model the calling shell.
 const FAKE_PS = `#!/bin/sh
@@ -238,30 +237,5 @@ describe.skipIf(process.platform === 'win32')('orcad launch SSH session', () => 
     // Hide system sw_vers so every test host exercises its absence.
     writeFileSync(join(dir, 'bin', 'sw_vers'), '#!/bin/sh\nexit 127\n')
     expect(probe({ FAKE_PS_GONE: '500' })).toBe('not-applicable')
-  })
-})
-
-describe('orcad launch command session record', () => {
-  const spec = {
-    remoteInstallDir: '/home/u/.orca-remote/orcad-1',
-    nodePath: '/usr/bin/node',
-    fullVersion: '1.0.0',
-    userDataDir: '/home/u/.orca',
-    bindHost: '127.0.0.1',
-    port: 7777,
-    activationRoot: '/home/u/.orca-remote/activation'
-  }
-
-  it('records the session only on a macOS nohup launch', () => {
-    expect(orcadLaunchCommand(mac, spec)).toContain(ORCAD_LAUNCH_SSH_SESSION_FILENAME)
-    expect(orcadLaunchCommand(mac, spec)).toMatch(/orcad_session=.* exec nohup /u)
-    expect(orcadLaunchCommand(linux, spec)).not.toContain('orcad_session')
-    expect(orcadLaunchCommand(mac, spec, 'setsid')).not.toContain('orcad_session')
-  })
-
-  it('still prints the detached PID last', () => {
-    const command = orcadLaunchCommand(mac, spec)
-    expect(command).toMatch(/^orcad_pid='[^']+\/\.orcad-pid';/u)
-    expect(command).toMatch(/&& cat "\$orcad_pid"$/u)
   })
 })

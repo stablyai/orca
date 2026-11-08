@@ -1,7 +1,7 @@
 import type { GitCommitActionResult } from '../../../../shared/git/commands/git-commit-action'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { callRuntimeResult } from './web-runtime-calls'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 
 export function createGitCommitActionsApi(): Pick<

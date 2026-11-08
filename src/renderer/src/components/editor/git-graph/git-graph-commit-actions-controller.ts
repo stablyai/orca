@@ -6,15 +6,15 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { gitGraphScope } from '@/lib/git-graph-tab'
 import { gitGraphOwnerKey } from './git-graph-workspace-navigation'
-import { gitCommitActionsSupported } from '@/runtime/git-commit-actions-capability'
+import { gitCommitActionsSupported } from '@/runtime/source-control/git/git-commit-actions-capability'
 import {
   createRuntimeGitBranch,
   cherryPickRuntimeGit,
   revertRuntimeGit
-} from '@/runtime/runtime-git-commit-actions-client'
+} from '@/runtime/source-control/git/runtime-git-commit-actions-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import type { GitGraphHistoryController } from './git-graph-history-controller'
 import type {

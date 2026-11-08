@@ -11,7 +11,7 @@ import type {
 } from '../../../../../shared/git/status/git-status-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,

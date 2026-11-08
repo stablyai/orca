@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'

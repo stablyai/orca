@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 /** Paired subscriptions must attach never-activated daemon sessions so headless terminal read/streams receive bytes.
  * Exercise real runtime/multiplex with controller data gated on attach; no renderer is present. */
 import { describe, expect, it, vi } from 'vitest'

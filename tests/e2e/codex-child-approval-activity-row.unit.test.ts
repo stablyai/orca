@@ -58,14 +58,23 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: vi.fn()
+  })
+)
+
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: vi.fn(),
+    subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+  })
+)
 
 import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/session/status/StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/native-chat/status/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'

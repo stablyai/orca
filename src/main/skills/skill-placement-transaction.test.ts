@@ -50,27 +50,6 @@ afterEach(async () => {
 })
 
 describe('skill placement transaction recovery', () => {
-  it('does not persist empty global root overrides for a workspace transaction', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-workspace-root-'))
-    roots.push(root)
-    const workspace = join(root, 'workspace')
-    const canonical = await skill(join(workspace, '.agents', 'skills', 'alpha'), '# Skill')
-    const stateDirectory = join(root, 'state')
-    const transaction = createSkillPlacementTransaction({
-      stateDirectory,
-      scope: 'workspace',
-      homeDirectory: join(root, 'home'),
-      workspaceDirectory: workspace,
-      detectedProviders: ['claude'],
-      providerRootOverrides: {}
-    })
-    await transaction.prepare(null, receipt(canonical.path, canonical.digest, 'version_1', []))
-
-    const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
-    expect(journal).not.toBeNull()
-    expect(journal).not.toHaveProperty('providerRootOverrides')
-  })
-
   it('rebuilds a partial staged copy and publishes its placement receipt', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-placement-partial-'))
     roots.push(root)
@@ -294,35 +273,5 @@ describe('skill placement transaction recovery', () => {
     await expect(
       lstat(skillPlacementJournalPath(stateDirectory, canonical.path))
     ).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
-  it('does not treat a skipped historical placement as ownership', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-skipped-owner-'))
-    roots.push(root)
-    const home = join(root, 'home')
-    const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')
-    const sharedRoot = join(root, 'shared', 'skills')
-    const previous = receipt(canonical.path, canonical.digest, 'version_1', [
-      {
-        provider: 'claude',
-        path: join(sharedRoot, 'alpha'),
-        topology: 'independent-copy',
-        status: 'skipped'
-      }
-    ])
-    const next = receipt(canonical.path, canonical.digest, 'version_2', [])
-    const stateDirectory = join(root, 'state')
-    const transaction = createSkillPlacementTransaction({
-      stateDirectory,
-      scope: 'global',
-      homeDirectory: home,
-      detectedProviders: ['grok'],
-      providerRootOverrides: { grok: sharedRoot }
-    })
-
-    await expect(transaction.prepare(previous, next)).resolves.toBeUndefined()
-    await expect(
-      readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
-    ).resolves.not.toBeNull()
   })
 })

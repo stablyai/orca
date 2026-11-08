@@ -19,6 +19,24 @@ import {
 } from './agent-launch/startup/automation-extra-agent-args'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
+export function automationCanonicalLaunchSetup(
+  automation: AutomationLaunchSetup & { launchSetup?: AutomationLaunchSetup }
+): AutomationLaunchSetup {
+  if (automation.launchSetup) {
+    return { ...automation.launchSetup }
+  }
+  return {
+    ...(automation.surface !== undefined ? { surface: automation.surface } : {}),
+    ...(automation.extraAgentArgs !== undefined
+      ? { extraAgentArgs: automation.extraAgentArgs }
+      : {}),
+    ...(automation.launchPreferences !== undefined
+      ? { launchPreferences: automation.launchPreferences }
+      : {}),
+    ...(automation.agentArgs !== undefined ? { agentArgs: automation.agentArgs } : {})
+  }
+}
+
 export function automationLaunchChoices(setup: AutomationLaunchSetup): AgentDedicatedChoices {
   const preferences = setup.launchPreferences
   return {

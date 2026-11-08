@@ -1,6 +1,6 @@
 import { useStore } from 'zustand'
 import type { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
-import type { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
+import type { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { useMemo, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import {

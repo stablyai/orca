@@ -2,8 +2,8 @@ import * as branchActions from '@/runtime/source-control/git/runtime-git-branch-
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 // @vitest-environment happy-dom
-import * as commitSupport from '@/runtime/git-commit-actions-capability'
-import * as commitActions from '@/runtime/runtime-git-commit-actions-client'
+import * as commitSupport from '@/runtime/source-control/git/git-commit-actions-capability'
+import * as commitActions from '@/runtime/source-control/git/runtime-git-commit-actions-client'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'

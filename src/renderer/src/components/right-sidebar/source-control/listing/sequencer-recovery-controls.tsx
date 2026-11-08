@@ -7,11 +7,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   gitCommitActionsSupported,
   useGitCommitActionsSupport
-} from '@/runtime/git-commit-actions-capability'
+} from '@/runtime/source-control/git/git-commit-actions-capability'
 import {
   sequencerAbortRuntimeGit,
   sequencerContinueRuntimeGit
-} from '@/runtime/runtime-git-commit-actions-client'
+} from '@/runtime/source-control/git/runtime-git-commit-actions-client'
 import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
