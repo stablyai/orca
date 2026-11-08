@@ -4,22 +4,22 @@ import {
   captureTerminalPaneRecoveryGeneration,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
-import { bumpTabGeneration } from '../../terminal-recovery-ledger-test-driver'
+import { bumpTabGeneration } from './terminal-recovery-ledger-test-driver'
 import {
   recoveryLedgerMocks as mocks,
   resetRecoveryLedgerStore,
   setTerminalTabs
-} from '../../terminal-recovery-ledger-test-store'
+} from './terminal-recovery-ledger-test-store'
 
 /** Aged pending is not observed failure: fresh-spawn recovery cannot report reattach success. Cooldown/window cap bound silent panes, while new evidence can reopen admission. */
 
 vi.mock('@/store/index', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
 })
 
 vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
 })
 

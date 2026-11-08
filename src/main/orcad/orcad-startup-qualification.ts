@@ -6,10 +6,12 @@ import { isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../shared/orcad-node-runtime-identity'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { listOrcadArtifactFilenames } from './orcad-artifact-identity'
 import { detectNativeHostAbi } from './native-host-abi'
 
 export const ORCAD_STARTUP_QUALIFIED_FILENAME = '.orcad-startup-qualified'
+const ARTIFACT_STAT_CONCURRENCY = 16
 
 // Launch environment that changes how Node, its native modules or the probe's temp files behave.
 const ORCAD_STARTUP_QUALIFICATION_ENV = [
@@ -47,10 +49,14 @@ export async function orcadStartupQualificationKey(
   artifactVersion: string,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<string> {
+  const filenames = await listOrcadArtifactFilenames(directory)
+  // Startup path: overlap the independent stats; hash in listing order so the key is unchanged.
+  const stats = await mapWithConcurrency(filenames, ARTIFACT_STAT_CONCURRENCY, (filename) =>
+    stat(join(directory, filename))
+  )
   const files = createHash('sha256')
-  for (const filename of await listOrcadArtifactFilenames(directory)) {
-    const { size, mtimeMs, ctimeMs, ino } = await stat(join(directory, filename))
-    files.update(JSON.stringify([filename, size, mtimeMs, ctimeMs, ino]))
+  for (const [index, { size, mtimeMs, ctimeMs, ino }] of stats.entries()) {
+    files.update(JSON.stringify([filenames[index], size, mtimeMs, ctimeMs, ino]))
   }
   const launchEnv = createHash('sha256')
     .update(JSON.stringify(ORCAD_STARTUP_QUALIFICATION_ENV.map((name) => env[name] ?? null)))

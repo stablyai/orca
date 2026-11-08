@@ -1,5 +1,5 @@
 import type { GestureResponderEvent } from 'react-native'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
 import { colors } from '../theme/mobile-theme'
 import {
   clampBrowserZoomState,

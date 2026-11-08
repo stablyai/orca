@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { WorkspaceCleanupFreshness } from './workspace-cleanup-freshness'
 
@@ -21,7 +21,8 @@ export function WorkspaceCleanupDialogHeader({
   onRefresh: () => void
   onClose: () => void
 }): React.JSX.Element {
-  const refreshLabel = translate(
+  const t = useTranslate()
+  const refreshLabel = t(
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7ae2ad30f4',
     'Refresh'
   )
@@ -30,7 +31,7 @@ export function WorkspaceCleanupDialogHeader({
       <DialogHeader>
         <div className="flex items-center justify-between gap-4">
           <DialogTitle className="min-w-0 text-base">
-            {translate(
+            {t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b2c1331844',
               'Delete Inactive Workspaces'
             )}
@@ -61,7 +62,7 @@ export function WorkspaceCleanupDialogHeader({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e',
                 'Close'
               )}

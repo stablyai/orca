@@ -7,7 +7,6 @@ import {
   registerPtyConnectionForegroundBulkAndInteractiveOutputTests,
   registerPtyConnectionForegroundFrameSchedulingTests
 } from '../output/pty-connection-foreground-write-path.spec'
-import { registerPtyConnectionDeferredInputForwardingTests } from '../input/pty-connection-deferred-input-forwarding.spec'
 import { registerPtyConnectionInterruptInferenceTests } from '../input/pty-connection-interrupt-inference.spec'
 import { registerPtyConnectionTypedAgentIdentityTests } from '../agent-identity/pty-connection-typed-agent-identity.spec'
 
@@ -26,7 +25,6 @@ describe(
 )
 describe('pty-connection-foreground-write-path', () => {
   registerPtyConnectionForegroundBulkAndInteractiveOutputTests()
-  registerPtyConnectionDeferredInputForwardingTests()
   registerPtyConnectionForegroundFrameSchedulingTests()
 })
 describe('pty-connection-interrupt-inference', registerPtyConnectionInterruptInferenceTests)

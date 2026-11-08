@@ -413,7 +413,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const { resolveWebAgentSessionHandoff } =
-      await import('../../../../runtime/web-agent-session-handoff')
+      await import('../../../../runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'provisional-tab',

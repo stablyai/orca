@@ -100,9 +100,9 @@ async function revealPreviewAction(page: Page, fixtureName: string): Promise<Loc
   const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: fixtureName })
   await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
   await fixtureRow.click()
-  const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
-  await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
-  return openPreviewToSide
+  const openPreview = page.getByRole('button', { name: 'Preview', exact: true })
+  await expect(openPreview).toBeVisible({ timeout: 30_000 })
+  return openPreview
 }
 
 async function focusBrowserWorkspace(
@@ -178,7 +178,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     const docFilePath = path.join(worktreePath, FIXTURE_NAME)
     const inventoryArgs = { environmentId: client.environmentId, docFilePath, worktreeId }
 
-    const openPreviewToSide = await revealPreviewAction(page, FIXTURE_NAME)
+    const openPreview = await revealPreviewAction(page, FIXTURE_NAME)
     const sourceEditor = await page.evaluate((targetWorktreeId) => {
       const state = window.__store?.getState()
       const groupId = state?.activeGroupIdByWorktree[targetWorktreeId]
@@ -191,7 +191,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       return groupId && tab ? { groupId, tabId: tab.id } : null
     }, worktreeId)
     if (!sourceEditor) {
-      throw new Error('paired client editor had no source identity before side preview')
+      throw new Error('paired client editor had no source identity before the preview')
     }
     const sourceGroupId = sourceEditor.groupId
 
@@ -203,7 +203,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .toMatchObject({ hostResponseOk: true, docWorkspaces: [] })
     const baseline = await readPairedHtmlPreviewInventory(page, inventoryArgs)
 
-    await openPreviewToSide.click()
+    await openPreview.click()
 
     await expect
       .poll(
@@ -255,7 +255,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     })
     // Reject legacy html-preview:: editor rows resurrected by restore/actions.
     expect(afterPreview.htmlPreviewEditorFileIds).toEqual([])
-    expect(previewRow.groupId).not.toBe(sourceGroupId)
+    expect(previewRow.groupId).toBe(sourceGroupId)
     // The heading follows both unattended attempts; unchanged host state proves neither opened a page or published the grant.
     expect(afterPreview.hostBrowserPages).toEqual(baseline.hostBrowserPages)
     expect(afterPreview.hostSessionBrowserTabs).toEqual(baseline.hostSessionBrowserTabs)
@@ -280,37 +280,32 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     }
 
     await expect(page.locator(`[data-tab-group-body-id="${sourceGroupId}"]`)).toBeVisible()
-    await expect(page.locator(`[data-tab-group-body-id="${previewRow.groupId}"]`)).toBeVisible()
     await expect(page.locator(`[data-tab-id="${sourceEditor.tabId}"]`)).toBeVisible()
 
-    // Preview opens unfocused beside the source editor; only explicit selection moves focus.
+    // Preview opens as the active tab in the source editor's group, without splitting.
     await expect
       .poll(
         () =>
-          page.evaluate(
-            ({ previewGroupId, worktreeId: targetWorktreeId }) => {
-              const state = window.__store?.getState()
-              const groups = state?.groupsByWorktree[targetWorktreeId] ?? []
-              const activeGroup = groups.find(
-                (group) => group.id === state?.activeGroupIdByWorktree[targetWorktreeId]
-              )
-              return {
-                activeGroupId: activeGroup?.id ?? null,
-                activeTabId: activeGroup?.activeTabId ?? null,
-                activeTabType: state?.activeTabTypeByWorktree[targetWorktreeId] ?? null,
-                previewGroupActiveTabId:
-                  groups.find((group) => group.id === previewGroupId)?.activeTabId ?? null
-              }
-            },
-            { previewGroupId: previewRow.groupId, worktreeId }
-          ),
+          page.evaluate((targetWorktreeId) => {
+            const state = window.__store?.getState()
+            const groups = state?.groupsByWorktree[targetWorktreeId] ?? []
+            const activeGroup = groups.find(
+              (group) => group.id === state?.activeGroupIdByWorktree[targetWorktreeId]
+            )
+            return {
+              groupCount: groups.length,
+              activeGroupId: activeGroup?.id ?? null,
+              activeTabId: activeGroup?.activeTabId ?? null,
+              activeTabType: state?.activeTabTypeByWorktree[targetWorktreeId] ?? null
+            }
+          }, worktreeId),
         { timeout: 30_000, message: 'preview placement never settled' }
       )
       .toEqual({
+        groupCount: 1,
         activeGroupId: sourceGroupId,
-        activeTabId: sourceEditor.tabId,
-        activeTabType: 'editor',
-        previewGroupActiveTabId: previewRow.unifiedTabId
+        activeTabId: previewRow.unifiedTabId,
+        activeTabType: 'browser'
       })
 
     const terminalTabId = await page.evaluate((targetWorktreeId) => {
@@ -662,9 +657,9 @@ test('asks before a paired preview reads a sibling directory', async ({
         targetWorktreeId: worktreeId
       }
     )
-    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
-    await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
-    await openPreviewToSide.click()
+    const openPreview = page.getByRole('button', { name: 'Preview', exact: true })
+    await expect(openPreview).toBeVisible({ timeout: 30_000 })
+    await openPreview.click()
     await expect
       .poll(() => readDocPreviewRenderedText(page, 'h1'), {
         timeout: 60_000,
@@ -734,8 +729,8 @@ test('restores the document tab, on a fresh grant, after the client quits and re
       worktreeId
     }
 
-    const openPreviewToSide = await revealPreviewAction(prepared.client.page, RESTORE_FIXTURE_NAME)
-    await openPreviewToSide.click()
+    const openPreview = await revealPreviewAction(prepared.client.page, RESTORE_FIXTURE_NAME)
+    await openPreview.click()
     await expect
       .poll(() => readDocPreviewRenderedText(prepared!.client.page, 'h1'), {
         timeout: 60_000,

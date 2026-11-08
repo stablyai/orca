@@ -78,6 +78,7 @@ export type PtySpawnLaunchOptionsInput = {
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
     worktreeId?: string
+    trustWorktreeId?: string
     tabId?: unknown
     connectionId?: string | null
     shellOverride?: string
@@ -198,6 +199,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const trustWrite = applyAgentWorkspaceTrustToSpawn({
     launchAgent: args.launchAgent,
     worktreeId: args.worktreeId,
+    trustWorktreeId: args.trustWorktreeId,
     skipForThisLaunch: args.skipAgentWorkspaceTrust === true,
     cwd: input.cwd,
     store: input.store,

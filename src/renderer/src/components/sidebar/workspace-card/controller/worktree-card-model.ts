@@ -5,6 +5,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeRenameRequest = {
   worktreeId: string
@@ -106,11 +107,14 @@ export function shouldBeginWorktreeRename(
   )
 }
 
-export function formatSparseDirectoryPreview(directories: string[]): string {
+export function formatSparseDirectoryPreview(
+  directories: string[],
+  t: Translate = translate
+): string {
   const preview = directories.slice(0, 4).join(', ')
   return directories.length <= 4
     ? preview
-    : translate(
+    : t(
         'auto.components.sidebar.worktreeCardModel.sparsePreviewMore',
         '{{preview}}, +{{count}} more',
         { preview, count: directories.length - 4, defaultValue_one: '{{preview}}, +{{count}} more' }

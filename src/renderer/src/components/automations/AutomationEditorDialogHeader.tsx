@@ -4,6 +4,7 @@ import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { AutomationTemplate } from './automation-templates'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type AutomationEditorDialogHeaderProps = {
   isEditing: boolean
@@ -36,14 +37,14 @@ function AutomationTemplateCard({
   )
 }
 
-function getEditorTitle(args: { isEditing: boolean }): string {
+function getEditorTitle(args: { isEditing: boolean }, t: Translate = translate): string {
   if (args.isEditing) {
-    return translate(
+    return t(
       'auto.components.automations.AutomationEditorDialogHeader.17086b48ee',
       'Edit automation'
     )
   }
-  return translate(
+  return t(
     'auto.components.automations.AutomationEditorDialogHeader.4133d33862',
     'Create automation'
   )
@@ -57,7 +58,8 @@ export function AutomationEditorDialogHeader({
   onTemplateOpenChange,
   onApplyTemplate
 }: AutomationEditorDialogHeaderProps): React.JSX.Element {
-  const title = getEditorTitle({ isEditing })
+  const t = useTranslate()
+  const title = getEditorTitle({ isEditing }, t)
 
   return (
     <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border/50 px-5 py-2.5 pr-12 text-left">
@@ -68,7 +70,7 @@ export function AutomationEditorDialogHeader({
             <PopoverTrigger asChild>
               <Button type="button" variant="ghost" size="sm">
                 <Sparkles className="size-4" />
-                {translate(
+                {t(
                   'auto.components.automations.AutomationEditorDialogHeader.31f9253920',
                   'Use template'
                 )}

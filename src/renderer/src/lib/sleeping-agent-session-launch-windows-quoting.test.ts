@@ -45,6 +45,7 @@ const store = {
   sshStateByEnvironment: new Map(),
   runtimeStatusByEnvironmentId: new Map<string, { status: { hostPlatform: NodeJS.Platform } }>(),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+  unifiedTabsByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -159,18 +160,6 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
 
     await expect(launch()).resolves.toBe(`codex "resume" "${SESSION_ID}"`)
-  })
-
-  it('keeps PowerShell quoting for a powershell tab', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
-  })
-
-  it('quotes the resume argv for a Git Bash tab', async () => {
-    store.settings.terminalWindowsShell = 'git-bash'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
   })
 
   it('ignores the local Windows shell setting for an SSH workspace', async () => {

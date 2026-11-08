@@ -5,7 +5,7 @@ import {
   type ChecksTabActionContext
 } from './github-item-dialog/inspect-pull-request/checks-tab-actions'
 import { createGitHubChecksTabState } from './github-checks-tab-state'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { getOverallCheckCounts } from './pr-check-counts'

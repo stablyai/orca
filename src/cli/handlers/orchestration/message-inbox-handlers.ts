@@ -9,7 +9,7 @@ import {
 import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'

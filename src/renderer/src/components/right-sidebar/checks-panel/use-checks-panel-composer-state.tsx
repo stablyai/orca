@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useCreatePullRequestDialogFields } from '../hosted-review/creation/useCreatePullRequestDialogFields'
 import { useHostedReviewStackParent } from '../hosted-review/provider-actions/useHostedReviewStackParent'
-import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
+import { shouldHydratePullRequestGenerationResult } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,

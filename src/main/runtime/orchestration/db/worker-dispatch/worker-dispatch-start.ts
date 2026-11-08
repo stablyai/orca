@@ -1,7 +1,7 @@
 import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'

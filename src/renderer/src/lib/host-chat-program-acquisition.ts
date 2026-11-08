@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import {
+  useAppViewExternalStore,
+  useAppStateViewActive,
+  useAppStateValue
+} from '@/store/retained-views/app-state-view'
+import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'
 import {
@@ -7,13 +12,13 @@ import {
   subscribeChatProgramFacts,
   readChatProgramFactsVersion
 } from './host-chat-program'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import {
   acquireHostStructuredAgentAvailability,
   firstHostStructuredAgentAvailability
-} from '@/runtime/host-structured-agent-availability'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agent-availability'
+import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
@@ -24,7 +29,7 @@ import {
 } from './agent-detection-target-inventory'
 
 export const useChatProgramFactsVersion = (): number =>
-  useSyncExternalStore(
+  useAppViewExternalStore(
     subscribeChatProgramFacts,
     readChatProgramFactsVersion,
     readChatProgramFactsVersion
@@ -58,18 +63,19 @@ export function holdChatProgramFacts(context: ReturnType<typeof resolveChatProgr
 }
 
 export function useChatProgramFacts(workspace: ProspectiveWorkspace, active = true): void {
+  const viewActive = useAppStateViewActive()
   useChatProgramFactsVersion()
   // Hidden worktrees' tab bars stay mounted; resolving per store write there is wasted work.
-  const key = useAppStore((state) =>
+  const key = useAppStateValue((state) =>
     active ? resolveChatProgramContext(state, workspace).revision : null
   )
   useEffect(() => {
-    return active
+    return active && viewActive
       ? holdChatProgramFacts(resolveChatProgramContext(useAppStore.getState(), workspace)).release
       : undefined
     // The descriptor covers all owner inputs; resource notifications do not reopen a live lease.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, active])
+  }, [key, active, viewActive])
 }
 
 /** Listing and selected-entry readiness are separate; null preserves pending-inventory fallback. */
@@ -78,7 +84,7 @@ export function useAgentsOfferedForLaunch(
   detected: ReadonlySet<TuiAgent> | null
 ): ReadonlySet<TuiAgent> | null {
   useChatProgramFacts(workspace)
-  const key = useAppStore((state) =>
+  const key = useAppStateValue((state) =>
     detected === null ? null : agentsOfferedForLaunch(state, workspace, [...detected]).join(',')
   )
   return useMemo(() => (key === null ? null : new Set(key.split(',').filter(isTuiAgent))), [key])

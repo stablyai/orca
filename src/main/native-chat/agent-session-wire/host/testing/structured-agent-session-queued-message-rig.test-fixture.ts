@@ -59,7 +59,7 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const store = await openTestAgentSessionRecordStore(root)
+  let store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const makeHost = () =>
@@ -205,7 +205,7 @@ export async function createQueuedMessageTestRig(
     await result
     await eventually(async () => {
       if (host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {
-        await proveProviderOpen()
+        provider.proveOpen()
       }
       expect((await submission(id))?.handedOverAt).toBeDefined()
     })
@@ -238,13 +238,16 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** Graceful restart preserves personal Stop pauses because quit writes no close Stop event. */
-  async function restartHostProcess(): Promise<void> {
-    await quitRestartHostProcess()
-  }
-
   /** Replace the host without graceful close, reusing persisted state. */
   function crashRestartHostProcess(): void {
+    host = makeHost()
+  }
+
+  /** A crash loses process-local lease authority as well as cached conversation state. */
+  async function crashRestartHostFromDisk(): Promise<void> {
+    await host.collaboratorsForTests().runtimeState.stopLeaseRenewal()
+    await store.renewLeases([])
+    store = await openTestAgentSessionRecordStore(root)
     host = makeHost()
   }
 
@@ -275,10 +278,6 @@ export async function createQueuedMessageTestRig(
     await eventually(() =>
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
-    await proveProviderOpen()
-  }
-
-  async function proveProviderOpen(): Promise<void> {
     provider.proveOpen()
     await Promise.resolve()
   }
@@ -291,7 +290,9 @@ export async function createQueuedMessageTestRig(
 
   return {
     root,
-    store,
+    get store() {
+      return store
+    },
     get host() {
       return host
     },
@@ -317,8 +318,9 @@ export async function createQueuedMessageTestRig(
     workingSend,
     settleAccepted,
     settleRejected,
-    restartHostProcess,
+    restartHostProcess: quitRestartHostProcess,
     crashRestartHostProcess,
+    crashRestartHostFromDisk,
     quitRestartHostProcess,
     queuePause,
     restartOffers,

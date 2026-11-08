@@ -27,7 +27,7 @@ import {
   resumeRuntimeEnvironmentStatus
 } from '../ssh/ssh-host-user-disconnect'
 import { releaseUnlinkedHostTransport } from '../ssh/ssh-session-teardown'
-import type { ManagedServerActions } from '../../runtime/managed-server-actions-registry'
+import type { ManagedServerActions } from '../../runtime/hosts/management/managed-server-actions-registry'
 import {
   retireRemovedRuntimeEnvironment,
   type RemovedServerStore

@@ -1,5 +1,5 @@
 import type { Mock } from 'vitest'
-import type * as BoundedFileReader from '../../../shared/node-bounded-file-reader'
+import type * as BoundedFileReader from '../../../shared/file-content/node-bounded-file-reader'
 
 type MockFn = Mock
 

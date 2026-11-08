@@ -7,7 +7,7 @@ import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
 import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
 import { PaletteLiveStatusProvider } from '@/components/cmd-j/palette-live-status'
 import { getPaletteFilterSelectionCount } from '@/components/cmd-j/palette-filter'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './worktree-jump-palette-entry'
@@ -22,11 +22,12 @@ export function WorktreeJumpPaletteSurface({
 }: {
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const selectedTask = controller.taskItems.find(
     (item) => item.id === controller.commandSelectedItemId
   )
   const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
-  const emptyState = getWorktreeJumpPaletteEmptyState(controller)
+  const emptyState = getWorktreeJumpPaletteEmptyState(controller, t)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const paletteDialog = (
     <CommandDialog
@@ -35,8 +36,8 @@ export function WorktreeJumpPaletteSurface({
       shouldFilter={false}
       onOpenAutoFocus={controller.handleOpenAutoFocus}
       onCloseAutoFocus={controller.handleCloseAutoFocus}
-      title={translate('auto.components.WorktreeJumpPalette.4ee378034d', 'Jump to...')}
-      description={translate(
+      title={t('auto.components.WorktreeJumpPalette.4ee378034d', 'Jump to...')}
+      description={t(
         'auto.components.WorktreeJumpPalette.2770f02910',
         'Search chats, terminals, workspaces, tasks, settings, and actions'
       )}
@@ -69,7 +70,7 @@ export function WorktreeJumpPaletteSurface({
     >
       <CommandInput
         ref={controller.inputRef}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.WorktreeJumpPalette.27f10cca63',
           'Search chats, terminals, workspaces, tasks, settings, and actions...'
         )}
@@ -97,7 +98,7 @@ export function WorktreeJumpPaletteSurface({
         anchorRef={controller.inputRef}
         open={controller.emojiInput.open}
         commandValue={controller.emojiInput.commandValue}
-        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        heading={t('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
         suggestions={controller.emojiInput.suggestions}
         onCommandValueChange={controller.emojiInput.onCommandValueChange}
         onSelect={controller.emojiInput.selectSuggestion}
@@ -122,11 +123,8 @@ export function WorktreeJumpPaletteSurface({
         controller.selectableItems.length === 0 &&
         !controller.showCreateAction ? (
           <PaletteState
-            title={translate(
-              'auto.components.WorktreeJumpPalette.ff908adfe9',
-              'Loading jump targets'
-            )}
-            subtitle={translate(
+            title={t('auto.components.WorktreeJumpPalette.ff908adfe9', 'Loading jump targets')}
+            subtitle={t(
               'auto.components.WorktreeJumpPalette.684e8d7bc2',
               'Gathering your recent worktrees and open tabs.'
             )}
@@ -158,47 +156,37 @@ export function WorktreeJumpPaletteSurface({
           {selectedTask ? (
             <>
               <ShortcutKeyCombo keys={[modKey, 'Enter']} />
-              <span>{translate('worktreeJumpPalette.taskCreate', 'Create workspace')}</span>
+              <span>{t('worktreeJumpPalette.taskCreate', 'Create workspace')}</span>
             </>
           ) : null}
-          <FooterKey>
-            {translate('auto.components.WorktreeJumpPalette.f65d992a11', 'Enter')}
-          </FooterKey>
-          <span>{translate('auto.components.WorktreeJumpPalette.45def60329', 'Open')}</span>
-          <FooterKey>
-            {translate('auto.components.WorktreeJumpPalette.66b5a67bee', 'Esc')}
-          </FooterKey>
-          <span>{translate('auto.components.WorktreeJumpPalette.75499e01d9', 'Close')}</span>
+          <FooterKey>{t('auto.components.WorktreeJumpPalette.f65d992a11', 'Enter')}</FooterKey>
+          <span>{t('auto.components.WorktreeJumpPalette.45def60329', 'Open')}</span>
+          <FooterKey>{t('auto.components.WorktreeJumpPalette.66b5a67bee', 'Esc')}</FooterKey>
+          <span>{t('auto.components.WorktreeJumpPalette.75499e01d9', 'Close')}</span>
           <FooterKey>↑↓</FooterKey>
-          <span>{translate('auto.components.WorktreeJumpPalette.ac037cfac2', 'Move')}</span>
-          <FooterKey>{translate('worktreeJumpPalette.filter.tabKey', 'Tab')}</FooterKey>
-          <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
+          <span>{t('auto.components.WorktreeJumpPalette.ac037cfac2', 'Move')}</span>
+          <FooterKey>{t('worktreeJumpPalette.filter.tabKey', 'Tab')}</FooterKey>
+          <span>{t('worktreeJumpPalette.filter.label', 'Filter')}</span>
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
         {controller.filterActive
-          ? `${translate(
-              'worktreeJumpPalette.filter.ariaActiveCount',
-              'Filter: {{count}} active.',
-              {
-                count: getPaletteFilterSelectionCount(controller.filter),
-                defaultValue_one: 'Filter: {{count}} active.'
-              }
-            )} `
+          ? `${t('worktreeJumpPalette.filter.ariaActiveCount', 'Filter: {{count}} active.', {
+              count: getPaletteFilterSelectionCount(controller.filter),
+              defaultValue_one: 'Filter: {{count}} active.'
+            })} `
           : ''}
         {controller.deferredQuery.trim()
-          ? translate(
-              'auto.components.WorktreeJumpPalette.resultsFound',
-              '{{count}} results found.',
-              { count: resultCount, defaultValue_one: '{{count}} result found.' }
-            )
-          : translate(
-              'auto.components.WorktreeJumpPalette.itemsAvailable',
-              '{{count}} items available.',
-              { count: resultCount, defaultValue_one: '{{count}} item available.' }
-            )}
+          ? t('auto.components.WorktreeJumpPalette.resultsFound', '{{count}} results found.', {
+              count: resultCount,
+              defaultValue_one: '{{count}} result found.'
+            })
+          : t('auto.components.WorktreeJumpPalette.itemsAvailable', '{{count}} items available.', {
+              count: resultCount,
+              defaultValue_one: '{{count}} item available.'
+            })}
         {controller.showCreateAction
-          ? ` ${translate('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
+          ? ` ${t('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
           : ''}
       </div>
     </CommandDialog>

@@ -1,7 +1,7 @@
-import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
-import { automationLaunchInputs } from '../../../../shared/automation-launch-setup-source'
+import { buildAutomationRrule } from '../../../../shared/automations/scheduling/automation-schedule-occurrences'
+import { automationLaunchInputs } from '../../../../shared/automations/launch/automation-launch-choices'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import type { AutomationPrecheck } from '../../../../shared/automations-types'
+import type { AutomationPrecheck } from '../../../../shared/automations/automation-definition'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   hasExtraAgentArgs,

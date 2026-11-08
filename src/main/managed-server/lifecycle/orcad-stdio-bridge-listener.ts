@@ -70,7 +70,8 @@ export async function listenOrcadStdioBridge(
     pipeSocketThroughBridge(socket, channel, mode)
   }
 
-  const server = createServer((socket) => {
+  // Why noDelay: bridged orcad RPC carries keystroke echo; Nagle would hold small writes behind an unacked segment.
+  const server = createServer({ noDelay: true }, (socket) => {
     sockets.add(socket)
     socket.on('error', () => socket.destroy())
     const entry = {

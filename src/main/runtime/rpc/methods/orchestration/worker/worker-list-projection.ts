@@ -3,8 +3,8 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker,
   type OrchestrationFleetWorker
-} from '../../../../../../shared/orchestration-fleet-projection'
-import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
+} from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-outcome-resolution'
 import {
   liveWorkerTerminalAutoReleaseAt,
   type WorkerTerminalListState

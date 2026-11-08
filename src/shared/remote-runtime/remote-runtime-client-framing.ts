@@ -163,7 +163,11 @@ async function latchedHostPredatesV2Token(
     status = await dial.readStatus(
       createRemoteRuntimeClientHandshake(hostPublicKeyB64, { latchedHostCheck: true })
     )
-  } catch {
+  } catch (error) {
+    // A sealed refusal of this device's credential proves the pinned host answered: it was revoked.
+    if (isCredentialRefusal(error)) {
+      throw error
+    }
     return false
   }
   const capabilities = status.ok ? (status.result.capabilities ?? []) : null
@@ -189,4 +193,12 @@ function latchedHostRefusalError(error: unknown): Error {
         closeCode: error.closeCode
       })
     : new Error(message)
+}
+
+function isCredentialRefusal(error: unknown): boolean {
+  return (
+    error instanceof RemoteRuntimeClientError &&
+    error.code === 'unauthorized' &&
+    error.pairingStage === 'access-grant'
+  )
 }

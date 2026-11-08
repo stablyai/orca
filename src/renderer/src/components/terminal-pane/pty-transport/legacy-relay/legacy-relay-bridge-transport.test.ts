@@ -51,7 +51,7 @@ vi.stubGlobal('window', {
 const { createLegacyRelayBridgeTransport: createTransport } =
   await import('./legacy-relay-bridge-transport')
 const { legacyRelayBridgePtyIdForPane, legacyRelayBridgedPtyIdsForClosingTab } =
-  await import('../../legacy-relay-bridge-panes')
+  await import('./legacy-relay-bridge-panes')
 
 const created: PtyTransport[] = []
 function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransport): PtyTransport {

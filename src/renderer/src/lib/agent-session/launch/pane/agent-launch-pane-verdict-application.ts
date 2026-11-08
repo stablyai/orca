@@ -1,7 +1,7 @@
 /** Apply main’s typed spawn/takeback verdicts, retaining final pane outcomes until session cleanup. */
 
 import type { AgentLaunchPaneVerdictEvent } from '../../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
+import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
 import { collectLeafIdsInOrder } from '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { useAppStore } from '@/store/index'
 import { forgetAgentLaunchPanePrompt } from './agent-launch-pane-prompt'

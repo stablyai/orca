@@ -1,6 +1,6 @@
 /** Capture fences only for requests that survive dedupe, freshness, in-flight and retry-cooldown checks. */
 
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type { AutomationHostCache } from './automation-host-cache'
 import type { AutomationHostRequestFence } from './automation-host-cache-types'
 import type { AutomationHostFetchTarget } from './automation-host-scheduler'

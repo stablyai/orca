@@ -4,7 +4,7 @@ import type { LaunchSource } from '../../../../../../shared/telemetry-property-s
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import type { LaunchAgentInNewTabRequest } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/native-chat-composer-focus-intent'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   requestedSurface?: AgentSessionLaunchRequest['requestedSurface']
@@ -20,6 +20,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
+  /** A surface the user already sees for this launch presents a preparation refusal, not a toast. */
+  presentsRefusal?: true
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
   /** Raw action Arguments replace configured Arguments while inheriting host permission. */
@@ -30,6 +32,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
   sessionOptionsYieldToAgentArgs?: true
   initialCwd?: string | null
+  /** Unsaved section root whose trust is prepared without changing placement. */
+  trustWorktreeId?: string
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */

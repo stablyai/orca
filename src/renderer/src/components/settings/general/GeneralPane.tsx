@@ -19,10 +19,11 @@ import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
 import { DefaultWindowsProjectRuntimeSetting } from './project-runtime/DefaultWindowsProjectRuntimeSetting'
 import { defaultScopeHost } from '@/lib/default-creation-host'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
 
@@ -85,6 +86,7 @@ export function GeneralPane({
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
     (s) => s.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
@@ -109,32 +111,32 @@ export function GeneralPane({
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, generalNavigationSearchEntries) ? (
-      <section key="navigation" className="space-y-4">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
-        />
+      <SettingsGroup
+        key="navigation"
+        title={t('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
+      >
         <RecentTabOrderControl
           ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
           keywords={tabOrderKeywords}
           updateSettings={updateSettings}
         />
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralPane.editor_preview_tabs',
             'Reuse a preview tab when browsing files'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralPane.editor_preview_tabs_description',
             'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
           )}
           keywords={['preview', 'tab', 'editor', 'explorer', 'reuse', 'replace', 'italic']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralPane.editor_preview_tabs',
               'Reuse a preview tab when browsing files'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralPane.editor_preview_tabs_description',
               'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
             )}
@@ -147,22 +149,22 @@ export function GeneralPane({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralPane.5cb5475664',
             'Confirm before closing pinned tabs'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralPane.36b2a5dc6d',
             'Show a confirmation dialog before a pinned tab is closed.'
           )}
           keywords={['pinned', 'tab', 'confirm', 'close']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralPane.5cb5475664',
               'Confirm before closing pinned tabs'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralPane.36b2a5dc6d',
               'Show a confirmation dialog before a pinned tab is closed.'
             )}
@@ -173,22 +175,22 @@ export function GeneralPane({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralPane.confirm_running_work_close',
             'Confirm before closing active chats or terminals'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralPane.confirm_running_work_close_description',
             'Ask before stopping an active agent or command when closing its chat or terminal.'
           )}
           keywords={['chat', 'terminal', 'agent', 'command', 'confirm', 'close', 'OMP']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralPane.confirm_running_work_close',
               'Confirm before closing active chats or terminals'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralPane.confirm_running_work_close_description',
               'Ask before stopping an active agent or command when closing its chat or terminal.'
             )}
@@ -201,7 +203,7 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
-      </section>
+      </SettingsGroup>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
       <GeneralWorkspaceSettingsSection
@@ -218,17 +220,14 @@ export function GeneralPane({
       searchQuery,
       projectRuntimeSearchEntries
     ) ? (
-      <section key="project-runtime" className="space-y-4">
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.GeneralPane.projectRuntime',
-            'Project Runtime'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralPane.projectRuntimeDescription',
-            'Default runtime for local Windows projects that do not override it.'
-          )}
-        />
+      <SettingsGroup
+        key="project-runtime"
+        title={t('auto.components.settings.GeneralPane.projectRuntime', 'Project Runtime')}
+        description={t(
+          'auto.components.settings.GeneralPane.projectRuntimeDescription',
+          'Default runtime for local Windows projects that do not override it.'
+        )}
+      >
         <DefaultWindowsProjectRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
@@ -237,7 +236,7 @@ export function GeneralPane({
           wslDistros={wslDistros}
           wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
         />
-      </section>
+      </SettingsGroup>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
@@ -266,7 +265,7 @@ export function GeneralPane({
 
   return (
     <div className="space-y-6">
-      <SettingsSectionStack sections={visibleSections} spacing="section" />
+      <SettingsSectionStack sections={visibleSections} />
       {matchesSettingsSearch(searchQuery, getGeneralSupportSearchEntries()) ? (
         <GeneralSupportSection
           hasPrecedingSections={visibleSections.some((section) => section !== null)}

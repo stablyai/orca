@@ -52,7 +52,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
@@ -235,7 +235,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
-      settings: null,
       repo: null,
       worktreeId: WORKTREE_ID,
       promptDelivery: 'submit-after-ready',

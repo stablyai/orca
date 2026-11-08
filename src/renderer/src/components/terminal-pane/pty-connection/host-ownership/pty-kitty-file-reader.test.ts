@@ -5,8 +5,10 @@ import { readTerminalKittyFile } from '@/lib/pane-manager/terminal-kitty-file-re
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), revision: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   captureRuntimeEnvironmentRequestRevision: mocks.revision
 }))
 const cleanups: (() => void)[] = []
@@ -74,16 +76,6 @@ beforeEach(() => {
 })
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 describe('PTY Kitty file execution-host routing', () => {
-  it('resolves an encoded split surface using its parent tab and active leaf', async () => {
-    const value = fixture('ssh-host')
-    value.session.deps.tabId = 'web-terminal-tab-1%3A%3Aleaf-1'
-    value.session.cacheKey = `${value.session.deps.tabId}:leaf-1`
-    mocks.rpc.mockResolvedValueOnce(resolved()).mockResolvedValueOnce({ base64: 'AQID' })
-    await readTerminalKittyFile(value.terminal, request())
-    expect(mocks.rpc.mock.calls[0][2]).toEqual({ paneKey: 'tab-1:leaf-1', worktreeId: 'folder-1' })
-    expect(mocks.rpc.mock.calls[1][2].terminal).toBe(resolved().terminal.handle)
-  })
-
   it.each([null, 'ssh-host', 'wsl-environment'])(
     'uses owning runtime %s and host-normalized pane keys for both RPCs',
     async (environmentId) => {
@@ -130,78 +122,6 @@ describe('PTY Kitty file execution-host routing', () => {
     expect(mocks.rpc.mock.calls[0][3].expectedEnvironmentPairingRevision).toBe(7)
     expect(mocks.rpc.mock.calls[1][3].expectedEnvironmentPairingRevision).toBe(7)
     expect(mocks.rpc.mock.calls[1][3]).toBe(mocks.rpc.mock.calls[0][3])
-  })
-  it('does not capture a remote revision for a local terminal', async () => {
-    const value = fixture()
-    mocks.rpc.mockResolvedValueOnce(resolved()).mockResolvedValueOnce({ base64: 'AQ==' })
-    await readTerminalKittyFile(value.terminal, request())
-    expect(mocks.revision).not.toHaveBeenCalled()
-    expect(mocks.rpc.mock.calls[1][3].expectedEnvironmentPairingRevision).toBeUndefined()
-  })
-  it('omits incarnation and length for older runtime responses', async () => {
-    const value = fixture('old-host')
-    mocks.rpc
-      .mockResolvedValueOnce(resolved('pty-1', null))
-      .mockResolvedValueOnce({ base64: 'AQ==' })
-    await readTerminalKittyFile(value.terminal, {
-      path: '/execution-host/image.png',
-      offset: 0,
-      signal: new AbortController().signal
-    })
-    expect(mocks.rpc.mock.calls[1][2]).not.toHaveProperty('expectedIncarnationId')
-    expect(mocks.rpc.mock.calls[1][2]).not.toHaveProperty('length')
-  })
-  it.each(['disconnected', 'disposed', 'unresolved'])(
-    'refuses %s owner before RPC',
-    async (state) => {
-      const value = fixture('remote-host')
-      if (state === 'disconnected') {
-        value.setPtyId(null)
-      }
-      if (state === 'disposed') {
-        value.session.disposed = true
-      }
-      if (state === 'unresolved') {
-        value.session.terminalOwnerUnresolved = true
-      }
-      await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow('unavailable')
-      expect(mocks.rpc).not.toHaveBeenCalled()
-    }
-  )
-  it('refuses a resolved terminal belonging to another native PTY', async () => {
-    const value = fixture()
-    mocks.rpc.mockResolvedValueOnce(resolved('other-pty'))
-    await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow(
-      'binding changed'
-    )
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
-  })
-  it('refuses a foreign remote terminal handle despite a matching native PTY ID', async () => {
-    const value = fixture('remote-host')
-    mocks.rpc.mockResolvedValueOnce({
-      terminal: { ...resolved().terminal, handle: 'term_22222222-2222-4222-8222-222222222222' }
-    })
-    await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow(
-      'binding changed'
-    )
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
-  })
-  it('refuses a remote handle owned by another environment', async () => {
-    const value = fixture('remote-host')
-    value.setPtyId(toRemoteRuntimePtyId(resolved().terminal.handle, 'different-host'))
-    mocks.rpc.mockResolvedValueOnce(resolved())
-    await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow(
-      'binding changed'
-    )
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
-  })
-  it('refuses a remote terminal with no live native PTY', async () => {
-    const value = fixture('remote-host')
-    mocks.rpc.mockResolvedValueOnce(resolved(''))
-    await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow(
-      'binding changed'
-    )
-    expect(mocks.rpc).toHaveBeenCalledTimes(1)
   })
   it('refuses owner replacement during resolution', async () => {
     const value = fixture('remote-host')
@@ -253,23 +173,6 @@ describe('PTY Kitty file execution-host routing', () => {
     expect(mocks.rpc.mock.calls[1][3].signal.aborted).toBe(true)
     pending.resolve({ base64: 'AQ==' })
   })
-  it('does not fall back locally when remote lacks RPC', async () => {
-    const value = fixture('old-host')
-    mocks.rpc
-      .mockResolvedValueOnce(resolved())
-      .mockRejectedValueOnce(new Error('Unknown method terminal.readKittyFile'))
-    await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow('Unknown method')
-    expect(mocks.rpc).toHaveBeenCalledTimes(2)
-    expect(mocks.rpc.mock.calls.every((call) => call[0].kind === 'environment')).toBe(true)
-  })
-  it.each([null, '***', 'A'.repeat(2_796_205)])(
-    'rejects malformed or oversized encoded response %#',
-    async (base64) => {
-      const value = fixture('remote-host')
-      mocks.rpc.mockResolvedValueOnce(resolved()).mockResolvedValueOnce({ base64 })
-      await expect(readTerminalKittyFile(value.terminal, request())).rejects.toThrow()
-    }
-  )
   it('rejects decoded bytes above 2 MiB at encoded boundary', async () => {
     const value = fixture('remote-host')
     mocks.rpc

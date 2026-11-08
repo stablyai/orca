@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'

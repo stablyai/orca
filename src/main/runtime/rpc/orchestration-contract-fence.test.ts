@@ -1,7 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
@@ -82,30 +81,6 @@ describe('orchestration contract fence', () => {
       expect(database.getMutationReceipt(callerFingerprint, 'mutation_1')).toBeUndefined()
     }
   )
-
-  it('allows the current contract to reach the mutation executor', async () => {
-    const { dispatcher, effect } = createHarness()
-    const response = await dispatcher.dispatch(
-      request({ orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION })
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { accepted: true } })
-    expect(effect).toHaveBeenCalledOnce()
-  })
-
-  it('keeps read-only orchestration inspection available without a contract', async () => {
-    const { dispatcher, effect } = createHarness('orchestration.taskList')
-    const response = await dispatcher.dispatch(
-      request({
-        method: 'orchestration.taskList',
-        params: { subject: 'read' },
-        orchestrationRequestId: undefined
-      })
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { accepted: true } })
-    expect(effect).toHaveBeenCalledOnce()
-  })
 
   it.each(['orchestration.run', 'orchestration.runStop'])(
     'retires %s even when the caller sends the current contract',

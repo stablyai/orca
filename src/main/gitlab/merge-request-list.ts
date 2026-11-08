@@ -20,6 +20,7 @@ import {
   type LocalGitExecOptions
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { readGlabViewer } from './gitlab-auth-and-rate-limit'
 import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
 
 const INVOLVEMENT_PARAM: Record<GitLabMRInvolvement, string> = {
@@ -42,19 +43,14 @@ function isSignedOutLookupFailure(err: unknown): boolean {
   )
 }
 
-// Uncached: a cached id goes stale when glab switches accounts on this host, a WSL distro or a paired server.
 async function involvementFilterParam(
   involvement: GitLabMRInvolvement,
   hostArgs: string[],
   options: Parameters<typeof glabExecFileAsync>[1]
 ): Promise<string> {
-  const { stdout } = await glabExecFileAsync(['api', ...hostArgs, 'user'], options).catch(
-    (err: unknown) => {
-      throw isSignedOutLookupFailure(err) ? new GitLabSignInRequiredError() : err
-    }
-  )
-  const viewer: unknown = JSON.parse(stdout)
-  const viewerId = viewer && typeof viewer === 'object' && 'id' in viewer ? viewer.id : undefined
+  const { id: viewerId } = await readGlabViewer(hostArgs, options).catch((err: unknown) => {
+    throw isSignedOutLookupFailure(err) ? new GitLabSignInRequiredError() : err
+  })
   if (typeof viewerId !== 'number' || !Number.isSafeInteger(viewerId) || viewerId <= 0) {
     throw new Error('Could not identify the signed-in GitLab user.')
   }

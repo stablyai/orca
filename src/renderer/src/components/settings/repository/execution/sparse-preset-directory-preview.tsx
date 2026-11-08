@@ -1,10 +1,11 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SparsePresetDirectoryPreview({
   directories
 }: {
   directories: string[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const visibleDirectories = directories.slice(0, 6)
   const hiddenCount = directories.length - visibleDirectories.length
 
@@ -21,7 +22,7 @@ export function SparsePresetDirectoryPreview({
       ))}
       {hiddenCount > 0 ? (
         <span className="rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.SparsePresetSettingsSection.8b64731aaf',
             '+{{value0}} more',
             { value0: hiddenCount }

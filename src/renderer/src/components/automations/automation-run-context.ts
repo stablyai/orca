@@ -1,7 +1,7 @@
 import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'

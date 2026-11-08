@@ -7,7 +7,7 @@ import {
 } from './terminal-pane-menu-copy-actions'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolvePaneAgentSessionId } from '../pane-agent-session-id'
+import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import type { UseTerminalPaneContextMenuDeps } from '../context-menu/terminal-pane-context-menu-types'
 
 export function createTerminalPaneMenuCopyActions({

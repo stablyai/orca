@@ -78,7 +78,8 @@ function publishHostGraph(): void {
 // The host app relaunched with its daemon PTY alive; its renderer has not published yet.
 async function connectThenLoseHostRenderer(options: { staleSend?: boolean } = {}) {
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-  const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+  const handleEvents =
+    await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
   const onPtyExit = vi.fn()
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',

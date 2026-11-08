@@ -1,8 +1,8 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
-import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { activateWebRuntimeSessionWorktree } from '@/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-activation-nav-registration'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
@@ -37,9 +37,10 @@ import { findPendingWorktreeCreationId } from '../creation/pending-worktree-crea
 import {
   buildActivationStateTransition,
   markVisited,
-  readPreviousActive
+  readPreviousActive,
+  recordShownTabFocus
 } from './worktree-activation-visit'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 import {
   workspaceActivationResult,
@@ -110,8 +111,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
         )))
   if (!shouldGateAgentActivation) {
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(workspaceKey, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
@@ -142,6 +142,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), workspaceKey)
 
   return { opened: { primaryTabId } }
 }
@@ -220,8 +221,7 @@ export function activateAndRevealWorktreeWithOutcome(
   if (!shouldGateAgentActivation) {
     // Resume preserved provider sessions before shell seeding; synchronous tab creation prevents an extra bare shell.
     resumeSleepingAgentSessionsForWorktree(worktreeId)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
@@ -272,11 +272,10 @@ export function activateAndRevealWorktreeWithOutcome(
     }
   }
 
-  if (
+  const startupAccepted =
     opts?.notifyHostRuntime !== false &&
     !opts?.backendStartupTerminalSpawned &&
-    opts?.providesInitialSurface !== true
-  ) {
+    opts?.providesInitialSurface !== true &&
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
@@ -284,9 +283,9 @@ export function activateAndRevealWorktreeWithOutcome(
       startup: opts?.startup,
       agent: opts?.agent
     })
-  }
+  recordShownTabFocus(useAppStore.getState(), worktreeId)
 
-  return { opened: { primaryTabId } }
+  return { opened: { primaryTabId, ...(startupAccepted ? { startupAccepted } : {}) } }
 }
 
 /** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */

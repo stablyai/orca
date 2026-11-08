@@ -8,6 +8,7 @@ import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentati
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,7 @@ export function ActivityThreadHoverCardSummary({
   onJumpToWorkspace?: (event: React.MouseEvent) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktree, repo } = thread
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -69,12 +71,9 @@ export function ActivityThreadHoverCardSummary({
     return getExecutionHostLabel(executionHostId)
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
-  const { taskTitle, needsAttention } = activityThreadRowCopy(thread)
+  const { taskTitle, needsAttention } = activityThreadRowCopy(thread, t)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
-  const copyPathLabel = translate(
-    'auto.components.activity.ActivityThreadHoverCard.copyPath',
-    'Copy path'
-  )
+  const copyPathLabel = t('auto.components.activity.ActivityThreadHoverCard.copyPath', 'Copy path')
 
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
@@ -144,7 +143,7 @@ export function ActivityThreadHoverCardSummary({
                 needsAttention ? 'text-agent-question-text' : 'text-muted-foreground'
               )}
             >
-              {threadAgentStateLabel(thread)}
+              {threadAgentStateLabel(thread, t)}
             </span>
             <span className="text-muted-foreground/40">•</span>
             <EventTime timestamp={thread.latestTimestamp} compact />
@@ -168,14 +167,11 @@ export function ActivityThreadHoverCardSummary({
       <WorktreeCardDetailSection>
         <DetailHeader
           icon={<FolderGit2 className="size-3 text-muted-foreground" />}
-          label={translate(
-            'auto.components.activity.ActivityThreadHoverCard.workspace',
-            'Workspace'
-          )}
+          label={t('auto.components.activity.ActivityThreadHoverCard.workspace', 'Workspace')}
           actions={
             canJump ? (
               <MetadataActionIcon
-                label={translate(
+                label={t(
                   'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
                   'Jump to workspace'
                 )}

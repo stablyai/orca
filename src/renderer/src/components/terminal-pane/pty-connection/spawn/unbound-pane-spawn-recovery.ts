@@ -1,4 +1,4 @@
-import { warnTerminalLifecycleAnomaly } from '../../terminal-lifecycle-diagnostics'
+import { warnTerminalLifecycleAnomaly } from '../../layout/reconciliation/terminal-lifecycle-diagnostics'
 import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

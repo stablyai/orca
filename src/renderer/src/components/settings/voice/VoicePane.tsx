@@ -12,10 +12,11 @@ import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
+import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 
 type VoicePaneProps = {
@@ -24,6 +25,7 @@ type VoicePaneProps = {
 }
 
 export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
+  const t = useTranslate()
   // Keep fallback identity stable so parent renders cannot repeat fetch effects.
   const [defaultVoiceSettings] = useState(getDefaultVoiceSettings)
   const voiceSettings = settings.voice ?? defaultVoiceSettings
@@ -110,28 +112,25 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       isMounted: () => mountedRef.current,
       notifyPermissionGranted: () =>
         toast.success(
-          translate(
-            'auto.components.settings.VoicePane.cd9fe37556',
-            'Microphone permission granted'
-          )
+          t('auto.components.settings.VoicePane.cd9fe37556', 'Microphone permission granted')
         ),
       notifyPermissionOpenedSystemSettings: () =>
         toast.message(
-          translate(
+          t(
             'auto.components.settings.VoicePane.1eac933202',
             'Opened macOS Privacy & Security. Enable dictation again after granting access.'
           )
         ),
       notifyPermissionRequired: () =>
         toast.message(
-          translate(
+          t(
             'auto.components.settings.VoicePane.f9a9cf6928',
             'Microphone permission is required before enabling voice dictation.'
           )
         ),
       notifyPermissionRequestFailed: () =>
         toast.error(
-          translate(
+          t(
             'auto.components.settings.VoicePane.ad5d036ecc',
             'Could not request microphone permission. Voice dictation was not enabled.'
           )
@@ -164,16 +163,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       setOpenAiDialogOpen(false)
       setOpenAiApiKeyDraft('')
       setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved')
-      )
+      toast.success(t('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved'))
     } catch (err) {
       toast.error(
         readIpcErrorMessage(err) ??
-          translate(
-            'auto.components.settings.VoicePane.8572bbb537',
-            'Failed to save OpenAI API key'
-          )
+          t('auto.components.settings.VoicePane.8572bbb537', 'Failed to save OpenAI API key')
       )
     } finally {
       if (mountedRef.current) {
@@ -194,17 +188,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       setOpenAiDialogOpen(false)
       setOpenAiApiKeyDraft('')
       setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.37aba8bb63', 'OpenAI API key cleared')
-      )
+      toast.success(t('auto.components.settings.VoicePane.37aba8bb63', 'OpenAI API key cleared'))
     } catch (err) {
       toast.error(
         err instanceof Error
           ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.62d2a84d31',
-              'Failed to clear OpenAI API key'
-            )
+          : t('auto.components.settings.VoicePane.62d2a84d31', 'Failed to clear OpenAI API key')
       )
     } finally {
       if (mountedRef.current) {
@@ -239,12 +228,20 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
       />
 
+      <Separator />
+
+      <VoiceModelUnloadSetting
+        voiceSettings={voiceSettings}
+        selectedModel={selectedModel}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
       {showOpenAiSettingsRow && (
         <>
           <Separator />
           <UnsealedCredentialNotice
             protection={openAiKeyProtection}
-            credentialName={translate(
+            credentialName={t(
               'auto.components.settings.VoicePane.openAiKeyName',
               'Your OpenAI transcription key'
             )}

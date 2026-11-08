@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithHasRecentTerminalOutputPath } from '../output/terminal-output-path'
 import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeFileCommandSurface } from '../../runtime-file-command-surface'
+import type { RuntimeFileCommandSurface } from '../../construction/runtime-file-command-surface'
 
 export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecentTerminalOutputPath {
   abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'

@@ -24,7 +24,7 @@ import {
   type AutomaticWorkResumeOutcome,
   type AutomaticWorkResumeResult,
   type AutomaticWorkStatus
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from '../../admission/daemon-automatic-work-protocol'
 import type {

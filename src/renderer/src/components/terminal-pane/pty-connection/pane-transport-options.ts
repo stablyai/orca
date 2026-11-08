@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { notifyTerminalTypingDiscardedBeforeBind } from '../input/terminal-input-not-sent-notice'
-import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
+import { terminalShowsReplayedHistory } from '../snapshots/replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './spawn/disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './startup/cold-restore-resume-startup'
@@ -146,6 +146,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.draftPrompt
         ? { agentPromptDelivery: 'draft' as const }
         : {}),
+    ...(session.paneStartup?.freshAgentLaunch
+      ? { freshAgentLaunch: session.paneStartup.freshAgentLaunch }
+      : {}),
     ...(session.paneStartup?.agentArgsOverride !== undefined
       ? { agentArgsOverride: session.paneStartup.agentArgsOverride }
       : {}),
@@ -154,6 +157,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.trustWorktreeId
+      ? { trustWorktreeId: session.paneStartup.trustWorktreeId }
+      : {}),
     ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,

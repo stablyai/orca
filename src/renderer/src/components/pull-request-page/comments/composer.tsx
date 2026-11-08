@@ -14,9 +14,10 @@ import {
 } from '@/lib/comment-body-submit-state'
 import { addIssueCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
@@ -44,6 +45,7 @@ export function GHCommentComposer({
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const images = useGitHubImagePending()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -162,7 +164,7 @@ export function GHCommentComposer({
           requestAnimationFrame(autoGrow)
         }}
         onKeyDown={handleKeyDown}
-        placeholder={translate('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
+        placeholder={t('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
         rows={4}
         mentionOptions={mentionOptions}
         mentionError={mentionError}
@@ -177,7 +179,7 @@ export function GHCommentComposer({
             onClick={handleSubmit}
             disabled={!canSubmitComment || submitting || images.pending}
             className="absolute bottom-3 right-3 shadow-sm"
-            aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+            aria-label={t('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
           >
             {submitting ? (
               <LoaderCircle className="size-4 animate-spin" />
@@ -187,7 +189,7 @@ export function GHCommentComposer({
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          {t('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
         </TooltipContent>
       </Tooltip>
     </div>

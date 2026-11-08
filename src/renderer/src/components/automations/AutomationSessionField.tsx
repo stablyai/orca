@@ -3,32 +3,29 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationSessionFieldProps = {
   draft: AutomationDraft
-  toggleGroupClassName: string
-  toggleItemClassName: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
 export function AutomationSessionField({
   draft,
-  toggleGroupClassName,
-  toggleItemClassName,
   onDraftChange
 }: AutomationSessionFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Field
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
       label={
         <span className="inline-flex items-center gap-1">
-          {translate('auto.components.automations.AutomationSessionField.5ad314118e', 'Session')}
+          {t('auto.components.automations.AutomationSessionField.5ad314118e', 'Session')}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationSessionField.4bdce31f37',
                   'Session reuse help'
                 )}
@@ -38,7 +35,7 @@ export function AutomationSessionField({
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {translate(
+              {t(
                 'auto.components.automations.AutomationSessionField.b675112193',
                 'Reuse sends future runs to the previous live automation session. If that session is gone, Orca starts a fresh one.'
               )}
@@ -62,13 +59,13 @@ export function AutomationSessionField({
           }))
         }}
         size="sm"
-        className={toggleGroupClassName}
+        variant="segmented-card"
       >
-        <ToggleGroupItem value="fresh" className={toggleItemClassName}>
-          {translate('auto.components.automations.AutomationSessionField.c90888ee94', 'Fresh')}
+        <ToggleGroupItem value="fresh">
+          {t('auto.components.automations.AutomationSessionField.c90888ee94', 'Fresh')}
         </ToggleGroupItem>
-        <ToggleGroupItem value="reuse" className={toggleItemClassName}>
-          {translate('auto.components.automations.AutomationSessionField.f3c76dce51', 'Reuse')}
+        <ToggleGroupItem value="reuse">
+          {t('auto.components.automations.AutomationSessionField.f3c76dce51', 'Reuse')}
         </ToggleGroupItem>
       </ToggleGroup>
     </Field>

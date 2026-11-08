@@ -1,7 +1,7 @@
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { selectFreshExplicitAgentStatus } from '../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { selectRuntimeHookAgentRowForPane } from '../runtime/session-lifecycle/projection/runtime-mobile-agent-status-projection'
@@ -15,15 +15,28 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 const servers: { stop: () => void }[] = []
 const folders: string[] = []
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+})
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+  vi.useRealTimers()
   for (const folder of folders.splice(0)) {
     await rm(folder, { recursive: true, force: true })
   }
   vi.restoreAllMocks()
 })
+// Transcript polls run on the fake clock while transcript I/O stays real.
+const settle = (assertion: () => void) =>
+  vi.waitFor(
+    () => {
+      vi.advanceTimersByTime(250)
+      assertion()
+    },
+    { timeout: 5_000, interval: 10 }
+  )
 
 async function host(kind: string, initial: Record<string, unknown>[] = []) {
   // All captured user/assistant/system records survive, including the child interruption after kill.
@@ -125,10 +138,7 @@ it.each(['local', 'relay', 'spool'])(
     const before = p.row()
     expect(before?.subagents?.[0]?.state).toBe('working')
     await p.kill()
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 5_000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     const after = p.row()!
     expect(after.workingMode).toBe('monitoring')
     expect(after.mainAgent).toEqual(before?.mainAgent)
@@ -201,10 +211,7 @@ it.each(['local', 'relay'])(
     })
     const before = p.row()!
     await p.kill()
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 5_000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     expect(p.row()?.mainAgent).toEqual(before.mainAgent)
     expect(before.mainAgent?.outcome).toBe('cancellation')
     expect(p.row()?.interrupted).toBe(true)
@@ -237,10 +244,7 @@ it.each(['hook', 'kill'])('matches child-only ending and wait ownership via %s',
     await (ending === 'hook'
       ? p.post({ hook_event_name: 'SubagentStop', agent_id: 'a123' })
       : p.kill())
-    await vi.waitFor(
-      () => expect(p.row()?.subagents?.some((c) => c.id === 'a123')).not.toBe(true),
-      { timeout: 5_000, interval: 30 }
-    )
+    await settle(() => expect(p.row()?.subagents?.some((c) => c.id === 'a123')).not.toBe(true))
     expect(p.row()?.state).toBe(owner === 'sibling' || owner === 'root' ? 'waiting' : 'working')
     expect(p.row()?.toolName).toBe(owner === 'sibling' || owner === 'root' ? 'Bash' : undefined)
   }

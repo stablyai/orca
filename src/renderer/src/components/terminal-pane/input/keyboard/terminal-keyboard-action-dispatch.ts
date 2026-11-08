@@ -9,7 +9,7 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
-import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
+import type { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>

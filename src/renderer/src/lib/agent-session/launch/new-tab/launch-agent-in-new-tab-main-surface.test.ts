@@ -1,15 +1,16 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultSettings
 } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -28,10 +29,21 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
+vi.mock('@/lib/host-chat-program-acquisition', async (original) => ({
+  ...(await original<object>()),
+  acquireAgentLaunchChoices: async () => ({ detected: ['claude', 'codex'] })
+}))
+
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+
+vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () => ({
+  pasteAgentLaunchPromptOnceReady: async () => ({ delivered: true, failureNotified: false })
+}))
+
 createStoreCascadesMockApi()
 
-import { makeFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { makeFolderWorkspace as makeLaunchFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -71,8 +83,8 @@ describe('launchAgentInNewTab main-window surface', () => {
         nativeChatProviders: { claude: true }
       },
       folderWorkspaces: [
-        makeFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
-        makeFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
+        makeLaunchFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
+        makeLaunchFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
       ]
     }))
     store.getState().setActiveFolderWorkspace('captured', 'local')
@@ -132,11 +144,13 @@ describe('launchAgentInNewTab main-window surface', () => {
     const before = store.getState()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'opencode',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-1',
+        agent: 'opencode',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    )
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null

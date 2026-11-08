@@ -7,9 +7,9 @@ import { hostQueryKey } from '../query/host-query-key'
 import {
   sourceControlSettingsRead,
   type MobileSourceControlSettings
-} from '../transport/settings-read-operations'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+} from './mobile-source-control-settings-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 const DESKTOP_DEFAULTS: MobileSourceControlSettings = {
   groupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
@@ -19,10 +19,11 @@ const DESKTOP_DEFAULTS: MobileSourceControlSettings = {
 
 const NO_INPUT = {}
 
-// Mobile has no settings stream, so these go stale on a timer and on an explicit refresh.
+// The desktop sends no settings change signal, so every mount and foreground rereads behind the cached copy.
 const sourceControlSettingsQuery = defineHostQuery({
   family: 'settings.sourceControl',
-  staleTime: 5 * 60_000,
+  staleTime: 0,
+  refetchOnWindowFocus: true,
   gcTime: 30 * 60_000,
   fetch: async (
     client,

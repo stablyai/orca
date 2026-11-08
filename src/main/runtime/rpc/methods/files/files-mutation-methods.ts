@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../../shared/file-bytes-write'
+import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../../shared/file-write/file-bytes-write'
 import {
   FileCommitUpload,
   FileReplaceWithUpload,

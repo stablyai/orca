@@ -2057,18 +2057,6 @@
   "auto.components.settings.Settings.c2ee313198": {
     "ko": "SSH를 통해 기존 머신의 파일, 터미널, Git, 워크스페이스를 사용합니다."
   },
-  "auto.components.settings.SettingsFormControls.c822571b2e": {
-    "ko": " \"{{value0}}\"과(와) 일치"
-  },
-  "auto.components.settings.SettingsFormControls.cb330ef7f8": {
-    "ko": "/{{value0}}"
-  },
-  "auto.components.settings.SettingsFormControls.fbb428db98": {
-    "ko": "선택됨:"
-  },
-  "auto.components.settings.SettingsFormControls.imported_from": {
-    "ko": "{{value0}}에서 가져옴"
-  },
   "auto.components.settings.SettingsFormControls.search_terminal_themes": {
     "ko": "터미널 테마 검색"
   },
@@ -4732,9 +4720,6 @@
   },
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
-  },
-  "accounts.antigravity.scope": {
-    "ko": "{{host}}의 agy 자체 계정을 관리합니다."
   },
   "accounts.antigravity.signIn": {
     "ko": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요."
