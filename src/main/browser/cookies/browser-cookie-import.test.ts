@@ -67,7 +67,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
-import { importCookiesFromBrowser } from './browser-cookie-import'
+import { importCookiesFromJson, importCookiesFromBrowser } from './browser-cookie-import'
 import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import {
@@ -158,6 +158,37 @@ function buildExpiredSafariCookie(index: number): Buffer {
   }
   return cookie
 }
+
+describe('importCookiesFromJson', () => {
+  beforeEach(() => {
+    writeCookieIdentityMock.mockReset()
+    writeCookieIdentityMock.mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: {
+        get: vi.fn().mockResolvedValue([]),
+        remove: vi.fn().mockResolvedValue(undefined),
+        set: unreachableCookieSet
+      }
+    })
+  })
+
+  it('imports a valid JSON array (the agentcookie pull path)', async () => {
+    const json = JSON.stringify([
+      { domain: '.github.com', name: 'user_session', value: 'tok', path: '/', secure: true }
+    ])
+    const result = await importCookiesFromJson(json, 'persist:orca-browser')
+    expect(result).toMatchObject({ ok: true, summary: { importedCookies: 1 } })
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('persist:orca-browser')
+    expect(writeCookieIdentityMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects non-JSON and non-array input', async () => {
+    expect((await importCookiesFromJson('nope', 'persist:test')).ok).toBe(false)
+    expect((await importCookiesFromJson('{"a":1}', 'persist:test')).ok).toBe(false)
+    expect((await importCookiesFromJson('[]', 'persist:test')).ok).toBe(false)
+  })
+})
 
 describe('importCookiesFromBrowser Safari', () => {
   let tmpDir: string

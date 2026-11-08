@@ -176,7 +176,14 @@ export async function importCookiesFromFile(
   } catch {
     return browserCookieImportFailure('fileUnreadable')
   }
+  return importCookiesFromJson(rawContent, targetPartition)
+}
 
+// Why: the agentcookie sync feeds the same JSON array as the file import, so both share one pipeline.
+export async function importCookiesFromJson(
+  rawContent: string,
+  targetPartition: string
+): Promise<BrowserCookieImportResult> {
   let parsed: unknown
   try {
     parsed = JSON.parse(rawContent)
