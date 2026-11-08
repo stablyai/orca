@@ -145,30 +145,35 @@ async function settleWorkspaceSleepChat(
   if (!stopped) {
     return { stopped: false, fence: current.lease.runtimeFence }
   }
-  // Stop queues its own end report, so judge work by state rather than lane occupancy.
-  const quiet = (record: AgentSessionRecord): boolean => {
-    const session = host.sessions.get(sessionId)
-    return !(
-      session?.child ||
-      host.tasks.hasPendingAttach(sessionId) ||
-      host.deliveryRunning(sessionId) ||
-      host.childWorkIncomplete(sessionId) ||
-      session?.journal.pendingSubmissions().length ||
-      host.deps.hasOpenDispatch?.(record)
-    )
+  const journal = host.sessions.get(sessionId)?.journal
+  const settle = async (): Promise<WorkspaceSleepVerdict> => {
+    const pending = await journal?.reads.pendingSubmissions()
+    // Stop queues its own end report, so judge work by state rather than lane occupancy.
+    const quiet = (record: AgentSessionRecord): boolean => {
+      const session = host.sessions.get(sessionId)
+      return !(
+        session?.child ||
+        host.tasks.hasPendingAttach(sessionId) ||
+        host.deliveryRunning(sessionId) ||
+        host.childWorkIncomplete(sessionId) ||
+        pending?.length ||
+        host.deps.hasOpenDispatch?.(record)
+      )
+    }
+    if (!markAsleep) {
+      return quiet(current) ? { stopped: true } : null
+    }
+    let marked = false
+    const now = host.deps.now?.() ?? Date.now()
+    // Check inside the write so the mark and receipt cannot disagree.
+    await host.deps.store.transitionHandoff(sessionId, (record) => {
+      marked = quiet(record)
+      return marked ? { ...record, sleptAt: now, updatedAt: now } : record
+    })
+    if (marked) {
+      host.publishRecordNotes(sessionId)
+    }
+    return marked ? { stopped: true } : null
   }
-  if (!markAsleep) {
-    return quiet(current) ? { stopped: true } : null
-  }
-  let marked = false
-  const now = host.deps.now?.() ?? Date.now()
-  // Check inside the write so the mark and receipt cannot disagree.
-  await host.deps.store.transitionHandoff(sessionId, (record) => {
-    marked = quiet(record)
-    return marked ? { ...record, sleptAt: now, updatedAt: now } : record
-  })
-  if (marked) {
-    host.publishRecordNotes(sessionId)
-  }
-  return marked ? { stopped: true } : null
+  return journal ? journal.readInOrder(settle) : settle()
 }

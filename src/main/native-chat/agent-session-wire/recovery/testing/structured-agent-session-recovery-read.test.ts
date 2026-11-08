@@ -8,6 +8,7 @@ import type {
   AgentJournalItemBody
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
+import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { readStructuredSessionRecovery } from '../structured-agent-session-recovery-read'
 import * as recoveryOptions from '../../../../runtime/agent-session/lifecycle/structured-session-recovery-options'
@@ -22,7 +23,13 @@ it('does no discovery on ordinary reads and drops preparation superseded by a se
     submissions: []
   }
   const session = {
-    journal: { statusRead: () => snapshot, reads: { cursor: async () => snapshot.cursor } }
+    journal: {
+      reads: {
+        cursor: async () => snapshot.cursor,
+        usageLimitCut: async () =>
+          latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+      }
+    }
   }
   const deps = {
     store: { getRecord: () => record },
@@ -116,7 +123,13 @@ it('recovers an unpinned OMP native file using the owning host directory and flo
       submissions: []
     }
     const session = {
-      journal: { statusRead: () => snapshot, reads: { cursor: async () => snapshot.cursor } }
+      journal: {
+        reads: {
+          cursor: async () => snapshot.cursor,
+          usageLimitCut: async () =>
+            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+        }
+      }
     }
     const resolveWorkspacePath = vi.fn(async () => cwd)
     const deps = {
