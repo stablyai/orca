@@ -1,6 +1,8 @@
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveCliCommand } from '../codex-cli/command'
 import { wslAwareSpawn } from '../git/runner'
 import { AGENT_PANE_HOOK_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
@@ -23,7 +25,10 @@ const WSL_LAUNCHER_ENV_KEYS = [
   'WINDIR'
 ] as const
 
-const PANE_HOOK_ENV_KEYS = new Set<string>(AGENT_PANE_HOOK_ENV_KEYS)
+const BACKGROUND_HOOK_ENV_KEYS = new Set<string>([
+  ...AGENT_PANE_HOOK_ENV_KEYS,
+  ORCA_AGENT_HOOKS_DISABLED_ENV
+])
 
 function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
@@ -48,15 +53,16 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   // Background agents cannot report hooks against the terminal that launched Orca.
   const spawnEnv = { ...(input.env ?? process.env) }
   for (const key of Object.keys(spawnEnv)) {
-    if (PANE_HOOK_ENV_KEYS.has(process.platform === 'win32' ? key.toUpperCase() : key)) {
+    if (BACKGROUND_HOOK_ENV_KEYS.has(process.platform === 'win32' ? key.toUpperCase() : key)) {
       delete spawnEnv[key]
     }
   }
+  spawnEnv[ORCA_AGENT_HOOKS_DISABLED_ENV] = '1'
   if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
-    const assignments = Object.entries(input.commandEnv ?? {}).map(
-      ([key, value]) => `${key}=${value}`
-    )
+    const assignments = Object.entries(input.commandEnv ?? {})
+      .filter(([key]) => !BACKGROUND_HOOK_ENV_KEYS.has(key))
+      .map(([key, value]) => `${key}=${value}`)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL spawn pipes both output streams and supplies the configured stdin stream.
     return wslAwareSpawn(
       assignments.length ? '/usr/bin/env' : input.binary,
@@ -68,6 +74,12 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
         windowsHide: true,
         wslDistro,
         useWslLoginShell: true,
+        // Profiles may restore pane identity; clear it in the guest before invoking the agent.
+        wslShellCommand: [
+          `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,
+          `command export ${ORCA_AGENT_HOOKS_DISABLED_ENV}=1`,
+          quotePosixShell(assignments.length ? '/usr/bin/env' : input.binary)
+        ].join(' && '),
         ...(input.preparation ? { preparation: input.preparation } : {})
       }
     ) as SpawnedSourceControlAgentProcess

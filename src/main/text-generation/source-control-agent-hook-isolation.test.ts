@@ -18,6 +18,7 @@ console.log(JSON.stringify({
   launch: process.env.ORCA_AGENT_LAUNCH_TOKEN ?? null,
   endpoint: process.env.ORCA_AGENT_HOOK_ENDPOINT ?? null,
   port: process.env.ORCA_AGENT_HOOK_PORT ?? null,
+  disabled: process.env.ORCA_AGENT_HOOKS_DISABLED,
   home: process.env.CODEX_HOME
 }))
 `
@@ -33,6 +34,7 @@ console.log(JSON.stringify({
       ORCA_AGENT_LAUNCH_TOKEN: 'parent-launch',
       ORCA_AGENT_HOOK_ENDPOINT: '/parent/hook.sock',
       ORCA_AGENT_HOOK_PORT: '57279',
+      ORCA_AGENT_HOOKS_DISABLED: '0',
       CODEX_HOME: join(folder, 'managed-home')
     },
     stdinMode: 'pipe',
@@ -55,6 +57,7 @@ console.log(JSON.stringify({
     launch: null,
     endpoint: null,
     port: null,
+    disabled: '1',
     home: join(folder, 'managed-home')
   })
 })
