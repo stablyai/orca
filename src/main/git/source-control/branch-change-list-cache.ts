@@ -21,11 +21,11 @@ const BRANCH_CHANGE_LIST_CACHE_LIMITS: SettledDiffCacheLimits<CachedBranchChange
   maxEntries: 16,
   maxCharacters: 16_000_000,
   maxEntryCharacters: 4_000_000,
-  // Paths dominate; status, counts and object overhead are a few dozen characters each.
+  // Paths are slices of Git's stdout (raw + numstat records name each path twice), which they keep alive.
   characterCount: ({ entries, attributePaths }) => {
     let characters = 0
     for (const entry of entries) {
-      characters += entry.path.length + (entry.oldPath?.length ?? 0) + 32
+      characters += 3 * (entry.path.length + (entry.oldPath?.length ?? 0)) + 128
     }
     for (const attributePath of attributePaths) {
       characters += attributePath.length
