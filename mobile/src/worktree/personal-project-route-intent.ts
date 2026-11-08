@@ -8,7 +8,7 @@ import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/sha
 import { PERSONAL_PROJECT_ORDER_CAPABILITY } from '../../../src/shared/personal-project-order'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
 import { projectOpenWrite } from '../host-screen/host-screen-operations'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readMirroredKeyOrStore } from '../storage/mirrored-storage-keys'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from './last-visited-worktree-repo'
 import { readLastVisitedWorktreeOnHost } from './last-visited-worktree-by-host'

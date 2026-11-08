@@ -18,14 +18,16 @@ import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostViewSettings } from './use-host-view-settings'
 import { useHostScreenState } from './use-host-screen-state'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
-vi.mock('../transport/hosts/host-removal-lifecycle', () => ({ removeHostAndCloseClient: async () => {} }))
+vi.mock('../transport/hosts/host-removal-lifecycle', () => ({
+  removeHostAndCloseClient: async () => {}
+}))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 vi.mock('../storage/mirrored-storage-keys', () => ({
   readMirroredKeyOrStore: async () => JSON.stringify({ hostId: 'host', worktreeId: 'b::/b' })

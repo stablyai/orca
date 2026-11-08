@@ -11,7 +11,7 @@ import type { SectionRepo } from '../worktree/workspace-list-types'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import type { MobileViewState } from '../worktree/workspace-view-settings'
 import type { HostScreenState } from './use-host-screen-state'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { projectPinWrite, hostViewSettingsWrite } from './host-screen-operations'
 
 export function useHostProjectOrder(args: {
