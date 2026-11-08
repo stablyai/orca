@@ -22,6 +22,9 @@ import {
 } from './host-query-key'
 import { hostReadClient } from './host-read-client'
 
+// Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
+export { useHostEventRouter } from './host-event-router'
+
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
   // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads pass none.
