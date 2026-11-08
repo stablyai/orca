@@ -137,3 +137,14 @@ export function getNotchStatusEntries(
     options.showNotchStatus ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
   return show ? getNotchStatusEntryCatalog() : []
 }
+
+/** Every system-presence row, so the pane-wide search index gains new ones without growing. */
+export function getSystemPresenceEntries(
+  options: SystemPresenceSearchOptions = {}
+): SettingsSearchEntry[] {
+  return [
+    ...getSystemTrayEntries(options),
+    ...getMenuBarIconEntries(options),
+    ...getNotchStatusEntries(options)
+  ]
+}
