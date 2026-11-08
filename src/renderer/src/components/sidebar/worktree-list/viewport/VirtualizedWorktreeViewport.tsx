@@ -31,6 +31,8 @@ import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './v
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { ProjectRenameDialog } from '../rows/ProjectRenameDialog'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
 
@@ -65,6 +67,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
+  const [renameProjectRepo, setRenameProjectRepo] = useState<Repo | null>(null)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const projectHeaderHostContexts = useProjectHeaderHostContexts({
@@ -95,6 +98,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       onMoveProjectToGroup: handleMoveProjectToGroup,
       onRemoveProjectFromGroup: handleRemoveProjectFromGroup,
       onRemoveProject: handleRemoveProject,
+      onRenameProject: setRenameProjectRepo,
       onCreateForRepo: handleCreateForRepo
     }),
     [
@@ -410,6 +414,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         </div>
       </div>
       {showScrollToTop ? <WorktreeListScrollToTopButton onClick={scrollToTop} /> : null}
+      <ProjectRenameDialog
+        repo={renameProjectRepo}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameProjectRepo(null)
+          }
+        }}
+      />
     </div>
   )
 })

@@ -7,6 +7,7 @@ import {
   Eye,
   FolderInput,
   FolderTree,
+  Pencil,
   Plus,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
@@ -74,6 +75,8 @@ export type RepoHeaderProjectActions = {
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
   onRemoveProject: (repo: Repo) => void
+  /** Present only where a rename dialog is mounted; without it the menu hides the rename item. */
+  onRenameProject?: (repo: Repo) => void
   /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
   onCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
 }
@@ -137,6 +140,12 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <SlidersHorizontal className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
+        {actions.onRenameProject ? (
+          <DropdownMenuItem onSelect={() => actions.onRenameProject?.(repo)}>
+            <Pencil className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeList.renameProject', 'Rename project')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           onSelect={() => actions.onOpenRepoSettings(repo.id, getRepositoryIconSectionId(repo.id))}
         >

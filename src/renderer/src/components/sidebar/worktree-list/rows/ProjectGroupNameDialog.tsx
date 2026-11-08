@@ -18,6 +18,8 @@ type ProjectGroupNameDialogProps = {
   description: string
   initialName: string
   confirmLabel: string
+  /** Input label; defaults to the group-name wording this dialog started with. */
+  fieldLabel?: string
   onOpenChange: (open: boolean) => void
   onSubmit: (name: string) => Promise<void> | void
 }
@@ -28,6 +30,7 @@ export function ProjectGroupNameDialog({
   description,
   initialName,
   confirmLabel,
+  fieldLabel,
   onOpenChange,
   onSubmit
 }: ProjectGroupNameDialogProps): React.JSX.Element {
@@ -59,6 +62,8 @@ export function ProjectGroupNameDialog({
     }
   }
 
+  const submittedInitialNameRef = useRef<string | null>(null)
+
   const handleSubmit = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
       event?.preventDefault()
@@ -66,19 +71,21 @@ export function ProjectGroupNameDialog({
         return
       }
       setSubmitting(true)
+      submittedInitialNameRef.current = initialName
       try {
         await onSubmit(trimmedName)
-        if (mountedRef.current) {
+        // A cancelled-and-reopened dialog is a new session; a stale save must not close it.
+        if (mountedRef.current && submittedInitialNameRef.current === initialName) {
           onOpenChange(false)
         }
       } catch (error) {
-        console.error('Failed to save project group name:', error)
+        console.error('Failed to save name:', error)
         if (mountedRef.current) {
           setSubmitting(false)
         }
       }
     },
-    [onOpenChange, onSubmit, submitting, trimmedName]
+    [initialName, onOpenChange, onSubmit, submitting, trimmedName]
   )
 
   return (
@@ -99,7 +106,8 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+              {fieldLabel ??
+                t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}

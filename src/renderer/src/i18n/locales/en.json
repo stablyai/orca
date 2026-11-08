@@ -7249,7 +7249,12 @@
           "hostVmSetupFailed": "Setup failed",
           "hostVmSuspended": "Suspended",
           "hostVmWaking": "Waking…",
-          "hostVmProvisioning": "Provisioning…"
+          "hostVmProvisioning": "Provisioning…",
+          "renameProject": "Rename project",
+          "renameProjectDescription": "Choose the name shown for this project in the sidebar and tabs.",
+          "projectNameLabel": "Project name",
+          "saveProjectName": "Save",
+          "renameProjectFailed": "Could not rename the project"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
