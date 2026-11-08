@@ -8,8 +8,12 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   // The cells' credential store is imported unchanged; resolve its workspace import to source.
+  // Source files, never a local dist/ build: wrangler's alias does not rewrite subpaths, and the
+  // package's exports point them at dist/. Add a line for any new subpath the bundle imports.
   "alias": {
-    "@orca-cloud/relay-contract": "../../packages/relay-contract/src"
+    "@orca-cloud/relay-contract": "../../packages/relay-contract/src/index.ts",
+    "@orca-cloud/relay-contract/persistence-invariants": "../../packages/relay-contract/src/persistence-invariants.ts",
+    "@orca-cloud/relay-contract/protocol-limits": "../../packages/relay-contract/src/protocol-limits.ts"
   },
   "workers_dev": false,
   "durable_objects": {
