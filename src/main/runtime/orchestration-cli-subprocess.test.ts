@@ -18,12 +18,12 @@ import {
   hostTestState,
   hostTestRecoveryCapsuleSettled,
   replaceHostTestState
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon.test-fixture'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {

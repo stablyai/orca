@@ -24,7 +24,7 @@ import { eventually } from '../../../../native-chat/agent-session-wire/host/test
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { agentMessageDisplayText } from '../../../../../shared/agent-session/agent-message-display-text'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'

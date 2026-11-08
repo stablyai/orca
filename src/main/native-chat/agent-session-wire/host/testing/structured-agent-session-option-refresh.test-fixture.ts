@@ -17,7 +17,7 @@ import {
   hostTestRestingOptionsRecord,
   hostTestRestingOptionsJournal,
   hostTestOptionsReadStore
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { readStructuredAgentSessionOptions } from '../../options/structured-agent-session-options-read'
 
 function deferred<T>() {

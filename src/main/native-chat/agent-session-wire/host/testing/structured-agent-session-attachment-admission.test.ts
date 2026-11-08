@@ -15,7 +15,7 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 const UPLOAD = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
 

@@ -10,7 +10,7 @@ import {
   body,
   reopenWithRawRows,
   serializedPageBytes
-} from './agent-session-history-contract-test-fixture'
+} from './agent-session-history-contract.test-fixture'
 
 describe('pre-existing oversized identities', () => {
   // Legacy oversized tombstone IDs cannot fit any outbound page.

@@ -14,7 +14,7 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig

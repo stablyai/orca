@@ -11,7 +11,7 @@ import { createTrackedJournalOpener } from '../../../agent-session-journal/store
 import type { JournalLifecycleIdentityMutationInput } from '../../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
 import type { StructuredAgentSessionTransitionStep } from '../structured-agent-session-transition'
 import type { JournalTimelineItemResolution } from '../../../agent-session-journal/writing/journal-timeline-resolution'
 

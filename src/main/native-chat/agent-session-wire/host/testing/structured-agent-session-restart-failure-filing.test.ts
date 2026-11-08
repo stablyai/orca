@@ -10,13 +10,13 @@ import {
   QUIT_CUT_NOTICE,
   readerNotes,
   statusNotes
-} from './structured-agent-session-restart-interruption-test-harness'
-import { CALLER, envelope } from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-restart-interruption.test-fixture'
+import { CALLER, envelope } from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 

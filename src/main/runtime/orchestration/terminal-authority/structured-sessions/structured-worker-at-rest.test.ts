@@ -40,11 +40,11 @@ const { closeStructuredAgentSessionChild } =
   await import('../../../agent-session/structured-agent-session-close')
 const { resolveGroupAddress } = await import('../../addressing/groups/group-addressing')
 const { createRestTestRig, foundRestTestChat, sweepTicks } =
-  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig')
+  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture')
 const { STRUCTURED_AGENT_SESSION_IDLE_MS: IDLE_MS } =
   await import('../../../../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep')
 const { HOST_TEST_SESSION: REST_TEST_SESSION } =
-  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data')
+  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture')
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const LOCAL = JSON.stringify({ kind: 'local', hostId: 'local' })

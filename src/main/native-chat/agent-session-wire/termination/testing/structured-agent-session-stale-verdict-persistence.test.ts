@@ -16,7 +16,7 @@ import {
   RUNNING_IDENTITY,
   THREAD,
   turnScopeOf
-} from './structured-agent-session-stale-verdict-contract-test-fixture'
+} from './structured-agent-session-stale-verdict-contract.test-fixture'
 
 it('adds one row for a death however many attempts its settle takes to write', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))

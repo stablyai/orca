@@ -8,7 +8,10 @@ import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { HOST_TEST_NOW, HOST_TEST_THREAD } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
 export function seedQueuedRigLegacyJournal(

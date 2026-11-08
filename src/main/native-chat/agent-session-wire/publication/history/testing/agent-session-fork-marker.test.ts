@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ForkMarker } from '../agent-session-fork-marker'
 import { remapForkChildBoundary } from '../../../rewind/agent-session-fork-boundary-remap'
-import { fixture, appendItems, item, body } from './agent-session-history-contract-test-fixture'
+import { fixture, appendItems, item, body } from './agent-session-history-contract.test-fixture'
 
 function marker(): ForkMarker {
   return {

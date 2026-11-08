@@ -13,7 +13,7 @@ import type { openCodexAppServerConnection } from '../codex/app-server/codex-app
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import {
   ensureStructuredAgentSessionHost,

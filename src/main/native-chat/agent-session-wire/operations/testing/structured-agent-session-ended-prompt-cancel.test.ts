@@ -11,7 +11,7 @@ import { claudePromptCancelRoute } from '../../../../claude/structured/journal/c
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionChatStopRun } from '../structured-agent-session-chat-stop'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'

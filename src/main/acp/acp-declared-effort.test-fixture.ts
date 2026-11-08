@@ -19,13 +19,13 @@ import {
   agentModelCatalogResultFromEntry,
   entryWithConfiguredDefault
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   openTestAgentSessionRecordStore,

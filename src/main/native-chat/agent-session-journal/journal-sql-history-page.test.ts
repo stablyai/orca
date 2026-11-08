@@ -4,7 +4,7 @@ import {
   fixture,
   item,
   body
-} from '../agent-session-wire/publication/history/testing/agent-session-history-contract-test-fixture'
+} from '../agent-session-wire/publication/history/testing/agent-session-history-contract.test-fixture'
 import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
@@ -14,7 +14,7 @@ import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './store-lifecycle/journal-host-database-test-support'
-import { convertJournalSqlProjection } from './journal-sql-conversion'
+import { convertJournalSqlProjection } from './journal-domain-single-connection-import.test-fixture'
 import { JournalProjectionStaleError } from './journal-sql-meta'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'

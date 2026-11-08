@@ -9,7 +9,7 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'

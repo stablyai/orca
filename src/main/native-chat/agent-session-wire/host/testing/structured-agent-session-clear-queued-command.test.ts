@@ -10,7 +10,7 @@ import type { QueuedMessageTestRig } from './structured-agent-session-queued-mes
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {

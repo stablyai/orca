@@ -13,14 +13,14 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { claudeProfileSetupFailed } from '../../../../claude-accounts/claude-profile-launch-errors'
 
 const CALLER = { callerKey: 'client-1' }

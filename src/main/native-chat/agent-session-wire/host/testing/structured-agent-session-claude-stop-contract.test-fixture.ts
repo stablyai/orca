@@ -19,14 +19,14 @@ import {
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 export const CALLER = { callerKey: 'client-1' }
 // Claude Code 2.1.280 system/init capabilities.

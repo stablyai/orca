@@ -13,7 +13,7 @@ import {
   RUNNING_IDENTITY,
   THREAD,
   turnScopeOf
-} from './structured-agent-session-stale-verdict-contract-test-fixture'
+} from './structured-agent-session-stale-verdict-contract.test-fixture'
 
 it('ends a crashed turn at its last proof of life, not at a send accepted before the proof', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))

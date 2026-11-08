@@ -4,8 +4,8 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import {
   attach,
   hostTestState
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import * as journalFactory from '../../../../../native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../../dispatcher'

@@ -19,7 +19,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcAnyMethodDeclaration, RpcContext, RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../creation/structured-agent-session-close-before-create'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 

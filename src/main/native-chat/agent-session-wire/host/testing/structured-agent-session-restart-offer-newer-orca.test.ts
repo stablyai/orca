@@ -11,12 +11,12 @@ import {
   updateTestJournalRowJson
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
-import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
+import { attachParams, CALLER, hostTestState } from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 // Preserve newer-chat offers byte-for-byte for a compatible build; this host cannot act on them.
 

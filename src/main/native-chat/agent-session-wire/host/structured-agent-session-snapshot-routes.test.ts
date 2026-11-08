@@ -6,7 +6,7 @@ import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle
 import { createTrackedJournalOpener } from '../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionSnapshotRoutes } from './structured-agent-session-snapshot-routes'
-import { testEventSinkLogging } from './testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from './testing/structured-agent-session-logger.test-fixture'
 
 const journals = createTrackedJournalOpener()
 let root: string

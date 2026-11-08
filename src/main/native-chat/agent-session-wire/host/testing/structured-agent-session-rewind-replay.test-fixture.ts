@@ -12,7 +12,7 @@ import {
   HOST_TEST_THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 type RewindReplayFixture = {
   host: StructuredAgentSessionHost

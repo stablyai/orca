@@ -6,8 +6,8 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import {
   GROK_CONFIG_OPTIONS,

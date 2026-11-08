@@ -20,7 +20,7 @@ import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestMessage
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { automationRunOperationId } from './automation-run-operation'
 

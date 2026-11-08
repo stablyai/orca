@@ -20,7 +20,7 @@ import type {
 import { runClaudeControl } from '../../../claude/claude-agent-sdk-control-requests'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
-import { hostTestAttachParams } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestAttachParams } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   ensureStructuredAgentSessionHost,

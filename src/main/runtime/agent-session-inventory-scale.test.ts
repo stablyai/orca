@@ -3,7 +3,7 @@ import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualifie
 import '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import '../ai-vault/structured-session-ownership.test-support'
 import '../ai-vault/structured-session-ownership'
-import { hostTestState } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { hostTestState } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'

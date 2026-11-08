@@ -7,7 +7,7 @@ import {
   resumeStructuredAgentSessionsFromRestart,
   StructuredAgentSessionResumeAdmission
 } from '../structured-agent-session-restart-resume-runner'
-import { marker } from './structured-agent-session-restart-resume-test-harness'
+import { marker } from './structured-agent-session-restart-resume.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
 
 type Handover = { dispatchState: string; reason?: string | null } | undefined

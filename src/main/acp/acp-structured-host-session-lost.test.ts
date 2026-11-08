@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { GROK, PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { openAttachedHostRig, send } from './acp-structured-host.test-support'

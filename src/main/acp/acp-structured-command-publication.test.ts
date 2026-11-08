@@ -5,11 +5,11 @@ import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agen
 import { openHostRig, send } from './acp-structured-host.test-support'
 import './acp-launch-specs'
 import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
-import '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { commandDiscoveryRig, OMP } from './acp-command-discovery.test-fixture'
-import { createTestParams } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+import { createTestParams } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import { buildNativeChatPickerItems } from '../../shared/native-chat/input/native-chat-picker-items'
 import {
   sessionReportedSkills,

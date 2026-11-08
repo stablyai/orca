@@ -8,7 +8,7 @@ import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   HOST_TEST_NOW,
@@ -16,7 +16,7 @@ import {
   hostTestAttachParams,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

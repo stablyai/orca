@@ -7,7 +7,7 @@ import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined

@@ -22,7 +22,7 @@ import * as reducer from '../../../agent-session-journal/projection/journal-redu
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
-import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume-test-harness'
+import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import {
   adapter,
   attach,
@@ -31,17 +31,17 @@ import {
   hostTestState,
   replaceHostTestState,
   serveHostTestChildWork
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentRegistry } from '../../providers/structured-agent-registry'
 
 export const QUEUED_BEFORE_QUIT = ['card A', 'card B'] as const

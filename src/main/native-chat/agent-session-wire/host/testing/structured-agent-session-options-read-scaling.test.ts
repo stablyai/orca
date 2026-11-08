@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { hostTestCatalogReadOperation } from './structured-agent-session-host-test-data'
+import { hostTestCatalogReadOperation } from './structured-agent-session-host-test-data.test-fixture'
 import '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../../../agent-model-catalog/agent-model-catalog-service'
 import '../../../agent-model-catalog/agent-model-catalog-store'

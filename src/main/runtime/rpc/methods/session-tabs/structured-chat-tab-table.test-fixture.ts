@@ -17,7 +17,7 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
@@ -33,7 +33,7 @@ import {
 } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 export const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
 export const SOURCE_TAB = `structured-agent-session-${HOST_TEST_SESSION}`

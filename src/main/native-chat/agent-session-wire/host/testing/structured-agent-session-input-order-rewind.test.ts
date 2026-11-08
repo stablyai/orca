@@ -8,7 +8,7 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey

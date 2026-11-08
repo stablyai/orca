@@ -10,7 +10,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { catchUpCodexThread } from './codex-structured-thread-catch-up'
 
 export const SESSION = 'session-codex-catch-up'

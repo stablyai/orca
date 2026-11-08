@@ -1,5 +1,4 @@
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
-import type { JournalSqlHistoryRequest } from './journal-sql-history-page'
 import type { JournalSqlFailure } from './journal-sql-failure'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import type {
@@ -11,7 +10,6 @@ import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
 import type { JournalDomainImportState } from './journal-domain-import-rows'
 
 export type JournalSqlReaderOperation =
-  | { kind: 'history'; request: JournalSqlHistoryRequest }
   | { kind: 'domain-history'; request: JournalDomainHistoryRequest }
   | { kind: 'database'; operation: JournalSqlDatabaseRead }
   | { kind: 'point'; request: JournalSqlPointRead }

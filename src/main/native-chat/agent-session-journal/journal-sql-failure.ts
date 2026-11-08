@@ -1,7 +1,6 @@
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
-import { JournalProjectionStaleError } from './journal-sql-meta'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import {
   JournalHostFactsNeededError,
@@ -81,8 +80,6 @@ export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
       return new JournalUnreleasedSchemaError(error.message)
     case 'JournalOutcomeDecodeError':
       return new JournalOutcomeDecodeError(error.message)
-    case 'JournalProjectionStaleError':
-      return new JournalProjectionStaleError(error.message)
     case 'AgentSessionJournalError': {
       const code = error.code
       if (

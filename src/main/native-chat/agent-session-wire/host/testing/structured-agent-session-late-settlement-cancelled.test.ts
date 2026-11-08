@@ -5,7 +5,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   fixture,
@@ -14,7 +14,7 @@ import {
   journal,
   sendParams,
   submissions
-} from './structured-agent-session-late-settlement-contract-test-fixture'
+} from './structured-agent-session-late-settlement-contract.test-fixture'
 
 describe('settling a send the provider proves it received after the ack window', () => {
   it('a receipt after Stop withdrew an unwritten send keeps it cancelled', async () => {

@@ -1,4 +1,4 @@
-import { openTestChats } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-open-test-chats.test-support'
+import { openTestChats } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-open-test-chats.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   hostTestState,
@@ -7,14 +7,14 @@ import {
   seedApproval,
   envelope,
   CALLER
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {

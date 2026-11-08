@@ -1,4 +1,4 @@
-import { recordingStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   SESSION,
   tick,
@@ -15,7 +15,7 @@ import { structuredAgentSessionStartFailure } from '../../../../native-chat/agen
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { recordStructuredAgentSessionStartFailure } from '../../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionEndedChild } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import { hostTestMessage } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestMessage } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 import { settleStructuredAgentSessionChildExit } from '../../../../native-chat/agent-session-wire/termination/structured-agent-session-child-exit'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'

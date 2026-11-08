@@ -6,9 +6,9 @@ import {
   body,
   fixture,
   item
-} from '../agent-session-wire/publication/history/testing/agent-session-history-contract-test-fixture'
+} from '../agent-session-wire/publication/history/testing/agent-session-history-contract.test-fixture'
 import { openTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
-import { convertJournalSqlProjection } from './journal-sql-conversion'
+import { convertJournalSqlProjection } from './journal-domain-single-connection-import.test-fixture'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 import { journalSqlReads } from './journal-sql-reads'

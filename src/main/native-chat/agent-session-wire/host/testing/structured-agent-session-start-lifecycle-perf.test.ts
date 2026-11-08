@@ -27,7 +27,7 @@ import {
 import {
   claudeAndCodexAgents,
   claudeAndCodexRouter
-} from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type * as ExitObservation from '../../termination/structured-agent-session-exit-observation'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -36,9 +36,9 @@ import {
   hostTestAttachParams,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { restTestSend } from './structured-agent-session-rest-test-rig'
+import { restTestSend } from './structured-agent-session-rest-test-rig.test-fixture'
 import type * as StartFailure from '../../startup/structured-agent-session-start-failure'
 
 // Every adapter's startup receipts and every acquisition's root-exit receipt, to count what they

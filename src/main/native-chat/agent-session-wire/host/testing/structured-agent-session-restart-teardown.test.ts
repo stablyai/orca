@@ -6,16 +6,16 @@ import {
   attach,
   hostTestState,
   serveHostTestChildWork
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   childRecord,
   pendingApproval
-} from '../../recovery/testing/structured-agent-session-restart-resume-test-harness'
+} from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { inspect } from 'node:util'
 
 it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(

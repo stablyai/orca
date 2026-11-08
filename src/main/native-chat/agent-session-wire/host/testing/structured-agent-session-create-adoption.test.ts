@@ -20,11 +20,11 @@ vi.mock('../../../../ai-vault/session-titles/session-title-resolver', () => ({
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
-} from './structured-agent-session-create-test-fixture'
+} from './structured-agent-session-create.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   codexLegacyMirrorRecords,
   writeCodexHistoryFixture
@@ -36,7 +36,7 @@ import {
 } from '../../../../runtime/agent-session/structured-agent-session-create-adoption'
 import { prepareCodexAiVaultSessionResume } from '../../../../codex/history/resume/codex-ai-vault-session-resume'
 
-import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
+import { fixture } from './structured-agent-session-create-adoption-contract.test-fixture'
 
 it.each([
   ['matching', THREAD],

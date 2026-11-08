@@ -28,7 +28,7 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler,

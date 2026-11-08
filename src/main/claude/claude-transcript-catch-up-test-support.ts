@@ -7,7 +7,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session/jou
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 

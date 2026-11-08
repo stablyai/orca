@@ -1,4 +1,4 @@
-import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { openTestChats } from './structured-agent-session-open-test-chats.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -8,14 +8,14 @@ import {
   createRestTestRig,
   foundRestTestChat,
   sweepOnce
-} from './structured-agent-session-rest-test-rig'
+} from './structured-agent-session-rest-test-rig.test-fixture'
 
 import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../../termination/structured-agent-session-idle-sweep'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
-} from './structured-agent-session-host-test-data'
-import type { RestTestRig } from './structured-agent-session-rest-test-rig'
+} from './structured-agent-session-host-test-data.test-fixture'
+import type { RestTestRig } from './structured-agent-session-rest-test-rig.test-fixture'
 
 let rig: RestTestRig
 

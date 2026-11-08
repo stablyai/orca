@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { waitForStructuredAgentSessionRecovery } from '../structured-agent-session-runtime'
 import {

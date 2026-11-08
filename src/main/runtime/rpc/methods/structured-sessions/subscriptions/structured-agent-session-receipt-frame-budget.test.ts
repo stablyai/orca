@@ -11,7 +11,7 @@ import type { AgentSessionSubscribeInput } from '../../../../../native-chat/agen
 import {
   fixture,
   journals
-} from '../../../../../native-chat/agent-session-wire/publication/subscribers/testing/structured-agent-session-subscriber-contract-test-fixture'
+} from '../../../../../native-chat/agent-session-wire/publication/subscribers/testing/structured-agent-session-subscriber-contract.test-fixture'
 import {
   clearStructuredHostStub,
   hostCalls,

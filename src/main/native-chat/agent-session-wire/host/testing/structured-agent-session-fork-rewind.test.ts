@@ -15,7 +15,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -25,8 +25,8 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 
 const caller = { callerKey: 'desktop' }

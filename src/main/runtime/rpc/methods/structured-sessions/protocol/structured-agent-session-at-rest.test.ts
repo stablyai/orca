@@ -17,13 +17,13 @@ import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
   restTestSend
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import { editPersistedTestAgentSessionStore } from '../../../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../../../core'

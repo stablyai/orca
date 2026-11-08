@@ -12,7 +12,7 @@ import { eventually } from '../../../../native-chat/agent-session-wire/host/test
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody

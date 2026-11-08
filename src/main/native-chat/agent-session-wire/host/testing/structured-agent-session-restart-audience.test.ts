@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 

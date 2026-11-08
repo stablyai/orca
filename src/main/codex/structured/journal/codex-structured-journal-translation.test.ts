@@ -10,7 +10,7 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import { CODEX_USER_INPUT_METHOD } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import { deferredTarget } from './codex-deferred-sink-target-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'

@@ -20,12 +20,12 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from './structured-agent-session-logger-test-support'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from './structured-agent-session-logger.test-fixture'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 

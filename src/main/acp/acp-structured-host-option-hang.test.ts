@@ -4,8 +4,8 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
 import { framesOf, hello, openAttachedHostRig, send } from './acp-structured-host.test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'

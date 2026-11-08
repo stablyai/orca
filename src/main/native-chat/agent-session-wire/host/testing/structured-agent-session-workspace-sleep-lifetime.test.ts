@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
-import { attach, hostTestState } from './structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
+import { attach, hostTestState } from './structured-agent-session-host.test-fixture'
 
 it('omits an unproven workspace child from the stop receipt', async () => {
   const { host, store } = hostTestState()

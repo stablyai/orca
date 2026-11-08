@@ -16,7 +16,7 @@ import type { StructuredAgentSessionAdapter } from '../../providers/structured-a
 import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
-} from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -26,7 +26,7 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { structuredAgentRuntimeRegistration } from '../../../../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 

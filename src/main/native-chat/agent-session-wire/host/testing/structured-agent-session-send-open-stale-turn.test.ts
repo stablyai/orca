@@ -1,4 +1,4 @@
-import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { openTestChats } from './structured-agent-session-open-test-chats.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { cp, rm } from 'node:fs/promises'
@@ -12,18 +12,18 @@ import {
   attach,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const relaunchedRoots: string[] = []
 

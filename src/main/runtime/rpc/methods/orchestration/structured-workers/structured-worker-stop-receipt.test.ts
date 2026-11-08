@@ -1,4 +1,4 @@
-import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

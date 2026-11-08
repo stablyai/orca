@@ -37,7 +37,7 @@ import {
   HOST_TEST_SESSION as HOST_SESSION,
   hostTestMessage,
   hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { queuedImageHistoryReader } from '../attachments/structured-agent-session-queued-image-capability'
 import '../../../unused-default-rpc-methods.test-fixture'
 

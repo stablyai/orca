@@ -8,7 +8,7 @@ import type { AgentSessionHandleProvider } from '../../../../../shared/agent-ses
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentHookServer } from '../../../../agent-hooks/server'
-import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session.test-fixture'
 import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-status-feed'
 
 import type { StructuredAgentSessionStatusSink } from '../structured-agent-session-status-ownership'

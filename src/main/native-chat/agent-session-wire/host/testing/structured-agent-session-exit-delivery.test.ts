@@ -13,7 +13,7 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 // Proven generation death must immediately disable old work and wake cards even when lease release fails.
 
 let rig: QueuedMessageTestRig | undefined

@@ -4,11 +4,11 @@ import {
   attach,
   envelope,
   hostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { structuredAgentSessionCompactBody } from '../../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionProviderOpenResult } from '../../startup/structured-agent-session-provider-open-contract'
 

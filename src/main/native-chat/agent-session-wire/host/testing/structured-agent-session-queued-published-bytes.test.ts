@@ -10,7 +10,7 @@ import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
-import { hostTestMessage } from './structured-agent-session-host-test-data'
+import { hostTestMessage } from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 

@@ -6,7 +6,7 @@ import {
   marker,
   NOW,
   SESSION
-} from '../../../native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume-test-harness'
+} from '../../../native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE

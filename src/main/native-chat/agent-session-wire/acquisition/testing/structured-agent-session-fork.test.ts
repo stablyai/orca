@@ -19,14 +19,14 @@ import type { StructuredAgentSessionHost } from '../../host/structured-agent-ses
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../host/testing/structured-agent-session-rest-test-rig'
+} from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
 import {
   hostTestMessage,
   hostTestOperationId
-} from '../../host/testing/structured-agent-session-host-test-data'
+} from '../../host/testing/structured-agent-session-host-test-data.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'

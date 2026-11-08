@@ -13,9 +13,9 @@ import { expect, it, vi } from 'vitest'
 import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import * as fileOperations from 'node:fs/promises'
 import * as contextSnapshots from '../../../../../native-chat/agent-session-context-snapshots'

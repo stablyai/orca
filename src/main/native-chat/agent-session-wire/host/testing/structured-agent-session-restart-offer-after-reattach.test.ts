@@ -2,11 +2,11 @@ import { expect, it } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { restartContinuationBody } from '../../recovery/structured-agent-session-restart-continuation-envelope'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 it("delivers a retry as a new continuation after the first one's start failed", async () => {
   const { host, acquire, dispatch, marker } = await interruptedRestart('children')

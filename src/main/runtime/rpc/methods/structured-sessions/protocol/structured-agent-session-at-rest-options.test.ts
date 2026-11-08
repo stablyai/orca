@@ -8,17 +8,17 @@ import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
   restTestSend
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import { closeStructuredAgentSessionChild } from '../../../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from '../../orchestration/structured-workers/orchestration-structured-worker-session'
-import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 

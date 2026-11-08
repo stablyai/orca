@@ -20,7 +20,7 @@ import type {
 } from '../../providers/structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from '../../acquisition/structured-agent-session-attach'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { TrackedTestRecoveryCapsule } from './structured-agent-session-host-test-recovery-capsule'
+import { TrackedTestRecoveryCapsule } from './structured-agent-session-host-test-recovery-capsule.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -28,11 +28,11 @@ import {
   hostTestAttachParams,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 
 const journals = createTrackedJournalOpener()
 

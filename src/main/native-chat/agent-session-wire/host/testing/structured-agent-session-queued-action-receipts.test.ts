@@ -6,7 +6,7 @@ import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
+import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data.test-fixture'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
 void (NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000)

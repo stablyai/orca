@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   acquire,
   eventually,
@@ -14,7 +14,7 @@ import {
   store,
   submission,
   registerStartupAttemptHostTests
-} from './structured-agent-session-startup-attempt-host-test-support'
+} from './structured-agent-session-startup-attempt-host.test-fixture'
 
 registerStartupAttemptHostTests()
 

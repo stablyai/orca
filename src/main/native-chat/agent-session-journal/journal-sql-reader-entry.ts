@@ -1,7 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
-import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
 import { prepareJournalDomainImport, type JournalDomainImport } from './journal-domain-import'
@@ -57,9 +56,6 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
-        break
-      case 'history':
-        reply({ type: 'page', id, result: readJournalSqlHistoryPage(db, operation.request) })
         break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.

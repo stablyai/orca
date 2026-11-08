@@ -3,7 +3,7 @@ import type { AgentSessionRecord } from '../../../../../shared/agent-session/lif
 import type { JournalHostDatabase } from '../../../agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { openStructuredAgentSessionConversationJournal } from '../structured-agent-session-conversation-open'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 
 /** Open through the production conversation path so hostless attach tests adopt the same journal. */
 export function openTestAttachConversation(

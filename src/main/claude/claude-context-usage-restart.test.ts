@@ -11,7 +11,7 @@ import { settleStaleStructuredAgentSessionState } from '../native-chat/agent-ses
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()

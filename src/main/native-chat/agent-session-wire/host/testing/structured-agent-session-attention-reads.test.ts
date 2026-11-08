@@ -17,13 +17,13 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   restTestSend,
   sweepOnce
-} from './structured-agent-session-rest-test-rig'
+} from './structured-agent-session-rest-test-rig.test-fixture'
 
 import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../../termination/structured-agent-session-idle-sweep'
 

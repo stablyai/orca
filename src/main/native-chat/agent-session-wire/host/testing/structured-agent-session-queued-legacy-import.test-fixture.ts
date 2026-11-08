@@ -14,7 +14,7 @@ import {
 
 import { pinTestJournalInputMode } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig

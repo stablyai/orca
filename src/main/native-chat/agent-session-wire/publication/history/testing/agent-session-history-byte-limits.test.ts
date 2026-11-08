@@ -3,7 +3,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-sessi
 import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 
-import { fixture, body, item } from './agent-session-history-contract-test-fixture'
+import { fixture, body, item } from './agent-session-history-contract.test-fixture'
 
 describe('history page byte ceiling', () => {
   // Several legal messages exceed the 4 MiB outbound cap.

@@ -8,7 +8,7 @@ import {
   hostTestCancelParams,
   hostTestSubmission,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,12 +29,12 @@ import type {
 import {
   claudeAndCodexDeclared,
   NO_STRUCTURED_AGENTS
-} from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import type { StructuredAgentSessionStartupLimits } from '../../startup/structured-agent-session-startup-attempt-contract'
 import type { AgentSessionStartFailure } from '../../startup/structured-agent-session-start-failure'
-import { testAdapterStartupEnding } from '../../startup/testing/structured-agent-session-held-start.test-support'
+import { testAdapterStartupEnding } from '../../startup/testing/structured-agent-session-held-start.test-fixture'
 
 export const CALLER = { callerKey: 'client-1' }
 

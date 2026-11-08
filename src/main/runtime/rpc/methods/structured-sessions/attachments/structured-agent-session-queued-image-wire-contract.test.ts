@@ -19,7 +19,7 @@ import { agentSessionAttachmentStoreRoot } from '../../../../../native-chat/agen
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { call, openStream } from '../protocol/structured-agent-session-rpc.test-fixture'
 
 import { STRUCTURED_MOBILE_CLIENT } from '../protocol/structured-agent-session-rpc-client.test-fixture'

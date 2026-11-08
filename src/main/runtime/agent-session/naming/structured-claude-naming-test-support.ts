@@ -12,11 +12,11 @@ import { createStructuredChatNamingHandler } from '../../../native-chat/structur
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import {
   hostTestMessage,
   HOST_TEST_SESSION
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'

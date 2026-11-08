@@ -8,7 +8,7 @@ import {
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { JournalSubmissionRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
-import { hostTestMessage } from './structured-agent-session-host-test-data'
+import { hostTestMessage } from './structured-agent-session-host-test-data.test-fixture'
 
 /** Actual unannotated initial-source writer shape, including terminal direct inputs between consumers. */
 export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal, n: number): void {

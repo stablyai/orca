@@ -6,15 +6,15 @@ import {
   backgroundWakeCapture,
   FIRST_PROMPT
 } from '../../../../claude/claude-captured-fold-steer-frames.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
-import { fixture, laneDrained } from './structured-agent-session-claude-stop-contract-test-fixture'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
+import { fixture, laneDrained } from './structured-agent-session-claude-stop-contract.test-fixture'
 import {
   dispatch,
   eventually,
   openTurn,
   send,
   sendUnechoed
-} from './structured-agent-session-claude-stop-contract-test-actions'
+} from './structured-agent-session-claude-stop-contract-test-actions.test-fixture'
 
 async function turns() {
   await laneDrained()

@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import {
   interruptedRestart,
   QUEUED_BEFORE_QUIT
-} from './structured-agent-session-restart-interruption-test-harness'
+} from './structured-agent-session-restart-interruption.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 

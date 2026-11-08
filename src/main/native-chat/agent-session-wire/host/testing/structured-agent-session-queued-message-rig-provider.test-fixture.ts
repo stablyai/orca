@@ -10,11 +10,11 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 export type QueuedRigProviderOptions = {
   agent?: 'claude'

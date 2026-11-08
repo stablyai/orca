@@ -8,7 +8,7 @@ import {
   HOST_TEST_THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { journalIdentityFor } from '../../acquisition/structured-agent-session-attach'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
@@ -19,7 +19,7 @@ import {
   attachParams,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 
 it("creates a chat while another saved chat's owner check fails", async () => {
   await attach()

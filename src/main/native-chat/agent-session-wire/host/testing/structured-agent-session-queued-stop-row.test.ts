@@ -9,7 +9,7 @@ import {
   HOST_TEST_THREAD,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER

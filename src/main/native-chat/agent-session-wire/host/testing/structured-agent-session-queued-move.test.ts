@@ -6,7 +6,10 @@ import {
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 let rig: QueuedMessageTestRig

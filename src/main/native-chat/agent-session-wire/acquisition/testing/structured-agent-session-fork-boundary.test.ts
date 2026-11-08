@@ -11,7 +11,7 @@ import {
   fixture,
   appendItems,
   item
-} from '../../publication/history/testing/agent-session-history-contract-test-fixture'
+} from '../../publication/history/testing/agent-session-history-contract.test-fixture'
 import { structuredAgentSessionForkBoundary } from '../structured-agent-session-fork-boundary'
 
 it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {

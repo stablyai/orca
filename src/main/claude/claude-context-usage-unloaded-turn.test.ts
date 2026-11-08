@@ -29,9 +29,9 @@ import {
   userFrame
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
 
 const SESSION = 'orca-session'

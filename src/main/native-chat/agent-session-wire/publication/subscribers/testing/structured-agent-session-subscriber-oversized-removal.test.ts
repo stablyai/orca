@@ -18,7 +18,7 @@ import {
   fixture,
   SESSION,
   journals
-} from './structured-agent-session-subscriber-contract-test-fixture'
+} from './structured-agent-session-subscriber-contract.test-fixture'
 
 it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
   const journalDir = join(fixture.root, 'oversized-removal-journal')

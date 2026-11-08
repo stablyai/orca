@@ -13,12 +13,15 @@ vi.mock(
 )
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { createRestTestRig, type RestTestRig } from './structured-agent-session-rest-test-rig'
-import { createTestParams } from './structured-agent-session-create-test-fixture'
+import {
+  createRestTestRig,
+  type RestTestRig
+} from './structured-agent-session-rest-test-rig.test-fixture'
+import { createTestParams } from './structured-agent-session-create.test-fixture'
 import {
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { AgentSessionAttachParams } from '../../acquisition/structured-agent-session-attach'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

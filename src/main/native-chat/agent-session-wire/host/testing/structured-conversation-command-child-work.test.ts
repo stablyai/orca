@@ -10,13 +10,13 @@ import {
   envelope,
   hostTestState,
   serveHostTestChildWork
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
-import { reportedChildWork } from '../../observations/testing/structured-agent-session-reported-child-work.test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { reportedChildWork } from '../../observations/testing/structured-agent-session-reported-child-work.test-fixture'
 
 let state: ReturnType<typeof hostTestState>
 let compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>>

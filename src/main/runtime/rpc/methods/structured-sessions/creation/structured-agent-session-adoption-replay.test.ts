@@ -29,7 +29,7 @@ import {
 } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexAgents } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { prepareStructuredAgentSessionCreateForWorktree } from './structured-agent-session-create'
 
 const SESSION = 'session-adoption-replay'

@@ -15,7 +15,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 // Claude Code 2.1.258 / SDK 0.3.251 capture: only message.id links partial and final frames.

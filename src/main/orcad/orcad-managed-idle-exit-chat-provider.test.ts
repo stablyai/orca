@@ -4,14 +4,14 @@ import {
   createRestTestRig,
   foundRestTestChat,
   sweepOnce
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep'
 import {
   HOST_TEST_SESSION as REST_TEST_SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import type { RestTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import type { RestTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { OrcadIdleExitMonitor } from './orcad-idle-exit-monitor'
 import { createOrcadIdleProbes } from './orcad-managed-idle-exit'
 

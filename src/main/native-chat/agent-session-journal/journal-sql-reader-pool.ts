@@ -5,7 +5,6 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
-import type { JournalSqlHistoryRequest } from './journal-sql-history-page'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import type {
   JournalSqlReaderOperation,
@@ -37,14 +36,6 @@ export class JournalSqlReaderPool {
       'journal-sql-reader-entry.js'
     )
   ) {}
-
-  async read(request: JournalSqlHistoryRequest): Promise<AgentSessionHistoryResult> {
-    const response = await this.slot().request({ kind: 'history', request })
-    if (response.type !== 'page') {
-      throw new Error('journal reader returned no history page')
-    }
-    return response.result
-  }
 
   async domainHistory(request: JournalDomainHistoryRequest): Promise<AgentSessionHistoryResult> {
     const response = await this.slot().request({ kind: 'domain-history', request })

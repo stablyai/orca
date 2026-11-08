@@ -17,8 +17,8 @@ import type {
   StructuredAgentSessionAdapter
 } from '../../providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { structuredAgentSessionHeldStarts } from '../../startup/testing/structured-agent-session-held-start.test-support'
+import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { structuredAgentSessionHeldStarts } from '../../startup/testing/structured-agent-session-held-start.test-fixture'
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
 import {
   HOST_TEST_NOW,
@@ -28,7 +28,7 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   closeTestJournalHostDatabases,

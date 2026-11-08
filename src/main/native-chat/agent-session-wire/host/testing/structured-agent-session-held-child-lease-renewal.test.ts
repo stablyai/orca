@@ -10,7 +10,7 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionProviderChild } from '../structured-agent-session-host-types'
 import { StructuredAgentSessionLeaseRenewer } from '../structured-agent-session-lease-renewer'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import { holdsLiveProviderChild } from '../structured-agent-session-provider-child'
 
 const NOW = 1_800_000_000_000

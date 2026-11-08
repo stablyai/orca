@@ -16,12 +16,12 @@ import { expect, it, vi } from 'vitest'
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
-} from './structured-agent-session-create-test-fixture'
-import { HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data'
+} from './structured-agent-session-create.test-fixture'
+import { HOST_TEST_THREAD as THREAD } from './structured-agent-session-host-test-data.test-fixture'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../../../agent-session-journal/history-import/adopted-directory-probe'
 
-import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
+import { fixture } from './structured-agent-session-create-adoption-contract.test-fixture'
 
 it('uses current selected ancestors, then refuses retargeted/foreign sources before ownership', async () => {
   const physical = join(await realpath(fixture.rig.root), 'physical')

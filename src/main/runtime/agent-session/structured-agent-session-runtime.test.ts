@@ -16,7 +16,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const HOST_ID = 'local'

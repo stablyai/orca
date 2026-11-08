@@ -11,7 +11,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { openRigTurnFor } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-rig-turn.test-fixture'
 import {
   sendAgentTurn,

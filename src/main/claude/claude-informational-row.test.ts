@@ -10,7 +10,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {

@@ -9,7 +9,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../../../shar
 
 import { readAgentSessionHistory } from '../agent-session-history-page'
 
-import { fixture, IDENTITY, body, item } from './agent-session-history-contract-test-fixture'
+import { fixture, IDENTITY, body, item } from './agent-session-history-contract.test-fixture'
 
 describe('projectJournalBatch', () => {
   it('publishes every nested lifecycle mutation atomically at the outer cursor', async () => {

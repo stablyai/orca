@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { evictStructuredAgentSession } from '../structured-agent-session-eviction'
 import { StructuredAgentSessionHostRuntimeState } from '../../host/structured-agent-session-host-runtime-state'
-import { withJournalQueueMembers } from '../../journal-ingress/testing/structured-agent-session-journal-double-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../host/testing/structured-agent-session-logger-test-support'
+import { withJournalQueueMembers } from '../../journal-ingress/testing/structured-agent-session-journal-double.test-fixture'
+import { recordingStructuredAgentSessionLogger } from '../../host/testing/structured-agent-session-logger.test-fixture'
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.

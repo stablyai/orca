@@ -7,7 +7,7 @@ import {
   HOST_TEST_SESSION,
   hostTestOperationId,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'

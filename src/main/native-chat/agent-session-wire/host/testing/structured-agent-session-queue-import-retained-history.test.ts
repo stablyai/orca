@@ -23,7 +23,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-ses
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   db,
@@ -34,7 +34,7 @@ import {
   retainedHistoryCases,
   seedLegacy,
   threadWrite
-} from './structured-agent-session-queue-import-contract-test-fixture'
+} from './structured-agent-session-queue-import-contract.test-fixture'
 
 it.each(['person', 'mail'] as const)(
   'accepted table-only %s handoff keeps its Stop provenance after cleanup and another open',

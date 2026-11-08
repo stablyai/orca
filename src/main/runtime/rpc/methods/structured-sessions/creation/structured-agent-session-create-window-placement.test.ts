@@ -7,11 +7,11 @@ import { structuredAgentSessionCreateParams } from '../../../../../../shared/age
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcCallerIdentity } from '../../../rpc-caller-identity'
 import { call, runtimeCalls } from '../protocol/structured-agent-session-rpc.test-fixture'

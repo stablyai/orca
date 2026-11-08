@@ -16,7 +16,7 @@ import {
   scope,
   turn,
   unconfirmed
-} from './agent-session-stop-note-contract-test-fixture'
+} from './agent-session-stop-note-contract.test-fixture'
 
 it('shrinks the triggering row window without dropping the dependent note', async () => {
   await turn('running')

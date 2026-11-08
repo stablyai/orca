@@ -17,7 +17,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 let native: ReturnType<typeof optionSession>

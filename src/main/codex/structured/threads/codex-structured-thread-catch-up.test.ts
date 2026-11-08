@@ -5,7 +5,7 @@ import {
 } from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { codexNonMessageIdentity } from '../items/codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { writeFile } from 'node:fs/promises'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { join } from 'node:path'

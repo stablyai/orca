@@ -9,7 +9,7 @@ import {
   itemStep,
   rig,
   tool
-} from './structured-agent-session-transition-contract-test-fixture'
+} from './structured-agent-session-transition-contract.test-fixture'
 
 it('lands its steps back to back, each resolved after the one before it', async () => {
   const { journal, deferred, sink, publishes, bind } = await rig()

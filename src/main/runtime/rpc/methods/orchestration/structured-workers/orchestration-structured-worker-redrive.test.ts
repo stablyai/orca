@@ -5,12 +5,12 @@ import { withChatTabChanges } from '../../../../agent-session/agent-session-tab-
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import * as historyPages from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import * as subscriberFrames from '../../../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
-import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { createTestParams } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { createTestParams } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredWorkerIdentities,

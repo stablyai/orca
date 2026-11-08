@@ -10,13 +10,13 @@ import {
   CALLER,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessionHost {
   const host = new StructuredAgentSessionHost({

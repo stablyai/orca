@@ -14,13 +14,13 @@ import { readPersistedTestAgentSessionStore } from '../../../../runtime/agent-se
 import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
-import { createTestParams } from './structured-agent-session-create-test-fixture'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { createTestParams } from './structured-agent-session-create.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER as CALLER
-} from './structured-agent-session-rest-test-rig'
-import type { RestTestRig } from './structured-agent-session-rest-test-rig'
+} from './structured-agent-session-rest-test-rig.test-fixture'
+import type { RestTestRig } from './structured-agent-session-rest-test-rig.test-fixture'
 
 export const CLAUDE_MODEL = 'claude-opus-5-5[1m]'
 export const CODEX_MODEL = 'gpt-5.4'

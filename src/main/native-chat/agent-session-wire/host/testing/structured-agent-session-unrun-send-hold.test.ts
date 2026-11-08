@@ -6,7 +6,7 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 
 const words = (kind: 'hostRestarted' | 'chatClosed' | 'cancelled') =>
   agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })

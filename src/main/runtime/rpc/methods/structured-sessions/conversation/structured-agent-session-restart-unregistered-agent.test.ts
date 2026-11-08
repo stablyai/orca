@@ -16,7 +16,7 @@ import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { StructuredAgentRegistry } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'

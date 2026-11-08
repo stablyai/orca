@@ -15,14 +15,14 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   fixture,
   CALLER,
   CAPABILITIES,
   laneDrained
-} from './structured-agent-session-claude-stop-contract-test-fixture'
+} from './structured-agent-session-claude-stop-contract.test-fixture'
 export function eventually<T>(assertion: () => T | Promise<T>): Promise<T> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }

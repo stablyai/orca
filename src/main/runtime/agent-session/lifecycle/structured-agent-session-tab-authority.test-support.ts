@@ -24,7 +24,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'

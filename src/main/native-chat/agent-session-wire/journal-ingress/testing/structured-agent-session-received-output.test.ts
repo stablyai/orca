@@ -10,7 +10,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
 
 it('saves every tool result past 1,024 in one received Claude message, through reopen', async () => {
   const count = 1025

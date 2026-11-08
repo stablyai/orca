@@ -7,7 +7,7 @@ import {
   identity,
   rig,
   tool
-} from './structured-agent-session-transition-contract-test-fixture'
+} from './structured-agent-session-transition-contract.test-fixture'
 
 it('leaves no row of a settlement durable when a later one of its rows fails to write', async () => {
   const { root, journal, deferred, sink, bind } = await rig()

@@ -16,7 +16,7 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 export async function expectRawStopNoteRewindRecovery({
   host,

@@ -13,7 +13,7 @@ import { providerTimelineSink } from '../native-chat/agent-session-timeline/prov
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const lanes: AcpStructuredLane[] = []
 afterEach(async () => {

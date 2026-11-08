@@ -8,7 +8,7 @@ import { createTrackedJournalOpener } from '../../../agent-session-journal/store
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { performThreadGoalChange } from '../structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from '../structured-agent-session-turns'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

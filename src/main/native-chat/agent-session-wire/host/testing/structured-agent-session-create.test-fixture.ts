@@ -4,7 +4,7 @@ import {
   hostTestAttachParams,
   hostTestOperationId,
   HOST_TEST_SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { AgentSessionAttachParams } from '../../acquisition/structured-agent-session-attach'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'

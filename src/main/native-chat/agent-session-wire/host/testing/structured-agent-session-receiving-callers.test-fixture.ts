@@ -10,7 +10,7 @@ import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/j
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionCaller } from '../../../../runtime/orchestration/addressing/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../runtime/orchestration/addressing/orchestration-party'
-import { ReceivingRuntime } from './structured-agent-session-receiving-runtime.test-support'
+import { ReceivingRuntime } from './structured-agent-session-receiving-runtime.test-fixture'
 import { eraseRpcMethods, isStreamingMethod } from '../../../../runtime/rpc/core'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-sessions/structured-agent-session'
 import { ORCHESTRATION_METHODS } from '../../../../runtime/rpc/methods/orchestration/orchestration'
@@ -23,14 +23,17 @@ import {
   structuredWorkerProcessIncarnation
 } from '../../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerOwesWork } from '../../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { createRestTestRig, REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
+import {
+  createRestTestRig,
+  REST_TEST_CALLER
+} from './structured-agent-session-rest-test-rig.test-fixture'
 import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../structured-agent-session-registry'
-import { createClaudeAccountRouting } from './structured-agent-session-claude-account-routing.test-support'
+import { createClaudeAccountRouting } from './structured-agent-session-claude-account-routing.test-fixture'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 
 export const PARENT = testOrcaSessionId('cfe50e96-3a95-4353-9cdc-7a652779c6e8')

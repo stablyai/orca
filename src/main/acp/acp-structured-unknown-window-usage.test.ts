@@ -4,7 +4,7 @@ import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent
 import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
 import { JournalWriteProjection } from '../native-chat/agent-session-journal/writing/journal-write-projection'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { PROVIDER_SESSION, replyChunk, waitFor } from './acp-structured-adapter.test-support'
 import { openAttachedHostRig, promptIdOf, send } from './acp-structured-host.test-support'
 

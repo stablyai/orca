@@ -12,7 +12,7 @@ import {
   hostTestMessage,
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 
