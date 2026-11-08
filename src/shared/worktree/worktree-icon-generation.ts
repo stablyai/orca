@@ -1,6 +1,7 @@
 import type { TextGenerationFailureFields } from '../text-generation-failure-copy'
 
-export type WorktreeIconGenerationRequest = { name: string }
+export type WorktreeIconGenerationRequest = { name: string; requestId: string }
+export type WorktreeIconGenerationCancellation = { requestId: string }
 
 export type WorktreeIconGenerationResult =
   | { success: true; svg: string }

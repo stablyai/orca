@@ -1,8 +1,10 @@
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   IDLE,
   buildExplicitEntriesByTabId,
@@ -53,8 +55,9 @@ export function orderWorktreeLeadingTabs(state: AppState, worktreeId: string): T
   const byTabId = entriesByTabId(state)
   const smart = state.sortBy === 'smart'
   const terminalTabs = state.tabsByWorktree[worktreeId]
+  const terminalById = new Map(terminalTabs?.map((tab) => [tab.id, tab]))
   const worktreeLastActivityAt = smart
-    ? (getIndexedWorktreesById(state.worktreesByRepo, worktreeId)[0]?.lastActivityAt ?? 0)
+    ? (getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)[0]?.lastActivityAt ?? 0)
     : 0
   const paneSources: TabPaneInputSources = {
     entriesByTabId: byTabId,
@@ -64,21 +67,27 @@ export function orderWorktreeLeadingTabs(state: AppState, worktreeId: string): T
   }
   const ranked: RankedTab[] = tabs.map((tab) => {
     // Agent-status pane keys use the backing terminal tab id, not the unified tab id.
-    const terminalTab =
-      tab.contentType === 'terminal'
-        ? terminalTabs?.find((candidate) => candidate.id === tab.entityId)
+    const terminalTab = tab.contentType === 'terminal' ? terminalById.get(tab.entityId) : undefined
+    const nativeEntry =
+      tab.contentType === 'agent-session'
+        ? state.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
         : undefined
-    const entries = terminalTab ? (byTabId.get(terminalTab.id) ?? []) : []
+    const entries = terminalTab
+      ? (byTabId.get(terminalTab.id) ?? [])
+      : nativeEntry
+        ? [nativeEntry]
+        : []
     return {
       tab,
       latestAt: latestEventAt(tab, entries, now),
-      attention:
-        smart && terminalTab
-          ? resolveAttention(
-              collectTabPaneInputs(terminalTab, worktreeLastActivityAt, paneSources, now),
-              now
-            )
-          : IDLE
+      attention: smart
+        ? resolveAttention(
+            terminalTab
+              ? collectTabPaneInputs(terminalTab, worktreeLastActivityAt, paneSources, now)
+              : entries.map((entry) => ({ kind: 'hook', entry, hasLivePty: false })),
+            now
+          )
+        : IDLE
     }
   })
   return ranked

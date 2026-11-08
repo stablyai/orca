@@ -16,6 +16,7 @@ import {
 } from './commit-message-agent-environment'
 import { resolveTextGenerationParams } from './commit-message-text-generation'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
+import { cancelLocalGeneration } from './source-control-generation-lanes'
 
 export type WorktreeIconGenerationHost = {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0]
@@ -26,9 +27,22 @@ export type WorktreeIconGenerationHost = {
 const MAX_CACHED_ICONS = 500
 
 let cache: Map<string, string> | null = null
-const inFlight = new Map<string, Promise<WorktreeIconGenerationResult>>()
-// One agent at a time: generation lanes cancel a same-cwd predecessor, and a sidebar of cards would fan out.
-let queue: Promise<unknown> = Promise.resolve()
+type IconRequest = {
+  host: WorktreeIconGenerationHost
+  name: string
+  controller: AbortController
+  consumers: number
+  settled: boolean
+  result: ReturnType<typeof Promise.withResolvers<WorktreeIconGenerationResult>>
+}
+const inFlight = new Map<string, IconRequest>()
+const queued = new Set<IconRequest>()
+let active: IconRequest | undefined
+const canceledResult = (): WorktreeIconGenerationResult => ({
+  success: false,
+  canceled: true,
+  error: 'Generation canceled.'
+})
 
 function loadCache(file: string): Map<string, string> {
   if (cache) {
@@ -54,7 +68,11 @@ function remember(file: string, name: string, svg: string): void {
   icons.delete(name)
   icons.set(name, svg)
   while (icons.size > MAX_CACHED_ICONS) {
-    icons.delete(icons.keys().next().value as string)
+    const oldest = icons.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    icons.delete(oldest)
   }
   try {
     mkdirSync(path.dirname(file), { recursive: true })
@@ -74,12 +92,19 @@ const PREFERRED_ICON_PARAMS: ResolvedSourceControlAiGenerationParams = {
 async function generateWith(
   host: WorktreeIconGenerationHost,
   params: ResolvedSourceControlAiGenerationParams,
-  name: string
+  name: string,
+  signal: AbortSignal
 ): Promise<WorktreeIconGenerationResult> {
+  if (signal.aborted) {
+    return canceledResult()
+  }
   const localEnv = await prepareLocalCommitMessageAgentEnv(
     params.agentId,
     host.getAgentEnvironment()
   )
+  if (signal.aborted) {
+    return canceledResult()
+  }
   if (!localEnv.ok) {
     return { success: false, error: localEnv.error }
   }
@@ -88,7 +113,8 @@ async function generateWith(
     prompt: buildWorktreeIconPrompt(name),
     target: { kind: 'local', cwd: os.homedir(), ...(localEnv.env ? { env: localEnv.env } : {}) },
     spawnAgent: spawnSourceControlAgent,
-    operation: 'worktree-icon'
+    operation: 'worktree-icon',
+    shouldExecute: () => !signal.aborted
   })
   if (!result.success) {
     return { success: false, error: result.error, canceled: result.canceled }
@@ -101,9 +127,13 @@ async function generateWith(
 
 async function generate(
   host: WorktreeIconGenerationHost,
-  name: string
+  name: string,
+  signal: AbortSignal
 ): Promise<WorktreeIconGenerationResult> {
-  const preferred = await generateWith(host, PREFERRED_ICON_PARAMS, name)
+  const preferred = await generateWith(host, PREFERRED_ICON_PARAMS, name, signal)
+  if (signal.aborted) {
+    return canceledResult()
+  }
   let result = preferred
   if (!preferred.success && !preferred.canceled) {
     const configured = resolveTextGenerationParams(
@@ -117,11 +147,14 @@ async function generate(
       (configured.params.agentId !== PREFERRED_ICON_PARAMS.agentId ||
         configured.params.model !== PREFERRED_ICON_PARAMS.model)
     ) {
-      const fallback = await generateWith(host, configured.params, name)
+      const fallback = await generateWith(host, configured.params, name, signal)
       result = fallback.success
         ? fallback
         : { ...fallback, error: `${preferred.error}\n${fallback.error}` }
     }
+  }
+  if (signal.aborted) {
+    return canceledResult()
   }
   if (result.success) {
     remember(host.cacheFile, name, result.svg)
@@ -129,11 +162,46 @@ async function generate(
   return result
 }
 
+function forget(request: IconRequest): void {
+  if (inFlight.get(request.name) === request) {
+    inFlight.delete(request.name)
+  }
+}
+
+// One agent at a time; canceled waiting cards are removed before they can acquire a process lane.
+function drainQueue(): void {
+  if (active) {
+    return
+  }
+  const request = queued.values().next().value
+  if (!request) {
+    return
+  }
+  queued.delete(request)
+  active = request
+  void generate(request.host, request.name, request.controller.signal)
+    .catch((error: unknown): WorktreeIconGenerationResult => ({
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }))
+    .then((result) => {
+      request.settled = true
+      forget(request)
+      request.result.resolve(result)
+      active = undefined
+      drainQueue()
+    })
+}
+
 /** The cached icon for this name, or a queued generation that caches its result. */
 export function generateWorktreeIconRequest(
   host: WorktreeIconGenerationHost,
-  rawName: string
+  rawName: string,
+  signal: AbortSignal
 ): Promise<WorktreeIconGenerationResult> {
+  if (signal.aborted) {
+    return Promise.resolve(canceledResult())
+  }
   const name = normalizeWorktreeIconName(rawName)
   if (!name) {
     return Promise.resolve({ success: false, error: 'Workspace name is empty.' })
@@ -142,18 +210,47 @@ export function generateWorktreeIconRequest(
   if (cached) {
     return Promise.resolve({ success: true, svg: cached })
   }
-  const pending = inFlight.get(name)
-  if (pending) {
-    return pending
+  let request = inFlight.get(name)
+  if (!request) {
+    request = {
+      host,
+      name,
+      controller: new AbortController(),
+      consumers: 0,
+      settled: false,
+      result: Promise.withResolvers<WorktreeIconGenerationResult>()
+    }
+    inFlight.set(name, request)
+    queued.add(request)
   }
-  const run = queue
-    .then(() => generate(host, name))
-    .catch((error: unknown): WorktreeIconGenerationResult => ({
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    }))
-    .finally(() => inFlight.delete(name))
-  queue = run
-  inFlight.set(name, run)
-  return run
+  const owned = request
+  owned.consumers++
+  const result = new Promise<WorktreeIconGenerationResult>((resolve) => {
+    let finished = false
+    const finish = (result: WorktreeIconGenerationResult): void => {
+      if (finished) {
+        return
+      }
+      finished = true
+      signal.removeEventListener('abort', cancel)
+      owned.consumers--
+      if (!owned.consumers && !owned.settled) {
+        owned.controller.abort()
+        queued.delete(owned)
+        forget(owned)
+        if (active === owned) {
+          cancelLocalGeneration('worktree-icon', os.homedir())
+        } else {
+          owned.settled = true
+          owned.result.resolve(canceledResult())
+        }
+      }
+      resolve(result)
+    }
+    const cancel = (): void => finish(canceledResult())
+    signal.addEventListener('abort', cancel, { once: true })
+    void owned.result.promise.then(finish)
+  })
+  drainQueue()
+  return result
 }

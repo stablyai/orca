@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useMemo } from 'react'
 import { Smartphone } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { BrowserFavicon } from '@/components/browser-favicon'
@@ -6,12 +6,11 @@ import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import type { WorktreeCardIconStyle } from '../../../../shared/worktree/card-display-settings-types'
 import { ShellIcon, shellIconKind } from '../tab-bar/shell-icons'
 import {
   decodeLeadingTabIcon,
-  selectWorktreeLeadingTabs,
+  createWorktreeLeadingTabsSelector,
   type LeadingTabIcon
 } from './worktree-card-leading-tabs'
 import type { SlotException } from './worktree-card-slot-signal'
@@ -87,11 +86,8 @@ export function WorktreeCardLeadingBadge({
 }
 
 function TabStack({ worktreeId }: { worktreeId: string }): React.JSX.Element {
-  const encoded = useAppStore(
-    useShallow(
-      useCallback((state: AppState) => selectWorktreeLeadingTabs(state, worktreeId), [worktreeId])
-    )
-  )
+  const select = useMemo(() => createWorktreeLeadingTabsSelector(worktreeId), [worktreeId])
+  const encoded = useAppStore(useShallow(select))
   const icons = encoded.map(decodeLeadingTabIcon)
   return icons.length === 0 ? (
     <span className="worktree-card-leading-tile" data-layer="front">

@@ -1,4 +1,6 @@
 import type { AppState } from '@/store/types'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
@@ -84,4 +86,32 @@ export function selectWorktreeLeadingTabs(state: AppState, worktreeId: string): 
   return orderWorktreeLeadingTabs(state, worktreeId)
     .slice(0, LEADING_TAB_LIMIT)
     .map((tab) => encode(iconForTab(state, tab, worktreeId)))
+}
+
+/** Keep ordering and icon projection out of unrelated store notifications. */
+export function createWorktreeLeadingTabsSelector(worktreeId: string) {
+  let previous: readonly unknown[] = []
+  let result: string[] = []
+  return (state: AppState): string[] => {
+    const inputs = [
+      state.unifiedTabsByWorktree[worktreeId],
+      state.tabsByWorktree[worktreeId],
+      state.browserTabsByWorktree[worktreeId],
+      state.agentStatusByPaneKey,
+      state.agentStatusEpoch,
+      state.migrationUnsupportedByPtyId,
+      state.ptyIdsByTabId,
+      state.runtimePaneTitlesByTabId,
+      state.terminalLayoutsByTabId,
+      state.sortBy,
+      state.sortBy === 'smart'
+        ? getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)[0]?.lastActivityAt
+        : undefined
+    ]
+    if (!inputs.every((value, index) => value === previous[index])) {
+      previous = inputs
+      result = selectWorktreeLeadingTabs(state, worktreeId)
+    }
+    return result
+  }
 }

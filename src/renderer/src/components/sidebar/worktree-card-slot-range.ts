@@ -3,6 +3,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostScopedWorktreeKey } from '../../../../shared/worktree/host-qualified-identity'
 import { getWorktreeIdFromHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeLineageTree } from '../../../../shared/sidebar-list/worktree-lineage-range'
+import {
+  createLineageRangeAggregate,
+  type LineageRangeAggregate
+} from '../../../../shared/sidebar-list/lineage-range-aggregate'
 import type { SlotTarget } from './worktree-card-slot-targets'
 import {
   toLineageSlotRecord,
@@ -27,8 +31,7 @@ export function createLineageSlotReader(
   type TreeSlots = {
     snapshot: SlotSnapshot
     own: WorkspaceSlot[]
-    size: number
-    segments: SlotAggregate[]
+    aggregate: LineageRangeAggregate<SlotAggregate>
     indicesById: Map<string, number[]>
   }
   const treeSlots = new WeakMap<WorktreeLineageTree, TreeSlots>()
@@ -40,12 +43,7 @@ export function createLineageSlotReader(
   }
   function updateTreeSlot(slots: TreeSlots, index: number, own: WorkspaceSlot): void {
     slots.own[index] = own
-    let node = slots.size + index
-    slots.segments[node] = own
-    while (node > 1) {
-      node = Math.floor(node / 2)
-      slots.segments[node] = combineSlots(slots.segments[node * 2]!, slots.segments[node * 2 + 1]!)
-    }
+    slots.aggregate.update(index, own)
   }
   function slotsForTree(state: AppState, tree: WorktreeLineageTree): TreeSlots {
     const snapshot = slotSnapshot(state)
@@ -70,14 +68,7 @@ export function createLineageSlotReader(
     const own = tree.identities.map((identity, index) =>
       ownSlot(state, identity, tree.worktrees[index])
     )
-    const size = 2 ** Math.ceil(Math.log2(Math.max(own.length, 1)))
-    const segments = Array.from({ length: size * 2 }, emptyAggregate)
-    own.forEach((slot, index) => {
-      segments[size + index] = slot
-    })
-    for (let node = size - 1; node > 0; node--) {
-      segments[node] = combineSlots(segments[node * 2]!, segments[node * 2 + 1]!)
-    }
+    const aggregate = createLineageRangeAggregate(own, emptyAggregate, combineSlots)
     const indicesById = new Map<string, number[]>()
     tree.identities.forEach((identity, index) => {
       const id = getWorktreeIdFromHostIdentity(identity)
@@ -85,7 +76,7 @@ export function createLineageSlotReader(
       indices.push(index)
       indicesById.set(id, indices)
     })
-    const result = { snapshot, own, size, segments, indicesById }
+    const result = { snapshot, own, aggregate, indicesById }
     treeSlots.set(tree, result)
     return result
   }
@@ -97,20 +88,7 @@ export function createLineageSlotReader(
     index: number
   ): SlotAggregate {
     const slots = slotsForTree(state, tree)
-    let start = slots.size + index + 1
-    let end = slots.size + tree.ends[index]!
-    let result = emptyAggregate()
-    while (start < end) {
-      if (start % 2) {
-        result = combineSlots(result, slots.segments[start++]!)
-      }
-      if (end % 2) {
-        result = combineSlots(result, slots.segments[--end]!)
-      }
-      start = Math.floor(start / 2)
-      end = Math.floor(end / 2)
-    }
-    return result
+    return slots.aggregate.read(index + 1, tree.ends[index]!)
   }
 
   return { slotsForTree, descendantSlot }
