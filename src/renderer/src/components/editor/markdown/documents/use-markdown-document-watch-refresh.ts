@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot

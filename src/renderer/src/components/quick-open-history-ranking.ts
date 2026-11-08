@@ -2,7 +2,7 @@ import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles,
   QUICK_OPEN_RESULT_LIMIT
-} from './quick-open-search'
+} from '../../../shared/quick-open/quick-open-path-search'
 
 // One listing serves every keystroke; rebuilding its membership set per query scanned it all again.
 const availablePaths = new WeakMap<readonly string[], ReadonlySet<string>>()

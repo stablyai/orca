@@ -20,6 +20,7 @@ import { colors } from '../theme/mobile-theme'
 import { styles as sessionStyles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
 
 // The terminal's key row above the live input; every key goes straight to the terminal.
 export function MobileSessionAccessoryKeys({
@@ -45,9 +46,9 @@ export function MobileSessionAccessoryKeys({
     stopAccessoryRepeat,
     cancelAccessoryRepeat,
     prepareAccessoryPress,
-    handlePaste,
-    keyboardLift
+    handlePaste
   } = controller
+  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const accessoryPresses = useRef(new Map<string, ReturnType<typeof prepareAccessoryPress>>())
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   // An unmounting Pressable never fires onPressOut, so a held key would outlive its row.

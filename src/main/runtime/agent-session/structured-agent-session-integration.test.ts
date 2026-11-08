@@ -1,5 +1,4 @@
-import '../rpc/unused-default-rpc-methods.test-fixture'
-import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
+import { scriptedCodexCatalogSession } from './model-catalog/scripted-codex-model-catalog.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,7 +20,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { NativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../rpc/methods/structured-sessions/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

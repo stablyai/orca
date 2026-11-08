@@ -1,4 +1,3 @@
-import '../rpc/unused-default-rpc-methods.test-fixture'
 /** Opening the store for history/resume/phone admission does not prove chat presence; the first chat record must update the signal immediately. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -27,8 +26,8 @@ vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (impo
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-const { AI_VAULT_METHODS } = await import('../rpc/methods/ai-vault')
-await import('../rpc/methods/agent-launch-replay')
+const { AI_VAULT_METHODS } = await import('../rpc/methods/history/ai-vault')
+await import('../rpc/methods/agent-launch/agent-launch-replay')
 
 let stateDirectory: string
 let heldChanges: boolean[]

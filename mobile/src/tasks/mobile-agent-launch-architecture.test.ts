@@ -14,7 +14,7 @@ import { AgentLaunchFields } from '../../../src/shared/rpc-contract/agent-launch
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+} from '../../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
@@ -29,10 +29,15 @@ import {
 } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 const createStructuredSession = vi.fn()
-vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: (...args: unknown[]) => createStructuredSession(...args)
-}))
-const { AGENT_LAUNCH_METHODS } = await import('../../../src/main/runtime/rpc/methods/agent-launch')
+vi.mock(
+  '../../../src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: (...args: unknown[]) =>
+      createStructuredSession(...args)
+  })
+)
+const { AGENT_LAUNCH_METHODS } =
+  await import('../../../src/main/runtime/rpc/methods/agent-launch/agent-launch')
 
 let directory: string
 let store: AgentSessionRecordStore
@@ -89,6 +94,7 @@ function scenario(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the logical client reaches these transport methods; each mutation uses the production dispatcher.
     return {
       getState: () => 'connected',
+      getLastConnectedAt: () => null,
       onStateChange: () => () => {},
       close: () => rejectFirst?.(markRpcDeliveryUnknown(new Error('Connection lost'))),
       sendRequest: async (method: string, params: unknown) => {

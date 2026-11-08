@@ -91,6 +91,14 @@ beforeEach(async () => {
       answerPrompt: async () => {},
       setOption: async () => {},
       rewindSupport: () => ({ supported: true }),
+      prepareRewind: async (input) => ({
+        ok: true,
+        revert: {
+          threadId: HOST_TEST_THREAD,
+          beforeTurnId: input.beforeTurnId,
+          keptTurnId: input.beforeTurnId === 'drop' ? 'kept' : null
+        }
+      }),
       rewind,
       recoverRewind,
       releaseAcquisition: async () => true,
@@ -213,5 +221,22 @@ describe('host rewind', () => {
         clock += 75_000
       }
     }))
+  })
+})
+
+it('persists the live native predecessor before revert and retains it after a lost reply', async () => {
+  const target = await seed()
+  rewind.mockImplementationOnce(async () => {
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({
+      phase: 'prepared',
+      providerRevert: { threadId: HOST_TEST_THREAD, beforeTurnId: 'drop', keptTurnId: 'kept' }
+    })
+    throw new Error('reply lost')
+  })
+  await expect(host.rewind(caller, await params(target))).rejects.toThrow('reply lost')
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.providerRevert).toEqual({
+    threadId: HOST_TEST_THREAD,
+    beforeTurnId: 'drop',
+    keptTurnId: 'kept'
   })
 })

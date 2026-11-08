@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { orchestrationMailFixture } from '../../main/runtime/orchestration/orchestration-mail.test-fixture'
+import { orchestrationMailFixture } from '../../main/runtime/orchestration/mailbox/orchestration-mail.test-fixture'
 import { agentMessageTranscriptText } from './agent-message-display-text'
 import { agentMessageHeading } from './agent-message-presentation'
 import { readAgentMessageSource } from './agent-session-message-source'

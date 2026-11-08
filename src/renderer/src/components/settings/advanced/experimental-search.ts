@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
@@ -198,35 +199,26 @@ function findEntry(title: string): SettingsSearchEntry {
   return entry
 }
 
-export function getExperimentalSearchEntry() {
+export function getExperimentalSearchEntry(t: Translate = translate) {
   return {
-    pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
+    pet: findEntry(t('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
     agentDashboard: findEntry(
-      translate(
-        'auto.components.settings.experimental.search.agentDashboard.title',
-        'Agent Dashboard'
-      )
+      t('auto.components.settings.experimental.search.agentDashboard.title', 'Agent Dashboard')
     ),
     terminalAttention: findEntry(
-      translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
+      t('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
     ),
     agentHibernation: findEntry(
-      translate(
-        'auto.components.settings.experimental.search.agentHibernation.title',
-        'Agent sleep'
-      )
+      t('auto.components.settings.experimental.search.agentHibernation.title', 'Agent sleep')
     ),
     newWorktreeCardStyle: findEntry(
-      translate(
-        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
-        'New card style'
-      )
+      t('auto.components.settings.experimental.search.newWorktreeCardStyle.title', 'New card style')
     ),
     ephemeralVms: findEntry(
-      translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
+      t('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
     ),
     browserExtensions: findEntry(
-      translate(
+      t(
         'auto.components.settings.experimental.search.browserExtensions.title',
         'Browser extensions'
       )

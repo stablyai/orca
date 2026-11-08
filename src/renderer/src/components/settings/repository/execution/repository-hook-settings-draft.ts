@@ -6,6 +6,7 @@ import type {
 import type { Repo } from '../../../../../../shared/repo-types'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './repository-hook-defaults'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type LocalHookName = 'setup' | 'archive'
 export type LocalHookField = {
@@ -18,34 +19,30 @@ export type HookSettingsPolicyDraft = Partial<
   Pick<RepoHookSettings, 'setupRunPolicy' | 'setupAgentStartupPolicy' | 'commandSourcePolicy'>
 >
 
-export function getLocalHookFields(): readonly [LocalHookField, LocalHookField] {
+export function getLocalHookFields(
+  t: Translate = translate
+): readonly [LocalHookField, LocalHookField] {
   return [
     {
       name: 'setup',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.52b31baf02',
-        'Setup Script'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.f0710e1c83',
         'Runs after a new worktree is created; install deps, copy env files, run migrations.'
       ),
-      placeholder: translate(
+      placeholder: t(
         'auto.components.settings.RepositoryHooksSection.a3fc966677',
         '# e.g. pnpm install cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
       )
     },
     {
       name: 'archive',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.9a100323ff',
-        'Archive Script'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
         'Runs before a worktree is archived or removed.'
       ),
-      placeholder: translate(
+      placeholder: t(
         'auto.components.settings.RepositoryHooksSection.9b821fa19d',
         '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
       )
@@ -79,19 +76,22 @@ export type LocalCommandSourcePolicyNotice =
   | { kind: 'checking' }
   | { kind: 'action'; policy: 'local-only' | 'run-both'; label: string }
 
-export function getLocalCommandSourcePolicyNotice({
-  hooksInspectionReady,
-  currentPolicy,
-  setupScript,
-  archiveScript,
-  hasSharedScript
-}: {
-  hooksInspectionReady: boolean
-  currentPolicy: HookCommandSourcePolicy
-  setupScript: string | undefined
-  archiveScript: string | undefined
-  hasSharedScript: boolean
-}): LocalCommandSourcePolicyNotice | null {
+export function getLocalCommandSourcePolicyNotice(
+  {
+    hooksInspectionReady,
+    currentPolicy,
+    setupScript,
+    archiveScript,
+    hasSharedScript
+  }: {
+    hooksInspectionReady: boolean
+    currentPolicy: HookCommandSourcePolicy
+    setupScript: string | undefined
+    archiveScript: string | undefined
+    hasSharedScript: boolean
+  },
+  t: Translate = translate
+): LocalCommandSourcePolicyNotice | null {
   if ((!setupScript?.trim() && !archiveScript?.trim()) || currentPolicy !== 'shared-only') {
     return null
   }
@@ -102,15 +102,12 @@ export function getLocalCommandSourcePolicyNotice({
     ? {
         kind: 'action',
         policy: 'run-both',
-        label: translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
+        label: t('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
       }
     : {
         kind: 'action',
         policy: 'local-only',
-        label: translate(
-          'auto.components.settings.RepositoryHooksSection.8bfe65fc60',
-          'Use local commands'
-        )
+        label: t('auto.components.settings.RepositoryHooksSection.8bfe65fc60', 'Use local commands')
       }
 }
 

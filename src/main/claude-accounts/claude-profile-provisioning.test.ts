@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as FsUtils from '../codex-accounts/fs-utils'
-import type * as SecureFile from '../../shared/secure-file'
+import type * as SecureFile from '../../shared/secure-storage/secure-file'
 const secureFile = vi.hoisted(() => ({ canProtect: true }))
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
@@ -14,7 +14,7 @@ vi.mock('../codex-accounts/fs-utils', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
-vi.mock('../../shared/secure-file', async (original) => {
+vi.mock('../../shared/secure-storage/secure-file', async (original) => {
   const actual = await original<typeof SecureFile>()
   return {
     ...actual,
@@ -164,7 +164,9 @@ describe('Claude profile refresh from the default home', () => {
       platform: 'linux',
       endpointEnv: { ANTHROPIC_AUTH_TOKEN: 'endpoint-token' }
     })
-    expect(fs.readFileSync(join(f.profileHome, 'settings.json'), 'utf8')).toContain('endpoint-token')
+    expect(fs.readFileSync(join(f.profileHome, 'settings.json'), 'utf8')).toContain(
+      'endpoint-token'
+    )
     // The default home did not change, so only a full rewrite removes the token.
     await provision(f)
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a' })

@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { BoundedMap } from '../../../../../../shared/bounded-map'
 import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
@@ -50,13 +51,16 @@ export function useSourceControlPanelViewState({
   const isGitHistoryExpanded = !collapsedSections.has('history')
 
   const handleToggleSourceControlViewMode = useCallback(() => {
-    if (!settings) {
+    const current = useAppStore.getState().settings
+    if (!current) {
       return
     }
     updateSettings({
-      sourceControlViewMode: getNextSourceControlViewMode(sourceControlViewMode)
+      sourceControlViewMode: getNextSourceControlViewMode(
+        normalizeSourceControlViewMode(current.sourceControlViewMode)
+      )
     })
-  }, [settings, sourceControlViewMode, updateSettings])
+  }, [updateSettings])
 
   // Reset during render; key-based remounts on switches caused Windows IPC storms.
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)

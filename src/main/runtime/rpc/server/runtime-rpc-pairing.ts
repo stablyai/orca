@@ -2,7 +2,7 @@ import type { RuntimeDeviceGrant } from '../rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { MobileSocketWiring } from '../mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
@@ -12,7 +12,7 @@ import type { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-reach'
-import { resolveAdvertisedPairingEndpoint } from '../../pairing-endpoint'
+import { resolveAdvertisedPairingEndpoint } from './pairing/network/pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
@@ -21,7 +21,7 @@ import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../methods/terminal/terminal-subscription-stream-id'
-import { isStructuredNativeChatDefaultFor } from '../methods/structured-agent-session-policy'
+import { isStructuredNativeChatDefaultFor } from '../methods/structured-sessions/structured-agent-session-policy'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -127,6 +127,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
         })
       : null
+    this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 
   private listRelayedPhones(): { phoneKey: string; name: string }[] {
@@ -157,6 +158,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     reach?: RuntimePairingReach
     // Grant administrative permissions only at pairing, never as later device upgrades.
     grants?: readonly RuntimeDeviceGrant[]
+    // Desktop UI only; absent keeps headless offers valid until scanned.
+    offerTtlMs?: number
   }):
     | PairingOfferUnavailable
     | {
@@ -165,6 +168,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         endpoint: string
         deviceId: string
         webClientUrl: string | null
+        offerExpiresAt: number | null
       } {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
@@ -195,9 +199,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
+      const ttl = args.offerTtlMs
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, ttl)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, ttl)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -219,7 +224,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       endpoint,
       deviceId: device.deviceId,
       webClientUrl:
-        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
+        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null,
+      offerExpiresAt: device.offerExpiresAt ?? null
     }
   }
 

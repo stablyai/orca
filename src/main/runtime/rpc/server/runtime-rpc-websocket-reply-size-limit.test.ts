@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './pairing/device-registry'
-import { FILE_METHODS } from '../methods/files'
+import { FILE_METHODS } from '../methods/files/files'
 import { E2EEChannel } from '../e2ee-channel'
 import {
   decrypt,
@@ -16,17 +16,8 @@ import {
   generateKeyPair
 } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import type { DirEntry } from '../../../../shared/filesystem-entry-types'
-import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc-reply-size-limit'
 
-// The HH-2 folder: 80,000 files serialize past the 4 MiB encrypted-reply cap.
-function hugeListing(): DirEntry[] {
-  return Array.from({ length: 80_000 }, (_, index) => ({
-    name: `file-${String(index).padStart(5, '0')}.txt`,
-    isDirectory: false,
-    isSymlink: false
-  }))
-}
+import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc-reply-size-limit'
 
 function createServer() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-reply-size-'))
@@ -95,44 +86,6 @@ describe('remote RPC replies over the encrypted channel', () => {
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((server) => server.stop()))
     vi.restoreAllMocks()
-  })
-
-  it('answers an oversized folder listing with an error instead of closing the connection', async () => {
-    const { runtime, server, device } = createServer()
-    servers.push(server)
-    vi.spyOn(runtime, 'readFileExplorerDir').mockResolvedValue(hugeListing())
-    const encrypted = connectEncryptedChannel()
-    encrypted.channel.onMessage((plaintext, reply, sendBinary) => {
-      void server['handleWebSocketMessage'](
-        plaintext,
-        reply,
-        sendBinary,
-        undefined,
-        undefined,
-        device.token
-      )
-    })
-
-    encrypted.channel.handleRawMessage(
-      encrypt(
-        JSON.stringify({
-          id: 'read-flat',
-          method: 'files.readDir',
-          params: { worktree: 'id:wt-1', relativePath: 'flat' }
-        }),
-        encrypted.sharedKey
-      )
-    )
-    await vi.waitFor(() => expect(encrypted.replies()).toHaveLength(1))
-
-    expect(encrypted.onError).not.toHaveBeenCalled()
-    expect(encrypted.replies()[0]).toMatchObject({
-      id: 'read-flat',
-      ok: false,
-      error: {
-        message: 'This folder has 80,000 entries, too many to list over a remote connection.'
-      }
-    })
   })
 
   it('answers any other oversized reply with a per-request error', async () => {

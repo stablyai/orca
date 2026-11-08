@@ -1,5 +1,6 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
+import { TerminalResumeState } from './terminal-stream-resume'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
   scope: MobileSessionNativeChatDictationModel
@@ -22,6 +23,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     nativeChatInputLeaseReadyRef,
     clearNativeChatInputLease
   } = scope
+  const [terminalResume] = useState(() => new TerminalResumeState())
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
@@ -60,6 +62,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     subscribingHandlesRef.current.clear()
     leaseOnlyHandlesRef.current.clear()
     initializedHandlesRef.current.clear()
+    terminalResume.forget()
     terminalDiagnosticsRef.current.clearTerminalCache()
     viewportResubscribeBudgetRef.current.clear()
     webReadyHandlesRef.current.clear()
@@ -70,8 +73,9 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
-  }, [clearNativeChatInputLease])
+  }, [clearNativeChatInputLease, terminalResume])
   return {
+    terminalResume,
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,

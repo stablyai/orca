@@ -12,13 +12,18 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import {
+  useAllWorktrees,
+  useWorktreeMap
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { cn } from '@/lib/utils'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { useEligibleFolderParents } from './use-eligible-folder-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import { selectWorktreeParent, showCrossStoreParentError } from './worktree-parent-selection'
 
@@ -38,7 +43,8 @@ import {
   PICKER_VIEWPORT_PADDING
 } from './worktree-parent-picker-placement'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorktreeParentPickerPopoverProps = {
   open: boolean
@@ -114,6 +120,7 @@ export function WorktreeParentPickerPopover({
   anchorElement,
   onOpenChange
 }: WorktreeParentPickerPopoverProps): React.JSX.Element | null {
+  const t = useTranslate()
   const worktrees = useAllWorktrees()
   const worktreeMap = useWorktreeMap()
   const repoMap = useRepoMap()
@@ -136,19 +143,23 @@ export function WorktreeParentPickerPopover({
     const identity = clickedChild ? getWorktreeHostIdentity(clickedChild) : null
     return identity ? worktrees.find((row) => getWorktreeHostIdentity(row) === identity) : undefined
   }, [clickedChild, worktrees])
+  const folderParents = useEligibleFolderParents(child)
   const candidates = useMemo(
     () =>
       child
-        ? getEligibleWorktreeParents({
-            child,
-            worktrees,
-            lineageById,
-            worktreeMap,
-            repoMap,
-            parentIdentities
-          })
+        ? [
+            ...getEligibleWorktreeParents({
+              child,
+              worktrees,
+              lineageById,
+              worktreeMap,
+              repoMap,
+              parentIdentities
+            }),
+            ...folderParents
+          ]
         : [],
-    [child, lineageById, parentIdentities, repoMap, worktreeMap, worktrees]
+    [child, folderParents, lineageById, parentIdentities, repoMap, worktreeMap, worktrees]
   )
 
   useLayoutEffect(() => {
@@ -319,7 +330,7 @@ export function WorktreeParentPickerPopover({
           <span className="min-w-0 truncate">
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.sidebar.WorktreeParentPickerPopover.setParentForName',
                 'Set parent for <name>{{name}}</name>'
               )}
@@ -335,7 +346,7 @@ export function WorktreeParentPickerPopover({
             onValueChange={handleSearchChange}
             onKeyDown={handleKeyDown}
             wrapperClassName="shrink-0"
-            placeholder={translate(
+            placeholder={t(
               'auto.components.sidebar.WorktreeParentPickerPopover.searchPlaceholder',
               'Search worktrees...'
             )}
@@ -343,7 +354,7 @@ export function WorktreeParentPickerPopover({
           <CommandList ref={listRef} className="max-h-72 min-h-0 flex-1">
             {filtered.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorktreeParentPickerPopover.empty',
                   'No matching eligible worktrees.'
                 )}

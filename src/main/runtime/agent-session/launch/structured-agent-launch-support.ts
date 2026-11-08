@@ -31,12 +31,13 @@ import {
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
 
-type LaunchEnvironmentSettings = Pick<
+export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
   'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */
@@ -161,7 +162,8 @@ export async function resolveHostStructuredAgentCreateSupport(input: {
     ))
   const support = resolveStructuredAgentSessionCreateSupport({
     location,
-    adapterSupportsCreate: supportsLaunch
+    adapterSupportsCreate: supportsLaunch,
+    unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform)
   })
   warnStructuredAgentSessionCreateUnsupported(
     agent,

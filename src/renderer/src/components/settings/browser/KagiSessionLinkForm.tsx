@@ -4,7 +4,7 @@ import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type KagiSessionLinkDraftState = {
   persisted: string
@@ -26,6 +26,7 @@ export function resolveKagiSessionLinkDraftState(
 }
 
 export function KagiSessionLinkForm(): React.JSX.Element {
+  const t = useTranslate()
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const setBrowserKagiSessionLink = useAppStore((s) => s.setBrowserKagiSessionLink)
   const persistedDraft = browserKagiSessionLink ?? ''
@@ -49,17 +50,14 @@ export function KagiSessionLinkForm(): React.JSX.Element {
       setBrowserKagiSessionLink(null)
       setDraftState(createKagiSessionLinkDraftState(''))
       toast.success(
-        translate(
-          'auto.components.settings.KagiSessionLinkForm.9f741627a7',
-          'Kagi session link cleared.'
-        )
+        t('auto.components.settings.KagiSessionLinkForm.9f741627a7', 'Kagi session link cleared.')
       )
       return
     }
     const normalized = normalizeKagiSessionLink(trimmed)
     if (!normalized) {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.KagiSessionLinkForm.0911d5fa4c',
           'Enter a Kagi private session link from https://kagi.com/search?token=...'
         )
@@ -69,10 +67,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
     setBrowserKagiSessionLink(normalized)
     setDraftState(createKagiSessionLinkDraftState(normalized))
     toast.success(
-      translate(
-        'auto.components.settings.KagiSessionLinkForm.3e5b7c6c25',
-        'Kagi session link saved.'
-      )
+      t('auto.components.settings.KagiSessionLinkForm.3e5b7c6c25', 'Kagi session link saved.')
     )
   }
 
@@ -85,7 +80,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
       }}
     >
       <p className="max-w-72 text-right text-[11px] leading-snug text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.KagiSessionLinkForm.81409d9362',
           'Optional private session link for Kagi auth.'
         )}
@@ -95,7 +90,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
           type="password"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.KagiSessionLinkForm.e383683485',
             'https://kagi.com/search?token=...'
           )}
@@ -103,14 +98,14 @@ export function KagiSessionLinkForm(): React.JSX.Element {
           autoCapitalize="none"
           autoCorrect="off"
           autoComplete="off"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.KagiSessionLinkForm.ff450194cd',
             'Kagi private session link'
           )}
           className="h-7 w-72 text-xs"
         />
         <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
-          {translate('auto.components.settings.KagiSessionLinkForm.d5c8b94c5b', 'Save')}
+          {t('auto.components.settings.KagiSessionLinkForm.d5c8b94c5b', 'Save')}
         </Button>
         {browserKagiSessionLink ? (
           <Button
@@ -122,14 +117,14 @@ export function KagiSessionLinkForm(): React.JSX.Element {
               setBrowserKagiSessionLink(null)
               setDraftState(createKagiSessionLinkDraftState(''))
               toast.success(
-                translate(
+                t(
                   'auto.components.settings.KagiSessionLinkForm.9f741627a7',
                   'Kagi session link cleared.'
                 )
               )
             }}
           >
-            {translate('auto.components.settings.KagiSessionLinkForm.92f0b4e472', 'Clear')}
+            {t('auto.components.settings.KagiSessionLinkForm.92f0b4e472', 'Clear')}
           </Button>
         ) : null}
       </div>

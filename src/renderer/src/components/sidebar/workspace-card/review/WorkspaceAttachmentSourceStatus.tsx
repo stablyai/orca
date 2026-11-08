@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getJiraSourceStatusMessage } from '../../../new-workspace/jira-source-status-message'
 import type { WorkItemSourceSearch } from '../../../new-workspace/use-work-item-source-search'
 
@@ -17,35 +17,33 @@ export function WorkspaceAttachmentSourceStatus({
   error: string | null
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // The result list owns credential and generic Linear read messages.
   const linearReadFailed = controller.mode === 'linear' && Boolean(controller.linearReadError)
   let message: string | null =
-    error ?? translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
+    error ?? t('workspace.links.inlineSearchHint', 'Select a result to attach it.')
   let retry: (() => void) | null = null
   if (!error && taskUrlProvider === 'jira') {
     if (controller.jiraSource.intent) {
-      message = getJiraSourceStatusMessage(controller.jiraSource)
+      message = getJiraSourceStatusMessage(controller.jiraSource, t)
       if (controller.jiraSource.errorKind) {
         retry = controller.jiraSource.retry
       }
     } else {
-      message = translate(
-        'workspace.links.jiraModeRequired',
-        'Select Smart or Jira to load this issue.'
-      )
+      message = t('workspace.links.jiraModeRequired', 'Select Smart or Jira to load this issue.')
       retry = () => controller.setMode('jira')
     }
   } else if (!error && taskUrlProvider === 'linear' && !resolved) {
     if (!controller.linearUrlIntentOwnsInput) {
-      message = translate(
+      message = t(
         'workspace.links.linearModeRequired',
         'Select Smart or Linear to load this issue.'
       )
       retry = () => controller.setMode('linear')
     } else if (!controller.linearStatusChecked) {
-      message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
+      message = t('workspace.links.loadingLinear', 'Loading Linear issue…')
     } else if (!controller.linearStatus.connected) {
-      message = translate(
+      message = t(
         'workspace.links.linearConnectRequired',
         'Connect Linear in Settings to link this issue.'
       )
@@ -53,9 +51,9 @@ export function WorkspaceAttachmentSourceStatus({
     } else if (linearReadFailed) {
       retry = onRetry
     } else if (controller.unresolvedLinearUrlIntent || controller.linearLoading) {
-      message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
+      message = t('workspace.links.loadingLinear', 'Loading Linear issue…')
     } else {
-      message = translate(
+      message = t(
         'workspace.links.linearReadFailed',
         'Couldn’t load this Linear issue. Check the URL and connected workspace.'
       )
@@ -81,7 +79,7 @@ export function WorkspaceAttachmentSourceStatus({
           disabled={controller.disabled}
           onClick={retry}
         >
-          {translate('workspace.links.retrySource', 'Retry')}
+          {t('workspace.links.retrySource', 'Retry')}
         </Button>
       ) : null}
     </div>

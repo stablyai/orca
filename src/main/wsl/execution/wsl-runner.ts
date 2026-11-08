@@ -48,6 +48,8 @@ export type WslSpec = WslCommand & {
   timeoutMs?: number
   maxOutputBytes?: number
   signal?: AbortSignal
+  /** Guest stdin, so secrets stay off the command line; the command must fit argv delivery. */
+  input?: string
 }
 
 export type WslResult = {
@@ -163,6 +165,9 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
+  if (delivery === 'stdin' && spec.input !== undefined) {
+    throw new Error('WSL script is too long to run beside stdin input')
+  }
   const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
 
   // Probe and command share one deadline; never add an independent probe timeout.
@@ -173,7 +178,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     // Use stable Windows cwd: inherited worktrees can disappear and break all later spawns (#16463). Guest cd stays inside.
     cwd: resolveWslInteropSpawnCwd(),
     env: buildHostEnv(spec.env),
-    input: delivery === 'stdin' ? spec.script : undefined,
+    input: delivery === 'stdin' ? spec.script : spec.input,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes,
     signal: spec.signal

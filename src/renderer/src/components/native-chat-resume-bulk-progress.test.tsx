@@ -25,8 +25,11 @@ const statusStream: ResumeStatusStream = vi.hoisted(() => ({
   emit: (_event: Parameters<ResumeStatusStream['emit']>[0]) => {},
   snapshot: new Map()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: (event: Parameters<ResumeStatusStream['emit']>[0]) => void

@@ -7,7 +7,7 @@ import type {
   ClaudeApiEndpointAccountRequest,
   ClaudeApiEndpointSummary
 } from '../../shared/managed-account-types'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 export { CLAUDE_API_ENDPOINT_FILE }
 

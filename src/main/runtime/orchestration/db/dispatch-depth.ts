@@ -1,9 +1,9 @@
 import { createDispatchCreatorEvaluation } from './dispatch-creator-evaluation'
-import { requireOrchestrationAdmission } from '../orchestration-admission'
-export { isSelfCreatedDispatch, AmbiguousDispatchParentError } from './dispatch-creator-evaluation'
+import { requireOrchestrationAdmission } from '../addressing/orchestration-admission'
+
 import type { OrchestrationDb } from './orchestration-db'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
+import type { DispatchContextRow, RemoteDispatchAttachmentRow } from './orchestration-records'
 import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
 import {
   DISPATCH_CONTEXT_COLUMN_LIST,

@@ -46,8 +46,6 @@ function queuedMessageCardCaption(
       return card.waitsForAgent
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
-    case 'behind-returned':
-      return 'Waiting — a message ahead needs attention'
     // The phone draws no card for a send still on its way.
     case 'sending':
     case 'turn':

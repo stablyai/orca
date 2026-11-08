@@ -211,7 +211,12 @@ export function dependencies(
     readBundle: vi.fn(async () => bundle),
     writeBundle: vi.fn(async () => {}),
     setRelayRouting: vi.fn(async () => {}),
+    // Most suites model a phone on the network it last reached the desktop over directly.
+    lastGoodPathWasDirectHere: vi.fn(async () => true),
+    recordGoodPath: vi.fn(async () => {}),
+    readLocalNetwork: vi.fn(async () => null),
     directPath: 'lan',
+    directProbeTimeoutMs: 4_000,
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
     setTimer: defaultScheduleTimer,

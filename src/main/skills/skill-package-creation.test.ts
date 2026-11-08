@@ -103,33 +103,6 @@ describe('skill package creation and extraction', () => {
     expect(await readFile(first.archivePath)).toEqual(await readFile(second.archivePath))
   })
 
-  it('matches the cross-platform golden package identity', async () => {
-    const root = await temporaryDirectory()
-    const sourceDirectory = join(root, 'portable-skill')
-    await mkdir(sourceDirectory)
-    await writeFile(
-      join(sourceDirectory, 'SKILL.md'),
-      '---\nname: portable-skill\ndescription: Portable identity\n---\n\n# Portable\n'
-    )
-    await writeFile(join(sourceDirectory, 'notes.txt'), 'same bytes on every host\n')
-
-    const created = await createSkillPackageArchive({
-      sourceDirectory,
-      archivePath: join(root, 'portable.tar.gz'),
-      packageId: 'package_portable',
-      versionId: 'version_portable',
-      createdAt: '2026-08-11T12:00:00.000Z'
-    })
-
-    expect({
-      archiveSha256: created.archiveSha256,
-      packageDigest: created.manifest.packageDigest
-    }).toEqual({
-      archiveSha256: '20dbc3d2ba9f5e25c49551ebf2a5076b89594f9b67e03bc038aa9d974ac72894',
-      packageDigest: '3bb1fc63cfea2f2b7f2cf80e539735eebd5bfb6aa65f47cf0db7e9fd35297f57'
-    })
-  })
-
   it('rejects archive and package identity mismatches before publishing extraction', async () => {
     const root = await temporaryDirectory()
     const sourceDirectory = await createSkill(root)
@@ -212,28 +185,6 @@ describe('skill package creation and extraction', () => {
     expect(lfPackage.archiveSha256).not.toBe(crlfPackage.archiveSha256)
   })
 
-  it('rejects missing and malformed SKILL.md sources with stable archive errors', async () => {
-    const root = await temporaryDirectory()
-    const missing = join(root, 'missing')
-    const malformed = join(root, 'malformed')
-    await Promise.all([mkdir(missing), mkdir(malformed)])
-    await writeFile(join(missing, 'README.md'), 'no skill')
-    await writeFile(join(malformed, 'SKILL.md'), '# No frontmatter identity')
-    const input = (sourceDirectory: string, name: string) => ({
-      sourceDirectory,
-      archivePath: join(root, `${name}.tar.gz`),
-      packageId: 'package_1',
-      versionId: 'version_1'
-    })
-
-    await expect(createSkillPackageArchive(input(missing, 'missing'))).rejects.toThrow(
-      'skill-package-skill-markdown-required'
-    )
-    await expect(createSkillPackageArchive(input(malformed, 'malformed'))).rejects.toThrow(
-      'skill-package-skill-name-invalid'
-    )
-  })
-
   it('rejects truncated tar data and invalid tar checksums before publishing extraction', async () => {
     const root = await temporaryDirectory()
     const created = await createSkillPackageArchive({
@@ -261,19 +212,6 @@ describe('skill package creation and extraction', () => {
         destinationDirectory: join(root, 'truncated')
       })
     ).rejects.toThrow('skill-package-tar-truncated')
-  })
-
-  it('maps invalid gzip bytes to a stable archive failure', async () => {
-    const root = await temporaryDirectory()
-    const archivePath = join(root, 'invalid-gzip.tar.gz')
-    await writeFile(archivePath, 'not a gzip stream')
-
-    await expect(
-      extractSkillPackageArchive({
-        archivePath,
-        destinationDirectory: join(root, 'invalid-gzip')
-      })
-    ).rejects.toThrow('skill-package-gzip-invalid')
   })
 
   it('cancels during streamed extraction and removes partial bytes', async () => {

@@ -9,6 +9,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment,
@@ -21,7 +22,7 @@ import {
   type RemoteRuntimeSubscription
 } from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
-import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
+import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
@@ -87,20 +88,21 @@ export async function callRuntimeEnvironment(
       environment.id,
       method,
       async () => {
-        const currentEnvironment = await resolveManagedRuntimeEnvironment(
+        const prepared = await prepareFencedRuntimeRequest(
           userDataPath,
           environment.id,
-          options?.preparation
-        )
-        const revisionFailure = runtimeEnvironmentRevisionFailure(
-          currentEnvironment,
-          expectedEnvironmentPairingRevision,
           method,
-          options?.expectedEnvironmentRuntimeId
+          options?.preparation,
+          {
+            pairingRevision: expectedEnvironmentPairingRevision,
+            runtimeId: options?.expectedEnvironmentRuntimeId
+          },
+          options?.signal
         )
-        if (revisionFailure) {
-          return revisionFailure
+        if (prepared.failure) {
+          return prepared.failure
         }
+        const { environment: currentEnvironment, expected } = prepared
         const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
@@ -116,7 +118,7 @@ export async function callRuntimeEnvironment(
           const response = await sendEnvelopedOneShotCall(
             { environment: currentEnvironment, connection: pairedConnection },
             { ...call, envelope },
-            options?.expectedEnvironmentRuntimeId
+            expected.runtimeId
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -138,8 +140,8 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment: currentEnvironment,
             ...call,
-            expectedPairingRevision: expectedEnvironmentPairingRevision,
-            expectedRuntimeId: options?.expectedEnvironmentRuntimeId,
+            expectedPairingRevision: expected.pairingRevision,
+            expectedRuntimeId: expected.runtimeId,
             envelope: sharedControlEnvelope
           })
         }
@@ -193,12 +195,12 @@ export async function subscribeRuntimeEnvironment(
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
-    onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
+    onEvent: decodeRuntimeEnvironmentSubscriptionEvents(method, rawCallbacks.onEvent, isCurrent)
   }
   crewAttempt?.assertCurrent()
   const environment = crewAttempt
     ? resolveEnvironment(userDataPath, selector)
-    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
   crewAttempt?.assertCurrent()
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)

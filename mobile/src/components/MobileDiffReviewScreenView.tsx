@@ -52,17 +52,14 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
   })
   const item = controller.currentItem
   const github = controller.github
-  const refetchPR = controller.refetchPRSidebar
-  const refetchThreads = useCallback(async () => {
-    await refetchPR({ includeDetails: true })
-  }, [refetchPR])
   const threadCommentActions = useMobilePrCommentActions({
+    hostId: controller.hostId,
     client: controller.client,
     connState: controller.connState,
     worktreeId: controller.worktreeId,
     prNumber: github?.prNumber ?? 0,
     prRepo: github?.prRepo ?? null,
-    refetch: refetchThreads
+    queries: controller.prQueries
   })
   const threadActions = usePRCommentCardActions(
     github ? threadCommentActions : undefined,
@@ -141,10 +138,7 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
             threadsByLine={controller.threadsByLine}
             threadActions={threadActions}
             selectedRange={selectedRange}
-            onPickLines={(range) => {
-              controller.setComposerBody('')
-              controller.openSheet({ kind: 'range', ...range })
-            }}
+            onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
             scrollToLine={controller.scrollToLine}
             onScrolledToLine={controller.clearScrollToLine}
             onEditNote={controller.openEditComposer}
@@ -169,7 +163,9 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
               refetch={controller.refetchPRSidebar}
-              rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
+              rereadSlices={controller.rereadPRSlices}
+              hostId={controller.hostId}
+              queries={controller.prQueries}
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
@@ -193,7 +189,9 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
             state={controller.prSidebarState}
             onRetry={controller.retryPRSidebar}
             refetch={controller.refetchPRSidebar}
-            rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
+            rereadSlices={controller.rereadPRSlices}
+            hostId={controller.hostId}
+            queries={controller.prQueries}
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}

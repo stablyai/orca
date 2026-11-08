@@ -3,6 +3,8 @@ import type { RpcClient } from '../../../transport/rpc-client'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
+import { mobileNativeChatDraftDestination } from '../composer/mobile-native-chat-draft-inputs'
 import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
@@ -30,7 +32,15 @@ describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
   const acceptSend = vi.fn()
-  const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  const captureSendOrigin = vi.fn((): MobileNativeChatSendOrigin => ({
+    draftKey: 'k',
+    draftDestination: mobileNativeChatDraftDestination('k'),
+    draftEditGeneration: 0,
+    pendingKey: 'p',
+    normalizedText: '',
+    boundary: { afterMessageId: null, afterMessageTimestamp: null },
+    sentAt: 0
+  }))
   const clearDraftForSend = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()

@@ -12,6 +12,7 @@ import type {
   AgentSessionTurnContext,
   TurnOutcome
 } from '../operations/structured-agent-session-turns'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import {
   type savedAgentSessionCatalogModels,
   structuredAgentSessionPickReply
@@ -31,7 +32,8 @@ function acceptsOptionPick(
         agentChatPermissionModes(provider) !== null &&
         (value === 'own' ||
           agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true)
-    : definition?.restingOptions.acceptsKey(key) === true
+    : definition?.restingOptions.acceptsKey(key) === true &&
+        (key !== 'interactionMode' || isAgentSessionInteractionMode(value))
 }
 
 export function structuredAgentSessionOptionOverridesRefusal(

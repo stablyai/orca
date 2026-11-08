@@ -24,6 +24,7 @@ export function AgentLaunchSetupSubmenu({
   children: ReactNode
 }) {
   const trigger = useRef<HTMLDivElement>(null)
+  const segment = useRef<HTMLButtonElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const [sideOffset, setSideOffset] = useState(4)
   useLayoutEffect(() => {
@@ -54,10 +55,7 @@ export function AgentLaunchSetupSubmenu({
     })
   const close = (returnFocus: 'row' | 'segment') => {
     onOpenChange(false)
-    const target =
-      returnFocus === 'row'
-        ? trigger.current
-        : trigger.current?.querySelector<HTMLButtonElement>('button')
+    const target = returnFocus === 'row' ? trigger.current : segment.current
     target?.focus()
   }
   return (
@@ -77,8 +75,7 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
-          const segment = event.currentTarget.querySelector('button')
-          if (event.target instanceof Node && segment?.contains(event.target)) {
+          if (event.target instanceof Node && segment.current?.contains(event.target)) {
             event.preventDefault()
           }
         }}
@@ -87,8 +84,7 @@ export function AgentLaunchSetupSubmenu({
         }}
         onPointerUpCapture={(event) => {
           segmentRelease.current =
-            event.target instanceof Node &&
-            !!event.currentTarget.querySelector('button')?.contains(event.target)
+            event.target instanceof Node && !!segment.current?.contains(event.target)
         }}
         onClickCapture={(event) => {
           if (segmentRelease.current && event.target === event.currentTarget) {
@@ -101,7 +97,7 @@ export function AgentLaunchSetupSubmenu({
           segmentRelease.current = false
         }}
         onKeyDown={(event) => {
-          if (!disabled && event.target === event.currentTarget && event.key === 'ArrowRight') {
+          if (!disabled && event.key === 'ArrowRight') {
             event.preventDefault()
             onOpenChange(true)
             focusSearch()
@@ -110,6 +106,7 @@ export function AgentLaunchSetupSubmenu({
       >
         {renderAnchor(
           <Button
+            ref={segment}
             variant="menu-segment"
             size="icon-sm"
             type="button"

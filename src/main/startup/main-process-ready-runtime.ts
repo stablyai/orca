@@ -36,13 +36,16 @@ import {
 } from '../workspaces/removal/worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
+import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
+import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
+import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -72,7 +75,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void state.agentBrowserBridge.sweepOrphanedSessions()
-  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime })
+  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
     getAgentBrowserBridge: () => state.agentBrowserBridge,
@@ -118,6 +121,20 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // The startup pass ran before browser sessions and any window existed, so `browser-cookies` paused.
   runAfterFirstWindowShown(() => {
     void runGatedWslMoveDesktopRewritePass({ userDataPath: app.getPath('userData') })
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
+  runAfterFirstWindowShown(() => {
+    app.on('browser-window-focus', startSpeechModelWarmup(store))
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  runAfterFirstWindowShown(() => {
+    startClaudeCodeThemeSync({
+      getSettings: () => store.getSettings(),
+      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+      onAppFocused: (listener) => app.on('browser-window-focus', listener),
+      userDataPath: app.getPath('userData')
+    })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.

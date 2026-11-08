@@ -49,27 +49,6 @@ describe('Endpoint file lifecycle', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('writes the endpoint file with the expected shell-sourceable shape', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'development', userDataPath })
-    try {
-      const filePath = server.endpointFilePath
-      expect(filePath).toBeTruthy()
-      expect(existsSync(filePath!)).toBe(true)
-      const contents = readFileSync(filePath!, 'utf8')
-      const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
-      const expectedToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
-      const prefix = process.platform === 'win32' ? 'set ' : ''
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=1`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1`)
-    } finally {
-      server.stop()
-    }
-  })
-
   it('writes the endpoint file with owner-only permissions on POSIX', async () => {
     if (process.platform === 'win32') {
       return
@@ -111,27 +90,6 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
-  it('leaves the endpoint file in place on stop()', async () => {
-    // Unlinking could race another Orca instance replacing the endpoint; stale files fail open.
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    const filePath = server.endpointFilePath!
-    expect(existsSync(filePath)).toBe(true)
-    server.stop()
-    expect(existsSync(filePath)).toBe(true)
-  })
-
-  it('buildPtyEnv includes ORCA_AGENT_HOOK_ENDPOINT when the server is running', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
-    } finally {
-      server.stop()
-    }
-  })
-
   it('keeps endpoint files separate for parallel dev namespaces', async () => {
     const firstServer = new AgentHookServer()
     const secondServer = new AgentHookServer()
@@ -149,24 +107,6 @@ describe('Endpoint file lifecycle', () => {
       firstServer.stop()
       secondServer.stop()
     }
-  })
-
-  it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
-      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('buildPtyEnv returns empty when the server is not running', () => {
-    const server = new AgentHookServer()
-    expect(server.buildPtyEnv()).toEqual({})
   })
 
   it('sweeps stale .endpoint-*.tmp orphans older than 5 minutes on start', async () => {

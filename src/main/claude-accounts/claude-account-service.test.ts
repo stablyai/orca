@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type * as SecureFile from '../../shared/secure-file'
+import type * as SecureFile from '../../shared/secure-storage/secure-file'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE } from './claude-account-registration'
 import { CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE } from './claude-account-selection'
@@ -23,7 +23,7 @@ import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import { ClaudeAccountService } from './service'
 
 const secureFile = vi.hoisted(() => ({ canProtect: true }))
-vi.mock('../../shared/secure-file', async (original) => {
+vi.mock('../../shared/secure-storage/secure-file', async (original) => {
   const actual = await original<typeof SecureFile>()
   return {
     ...actual,

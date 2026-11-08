@@ -2,9 +2,9 @@
 
 import {
   installAutomationsPageHarness,
-  mocks,
-  RUNTIME_REPO_ID
+  mocks
 } from '../../src/renderer/src/components/automations/automations-page-test-harness'
+import { RUNTIME_REPO_ID } from '../../src/renderer/src/components/automations/automations-page-runtime-fixtures'
 import {
   createRpcCalls,
   holdRuntimeSave,

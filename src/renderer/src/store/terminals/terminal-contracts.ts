@@ -1,8 +1,8 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
-import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
+import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 
 export type TerminalCreationExecutionFacts = {

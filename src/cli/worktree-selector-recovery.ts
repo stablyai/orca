@@ -1,3 +1,4 @@
+import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { RuntimeClientError } from './runtime/types'
 import { attachCliErrorData } from './handlers/worktree-setup-decision-recovery'
 
@@ -5,6 +6,7 @@ import { attachCliErrorData } from './handlers/worktree-setup-decision-recovery'
 
 export const WORKTREE_SELECTOR_FORMS = [
   'id:<repo-id>::<absolute-path>',
+  'folder:<folder-id>',
   'path:<absolute-path>',
   'name:<display-name>',
   'branch:<branch>',
@@ -21,9 +23,13 @@ export type WorktreeSelectorRecovery = {
   nextSteps: readonly string[]
 }
 
-const PREFIXES = ['id:', 'path:', 'name:', 'branch:', 'identity:', 'issue:']
+const PREFIXES = ['id:', 'folder:', 'path:', 'name:', 'branch:', 'identity:', 'issue:']
 
 function suggestForms(selector: string): string[] {
+  if (parseWorkspaceKey(selector.replace(/^id:/, ''))?.type === 'folder') {
+    // A folder id is complete on its own; only listing can show the right one.
+    return []
+  }
   if (selector.startsWith('id:')) {
     // A worktree id is `<repo-id>::<path>`; the repo id alone names no checkout.
     return selector.includes('::')
@@ -48,7 +54,7 @@ export function worktreeSelectorRecovery(selector: string): WorktreeSelectorReco
       `No Orca workspace matched the worktree selector "${selector}".`,
       ...(suggestions.length > 0 ? [`Did you mean: ${suggestions.join(', ')}`] : []),
       `Valid selector forms: ${WORKTREE_SELECTOR_FORMS.join(', ')}.`,
-      'List the exact values with `orca worktree list --json`; a bare repository id is not a worktree id.'
+      'List the exact values, folder workspaces included, with `orca worktree ps --json` (add `--environment <id>` for a workspace in another environment); a bare repository id is not a worktree id.'
     ]
   }
 }

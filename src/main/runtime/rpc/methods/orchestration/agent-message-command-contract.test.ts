@@ -10,7 +10,7 @@ import { OrchestrationMutationExecutor } from '../../orchestration-mutation-exec
 import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
-import { STATUS_METHODS } from '../status'
+import { STATUS_METHODS } from '../host-management/status'
 import { eraseRpcMethods } from '../../core'
 import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
@@ -45,7 +45,7 @@ import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/orchestration-runtime-capabilities'
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint

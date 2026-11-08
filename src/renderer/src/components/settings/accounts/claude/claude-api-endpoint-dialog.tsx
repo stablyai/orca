@@ -1,6 +1,6 @@
 import { useEffectEvent, useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Pencil, Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,6 +41,7 @@ export function ClaudeApiEndpointDialog({
   account,
   onSaved
 }: ClaudeApiEndpointDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const labelId = useId()
   const baseUrlId = useId()
@@ -104,7 +105,7 @@ export function ClaudeApiEndpointDialog({
         setError(
           saveError instanceof Error
             ? saveError.message
-            : translate('accounts.claude.apiEndpoint.saveFailed', 'Could not save the endpoint.')
+            : t('accounts.claude.apiEndpoint.saveFailed', 'Could not save the endpoint.')
         )
       }
     } finally {
@@ -156,11 +157,11 @@ export function ClaudeApiEndpointDialog({
         <DialogHeader className="gap-3">
           <DialogTitle className="leading-tight">
             {editing
-              ? translate('accounts.claude.apiEndpoint.editTitle', 'Edit API endpoint')
-              : translate('accounts.claude.apiEndpoint.addTitle', 'Add API endpoint')}
+              ? t('accounts.claude.apiEndpoint.editTitle', 'Edit API endpoint')
+              : t('accounts.claude.apiEndpoint.addTitle', 'Add API endpoint')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'accounts.claude.apiEndpoint.description',
               'Claude Code sends this account’s requests to an Anthropic-compatible endpoint with your token.'
             )}
@@ -189,41 +190,37 @@ export function ClaudeApiEndpointDialog({
           </div>
         )}
         <div className="space-y-3">
-          {field(labelId, translate('accounts.claude.apiEndpoint.name', 'Name'), label, setLabel)}
+          {field(labelId, t('accounts.claude.apiEndpoint.name', 'Name'), label, setLabel)}
           {field(
             baseUrlId,
-            translate('accounts.claude.apiEndpoint.baseUrl', 'Base URL'),
+            t('accounts.claude.apiEndpoint.baseUrl', 'Base URL'),
             baseUrl,
             setBaseUrl,
             { placeholder: 'https://api.example.com' }
           )}
           {field(
             tokenId,
-            translate('accounts.claude.apiEndpoint.token', 'Token'),
+            t('accounts.claude.apiEndpoint.token', 'Token'),
             authToken,
             setAuthToken,
             {
               type: 'password',
               placeholder: keepsToken
-                ? translate('accounts.claude.apiEndpoint.tokenKeep', 'Leave blank to keep it')
+                ? t('accounts.claude.apiEndpoint.tokenKeep', 'Leave blank to keep it')
                 : undefined
             }
           )}
-          {field(
-            modelId,
-            translate('accounts.claude.apiEndpoint.model', 'Model'),
-            model,
-            setModel,
-            { list: preset ? modelListId : undefined }
-          )}
+          {field(modelId, t('accounts.claude.apiEndpoint.model', 'Model'), model, setModel, {
+            list: preset ? modelListId : undefined
+          })}
           {field(
             smallFastModelId,
-            translate('accounts.claude.apiEndpoint.smallFastModel', 'Background model'),
+            t('accounts.claude.apiEndpoint.smallFastModel', 'Background model'),
             smallFastModel,
             setSmallFastModel,
             {
               list: preset ? modelListId : undefined,
-              placeholder: translate('accounts.claude.apiEndpoint.sameAsModel', 'Same as Model')
+              placeholder: t('accounts.claude.apiEndpoint.sameAsModel', 'Same as Model')
             }
           )}
           {preset ? (
@@ -241,11 +238,11 @@ export function ClaudeApiEndpointDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+            {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
           </Button>
           <Button onClick={() => void save()} disabled={!canSave} className="gap-1.5">
             {saving ? <LoaderCircle className="size-3 animate-spin" /> : null}
-            {translate('accounts.claude.apiEndpoint.save', 'Save')}
+            {t('accounts.claude.apiEndpoint.save', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -298,10 +295,11 @@ export function AddClaudeApiEndpointButton(props: {
   disabled: boolean
   onSaved: (state: ClaudeRateLimitAccountsState) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ClaudeApiEndpointButton variant="outline" className="gap-1.5" {...props}>
       <Plus className="size-3" />
-      {translate('accounts.claude.apiEndpoint.add', 'Add API Endpoint')}
+      {t('accounts.claude.apiEndpoint.add', 'Add API Endpoint')}
     </ClaudeApiEndpointButton>
   )
 }
@@ -311,6 +309,7 @@ export function EditClaudeApiEndpointButton(props: {
   disabled: boolean
   onSaved: (state: ClaudeRateLimitAccountsState) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ClaudeApiEndpointButton
       variant="ghost"
@@ -318,7 +317,7 @@ export function EditClaudeApiEndpointButton(props: {
       {...props}
     >
       <Pencil className="size-3" />
-      {translate('accounts.claude.apiEndpoint.edit', 'Edit')}
+      {t('accounts.claude.apiEndpoint.edit', 'Edit')}
     </ClaudeApiEndpointButton>
   )
 }

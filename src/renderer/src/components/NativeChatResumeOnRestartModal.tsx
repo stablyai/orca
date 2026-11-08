@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogFooter } from './ui/dialog'
 import { useAppStore } from '../store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
@@ -35,11 +35,11 @@ import { moveInTree } from './native-chat-resume-tree-keys'
  * The store owns runs across dialog closes. Closing snoozes; Dismiss all deletes durable offers. Row Retry/Dismiss keep the dialog open, and settled runs cannot close a user-reopened dialog. Unretryable failures stay outside Resume. */
 
 /** Pre-selected unless it is a failure a retry cannot fix; resuming that would only fail again. */
-function selectedByDefault(failure: ResumeFailure | undefined): boolean {
+function selectedByDefault(failure: ResumeFailure | undefined, t?: Translate): boolean {
   if (!failure) {
     return true
   }
-  const guidance = resumeFailureGuidance(failure)
+  const guidance = resumeFailureGuidance(failure, t)
   return guidance.primary === 'retry' || guidance.secondary === 'retry'
 }
 
@@ -52,6 +52,7 @@ export function NativeChatResumeOccurrenceModal({
   machineName?: string
   offerEnabled: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     continueNativeChatRestartOffer,
     dismissNativeChatRestartOffer,
@@ -218,7 +219,7 @@ export function NativeChatResumeOccurrenceModal({
   }
 
   const interruptedByUpdate = rows.some((row) => row.trigger === 'update')
-  const selectAllLabel = translate(
+  const selectAllLabel = t(
     'auto.components.NativeChatResumeOnRestartModal.selectAllLabel',
     'Select all'
   )
@@ -259,11 +260,11 @@ export function NativeChatResumeOccurrenceModal({
           tabIndex={0}
           aria-label={
             choosing
-              ? translate(
+              ? t(
                   'auto.components.NativeChatResumeOnRestartModal.listLabel',
                   'Chats that would be resumed'
                 )
-              : translate(
+              : t(
                   'auto.components.NativeChatResumeOnRestartModal.resultListLabel',
                   'Chats in this resume'
                 )
@@ -283,7 +284,7 @@ export function NativeChatResumeOccurrenceModal({
                 onCheckedChange={() =>
                   toggleResumeSelection(selectable, allSelection, toggleSelected)
                 }
-                checkboxLabel={translate(
+                checkboxLabel={t(
                   'auto.components.NativeChatResumeOnRestartModal.selectAll',
                   'Select all chats'
                 )}
@@ -292,7 +293,7 @@ export function NativeChatResumeOccurrenceModal({
                   {selectAllLabel}
                 </span>
                 <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.NativeChatResumeOnRestartModal.selectedCount',
                     '{{value0}} of {{value1}} selected',
                     { value0: allSelection.selectedCount, value1: allSelection.total }
@@ -331,14 +332,14 @@ export function NativeChatResumeOccurrenceModal({
                 />
                 <span className="min-w-0 space-y-0.5">
                   <span className="block text-sm">
-                    {translate(
+                    {t(
                       'auto.components.NativeChatResumeOnRestartModal.dontAskAgain',
                       "Don't ask again (resume automatically)"
                     )}
                   </span>
                   {/* Link to reversal settings; body copy explains the action. */}
                   <span className="block text-xs text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
                       'You can turn this off in Settings → Chat → Behavior.'
                     )}
@@ -349,7 +350,7 @@ export function NativeChatResumeOccurrenceModal({
           )}
           {rows.length === 0 || (run?.inFlight === false && !choosing) ? (
             <Button ref={resumeButtonRef} variant="default" size="sm" onClick={snooze}>
-              {translate('auto.components.NativeChatResumeOnRestartModal.done', 'Done')}
+              {t('auto.components.NativeChatResumeOnRestartModal.done', 'Done')}
             </Button>
           ) : remote ? (
             <NativeChatRemoteResumeActions
@@ -368,10 +369,7 @@ export function NativeChatResumeOccurrenceModal({
             <>
               {/* Dismiss deletes durable records rather than snoozing them. */}
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => void dismissAll()}>
-                {translate(
-                  'auto.components.NativeChatResumeOnRestartModal.dismissAll',
-                  'Dismiss all'
-                )}
+                {t('auto.components.NativeChatResumeOnRestartModal.dismissAll', 'Dismiss all')}
               </Button>
               <Button
                 ref={resumeButtonRef}
@@ -385,11 +383,8 @@ export function NativeChatResumeOccurrenceModal({
                 }}
               >
                 {busy
-                  ? translate(
-                      'auto.components.NativeChatResumeOnRestartModal.resuming',
-                      'Resuming…'
-                    )
-                  : translate(
+                  ? t('auto.components.NativeChatResumeOnRestartModal.resuming', 'Resuming…')
+                  : t(
                       'auto.components.NativeChatResumeOnRestartModal.resumeChats',
                       'Resume {{count}} chats',
                       { count: chosen.length, defaultValue_one: 'Resume {{count}} chat' }

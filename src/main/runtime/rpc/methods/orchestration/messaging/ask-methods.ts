@@ -1,24 +1,24 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import { isGroupAddress } from '../../../../orchestration/groups'
-import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
-import { AskParams } from '../schemas'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 import {
   mailboxAddressOf,
   runCoordinatorKey
-} from '../../../../orchestration/orchestration-caller-identity'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
-} from '../../../../orchestration/question-answer-delivery'
+} from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({

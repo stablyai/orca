@@ -20,7 +20,7 @@ import {
   store,
   makeRuntimeStoreWithWorkspaceSession
 } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('sequences setup before startup for opted-in local headless worktree creates', async () => {

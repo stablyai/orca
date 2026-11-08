@@ -50,7 +50,10 @@ export type PaneLayoutChange<T> = {
 }
 
 /** Runtime facts unavailable from stored layout. */
-export type LayoutLiveContext = Pick<LayoutContext, 'isBindingLive' | 'retiresBinding'>
+export type LayoutLiveContext = Pick<
+  LayoutContext,
+  'isBindingLive' | 'retiresBinding' | 'visibility'
+>
 
 export function admitPaneToSession(
   hostId: ExecutionHostId,
