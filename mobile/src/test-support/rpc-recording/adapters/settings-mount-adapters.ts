@@ -138,14 +138,19 @@ export function settingsMountAdapters(
                 () => undefined
               )
           }
-          const current = query()
-          // `load` is a change event; `load-cached` is a return to the list, which reads only stale data.
-          if (
-            name === 'load-cached' &&
-            !current?.isStaleByTime(queries.hostRepoCatalogQuery.staleTime)
-          ) {
-            return
+          if (name === 'load-cached') {
+            // A return to the list: the remount reads again only what the family's staleTime calls stale.
+            hook.leave()
+            hook.mount()
+            const current = query()
+            return current?.state.fetchStatus === 'fetching'
+              ? current.fetch().then(
+                  () => undefined,
+                  () => undefined
+                )
+              : undefined
           }
+          // A change event.
           return queryClient?.invalidateQueries({ queryKey: hostScopeKey('host-1') })
         },
         state: () =>
