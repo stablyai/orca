@@ -12,6 +12,7 @@ import { sqlJournalIndexStorage } from './journal-sql-index-storage'
 import { JournalDerivedTurnScope } from './projection/journal-derived-turn-scope'
 import { setJournalOutcomeScalarReader } from './journal-outcome-scalars'
 import type { JournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 
 /** A SAVEPOINT owns this shell and its decoded values; the writer discards it after every command. */
 export class JournalSqlReducer {
@@ -22,7 +23,7 @@ export class JournalSqlReducer {
   private readonly scalars: JournalSqlScalars
   private scopeBefore: string | null
 
-  constructor(scope: JournalSqlScope, epoch: string) {
+  constructor(scope: JournalSqlScope, epoch: string, stopSettle?: JournalStopSettleFact) {
     this.context = new JournalSqlValueContext(scope, new JournalSqlItemValues(scope))
     this.facts = new JournalSqlQueryFacts(this.context)
     const items = new JournalSqlKeyedMap<string, AgentJournalRenderItem>(this.context, 'items')
@@ -47,7 +48,7 @@ export class JournalSqlReducer {
     new JournalSqlScalars(scope, 'inputs').define(state.inputs, { revision: 0 })
     this.scopeBefore = this.scalars.get<string | null>('derivedTurnScope', null)
     state.derivedTurnScope = JournalDerivedTurnScope.restore(this.scopeBefore)
-    this.marks = new JournalSqlPauseMarks(scope)
+    this.marks = new JournalSqlPauseMarks(scope, stopSettle)
     Object.defineProperty(state, 'queuePauseMarks', {
       enumerable: true,
       get: () => this.marks.value,

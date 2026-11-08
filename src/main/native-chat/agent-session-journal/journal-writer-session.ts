@@ -202,7 +202,8 @@ export class JournalWriterSession {
       throw new Error('journal projection no longer covers the saved chat')
     }
     const scope = new JournalSqlScope(db, target.sessionId, meta.scope)
-    const reducer = new JournalSqlReducer(scope, target.epoch)
+    // The host's Stop settlement is memory-only; every command's planning sees it, nothing saves it.
+    const reducer = new JournalSqlReducer(scope, target.epoch, this.facts.stopSettle)
     if (reducer.state.lastSequence !== meta.through) {
       throw new Error('journal projection writer has stale coverage')
     }

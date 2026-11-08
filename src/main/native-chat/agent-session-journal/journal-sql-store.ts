@@ -28,40 +28,13 @@ import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifec
 import type { JournalWriterSettled } from './journal-writer-operations'
 import type { JournalCommandOpenResult } from './writing/journal-command-open'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
+import { SqlJournalQueuedMessages, type JournalSqlQueueWrite } from './journal-sql-queued-messages'
+import { SqlJournalReopenMarks } from './journal-sql-reopen-marks'
+import { SqlJournalStopMarks } from './journal-sql-stop-marks'
+import { SqlJournalAppends } from './journal-sql-appends'
 
-/** Queue commands join this surface after their ordered-list owner has landed. */
-export type JournalSqlStoreOperation =
-  | Extract<
-      JournalWriterOperation,
-      {
-        kind:
-          | 'item'
-          | 'item-claiming'
-          | 'tombstone'
-          | 'goal-withdraw'
-          | 'dispatch'
-          | 'late-dispatch'
-          | 'shutdown-cut'
-          | 'command-settle'
-          | 'command-open'
-          | 'handover'
-          | 'stop'
-          | 'context-clear'
-          | 'context-rewind'
-          | 'epoch-replace'
-      }
-    >
-  | {
-      kind: 'lifecycle'
-      input: Omit<Extract<JournalWriterOperation, { kind: 'lifecycle' }>['input'], 'rejectsQueued'>
-    }
-  | {
-      kind: 'submission'
-      input: Omit<
-        Extract<JournalWriterOperation, { kind: 'submission' }>['input'],
-        'queuedMessageId'
-      >
-    }
+/** Every writer command a live handle sends; the open command belongs to the database. */
+export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
 
 export type JournalSqlStorePreparation = {
   facts?: Omit<JournalWriterHostFacts, 'identity'>
@@ -71,18 +44,21 @@ export type JournalSqlStorePreparation = {
 }
 
 /** Return all host facts anew; a rollback invalidates staged store drafts from the prior attempt. */
-type Prepare = (
+export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
-type AnswerFacts = (
+export type JournalSqlStoreAnswerFacts = (
   context: JournalReceiptStage,
   needs: JournalHostFactsNeeded
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
-export class SqlAgentSessionJournal {
+export class SqlAgentSessionJournal extends SqlJournalAppends {
   readonly reads: JournalSqlReads
+  readonly stopMarks: SqlJournalStopMarks
+  readonly queuedMessages: SqlJournalQueuedMessages
+  private readonly reopenMarks = new SqlJournalReopenMarks()
   private readonly openedThrough: AgentJournalCursor
   private acknowledged: AgentJournalCursor
   private closed = false
@@ -96,7 +72,17 @@ export class SqlAgentSessionJournal {
     private readonly now: () => number,
     opened: JournalWriterCommit
   ) {
+    super()
     this.reads = journalSqlReads(database.readers, identity.sessionId)
+    this.stopMarks = new SqlJournalStopMarks(this.reads)
+    this.queuedMessages = new SqlJournalQueuedMessages(
+      {
+        read: (operation) => this.reads.queue(operation),
+        write: async (operation: JournalSqlQueueWrite, receipt) =>
+          (await this.write(operation, receipt && (() => ({ receipt })))).value
+      },
+      this.reopenFloor
+    )
     // The open operation returns its physical position before ordinary recovery.
     this.openedThrough = { ...(opened.value as AgentJournalCursor) }
     this.acknowledged = { ...opened.cursor }
@@ -117,7 +103,10 @@ export class SqlAgentSessionJournal {
     )
   }
 
+  /** The immutable physical position this handle opened at; never the reopen floor. */
   openingCursor = (): AgentJournalCursor => ({ ...this.openedThrough })
+  /** Fallback reopen boundary until this handle's mark commits; usually null. */
+  reopenFloor = (): AgentJournalCursor | null => this.reopenMarks.floor()
   cursor = (): AgentJournalCursor => ({ ...this.acknowledged })
   physicalCursor = (): AgentJournalCursor => ({
     epoch: this.target.epoch,
@@ -144,18 +133,24 @@ export class SqlAgentSessionJournal {
 
   write(
     operation: JournalSqlStoreOperation,
-    prepare?: Prepare,
-    answerFacts?: AnswerFacts
+    prepare?: JournalSqlStorePrepare,
+    answerFacts?: JournalSqlStoreAnswerFacts
   ): Promise<JournalWriterCommit> {
     return this.admit(async (writer) => {
       const savedAt = this.now()
       let needs: JournalHostFactsNeeded | undefined
+      const mail: (readonly [string, boolean])[] = []
       for (;;) {
         const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
         const preparation: JournalSqlStorePreparation = needs
           ? await answerFacts!(context, needs)
           : ((await prepare?.(context)) ?? {})
-        const facts: JournalWriterHostFacts = { identity: this.identity, ...preparation.facts }
+        const facts: JournalWriterHostFacts = {
+          identity: this.identity,
+          ...this.queuedMessages.facts(mail),
+          ...settled(this.stopMarks.fact()),
+          ...preparation.facts
+        }
         let staged: JournalStagedReceipt | undefined
         let commit: JournalWriterCommit
         try {
@@ -175,7 +170,18 @@ export class SqlAgentSessionJournal {
         } catch (error) {
           preparation.settle?.(undefined)
           staged?.settle(undefined)
-          if (!(error instanceof JournalHostFactsNeededError) || !answerFacts) {
+          if (!(error instanceof JournalHostFactsNeededError)) {
+            throw error
+          }
+          // Mail availability is the queue's installed host fact; anything else is the caller's.
+          const { mail: senders, ...rest } = error.needs
+          if (senders) {
+            mail.push(...this.queuedMessages.answerMail(senders))
+            if (Object.keys(rest).length === 0) {
+              continue
+            }
+          }
+          if (!answerFacts) {
             throw error
           }
           needs = error.needs
@@ -229,6 +235,30 @@ export class SqlAgentSessionJournal {
     }
   }
 
+  /** Mark preexisting cards; failed writes retain a conservative reopenFloor and throw. */
+  markQueueReopen(fence: number, since?: number): Promise<void> {
+    return this.reopenMarks.mark(
+      async () => {
+        const answer = await this.readInOrder((reads) =>
+          reads.queue({ kind: 'reopen-mark', facts: this.queuedMessages.facts() })
+        )
+        if (answer.kind !== 'reopen-mark') {
+          throw new Error(`journal queue reader answered ${answer.kind} for reopen-mark`)
+        }
+        return { awaits: answer.awaits, epoch: this.target.epoch, since: answer.since }
+      },
+      () =>
+        this.answerOf<number | null>(
+          this.write({
+            kind: 'queue-reopen-mark',
+            fence,
+            ...(since !== undefined ? { since } : {})
+          })
+        ),
+      since
+    )
+  }
+
   /** Pure readers can join preceding commands without allowing another command between reads. */
   readInOrder<T>(read: (reads: JournalSqlReads) => T | Promise<T>): Promise<T> {
     return this.admit(() => read(this.reads))
@@ -257,6 +287,10 @@ export class SqlAgentSessionJournal {
   }
 }
 
+function settled(stopSettle: JournalWriterHostFacts['stopSettle']) {
+  return stopSettle ? { stopSettle } : {}
+}
+
 function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['row'] {
   switch (operation.kind) {
     case 'item':
@@ -265,7 +299,17 @@ function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['r
     case 'tombstone':
     case 'goal-withdraw':
     case 'stop':
+    case 'stop-accept':
+    case 'queue-resume':
+    case 'queue-reopen':
+    case 'queue-reopen-mark':
       return 'tombstone'
+    case 'queue-insert':
+    case 'queue-update':
+    case 'queue-hold':
+    case 'queue-withdraw':
+    case 'queue-move':
+      return 'queue'
     case 'dispatch':
       return 'dispatch'
     case 'submission':

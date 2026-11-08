@@ -108,6 +108,9 @@ export class JournalSqlScalars {
   set(name: string, value: unknown): void {
     const column = this.column(name)
     this.cache.set(name, value)
+    if (this.scope.snapshot) {
+      return
+    }
     this.scope.db.prepare(column.upsert).run(...this.scope.prefix, encode(column.kind, value))
   }
 

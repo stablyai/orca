@@ -2,6 +2,8 @@ import type { JournalObserverRead, JournalObserverResult } from './journal-obser
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
+import type { JournalSqlQueueRead, JournalSqlQueueReadResult } from './journal-sql-queued-messages'
 import type {
   JournalInputAnswer,
   JournalInputRead,
@@ -10,6 +12,11 @@ import type {
 
 export type JournalSqlReads = AgentSessionJournalReads & {
   observer(input: JournalObserverRead): Promise<JournalObserverResult>
+  /** The saved latest Stop, without the host's settlement overlay. */
+  latestStop(): Promise<JournalLatestStop | null>
+  latestAcceptedSendUnopened(): Promise<boolean>
+  turnWasRemoved(turnId: string): Promise<boolean>
+  queue(operation: JournalSqlQueueRead): Promise<JournalSqlQueueReadResult>
 }
 
 const VISIT_PAGE = 256
@@ -53,6 +60,11 @@ export function journalSqlReads(
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
     observer: async (input) => (await read({ kind: 'observer', input })).observation,
+    latestStop: async () => (await read({ kind: 'latest-stop' })).stop,
+    latestAcceptedSendUnopened: async () =>
+      (await read({ kind: 'accepted-send-unopened' })).unopened,
+    turnWasRemoved: async (turnId) => (await read({ kind: 'turn-removed', turnId })).removed,
+    queue: async (operation) => (await read({ kind: 'queue', operation })).result,
     statusIndicators: async (input) =>
       (await read({ kind: 'status-indicators', input })).indicators,
     statusState: async (currentFence) =>

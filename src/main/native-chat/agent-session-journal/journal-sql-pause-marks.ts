@@ -3,6 +3,7 @@ import { createJournalQueuePauseMarks } from './queued-messages/queued-message-p
 import { JournalEncodedScalar } from './journal-outcome-scalars'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 
 type Clear = NonNullable<JournalQueuePauseMarks['cleared']>
 type Header = Omit<JournalQueuePauseMarks, 'cleared'> & {
@@ -33,8 +34,13 @@ export class JournalSqlPauseMarks {
   private clearVersion: number
   private encoded: JournalEncodedScalar
   private marks: JournalQueuePauseMarks
+  private raw: JournalQueuePauseMarks
 
-  constructor(private readonly scope: JournalSqlScope) {
+  /** `settle` is the host's memory-only Stop settlement: read through, never saved. */
+  constructor(
+    private readonly scope: JournalSqlScope,
+    private readonly settle?: JournalStopSettleFact
+  ) {
     this.scalars = new JournalSqlScalars(scope, 'pause-marks')
     this.stopVersion = this.scalars.get('stopVersion', 0)
     this.clearVersion = this.scalars.get('clearVersion', 0)
@@ -64,7 +70,8 @@ export class JournalSqlPauseMarks {
         writeMembers(next)
       }
     }
-    this.marks = this.wrap({ ...header, cleared: clear })
+    this.raw = { ...header, cleared: clear }
+    this.marks = this.wrap(this.raw)
     this.identify()
   }
 
@@ -75,6 +82,7 @@ export class JournalSqlPauseMarks {
   replace(value: JournalQueuePauseMarks): void {
     this.stopVersion++
     this.clearVersion++
+    this.raw = value
     this.marks = this.wrap(value)
     this.dirty = true
     this.membersChanged = true
@@ -152,6 +160,11 @@ export class JournalSqlPauseMarks {
     }
     const proxy = new Proxy(value, {
       get: (target, key, receiver) => {
+        if (key === 'settle' && target === this.raw.latestStop) {
+          return this.settle?.sequence === this.raw.latestStop.sequence
+            ? this.settle.settle
+            : undefined
+        }
         // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy getter preserves the lazy clear-members accessor and native array methods.
         const child = Reflect.get(target, key, receiver)
         return typeof child === 'object' && child !== null ? this.wrap(child) : child
