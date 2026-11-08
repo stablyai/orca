@@ -54,7 +54,7 @@ export function useWorkspaceCopyStatus({
   )
   const [read, setRead] = useState<PrivateRead | null>(null)
   // Selecting a copy doesn't clear the slots, so on becoming owner they may still hold the twin's
-  // status; distrust them until they change or this copy's own refresh lands.
+  // status; until they change, this copy reads its own status as a non-owner would.
   const [wasOwner, setWasOwner] = useState(owner)
   const [inherited, setInherited] = useState<{ head?: string; entries?: GitStatusEntry[] } | null>(
     null
@@ -63,15 +63,17 @@ export function useWorkspaceCopyStatus({
     setWasOwner(owner)
     setInherited(owner ? { head, entries: slotEntries } : null)
   }
+  const slotTrusted =
+    owner && !(inherited && inherited.head === head && inherited.entries === slotEntries)
   const key = `${hostId}\u0000${worktreeId}\u0000${worktreePath}`
   useEffect(() => {
     if (!open) {
       return
     }
-    if (owner) {
-      if (refreshOnOpen) {
-        refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath, () => setInherited(null))
-      }
+    if (owner && refreshOnOpen) {
+      refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath)
+    }
+    if (slotTrusted) {
       return
     }
     const copy = resolveWorktreeGitCopyNow(worktreeId, hostId)
@@ -106,9 +108,7 @@ export function useWorkspaceCopyStatus({
     return () => {
       stale = true
     }
-  }, [open, owner, refreshOnOpen, worktreeId, hostId, worktreePath, key])
-  const slotTrusted =
-    owner && !(inherited && inherited.head === head && inherited.entries === slotEntries)
+  }, [open, owner, slotTrusted, refreshOnOpen, worktreeId, hostId, worktreePath, key])
   if (slotTrusted) {
     return {
       statusKnown: head !== undefined,

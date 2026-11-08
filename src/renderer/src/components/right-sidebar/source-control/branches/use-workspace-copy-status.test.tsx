@@ -186,7 +186,7 @@ it("doesn't trust the twin's slot when this copy becomes the owner", async () =>
   expect(seen.current).toMatchObject({ statusKnown: true, entries: [] })
 })
 
-it('trusts the slot again when a newer identical poll supersedes the picker refresh', async () => {
+it("shows the copy's own status when an identical newer poll supersedes the picker refresh", async () => {
   // Both copies clean at the same commit; the store keeps the same entries reference for an identical status.
   useAppStore.setState({
     gitStatusByWorktree: { [id]: [] },
@@ -228,4 +228,26 @@ it('trusts the slot again when a newer identical poll supersedes the picker refr
   )
   await finishPicker(clean)
   expect(seen.current).toMatchObject({ statusKnown: true, entries: [] })
+})
+
+it("keeps the twin's status out after selecting it and back while a refresh is in flight", async () => {
+  useAppStore.setState({
+    activeWorkspaceExecutionHostId: 'local',
+    gitStatusByWorktree: { [id]: [] }
+  })
+  const finishFirst = deferStatus()
+  const seen = await readFor('local')
+  await act(async () =>
+    useAppStore.setState({
+      activeWorkspaceExecutionHostId: 'ssh:box-b',
+      gitStatusByWorktree: { [id]: [...dirty] },
+      gitStatusHeadByWorktree: { [id]: 'bbb' }
+    })
+  )
+  const finishSecond = deferStatus()
+  await act(async () => useAppStore.setState({ activeWorkspaceExecutionHostId: 'local' }))
+  await finishFirst(clean)
+  expect(seen.current?.entries).toEqual([])
+  await finishSecond(clean)
+  expect(seen.current?.entries).toEqual([])
 })

@@ -25,8 +25,7 @@ export function copyOwnsStatusSlot(
 export function refreshWorktreeCopyStatus(
   worktreeId: string,
   hostId: ExecutionHostId,
-  worktreePath: string,
-  onSettledAsOwner?: () => void
+  worktreePath: string
 ): void {
   const state = useAppStore.getState()
   const copy = resolveWorktreeGitCopyNow(worktreeId, hostId)
@@ -47,15 +46,7 @@ export function refreshWorktreeCopyStatus(
       // The user can select a twin while this read is in flight.
       shouldApply: () => copyOwnsStatusSlot(useAppStore.getState(), worktreeId, hostId)
     }
-  }).then(
-    () => {
-      // Losing the ordering check means a newer refresh for this owner already applied.
-      if (copyOwnsStatusSlot(useAppStore.getState(), worktreeId, hostId)) {
-        onSettledAsOwner?.()
-      }
-    },
-    (error: unknown) => console.warn('[BranchPicker] git status refresh failed', error)
-  )
+  }).catch((error: unknown) => console.warn('[BranchPicker] git status refresh failed', error))
 }
 
 /** What the Source Control panel does after a landed switch, for a picker outside the panel. */
