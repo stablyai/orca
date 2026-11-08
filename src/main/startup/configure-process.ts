@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { installBestEffortSocketTypeOfService } from '../network/best-effort-socket-type-of-service'
 import { guardExternalOpensInE2E } from './e2e-external-open-guard'
 import { quitProcess } from './process-quit-request'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -71,6 +72,7 @@ export function shouldDisableHttp2ForElectronNetworking(
 export function configureElectronNetworkCompatibility(
   options: NetworkCompatibilityOptions = {}
 ): void {
+  installBestEffortSocketTypeOfService()
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }

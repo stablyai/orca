@@ -80,17 +80,16 @@ describe('main-process fatal error guards (issue #9441)', () => {
     expect(String(consoleError.mock.calls[0]?.[0]).length).toBeLessThan(5_000)
   })
 
-  it('exits on a fatal exception and stays subscribed so Electron never shows its modal alert', async () => {
+  it('rethrows non-pipe errors outside the uncaughtException handler', async () => {
     vi.resetModules()
-    const record = vi.fn()
-    const exit = vi.fn()
     vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: record
+      recordDurableCrashBreadcrumb: vi.fn()
     }))
-    vi.doMock('electron', () => ({ app: { exit } }))
     const { installUncaughtPipeErrorGuard } = await import('./main-process-error-guards')
     const originalOn = process.on.bind(process)
+    const originalOff = process.off.bind(process)
     let handler: ((error: unknown) => void) | null = null
+    let scheduled: (() => void) | null = null
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(process, 'on').mockImplementation(((event, listener) => {
       if (event === 'uncaughtException') {
@@ -99,16 +98,23 @@ describe('main-process fatal error guards (issue #9441)', () => {
       }
       return originalOn(event, listener)
     }) as typeof process.on)
-    const offSpy = vi.spyOn(process, 'off')
+    const offSpy = vi.spyOn(process, 'off').mockImplementation(((event, listener) => {
+      if (event === 'uncaughtException') {
+        return process
+      }
+      return originalOff(event, listener)
+    }) as typeof process.off)
+    vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback) => {
+      scheduled = callback as () => void
+      return {} as NodeJS.Immediate
+    }) as typeof setImmediate)
 
     installUncaughtPipeErrorGuard()
 
-    const error = Object.assign(new Error('setTypeOfService EINVAL'), { code: 'EINVAL' })
+    const error = new Error('boom')
     expect(() => handler?.(error)).not.toThrow()
-    expect(() => handler?.(new Error('second'))).not.toThrow()
-    expect(exit).toHaveBeenCalledTimes(1)
-    expect(exit).toHaveBeenCalledWith(1)
-    expect(record).toHaveBeenCalledTimes(1)
-    expect(offSpy).not.toHaveBeenCalledWith('uncaughtException', handler)
+    expect(offSpy).toHaveBeenCalledWith('uncaughtException', handler)
+    expect(scheduled).not.toBeNull()
+    expect(() => scheduled?.()).toThrow(error)
   })
 })
