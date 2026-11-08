@@ -5,11 +5,8 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import { applyJournalWriterEffect, type JournalWriterEffectResult } from './journal-writer-effects'
 import { JournalWriterSession } from './journal-writer-session'
 import { runJournalWriterOperation } from './journal-writer-operations'
-import { planJournalWriterRows } from './journal-writer-plan'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { runJournalSqlSteps } from './journal-sql-steps'
-import { isJournalStreamedTextRevision } from './writing/journal-streamed-text-revision'
-import { planJournalWriterStep } from './writing/journal-writer-step-plan'
 import {
   claimJournalSqlProjection,
   journalLogNeedsFounding,
@@ -21,40 +18,6 @@ export class JournalSqlCommand {
     private readonly db: Database.Database,
     private readonly stateDirectory: string
   ) {}
-
-  /** Conservative preflight only; all authority and revision assignment are repeated in apply(). */
-  streamed(command: JournalWriterCommand): boolean {
-    if (command.effects) {
-      return false
-    }
-    try {
-      const { state } = this.session(command, 0)
-      const { operation } = command
-      if (operation.kind === 'steps') {
-        return operation.steps.every((step) => {
-          if (step.kind === 'settlement' || step.kind === 'creation-fact') {
-            return false
-          }
-          const planned = planJournalWriterStep(state, step, () => {})
-          return (
-            planned === null ||
-            planned.every((build) =>
-              isJournalStreamedTextRevision(state, build(state.lastSequence + 1, 0))
-            )
-          )
-        })
-      }
-      if (operation.kind !== 'item') {
-        return false
-      }
-      return planJournalWriterRows(state, operation).every((build) =>
-        isJournalStreamedTextRevision(state, build(state.lastSequence + 1, 0))
-      )
-    } catch {
-      // A stale/invalid command fails its own SAVEPOINT; it must not downgrade the batch.
-      return false
-    }
-  }
 
   async apply(command: JournalWriterCommand, savedAt: number): Promise<JournalWriterCommit> {
     if (!this.db.isTransaction) {

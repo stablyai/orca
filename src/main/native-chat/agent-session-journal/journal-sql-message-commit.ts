@@ -1,12 +1,7 @@
 import type Database from '../../sqlite/sync-database'
-import type {
-  JournalSqlBatch,
-  JournalSqlBatchOutcome,
-  JournalSqlBatchResult
-} from './journal-sql-batch'
+import type { JournalSqlBatch, JournalSqlBatchResult } from './journal-sql-batch'
 import {
   applyJournalSqlMessage,
-  JournalMessageNeedsFull,
   type JournalSqlMessage,
   type JournalSqlMessageCommit
 } from './journal-sql-message'
@@ -20,7 +15,6 @@ type MessageCommand = {
 export type JournalSqlMessageJob = {
   command: MessageCommand
   bytes: number
-  normal: boolean
 }
 
 export type JournalSqlMessagesCommit = Omit<JournalSqlMessageCommit, 'outcome'> & {
@@ -32,45 +26,8 @@ export type JournalSqlMessagesCommit = Omit<JournalSqlMessageCommit, 'outcome'> 
 export function prepareJournalSqlMessages(command: MessageCommand): JournalSqlMessageJob {
   return {
     command,
-    bytes: Buffer.byteLength(JSON.stringify(command), 'utf8'),
-    normal: command.steps.length > 0 && command.steps.every((step) => step.kind === 'text-snapshot')
+    bytes: Buffer.byteLength(JSON.stringify(command), 'utf8')
   }
-}
-
-/** Select one ready prefix; controls and repeated chats keep their serialization boundary. */
-export function journalSqlMessageBatchSize<T>(
-  ready: readonly T[],
-  jobFor: (entry: T) => JournalSqlMessageJob | undefined,
-  at = 0
-): number {
-  const sessions = new Set<string>()
-  let bytes = 0
-  let events = 0
-  let count = 0
-  for (let next = at; next < ready.length; next++) {
-    const job = jobFor(ready[next]!)
-    if (!job) {
-      break
-    }
-    const size = Math.max(1, job.command.steps.length)
-    if (
-      count &&
-      (!job.normal ||
-        sessions.has(job.command.target.sessionId) ||
-        bytes + job.bytes > 1024 * 1024 ||
-        events + size > 64)
-    ) {
-      break
-    }
-    count++
-    bytes += job.bytes
-    events += size
-    sessions.add(job.command.target.sessionId)
-    if (!job.normal || bytes >= 1024 * 1024 || events >= 64) {
-      break
-    }
-  }
-  return count
 }
 
 /** Called by the existing writer admission lane; publication completes before the next drain. */
@@ -80,48 +37,13 @@ export async function commitJournalSqlMessages(
   jobs: readonly JournalSqlMessageJob[],
   publish: (commit: JournalSqlMessagesCommit, index: number) => void
 ): Promise<JournalSqlBatchResult<JournalSqlMessagesCommit>> {
-  const outcomes: JournalSqlBatchOutcome<JournalSqlMessagesCommit>[] = []
-  let at = 0
-  while (at < jobs.length) {
-    const ready = jobs.slice(at, at + journalSqlMessageBatchSize(jobs, (job) => job, at))
-    const result = await batch.run(
-      ready.map((job) => ({ command: job, normal: job.normal })),
-      (job) => applyMessageSteps(db, job)
-    )
-    for (const [index, outcome] of result.outcomes.entries()) {
-      if (outcome.committed) {
-        // Payloads are owned by this just-committed result, never reloaded through a reader.
-        publish(outcome.value, at + index)
-      }
+  const result = await batch.run(jobs, (job) => applyMessageSteps(db, job))
+  for (const [index, outcome] of result.outcomes.entries()) {
+    if (outcome.committed) {
+      publish(outcome.value, index)
     }
-    for (let index = 0; index < result.outcomes.length; index++) {
-      let outcome = result.outcomes[index]!
-      if (
-        !outcome.committed &&
-        outcome.error instanceof JournalMessageNeedsFull &&
-        !result.postcommit
-      ) {
-        const job = { ...ready[index]!, normal: false }
-        const rerouted = await batch.run([{ command: job, normal: false }], (job) =>
-          applyMessageSteps(db, job)
-        )
-        outcome = rerouted.outcomes[0]!
-        if (outcome.committed) {
-          publish(outcome.value, at + index)
-        }
-        if (rerouted.postcommit) {
-          outcomes.push(outcome)
-          return { outcomes, postcommit: rerouted.postcommit }
-        }
-      }
-      outcomes.push(outcome)
-    }
-    if (result.postcommit) {
-      return { outcomes, postcommit: result.postcommit }
-    }
-    at += ready.length
   }
-  return { outcomes }
+  return result
 }
 
 function applyMessageSteps(
@@ -146,7 +68,7 @@ function applyMessageSteps(
   for (const step of steps) {
     db.exec('SAVEPOINT journal_message_step')
     try {
-      const commit = applyJournalSqlMessage(db, target, step, savedAt, job.normal)
+      const commit = applyJournalSqlMessage(db, target, step, savedAt)
       db.exec('RELEASE journal_message_step')
       result.cursor = commit.cursor
       result.outcomes.push(commit.outcome)
@@ -160,9 +82,6 @@ function applyMessageSteps(
       }
     } catch (error) {
       db.exec('ROLLBACK TO journal_message_step; RELEASE journal_message_step')
-      if (error instanceof JournalMessageNeedsFull) {
-        throw error
-      }
       result.failure = { message: error instanceof Error ? error.message : String(error) }
       break
     }

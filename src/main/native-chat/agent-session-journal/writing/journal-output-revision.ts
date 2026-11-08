@@ -2,48 +2,6 @@ import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-
-/** Only streamed assistant text may skip per-commit fsync; FULL turn settlement makes it durable. */
-export function isJournalStreamedTextRevision(
-  state: JournalReducerState,
-  row: JournalRow
-): boolean {
-  if (row.kind !== 'item' || row.recovered) {
-    return false
-  }
-  const previous = state.items.get(row.itemId)
-  return isJournalTextRevision(row, previous) && sameRevisionPlacement(state, row, previous!)
-}
-
-export function isJournalTextRevision(
-  row: Extract<JournalRow, { kind: 'item' }>,
-  previous: AgentJournalRenderItem | undefined
-): boolean {
-  if (row.recovered) {
-    return false
-  }
-  const { body } = row
-  if (
-    body.kind !== 'message' ||
-    body.role !== 'assistant' ||
-    !body.blocks.every((block) => block.type === 'text') ||
-    body.sentAs !== undefined ||
-    body.command !== undefined ||
-    body.from !== undefined ||
-    previous?.body.kind !== 'message' ||
-    previous.body.role !== 'assistant' ||
-    previous.body.sentAs !== undefined ||
-    previous.body.command !== undefined ||
-    previous.body.from !== undefined ||
-    !previous.body.blocks.every((block) => block.type === 'text')
-  ) {
-    return false
-  }
-  const { blocks: _oldText, ...before } = previous.body
-  const { blocks: _newText, ...after } = body
-  return isDeepStrictEqual(before, after)
-}
 
 /** Output revisions cannot change queue eligibility; lifecycle and unknown changes still wake it. */
 export function isJournalOutputRevision(state: JournalReducerState, row: JournalRow): boolean {

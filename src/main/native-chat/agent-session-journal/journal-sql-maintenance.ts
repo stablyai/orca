@@ -39,11 +39,6 @@ export type JournalSqlMaintenanceResult =
   | boolean
   | null
 
-/** Each call is one writer batch; only the final publication needs FULL durability. */
-export function journalSqlMaintenanceIsNormal(operation: JournalSqlMaintenance): boolean {
-  return operation.kind !== 'conversion-finish' && operation.kind !== 'projection-state'
-}
-
 export function applyJournalSqlMaintenance(
   db: Database.Database,
   operation: JournalSqlMaintenance

@@ -6,6 +6,7 @@ import {
 } from '../../worker-threads/worker-thread-entry-path'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
+import { prepareJournalSqlRequest } from './journal-sql-ready-batch'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
@@ -130,7 +131,7 @@ export class JournalSqlOwner {
           !(command.type === 'maintenance' && command.operation.kind === 'projection-state')
       })
       try {
-        this.worker.postMessage({ id, command } satisfies JournalSqlRequest)
+        this.worker.postMessage(prepareJournalSqlRequest(id, command))
       } catch (error) {
         this.pending.delete(id)
         reject(error)
@@ -170,9 +171,6 @@ export class JournalSqlOwner {
       return
     }
     pending?.resolve(response)
-    if ('postcommit' in response && response.postcommit) {
-      this.fail(restoreJournalSqlFailure(response.postcommit))
-    }
   }
 
   private fail(error: Error): void {

@@ -14,7 +14,7 @@ import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { commitJournalSqlMessages, journalSqlMessageBatchSize } from './journal-sql-message-commit'
+import { commitJournalSqlMessages } from './journal-sql-message-commit'
 
 if (
   !parentPort ||
@@ -94,24 +94,19 @@ type MessageRequest = {
 
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
-  if (queue[0]?.command.type === 'messages') {
-    const count = journalSqlMessageBatchSize(queue, ({ command }) =>
-      command.type === 'messages' ? command.job : undefined
-    )
+  const pending = takeJournalSqlReadyBatch(queue)
+  if (pending[0]?.command.type === 'messages') {
     await drainMessages(
-      queue
-        .splice(0, count)
-        .filter((request): request is MessageRequest => request.command.type === 'messages')
+      pending.filter((request): request is MessageRequest => request.command.type === 'messages')
     )
     scheduleNextDrain()
     return
   }
-  const pending = takeJournalSqlReadyBatch(queue, (command) => commands?.streamed(command) === true)
   const writes = pending.filter(
-    (entry): entry is { request: WriteRequest; normal: boolean } =>
-      entry.request.command.type !== 'close' && entry.request.command.type !== 'messages'
+    (request): request is WriteRequest =>
+      request.command.type !== 'close' && request.command.type !== 'messages'
   )
-  const close = pending.find(({ request }) => request.command.type === 'close')?.request
+  const close = pending.find((request) => request.command.type === 'close')
   const database = db
   if (writes.length > 0 && database && batch && commands) {
     const executor = commands
@@ -122,32 +117,25 @@ async function drain(): Promise<void> {
         throw fault
       }
       assertJournalWritable(readOnly, 'database')
-      const result = await batch.run<WriteRequest, CommitResponse>(
-        writes.map(({ request, normal }) => ({
-          command: request,
-          normal
-        })),
-        async (request) => {
-          const { command, id } = request
-          if (command.type === 'maintenance') {
-            return {
-              type: 'maintenance',
-              id,
-              result: applyJournalSqlMaintenance(database, command.operation)
-            }
+      const result = await batch.run<WriteRequest, CommitResponse>(writes, async (request) => {
+        const { command, id } = request
+        if (command.type === 'maintenance') {
+          return {
+            type: 'maintenance',
+            id,
+            result: applyJournalSqlMaintenance(database, command.operation)
           }
-          return command.type === 'write'
-            ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
-            : {
-                type: 'effects',
-                id,
-                results: command.effects.map((effect) =>
-                  applyJournalWriterEffect(database, stateDirectory, effect)
-                )
-              }
         }
-      )
-      postcommit = result.postcommit ? journalSqlFailure(result.postcommit) : undefined
+        return command.type === 'write'
+          ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
+          : {
+              type: 'effects',
+              id,
+              results: command.effects.map((effect) =>
+                applyJournalWriterEffect(database, stateDirectory, effect)
+              )
+            }
+      })
       try {
         checkpoint?.afterCommit()
       } catch (error) {
@@ -159,18 +147,18 @@ async function drain(): Promise<void> {
           ? outcome.value
           : {
               type: 'failed',
-              id: writes[index]!.request.id,
+              id: writes[index]!.id,
               outcome: 'rolled-back',
               error: journalSqlFailure(outcome.error)
             }
       )
       if (postcommit) {
-        fault = result.postcommit ?? postcommit
+        fault = postcommit
       }
     } catch (error) {
       const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
       fault ??= batch.fault
-      responses = writes.map(({ request }) => ({
+      responses = writes.map((request) => ({
         type: 'failed',
         id: request.id,
         outcome,
@@ -240,7 +228,7 @@ async function drainMessages(requests: readonly MessageRequest[]): Promise<void>
         acknowledged.add(id)
       }
     }
-    let postcommit = result.postcommit
+    let postcommit: unknown
     try {
       checkpoint?.afterCommit()
     } catch (error) {

@@ -10,7 +10,7 @@ try {
   if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
     throw new Error('chat journal is not in WAL mode');
   }
-  db.exec('PRAGMA busy_timeout = 0; PRAGMA synchronous = FULL; PRAGMA checkpoint_fullfsync = ON;');
+  db.exec('PRAGMA busy_timeout = 0; PRAGMA synchronous = NORMAL; PRAGMA checkpoint_fullfsync = ON;');
   db.exec('PRAGMA journal_size_limit = ' + workerData.sizeLimit);
   const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
   const checkpoint = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');

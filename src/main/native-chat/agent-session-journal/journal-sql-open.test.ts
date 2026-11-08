@@ -50,9 +50,7 @@ function fixture() {
       operation,
       facts: { identity: { ...identity, sessionId } }
     }
-    const [outcome] = (
-      await batch.run([{ command, normal: false }], (entry) => engine.apply(entry, 100))
-    ).outcomes
+    const [outcome] = (await batch.run([command], (entry) => engine.apply(entry, 100))).outcomes
     if (!outcome!.committed) {
       throw outcome!.error
     }

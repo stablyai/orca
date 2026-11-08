@@ -7,6 +7,7 @@ import type { JournalSqlMessageJob, JournalSqlMessagesCommit } from './journal-s
 
 export type JournalSqlRequest = {
   id: number
+  batch?: { sessionId: string; steps: number; bytes: number }
   command:
     | { type: 'write'; command: JournalWriterCommand }
     | { type: 'messages'; job: JournalSqlMessageJob }
@@ -17,20 +18,18 @@ export type JournalSqlRequest = {
 
 export type JournalSqlResponse =
   | { type: 'ready'; readOnly: boolean }
-  | { type: 'committed'; id: number; commit: JournalWriterCommit; postcommit?: JournalSqlFailure }
+  | { type: 'committed'; id: number; commit: JournalWriterCommit }
   | { type: 'messages'; id: number; commit: JournalSqlMessagesCommit }
   | {
       type: 'effects'
       id: number
       results: JournalWriterEffectResult[]
-      postcommit?: JournalSqlFailure
     }
   | { type: 'done'; id: number }
   | {
       type: 'maintenance'
       id: number
       result: JournalSqlMaintenanceResult
-      postcommit?: JournalSqlFailure
     }
   | {
       type: 'failed'

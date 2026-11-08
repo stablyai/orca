@@ -145,9 +145,7 @@ export async function sides() {
       facts: { identity, ...facts },
       savedAt: NOW
     }
-    const [outcome] = (
-      await batch.run([{ command, normal: false }], (entry) => engine.apply(entry, NOW))
-    ).outcomes
+    const [outcome] = (await batch.run([command], (entry) => engine.apply(entry, NOW))).outcomes
     if (!outcome!.committed) {
       // Exactly what reaches the host through the worker port.
       throw restoreJournalSqlFailure(journalSqlFailure(outcome!.error))

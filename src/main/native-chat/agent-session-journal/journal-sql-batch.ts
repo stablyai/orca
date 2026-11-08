@@ -6,7 +6,6 @@ export type JournalSqlBatchOutcome<Value> =
 
 export type JournalSqlBatchResult<Value> = {
   outcomes: JournalSqlBatchOutcome<Value>[]
-  postcommit?: unknown
 }
 
 export class JournalSqlBatchError extends Error {
@@ -33,7 +32,7 @@ export class JournalSqlBatch {
 
   /** Commands may await only microtasks: the worker owns the connection while one is open. */
   async run<Command, Value>(
-    commands: readonly { command: Command; normal: boolean }[],
+    commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
@@ -44,20 +43,13 @@ export class JournalSqlBatch {
       return { outcomes }
     }
     const drain = commands.slice()
-    const normal = drain.every((entry) => entry.normal)
     let began = false
     let committing = false
     let failed: JournalSqlBatchError | undefined
-    let postcommit: unknown
     try {
-      // Re-prove FULL before every drain, including after a failed PRAGMA from an earlier drain.
-      this.db.pragma('synchronous = FULL')
-      if (normal) {
-        this.db.pragma('synchronous = NORMAL')
-      }
       this.db.exec('BEGIN IMMEDIATE')
       began = true
-      for (const { command } of drain) {
+      for (const command of drain) {
         this.db.exec('SAVEPOINT journal_command')
         try {
           const value = await apply(command)
@@ -88,20 +80,10 @@ export class JournalSqlBatch {
       if (committing || rollback) {
         this.failure = failed
       }
-    } finally {
-      if (normal && !this.db.isTransaction) {
-        try {
-          this.db.pragma('synchronous = FULL')
-        } catch (error) {
-          // The COMMIT answer remains true; the owner reports this fault after its acknowledgement.
-          postcommit = error
-          this.failure ??= error
-        }
-      }
     }
     if (failed) {
       throw failed
     }
-    return { outcomes, ...(postcommit ? { postcommit } : {}) }
+    return { outcomes }
   }
 }

@@ -31,10 +31,7 @@ import {
 import { claimAgentSessionAttachmentsInTransaction } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from '../writing/journal-goal-attachment-inverse'
 import { JournalEpochReplacements } from '../context-epochs/journal-epoch-replacements'
-import {
-  isJournalOutputRevision,
-  isJournalStreamedTextRevision
-} from '../writing/journal-streamed-text-revision'
+import { isJournalOutputRevision } from '../writing/journal-output-revision'
 
 export type JournalStoreHost = {
   /** Notify readers of durable draft-only transactions that append no journal row. */
@@ -97,7 +94,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     prepare: host.prepare,
     commit: host.commit,
     project: (rows) => projectJournalRows(host.state(), rows),
-    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>

@@ -16,7 +16,7 @@ import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-att
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-const JOURNAL_SYNCHRONOUS = 'FULL'
+const JOURNAL_SYNCHRONOUS = 'NORMAL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -97,7 +97,7 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
   db.pragma('journal_mode = WAL')
   db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // FULL fsyncs submissions before dispatch; checkpoint_fullfsync also flushes macOS drive caches.
+  // WAL checkpoints flush committed pages and macOS drive caches.
   db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
   db.pragma('checkpoint_fullfsync = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)

@@ -16,17 +16,14 @@ afterEach(() => {
   }
 })
 
-it('reroutes a first snapshot to FULL and publishes exact committed revisions in order', async () => {
+it('publishes exact committed snapshots and their final body in order', async () => {
   const { db, batch, commit, item, published } = fixture()
-  db.exec(`CREATE TEMP TRIGGER durable_first BEFORE INSERT ON journal_items
-    WHEN (SELECT synchronous FROM pragma_synchronous)<>2 BEGIN SELECT RAISE(ABORT,'creation was not FULL'); END`)
   expect((await commit(message('first'))).outcomes[0]).toMatchObject({
     committed: true,
     value: {
       cursor: { epoch: 'epoch', sequence: 11 }
     }
   })
-  db.exec('DROP TRIGGER durable_first')
   const result = await commitJournalSqlMessages(
     db,
     batch,
@@ -42,9 +39,6 @@ it('reroutes a first snapshot to FULL and publishes exact committed revisions in
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'third' }] }
   ])
   expect(item('orca:assistant')).toMatchObject({ revision: 3, sequence: 11, observedAt: 100 })
-  db.exec(`CREATE TEMP TRIGGER durable_message_end BEFORE UPDATE ON journal_items
-    WHEN (SELECT synchronous FROM pragma_synchronous)<>2 AND json_extract(NEW.payload_json,'$.body.completedAt') IS NOT NULL
-    BEGIN SELECT RAISE(ABORT,'message end was not FULL'); END`)
   const ended = message('third')
   ended.body.completedAt = 300
   expect((await commit(ended)).outcomes[0]).toMatchObject({
@@ -54,7 +48,6 @@ it('reroutes a first snapshot to FULL and publishes exact committed revisions in
       items: [{ body: { completedAt: 300 } }]
     }
   })
-  expect(db.pragma('user_version', { simple: true })).toBe(4)
 })
 
 it('commits ready revisions from different chats atomically before publishing either payload', async () => {
@@ -132,8 +125,6 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     `INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
       VALUES('chat','epoch','card',1,0,1,'returned','orca:reported-command',?)`
   ).run(JSON.stringify(card))
-  db.exec(`CREATE TEMP TRIGGER durable_echo BEFORE UPDATE ON journal_submission_attempts
-    WHEN (SELECT synchronous FROM pragma_synchronous)<>2 BEGIN SELECT RAISE(ABORT,'acceptance was not FULL'); END`)
   const input = message('original', 'unused', 'item')
   input.identity = { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }
   input.body.role = 'user'

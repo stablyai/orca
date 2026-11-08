@@ -77,7 +77,7 @@ export class JournalWriterSession {
       db,
       readOnly: false,
       stateDirectory,
-      transaction: (run, _streamed, committed) => this.savepoint(run, committed)
+      transaction: (run, committed) => this.savepoint(run, committed)
     }
     const held = queuedMessageEditLeaseHolds(facts.editLeases ?? [])
     this.collaborators = createJournalStoreCollaborators({

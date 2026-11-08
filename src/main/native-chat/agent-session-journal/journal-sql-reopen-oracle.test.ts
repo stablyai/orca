@@ -155,12 +155,9 @@ it.each([
       await new JournalSqlBatch(persisted.db).run(
         [
           {
-            command: {
-              target: { sessionId: 'session', epoch: 'epoch', ownerToken: `open-${index}` },
-              operation: { kind: 'open' as const },
-              facts: { identity }
-            },
-            normal: false
+            target: { sessionId: 'session', epoch: 'epoch', ownerToken: `open-${index}` },
+            operation: { kind: 'open' as const },
+            facts: { identity }
           }
         ],
         (entry) => engine.apply(entry, 100)

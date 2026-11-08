@@ -74,7 +74,6 @@ export function publishNewEpoch(input: {
       publishJournalSessionEpoch(db, input.identity, input.epoch)
       return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
     },
-    false,
     (publication) => {
       // Adopt, then finish the nonthrowing queue bookkeeping, before the fallible publication.
       const state = publication.adopt()

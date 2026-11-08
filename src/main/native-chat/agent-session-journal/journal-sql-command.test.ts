@@ -71,13 +71,10 @@ it('commits a step prefix without leaking the rolled-back session or admitting i
   const answer = (
     await batch.run(
       [
-        {
-          command: command({
-            kind: 'steps',
-            steps: [step('first'), step('refused'), step('suffix')]
-          }),
-          normal: false
-        }
+        command({
+          kind: 'steps',
+          steps: [step('first'), step('refused'), step('suffix')]
+        })
       ],
       (entry) => engine.apply(entry, 100)
     )
@@ -161,10 +158,7 @@ it('assigns revisions after preceding successes and rolls back failed command pr
     ]
   }
   const results = await batch.run(
-    [accepted, duplicate, command(item('second')), command(item('stale', 0))].map((entry) => ({
-      command: entry,
-      normal: engine.streamed(entry)
-    })),
+    [accepted, duplicate, command(item('second')), command(item('stale', 0))],
     (entry) => engine.apply(entry, 100)
   )
   expect(results.outcomes.map((result) => result.committed)).toEqual([true, false, true, false])
@@ -240,11 +234,8 @@ it('keeps exact saved records across command shells and publishes metadata witho
     memory = persistJournalOutcomeRows(oracle, memory, source, rows, 100, false, (state) =>
       journalInputOrder(state).cards.ensure(state)
     ).adopt()
-    const result = (
-      await batch.run([{ command: command(operation), normal: false }], (entry) =>
-        engine.apply(entry, 100)
-      )
-    ).outcomes[0]!
+    const result = (await batch.run([command(operation)], (entry) => engine.apply(entry, 100)))
+      .outcomes[0]!
     expect(result.committed).toBe(true)
   }
   const records = (connection: Database.Database) =>
@@ -254,64 +245,13 @@ it('keeps exact saved records across command shells and publishes metadata witho
       .all()
   expect(records(db)).toEqual(records(oracle))
   const final = (
-    await batch.run([{ command: command(item('after deletion')), normal: false }], (entry) =>
-      engine.apply(entry, 100)
-    )
+    await batch.run([command(item('after deletion'))], (entry) => engine.apply(entry, 100))
   ).outcomes[0]!
   expect(final).toMatchObject({
     committed: true,
     value: { items: [{ itemId, revision: 6, deleted: false }] }
   })
   expect(JSON.stringify(final)).not.toContain('after deletion')
-})
-
-it('chooses NORMAL only for proven text revisions and retains FULL for settlements and effects', async () => {
-  const { db, engine, batch } = fixture()
-  expect(engine.streamed(command(item('first')))).toBe(false)
-  await batch.run([{ command: command(item('first')), normal: false }], (entry) =>
-    engine.apply(entry, 100)
-  )
-  const revision = command(item('next'))
-  const textStep: JournalWriterStep = {
-    kind: 'resolved-item',
-    reservedBytes: 4096,
-    resolution: {
-      kind: 'text-snapshot',
-      identity,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'streamed' }] }
-    },
-    options: { fence: 1, turnScope: { kind: 'thread' } }
-  }
-  const steps = command({ kind: 'steps', steps: [textStep] })
-  db.pragma('query_only = ON')
-  try {
-    expect(engine.streamed(revision)).toBe(true)
-    expect(engine.streamed(steps)).toBe(true)
-    expect(
-      engine.streamed(
-        command({
-          kind: 'steps',
-          steps: [{ ...textStep, options: { ...textStep.options, executionOwner: 2 } }]
-        })
-      )
-    ).toBe(false)
-  } finally {
-    db.pragma('query_only = OFF')
-  }
-  expect(
-    engine.streamed({
-      ...revision,
-      effects: [{ kind: 'queue-delete', sessionId: 'session', messageIds: [] }]
-    })
-  ).toBe(false)
-  expect(engine.streamed(command({ kind: 'queue-resume', fence: 1 }))).toBe(false)
-  let synchronous = -1
-  await batch.run([{ command: steps, normal: engine.streamed(steps) }], (entry) => {
-    synchronous = Number(db.pragma('synchronous', { simple: true }))
-    return engine.apply(entry, 100)
-  })
-  expect(synchronous).toBe(1)
-  expect(Number(db.pragma('synchronous', { simple: true }))).toBe(2)
 })
 
 it('refuses stale ownership, changed epochs and log coverage even for an empty plan', async () => {
@@ -322,8 +262,7 @@ it('refuses stale ownership, changed epochs and log coverage even for an empty p
     onlyIfUnsettled: true
   })
   const run = async (entry = noOp) =>
-    (await batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)))
-      .outcomes[0]!
+    (await batch.run([entry], (value) => engine.apply(value, 100))).outcomes[0]!
   expect(
     await run({
       ...noOp,
@@ -354,8 +293,7 @@ it('refuses stale ownership, changed epochs and log coverage even for an empty p
 it('replaces the epoch inside one writer command, moving the logical cursor epoch', async () => {
   const { engine, batch } = fixture()
   const run = async (entry: JournalWriterCommand) =>
-    (await batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)))
-      .outcomes[0]!
+    (await batch.run([entry], (value) => engine.apply(value, 100))).outcomes[0]!
   const before = await run(command(item('before')))
   const replaced = await run(
     command({

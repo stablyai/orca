@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import {
   agentJournalItemKey,
@@ -28,7 +27,6 @@ import {
 import { journalRenderItem } from './projection/journal-render-item'
 import { resolveJournalGuardedItem } from './writing/journal-timeline-resolution'
 import { journalRowBase } from './writing/journal-row-builders'
-import { isJournalTextRevision } from './writing/journal-streamed-text-revision'
 import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
@@ -60,15 +58,12 @@ export type JournalSqlMessageCommit = {
   editDeadline?: number | null
 }
 
-export class JournalMessageNeedsFull extends Error {}
-
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
 export function applyJournalSqlMessage(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   input: JournalSqlMessage,
-  savedAt: number,
-  normal: boolean
+  savedAt: number
 ): JournalSqlMessageCommit {
   if (!db.isTransaction) {
     throw new Error('journal message requires its writer transaction')
@@ -186,22 +181,6 @@ export function applyJournalSqlMessage(
     JOIN journal_items AS item ON item.session_id=card.session_id AND item.epoch=card.epoch AND item.item_id=card.command_turn_item_id
     WHERE card.session_id=? AND card.epoch=? AND card.current=1 AND card.state='returned'`)
     .all(...prefix)
-  if (
-    normal &&
-    !(
-      input.kind === 'text-snapshot' &&
-      !echo &&
-      !declaration &&
-      returned.length === 0 &&
-      isJournalTextRevision(row, previous) &&
-      row.ownerFence === stored?.owner_fence &&
-      (row.executionOwner === undefined || row.executionOwner === stored?.execution_owner) &&
-      isDeepStrictEqual(scope, previous?.turnScope) &&
-      isDeepStrictEqual(agentJournalLinkageFields(row), agentJournalLinkageFields(previous))
-    )
-  ) {
-    throw new JournalMessageNeedsFull()
-  }
   const result: JournalSqlMessageCommit = {
     cursor: { epoch, sequence },
     outcome: { kind: 'committed', wrote: true },

@@ -1,7 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
-import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
+import { prepareJournalSqlRequest, takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
+import { prepareJournalSqlMessages } from './journal-sql-message-commit'
+import { message } from './journal-sql-message.test-fixture'
 import type { JournalSqlRequest } from './journal-sql-protocol'
 
 const databases: Database.Database[] = []
@@ -22,21 +24,14 @@ function fixture() {
 it('rolls back a failed command while later commands see preceding successful writes', async () => {
   const { db, batch } = fixture()
   const failure = new Error('command failed')
-  const answer = await batch.run(
-    [
-      { command: 1, normal: true },
-      { command: 2, normal: true },
-      { command: 3, normal: false }
-    ],
-    (id) => {
-      const previous = db.prepare('SELECT id FROM writes ORDER BY id').all()
-      db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written')
-      if (id === 2) {
-        throw failure
-      }
-      return previous
+  const answer = await batch.run([1, 2, 3], (id) => {
+    const previous = db.prepare('SELECT id FROM writes ORDER BY id').all()
+    db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written')
+    if (id === 2) {
+      throw failure
     }
-  )
+    return previous
+  })
   expect(answer).toEqual({
     outcomes: [
       { committed: true, value: [] },
@@ -51,38 +46,19 @@ it('rolls back a failed command while later commands see preceding successful wr
   expect(db.isTransaction).toBe(false)
 })
 
-it.each([
-  { normal: [true, true], synchronous: 1 },
-  { normal: [true, false], synchronous: 2 }
-])('uses batch durability $synchronous and restores FULL before the next batch', async (input) => {
+it('leaves newly admitted work for a new drain', async () => {
   const { db, batch } = fixture()
-  const answer = await batch.run(
-    input.normal.map((normal, id) => ({ command: id, normal })),
-    (id) => {
-      db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written')
-      return db.pragma('synchronous', { simple: true })
-    }
-  )
-  expect(answer.outcomes).toEqual([
-    { committed: true, value: input.synchronous },
-    { committed: true, value: input.synchronous }
-  ])
-  expect(db.pragma('synchronous', { simple: true })).toBe(2)
-})
-
-it('leaves newly admitted work for a new drain with its own durability', async () => {
-  const { db, batch } = fixture()
-  const admitted = [{ command: 1, normal: true }]
+  const admitted = [1]
   const first = await batch.run(admitted, (id) => {
     db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'stream')
-    admitted.push({ command: 2, normal: false })
+    admitted.push(2)
     return id
   })
   expect(first.outcomes).toEqual([{ committed: true, value: 1 }])
   expect(db.prepare('SELECT id, value FROM writes').all()).toEqual([{ id: 1, value: 'stream' }])
   const send = await batch.run(admitted.slice(1), (id) => {
     db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'send')
-    return db.pragma('synchronous', { simple: true })
+    return id
   })
   expect(send.outcomes).toEqual([{ committed: true, value: 2 }])
   expect(db.prepare('SELECT id, value FROM writes ORDER BY id').all()).toEqual([
@@ -91,43 +67,39 @@ it('leaves newly admitted work for a new drain with its own durability', async (
   ])
 })
 
-it('commits a control receipt before later streamed work with its own durability', async () => {
+it('keeps bounded snapshot prefixes and controls in enqueue order', async () => {
   const { db, batch } = fixture()
-  const stream = (id: number): JournalSqlRequest => ({
-    id,
-    command: {
-      type: 'write',
-      command: {
-        target: { sessionId: 'session', epoch: 'epoch', ownerToken: 'owner' },
-        operation: {
-          kind: 'item',
-          identity: { provider: 'orca', clientMessageId: 'output' },
-          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'output' }] },
-          options: { fence: 1, turnScope: { kind: 'thread' } }
-        }
-      }
-    }
-  })
+  const stream = (id: number, steps: number, text = 'output'): JournalSqlRequest =>
+    prepareJournalSqlRequest(id, {
+      type: 'messages',
+      job: prepareJournalSqlMessages({
+        target: { sessionId: `session${id}`, epoch: 'epoch' },
+        steps: Array.from({ length: steps }, () => message(text)),
+        savedAt: 100
+      })
+    })
   const queue: JournalSqlRequest[] = [
-    stream(1),
-    { id: 2, command: { type: 'effects', effects: [] } },
-    stream(3)
+    stream(1, 32),
+    stream(2, 32),
+    stream(3, 1),
+    { id: 4, command: { type: 'effects', effects: [] } },
+    stream(5, 1, 'x'.repeat(700 * 1024)),
+    stream(6, 1, 'x'.repeat(700 * 1024))
   ]
   const commit = async () =>
-    batch.run(
-      takeJournalSqlReadyBatch(queue, () => true).map(({ request, normal }) => ({
-        command: request,
-        normal
-      })),
-      (request) => {
-        db.prepare('INSERT INTO writes VALUES (?, ?)').run(request.id, 'written')
-        return { id: request.id, durability: db.pragma('synchronous', { simple: true }) }
-      }
-    )
-  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 1, durability: 1 } }])
-  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 2, durability: 2 } }])
+    batch.run(takeJournalSqlReadyBatch(queue), (request) => {
+      db.prepare('INSERT INTO writes VALUES (?, ?)').run(request.id, 'written')
+      return request.id
+    })
+  expect((await commit()).outcomes).toEqual([
+    { committed: true, value: 1 },
+    { committed: true, value: 2 }
+  ])
   expect(db.prepare('SELECT id FROM writes ORDER BY id').all()).toEqual([{ id: 1 }, { id: 2 }])
-  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 3, durability: 1 } }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: 3 }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: 4 }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: 5 }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: 6 }])
 })
 
 it.each([false, true])(
@@ -146,7 +118,7 @@ it.each([false, true])(
     })
     let failure: unknown
     try {
-      await batch.run([{ command: 1, normal: false }], (id) => {
+      await batch.run([1], (id) => {
         db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written')
         return id
       })
@@ -156,33 +128,12 @@ it.each([false, true])(
     expect(failure).toBeInstanceOf(JournalSqlBatchError)
     expect(failure).toMatchObject({ outcome: 'indeterminate' })
     expect(db.prepare('SELECT id FROM writes').all()).toEqual(committed ? [{ id: 1 }] : [])
-    await expect(batch.run([{ command: 2, normal: false }], (id) => id)).rejects.toThrow(
+    await expect(batch.run([2], (id) => id)).rejects.toThrow(
       expect.objectContaining({ outcome: 'not-dispatched' })
     )
     expect(db.prepare('SELECT id FROM writes').all()).toEqual(committed ? [{ id: 1 }] : [])
   }
 )
-
-it('acknowledges a committed stream even when restoring FULL fails afterwards', async () => {
-  const { db, batch } = fixture()
-  const pragma = db.pragma.bind(db)
-  let committed = false
-  const failure = new Error('FULL setting failed')
-  vi.spyOn(db, 'pragma').mockImplementation((sql, options) => {
-    if (sql === 'synchronous = FULL' && committed) {
-      throw failure
-    }
-    return pragma(sql, options)
-  })
-  const answer = await batch.run([{ command: 1, normal: true }], (id) => {
-    db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written')
-    committed = true
-    return id
-  })
-  expect(answer).toEqual({ outcomes: [{ committed: true, value: 1 }], postcommit: failure })
-  expect(db.prepare('SELECT id FROM writes').all()).toEqual([{ id: 1 }])
-  expect(batch.fault).toBe(failure)
-})
 
 it('does not claim rollback when both command and outer rollback fail', async () => {
   const { db, batch } = fixture()
@@ -195,13 +146,13 @@ it('does not claim rollback when both command and outer rollback fail', async ()
     exec(sql)
   })
   await expect(
-    batch.run([{ command: 1, normal: false }], (id) => {
+    batch.run([1], (id) => {
       db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'uncommitted')
       throw new Error('command failed')
     })
   ).rejects.toThrow(expect.objectContaining({ outcome: 'indeterminate', rollback }))
   expect(db.isTransaction).toBe(true)
-  await expect(batch.run([{ command: 2, normal: false }], (id) => id)).rejects.toThrow(
+  await expect(batch.run([2], (id) => id)).rejects.toThrow(
     expect.objectContaining({ outcome: 'not-dispatched' })
   )
   exec('ROLLBACK')
