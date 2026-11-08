@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -61,9 +61,11 @@ export function useFileExplorerHostBrowser({
   const activationGenerationRef = useRef(0)
   // Why: source objects are rebuilt each render; requests only need the latest host.
   const sourceRef = useRef(source)
-  sourceRef.current = source
   const sessionRef = useRef(session)
-  sessionRef.current = session
+  useLayoutEffect(() => {
+    sourceRef.current = source
+    sessionRef.current = session
+  })
 
   const startListing = useCallback((key: string, dirPath: string, generation: number) => {
     const source = sourceRef.current

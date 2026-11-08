@@ -46,7 +46,7 @@ export function FileExplorerHostList({
   // navigation) keeps the user's place.
   useLayoutEffect(() => {
     if (scrollElement) {
-      scrollElement.scrollTop = 0
+      scrollElement.scrollTo({ top: 0 })
     }
   }, [scrollElement, resolvedPath, deferredQuery])
   const status = (
