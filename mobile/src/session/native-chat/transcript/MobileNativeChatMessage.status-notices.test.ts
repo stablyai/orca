@@ -152,7 +152,11 @@ describe('MobileNativeChatMessage status notices', () => {
     const links = renderer!.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
     )
-    expect(links.map((link) => link.props.children)).toEqual(['repo#3', '8d5f74b'])
+    // The whole lead is the PR's target, so a lead the ellipsis cuts still opens it.
+    expect(links.map((link) => link.props.accessibilityLabel ?? link.props.children)).toEqual([
+      'CI failing on repo#3',
+      '8d5f74b'
+    ])
     links.forEach((link) => act(() => link.props.onPress()))
     expect(openLink.mock.calls).toEqual([
       ['https://github.com/acme/repo/pull/3'],

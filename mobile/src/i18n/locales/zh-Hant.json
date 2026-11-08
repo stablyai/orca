@@ -308,8 +308,8 @@
       "forkedFrom": "分支來源"
     },
     "ciResultLine": {
-      "failingLead": "CI 失敗：",
-      "greenLead": "CI 通過：",
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 通過:",
       "at": "提交"
     },
     "orcaStop": {

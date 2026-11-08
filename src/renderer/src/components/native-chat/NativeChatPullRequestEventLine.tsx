@@ -15,13 +15,24 @@ import {
 } from './messages/disclosure/NativeChatCardHideButton'
 import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 
-function LineLink({ href, children }: { href: string; children: string }): React.JSX.Element {
+function LineLink({
+  href,
+  className,
+  children
+}: {
+  href: string
+  className?: string
+  children: React.ReactNode
+}): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
   return (
     <a
       href={href}
       onClick={(event) => onLinkClick?.(event, href)}
-      className="rounded-sm text-chat-foreground-faint underline-offset-2 hover:text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className={cn(
+        'rounded-sm text-chat-foreground-faint underline-offset-2 hover:text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        className
+      )}
     >
       {children}
     </a>
@@ -50,16 +61,14 @@ export function NativeChatPullRequestEventLine({
           className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}
         />
         {event ? (
-          // Only the lead and PR name truncate, so the commit link stays reachable.
+          // Only the lead and PR name truncate, and all of it opens the PR, so both links stay reachable.
           <span className="flex min-w-0">
-            <span className="min-w-0 truncate">
+            <LineLink href={pullRequestEventPullRequestUrl(event)} className="min-w-0 truncate">
               {failing
                 ? t('components.native-chat.ciResultLine.failingLead', 'CI failing on')
                 : t('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
-              <LineLink href={pullRequestEventPullRequestUrl(event)}>
-                {`${event.repo}#${event.number}`}
-              </LineLink>
-            </span>
+              {`${event.repo}#${event.number}`}
+            </LineLink>
             <span className="shrink-0 whitespace-pre">
               {' '}
               {t('components.native-chat.ciResultLine.at', 'at')}{' '}

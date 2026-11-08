@@ -40,6 +40,10 @@ export function MobileNativeChatPullRequestEventLine({
     numberOfLines: 1
   }
   const type = scaledType(typography.metaSize, fontScale)
+  const lead = failing
+    ? t('chat.ciResultLine.failingLead', 'CI failing on')
+    : t('chat.ciResultLine.greenLead', 'CI green on')
+  const pullRequestName = event ? `${event.repo}#${event.number}` : ''
   return (
     <View style={styles.card}>
       <Icon
@@ -49,18 +53,15 @@ export function MobileNativeChatPullRequestEventLine({
       />
       {event ? (
         <>
-          {/* Only the lead and PR name truncate, so the commit link stays reachable. */}
-          <Text {...text} style={[styles.lead, type]}>
-            {failing
-              ? t('chat.ciResultLine.failingLead', 'CI failing on')
-              : t('chat.ciResultLine.greenLead', 'CI green on')}{' '}
-            <Text
-              accessibilityRole="link"
-              style={styles.link}
-              onPress={() => openLink(pullRequestEventPullRequestUrl(event))}
-            >
-              {`${event.repo}#${event.number}`}
-            </Text>
+          {/* Only the lead and PR name truncate, and all of it opens the PR, so both links stay reachable. */}
+          <Text
+            {...text}
+            accessibilityRole="link"
+            accessibilityLabel={`${lead} ${pullRequestName}`}
+            onPress={() => openLink(pullRequestEventPullRequestUrl(event))}
+            style={[styles.lead, type]}
+          >
+            {lead} <Text style={styles.link}>{pullRequestName}</Text>
           </Text>
           <Text {...text} style={[styles.commit, type]}>
             {t('chat.ciResultLine.at', 'at')}{' '}

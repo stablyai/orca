@@ -308,8 +308,8 @@
       "forkedFrom": "分岐元"
     },
     "ciResultLine": {
-      "failingLead": "CI 失敗：",
-      "greenLead": "CI 成功：",
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
       "at": "コミット"
     },
     "orcaStop": {
