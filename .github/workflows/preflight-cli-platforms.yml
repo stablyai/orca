@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     name: Preflight CLI (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -52,3 +52,45 @@ jobs:
           src/packages/process-host/src/process-tree-termination.test.ts
           src/packages/process-host/src/run-process.test.ts
           src/packages/process-host/src/run-process-termination-failure.test.ts
+
+  relay-holder-diagnostic:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          node-version: '24.22.2'
+          native-runtime: node
+      - name: Print runtime and lsof versions
+        run: |
+          node --version
+          lsof -v
+      - name: Add ephemeral holder diagnostics
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts')
+          s = p.read_text()
+          s = "import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'\n" + s
+          needle = '    expect(incumbent.holders.map((holder) => holder.pid)).toEqual([relay.pid])'
+          assert s.count(needle) == 1
+          extra = """    console.error('HOLDER_SNAPSHOT', { workerPid: process.pid, parentPid: process.ppid, relayPid: relay.pid, incumbent })
+              console.error('HOLDER_RAW_LSOF', await sh('lsof -nP -a -U -- ' + quotePosixShell(sockPath) + ' || true'))
+              const diagnosticPids = [...new Set([process.pid, process.ppid, ...incumbent.holders.map((holder) => holder.pid)])].join(',')
+              console.error('HOLDER_PROCESSES', await sh('ps -o pid,ppid,args -p ' + diagnosticPids + ' || true'))
+              console.error('HOLDER_DESCRIPTORS', await sh('for pid in ' + diagnosticPids.replaceAll(',', ' ') + '; do echo PID=$pid; ls -l /proc/$pid/fd 2>/dev/null; done; true'))
+          """
+          p.write_text(s.replace(needle, extra + needle))
+      - name: Focused socket probe
+        continue-on-error: true
+        run: pnpm test src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts --maxWorkers=4 --reporter=verbose
+      - name: Replay balanced shard with holder diagnostics
+        env:
+          ORCA_BALANCE_UNIT_SHARDS: '1'
+        run: node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --shard=1/12 --maxWorkers=4
