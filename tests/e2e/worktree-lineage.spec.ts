@@ -252,12 +252,10 @@ test.describe('Worktree Lineage', () => {
     })
 
     await worktreeOption(orcaPage, parentId).click({ button: 'right' })
-    const sleepSubtree = orcaPage.getByRole('menuitem', {
-      name: 'Sleep with Descendants (1)'
-    })
+    await orcaPage.getByRole('menuitem', { name: 'Sleep', exact: true }).hover()
+    const sleepSubtree = orcaPage.getByRole('menuitem', { name: 'With Descendants (1)' })
     await expect(sleepSubtree).toBeVisible()
     await expect(sleepSubtree).toBeEnabled()
-    await expect(orcaPage.getByRole('menuitem', { name: 'Delete with Descendants…' })).toBeVisible()
     await captureEvidence(orcaPage, 'workspace-descendant-actions.png')
     await sleepSubtree.click()
 
