@@ -13,5 +13,6 @@ export type EmulatorSessionState = {
 }
 
 export type EmulatorBridgeOptions = {
+  androidGrpc?: boolean
   waitForEndpointReady?: (endpoint: string) => Promise<boolean>
 }

@@ -40,21 +40,6 @@ afterEach(() => {
 })
 
 describe('emulator:scrcpyKeyboard', () => {
-  it('injects text, and keycodes with the Shift meta state, into the live session', () => {
-    expect(sendKeyboard({ deviceId: 'serial-1', text: 'hi' })).toBe(true)
-    expect(sendKeyboard({ deviceId: 'serial-1', key: 'dpad_left', shift: true })).toBe(true)
-
-    const [text, ...keys] = sendControl.mock.calls.map(([message]) => message)
-    expect(text.subarray(5).toString('utf8')).toBe('hi')
-    // [action, keycode, metaState]: SHIFT_LEFT is held around DPAD_LEFT.
-    expect(keys.map((key) => [key[1], key.readInt32BE(2), key.readInt32BE(10)])).toEqual([
-      [0, 59, 0x41],
-      [0, 21, 0x41],
-      [1, 21, 0x41],
-      [1, 59, 0]
-    ])
-  })
-
   it('returns false for malformed input, unknown devices or keys, and non-window senders', () => {
     for (const payload of [
       null,

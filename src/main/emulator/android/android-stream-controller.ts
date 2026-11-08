@@ -7,6 +7,8 @@ import {
   type StartAndroidStream
 } from './android-stream-session-starter'
 import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
+import { nativeAndroidSessions, startNativeAndroidSession } from './emulator-grpc-session'
+import { ScrcpyStreamSession } from './scrcpy-stream-session'
 
 export type AndroidStreamControllerDeps = {
   runner: AndroidCommandRunner
@@ -14,6 +16,7 @@ export type AndroidStreamControllerDeps = {
   ensureJar: () => Promise<string>
   startStreamSession: StartAndroidStream
   maxSize: number
+  nativeEmulator?: boolean
 }
 
 // Deduplicate starts so racing attaches cannot launch competing scrcpy servers.
@@ -38,10 +41,47 @@ export class AndroidStreamController {
   }
 
   private async begin(serial: string): Promise<EmulatorSessionInfo> {
+    const native = nativeAndroidSessions.get(serial)
+    if (native && (await native.isReusable())) {
+      return native.info
+    }
     if (this.handles.has(serial) && scrcpyVideoRegistry.has(serial)) {
       return androidStreamSessionInfo(serial)
     }
     this.handles.delete(serial)
+    if (this.deps.nativeEmulator) {
+      const session = await startNativeAndroidSession(serial)
+      if (session) {
+        try {
+          const control = await ScrcpyStreamSession.start(
+            {
+              runner: this.deps.runner,
+              sdk: this.deps.sdk(),
+              serial,
+              localJarPath: await this.deps.ensureJar(),
+              video: false
+            },
+            {
+              onMeta: () => {},
+              onFrame: () => {},
+              onError: () => {
+                void session.close()
+              },
+              onClose: () => {
+                void session.close()
+              }
+            }
+          )
+          session.attachKeyboard(control)
+          if (await session.isReusable()) {
+            this.handles.set(serial, session)
+            return session.info
+          }
+        } catch {
+          await session.close()
+        }
+      }
+    }
     const jarPath = await this.deps.ensureJar()
     const { info, handle } = await this.deps.startStreamSession({
       runner: this.deps.runner,
@@ -54,11 +94,11 @@ export class AndroidStreamController {
     return info
   }
 
-  stop(serial: string): void {
+  async stop(serial: string): Promise<void> {
     const handle = this.handles.get(serial)
     if (handle) {
-      handle.close()
       this.handles.delete(serial)
+      await handle.close()
     }
   }
 }

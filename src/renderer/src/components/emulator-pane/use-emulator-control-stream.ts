@@ -36,7 +36,7 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
 }
 
 export type ScrcpyKeyboard = {
-  sendKey: (name: string, shift: boolean) => void
+  sendKey: (name: string, shift: boolean, ctrl?: boolean) => void
   sendText: (text: string) => Promise<boolean>
 }
 
@@ -47,7 +47,7 @@ export type EmulatorControlStream = {
   scrcpyKeyboard: ScrcpyKeyboard | null
   reportedOrientation: EmulatorStreamOrientation | null
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
-  sendTouch: (touch: ServeSimTouchFrame) => boolean
+  sendTouch: (touch: ServeSimTouchFrame & { pointerType?: string }) => boolean
 }
 
 // Android has no serve-sim socket: its touches go to main, which owns the scrcpy control socket.
@@ -190,14 +190,15 @@ export function useEmulatorControlStream(
   }, [cancelKeyboardFrames, clearKeyboardTimers, enabled, releasePressedKeyboardUsages, wsUrl])
 
   const sendTouch = useCallback(
-    (touch: ServeSimTouchFrame): boolean => {
+    (touch: ServeSimTouchFrame & { pointerType?: string }): boolean => {
       // The frame only begins touches while it can interact; later phases must still release.
       if (scrcpyDeviceId) {
         window.api.emulator.sendScrcpyTouch({
           deviceId: scrcpyDeviceId,
           type: touch.type,
           x: touch.x,
-          y: touch.y
+          y: touch.y,
+          pointerType: touch.pointerType
         })
         return true
       }
@@ -244,9 +245,9 @@ export function useEmulatorControlStream(
     () =>
       scrcpyDeviceId
         ? {
-            sendKey: (key, shift) =>
+            sendKey: (key, shift, ctrl) =>
               void window.api.emulator
-                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, key, shift })
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, key, shift, ctrl })
                 .catch(() => false),
             sendText: (text) =>
               window.api.emulator

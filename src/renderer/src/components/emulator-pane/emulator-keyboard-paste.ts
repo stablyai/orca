@@ -74,7 +74,8 @@ export function buildEmulatorKeyboardPastePlan(
 
 function validateEmulatorKeyboardPasteText(
   text: string,
-  maxBytes?: number
+  maxBytes?: number,
+  transport: 'hid' | 'clipboard' = 'hid'
 ): EmulatorKeyboardPasteValidation {
   const byteLimit = getPositiveIntegerLimit(maxBytes, EMULATOR_KEYBOARD_PASTE_MAX_BYTES)
   const byteLengthMeasurement = measureClipboardTextByteLength(text, { stopAfterBytes: byteLimit })
@@ -82,6 +83,11 @@ function validateEmulatorKeyboardPasteText(
     return { byteLength: byteLengthMeasurement.byteLength, reason: 'too-large', status: 'rejected' }
   }
   const { byteLength } = byteLengthMeasurement
+  if (transport === 'clipboard') {
+    return text.replaceAll('\r', '').length
+      ? { byteLength, status: 'accepted' }
+      : { byteLength, reason: 'empty', status: 'rejected' }
+  }
   let hasFrames = false
 
   for (const char of text) {
@@ -188,7 +194,7 @@ export async function pasteTextIntoAndroidEmulator({
   sendText: (text: string) => Promise<boolean>
   text: string
 }): Promise<EmulatorKeyboardPasteResult> {
-  const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+  const validation = validateEmulatorKeyboardPasteText(text, maxBytes, 'clipboard')
   if (validation.status === 'rejected') {
     return validation
   }

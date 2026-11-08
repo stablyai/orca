@@ -1,8 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
+import type { PluginMonacoTheme } from '@/lib/plugin-monaco-theme'
 
 const definedThemes = new Set<string>()
+
+async function definePluginTheme(theme: PluginMonacoTheme): Promise<void> {
+  // Surfaces without an editor must not load Monaco just for a theme.
+  const [monaco, data] = await Promise.all([
+    import('monaco-editor'),
+    import('@/lib/monaco-languages/markdown-monaco-theme-rules').then(
+      ({ monacoThemeDataWithMarkdown }) => monacoThemeDataWithMarkdown(theme.data),
+      () => theme.data
+    )
+  ])
+  monaco.editor.defineTheme(theme.name, data)
+  definedThemes.add(theme.name)
+}
 
 /** The Monaco theme every editor surface uses: the editor or app theme's, else the built-in.
  *  `isDarkOverride` passes an already resolved app mode; a separate editor theme's base wins. */
@@ -18,17 +32,7 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
       return
     }
     let current = true
-    // Why lazy: surfaces that never show an editor must not load Monaco for a theme.
-    void Promise.all([
-      import('monaco-editor'),
-      import('@/lib/monaco-languages/markdown-monaco-theme-rules').then(
-        ({ monacoThemeDataWithMarkdown }) => monacoThemeDataWithMarkdown(pluginTheme.data),
-        // Why: markdown colors are extra; a failed chunk must not keep the theme undefined.
-        () => pluginTheme.data
-      )
-    ]).then(([monaco, data]) => {
-      monaco.editor.defineTheme(pluginTheme.name, data)
-      definedThemes.add(pluginTheme.name)
+    void definePluginTheme(pluginTheme).then(() => {
       if (current) {
         setDefined(new Set(definedThemes))
       }

@@ -7,6 +7,7 @@ src/components/katex-page-style.generated.ts
 .expo/
 dist/
 /android/
+/modules/*/android/build/
 /ios/
 *.jks
 *.p8

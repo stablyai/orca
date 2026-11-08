@@ -1,6 +1,6 @@
 export type EmulatorBackendKind = 'ios' | 'android'
 
-export type EmulatorStreamCodec = 'mjpeg' | 'h264'
+export type EmulatorStreamCodec = 'mjpeg' | 'h264' | 'rgb888'
 
 export type EmulatorSessionInfo = {
   deviceUdid: string

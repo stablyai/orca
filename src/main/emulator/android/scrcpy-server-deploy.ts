@@ -22,6 +22,7 @@ export function scrcpyRemoveForwardArgs(serial: string, localPort: number): stri
 
 export type ScrcpyServerOptions = {
   scid: string
+  video?: boolean
   maxSize?: number
   maxFps?: number
   videoBitRate?: number
@@ -42,6 +43,9 @@ export function startScrcpyServerArgs(serial: string, options: ScrcpyServerOptio
     'clipboard_autosync=false',
     'video_codec=h264'
   ]
+  if (options.video === false) {
+    params.push('video=false', 'send_device_meta=false')
+  }
   if (options.maxSize !== undefined) {
     params.push(`max_size=${options.maxSize}`)
   }

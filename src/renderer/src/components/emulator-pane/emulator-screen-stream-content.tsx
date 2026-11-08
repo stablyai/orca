@@ -5,6 +5,7 @@ import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
+import { nativeEmulatorDeviceId, useEmulatorNativeVideo } from './use-emulator-native-video'
 
 type StreamSize = {
   height: number
@@ -35,6 +36,13 @@ export function EmulatorScreenStreamContent({
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
   const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const nativeDeviceId = nativeEmulatorDeviceId(previewUrl)
+  const native = useEmulatorNativeVideo(
+    nativeDeviceId,
+    streamKey,
+    showStream && Boolean(nativeDeviceId),
+    onStreamSize
+  )
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,
@@ -43,16 +51,16 @@ export function EmulatorScreenStreamContent({
     onStreamSize
   )
   const frameStream = useEmulatorFrameStream(
-    androidDeviceId ? undefined : previewUrl,
+    androidDeviceId || nativeDeviceId ? undefined : previewUrl,
     streamKey,
-    showStream && Boolean(previewUrl) && !androidDeviceId
+    showStream && Boolean(previewUrl) && !androidDeviceId && !nativeDeviceId
   )
 
   useEffect(() => {
-    if (frameStream.error || video.error) {
+    if (frameStream.error || video.error || native.error) {
       onStreamError()
     }
-  }, [frameStream.error, video.error, onStreamError])
+  }, [frameStream.error, video.error, native.error, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -60,10 +68,10 @@ export function EmulatorScreenStreamContent({
       ? 'block h-full w-full bg-black object-contain'
       : 'absolute left-1/2 top-1/2 block max-w-none bg-black object-contain'
 
-  if (androidDeviceId && showStream && !video.error) {
+  if ((androidDeviceId || nativeDeviceId) && showStream && !video.error && !native.error) {
     return (
       <canvas
-        ref={video.canvasRef}
+        ref={nativeDeviceId ? native.canvasRef : video.canvasRef}
         className={mediaClassName}
         style={mediaStyle}
         aria-label={translate(
@@ -98,8 +106,9 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error && !video.error
-  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
+  const waitingForFrame = showStream && !frameStream.error && !video.error && !native.error
+  const displayError =
+    streamError || Boolean(frameStream.error) || Boolean(video.error) || Boolean(native.error)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">

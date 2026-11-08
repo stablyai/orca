@@ -133,7 +133,7 @@ export async function androidExec(
   return result.stdout
 }
 
-function orientationToRotation(orientation: string): number {
+export function orientationToRotation(orientation: string): number {
   switch (orientation) {
     case 'landscape_left':
       return 1

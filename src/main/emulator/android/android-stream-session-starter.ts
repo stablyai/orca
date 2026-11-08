@@ -4,7 +4,7 @@ import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { ScrcpyStreamSession } from './scrcpy-stream-session'
 
-export type AndroidStreamHandle = { close: () => void }
+export type AndroidStreamHandle = { close: () => void | Promise<void> }
 
 export type StartAndroidStreamParams = {
   runner: AndroidCommandRunner

@@ -10,7 +10,11 @@ import type {
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 import { AndroidSdkState } from '../android/android-sdk-state'
 import { emuKillArgs } from '../android/avd-manager'
-import { androidExec, androidRotate } from '../android/android-input-commands'
+import {
+  androidExec,
+  androidRotate,
+  orientationToRotation
+} from '../android/android-input-commands'
 import { AndroidDeviceInput } from '../android/android-device-input'
 import {
   execFileAndroidCommandRunner,
@@ -39,6 +43,7 @@ import {
 } from '../android/android-stream-session-starter'
 import { AndroidStreamController } from '../android/android-stream-controller'
 import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
+import { nativeAndroidSessions } from '../android/emulator-grpc-session'
 import { ANDROID_AVD_BOOT_TIMEOUT_MS } from '../../../shared/emulator-attach-timeouts'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
@@ -52,6 +57,7 @@ export type AndroidEmulatorBackendOptions = {
   ensureJar?: () => Promise<string>
   startStreamSession?: StartAndroidStream
   streamMaxSize?: number
+  nativeEmulator?: boolean
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 2_000
@@ -76,11 +82,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   private readonly startStreamSession: StartAndroidStream
   private readonly streamMaxSize: number
   private readonly streams: AndroidStreamController
+  private readonly nativeEmulator: boolean
   private readonly input: AndroidDeviceInput
   // A second launch of a booting AVD exits on its lock, so concurrent attaches share one boot.
   private readonly bootsInFlight = new Map<string, Promise<string>>()
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
+    this.nativeEmulator = options.nativeEmulator ?? false
     this.runner = options.runner ?? execFileAndroidCommandRunner
     this.sdkState = new AndroidSdkState(options.sdk !== undefined, options.sdk ?? null)
     this.bootTimeoutMs = options.bootTimeoutMs ?? ANDROID_AVD_BOOT_TIMEOUT_MS
@@ -94,7 +102,9 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       sdk: () => this.requireSdk(),
       ensureJar: this.ensureJar,
       startStreamSession: this.startStreamSession,
-      maxSize: this.streamMaxSize
+      maxSize: this.streamMaxSize,
+      // Only a desktop host with local renderer IPC opts into raw frames.
+      nativeEmulator: this.nativeEmulator
     })
     this.input = new AndroidDeviceInput({
       runner: this.runner,
@@ -180,7 +190,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     _options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
     // Only live handles establish ownership; scrcpy socket names are shared with other tools.
-    this.streams.stop(deviceId)
+    await this.streams.stop(deviceId)
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {
@@ -191,8 +201,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
-    // Reuse the registered stream so remounts replay cached video instead of restarting scrcpy.
-    return scrcpyVideoRegistry.has(info.deviceUdid)
+    const native = nativeAndroidSessions.get(info.deviceUdid)
+    return native ? native.isReusable() : scrcpyVideoRegistry.has(info.deviceUdid)
   }
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
@@ -219,6 +229,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     const serial = await this.resolveDeviceId(deviceId)
     this.input.forgetScreenSize(serial)
     await androidRotate(this.runner, this.requireSdk(), serial, orientation)
+    await nativeAndroidSessions.get(serial)?.rotate(orientationToRotation(orientation))
   }
 
   async exec(deviceId: string, command: string): Promise<unknown> {
@@ -285,6 +296,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       return inFlight
     }
     const boot = bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
+      nativeEmulator: this.nativeEmulator,
       bootTimeoutMs: this.bootTimeoutMs,
       pollIntervalMs: this.pollIntervalMs,
       sleep: this.sleep

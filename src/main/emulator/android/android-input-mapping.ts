@@ -56,7 +56,7 @@ const BUTTON_KEYCODES: Record<string, number> = {
 }
 
 export function androidButtonKeycode(name: string): number {
-  const keycode = BUTTON_KEYCODES[name]
+  const keycode = /^[a-z]$/.test(name) ? 29 + name.charCodeAt(0) - 97 : BUTTON_KEYCODES[name]
   if (keycode === undefined) {
     throw new EmulatorError('emulator_error', `Unknown Android hardware button: ${name}`)
   }
