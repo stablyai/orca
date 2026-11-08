@@ -64,8 +64,8 @@ describe('registerPtyHandlers', () => {
     const captured: string[] = []
     const settings = { telemetry: { protectedMilestones: { installCohort: 'existing' } } }
     const store = { getSettings: () => settings, updateSettings: () => undefined }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies all store methods read by milestone capture.
     bindSession(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies all store methods read by milestone capture.
       store as never,
       (name) => captured.push(name),
       () => true
