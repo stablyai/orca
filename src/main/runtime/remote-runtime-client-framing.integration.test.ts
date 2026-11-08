@@ -5,7 +5,11 @@ import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel } from './rpc/e2ee-channel'
-import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
+import {
+  sendRemoteRuntimeRequest,
+  subscribeRemoteRuntimeRequest
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { createRemoteRuntimeClientHandshake } from '../../shared/remote-runtime/remote-runtime-client-framing'
 import {
   configureRemoteRuntimeE2EEV2HostLatch,
@@ -32,6 +36,9 @@ vi.mock('./rpc/mobile-e2ee-auth-validation', async (importOriginal) => {
     }
   }
 })
+
+// Large and repetitive, so the host sends it as a compressed frame to clients that read them.
+const TERMINAL_OUTPUT = Buffer.from('\x1b[32m$ pnpm test\x1b[0m ok\r\n'.repeat(400))
 
 // current-behind-v2-blocker: a current host behind something on the path that refuses v2 hellos.
 type HostKind = 'current' | 'current-behind-v2-blocker' | 'v2-without-token-capabilities' | 'pre-v2'
@@ -84,11 +91,23 @@ async function startHost(
       },
       onError: (code, reason) => ws.close(code, reason)
     })
-    channel.onMessage((plaintext, reply) => {
+    channel.onMessage((plaintext, reply, replyBinary) => {
       const { id, method } = JSON.parse(plaintext)
       requests.push(`${method} over ${channel.transcriptHashB64 ? 'v2' : 'legacy'}`)
-      const result = method === 'status.get' ? { capabilities: hostCapabilities } : 'pong'
+      if (method === 'test.binary') {
+        replyBinary(new Uint8Array([1, 2, 3]))
+        return
+      }
+      const result =
+        method === 'status.get'
+          ? { capabilities: hostCapabilities }
+          : method === 'test.output'
+            ? TERMINAL_OUTPUT.toString()
+            : 'pong'
       reply(JSON.stringify({ id, ok: true, result, _meta: { runtimeId: 'r' } }))
+      if (method === 'test.output') {
+        replyBinary(TERMINAL_OUTPUT, { compressible: true })
+      }
     })
     ws.on('message', (data: Buffer) => {
       const text = data.toString()
@@ -241,5 +260,48 @@ describe('remote runtime client E2EE framing', () => {
     expect(classifyOrcadTunnelIdentityFailure(error).verdict).toBe('unpaired')
     expect(downgraded.requests).toEqual([])
     expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
+  })
+
+  it('reads compressed text and terminal frames from a v2 host on one-shot and stream sockets', async () => {
+    const host = await startHost('current')
+    await expect(ping(host)).resolves.toBe('pong')
+    expect(host.capabilities[0]).toContain(COMPRESSED_FRAMES_CLIENT_CAPABILITY)
+
+    const response = await sendRemoteRuntimeRequest(
+      host.connection,
+      'test.output',
+      undefined,
+      5_000
+    )
+    expect(response).toMatchObject({ ok: true, result: TERMINAL_OUTPUT.toString() })
+
+    const received: unknown[] = []
+    const subscription = await subscribeRemoteRuntimeRequest(
+      host.connection,
+      'test.output',
+      {},
+      5_000,
+      {
+        onResponse: (frame) => received.push(frame.ok && frame.result),
+        onBinary: (bytes) => received.push(Buffer.from(bytes).toString()),
+        onError: (error) => received.push(error)
+      }
+    )
+    await vi.waitFor(() => expect(received).toHaveLength(2))
+    subscription.close()
+    // In send order: the response, then the terminal frame, each as the host sent it.
+    expect(received).toEqual([TERMINAL_OUTPUT.toString(), TERMINAL_OUTPUT.toString()])
+    expect(host.requests).toContain('test.output over v2')
+  })
+
+  it('reports an authentic binary payload on a one-shot socket as unexpected, not undecryptable', async () => {
+    const host = await startHost('current')
+
+    await expect(
+      sendRemoteRuntimeRequest(host.connection, 'test.binary', undefined, 5_000)
+    ).rejects.toMatchObject({
+      code: 'invalid_runtime_response',
+      message: 'Remote Orca runtime returned an unexpected binary frame.'
+    })
   })
 })

@@ -9,7 +9,7 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/ag
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (_target: unknown, method: string) =>
     method === 'agentSession.modelCatalog' ? entry.catalog : { seedOptions: {} }
 }))

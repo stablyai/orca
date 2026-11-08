@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
@@ -19,7 +19,7 @@ import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 const SUGGESTED_TILE_LIMIT = 8
@@ -99,6 +99,7 @@ function BrowserNewTabPageLayout({
   servers: BrowserNewTabServerContext
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const removeBrowserHistoryEntry = useAppStore((s) => s.removeBrowserHistoryEntry)
   const restoreBrowserHistory = useAppStore((s) => s.restoreBrowserHistory)
@@ -121,12 +122,12 @@ function BrowserNewTabPageLayout({
       return
     }
     toast(
-      translate('browser.newTab.removedFromHistory', 'Removed “{{title}}” from history', {
+      t('browser.newTab.removedFromHistory', 'Removed “{{title}}” from history', {
         title: suggestionLabel(removed)
       }),
       {
         action: {
-          label: translate('browser.newTab.undo', 'Undo'),
+          label: t('browser.newTab.undo', 'Undo'),
           onClick: () =>
             restoreBrowserHistory({ browserUrlHistory: [removed], workspaceDocHistory: [] })
         }
@@ -142,10 +143,10 @@ function BrowserNewTabPageLayout({
             <Globe className="size-5" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            {translate('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')}
+            {t('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')}
           </p>
           <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-            {translate(
+            {t(
               'browser.newTab.emptyHint',
               'Search or enter an address above. Sites you visit, dev servers running in this workspace, and its PR and issue will show up here.'
             )}
@@ -159,7 +160,7 @@ function BrowserNewTabPageLayout({
     <BrowserNewTabScroller>
       {hasWorkspaceRows ? (
         <BrowserNewTabSection
-          label={translate('browser.newTab.thisWorkspace', 'This workspace')}
+          label={t('browser.newTab.thisWorkspace', 'This workspace')}
           detail={workspaceName}
         >
           <BrowserNewTabWorkspaceCard
@@ -172,7 +173,7 @@ function BrowserNewTabPageLayout({
         </BrowserNewTabSection>
       ) : null}
       {suggested.length > 0 ? (
-        <BrowserNewTabSection label={translate('browser.newTab.suggested', 'Suggested')}>
+        <BrowserNewTabSection label={t('browser.newTab.suggested', 'Suggested')}>
           <BrowserNewTabTileGrid>
             {suggested.map((entry) => (
               <BrowserNewTabTile
@@ -188,7 +189,7 @@ function BrowserNewTabPageLayout({
                 tooltip={entry.title.trim() ? `${entry.title} · ${entry.url}` : entry.url}
                 onOpen={() => onOpenUrl(entry.url)}
                 onRemove={() => removeSuggestion(entry)}
-                removeLabel={translate('browser.newTab.removeSuggestion', 'Remove from history')}
+                removeLabel={t('browser.newTab.removeSuggestion', 'Remove from history')}
               />
             ))}
           </BrowserNewTabTileGrid>

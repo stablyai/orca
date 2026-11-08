@@ -11,7 +11,7 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { isRenewableTerminalFileGrantRefusal } from '../../../../../shared/terminal-file-grant-refusal'
 

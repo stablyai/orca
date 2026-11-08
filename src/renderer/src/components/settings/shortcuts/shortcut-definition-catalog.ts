@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
 
 export type ShortcutDefinitionCatalog = {
@@ -25,14 +26,17 @@ export type ShortcutDefinitionCatalog = {
   conflictByAction: Map<KeybindingActionId, string[]>
 }
 
-export function buildShortcutDefinitionCatalog(options: {
-  disabledTuiAgents: readonly TuiAgent[]
-  pluginCommands: readonly ActivePluginCommand[]
-  keybindings: KeybindingOverrides
-  platform: NodeJS.Platform
-  macCapturedDigitChords?: readonly MacCapturedDigitChord[]
-  missionControlConflictMessage: string
-}): ShortcutDefinitionCatalog {
+export function buildShortcutDefinitionCatalog(
+  options: {
+    disabledTuiAgents: readonly TuiAgent[]
+    pluginCommands: readonly ActivePluginCommand[]
+    keybindings: KeybindingOverrides
+    platform: NodeJS.Platform
+    macCapturedDigitChords?: readonly MacCapturedDigitChord[]
+    missionControlConflictMessage: string
+  },
+  t: Translate = translate
+): ShortcutDefinitionCatalog {
   const pluginDefinitions = buildPluginCommandKeybindingDefinitions(options.pluginCommands)
   const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
   const definitions = groups.flatMap((group) => group.items)
@@ -58,7 +62,7 @@ export function buildShortcutDefinitionCatalog(options: {
     for (const actionId of conflict.actionIds) {
       conflictByAction.set(actionId, [
         ...(conflictByAction.get(actionId) ?? []),
-        translate(
+        t(
           'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
           '{{binding}} conflicts with {{actions}}.',
           {

@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext } from '../../core'
 import { OrcaRuntimeService } from '../../../orca-runtime'

@@ -8,7 +8,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
@@ -50,6 +50,7 @@ export function SourceControlEntryContextMenu({
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const scope = useSourceControlScope()
   // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
   const runtimeEnvironmentId = useSourceControlState((s) =>
@@ -97,10 +98,7 @@ export function SourceControlEntryContextMenu({
       <ContextMenuContent className="w-52">
         <ContextMenuItem onSelect={onView} disabled={!onView}>
           <Eye className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901',
-            'View'
-          )}
+          {t('auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901', 'View')}
         </ContextMenuItem>
         {onResolveConflict && conflictResolutions && conflictResolutions.length > 0 ? (
           <>
@@ -110,7 +108,7 @@ export function SourceControlEntryContextMenu({
               return (
                 <ContextMenuItem key={resolution} onSelect={() => onResolveConflict(resolution)}>
                   <Icon className="size-3.5" />
-                  {getLocalizedConflictResolutionLabel(resolution)}
+                  {getLocalizedConflictResolutionLabel(resolution, t)}
                 </ContextMenuItem>
               )
             })}
@@ -119,14 +117,11 @@ export function SourceControlEntryContextMenu({
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />
-          {translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
+          {t('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
         </ContextMenuItem>
         <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
           <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
-            'Copy Relative Path'
-          )}
+          {t('auto.components.right.sidebar.FileExplorerRow.66a29dde82', 'Copy Relative Path')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <OpenInContextSubmenu
@@ -139,16 +134,13 @@ export function SourceControlEntryContextMenu({
           disabled={!absolutePath || !hasWorkingTreeFile || revealBlocked}
         >
           <ExternalLink className="size-3.5" />
-          {getRevealInFileManagerLabel()}
+          {getRevealInFileManagerLabel(t)}
           {revealBlocked ? <LocalOnlyMenuHint /> : null}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleRevealInOrcaExplorer} disabled={!absolutePath}>
           <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
+          {t('auto.components.right.sidebar.SourceControl.cc05b2d088', 'Open in File Explorer')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

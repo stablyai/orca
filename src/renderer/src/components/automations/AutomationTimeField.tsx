@@ -2,7 +2,7 @@ import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const TIME_SHELL_CLASS =
   'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-input/30 px-3 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30'
@@ -179,6 +179,7 @@ export function AutomationTimeField({
   onTimeChange: (time: string) => void
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const clock = getAutomationClockParts(time)
   // Read current clock parts in digit commits; sync after render to keep rendering pure.
   const clockRef = React.useRef(clock)
@@ -204,10 +205,7 @@ export function AutomationTimeField({
               min={1}
               max={12}
               pad={false}
-              ariaLabel={translate(
-                'auto.components.automations.AutomationTimeField.aa593eb5e2',
-                'Hour'
-              )}
+              ariaLabel={t('auto.components.automations.AutomationTimeField.aa593eb5e2', 'Hour')}
               onCommit={(hour12) => patchTime({ hour12 })}
             />
             <span className="select-none text-sm text-muted-foreground" aria-hidden>
@@ -217,16 +215,13 @@ export function AutomationTimeField({
               value={clock.minute}
               min={0}
               max={59}
-              ariaLabel={translate(
-                'auto.components.automations.AutomationTimeField.32a5e4e35e',
-                'Minute'
-              )}
+              ariaLabel={t('auto.components.automations.AutomationTimeField.32a5e4e35e', 'Minute')}
               onCommit={(minute) => patchTime({ minute })}
             />
             <button
               type="button"
               // The label overrides the visible text, so name the current period explicitly.
-              aria-label={`${translate(
+              aria-label={`${t(
                 'auto.components.automations.AutomationTimeField.39ec1383f6',
                 'AM or PM'
               )}: ${clock.period}`}
@@ -246,10 +241,7 @@ export function AutomationTimeField({
               value={clock.minute}
               min={0}
               max={59}
-              ariaLabel={translate(
-                'auto.components.automations.AutomationTimeField.32a5e4e35e',
-                'Minute'
-              )}
+              ariaLabel={t('auto.components.automations.AutomationTimeField.32a5e4e35e', 'Minute')}
               onCommit={(minute) => patchTime({ minute })}
             />
           </>

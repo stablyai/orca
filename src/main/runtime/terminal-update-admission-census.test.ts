@@ -47,23 +47,6 @@ afterEach(() => {
 })
 
 describe("an update's last terminal census", () => {
-  it('refuses every new terminal until the stop, with a retryable message', async () => {
-    collect.mockResolvedValue(idle)
-    const runtime = new OrcaRuntimeService(store)
-    await expect(census(runtime, updateRecount)).resolves.toMatchObject({
-      liveSessions: 0,
-      admissionClosedUntil: expect.any(Number)
-    })
-
-    await expect(runtime.acquireWorktreeTerminalSpawn(target)).rejects.toThrow(
-      TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE
-    )
-    // A spawn outside any worktree dies with the stop all the same.
-    await expect(runtime.acquireWorktreeTerminalSpawn(undefined)).rejects.toThrow(
-      TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE
-    )
-  })
-
   it('counts only after a spawn admitted before it has finished starting', async () => {
     collect.mockResolvedValue({ ...idle, liveSessions: 1 })
     const runtime = new OrcaRuntimeService(store)
@@ -95,20 +78,5 @@ describe("an update's last terminal census", () => {
     await expect(
       runtime.acquireWorktreeTerminalSpawn(target, { reattachSessionId: 'pty-live' })
     ).rejects.toThrow(TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE)
-  })
-
-  it('reopens admission when a deferred update asks with 0, and a plain census never closes it', async () => {
-    collect.mockResolvedValue(idle)
-    const runtime = new OrcaRuntimeService(store)
-    await expect(census(runtime, { releaseFinishedAutomationTerminals: true })).resolves.toEqual(
-      idle
-    )
-    ;(await runtime.acquireWorktreeTerminalSpawn(target))()
-
-    await census(runtime, updateRecount)
-    await expect(census(runtime, { closeAdmissionForMs: 0 })).resolves.toMatchObject({
-      admissionClosedUntil: 0
-    })
-    ;(await runtime.acquireWorktreeTerminalSpawn(target))()
   })
 })

@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it } from 'vitest'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { CrewReadModel } from './crew-read-model'

@@ -8,7 +8,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ReadyEditorSurface, MirroredEditorTab } from './state'
-import type { WebSessionExistingTabIndex } from '../web-session-existing-tab-index'
+import type { WebSessionExistingTabIndex } from './placement/web-session-existing-tab-index'
 import { isReadyEditorTab } from './terminal-surfaces'
 import { createMirroredEditorFileResolver } from './mirrored-editor-file-identity'
 import { buildOwnedEditorFileId } from '../../store/slices/editor/file-ids/editor-file-ids'

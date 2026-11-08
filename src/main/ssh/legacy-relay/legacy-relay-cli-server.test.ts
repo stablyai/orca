@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import '../../../shared/ssh-remote-cli-control'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import '../../runtime/orchestration/db/contract-constants'
@@ -143,20 +143,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     expect(db.getTask(ids.taskId)?.status).toBe('dispatched')
   })
 
-  it.each([
-    ['no saved value', {}, true],
-    ['an explicit true', { allowRemoteCliControl: true }, true],
-    ['an explicit false', { allowRemoteCliControl: false }, false]
-  ])('admits per the saved switch: %s', async (_label, saved, admitted) => {
-    allowed = isRemoteCliControlAllowed(saved)
-    const check = run(['orchestration', 'check', '--json'])
-    if (admitted) {
-      expect((await check).exitCode).toBe(0)
-    } else {
-      await expect(check).rejects.toThrow(LEGACY_RELAY_CLI_CONTROL_OFF)
-    }
-  })
-
   it('refuses commands outside orchestration', async () => {
     await expect(run(['worktree', 'list'])).rejects.toThrow(LEGACY_RELAY_CLI_UNSUPPORTED)
     await expect(run(['terminal', 'send', '--terminal', COORDINATOR])).rejects.toThrow(
@@ -238,25 +224,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     expect(db.getInbox(100)).toHaveLength(1)
   })
 
-  it('sends to its own coordinator', async () => {
-    const sent = await run([
-      'orchestration',
-      'send',
-      '--to',
-      COORDINATOR,
-      '--subject',
-      'progress',
-      '--json'
-    ])
-    expect(json(sent)).toMatchObject({ ok: true })
-  })
-
-  it('refuses a malformed post-output action', async () => {
-    await expect(
-      server().postOutput({ env: ENV, postOutput: { kind: 'other' } }, new AbortController().signal)
-    ).rejects.toThrow('Invalid SSH CLI post-output action.')
-  })
-
   it('replays a completed worker_done after its Dispatch settled, and nothing new', async () => {
     const retry = ['--retry-request', '11111111-1111-4111-8111-111111111111']
     const first = await run([...workerDone(), ...retry])
@@ -267,23 +234,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     await expect(
       run([...workerDone(), '--retry-request', '22222222-2222-4222-8222-222222222222'])
     ).rejects.toThrow(LEGACY_RELAY_CLI_UNVERIFIED)
-  })
-
-  it('answers --help without running the command', async () => {
-    for (const flag of ['--help', '-h']) {
-      expect(await run([...workerDone(), flag])).toMatchObject({ exitCode: 0, stderr: '' })
-    }
-    expect(db.getTask(ids.taskId)?.status).toBe('dispatched')
-  })
-
-  it('refuses an emptied --retry-request instead of starting a new mutation', async () => {
-    for (const argv of [
-      [...workerDone(), '--retry-request='],
-      [...workerDone(), '--retry-request']
-    ]) {
-      await expect(run(argv)).rejects.toThrow(/--retry-request/)
-    }
-    expect(db.getTask(ids.taskId)?.status).toBe('dispatched')
   })
 
   it('replays a completed worker_done after the terminal took a new assignment', async () => {

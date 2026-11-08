@@ -26,7 +26,9 @@ const storeState = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 const requestBackgroundTerminalWorktreeMount = vi.hoisted(() => vi.fn())
 vi.mock('../../../terminal/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount

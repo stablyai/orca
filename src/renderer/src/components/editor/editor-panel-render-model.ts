@@ -240,7 +240,7 @@ export function getEditorPanelRenderModel({
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
     // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.
-    canOpenPreviewToSide:
+    canOpenPreview:
       canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),

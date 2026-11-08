@@ -43,10 +43,19 @@ import {
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: runtimeMocks.call,
-  subscribeStructuredAgentSession: runtimeMocks.subscribe
-}))
+vi.mock(
+  '../../../../../renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: runtimeMocks.call
+  })
+)
+
+vi.mock(
+  '../../../../../renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: runtimeMocks.subscribe
+  })
+)
 export const runtime: { call: Mock; subscribe: Mock } = runtimeMocks
 export const renderer = await vi.importActual<CommandMenuRendererFixtureModule>(
   '../../../../../renderer/src/components/native-chat/composer/pickers/agent-session-command-menu.test-fixture'

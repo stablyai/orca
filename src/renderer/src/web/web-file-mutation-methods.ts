@@ -2,7 +2,7 @@ import type { PreloadApi } from '../../../preload/api-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../runtime/rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileSnapshot } from '../runtime/files/reads/runtime-file-range-client'
 import {
   pagedTextFileResult,

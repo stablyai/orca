@@ -15,7 +15,6 @@ const {
 } = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_PTYS, SURFACE_TAB_ID, surfaceRuntime } =
   await import('./terminal/surface/terminal-surface-replies.test-fixture')
-await import('./rpc/unused-default-rpc-methods.test-fixture')
 const { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } =
   await import('./terminal/view/terminal-surface-deadlines')
 

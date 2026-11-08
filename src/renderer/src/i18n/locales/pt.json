@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Conecte-se ao host SSH deste espaço de trabalho e tente novamente.",
+    "sshUnavailable": "A inicialização no terminal não está disponível neste host SSH. Abra um terminal no espaço de trabalho e inicie o agente nele.",
+    "reconnectServer": "Reconecte-se ao servidor Orca deste espaço de trabalho e tente novamente.",
+    "updateServer": "Atualize o Orca no servidor deste espaço de trabalho e tente novamente.",
+    "checkSettings": "Verifique as configurações de inicialização do agente e tente novamente.",
+    "invalidArgs": "Os argumentos da CLI de {{value0}} têm uma aspa não fechada. Corrija-os e tente novamente.",
     "opencode": {
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
@@ -290,6 +296,30 @@
       "loading": "Carregando alterações do submódulo…",
       "empty": "Nenhuma alteração no submódulo",
       "loadFailed": "Não foi possível carregar as alterações do submódulo"
+    },
+    "branchPicker": {
+      "switch": "Trocar de branch: {{branch}}",
+      "search": "Pesquisar branches",
+      "recover": "Trocar para {{branch}}",
+      "create": "Criar branch {{name}} a partir de {{branch}}",
+      "open": "Abrir espaço de trabalho",
+      "occupied": "Em uso em {{path}}",
+      "remote": "remoto",
+      "statusFailed": "O Orca não conseguiu ler as alterações desta cópia de trabalho. Atualize o Controle de código-fonte antes de trocar.",
+      "statusUnknown": "Leia as alterações desta cópia de trabalho antes de trocar.",
+      "conflict": "Conclua ou cancele o {{operation}} antes de trocar de branch.",
+      "dirty_one": "Faça commit ou descarte {{count}} arquivo alterado antes de trocar de branch.",
+      "dirty_other": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "dirty_many": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "agentWorking": "Um agente está trabalhando neste workspace. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
+      "listFailed": "O Orca não conseguiu listar os branches locais. Tente reabrir o seletor.",
+      "discoveryFailed": "O Orca não encontrou branches remotos. Você ainda pode trocar para branches locais ou criar um branch.",
+      "switchFailed": "O Orca não conseguiu trocar de branch. Tente novamente.",
+      "switchFailedTitle": "Não foi possível trocar de branch",
+      "switchFailedIn": "Não foi possível trocar de branch em {{workspace}}",
+      "switchedIn": "Em {{workspace}}",
+      "thisComputer": "este computador",
+      "updateHost": "Atualize o Orca em {{host}} para trocar de branch daqui."
     }
   },
   "githubChecks": {
@@ -1619,7 +1649,6 @@
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
-        "invalidArgs": "Os argumentos de CLI de {{value0}} são inválidos. Corrija-os em Configurações → IA de Controle de Versão.",
         "model": "Modelo",
         "agentDefault": "Padrão do agente",
         "effortDefault": "Padrão",
@@ -2393,9 +2422,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Não foi possível encontrar um espaço de trabalho para estas verificações.",
-              "fb6c294e85": "Não foi possível montar o comando de inicialização do agente.",
               "03c1d61f83": "Não foi possível abrir o espaço de trabalho vinculado a estas verificações.",
-              "822bf52295": "Não foi possível determinar a plataforma de inicialização do espaço de trabalho.",
               "dfb4dd7c00": "Não foi possível encontrar o espaço de trabalho vinculado a estas verificações.",
               "9f00d7df0c": "O prompt de correção de verificações está vazio. Atualize as configurações de IA do Controle de Versão.",
               "2ebf794906": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -2434,8 +2461,8 @@
             "direct": {
               "3de6371df3": "Não foi possível montar o comando de inicialização do agente.",
               "67e103dd60": "Espaço de trabalho criado, mas não pôde ser ativado.",
-              "19c7683acf": "O agente selecionado não está disponível no espaço de trabalho criado.",
-              "8bc45efdbc": "Falha ao resolver o head do PR.",
+              "19c7683acf": "O agente selecionado está indisponível. Verifique as configurações do agente do espaço de trabalho e tente novamente.",
+              "8bc45efdbc": "Não foi possível ler o pull request. Verifique se você consegue abri-lo e tente novamente.",
               "agent": {
                 "ceeeb509b5": "O agente demorou muito para iniciar. O espaço de trabalho está pronto — cole o {{value0}} quando o agente estiver inativo."
               }
@@ -10228,7 +10255,6 @@
                     },
                     "d481ab22f9": "O agente de IA salvo não está disponível. Use Personalizar inicialização para escolher outro agente.",
                     "9bbd9077a2": "Nenhum agente de IA habilitado. Configure agentes em Configurações.",
-                    "5540ff50cc": "Não foi possível construir o comando de inicialização do agente.",
                     "216f762bd7": "Não foi possível resolver a conexão do espaço de trabalho.",
                     "success": "Foi iniciado um agente de IA para a falha de {{value0}}."
                   }
@@ -17177,7 +17203,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Configurações do agente…",
             "ec2adf093e": "Iniciar {{value0}} em um novo terminal",
-            "465e432ef1": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
@@ -18584,7 +18609,6 @@
             "3f4ca29961": "Maximizar espaço de trabalho flutuante",
             "1c79cba25d": "Restaurar espaço de trabalho flutuante",
             "648352c51f": "Abrir {{value0}} no espaço de trabalho flutuante",
-            "82da3701e7": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "109870e023": "Maximizar",
             "b5686fee1e": "Restaurar"
           }
@@ -19054,7 +19078,6 @@
         "a2a279b32a": "O salvamento expirou ou falhou. Corrija os erros antes de fechar.",
         "46e08bc5c8": "Este arquivo tem alterações não salvas.",
         "61ed600d29": "\"{{value0}}\" tem alterações não salvas. Você quer salvar antes de fechar?",
-        "e57db40c11": "Não foi possível construir o comando de inicialização para {{value0}}.",
         "5b2c1a9e44": "Nenhuma CLI de agente detectada — instale uma ou escolha um agente padrão em Configurações.",
         "quitSnapshotSaveFailed": "Saída cancelada: o snapshot da sessão não pôde ser salvo ({{value0}}).",
         "reloadSnapshotSaveFailed": "Recarregamento cancelado: não foi possível salvar o snapshot da sessão ({{value0}})."

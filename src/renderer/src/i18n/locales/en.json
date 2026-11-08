@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connect to this workspace’s SSH host, then try again.",
+    "sshUnavailable": "Terminal launch is unavailable on this SSH host. Open a terminal in the workspace and start the agent there.",
+    "reconnectServer": "Reconnect to this workspace’s Orca server, then try again.",
+    "updateServer": "Update Orca on this workspace’s server, then try again.",
+    "checkSettings": "Check the agent’s launch settings, then try again.",
+    "invalidArgs": "The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.",
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
     "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
@@ -732,6 +738,23 @@
           "remote": "remote",
           "gpu": "gpu"
         }
+      },
+      "appIcon": {
+        "importCustom": "Custom…",
+        "replaceCustom": "Replace custom icon…",
+        "removeCustom": "Remove custom icon",
+        "customKeyword": "custom",
+        "importKeyword": "import",
+        "importErrors": {
+          "unsupportedFormat": "Unsupported image. Pick a PNG or JPEG file.",
+          "unreadable": "Could not read the selected file.",
+          "tooLarge": "Image is larger than {{max}} MB.",
+          "notSquare": "App icons must be square.",
+          "tooSmall": "Image must be at least {{min}}×{{min}} pixels.",
+          "tooBig": "Image must be at most {{max}}×{{max}} pixels.",
+          "undecodable": "Could not decode the selected image.",
+          "saveFailed": "Could not save the custom icon."
+        }
       }
     },
     "browser": {
@@ -1036,7 +1059,6 @@
       "actionModel": {
         "on": "On",
         "off": "Off",
-        "invalidArgs": "The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.",
         "model": "Model",
         "effort": "Effort",
         "agentDefault": "Agent default",
@@ -1697,9 +1719,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Unable to find a workspace for these checks.",
-              "fb6c294e85": "Could not build the agent launch command.",
               "03c1d61f83": "Unable to open the workspace attached to these checks.",
-              "822bf52295": "Unable to resolve the workspace launch platform.",
               "dfb4dd7c00": "Unable to find the workspace attached to these checks.",
               "9f00d7df0c": "Fix checks prompt is empty. Update Source Control AI settings.",
               "2ebf794906": "No enabled AI agent was detected on this workspace host.",
@@ -1738,8 +1758,8 @@
             "direct": {
               "3de6371df3": "Could not build the agent launch command.",
               "67e103dd60": "Workspace created but could not be activated.",
-              "19c7683acf": "Selected agent is not available in the created workspace.",
-              "8bc45efdbc": "Failed to resolve PR head.",
+              "19c7683acf": "The selected agent is unavailable. Check the workspace’s agent settings, then try again.",
+              "8bc45efdbc": "Could not read the pull request. Check that you can open it, then try again.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
               }
@@ -3387,7 +3407,6 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "e57db40c11": "Could not build launch command for {{value0}}.",
         "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
         "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}}).",
         "reloadSnapshotSaveFailed": "Reload canceled: the session snapshot could not be saved ({{value0}})."
@@ -4488,7 +4507,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
             "ec2adf093e": "Launch {{value0}} in a new terminal",
-            "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
@@ -14692,7 +14710,6 @@
                     },
                     "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
                     "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                    "5540ff50cc": "Could not build the agent launch command.",
                     "216f762bd7": "Unable to resolve the workspace connection.",
                     "success": "Started an AI agent for the {{value0}} failure."
                   }
@@ -15922,7 +15939,6 @@
             "3f4ca29961": "Maximize floating workspace",
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
-            "82da3701e7": "Could not build launch command for {{value0}}.",
             "109870e023": "Maximize",
             "b5686fee1e": "Restore"
           }
@@ -20774,6 +20790,13 @@
         "settingsLink": "Settings > Chat UI > Turn activity",
         "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hidden": "Orca won't show CI result lines anymore"
+      },
       "openedPullRequests": {
         "one": "Opened {{name}}",
         "hide": "Don't show opened pull requests",
@@ -21186,6 +21209,11 @@
           "scrollback": "scrollback",
           "snap": "snap",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "title": "Match Claude Code to Terminal Theme",
+          "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
+          "claude": "claude"
         }
       },
       "nativeChat": {
@@ -21225,6 +21253,10 @@
         "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "pull request card",
+        "ciResultLinesTitle": "CI result lines",
+        "ciResultLinesCopy": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Turn activity",
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
@@ -21940,6 +21972,29 @@
       "loading": "Loading submodule changes…",
       "empty": "No changes in submodule",
       "loadFailed": "Failed to load submodule changes"
+    },
+    "branchPicker": {
+      "switch": "Switch branch: {{branch}}",
+      "search": "Search branches",
+      "recover": "Switch to {{branch}}",
+      "create": "Create branch {{name}} from {{branch}}",
+      "open": "Open workspace",
+      "occupied": "Checked out in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca couldn't read this checkout's changes. Refresh Source Control before switching.",
+      "statusUnknown": "Read this checkout’s changes before switching.",
+      "conflict": "Finish or abort the {{operation}} before switching branches.",
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches.",
+      "agentWorking": "An agent is working in this workspace. Switch branches after it finishes, or close its tab if it has stopped.",
+      "listFailed": "Orca couldn't list local branches. Try reopening the picker.",
+      "discoveryFailed": "Orca couldn't find remote branches. You can still switch local branches or create a branch.",
+      "switchFailed": "Orca couldn't switch branches. Try again.",
+      "switchFailedTitle": "Couldn't switch branches",
+      "switchFailedIn": "Couldn't switch branches in {{workspace}}",
+      "switchedIn": "In {{workspace}}",
+      "thisComputer": "this computer",
+      "updateHost": "Update Orca on {{host}} to switch branches from here."
     }
   },
   "agentsSidebarIntro": {
@@ -22245,7 +22300,22 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "windowsFontWeight": {
+      "title": "Terminal text on Windows is now lighter",
+      "okay": "Okay",
+      "lighterText": "Lighter terminal text"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Match Claude Code to your Orca theme?",
+      "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "accept": "Match Theme",
+      "accepted": "Claude Code theme sync is on",
+      "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
+      "decline": "No Thanks",
+      "failed": "Could not turn on Claude Code theme sync",
+      "failedDescription": "Turn it on in Settings."
+    }
   },
   "fileExplorer": {
     "root": {
@@ -23619,7 +23689,9 @@
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
       "importGhosttyConfig": "Import Ghostty Config",
-      "importKittyConfig": "Import Kitty Config"
+      "importKittyConfig": "Import Kitty Config",
+      "pickAppIcon": "Choose app icon",
+      "appIconImage": "App icon image"
     }
   },
   "taskProviders": {

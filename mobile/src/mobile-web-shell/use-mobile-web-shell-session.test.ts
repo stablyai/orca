@@ -180,12 +180,11 @@ function createFakeStore(): {
       deferred += 1
     },
     holdGeneration: () => () => {},
-    hasDeferredCommit: () => false,
+    claimUpdate: async () => () => {},
     abortStagedGeneration: async () => {
       aborted += 1
     },
     openReusableAssets: async () => ({ has: () => false, check: async () => false }),
-    sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => {
       deleted += 1
     },
