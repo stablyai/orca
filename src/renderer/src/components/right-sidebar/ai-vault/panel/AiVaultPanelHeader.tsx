@@ -12,6 +12,7 @@ import type { ExecutionHostScope } from '../../../../../../shared/execution-host
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
+import type { AiVaultGroupSessionLimit } from '../session-list/ai-vault-group-session-limit'
 
 type AiVaultPanelHeaderProps = {
   searching?: boolean
@@ -27,6 +28,7 @@ type AiVaultPanelHeaderProps = {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  groupSessionLimit: AiVaultGroupSessionLimit
   adjustmentCount: number
   searchInputRef?: Ref<HTMLInputElement>
   headerAction?: ReactNode
@@ -40,6 +42,7 @@ type AiVaultPanelHeaderProps = {
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+  onGroupSessionLimitChange: (limit: AiVaultGroupSessionLimit) => void
   onReset: () => void
   onRefresh: () => void
 }
@@ -58,6 +61,7 @@ export function AiVaultPanelHeader({
   group,
   hideEmptySessions,
   sessionLimit,
+  groupSessionLimit,
   adjustmentCount,
   searchInputRef,
   headerAction,
@@ -70,6 +74,7 @@ export function AiVaultPanelHeader({
   onGroupChange,
   onHideEmptySessionsChange,
   onSessionLimitChange,
+  onGroupSessionLimitChange,
   onReset,
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
@@ -111,12 +116,14 @@ export function AiVaultPanelHeader({
             group={group}
             hideEmptySessions={hideEmptySessions}
             sessionLimit={sessionLimit}
+            groupSessionLimit={groupSessionLimit}
             adjustmentCount={adjustmentCount}
             onAgentEnabledChange={onAgentEnabledChange}
             onAllAgentsEnabledChange={onAllAgentsEnabledChange}
             onGroupChange={onGroupChange}
             onHideEmptySessionsChange={onHideEmptySessionsChange}
             onSessionLimitChange={onSessionLimitChange}
+            onGroupSessionLimitChange={onGroupSessionLimitChange}
             onReset={onReset}
           />
           <Button

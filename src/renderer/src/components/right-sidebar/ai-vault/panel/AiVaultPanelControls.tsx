@@ -42,6 +42,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from '../session-list/AiVaultSessionLimitMenu'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
+import { AiVaultGroupSessionLimitMenu } from '../session-list/AiVaultGroupSessionLimitMenu'
+import type { AiVaultGroupSessionLimit } from '../session-list/ai-vault-group-session-limit'
 
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
 
@@ -225,12 +227,14 @@ export function VaultViewMenu({
   group,
   hideEmptySessions,
   sessionLimit,
+  groupSessionLimit,
   adjustmentCount,
   onAgentEnabledChange,
   onAllAgentsEnabledChange,
   onGroupChange,
   onHideEmptySessionsChange,
   onSessionLimitChange,
+  onGroupSessionLimitChange,
   onReset
 }: {
   searching?: boolean
@@ -238,12 +242,14 @@ export function VaultViewMenu({
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  groupSessionLimit: AiVaultGroupSessionLimit
   adjustmentCount: number
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
   onAllAgentsEnabledChange: (enabled: boolean) => void
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+  onGroupSessionLimitChange: (limit: AiVaultGroupSessionLimit) => void
   onReset: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -347,6 +353,10 @@ export function VaultViewMenu({
                 {t('auto.components.right.sidebar.AiVaultPanelControls.agent', 'Agent')}
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
+            <AiVaultGroupSessionLimitMenu
+              groupSessionLimit={groupSessionLimit}
+              onGroupSessionLimitChange={onGroupSessionLimitChange}
+            />
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem
               checked={hideEmptySessions}
