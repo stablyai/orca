@@ -72,7 +72,9 @@ export function prActionSlices(action: PrActionBusyKey): readonly PrSlice[] {
       return ['summary', 'details']
     case 'rerun':
       return ['checks']
-    default:
+    case 'merge':
+    case 'autoMerge':
+    case 'state':
       return ['summary']
   }
 }

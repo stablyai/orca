@@ -106,7 +106,9 @@ function applyWrite(details: GitHubWorkItemDetails, write: PrCommentWrite): GitH
       return mapComments(details, (comment) =>
         comment.id === write.params.commentId ? null : comment
       )
-    default:
+    case 'reply':
+    case 'root':
+    case 'line':
       return details
   }
 }
@@ -139,7 +141,9 @@ function revertWrite(
       comments.splice(Math.min(index, comments.length), 0, before.comments[index])
       return { ...current, comments }
     }
-    default:
+    case 'reply':
+    case 'root':
+    case 'line':
       return current
   }
 }
