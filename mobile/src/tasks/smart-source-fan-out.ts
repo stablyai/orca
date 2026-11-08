@@ -8,7 +8,7 @@ import {
   type SmartNameMode
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
-import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/work-items'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/github/work-item-ssh-error'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import {

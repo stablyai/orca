@@ -1,6 +1,6 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
-import { findAutomationRepo } from '../../../src/shared/automation-repo-target'
-import { getAutomationSetupDefaultDecision } from '../../../src/shared/automation-setup-decision'
+import { findAutomationRepo } from '../../../src/shared/automations/ownership/automation-repo-target'
+import { getAutomationSetupDefaultDecision } from '../../../src/shared/automations/launch/automation-setup-decision'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import {
   newWorkspaceSetupHooksRead,

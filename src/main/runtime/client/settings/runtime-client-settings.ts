@@ -4,7 +4,7 @@ import { getAppEnvironment } from '../../../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../../../shared/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { TASK_PROVIDERS } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation

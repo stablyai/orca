@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { createIdleSyncHarness } from './federation-sync-test-harness'
 import { armHomeAutoReleaseForOlderHost } from './federation-sync-capability'
 

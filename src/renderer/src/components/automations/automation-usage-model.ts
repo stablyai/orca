@@ -1,11 +1,9 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
-import type { AutomationRunUsage } from '../../../../shared/automations-types'
+import type { AutomationUsageSummary } from '../../../../shared/automations/history/automation-usage-summary'
+import type { AutomationRunUsage } from '../../../../shared/automations/history/automation-run'
 
 // Keep retained-run summaries shared across owning authorities; only display formatting belongs to the renderer.
-export type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
-export { summarizeAutomationRunUsage } from '../../../../shared/automation-usage-summary'
 
 export function formatAutomationTokens(
   value: number | null | undefined,

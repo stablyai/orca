@@ -1,6 +1,6 @@
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
-import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { buildRuntimeWorktreeVisibilityMatchers } from './runtime-worktree-visibility'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'

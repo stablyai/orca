@@ -9,11 +9,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalProviderLabel } from './external-automation-display'
 import { Trans } from 'react-i18next'

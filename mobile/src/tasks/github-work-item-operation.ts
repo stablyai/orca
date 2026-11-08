@@ -18,7 +18,7 @@ import { readGitHubWorkItemByNumber } from './mobile-task-source-search-operatio
 import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
-} from '../../../src/shared/task-source-runtime-capabilities'
+} from '../../../src/shared/work-items/task-source-runtime-capabilities'
 
 // Before this release an unaddressed issue write ignored the issue source its own number lookup honors.
 const ISSUE_WRITE_FOLLOWS_LOOKUP_VERSION = '1.4.221'

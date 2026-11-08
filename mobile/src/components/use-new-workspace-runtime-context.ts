@@ -9,7 +9,7 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../../../src/shared/task-providers'
+} from '../../../src/shared/work-items/task-providers'
 import {
   readJiraConnectionProbeReply,
   type MobileJiraConnection

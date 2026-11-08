@@ -1,7 +1,7 @@
 import { Presence } from '../components/AutoHeight'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { formatWorkerAutoCloseCountdown } from '../../../src/shared/worker-auto-close'
+import { formatWorkerAutoCloseCountdown } from '../../../src/shared/orchestration/workers/worker-auto-close'
 import { useMobileWorkerAutoClose, workerSubjectOf } from './mobile-worker-auto-close'
 import type { MobileSessionController } from './use-mobile-session-controller'
 

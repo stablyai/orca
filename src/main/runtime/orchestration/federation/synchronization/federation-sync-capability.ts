@@ -5,9 +5,9 @@ import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../shared/structured-worker-handle'
+import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { FederationRuntime } from '../federation-runtime'
 import type { FederatedDispatchRow } from '../../db/orchestration-records'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'

@@ -5,9 +5,9 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/share
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../src/shared/worktree-execution-host-resolution'
-import type { AutomationDestination } from '../../../src/shared/automation-owner-precondition'
-import { buildWorkspaceRunContext } from '../../../src/shared/task-source-context'
+} from '../../../src/shared/execution-host/worktree-execution-host-resolution'
+import type { AutomationDestination } from '../../../src/shared/automations/ownership/automation-owner-precondition'
+import { buildWorkspaceRunContext } from '../../../src/shared/work-items/task-source-context'
 import {
   PREFLIGHT_HOST_QUALIFIED_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY

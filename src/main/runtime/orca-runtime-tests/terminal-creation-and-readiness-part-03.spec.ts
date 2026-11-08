@@ -4,7 +4,7 @@ import '../../preflight/agent-command-detection'
 import './runtime-test-module-registration.spec'
 import '../../../shared/constants'
 import { OrcaRuntimeService } from '../orca-runtime'
-import '../../../shared/setup-agent-sequencing'
+import '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { join } from 'node:path'
 
 import { randomUUID } from 'node:crypto'

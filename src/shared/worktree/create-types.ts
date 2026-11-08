@@ -2,7 +2,7 @@ import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceKey } from '../workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {

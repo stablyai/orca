@@ -3,7 +3,7 @@ import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 
 export function bindTaskPageJiraItemSourceContext(args: {
   issue: JiraIssue

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,

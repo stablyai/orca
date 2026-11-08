@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/ag
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import { getDefaultSettings } from '../../../shared/constants'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
 import type * as paneSelectionLane from './codex-pane-selection-lane'

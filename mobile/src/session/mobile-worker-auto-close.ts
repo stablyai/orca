@@ -8,7 +8,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useOptionalHostProtocolGates } from '../components/host-protocol-gates-context'
-import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../src/shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../src/shared/orchestration/orchestration-runtime-capabilities'
 import {
   pollWorkerAutoClose,
   publishWorkerAutoClose,
@@ -16,7 +16,7 @@ import {
   readWorkerAutoCloseReply,
   subscribeWorkerAutoClose,
   type WorkerAutoCloseState
-} from '../../../src/shared/worker-auto-close'
+} from '../../../src/shared/orchestration/workers/worker-auto-close'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 export type MobileWorkerSubject = { terminal: string } | { sessionId: string }

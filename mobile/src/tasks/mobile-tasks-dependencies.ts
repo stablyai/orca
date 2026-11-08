@@ -122,21 +122,7 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export type { MobileColorScheme } from '../theme/mobile-theme'
 export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-export {
-  CROSS_REPO_DISPLAY_LIMIT,
-  getTaskPagePerRepoLimit,
-  getWorkItemCountedTotalPages,
-  isGitHubWorkItemsSshRemoteRequiredError,
-  PER_REPO_FETCH_LIMIT,
-  sortWorkItemsByNumber,
-  taskPageToGitHubApiPage
-} from '../../../src/shared/work-items'
-export {
-  filterAvailableTaskProviders,
-  normalizeVisibleTaskProviders,
-  resolveVisibleTaskProvider
-} from '../../../src/shared/task-providers'
-export type { TaskProvider } from '../../../src/shared/task-providers'
+
 export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
