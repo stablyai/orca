@@ -67,6 +67,12 @@ jobs:
         with:
           node-version: '24.22.2'
           native-runtime: node
+      - name: Install Electron package binary for tests
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: config/.bun-version
+          no-cache: true
       - name: Print runtime and lsof versions
         run: |
           node --version
@@ -87,10 +93,17 @@ jobs:
               console.error('HOLDER_DESCRIPTORS', await sh('for pid in ' + diagnosticPids.replaceAll(',', ' ') + '; do echo PID=$pid; ls -l /proc/$pid/fd 2>/dev/null; done; true'))
           """
           p.write_text(s.replace(needle, extra + needle))
-      - name: Focused socket probe
-        continue-on-error: true
-        run: pnpm test src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts --maxWorkers=4 --reporter=verbose
       - name: Replay balanced shard with holder diagnostics
         env:
           ORCA_BALANCE_UNIT_SHARDS: '1'
-        run: node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --shard=1/12 --maxWorkers=4
+          NODE_COMPILE_CACHE: ${{ runner.temp }}/orca-node-compile-cache-${{ github.run_id }}-${{ github.run_attempt }}-24-1
+          ORCA_UNIT_PHASE_REPORT: 'ci-shards/unit-phases.json'
+        run: |
+          export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --shard=1/12 --maxWorkers=4 --silent=false
+      - name: Upload diagnostic shard evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: relay-holder-diagnostic-shard
+          path: ci-shards/
