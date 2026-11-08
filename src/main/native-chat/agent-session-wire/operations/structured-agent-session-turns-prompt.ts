@@ -135,10 +135,14 @@ export async function performPrompt(
       response,
       fence: ctx.fence,
       commit: async () => {
-        committed.item = await ctx.journal.appendItem(
-          identity,
-          { ...prompt, resolution },
-          { fence: ctx.fence, turnScope: work.turnScope() },
+        committed.item = await ctx.journal.mutatePrompt(
+          {
+            itemId: input.itemId,
+            expectedRevision: input.expectedRevision,
+            kind: input.kind,
+            resolution,
+            options: { fence: ctx.fence, turnScope: work.turnScope() }
+          },
           // Commit answer identity before telling the provider.
           ctx.operationReceipt
         )

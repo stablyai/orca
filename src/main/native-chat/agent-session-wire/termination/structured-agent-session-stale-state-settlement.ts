@@ -2,7 +2,6 @@ import { providerTimelineExecutionItems } from '../../agent-session-timeline/pro
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
-import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -62,23 +61,12 @@ export type StaleStructuredAgentSessionStateInput = {
 }
 
 export async function settleStaleStructuredAgentSessionState(
-  input: StaleStructuredAgentSessionStateInput
+  input: StaleStructuredAgentSessionStateInput & {
+    journal: Pick<AgentSessionJournal, 'settleStaleState'>
+  }
 ): Promise<number> {
-  const { journal } = input
-  // Terminal results make retries no-ops; failed transactions retain the same identity prefix.
-  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  let planned = 0
-  await journal.appendPlannedLifecycleBatch({
-    settlementId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:${input.fence}:${generation}`,
-    fence: input.fence,
-    recovered: true,
-    plan: () => {
-      const plan = planStaleStructuredAgentSessionState(input)
-      planned = plan.mutations.length
-      return plan
-    }
-  })
-  return planned
+  const { journal, ...facts } = input
+  return journal.settleStaleState(facts)
 }
 
 export function planStaleStructuredAgentSessionState(

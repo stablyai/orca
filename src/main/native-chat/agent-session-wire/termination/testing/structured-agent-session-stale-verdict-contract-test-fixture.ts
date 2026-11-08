@@ -1,3 +1,4 @@
+import { settleJournalStaleState } from '../../../agent-session-journal/writing/journal-generation-settlement'
 import { vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -103,5 +104,7 @@ export function journalWith(items: AgentJournalRenderItem[]) {
     inputOrder: { recoverableSubmissions: () => [] },
     appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
   } as unknown as AgentSessionJournal
+  journal.settleStaleState = (input) =>
+    settleJournalStaleState(journal, { appendPlanned: journal.appendPlannedLifecycleBatch }, input)
   return { journal, appendLifecycleBatch }
 }
