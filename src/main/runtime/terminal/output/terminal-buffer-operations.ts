@@ -15,9 +15,8 @@ import {
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { readReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import type { RuledScreen } from '../wait/screen-input-veto'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
@@ -282,29 +281,15 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       if (turn) {
         this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)
       } else if (agent) {
-        this.restoreReattachedReadyScreenStatus(ptyId, agent, isCurrent, true)
+        restoreFromReattachedReadyScreen({
+          agent,
+          readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+          readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          isCurrent,
+          applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
+        })
       }
     })
-  }
-
-  private restoreReattachedReadyScreenStatus(
-    ptyId: string,
-    agent: TerminalAgent,
-    isCurrent: () => boolean,
-    mayRecheck: boolean
-  ): void {
-    const screen = this.readCaughtUpRuledScreen(ptyId)
-    const ready = readReattachedReadyScreen(agent, screen, this.readOutputClockAt(ptyId))
-    if (ready?.kind === 'idle') {
-      this.applyReattachedAgentStatus(ptyId, 'idle')
-    } else if (ready?.kind === 'recheck' && mayRecheck) {
-      const recheck = (): void => {
-        if (isCurrent()) {
-          this.restoreReattachedReadyScreenStatus(ptyId, agent, isCurrent, false)
-        }
-      }
-      setTimeout(recheck, ready.afterMs).unref?.()
-    }
   }
 
   private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
