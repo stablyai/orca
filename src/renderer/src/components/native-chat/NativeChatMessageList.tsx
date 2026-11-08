@@ -4,12 +4,14 @@ import {
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
 } from './appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
+import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   nativeChatScrollsToLatestOnSend,
+  nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
@@ -166,7 +168,13 @@ export function NativeChatMessageList({
     journalSubmissions,
     latestTurn
   )
-  const { messages: rows, turnKeys, liveTurnKey } = turnRows
+  const { liveTurnKey } = turnRows
+  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
+  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
+  const { messages: rows, turnKeys } = useMemo(
+    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
+    [showCiResultLines, turnRows]
+  )
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
