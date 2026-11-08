@@ -1,6 +1,6 @@
 import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
-import { MobileSourceControlPanel } from '../../../../src/source-control/MobileSourceControlPanel'
+import { MobileSourceControlRoutePanel } from '../../../../src/source-control/MobileSourceControlRoutePanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-source-control-hub-tab'
 
@@ -16,7 +16,7 @@ export default withWorkspaceRoute(function MobileSourceControlScreen() {
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   return (
-    <MobileSourceControlPanel
+    <MobileSourceControlRoutePanel
       hostId={hostId}
       worktreeId={worktreeId}
       name={firstParam(params.name)}

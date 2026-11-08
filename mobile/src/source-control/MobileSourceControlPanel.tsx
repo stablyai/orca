@@ -51,6 +51,8 @@ export type MobileSourceControlPanelProps = {
   name?: string
   embedded?: boolean
   initialTab?: SourceControlHubRouteTab
+  /** Back for a hub shown over another screen in place; a route's Back pops it. */
+  onBack?: () => void
   onRequestClose?: () => void
 }
 
@@ -60,6 +62,7 @@ export function MobileSourceControlPanel({
   name = '',
   embedded = false,
   initialTab = 'changes',
+  onBack: onBackInPlace,
   onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
@@ -233,7 +236,7 @@ export function MobileSourceControlPanel({
   })
 
   // Embedded close dismisses the dock; route Back pops. The dock column owns safe-area chrome.
-  const onBack = () => router.back()
+  const onBack = onBackInPlace ?? (() => router.back())
   const onClose = onRequestClose ?? (() => router.back())
   const prWebUrl =
     activeTab === 'pr' &&

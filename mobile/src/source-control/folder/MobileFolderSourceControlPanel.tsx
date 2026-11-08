@@ -1,0 +1,158 @@
+import { useState } from 'react'
+import { ScrollView, View } from 'react-native'
+import { GitBranch } from 'lucide-react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { MobileStateView } from '../../components/MobileStateView'
+import { OptionPager, useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
+import { ListGroup } from '../../components/list/ListGroup'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useBackClaim } from '../../navigation/use-back-claim'
+import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
+import { WorkspaceExecutionScope } from '../../navigation/workspace-route'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import type { Worktree } from '../../worktree/workspace-list-types'
+import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
+import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
+import { styles as sourceControlStyles } from '../mobile-source-control-styles'
+import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
+import { useMobileFolderAttachedWorktrees } from './use-mobile-folder-attached-worktrees'
+
+type Props = {
+  hostId: string
+  folderWorktreeId: string
+  name: string
+  embedded: boolean
+  onRequestClose?: () => void
+}
+
+/** A folder workspace's Source Control: one row per attached worktree, each opening that worktree's own Source Control in place. */
+export function MobileFolderSourceControlPanel({
+  hostId,
+  folderWorktreeId,
+  name,
+  embedded,
+  onRequestClose
+}: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const router = useWorkspaceRouteHandoff()
+  const insets = useSafeAreaInsets()
+  const pager = useOptionPager<string>()
+  const [opened, setOpened] = useState<Worktree | null>(null)
+  const pageOpen = pager.page !== null
+  const { folder, worktrees, desktopCapabilities, refetch } = useMobileFolderAttachedWorktrees(
+    hostId,
+    folderWorktreeId,
+    !pageOpen
+  )
+  const [refreshers] = useState(() => new Set<() => void>())
+  const refresh = () => {
+    refetch()
+    for (const refreshNow of refreshers) {
+      refreshNow()
+    }
+  }
+  useBackClaim(
+    pageOpen
+      ? () => {
+          pager.close()
+          return true
+        }
+      : null
+  )
+  const open = (worktree: Worktree) => {
+    setOpened(worktree)
+    pager.open(getWorktreeRowIdentity(worktree))
+  }
+  const onClose = onRequestClose ?? (() => router.back())
+
+  const header = (
+    <MobileSourceControlHeader
+      embedded={embedded}
+      worktreeLabel={folder?.displayName || name}
+      ioBusy={false}
+      refreshing={false}
+      onBack={() => router.back()}
+      onClose={onClose}
+      onRefresh={refresh}
+    />
+  )
+  const body =
+    folder === undefined ? (
+      <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : worktrees.length === 0 ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.folder.emptyTitle', 'No attached worktrees yet')}
+        message={t(
+          'sourceControl.folder.emptyCopy',
+          'Worktrees created from this workspace will show up here.'
+        )}
+      />
+    ) : (
+      <ScrollView
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.lg }]}
+      >
+        <ListGroup>
+          {worktrees.map((worktree) => (
+            <MobileFolderWorktreeRow
+              key={getWorktreeRowIdentity(worktree)}
+              hostId={hostId}
+              desktopCapabilities={desktopCapabilities}
+              worktree={worktree}
+              subscribed={!pageOpen}
+              refreshers={refreshers}
+              onOpen={() => open(worktree)}
+            />
+          ))}
+        </ListGroup>
+      </ScrollView>
+    )
+  const main = (
+    <View style={sourceControlStyles.container}>
+      {embedded ? (
+        <View style={sourceControlStyles.header}>{header}</View>
+      ) : (
+        <SafeAreaView style={sourceControlStyles.header} edges={['top']}>
+          {header}
+        </SafeAreaView>
+      )}
+      {body}
+    </View>
+  )
+  return (
+    <OptionPager
+      fill
+      pager={pager}
+      main={main}
+      page={
+        pageOpen && opened ? (
+          // The worktree's own Source Control, on its own server when the desktop relays one.
+          <WorkspaceExecutionScope
+            hostId={hostId}
+            executionHost={opened.hostId?.startsWith('runtime:') ? opened.hostId : undefined}
+          >
+            <MobileSourceControlPanel
+              key={getWorktreeRowIdentity(opened)}
+              hostId={hostId}
+              worktreeId={opened.worktreeId}
+              name={opened.displayName || opened.repo}
+              embedded={embedded}
+              onBack={pager.close}
+              onRequestClose={onRequestClose}
+            />
+          </WorkspaceExecutionScope>
+        ) : null
+      }
+    />
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  list: {
+    padding: spacing.lg
+  }
+}))

@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { firstParam } from './route-param-reader'
 import { WorkspaceExecutionHostContext } from './workspace-execution-host'
 import {
@@ -22,14 +22,37 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
     hostId?: string | string[]
     executionHost?: string | string[]
   }>()
-  const hostId = firstParam(params.hostId)
-  const executionHost = normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined
+  return (
+    <WorkspaceExecutionScope
+      hostId={firstParam(params.hostId)}
+      executionHost={normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined}
+    >
+      {children}
+    </WorkspaceExecutionScope>
+  )
+}
+
+/** A route's execution scope for one workspace; screens that show another workspace in place nest their own. */
+export function WorkspaceExecutionScope({
+  hostId,
+  executionHost,
+  children
+}: {
+  hostId: string
+  executionHost: ExecutionHostId | undefined
+  children: ReactNode
+}) {
   const { client, state } = useHostClient(hostId)
   const desktopGates = useOptionalHostProtocolGates()
+  // Nested in a server's scope, the gates in context are that server's, not the desktop's.
+  const desktopCapabilities =
+    useContext(WorkspaceServerContext)?.desktopCapabilities ??
+    desktopGates?.hostCapabilities ??
+    NO_CAPABILITIES
   const { routeHost, server } = useWorkspaceServer({
     client,
     connState: state,
-    desktopCapabilities: desktopGates?.hostCapabilities ?? NO_CAPABILITIES,
+    desktopCapabilities,
     executionHost
   })
   // Settled desktop status cannot become reachable by keeping this spinner open.

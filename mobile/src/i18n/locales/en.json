@@ -3580,6 +3580,10 @@
       "unavailableTitle": "Source Control Unavailable",
       "loading": "Loading changes…"
     },
+    "folder": {
+      "emptyTitle": "No attached worktrees yet",
+      "emptyCopy": "Worktrees created from this workspace will show up here."
+    },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
       "stagingChanges": "Staging changes...",
