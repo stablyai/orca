@@ -6100,7 +6100,7 @@
       "src/renderer/src/components/terminal-pane/provider-notices/codex-backfill/codex-backfill-error-detector.test.ts": 26,
       "src/renderer/src/components/terminal-pane/account-restart/detached/codex-detached-pane-restart.test.ts": 2270,
       "src/renderer/src/components/terminal-pane/provider-notices/codex-server-isolation/codex-shared-server-banner.test.tsx": 2766,
-      "src/renderer/src/components/terminal-pane/provider-notices/codex-presence/codex-terminal-presence.test.ts": 76,
+      "src/renderer/src/components/terminal-pane/provider-notices/agent-presence/agent-terminal-presence.test.ts": 76,
       "src/renderer/src/components/terminal-pane/pty-connection/output/deferred-reattach-live-data-queue.test.ts": 184,
       "src/renderer/src/components/terminal-pane/layout/split/deferred-split-pane-handoff.test.ts": 78,
       "src/renderer/src/components/terminal-pane/viewport/desktop-fit-fallback.test.ts": 92,

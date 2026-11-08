@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { Page } from '@playwright/test'
+import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -90,7 +90,8 @@ async function startClaude(page: Page, ptyId: string, workDir: string): Promise<
 
 async function exitClaude(page: Page, ptyId: string): Promise<void> {
   await sendToTerminal(page, ptyId, '/exit')
-  await page.waitForTimeout(500)
+  // Enter must land after the command menu picked /exit, or Claude submits a prompt.
+  await expect.poll(() => terminalText(page), { timeout: 10_000 }).toContain('Exit the CLI')
   await sendToTerminal(page, ptyId, '\r')
   // Back at the shell prompt.
   await expect
@@ -100,29 +101,45 @@ async function exitClaude(page: Page, ptyId: string): Promise<void> {
     .toMatch(/[$%#]$/)
 }
 
-test('Claude Code follows the Orca terminal theme live and restores its own theme', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(6 * 60_000)
+type Journey = {
+  home: string
+  workDir: string
+  ptyId: string
+  readTheme: () => unknown
+  readThemeFile: () => string
+  updateSettings: (updates: Record<string, unknown>) => Promise<unknown>
+  shot: (name: string) => Promise<unknown>
+  windowShot: (name: string) => Promise<unknown>
+}
+
+/** An existing profile (the e2e fixture seeds one) whose Claude Code uses its own light theme. */
+async function startJourney(
+  electronApp: ElectronApplication,
+  orcaPage: Page,
+  testInfo: { outputPath: (name: string) => string },
+  appTheme: 'dark' | 'light'
+): Promise<Journey> {
   await waitForSessionReady(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
   const updateSettings = (updates: Record<string, unknown>) =>
     orcaPage.evaluate((next) => window.__store!.getState().updateSettings(next), updates)
-  const shot = (name: string) =>
-    orcaPage
-      .locator('.pane:visible .xterm-screen')
-      .first()
-      .screenshot({ path: testInfo.outputPath(`${name}.png`) })
-  await updateSettings({
+  const settings = () =>
+    orcaPage.evaluate(() => {
+      const { claudeCodeThemeSync, claudeCodeThemeSyncOffer } = window.__store!.getState().settings!
+      return { claudeCodeThemeSync, claudeCodeThemeSyncOffer }
+    })
+  // Existing profiles start with the sync off and an offer owed.
+  expect(await settings()).toEqual({
     claudeCodeThemeSync: false,
-    theme: 'dark',
+    claudeCodeThemeSyncOffer: 'pending'
+  })
+  await updateSettings({
+    theme: appTheme,
     terminalThemeDark: 'Tokyo Night',
     terminalThemeLight: 'Tokyo Night Light',
     terminalUseSeparateLightTheme: true
   })
-  // Claude Code reads the isolated home's config; give it a user-picked theme while the sync is off.
   const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
   const settingsPath = join(home, '.claude', 'settings.json')
   const workDir = join(home, 'claude-theme-work')
@@ -142,43 +159,62 @@ test('Claude Code follows the Orca terminal theme live and restores its own them
       return {}
     }
   }
-  const readTheme = () => readSettings().theme
-  // A launch-time takeover must be restored (its record gone) before the test sets the user's theme.
-  const recordPath = join(home, '.orca', 'claude-theme-sync.json')
-  const recordedDirs = () => {
+  writeFileSync(settingsPath, `${JSON.stringify({ ...readSettings(), theme: 'light' }, null, 2)}\n`)
+  const readThemeFile = () => {
     try {
-      return Object.keys(JSON.parse(readFileSync(recordPath, 'utf-8')))
+      return readFileSync(join(home, '.claude', 'themes', 'orca.json'), 'utf-8')
     } catch {
-      return []
+      return ''
     }
   }
-  await expect.poll(recordedDirs, { timeout: 30_000 }).toEqual([])
-  writeFileSync(settingsPath, `${JSON.stringify({ ...readSettings(), theme: 'light' }, null, 2)}\n`)
-  const ptyId = await discoverActivePtyId(orcaPage)
+  return {
+    home,
+    workDir,
+    ptyId: await discoverActivePtyId(orcaPage),
+    readTheme: () => readSettings().theme,
+    readThemeFile,
+    updateSettings,
+    shot: (name) =>
+      orcaPage
+        .locator('.pane:visible .xterm-screen')
+        .first()
+        .screenshot({ path: testInfo.outputPath(`${name}.png`) }),
+    windowShot: (name) => orcaPage.screenshot({ path: testInfo.outputPath(`${name}.png`) })
+  }
+}
 
-  // Off matches main: Claude keeps its own light theme on the dark terminal.
+const offerTitle = 'Match Claude Code to your Orca theme?'
+
+test('an existing user accepts the offer, then Claude Code follows the Orca theme live and restores', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  // Real Claude Code launches, three live switches and a restore, each allowed Orca's reload retries.
+  test.setTimeout(6 * 60_000)
+  const journey = await startJourney(electronApp, orcaPage, testInfo, 'dark')
+  const { ptyId, workDir, readTheme, readThemeFile, updateSettings, shot, windowShot } = journey
+
+  // Off matches main: Claude keeps its own light theme on the dark terminal, and Orca offers the sync once.
   await startClaude(orcaPage, ptyId, workDir)
   await expect
     .poll(() => promptBorderColor(orcaPage), { timeout: 15_000 })
     .toBe(CLAUDE_LIGHT_BORDER)
   await shot('before-dark')
+  const offer = orcaPage.locator('[data-sonner-toast]').filter({ hasText: offerTitle })
+  await expect(offer).toBeVisible()
+  await windowShot('offer-toast-dark')
+  await offer.getByRole('button', { name: 'Match Theme' }).click()
+  await expect.poll(readTheme, { timeout: 30_000 }).toBe('custom:orca')
+  await expect.poll(readThemeFile, { timeout: 30_000 }).toContain('"promptBorder": "#7aa2f7"')
   await exitClaude(orcaPage, ptyId)
 
-  await updateSettings({ claudeCodeThemeSync: true })
-  await expect.poll(readTheme, { timeout: 30_000 }).toBe('custom:orca')
-  const themeFile = join(home, '.claude', 'themes', 'orca.json')
-  const readThemeFile = () => {
-    try {
-      return readFileSync(themeFile, 'utf-8')
-    } catch {
-      return ''
-    }
-  }
-  await expect.poll(readThemeFile, { timeout: 30_000 }).toContain('"promptBorder": "#7aa2f7"')
-  await startClaude(orcaPage, ptyId, workDir)
   // The previous session's frames stay in scrollback; wait for the new session's border.
+  await startClaude(orcaPage, ptyId, workDir)
   await expect.poll(() => promptBorderColor(orcaPage), { timeout: 15_000 }).toBe(TOKYO_NIGHT_ACCENT)
   await shot('after-dark')
+  await expect(orcaPage.locator('[data-sonner-toast]').filter({ hasText: offerTitle })).toHaveCount(
+    0
+  )
 
   // The running session recolors without a restart.
   await updateSettings({ terminalThemeDark: 'Gruvbox Dark' })
@@ -197,16 +233,63 @@ test('Claude Code follows the Orca terminal theme live and restores its own them
   await orcaPage.getByPlaceholder('Search settings').fill('Match Claude Code')
   const toggle = orcaPage.getByRole('switch', { name: 'Match Claude Code to Terminal Theme' })
   await expect(toggle).toBeChecked()
-  await orcaPage.screenshot({ path: testInfo.outputPath('settings-toggle-on.png') })
+  await windowShot('settings-on-light')
   await toggle.click()
   await expect(toggle).not.toBeChecked()
+  await windowShot('settings-off-light')
   await expect.poll(readTheme, { timeout: 15_000 }).toBe('light')
   await orcaPage.evaluate(() => window.__store!.getState().closeSettingsPage())
   const restoreMs = await expectLiveSwitch(orcaPage, TOKYO_NIGHT_LIGHT_ACCENT, CLAUDE_LIGHT_BORDER)
   await shot('restored-light')
+
+  // The same switch in dark mode, off then on.
+  await updateSettings({ theme: 'dark' })
+  await orcaPage.evaluate(() => window.__store!.getState().openSettingsPage())
+  await orcaPage.getByPlaceholder('Search settings').fill('Match Claude Code')
+  await expect(toggle).not.toBeChecked()
+  await windowShot('settings-off-dark')
+  await toggle.click()
+  await expect(toggle).toBeChecked()
+  await expect.poll(readTheme, { timeout: 15_000 }).toBe('custom:orca')
+  await windowShot('settings-on-dark')
+  await orcaPage.evaluate(() => window.__store!.getState().closeSettingsPage())
   testInfo.annotations.push({
     type: 'live-switch-ms',
     description: JSON.stringify({ darkSwitchMs, lightSwitchMs, restoreMs })
   })
+  await exitClaude(orcaPage, ptyId)
+})
+
+test('an existing user who declines the offer keeps Claude Code as it was and is not asked again', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  // Two real Claude Code launches.
+  test.setTimeout(3 * 60_000)
+  const { ptyId, workDir, readTheme, shot, windowShot } = await startJourney(
+    electronApp,
+    orcaPage,
+    testInfo,
+    'light'
+  )
+  await startClaude(orcaPage, ptyId, workDir)
+  const offer = orcaPage.locator('[data-sonner-toast]').filter({ hasText: offerTitle })
+  await expect(offer).toBeVisible()
+  await windowShot('offer-toast-light')
+  await offer.getByRole('button', { name: 'Not Now' }).click()
+  await expect(offer).toHaveCount(0)
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(() => window.__store!.getState().settings!.claudeCodeThemeSyncOffer)
+    )
+    .toBe('settled')
+  await exitClaude(orcaPage, ptyId)
+  await startClaude(orcaPage, ptyId, workDir)
+  await expect
+    .poll(() => promptBorderColor(orcaPage), { timeout: 15_000 })
+    .toBe(CLAUDE_LIGHT_BORDER)
+  await shot('declined-light')
+  expect(readTheme()).toBe('light')
+  await expect(offer).toHaveCount(0)
   await exitClaude(orcaPage, ptyId)
 })

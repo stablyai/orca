@@ -14,7 +14,8 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+  /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
+  migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     // Secondary profiles start with only the install's telemetry consent, before their first load.
     const telemetryOnly =
       Object.keys(state).length === 1 &&
@@ -34,6 +35,20 @@ export class LoadedCohortMigrationOperations {
         settings: {
           ...state.settings,
           [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
+        }
+      }
+    }
+    if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
+      this.runtime.loadNeedsSave = true
+      // Why: existing users keep Claude Code's look until they accept the offer at their next Claude launch.
+      const offer = existingProfile && state.settings?.claudeCodeThemeSync === undefined
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          ...(offer
+            ? { claudeCodeThemeSync: false, claudeCodeThemeSyncOffer: 'pending' as const }
+            : { claudeCodeThemeSyncOffer: 'settled' as const })
         }
       }
     }

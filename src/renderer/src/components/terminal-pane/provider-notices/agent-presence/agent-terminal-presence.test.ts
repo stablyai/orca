@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { noticeTestStore } from '../codex-notice-test-harness'
-import { whenCodexTerminalAppears } from './codex-terminal-presence'
+import { whenAgentTerminalAppears } from './agent-terminal-presence'
 
 vi.mock('@/store/index', () => import('../codex-notice-test-harness'))
 
-describe('whenCodexTerminalAppears', () => {
+describe('whenAgentTerminalAppears', () => {
   beforeEach(() => {
     noticeTestStore.setState(
       { tabsByWorktree: {}, agentStatusByPaneKey: {}, paneForegroundAgentByPaneKey: {} },
@@ -21,7 +21,7 @@ describe('whenCodexTerminalAppears', () => {
     ]
   ])('calls back once for %s', (_name, patch) => {
     const onAppear = vi.fn()
-    whenCodexTerminalAppears(onAppear)
+    whenAgentTerminalAppears('codex', onAppear)
 
     noticeTestStore.setState(patch)
     noticeTestStore.setState({ tabsByWorktree: { 'wt-2': [{ launchAgent: 'codex' }] } })
@@ -31,7 +31,7 @@ describe('whenCodexTerminalAppears', () => {
 
   it('stops watching once unsubscribed', () => {
     const onAppear = vi.fn()
-    whenCodexTerminalAppears(onAppear)()
+    whenAgentTerminalAppears('codex', onAppear)()
     noticeTestStore.setState({ tabsByWorktree: { 'wt-1': [{ launchAgent: 'codex' }] } })
     expect(onAppear).not.toHaveBeenCalled()
   })

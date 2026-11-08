@@ -22304,6 +22304,14 @@
       "title": "Terminal text on Windows is now lighter",
       "okay": "Okay",
       "lighterText": "Lighter terminal text"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Match Claude Code to your Orca theme?",
+      "description": "Claude Code would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "accept": "Match Theme",
+      "accepted": "Theme sync is on",
+      "acceptedDescription": "Claude Code sessions use your Orca theme from their next start.",
+      "decline": "Not Now"
     }
   },
   "fileExplorer": {
