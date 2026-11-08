@@ -52,6 +52,20 @@ export function AgentLaunchSetupSubmenu({
       observer.disconnect()
     }
   }, [open])
+  const wasOpen = useRef(open)
+  useLayoutEffect(() => {
+    const closed = wasOpen.current && !open
+    wasOpen.current = open
+    const active = document.activeElement
+    // Why: a close the caller drives (hover grace, another row) unmounts a focused panel; keep typing in the caller's input.
+    if (
+      closed &&
+      returnFocus &&
+      (!active || active === document.body || content.current?.contains(active))
+    ) {
+      returnFocus()
+    }
+  }, [open, returnFocus])
   const segmentRelease = useRef(false)
   const focusSearch = () =>
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
