@@ -1,4 +1,5 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
+import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
@@ -16,8 +17,19 @@ import {
   windowSlotBytes
 } from './mobile-web-bundle-window-checks'
 
-// Limit concurrent windows across all assets to the host’s four slots; one reader per asset serializes large scripts.
+// The host admits four window reads per connection; one reader per asset would serialize large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
+// Shells on one host share its client, so their fetches share its slots; per-fetch limits got the second fetch refused.
+const clientReadSlots = new WeakMap<RpcClient, PrioritySemaphore>()
+
+function readSlotsOf(client: RpcClient): PrioritySemaphore {
+  let slots = clientReadSlots.get(client)
+  if (slots === undefined) {
+    slots = new PrioritySemaphore(MAX_CONCURRENT_WINDOW_READS)
+    clientReadSlots.set(client, slots)
+  }
+  return slots
+}
 
 // Time fetch-wide inactivity; a queued read on a slow moving link can exceed a per-request stall budget (#29697).
 export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
@@ -73,6 +85,7 @@ export async function fetchMobileWebBundle(args: {
   throwIfCallerAborted(args.signal)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
+  const slots = readSlotsOf(args.client)
   const candidates = new Set(
     args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
   )
@@ -165,12 +178,21 @@ export async function fetchMobileWebBundle(args: {
     const worker = async (): Promise<void> => {
       try {
         while (!stopped.signal.aborted) {
-          const read = queue.shift()
-          if (read === undefined) {
+          // Rejects only when this fetch stopped while waiting; the failure that stopped it is already reported.
+          const release = await slots.acquire(0, stopped.signal).catch(() => null)
+          if (release === null) {
             return
           }
-          throwIfCallerAborted(args.signal)
-          await readWindow(read)
+          try {
+            const read = queue.shift()
+            if (read === undefined) {
+              return
+            }
+            throwIfCallerAborted(args.signal)
+            await readWindow(read)
+          } finally {
+            release()
+          }
         }
       } catch (error) {
         // Stop sibling dispatch after failure so retained reads cannot consume the host slots needed by a retry.

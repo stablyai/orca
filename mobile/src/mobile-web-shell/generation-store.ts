@@ -1,15 +1,13 @@
-import {
-  MobileWebBundleManifestReadSchema,
-  type MobileWebBundleManifestRead
-} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
 } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
-import { createGenerationHostOrder, parseJson, withHostLast } from './generation-host-order'
+import { createGenerationHostOrder, withHostLast } from './generation-host-order'
 import { createDeferredCommits } from './generation-deferred-commits'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
+import { parseGenerationManifest, readWaitingStage } from './generation-manifest-read'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
@@ -54,10 +52,9 @@ export type GenerationStore = {
   deferCommit(staged: StagedGeneration): void
   // A mounted page reading this host's active build; release when it stops reading it.
   holdGeneration(hostKey: string): () => void
-  hasDeferredCommit(hostKey: string, buildId: string): boolean
+  // A release while this page fetches the build for a deferred commit; null when another page already fetched or fetches it.
+  claimUpdate(hostKey: string, buildId: string): (() => void) | null
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
-  // Once per store, which is once per launch: a later sweep would delete stages waiting to commit.
-  sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
@@ -148,7 +145,7 @@ export function createGenerationStore(options: {
         // Unreadable is not corrupt: preserve verified cache through transient I/O and let the caller redownload.
         return null
       }
-      const manifest = text === null ? null : parseManifest(text)
+      const manifest = text === null ? null : parseGenerationManifest(text)
       if (manifest !== null && manifest.buildId === only.name) {
         return { buildId: manifest.buildId, directory, manifest }
       }
@@ -287,13 +284,21 @@ export function createGenerationStore(options: {
     return reusable
   }
 
+  // Once per launch, before the first read so every reader sees a stage an earlier launch left; a later sweep would delete stages waiting to commit.
   async function sweep(): Promise<void> {
     if (swept) {
       return
     }
-    // Sweep every host’s tmp tree; interrupted downloads may belong to a host this launch never opens.
+    // Interrupted downloads may belong to a host this launch never opens, so visit every host's tmp tree.
     for (const host of await listHostDirectories()) {
-      await fs.delete(joinUri(fs.rootUri, host.name, STAGING_DIRECTORY_NAME))
+      const waiting = await readWaitingStage(fs, host.name, stagingRoot(host.name))
+      if (waiting === null) {
+        await fs.delete(stagingRoot(host.name))
+        continue
+      }
+      // Deferred commits live in memory and a page is often open when the app dies, so the next open commits the stage instead.
+      issuedHandles.add(waiting)
+      deferred.defer(waiting)
     }
     swept = true
   }
@@ -315,7 +320,7 @@ export function createGenerationStore(options: {
   }
 
   return {
-    readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
+    readActiveGeneration: (hostKey) => serialize(() => sweep().then(() => openActive(hostKey))),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
     stageGeneration: (hostKey, result, signal, reusable) =>
       serialize(() => stage(hostKey, result, signal, reusable)),
@@ -327,10 +332,9 @@ export function createGenerationStore(options: {
       }
     },
     holdGeneration: deferred.hold,
-    hasDeferredCommit: deferred.waits,
+    claimUpdate: deferred.claim,
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
-    sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
@@ -338,12 +342,6 @@ export function createGenerationStore(options: {
     forgetHostUpdateFailures: (hostId) =>
       serialize(() => forgetHostUpdateFailuresIn(fs, hostId)).catch(() => undefined)
   }
-}
-
-// Use the forward-compatible reader on disk too; newer desktop fields must not force redownload every launch.
-function parseManifest(text: string): MobileWebBundleManifestRead | null {
-  const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
-  return parsed.success ? parsed.data : null
 }
 
 function requireHostKey(hostKey: string): string {
