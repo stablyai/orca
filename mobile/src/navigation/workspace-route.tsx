@@ -43,16 +43,15 @@ export function WorkspaceExecutionScope({
   children: ReactNode
 }) {
   const { client, state } = useHostClient(hostId)
-  const desktopGates = useOptionalHostProtocolGates()
+  const outerServer = useContext(WorkspaceServerContext)
+  const contextGates = useOptionalHostProtocolGates()
   // Nested in a server's scope, the gates in context are that server's, not the desktop's.
-  const desktopCapabilities =
-    useContext(WorkspaceServerContext)?.desktopCapabilities ??
-    desktopGates?.hostCapabilities ??
-    NO_CAPABILITIES
+  const desktopGates = outerServer ? (outerServer.desktopGates ?? null) : contextGates
   const { routeHost, server } = useWorkspaceServer({
     client,
     connState: state,
-    desktopCapabilities,
+    desktopCapabilities: desktopGates?.hostCapabilities ?? NO_CAPABILITIES,
+    desktopGates,
     executionHost
   })
   // Settled desktop status cannot become reachable by keeping this spinner open.
@@ -64,9 +63,19 @@ export function WorkspaceExecutionScope({
       {children}
     </WorkspaceExecutionHostContext.Provider>
   )
-  return server ? (
-    <WorkspaceServerContext.Provider value={server}>
-      <HostStatusGatesContext.Provider value={server.gates}>
+  if (server) {
+    return (
+      <WorkspaceServerContext.Provider value={server}>
+        <HostStatusGatesContext.Provider value={server.gates}>
+          {screens}
+        </HostStatusGatesContext.Provider>
+      </WorkspaceServerContext.Provider>
+    )
+  }
+  // A desktop workspace shown inside a server's scope goes back to desktop routing and gates.
+  return outerServer ? (
+    <WorkspaceServerContext.Provider value={undefined}>
+      <HostStatusGatesContext.Provider value={desktopGates}>
         {screens}
       </HostStatusGatesContext.Provider>
     </WorkspaceServerContext.Provider>

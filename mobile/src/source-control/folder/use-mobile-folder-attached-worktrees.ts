@@ -2,6 +2,7 @@ import { useContext, useMemo } from 'react'
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
 import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import {
+  HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
   hostServerWorkspacesQuery,
   hostWorktreeCatalogQuery,
@@ -14,18 +15,26 @@ import { relaysToServers } from '../../worktree/execution-host-scoped-rpc-client
 import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
 import { WorkspaceServerContext } from '../../worktree/workspace-server-context'
 import type { Worktree } from '../../worktree/workspace-list-types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   findFolderWorkspaceRow,
   getFolderAttachedWorktrees
 } from './mobile-folder-attached-worktrees'
 
 const NO_CAPABILITIES: readonly string[] = []
+const NO_SERVER_HOSTS: readonly MobileRelayHost[] = []
 
 export type MobileFolderAttachedWorktrees = {
   /** Undefined until the host's list is read; null when the list has no such folder. */
   folder: Worktree | null | undefined
   worktrees: Worktree[]
   desktopCapabilities: readonly string[]
+  /** The servers the desktop relays to, for rows it can't open. */
+  serverHosts: readonly MobileRelayHost[]
+  connState: ConnectionState
+  /** The first catalog read's failure, while nothing is shown. */
+  loadError: Error | null
   refetch: () => void
 }
 
@@ -39,11 +48,11 @@ export function useMobileFolderAttachedWorktrees(
   const { client, state } = useHostClient(hostId)
   const executionHost = useWorkspaceExecutionHost()
   const server = useContext(WorkspaceServerContext)
-  const gates = useOptionalHostProtocolGates()
-  // In a server's scope the gates in context are the server's; the desktop's identity is not known there.
-  const desktopCapabilities =
-    server?.desktopCapabilities ?? gates?.hostCapabilities ?? NO_CAPABILITIES
-  const ownInstallationId = server ? undefined : gates?.hostInstallationId
+  const contextGates = useOptionalHostProtocolGates()
+  // In a server's scope the gates in context are the server's; the desktop's travel with it.
+  const desktopGates = server ? (server.desktopGates ?? null) : contextGates
+  const desktopCapabilities = desktopGates?.hostCapabilities ?? NO_CAPABILITIES
+  const ownInstallationId = desktopGates?.hostInstallationId
   const host = { hostId, client: state === 'connected' ? client : null }
   const catalog = useHostQuery(
     hostWorktreeCatalogQuery,
@@ -58,13 +67,15 @@ export function useMobileFolderAttachedWorktrees(
     host,
     HOST_LIST_TARGET,
     { deltas: desktopCapabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY) },
-    { enabled: relays, subscribed }
+    // Execution hosts' notices are not relayed, so server rows keep the host list's poll.
+    { enabled: relays, subscribed, refetchInterval: HOST_LIST_POLL_MS }
   )
   const ownRows = catalog.data?.worktrees
   const serverRows = servers.data?.worktrees
   const serverHosts = servers.data?.hosts
   const resolved = useMemo(() => {
-    if (!ownRows) {
+    // A server's folder is unknown, not missing, until its rows are read.
+    if (!ownRows || (executionHost && relays && !serverRows)) {
       return { folder: undefined, worktrees: [] }
     }
     const rows = [...ownRows, ...(serverRows ?? [])]
@@ -74,12 +85,15 @@ export function useMobileFolderAttachedWorktrees(
       folder: folder ?? null,
       worktrees: folder ? getFolderAttachedWorktrees(rows, folder, stores) : []
     }
-  }, [ownRows, serverRows, serverHosts, folderWorktreeId, executionHost, ownInstallationId])
+  }, [ownRows, serverRows, serverHosts, folderWorktreeId, executionHost, ownInstallationId, relays])
   const refetchCatalog = catalog.refetch
   const refetchServers = servers.refetch
   return {
     ...resolved,
     desktopCapabilities,
+    serverHosts: serverHosts ?? NO_SERVER_HOSTS,
+    connState: state,
+    loadError: ownRows ? null : catalog.error,
     refetch: () => {
       void refetchCatalog()
       if (relays) {

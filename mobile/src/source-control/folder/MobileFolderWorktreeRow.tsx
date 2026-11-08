@@ -1,22 +1,18 @@
-import { useEffect } from 'react'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { ListRow } from '../../components/list/ListGroup'
-import { useHostQuery } from '../../query/host-query'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
-import {
-  scopeRpcClientToExecutionHost,
-  workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+import { workspaceRouteExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
 import type { Worktree } from '../../worktree/workspace-list-types'
-import { gitStatusQuery } from '../mobile-git-status-query'
 import { formatBranchLabel } from '../mobile-source-control-screen-state'
-
-const NO_INPUT = {}
+import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
 type Props = {
   hostId: string
   /** The paired desktop's, which decide whether it relays to the row's server. */
   desktopCapabilities: readonly string[]
   worktree: Worktree
+  /** The desktop relays to the row's server but can't reach it (e.g. it needs an update). */
+  unreachable: boolean
   subscribed: boolean
   refreshers: Set<() => void>
   onOpen: () => void
@@ -27,37 +23,31 @@ export function MobileFolderWorktreeRow({
   hostId,
   desktopCapabilities,
   worktree,
+  unreachable,
   subscribed,
   refreshers,
   onOpen
 }: Props) {
+  const t = useMobileTranslation()
   const { client, state } = useHostClient(hostId)
   // A relayed server's row reads through the desktop, as its own Source Control does.
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, worktree.hostId)
-  const rowClient =
-    client && state === 'connected' && routeHost !== null
-      ? routeHost
-        ? scopeRpcClientToExecutionHost(client, routeHost)
-        : client
-      : null
-  const status = useHostQuery(
-    gitStatusQuery,
-    { hostId, client: rowClient },
-    { exec: routeHost ?? 'local', worktree: worktree.worktreeId },
-    NO_INPUT,
-    { subscribed }
-  )
-  const refetch = status.refetch
-  useEffect(() => {
-    const refresh = () => void refetch()
-    refreshers.add(refresh)
-    return () => {
-      refreshers.delete(refresh)
-    }
-  }, [refetch, refreshers])
+  const openable = routeHost !== null && !unreachable
+  const status = useFolderWorktreeStatus({
+    hostId,
+    client: state === 'connected' && openable ? client : null,
+    routeHost: routeHost ?? undefined,
+    worktreeId: worktree.worktreeId,
+    subscribed,
+    refreshers
+  })
 
   const read = status.data?.kind === 'ready' ? status.data.status : undefined
-  const branch = read ? formatBranchLabel(read.branch, read.head) : worktree.branch
+  // A failed or unsupported read must not look like a clean worktree.
+  const unread = status.data?.kind === 'unavailable' || (!read && status.error !== null)
+  const branch = read
+    ? formatBranchLabel(read.branch, read.head)
+    : worktree.branch.replace(/^refs\/heads\//, '')
   const ahead = read?.upstreamStatus?.ahead ?? 0
   const behind = read?.upstreamStatus?.behind ?? 0
   const changeCount = read?.entries.length ?? 0
@@ -74,8 +64,15 @@ export function MobileFolderWorktreeRow({
     <ListRow
       title={worktree.repo}
       subtitle={subtitle}
-      value={changeCount > 0 ? String(changeCount) : undefined}
-      navigates
+      value={
+        !openable || unread
+          ? t('sourceControl.folder.statusUnavailable', 'Unavailable')
+          : changeCount > 0
+            ? String(changeCount)
+            : undefined
+      }
+      navigates={openable}
+      disabled={!openable}
       onPress={onOpen}
     />
   )

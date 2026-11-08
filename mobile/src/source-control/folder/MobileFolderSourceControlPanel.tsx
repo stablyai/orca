@@ -1,8 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { ScrollView, View } from 'react-native'
 import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { MobileStateView } from '../../components/MobileStateView'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../../components/MobileStateView'
+import { connectionRetryAction } from '../../transport/connection/connection-retry-action'
+import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { OptionPager, useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -43,11 +50,18 @@ export function MobileFolderSourceControlPanel({
   const pager = useOptionPager<string>()
   const [opened, setOpened] = useState<Worktree | null>(null)
   const pageOpen = pager.page !== null
-  const { folder, worktrees, desktopCapabilities, refetch } = useMobileFolderAttachedWorktrees(
-    hostId,
-    folderWorktreeId,
-    !pageOpen
+  // A covered screen stops observing, as the single-worktree screen does, and so does the list under an open child.
+  const [focused, setFocused] = useState(true)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      return () => setFocused(false)
+    }, [])
   )
+  const observing = focused && !pageOpen
+  const { folder, worktrees, desktopCapabilities, serverHosts, connState, loadError, refetch } =
+    useMobileFolderAttachedWorktrees(hostId, folderWorktreeId, observing)
+  const forceReconnect = useForceReconnect()
   const [refreshers] = useState(() => new Set<() => void>())
   const refresh = () => {
     refetch()
@@ -80,9 +94,24 @@ export function MobileFolderSourceControlPanel({
       onRefresh={refresh}
     />
   )
+  const retry = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: refetch
+  })
   const body =
-    folder === undefined ? (
+    folder === undefined && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={retry} />
+    ) : folder === undefined && loadError ? (
+      <MobileLoadErrorState error={loadError} onRetry={retry} />
+    ) : folder === undefined ? (
       <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : folder === null ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
+      />
     ) : worktrees.length === 0 ? (
       <MobileStateView
         icon={GitBranch}
@@ -103,7 +132,11 @@ export function MobileFolderSourceControlPanel({
               hostId={hostId}
               desktopCapabilities={desktopCapabilities}
               worktree={worktree}
-              subscribed={!pageOpen}
+              unreachable={
+                serverHosts.find((server) => server.hostId === worktree.hostId)?.relay ===
+                'update-needed'
+              }
+              subscribed={observing}
               refreshers={refreshers}
               onOpen={() => open(worktree)}
             />
@@ -141,7 +174,10 @@ export function MobileFolderSourceControlPanel({
               worktreeId={opened.worktreeId}
               name={opened.displayName || opened.repo}
               embedded={embedded}
-              onBack={pager.close}
+              backInPlace={{
+                onPress: pager.close,
+                label: t('sourceControl.folder.backToFolder', 'Back to folder')
+              }}
               onRequestClose={onRequestClose}
             />
           </WorkspaceExecutionScope>

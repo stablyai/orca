@@ -28,7 +28,7 @@ const folder = worktree({
   worktreeId: 'folder:f-1',
   repoId: 'folder-project:group-1'
 })
-const attachedTo = (worktreeId: string) => ({
+const attachedTo = (worktreeId: `folder:${string}`) => ({
   workspaceLineage: { parentWorkspaceKey: worktreeId, parentInstanceId: 'f-1' }
 })
 
