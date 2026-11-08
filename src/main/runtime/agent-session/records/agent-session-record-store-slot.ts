@@ -5,8 +5,8 @@ import { existsSync } from 'node:fs'
 import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import { openStructuredAgentSessionJournalDatabase } from '../structured-agent-session-journal-open'
+import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export type AgentSessionRecordStoreLocation = {
@@ -14,10 +14,13 @@ export type AgentSessionRecordStoreLocation = {
   hostId: string
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
-}
+} & Pick<
+  Parameters<typeof openStructuredAgentSessionSqlJournalDatabase>[0],
+  'writerPath' | 'readerPath'
+>
 
 export type OpenedAgentSessionRecordStore = {
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   store: AgentSessionRecordStore
 }
 
@@ -31,11 +34,11 @@ type RecordStoreSlot = {
 }
 
 let opening: RecordStoreSlot | null = null
-const pendingDatabaseClose = new Set<JournalHostDatabase>()
+const pendingDatabaseClose = new Set<JournalSqlDatabase>()
 
 /** Keep failed standalone/open-failure closes owned until a later stop or open retries them. */
 export async function closeAgentSessionRecordStoreDatabase(
-  database?: JournalHostDatabase
+  database?: JournalSqlDatabase
 ): Promise<void> {
   if (database) {
     pendingDatabaseClose.add(database)
@@ -92,12 +95,16 @@ async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
   await closeAgentSessionRecordStoreDatabase()
-  const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
+  const { journalDatabase, records } = await openStructuredAgentSessionSqlJournalDatabase({
+    ...location,
+    closeFailedOpen: closeAgentSessionRecordStoreDatabase
+  })
   try {
     return {
       journalDatabase,
       store: AgentSessionRecordStore.open({
         journalDatabase,
+        records,
         hostId: location.hostId,
         legacySessionTabIds: location.legacySessionTabIds
       })

@@ -1,4 +1,3 @@
-import { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { journalOpenRefusalError } from '../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { recordStructuredAgentSessionHostInstallRefusal } from './structured-agent-session-host-refusal'
@@ -22,30 +21,14 @@ function logOpenFailureOnce(logger: StructuredAgentSessionLogger, error: unknown
   })
 }
 
-/** Record the journal refusal for the gate and throw; the next install retries. */
-export function openStructuredAgentSessionJournalDatabase(args: {
-  stateDirectory: string
-  logger: StructuredAgentSessionLogger
-}): JournalHostDatabase {
-  try {
-    const opened = JournalHostDatabase.open(args.stateDirectory)
-    recordStructuredAgentSessionHostInstallRefusal(null)
-    lastLoggedOpenFailure = null
-    return opened
-  } catch (error) {
-    logOpenFailureOnce(args.logger, error)
-    // Refusal must leave the database file intact.
-    const refusal = journalOpenRefusalError(error)
-    recordStructuredAgentSessionHostInstallRefusal(refusal)
-    throw refusal
-  }
-}
-
-/** The worker-owned startup path; installation attaches activity before starting maintenance. */
+/** Record the journal refusal for the gate and throw; the next install retries.
+ *  Installation attaches activity before starting maintenance.
+ *  A load failure closes the opened owner through `closeFailedOpen` when one retains failed closes. */
 export async function openStructuredAgentSessionSqlJournalDatabase(
   args: {
     stateDirectory: string
     logger: StructuredAgentSessionLogger
+    closeFailedOpen?: (database: JournalSqlDatabase) => Promise<void>
   } & Pick<Parameters<typeof JournalSqlDatabase.open>[1], 'writerPath' | 'readerPath'>
 ) {
   let journalDatabase: JournalSqlDatabase | undefined
@@ -65,10 +48,12 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
     lastLoggedOpenFailure = null
     return { journalDatabase, records }
   } catch (error) {
-    await journalDatabase?.close()
     logOpenFailureOnce(args.logger, error)
     const refusal = journalOpenRefusalError(error)
     recordStructuredAgentSessionHostInstallRefusal(refusal)
+    if (journalDatabase) {
+      await (args.closeFailedOpen ?? ((database) => database.close()))(journalDatabase)
+    }
     throw refusal
   }
 }

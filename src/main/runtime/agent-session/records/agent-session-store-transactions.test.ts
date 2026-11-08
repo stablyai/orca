@@ -4,14 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { composeJournalOperationReceipts } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -25,7 +24,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -82,24 +81,6 @@ async function liveChat(
   })
 }
 
-describe('writing a transaction', () => {
-  // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
-  it('runs a store call made inside an open journal transaction after that transaction', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    let pending: Promise<unknown> | null = null
-
-    openTestJournalHostDatabase(root).transaction(() => {
-      pending = store.setConversationName('chat-a-0001', 'renamed')
-    })
-
-    await expect(pending).resolves.toMatchObject({ conversationName: 'renamed' })
-    expect((await readPersistedTestAgentSessionStore(root)).records['chat-a-0001']).toMatchObject({
-      conversationName: 'renamed'
-    })
-  })
-})
-
 describe('a receipt', () => {
   const operationId = `${NOW}-${'7'.repeat(32)}`
   const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
@@ -141,12 +122,13 @@ describe('a receipt', () => {
       ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
 
-    expect(() =>
-      openTestJournalHostDatabase(root).transaction((db) => {
-        receipt.write(db)
-        throw new Error('the journal row was refused')
-      })
-    ).toThrow('the journal row was refused')
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_record BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'the write was refused'); END"
+      )
+    )
+    await expect(store.commitOperationReceipt(receipt)).rejects.toThrow('the write was refused')
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER refuse_record'))
 
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
       insert ? undefined : 'pending'
@@ -220,5 +202,31 @@ describe('a receipt', () => {
       usageLimitContinueCancel: cancel
     })
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('succeeded')
+  })
+  it('commits receipts co-staged in one writer command, the later on the earlier draft', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
+    }
+    const composed = composeJournalOperationReceipts(
+      store.operationOutcomeReceipt({
+        callerKey: 'client-1',
+        operationId,
+        outcome,
+        record: change
+      }),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
+    )
+    const staged = await composed.stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    staged.settle(await database.effects(staged.effects))
+    const both = { usageLimitContinueCancel: cancel, forkedFrom }
+    expect(store.getRecord('chat-a-0001')).toMatchObject(both)
+    expect((await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')).toMatchObject(
+      both
+    )
+    expect(await persistedStatus()).toBe('succeeded')
   })
 })
