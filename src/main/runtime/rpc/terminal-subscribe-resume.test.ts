@@ -183,6 +183,22 @@ describe('terminal.subscribe resume', () => {
     await second.stop()
   })
 
+  it('sends a snapshot after a coverage reset while the stream was live, as on a clear', async () => {
+    const host = createHost()
+    const first = await host.subscribe()
+    host.output('hello ')
+    await first.receives('hello ')
+    host.resetCoverage()
+    host.output('after')
+    await first.receives('hello after')
+    await first.stop()
+
+    const next = await host.subscribe({ streamToken: first.subscribed.streamToken, units: 11 })
+    expect(next.subscribed.resumed).toBeUndefined()
+    expect(next.snapshotKinds()).toEqual(['scrollback'])
+    await next.stop()
+  })
+
   it.each([
     [
       'a reused token',
