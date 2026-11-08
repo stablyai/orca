@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { UsageLimitAccountReading } from '../../../rate-limits/usage-limit-account-reading'
 import { StructuredAgentSessionUsageLimitContinue } from './structured-agent-session-usage-limit-continue'
+import { hostTestRestingOptionsRecord } from '../host/testing/structured-agent-session-host-test-data'
 
 const MINUTE = 60_000
 const ENDED = 1_000_000
@@ -19,14 +20,10 @@ function createRig(ids: string[]) {
   )
   const sent: string[] = []
   let refreshes = 0
-  const record = {
-    provider: 'claude',
-    location: { executionHostId: 'host', workspaceId: 'ws' },
-    lease: { runtimeFence: 1 }
-  }
+  const record = { ...hostTestRestingOptionsRecord(), provider: 'claude' }
   const scheduler = new StructuredAgentSessionUsageLimitContinue({
     host: {
-      logger: { warn: () => {} } as never,
+      logger: { warn: () => {}, error: () => {} },
       usageLimitAutoContinue: {
         isEnabled: () => true,
         subscribe: () => () => {},
@@ -38,10 +35,10 @@ function createRig(ids: string[]) {
       },
       store: {
         listVisibleSessionIds: () => ids,
-        getRecord: () => record as never,
-        hostId: 'host',
+        getRecord: () => record,
+        hostId: record.location.executionHostId,
         isSessionTabVisible: () => true,
-        cancelUsageLimitContinue: async () => record as never
+        cancelUsageLimitContinue: async () => record
       }
     },
     sessions: new Map(ids.map((id) => [id, {}])),
@@ -53,6 +50,7 @@ function createRig(ids: string[]) {
       sent.push(id)
       // A sent continuation leaves no cut until its turn ends.
       cuts.set(id, null)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scheduler reads only `ok` from a successful send.
       return { ok: true } as never
     },
     publish: () => {},
