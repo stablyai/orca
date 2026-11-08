@@ -38,6 +38,8 @@ type Slot = {
   edits: AutomationDraftEdits | null
   // A drop before the row was read: the stored copy is what was dropped, so it never comes back.
   dropped: boolean
+  // Dropped since the editor opened: that editor's later typing is not saved (its automation may exist now).
+  closed: boolean
   // The open editor, told whenever a read (the first or a retried one) brings saved edits.
   onRestore: ((edits: AutomationDraftEdits) => void) | null
   row: DurableDraftRow
@@ -84,6 +86,7 @@ function slotFor(key: string): Slot {
     const created: Slot = {
       edits: null,
       dropped: false,
+      closed: false,
       onRestore: null,
       row: durableDraftRow(key, {
         backend: () => pageDraftRowBackend(key),
@@ -111,12 +114,13 @@ export function readAutomationEditorDraft(key: string): AutomationDraftEdits | n
   return slot.row.state() === 'loaded' ? slot.edits : null
 }
 
-/** Reads the row if it hasn't been, and hands saved edits to `onRestore` when a read brings them. */
+/** Opens the row for an editor: reads it if it hasn't been, and hands saved edits to `onRestore`. */
 export function watchAutomationEditorDraft(
   key: string,
   onRestore: (edits: AutomationDraftEdits) => void
 ): () => void {
   const slot = slotFor(key)
+  slot.closed = false
   slot.onRestore = onRestore
   void slot.row.load()
   return () => {
@@ -128,6 +132,9 @@ export function watchAutomationEditorDraft(
 
 export function saveAutomationEditorDraft(key: string, edits: AutomationDraftEdits | null): void {
   const slot = slotFor(key)
+  if (slot.closed) {
+    return
+  }
   slot.edits = edits
   slot.row.save(edits ? 'deferred' : 'immediate')
 }
@@ -137,6 +144,7 @@ export function discardAutomationEditorDraft(key: string): void {
   const slot = slotFor(key)
   slot.dropped ||= slot.row.state() === 'pending'
   saveAutomationEditorDraft(key, null)
+  slot.closed = true
 }
 
 export function dropAutomationEditorDraft(executionHost?: string, automationId?: string): void {

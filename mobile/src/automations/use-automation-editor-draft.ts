@@ -22,23 +22,16 @@ export function useAutomationEditorDraft(
     () => initialDraft ?? { ...newAutomationDraft(current), ...saved }
   )
   const original = useRef(newAutomationDraft(current))
-  // Set once the edits were discarded, so nothing writes them back.
-  const retired = useRef(false)
 
   useEffect(() => {
-    if (initialDraft) {
-      return
-    }
     return watchAutomationEditorDraft(draftKey, (edits) => {
       restored.current = edits
       setDraft((form) => laySavedEdits(form, original.current, edits))
     })
-  }, [draftKey, initialDraft])
+  }, [draftKey])
 
   useEffect(() => {
-    if (!retired.current) {
-      saveAutomationEditorDraft(draftKey, automationDraftEdits(original.current, draft))
-    }
+    saveAutomationEditorDraft(draftKey, automationDraftEdits(original.current, draft))
   }, [draft, draftKey])
 
   return {
@@ -47,9 +40,6 @@ export function useAutomationEditorDraft(
     original,
     // The form rebuilt from the host's values, with the saved edits on top.
     withSavedEdits: (form: AutomationDraft): AutomationDraft => ({ ...form, ...restored.current }),
-    discard: () => {
-      retired.current = true
-      discardAutomationEditorDraft(draftKey)
-    }
+    discard: () => discardAutomationEditorDraft(draftKey)
   }
 }
