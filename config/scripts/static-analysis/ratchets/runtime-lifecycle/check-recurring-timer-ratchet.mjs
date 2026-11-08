@@ -48,7 +48,7 @@ function outerExpression(node) {
   return current
 }
 
-// Reads the timer value: not a write target, a `typeof` probe or a JSX tag name.
+// Reads the timer value: not a plain `=` target (compound assignments read it), a `typeof` probe or a JSX tag name.
 function isRuntimeRead(node) {
   const outer = outerExpression(node)
   const parent = outer.parent
@@ -56,8 +56,7 @@ function isRuntimeRead(node) {
     ts.isTypeOfExpression(parent) ||
     (ts.isBinaryExpression(parent) &&
       parent.left === outer &&
-      parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) ||
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) ||
     ((ts.isJsxOpeningElement(parent) ||
       ts.isJsxSelfClosingElement(parent) ||
       ts.isJsxClosingElement(parent)) &&
