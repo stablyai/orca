@@ -34,6 +34,7 @@ export async function codexForkHistory(input: {
   turnId?: string
   sessionId: string
   signal?: AbortSignal
+  inheritedOnly?: boolean
 }) {
   const identity = parseAgentJournalItemKey(input.selectedItemId)
   const tracker = createLegacyIdentityTracker({
@@ -44,10 +45,19 @@ export async function codexForkHistory(input: {
   const roots: Root[] = []
   let selected: Root | undefined
   let lineIndex = 0
+  let referenceBacked = false
   await readCodexLocalHistory({
     filePath: input.path,
     roots: input.roots,
-    visit: (line, fallbackId, _selected, recordId) => {
+    visitRecord: ({ record, selected }) => {
+      if (selected && record?.type === 'session_meta') {
+        referenceBacked = asRecord(record.payload)?.history_base != null
+      }
+    },
+    visit: (line, fallbackId, selectedSegment, recordId) => {
+      if (input.inheritedOnly && referenceBacked && selectedSegment) {
+        return
+      }
       input.signal?.throwIfAborted()
       const tracked = tracker.identify(line, lineIndex++)
       const raw = parseJsonObject(line)
@@ -182,6 +192,20 @@ export async function copyCodexConversation(
     { ...invocation, resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs() },
     { timeoutMs: 60_000, signal, experimentalApi: !lastTurnId && Boolean(beforeTurnId) },
     async (rpc, cwd) => {
+      const prefix = history.roots.slice(0, history.index + 1)
+      const sourceTurns = prefix.every((root) => root.id)
+        ? prefix.map((root) => ({ id: root.id! }))
+        : await turns(rpc, input.providerSessionId, history.roots.length)
+      if (
+        sourceTurns.length < prefix.length ||
+        prefix.some((root, index) => root.id && root.id !== sourceTurns[index]?.id)
+      ) {
+        return unavailable()
+      }
+      const coverage = {
+        unit: 'codex-turn' as const,
+        ids: sourceTurns.slice(0, prefix.length).map((turn) => turn.id)
+      }
       const fork = asRecord(
         await rpc.request('thread/fork', {
           threadId: input.providerSessionId,
@@ -195,19 +219,33 @@ export async function copyCodexConversation(
       if (typeof id !== 'string' || !id.trim() || id === input.providerSessionId) {
         return unavailable()
       }
-      if (!lastTurnId && !beforeTurnId) {
-        // Reconcile against the child's actual capture; a parent can grow while fork runs.
+      const captured = await codexForkHistory({
+        path: await find(id),
+        roots: stores,
+        selectedItemId: checkpoint.selectedItemId,
+        turnId: checkpoint.turnId,
+        sessionId: id,
+        inheritedOnly: true,
+        signal
+      })
+      if (
+        captured.index !== history.index ||
+        captured.roots.length < prefix.length ||
+        captured.roots
+          .slice(0, prefix.length)
+          .some((root, index) => root.id && root.id !== coverage.ids[index])
+      ) {
+        return unavailable()
+      }
+      if (lastTurnId || beforeTurnId) {
+        if (captured.roots.length !== prefix.length) {
+          return unavailable()
+        }
+      } else {
+        // Trim the actual capture; coverage identities were frozen on the source before fork.
         if (thread?.historyMode !== 'paginated') {
           return unavailable()
         }
-        const captured = await codexForkHistory({
-          path: await find(id),
-          roots: stores,
-          selectedItemId: checkpoint.selectedItemId,
-          turnId: checkpoint.turnId,
-          sessionId: id,
-          signal
-        })
         const childTurns = await turns(rpc, id, captured.roots.length + 1)
         if (childTurns.length !== captured.roots.length) {
           return unavailable()
@@ -229,7 +267,7 @@ export async function copyCodexConversation(
           }
         }
       }
-      return { sessionId: id }
+      return { sessionId: id, coverage }
     }
   ).catch((error: unknown) => {
     if (error instanceof AgentConversationCopyError) {
