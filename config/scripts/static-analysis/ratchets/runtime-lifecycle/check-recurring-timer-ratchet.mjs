@@ -25,10 +25,7 @@ function isScannedPath(rel) {
   return /\.[cm]?[jt]sx?$/.test(rel) && !rel.endsWith('.d.ts') && !isTestOnlySourcePath(rel)
 }
 
-function isIntervalCallee(node) {
-  if (ts.isIdentifier(node)) {
-    return node.text === 'setInterval'
-  }
+function isHostIntervalCallee(node) {
   return (
     ts.isPropertyAccessExpression(node) &&
     node.name.text === 'setInterval' &&
@@ -37,29 +34,61 @@ function isIntervalCallee(node) {
   )
 }
 
+function isTimerModuleLoad(node) {
+  if (ts.isStringLiteral(node)) {
+    return TIMER_MODULES.includes(node.text)
+  }
+  return (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'require' &&
+    node.arguments.length > 0 &&
+    ts.isStringLiteral(node.arguments[0]) &&
+    TIMER_MODULES.includes(node.arguments[0].text)
+  )
+}
+
+// A local `setInterval` binding from node:timers (import or require destructuring).
+function bindsModuleSetInterval(node) {
+  if (ts.isImportSpecifier(node)) {
+    return (
+      node.name.text === 'setInterval' &&
+      isTimerModuleLoad(node.parent.parent.parent.moduleSpecifier)
+    )
+  }
+  if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && node.name.text === 'setInterval') {
+    const declaration = node.parent.parent
+    return (
+      ts.isVariableDeclaration(declaration) &&
+      !!declaration.initializer &&
+      isTimerModuleLoad(declaration.initializer)
+    )
+  }
+  return false
+}
+
 export function countRecurringTimers(rel, source) {
   if (!source.includes('setInterval')) {
     return 0
   }
   const file = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true)
-  // A module-imported setInterval is counted by the import collector; skip its bare calls here.
-  let importsByName = false
-  let count = 0
+  // Bare calls of a module-bound setInterval are already counted by the import collector.
+  let bindsModule = false
+  let bare = 0
+  let hosted = 0
   const visit = (node) => {
-    if (
-      ts.isImportSpecifier(node) &&
-      node.name.text === 'setInterval' &&
-      TIMER_MODULES.includes(node.parent.parent.parent.moduleSpecifier.text)
-    ) {
-      importsByName = true
-    }
-    if (ts.isCallExpression(node) && isIntervalCallee(node.expression)) {
-      count += 1
+    bindsModule ||= bindsModuleSetInterval(node)
+    if (ts.isCallExpression(node)) {
+      if (ts.isIdentifier(node.expression) && node.expression.text === 'setInterval') {
+        bare += 1
+      } else if (isHostIntervalCallee(node.expression)) {
+        hosted += 1
+      }
     }
     ts.forEachChild(node, visit)
   }
   visit(file)
-  return (importsByName ? 0 : count) + timerImports.collectUses(rel, source).count
+  return (bindsModule ? 0 : bare) + hosted + timerImports.collectUses(rel, source).count
 }
 
 export function collectRecurringTimerCounts(root = process.cwd()) {
