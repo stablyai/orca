@@ -92,6 +92,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         supersedesCleanly &&
         (serialized.alternateScreen !== true ||
           typeof serialized.seq !== 'number' ||
+          // A snapshot cut inside an escape would print the queued suffix as text.
+          Boolean(serialized.pendingEscapeTailAnsi) ||
           // The whole queue, so a marker split between covered and retained frames is still seen.
           !framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput))
       ) {
@@ -127,10 +129,14 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
-      const rate = linkEstimate.deliveryBytesPerMs()
-      // Snapshots bypass the ACK window, so cap superseding ones at half the measured link rate.
-      stream.ackSupersedeSnapshotNotBefore =
-        rate === null ? 0 : linkEstimate.now() + (2 * publication.bytes) / rate
+      if (linkEstimate.supersedesAltBacklog) {
+        const rate = linkEstimate.deliveryBytesPerMs()
+        // Snapshots bypass the ACK window, so cap superseding ones at half the measured link rate.
+        stream.ackSupersedeSnapshotNotBefore =
+          rate === null ? 0 : linkEstimate.now() + (2 * publication.bytes) / rate
+        // A snapshot can end inside an escape (pendingEscapeTailAnsi), so the sent tail is unknown until text follows.
+        stream.ackSentOutputTail = null
+      }
       if (typeof serialized.seq === 'number') {
         markYieldedQueriesDiscardedInFrames(stream, stream.ackPendingOutput.filter(isCovered))
         const retained = stream.ackPendingOutput.filter((chunk) => !isCovered(chunk))
@@ -145,8 +151,6 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         stream.ackRecoveryHistoryOwed = !carriesHistory
       }
       stream.ackPendingOutputOverflowed = false
-      // A snapshot can end inside an escape (pendingEscapeTailAnsi), so the sent tail is unknown until text follows.
-      stream.ackSentOutputTail = null
       replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
@@ -175,7 +179,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       void state.sendAckRecoverySnapshot(stream)
       return 0
     }
-    if (stream.ackRecoverySnapshotInFlight) {
+    if (linkEstimate.supersedesAltBacklog && stream.ackRecoverySnapshotInFlight) {
       // A superseding snapshot is serializing; its cutoff will drop the covered backlog.
       return 0
     }
@@ -233,7 +237,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (!stream.ackOutput || bytes <= 0) {
       return
     }
-    linkEstimate.noteAcknowledged(stream, creditAckWindow(state, stream, bytes))
+    const acknowledged = creditAckWindow(state, stream, bytes)
+    if (linkEstimate.enabled) {
+      linkEstimate.noteAcknowledged(stream, acknowledged)
+    }
     state.flushAllAckPendingOutput()
   }
 }

@@ -136,6 +136,7 @@ type HostConnection = {
     now: () => number
     deliveryBytesPerMs: () => null
     pacedWindowBytes: () => null
+    enabled: false
     supersedesAltBacklog: false
   }
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
@@ -339,6 +340,7 @@ async function publishHostRecovery(
       now: () => 0,
       deliveryBytesPerMs: () => null,
       pacedWindowBytes: () => null,
+      enabled: false,
       supersedesAltBacklog: false
     },
     sendFrame,

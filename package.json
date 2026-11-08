@@ -212,6 +212,7 @@
     "bench:renderer-quadratic-scans": "node config/scripts/performance/renderer-markdown/renderer-quadratic-scan-benchmark.mjs",
     "bench:session-write-hot-path": "node config/scripts/performance/session-transcripts/session-write-hot-path-benchmark.mjs",
     "bench:terminal-partial-escape-tail": "node config/scripts/performance/terminal-stream/terminal-partial-escape-tail-benchmark.mjs",
+    "bench:terminal-multiplex-ack-pacing": "node config/scripts/performance/terminal-stream/terminal-multiplex-ack-pacing-benchmark.mjs",
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/performance/source-control/worktree-refresh-churn-benchmark.mjs",
     "bench:cold-park-reveal": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-reveal-bench.mjs",
     "bench:cold-park-resource": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/terminal-cold-park-resource-bench.mjs",

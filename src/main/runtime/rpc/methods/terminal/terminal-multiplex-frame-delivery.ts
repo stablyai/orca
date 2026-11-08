@@ -21,6 +21,7 @@ import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { supersedableSentTail } from './terminal-multiplex-supersedable-frames'
 import {
+  isSentUnderPacedWindow,
   ackPendingOutputBudgetBytes,
   ackWindowAdmits,
   chargeAckWindow
@@ -132,10 +133,13 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       settleDeliveredYieldedQueries(stream, chunk.seq)
     }
     if (stream.ackOutput) {
-      state.linkEstimate.noteSent(stream, chunk.bytes.byteLength, {
-        backlogged: fromBacklog,
-        linkIdle: state.ackTotalInFlightBytes === 0
-      })
+      if (state.linkEstimate.enabled) {
+        state.linkEstimate.noteSent(stream, chunk.bytes.byteLength, {
+          backlogged: fromBacklog,
+          linkIdle: state.ackTotalInFlightBytes === 0,
+          paced: isSentUnderPacedWindow(state, stream)
+        })
+      }
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
       if (state.linkEstimate.supersedesAltBacklog) {
         stream.ackSentOutputTail = supersedableSentTail(stream.ackSentOutputTail, chunk)

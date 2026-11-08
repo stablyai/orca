@@ -54,6 +54,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         ackTotalInFlightBytes: 0,
         ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
         linkEstimate: new TerminalMultiplexLinkEstimate(),
+        ackTotalHoldbackBytes: 0,
         ackFlushCursorStreamId: null,
         resolveMultiplex,
         multiplexClosed,

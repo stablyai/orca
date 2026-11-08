@@ -10,6 +10,11 @@ const PACED_LINK_MIN_BASE_RTT_MS = 40
 const PACED_MIN_BACKLOGGED_SAMPLES = 16
 // Without fresh window-limited samples the estimate may describe an old link state, so fall back to legacy windows.
 const PACED_ESTIMATE_STALE_MS = 15_000
+// Paced RTT above twice what our own queue can add means the path changed; hold legacy windows while the base re-learns.
+const PACED_RTT_DIVERGENCE_FACTOR = 2
+const PACED_DIVERGENCE_HOLD_MS = 2 * ESTIMATE_WINDOW_MS
+// Probes drain our queue so each min-RTT window sees the path itself, not a base inflated by our own backlog.
+const PROBE_RTT_MAX_MS = 30_000
 const MAX_SEND_RECORDS_PER_STREAM = 1024
 
 type SendRecord = {
@@ -18,6 +23,7 @@ type SendRecord = {
   delivered: number
   deliveredAt: number
   backlogged: boolean
+  paced: boolean
 }
 
 type StreamSendLedger = {
@@ -27,40 +33,48 @@ type StreamSendLedger = {
   ackedOffset: number
 }
 
+// Opt-in until soaked on real high-latency links.
 export function isAdaptiveAckWindowEnabled(): boolean {
-  return process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW !== '0'
+  return process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW === '1'
 }
 
-/** Max over the last one-to-two windows of activity; idle time does not expire it. */
-class WindowedMax {
+/** Best sample over the last one-to-two windows of activity; idle time does not expire it. */
+class WindowedExtreme {
   private current: number | null = null
   private previous: number | null = null
   private startedAt = 0
+
+  constructor(private readonly isBetter: (a: number, b: number) => boolean) {}
 
   add(sample: number, now: number): void {
     if (this.current === null || now - this.startedAt >= ESTIMATE_WINDOW_MS) {
       this.previous = this.current
       this.current = sample
       this.startedAt = now
-    } else if (sample > this.current) {
+    } else if (this.isBetter(sample, this.current)) {
       this.current = sample
     }
   }
 
   value(): number | null {
-    return this.previous === null || this.current === null
-      ? (this.current ?? this.previous)
-      : Math.max(this.previous, this.current)
+    if (this.previous === null || this.current === null) {
+      return this.current ?? this.previous
+    }
+    return this.isBetter(this.previous, this.current) ? this.previous : this.current
   }
 }
 
 /** BBR-style link estimate from existing output ACK timing, so pacing needs no protocol change. */
 export class TerminalMultiplexLinkEstimate {
   private readonly ledgers = new WeakMap<TerminalMultiplexStream, StreamSendLedger>()
-  private readonly deliveryRate = new WindowedMax()
-  // A connection keeps one network path and floods never drain the queue, so only the lifetime minimum is base RTT.
-  private minRttMs: number | null = null
-  private readonly ackBurst = new WindowedMax()
+  private readonly deliveryRate = new WindowedExtreme((a, b) => a > b)
+  private readonly minRtt = new WindowedExtreme((a, b) => a < b)
+  private readonly ackBurst = new WindowedExtreme((a, b) => a > b)
+  // Only samples sent under pacing, whose queue our window bounds, can show the path itself changed.
+  private pacedSmoothedRttMs: number | null = null
+  private divergedAt = Number.NEGATIVE_INFINITY
+  private probeRttStartedAt: number | null = null
+  private lastProbeRttAt = Number.NEGATIVE_INFINITY
   private delivered = 0
   private deliveredAt = 0
   // Only a send that waited on the window measures the link; idle-trickle samples are lower bounds.
@@ -69,7 +83,7 @@ export class TerminalMultiplexLinkEstimate {
 
   constructor(
     readonly now: () => number = () => performance.now(),
-    private readonly enabled: boolean = isAdaptiveAckWindowEnabled(),
+    readonly enabled: boolean = isAdaptiveAckWindowEnabled(),
     // Read once per connection so per-frame and per-ACK paths skip process.env.
     readonly supersedesAltBacklog: boolean = enabled && isAltBacklogSupersedeEnabled()
   ) {}
@@ -77,7 +91,7 @@ export class TerminalMultiplexLinkEstimate {
   noteSent(
     stream: TerminalMultiplexStream,
     bytes: number,
-    options: { backlogged: boolean; linkIdle: boolean }
+    options: { backlogged: boolean; linkIdle: boolean; paced: boolean }
   ): void {
     if (!this.enabled) {
       return
@@ -98,6 +112,7 @@ export class TerminalMultiplexLinkEstimate {
       // Merging keeps the older send time, which only overstates RTT (a larger, safer window).
       last.endOffset = ledger.sentOffset
       last.backlogged &&= options.backlogged
+      last.paced &&= options.paced
       return
     }
     ledger.records.push({
@@ -105,7 +120,8 @@ export class TerminalMultiplexLinkEstimate {
       sentAt: now,
       delivered: this.delivered,
       deliveredAt: this.deliveredAt,
-      backlogged: options.backlogged
+      backlogged: options.backlogged,
+      paced: options.paced
     })
   }
 
@@ -134,10 +150,17 @@ export class TerminalMultiplexLinkEstimate {
     if (!acked) {
       return
     }
-    this.minRttMs = Math.min(
-      this.minRttMs ?? Number.POSITIVE_INFINITY,
-      Math.max(1, now - acked.sentAt)
-    )
+    const rtt = Math.max(1, now - acked.sentAt)
+    this.minRtt.add(rtt, now)
+    if (acked.paced) {
+      this.pacedSmoothedRttMs =
+        this.pacedSmoothedRttMs === null
+          ? rtt
+          : this.pacedSmoothedRttMs + (rtt - this.pacedSmoothedRttMs) / 8
+    }
+    if (this.probeRttStartedAt !== null && acked.sentAt >= this.probeRttStartedAt) {
+      this.probeRttStartedAt = null
+    }
     const interval = now - acked.deliveredAt
     if (interval < 1) {
       return
@@ -152,26 +175,46 @@ export class TerminalMultiplexLinkEstimate {
     }
   }
 
-  /** In-flight bytes a slow link needs to stay busy; null when unmeasured, stale, disabled, local, or fast. */
+  /** In-flight bytes a slow link needs to stay busy; null when unmeasured, stale, diverged, disabled, local, or fast. */
   pacedWindowBytes(): number | null {
     const rate = this.deliveryRate.value()
-    const rtt = this.minRttMs
+    const rtt = this.minRtt.value()
+    const now = this.now()
     if (
       !this.enabled ||
       this.backloggedSamples < PACED_MIN_BACKLOGGED_SAMPLES ||
-      this.isStale(this.now()) ||
+      this.isStale(now) ||
+      now - this.divergedAt < PACED_DIVERGENCE_HOLD_MS ||
       rate === null ||
       rtt === null ||
       rtt < PACED_LINK_MIN_BASE_RTT_MS ||
       rate >= PACED_LINK_MAX_BYTES_PER_MS
     ) {
+      this.probeRttStartedAt = null
       return null
     }
+    const burst = this.ackBurst.value() ?? 0
+    // Our window queues at most about 2 RTT plus a burst ahead of a sample.
+    const selfQueuedRtt = 3 * rtt + burst / rate
+    if ((this.pacedSmoothedRttMs ?? 0) > PACED_RTT_DIVERGENCE_FACTOR * selfQueuedRtt) {
+      this.divergedAt = now
+      this.pacedSmoothedRttMs = null
+      this.probeRttStartedAt = null
+      return null
+    }
+    if (this.probeRttStartedAt !== null && now - this.probeRttStartedAt > PROBE_RTT_MAX_MS) {
+      this.probeRttStartedAt = null
+    }
+    if (this.probeRttStartedAt === null && now - this.lastProbeRttAt > ESTIMATE_WINDOW_MS) {
+      this.probeRttStartedAt = now
+      this.lastProbeRttAt = now
+    }
+    if (this.probeRttStartedAt !== null) {
+      // Zero admits one chunk only once nothing is in flight, so the probe's sample carries no queue of ours.
+      return 0
+    }
     // Twice the BDP lets a faster link show itself; the ACK burst covers client-side ack batching.
-    return Math.max(
-      PACED_WINDOW_MIN_BYTES,
-      Math.ceil(2 * rate * rtt + (this.ackBurst.value() ?? 0))
-    )
+    return Math.max(PACED_WINDOW_MIN_BYTES, Math.ceil(2 * rate * rtt + burst))
   }
 
   private isStale(now: number): boolean {

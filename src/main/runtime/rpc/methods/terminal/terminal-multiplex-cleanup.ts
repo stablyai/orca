@@ -1,6 +1,6 @@
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import { answerUndeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
-import { releaseAckWindow } from './terminal-multiplex-ack-window'
+import { releaseAckPendingHoldback, releaseAckWindow } from './terminal-multiplex-ack-window'
 
 export function installMultiplexCleanup(state: TerminalMultiplexConnection): void {
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
@@ -12,6 +12,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.outputBatcher.flush()
     stream.outputBatcher.dispose()
     releaseAckWindow(state, stream)
+    releaseAckPendingHoldback(state, stream)
     stream.ackPendingOutput = []
     stream.ackPendingOutputBytes = 0
     stream.ackPendingOutputOverflowed = false

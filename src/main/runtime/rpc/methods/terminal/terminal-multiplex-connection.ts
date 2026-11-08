@@ -38,6 +38,8 @@ export type TerminalMultiplexConnectionBase = {
   ackTotalInFlightBytes: number
   ackTotalWindowBytes: number
   linkEstimate: TerminalMultiplexLinkEstimate
+  // Sum of streams' paced pending headroom, bounded by the connection window legacy would have used.
+  ackTotalHoldbackBytes: number
   ackFlushCursorStreamId: number | null
   resolveMultiplex: () => void
   multiplexClosed: Promise<void>
