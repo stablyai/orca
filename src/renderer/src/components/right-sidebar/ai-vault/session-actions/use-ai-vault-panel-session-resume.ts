@@ -4,6 +4,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
 import {
   resolveAiVaultHistorySessionResumeState,
   resolveAiVaultSessionResumeActions,
@@ -64,15 +65,18 @@ export function useAiVaultPanelSessionResume(args: {
     [getSessionRowResumeArgs]
   )
   // Chat resume must preserve the session’s workspace: Claude finds transcripts through launch-cwd-derived paths.
-  // Eligibility also reads host capabilities and agent lists from the store; this view changes with them.
+  // Eligibility reads launch-route store state plus host agent lists and capabilities kept outside the
+  // store; these two change with them, so memoized rows recompute it.
   const launchRoute = useAppStore(selectAgentLaunchRouteView)
+  const chatProgramFactsVersion = useChatProgramFactsVersion()
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
       resolveAiVaultHistoryRowResume({
         ...getSessionRowResumeArgs(session),
         settings: launchRoute.settings
       }).resumeInChat,
-    [getSessionRowResumeArgs, launchRoute]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the invalidation signal
+    [getSessionRowResumeArgs, launchRoute, chatProgramFactsVersion]
   )
   return {
     getSessionWorktreeInfo,
