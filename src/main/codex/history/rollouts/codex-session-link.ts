@@ -1,8 +1,14 @@
 import type { Dirent } from 'node:fs'
-import { link, mkdir, readdir, readlink, rename, rm, rmdir, symlink } from 'node:fs/promises'
+import { mkdir, readdir, readlink, rmdir, symlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { parseCodexRolloutThreadId } from '../index/codex-session-index-heal-state'
+import {
+  replaceCodexRolloutSymlinkWithHardlink,
+  tryHardlinkCodexRollout
+} from './codex-rollout-hardlink'
 
 export type CodexSessionLinkPass = {
   scannedFiles: number
@@ -12,19 +18,23 @@ export type CodexSessionLinkPass = {
   failedFiles: number
   /** Legacy symlinked rollouts replaced with hardlinks that Codex resume can read. */
   upgradedSymlinks: number
-  /** Thread ID to rollout timestamp for every source rollout now present in the target. */
+  /** Thread ID to rollout timestamp for source rollouts present in the target; only when collected. */
   bridgedThreads: Map<string, string>
 }
 
+const ENTRIES_PER_YIELD = 256
+
 /**
- * Links rollouts missing from `targetCodexHomePath` by diffing complete directory listings, so
- * history the target already has costs no per-rollout filesystem call.
+ * Links rollouts missing from `targetCodexHomePath`, walking every source together so each target
+ * directory is examined once and history the target already has costs no per-rollout call.
  */
 export async function linkMissingCodexSessionRollouts(args: {
-  sourceCodexHomePath: string
+  sourceCodexHomePaths: readonly string[]
   targetCodexHomePath: string
   /** Skip rather than symlink when the filesystem cannot hardlink (cross-volume). */
   hardlinkOnly?: boolean
+  /** Fill `bridgedThreads` for index healing. */
+  collectThreads?: boolean
   shouldStop?: () => boolean
 }): Promise<CodexSessionLinkPass> {
   const pass: CodexSessionLinkPass = {
@@ -35,23 +45,33 @@ export async function linkMissingCodexSessionRollouts(args: {
     upgradedSymlinks: 0,
     bridgedThreads: new Map()
   }
-  await new RolloutLinkWalk(
-    join(args.sourceCodexHomePath, 'sessions'),
-    join(args.targetCodexHomePath, 'sessions'),
-    args.hardlinkOnly === true,
-    args.shouldStop ?? (() => false),
-    pass
-  ).visit([])
+  const sourceRoots = dedupeSourceHomes(args.sourceCodexHomePaths, args.targetCodexHomePath).map(
+    (home) => join(home, 'sessions')
+  )
+  if (sourceRoots.length > 0) {
+    await new RolloutLinkWalk(
+      sourceRoots,
+      join(args.targetCodexHomePath, 'sessions'),
+      args.hardlinkOnly === true,
+      args.collectThreads === true,
+      args.shouldStop ?? (() => false),
+      pass
+    ).visit([])
+  }
   return pass
 }
 
 type LinkOutcome = 'linked' | 'existing' | 'skipped' | 'failed'
+type TargetEntryKind = 'file' | 'symlink'
 
 class RolloutLinkWalk {
+  private entriesSinceYield = 0
+
   constructor(
-    private readonly sourceRoot: string,
+    private readonly sourceRoots: readonly string[],
     private readonly targetRoot: string,
     private readonly hardlinkOnly: boolean,
+    private readonly collectThreads: boolean,
     private readonly shouldStop: () => boolean,
     private readonly pass: CodexSessionLinkPass
   ) {}
@@ -60,29 +80,39 @@ class RolloutLinkWalk {
     if (this.shouldStop()) {
       return
     }
-    const entries = await this.readSourceDirectory(relativeParts)
-    if (!entries) {
-      return
-    }
-    const rolloutNames = entries
-      .filter((entry) => entry.isFile() && isCodexRolloutFileName(entry.name))
-      .map((entry) => entry.name)
-    if (rolloutNames.length > 0) {
-      await this.linkDirectory(relativeParts, rolloutNames)
-    }
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        await this.visit([...relativeParts, entry.name])
+    // Rollout name to the sources holding it, in caller priority order.
+    const rollouts = new Map<string, number[]>()
+    const subdirectories = new Set<string>()
+    for (let sourceIndex = 0; sourceIndex < this.sourceRoots.length; sourceIndex += 1) {
+      const entries = await this.readSourceDirectory(sourceIndex, relativeParts)
+      for (const entry of entries ?? []) {
+        if (entry.isDirectory()) {
+          subdirectories.add(entry.name)
+        } else if (entry.isFile() && isCodexRolloutFileName(entry.name)) {
+          rollouts.set(entry.name, [...(rollouts.get(entry.name) ?? []), sourceIndex])
+        }
+        await this.yieldPeriodically()
       }
+    }
+    if (rollouts.size > 0) {
+      await this.linkDirectory(relativeParts, rollouts)
+    }
+    for (const name of subdirectories) {
+      await this.visit([...relativeParts, name])
     }
   }
 
-  private async readSourceDirectory(relativeParts: readonly string[]): Promise<Dirent[] | null> {
+  private async readSourceDirectory(
+    sourceIndex: number,
+    relativeParts: readonly string[]
+  ): Promise<Dirent[] | null> {
     try {
-      return await readdir(join(this.sourceRoot, ...relativeParts), { withFileTypes: true })
+      return await readdir(join(this.sourceRoots[sourceIndex], ...relativeParts), {
+        withFileTypes: true
+      })
     } catch (error) {
-      // A source home without history is normal.
-      if (relativeParts.length > 0 || !isDefinitiveAbsence(error)) {
+      // Missing history in one source is normal; other sources still fill this directory.
+      if (!isDefinitiveAbsence(error)) {
         console.warn('[codex-session-link] Failed to list Codex sessions:', error)
       }
       return null
@@ -91,29 +121,37 @@ class RolloutLinkWalk {
 
   private async linkDirectory(
     relativeParts: readonly string[],
-    rolloutNames: readonly string[]
+    rollouts: ReadonlyMap<string, readonly number[]>
   ): Promise<void> {
-    const sourceDir = join(this.sourceRoot, ...relativeParts)
     const targetDir = join(this.targetRoot, ...relativeParts)
-    const targetEntries = await this.readTargetEntries(targetDir)
+    const targetEntries = await this.readTargetEntries(targetDir, rollouts)
     if (!targetEntries) {
-      this.pass.scannedFiles += rolloutNames.length
-      this.pass.failedFiles += rolloutNames.length
+      this.pass.scannedFiles += rollouts.size
+      this.pass.failedFiles += rollouts.size
       return
     }
+    // A directory pair sits on fixed filesystems, so one unsupported hardlink settles the rest of
+    // it for this pass; a mount elsewhere under sessions still gets its own attempt.
+    const unsupportedSources = new Set<number>()
     let createdDirs: { firstCreated: string | undefined } | null = null
     let linkedHere = 0
-    for (const name of rolloutNames) {
+    for (const [name, sourceIndexes] of rollouts) {
       if (this.shouldStop()) {
         break
       }
+      await this.yieldPeriodically()
       this.pass.scannedFiles += 1
-      const sourcePath = join(sourceDir, name)
       const targetPath = join(targetDir, name)
       const existing = targetEntries.get(name)
       let outcome: LinkOutcome
-      if (existing?.isSymbolicLink()) {
-        outcome = await this.upgradeSymlinkedRollout(sourcePath, targetPath)
+      if (existing === 'symlink') {
+        outcome = await this.upgradeSymlinkedRollout(
+          relativeParts,
+          name,
+          sourceIndexes,
+          targetPath,
+          unsupportedSources
+        )
       } else if (existing) {
         // Rollout names carry the session UUID, so an existing name is this conversation.
         outcome = 'existing'
@@ -127,7 +165,12 @@ class RolloutLinkWalk {
             return
           }
         }
-        outcome = await this.linkRolloutFile(sourcePath, targetPath)
+        outcome = await this.linkRolloutFile(
+          sourceIndexes[0],
+          this.sourcePath(sourceIndexes[0], relativeParts, name),
+          targetPath,
+          unsupportedSources
+        )
         if (outcome === 'linked') {
           linkedHere += 1
           this.pass.linkedFiles += 1
@@ -137,7 +180,7 @@ class RolloutLinkWalk {
         this.pass.skippedFiles += 1
       } else if (outcome === 'failed') {
         this.pass.failedFiles += 1
-      } else {
+      } else if (this.collectThreads) {
         const rollout = parseCodexRolloutThreadId(name)
         if (rollout) {
           this.pass.bridgedThreads.set(rollout.threadId, rollout.rolloutStamp)
@@ -149,23 +192,41 @@ class RolloutLinkWalk {
     }
   }
 
-  private async readTargetEntries(targetDir: string): Promise<Map<string, Dirent> | null> {
+  /** Kinds of target entries named like a source rollout; null when the target cannot be read. */
+  private async readTargetEntries(
+    targetDir: string,
+    rollouts: ReadonlyMap<string, readonly number[]>
+  ): Promise<Map<string, TargetEntryKind> | null> {
+    const kinds = new Map<string, TargetEntryKind>()
     try {
-      const entries = await readdir(targetDir, { withFileTypes: true })
-      return new Map(entries.map((entry) => [entry.name, entry]))
+      for (const entry of await readdir(targetDir, { withFileTypes: true })) {
+        if (rollouts.has(entry.name)) {
+          kinds.set(entry.name, entry.isSymbolicLink() ? 'symlink' : 'file')
+        }
+        await this.yieldPeriodically()
+      }
+      return kinds
     } catch (error) {
       if (isDefinitiveAbsence(error)) {
-        return new Map()
+        return kinds
       }
-      console.warn('[codex-session-link] Failed to list target sessions:', error)
+      console.warn('[codex-session-link] Failed to read target sessions:', error)
       return null
     }
   }
 
-  private async linkRolloutFile(sourcePath: string, targetPath: string): Promise<LinkOutcome> {
-    const hardlink = await this.tryHardlink(sourcePath, targetPath)
-    if (hardlink !== 'unsupported') {
-      return hardlink
+  private async linkRolloutFile(
+    sourceIndex: number,
+    sourcePath: string,
+    targetPath: string,
+    unsupportedSources: Set<number>
+  ): Promise<LinkOutcome> {
+    if (!unsupportedSources.has(sourceIndex)) {
+      const hardlink = await tryHardlinkCodexRollout(sourcePath, targetPath)
+      if (hardlink !== 'unsupported') {
+        return hardlink
+      }
+      unsupportedSources.add(sourceIndex)
     }
     if (this.hardlinkOnly) {
       // A symlink would be ignored by resume and dangle once its account goes.
@@ -181,61 +242,59 @@ class RolloutLinkWalk {
     }
   }
 
-  // Codex resume ignores symlinked rollouts; replace ones that point at this source when possible.
+  // Codex resume ignores symlinked rollouts; replace ones that point at a source when possible.
   private async upgradeSymlinkedRollout(
-    sourcePath: string,
-    targetPath: string
+    relativeParts: readonly string[],
+    name: string,
+    sourceIndexes: readonly number[],
+    targetPath: string,
+    unsupportedSources: Set<number>
   ): Promise<LinkOutcome> {
+    if (sourceIndexes.every((sourceIndex) => unsupportedSources.has(sourceIndex))) {
+      return 'existing'
+    }
     let linkTarget: string
     try {
       linkTarget = await readlink(targetPath)
     } catch {
       return 'failed'
     }
-    const absoluteTarget = isAbsolute(linkTarget)
-      ? linkTarget
-      : resolve(dirname(targetPath), linkTarget)
-    if (absoluteTarget !== sourcePath) {
+    const absoluteTarget = normalizeRuntimePathForComparison(
+      isAbsolute(linkTarget) ? linkTarget : resolve(dirname(targetPath), linkTarget)
+    )
+    const sourceIndex = sourceIndexes.find(
+      (candidate) =>
+        normalizeRuntimePathForComparison(this.sourcePath(candidate, relativeParts, name)) ===
+        absoluteTarget
+    )
+    if (sourceIndex === undefined || unsupportedSources.has(sourceIndex)) {
       return 'existing'
     }
-    const replacementPath = `${targetPath}.orca-link-${process.pid}`
-    await rm(replacementPath, { force: true })
-    const hardlink = await this.tryHardlink(sourcePath, replacementPath)
-    if (hardlink === 'unsupported') {
+    const replaced = await replaceCodexRolloutSymlinkWithHardlink(
+      this.sourcePath(sourceIndex, relativeParts, name),
+      targetPath
+    )
+    if (replaced === 'unsupported') {
+      unsupportedSources.add(sourceIndex)
       return 'existing'
     }
-    if (hardlink !== 'linked') {
+    if (replaced === 'failed') {
       return 'failed'
     }
-    try {
-      await rename(replacementPath, targetPath)
-      this.pass.upgradedSymlinks += 1
-      return 'existing'
-    } catch (error) {
-      console.warn('[codex-session-link] Failed to replace symlinked rollout:', targetPath, error)
-      await rm(replacementPath, { force: true })
-      return 'failed'
-    }
+    this.pass.upgradedSymlinks += 1
+    return 'existing'
   }
 
-  private async tryHardlink(
-    sourcePath: string,
-    targetPath: string
-  ): Promise<'linked' | 'existing' | 'unsupported' | 'failed'> {
-    try {
-      await link(sourcePath, targetPath)
-      return 'linked'
-    } catch (error) {
-      if (hasErrorCode(error, 'EEXIST')) {
-        // A concurrent pass created it after the listing.
-        return 'existing'
-      }
-      if (isUnsupportedHardlinkError(error)) {
-        return 'unsupported'
-      }
-      // Permission and I/O errors stay retryable rather than becoming a permanent symlink.
-      console.warn('[codex-session-link] Failed to hardlink Codex session:', sourcePath, error)
-      return 'failed'
+  private sourcePath(sourceIndex: number, relativeParts: readonly string[], name: string): string {
+    return join(this.sourceRoots[sourceIndex], ...relativeParts, name)
+  }
+
+  // Wide directories must not hold the main thread while names are matched.
+  private async yieldPeriodically(): Promise<void> {
+    this.entriesSinceYield += 1
+    if (this.entriesSinceYield >= ENTRIES_PER_YIELD) {
+      this.entriesSinceYield = 0
+      await yieldToEventLoop()
     }
   }
 }
@@ -254,15 +313,21 @@ async function removeEmptyCreatedDirs(deepest: string, firstCreated: string): Pr
   }
 }
 
+function dedupeSourceHomes(
+  sourceCodexHomePaths: readonly string[],
+  targetCodexHomePath: string
+): string[] {
+  const seen = new Set([normalizeRuntimePathForComparison(targetCodexHomePath)])
+  return sourceCodexHomePaths.filter((sourceHomePath) => {
+    const key = normalizeRuntimePathForComparison(sourceHomePath)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
 function isCodexRolloutFileName(name: string): boolean {
   return name.endsWith('.jsonl') || name.endsWith('.jsonl.zst')
-}
-
-/** The filesystem pair cannot hold a hardlink at all; anything else may succeed on retry. */
-export function isUnsupportedHardlinkError(error: unknown): boolean {
-  return ['EXDEV', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS'].some((code) => hasErrorCode(error, code))
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }

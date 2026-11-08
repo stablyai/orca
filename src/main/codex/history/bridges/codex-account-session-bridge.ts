@@ -129,48 +129,20 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
   sourceCodexHomePaths: readonly string[]
   hardlinkOnly?: boolean
 }): Promise<CodexAccountSessionBridgeSummary> {
-  const summary: CodexAccountSessionBridgeSummary = {
-    scannedFiles: 0,
-    linkedFiles: 0,
-    skippedFiles: 0,
-    bridgedThreads: new Map()
-  }
-  for (const sourceHomePath of dedupeSourceHomes(
-    args.sourceCodexHomePaths,
-    args.targetCodexHomePath
-  )) {
-    const pass = await linkMissingCodexSessionRollouts({
-      sourceCodexHomePath: sourceHomePath,
-      targetCodexHomePath: args.targetCodexHomePath,
-      hardlinkOnly: args.hardlinkOnly,
-      shouldStop: () => stopping
-    })
-    summary.scannedFiles += pass.scannedFiles
-    summary.linkedFiles += pass.linkedFiles
-    summary.skippedFiles += pass.skippedFiles
+  const pass = await linkMissingCodexSessionRollouts({
+    sourceCodexHomePaths: args.sourceCodexHomePaths,
+    targetCodexHomePath: args.targetCodexHomePath,
+    hardlinkOnly: args.hardlinkOnly,
     // Every pass re-offers linked history so an interrupted or failed heal resumes next launch.
-    for (const [threadId, rolloutStamp] of pass.bridgedThreads) {
-      summary.bridgedThreads.set(threadId, rolloutStamp)
-    }
+    collectThreads: true,
+    shouldStop: () => stopping
+  })
+  return {
+    scannedFiles: pass.scannedFiles,
+    linkedFiles: pass.linkedFiles,
+    skippedFiles: pass.skippedFiles,
+    bridgedThreads: pass.bridgedThreads
   }
-  return summary
-}
-
-function dedupeSourceHomes(
-  sourceCodexHomePaths: readonly string[],
-  targetCodexHomePath: string
-): string[] {
-  const seen = new Set([normalizeRuntimePathForComparison(targetCodexHomePath)])
-  const sources: string[] = []
-  for (const sourceHomePath of sourceCodexHomePaths) {
-    const key = normalizeRuntimePathForComparison(sourceHomePath)
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    sources.push(sourceHomePath)
-  }
-  return sources
 }
 
 export const _internals = {

@@ -1,16 +1,15 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import type { Dirent, Stats } from 'node:fs'
-import { link, lstat, readdir, readFile, rename, rm } from 'node:fs/promises'
+import { link, lstat, open, readdir, readFile, rename, rm } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import {
-  isUnsupportedHardlinkError,
-  linkMissingCodexSessionRollouts
-} from '../rollouts/codex-session-link'
+import { isUnsupportedHardlinkError } from '../rollouts/codex-rollout-hardlink'
+import { linkMissingCodexSessionRollouts } from '../rollouts/codex-session-link'
 
 type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -27,10 +26,11 @@ export type LegacyCopiedCodexSessionBridgeScanPreference = {
 }
 
 const LEGACY_COPY_MARKER_DIR = '.orca-session-copies'
+const PREFIX_COMPARE_CHUNK_BYTES = 1024 * 1024
 
 let backgroundSessionBridgeTask: Promise<void> | null = null
-// Markers are the migration's durable state; diverged copies keep theirs, so walk them once per run.
-let legacyCopyMigrationStarted = false
+// Markers are the migration's durable state; diverged copies keep theirs, so walk once per source per run.
+const legacyCopyMigratedSources = new Set<string>()
 
 /** Custom CODEX_HOME changes history discovery only. */
 export function startSystemCodexSessionBridgeInBackground(
@@ -40,14 +40,16 @@ export function startSystemCodexSessionBridgeInBackground(
     return backgroundSessionBridgeTask
   }
   const managedHomePath = getOrcaManagedCodexHomePath()
-  const migrateLegacyCopies = !legacyCopyMigrationStarted
-  legacyCopyMigrationStarted = true
+  const sourceHomePath = sourceCodexHomePath || getSystemCodexHomePath()
+  const sourceKey = normalizeRuntimePathForComparison(sourceHomePath)
+  const migrateLegacyCopies = !legacyCopyMigratedSources.has(sourceKey)
+  legacyCopyMigratedSources.add(sourceKey)
   const task = (async () => {
     if (migrateLegacyCopies) {
-      await migrateLegacyCopiedCodexSessions(managedHomePath)
+      await migrateLegacyCopiedCodexSessions(managedHomePath, sourceHomePath)
     }
     await linkMissingCodexSessionRollouts({
-      sourceCodexHomePath: sourceCodexHomePath || getSystemCodexHomePath(),
+      sourceCodexHomePaths: [sourceHomePath],
       targetCodexHomePath: managedHomePath
     })
   })()
@@ -104,13 +106,20 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
  * Replaces unchanged pre-link session copies in the shared runtime home with hardlinks to their
  * source, so resume reads one growing log. Restart-safe: a marker is cleared only after the swap.
  */
-export async function migrateLegacyCopiedCodexSessions(managedHomePath: string): Promise<number> {
+export async function migrateLegacyCopiedCodexSessions(
+  managedHomePath: string,
+  sourceCodexHomePath: string
+): Promise<number> {
   const markerRoot = join(managedHomePath, LEGACY_COPY_MARKER_DIR)
   let migrated = 0
   for await (const markerPath of listLegacyCopyMarkers(markerRoot)) {
     const relativePath = relative(markerRoot, markerPath).slice(0, -'.json'.length)
     if (
-      await migrateLegacyCopiedSession(markerPath, join(managedHomePath, 'sessions', relativePath))
+      await migrateLegacyCopiedSession(
+        markerPath,
+        join(sourceCodexHomePath, 'sessions', relativePath),
+        join(managedHomePath, 'sessions', relativePath)
+      )
     ) {
       migrated += 1
     }
@@ -137,6 +146,7 @@ async function* listLegacyCopyMarkers(directory: string): AsyncGenerator<string>
 
 async function migrateLegacyCopiedSession(
   markerPath: string,
+  sourcePath: string,
   targetPath: string
 ): Promise<boolean> {
   let marker: LegacyCopiedSessionMarker | null
@@ -145,7 +155,12 @@ async function migrateLegacyCopiedSession(
   } catch {
     return false
   }
-  if (!marker) {
+  // A marker from a previously configured source stays until that source is selected again.
+  if (
+    !marker ||
+    normalizeRuntimePathForComparison(marker.sourcePath) !==
+      normalizeRuntimePathForComparison(sourcePath)
+  ) {
     return false
   }
   let targetStat: Stats
@@ -169,8 +184,12 @@ async function migrateLegacyCopiedSession(
       // Codex appended to the copy, so it is the only full log; usage scans keep using the marker.
       return false
     }
+    // Only a source that still begins with the whole copy can replace it without losing turns.
+    if (!(await startsWithFileContents(sourcePath, targetPath, targetStat.size))) {
+      return false
+    }
     await rm(replacementPath, { force: true })
-    await link(marker.sourcePath, replacementPath)
+    await link(sourcePath, replacementPath)
     await rename(replacementPath, targetPath)
     await rm(markerPath, { force: true })
     return true
@@ -185,6 +204,43 @@ async function migrateLegacyCopiedSession(
     }
     // A cross-volume copy stays a copy: a symlink would be ignored by resume.
     return false
+  }
+}
+
+async function startsWithFileContents(
+  filePath: string,
+  prefixPath: string,
+  prefixSize: number
+): Promise<boolean> {
+  const fileStat = await lstat(filePath)
+  if (!fileStat.isFile() || fileStat.size < prefixSize) {
+    return false
+  }
+  const file = await open(filePath, 'r')
+  const prefix = await open(prefixPath, 'r').catch(async (error: unknown) => {
+    await file.close()
+    throw error
+  })
+  try {
+    const fileChunk = Buffer.alloc(PREFIX_COMPARE_CHUNK_BYTES)
+    const prefixChunk = Buffer.alloc(PREFIX_COMPARE_CHUNK_BYTES)
+    for (let offset = 0; offset < prefixSize; offset += PREFIX_COMPARE_CHUNK_BYTES) {
+      const length = Math.min(PREFIX_COMPARE_CHUNK_BYTES, prefixSize - offset)
+      const [fileRead, prefixRead] = await Promise.all([
+        file.read(fileChunk, 0, length, offset),
+        prefix.read(prefixChunk, 0, length, offset)
+      ])
+      if (
+        fileRead.bytesRead !== length ||
+        prefixRead.bytesRead !== length ||
+        !fileChunk.subarray(0, length).equals(prefixChunk.subarray(0, length))
+      ) {
+        return false
+      }
+    }
+    return true
+  } finally {
+    await Promise.all([file.close(), prefix.close()])
   }
 }
 

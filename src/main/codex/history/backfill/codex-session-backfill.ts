@@ -25,7 +25,7 @@ import {
   getCodexSessionBackfillDate,
   mergeCodexSessionBackfillDates
 } from './codex-session-backfill-scan-dates'
-import { isUnsupportedHardlinkError } from '../rollouts/codex-session-link'
+import { isUnsupportedHardlinkError } from '../rollouts/codex-rollout-hardlink'
 import type {
   CodexSessionBackfillDate,
   CodexSessionBackfillOptions,
