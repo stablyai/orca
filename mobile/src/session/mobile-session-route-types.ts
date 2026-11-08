@@ -11,9 +11,12 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../src/shared/runtime-types'
 import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status/contracts/agent-status-observation'
-import type { MobileDiffLine } from './mobile-diff-lines'
-import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
-import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileDiffLine } from '../source-control/review/mobile-diff-lines'
+import type {
+  MobileHighlightedDiffLine,
+  MobileSyntaxSegment
+} from '../files/session-documents/mobile-file-syntax'
+import type { TerminalRecord } from '../terminal/session/mobile-terminal-records'
 import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord

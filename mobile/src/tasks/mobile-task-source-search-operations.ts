@@ -2,7 +2,7 @@ import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { githubPrRepoSlugSchema } from '../session/github-pr-read-reply-schema'
+import { githubPrRepoSlugSchema } from '../source-control/review/github-pr-read-reply-schema'
 import {
   taskGitHubWorkItemListSchema,
   taskGitLabWorkItemListSchema,

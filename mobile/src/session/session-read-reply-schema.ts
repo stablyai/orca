@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import type { WorktreeDisplayNameSource } from './worktree-display-name'
+import type { WorktreeDisplayNameSource } from '../worktree/worktree-display-name'
 
 // Require an inventory/handle for strip reconciliation; salvage individual malformed rows without erasing valid ones.
 export const sessionTerminalInventorySchema = z.looseObject({

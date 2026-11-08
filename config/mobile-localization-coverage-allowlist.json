@@ -210,21 +210,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-entity-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-entity-reply-schema.ts",
     "kind": "object-property:message",
     "text": "review has no login",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "found outcome has no readable pr",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "pull request has no number or state",
     "dynamic": false,
@@ -266,14 +266,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/QuickCommandEditorForm.tsx",
+    "filePath": "mobile/src/terminal/quick-commands/QuickCommandEditorForm.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "npm run dev",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/use-mobile-pr-actions.ts",
+    "filePath": "mobile/src/source-control/review/use-mobile-pr-actions.ts",
     "kind": "object-property:error",
     "text": "Not connected",
     "dynamic": false,

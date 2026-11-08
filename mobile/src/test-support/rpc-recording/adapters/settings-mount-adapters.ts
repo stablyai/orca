@@ -19,8 +19,8 @@ export function settingsMountAdapters(
   return {
     'settings.bot-overrides': ({ client }) => {
       const useOverrides = modules.load<
-        typeof import('../../../session/use-pr-bot-author-overrides')
-      >('mobile/src/session/use-pr-bot-author-overrides.ts').usePRBotAuthorOverrides
+        typeof import('../../../source-control/review/use-pr-bot-author-overrides')
+      >('mobile/src/source-control/review/use-pr-bot-author-overrides.ts').usePRBotAuthorOverrides
       let state: ReadonlySet<string> = new Set()
       let revision = 1
       const hook = hookMount(() => {

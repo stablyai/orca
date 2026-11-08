@@ -1,6 +1,6 @@
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
-import type { TerminalRecord } from '../../../session/mobile-terminal-records'
+import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -89,8 +89,8 @@ export function sessionScreenTabMountAdapters(
     },
     'session.tab-close': ({ client, effect }) => {
       const useClose = modules.load<
-        typeof import('../../../session/use-mobile-session-close-actions')
-      >('mobile/src/session/use-mobile-session-close-actions.ts').useMobileSessionCloseActions
+        typeof import('../../../session/tabs/use-mobile-session-close-actions')
+      >('mobile/src/session/tabs/use-mobile-session-close-actions.ts').useMobileSessionCloseActions
       const terminalTab = mountFixture<Extract<MobileSessionTab, { type: 'terminal' }>>({
         id: 'tab-1',
         type: 'terminal',

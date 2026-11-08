@@ -22,7 +22,7 @@ import {
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import type { BrowserDialogState } from './mobile-browser-stream-events'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
 
 import { useMobileBrowserCommands } from './use-mobile-browser-commands'
 const TAP_SLOP = 16

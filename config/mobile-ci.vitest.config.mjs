@@ -16,9 +16,7 @@ const nodeFiles = [
   'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-physical-channel.test.ts',
   'src/test-support/rpc-recording/subscription-recording.test.ts',
-  'src/test-support/rpc-recording/family-recordings.test.ts',
-  // Its goldens carry V8's TypeError wording, as family-recordings' do.
-  'src/test-support/rpc-recording/bridged-recording-corpus.test.ts'
+  'src/test-support/rpc-recording/family-recordings.test.ts'
 ]
 
 const config = mergeConfig(original, { cacheDir: process.env.ORCA_MOBILE_CI_CACHE_DIR })

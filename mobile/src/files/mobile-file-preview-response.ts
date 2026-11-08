@@ -1,5 +1,5 @@
 import type { MobileFileMedia } from './mobile-file-media'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { RpcFailure } from '../transport/types'

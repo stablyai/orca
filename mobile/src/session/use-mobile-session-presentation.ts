@@ -5,9 +5,9 @@ import {
   verdictDisplayLabel
 } from '../transport/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
-import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
+import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/calm-connection-state'

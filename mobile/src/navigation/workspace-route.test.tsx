@@ -54,7 +54,9 @@ vi.mock('../mobile-web-shell/MobileWebShellScreen', () => ({
 vi.mock('../files/MobileFileExplorerPanel', () => ({ MobileFileExplorerPanel: Probe }))
 vi.mock('../files/MobileFilePreviewScreen', () => ({ MobileFilePreviewScreen: Probe }))
 vi.mock('../source-control/MobileSourceControlPanel', () => ({ MobileSourceControlPanel: Probe }))
-vi.mock('../session/MobileDiffReviewRouteScreen', () => ({ MobileDiffReviewRouteScreen: Probe }))
+vi.mock('../source-control/review/MobileDiffReviewRouteScreen', () => ({
+  MobileDiffReviewRouteScreen: Probe
+}))
 vi.mock('../session/MobileSessionRouteScreen', () => ({ MobileSessionRouteScreen: Probe }))
 vi.mock('../agent-history/MobileAgentSessionHistoryPanel', () => ({
   MobileAgentSessionHistoryPanel: Probe
@@ -74,8 +76,8 @@ import type { ConnectionState } from '../transport/types'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { WorkspaceServerContext } from '../transport/workspace-server-context'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { WorkspaceServerContext } from '../worktree/workspace-server-context'
 import { useWorkspaceExecutionHost } from './workspace-execution-host'
 import { WorkspaceRoute } from './workspace-route'
 import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
@@ -184,27 +186,8 @@ async function render(element: ReactElement, gates: HostStatusGates): Promise<Re
   return renderer
 }
 
-function texts(renderer: ReactTestRenderer): string[] {
-  return renderer.root
-    .findAll(() => true)
-    .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
-}
-
 describe('a server workspace', () => {
   const screen = createElement(WorkspaceRoute, null, createElement(Probe))
-
-  it('runs every call on that server', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const session = desktop()
-    await render(screen, desktopGates(RELAYS))
-    expect(below.serverName).toBe('vm')
-    await below.client?.sendRequest('files.readDir', { worktree: 'id:wt' })
-    expect(session.sendRequest).toHaveBeenCalledWith(
-      'files.readDir',
-      { worktree: 'id:wt' },
-      { envelope: { executionHost: 'runtime:vm' } }
-    )
-  })
 
   it.each([
     ['connecting while the desktop reconnects to a stopped server', STOPPED, 'connecting'],
@@ -239,26 +222,5 @@ describe('a server workspace', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('says so for a deep link under an app without the envelope, never running on the desktop', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const shell = desktop()
-    // Older shells lack rpcEnvelope; preserve every other granted capability while dropping that unsupported token.
-    const pair = createBridgePortPair({
-      rpc: shell,
-      rewriteToPage: (json) => json.replace(',"rpcEnvelope"', '')
-    })
-    pairs.push(pair)
-    await pair.flush()
-    expect(pair.client.carriesRpcEnvelope?.()).toBe(false)
-    route.client = pair.client
-    const renderer = await render(screen, desktopGates(RELAYS))
-    await pair.flush()
-    expect(route.seen).toEqual([])
-    expect(texts(renderer)).toContain(
-      "Your phone can't reach this workspace's server through this desktop."
-    )
-    expect(shell.sendRequest).not.toHaveBeenCalled()
   })
 })

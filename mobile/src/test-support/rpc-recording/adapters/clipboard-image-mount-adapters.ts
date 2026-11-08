@@ -15,8 +15,8 @@ export function clipboardImageMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'clipboard.image-upload': ({ client }) => {
-      const save = modules.load<typeof import('../../../session/mobile-clipboard-image')>(
-        'mobile/src/session/mobile-clipboard-image.ts'
+      const save = modules.load<typeof import('../../../files/attachments/mobile-clipboard-image')>(
+        'mobile/src/files/attachments/mobile-clipboard-image.ts'
       ).saveMobileClipboardImageAsTempFile
       let path: unknown = 'unsaved'
       let failure: unknown = null
@@ -39,9 +39,9 @@ export function clipboardImageMountAdapters(
       }
     },
     'clipboard.image-terminal-attachment': ({ client, effect }) => {
-      const attach = modules.load<typeof import('../../../session/mobile-image-attachment')>(
-        'mobile/src/session/mobile-image-attachment.ts'
-      ).attachMobileImageToTerminal
+      const attach = modules.load<
+        typeof import('../../../files/attachments/mobile-image-attachment')
+      >('mobile/src/files/attachments/mobile-image-attachment.ts').attachMobileImageToTerminal
       let attached: unknown = 'unattached'
       let failure: unknown = null
       return {

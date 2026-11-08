@@ -18,8 +18,10 @@ export function sessionNotesMountAdapters(
   return {
     'session.diff-notes': ({ client, effect }) => {
       const useComments = modules.load<
-        typeof import('../../../session/use-mobile-session-diff-comments')
-      >('mobile/src/session/use-mobile-session-diff-comments.ts').useMobileSessionDiffComments
+        typeof import('../../../source-control/review/use-mobile-session-diff-comments')
+      >(
+        'mobile/src/source-control/review/use-mobile-session-diff-comments.ts'
+      ).useMobileSessionDiffComments
       let diffComments: DiffComment[] = []
       const diffCommentsRef = { current: diffComments }
       let busy = false
@@ -79,8 +81,10 @@ export function sessionNotesMountAdapters(
     },
     'session.markdown-save': ({ client, effect }) => {
       const useMarkdown = modules.load<
-        typeof import('../../../session/use-mobile-session-markdown-actions')
-      >('mobile/src/session/use-mobile-session-markdown-actions.ts').useMobileSessionMarkdownActions
+        typeof import('../../../files/session-documents/use-mobile-session-markdown-actions')
+      >(
+        'mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts'
+      ).useMobileSessionMarkdownActions
       let markdownDocs = new Map<string, MarkdownDocState>([
         [
           TAB,
@@ -141,9 +145,9 @@ export function sessionNotesMountAdapters(
       }
     },
     'settings.quick-commands': ({ client }) => {
-      const useQuickCommands = modules.load<typeof import('../../../session/use-quick-commands')>(
-        'mobile/src/session/use-quick-commands.ts'
-      ).useQuickCommands
+      const useQuickCommands = modules.load<
+        typeof import('../../../terminal/quick-commands/use-quick-commands')
+      >('mobile/src/terminal/quick-commands/use-quick-commands.ts').useQuickCommands
       let enabled = true
       let model: ReturnType<typeof useQuickCommands>
       const persisted: unknown[] = []

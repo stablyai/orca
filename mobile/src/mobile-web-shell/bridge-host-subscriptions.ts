@@ -14,7 +14,7 @@ import {
   type TerminalBacklogTimers
 } from './bridge-terminal-output-backlog'
 import type { BridgeBinaryEvent } from './bridge/bridge-screencast-binary'
-import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../browser/browser-screencast-protocol'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
 

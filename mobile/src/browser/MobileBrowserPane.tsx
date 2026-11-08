@@ -5,7 +5,7 @@ import type { MobileBrowserTab } from '../session/mobile-session-route-types'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import {

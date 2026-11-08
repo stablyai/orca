@@ -3,7 +3,7 @@ import type { Worktree } from '../worktree/workspace-list-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
-import { resolveMobileAiVaultResumePlatform } from '../session/ai-vault-resume-launch'
+import { resolveMobileAiVaultResumePlatform } from './ai-vault-resume-launch'
 
 /** Resolve terminal fallback only from the live owning-host catalog. */
 export async function prepareMobileHistoryResumeTarget(args: {

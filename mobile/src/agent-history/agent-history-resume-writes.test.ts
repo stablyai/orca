@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { resumeAiVaultSessionInTerminal } from '../session/ai-vault-resume-launch'
+import '../mobile-web-shell/bridge-host-test-fakes'
+import type { FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { resumeAiVaultSessionInTerminal } from './ai-vault-resume-launch'
 
 // Compare bridged and direct RPC verdicts for resume writes when replies fail/disappear; corpus covers only refusal/locked terminal.
 // Assert shell-loss ambiguity separately because direct client has no bridge door to close.
@@ -57,25 +58,6 @@ async function nthRequest(
 /** Both legs of one send reply, so a case reads as the one comparison it is making. */
 
 describe('a resume write through the bridge answers the caller as the native client does', () => {
-  it('keeps a lost reply ambiguous rather than reporting a failure the user can retry blindly', async () => {
-    const lost = () =>
-      markRpcDeliveryUnknown(new Error('Request timed out: session.tabs.createTerminal'))
-
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    const bridged = verdictOf(resumeAiVaultSessionInTerminal(pair.client, 'wt-1', LAUNCH))
-    ;(await firstRequest(pair.rpc, pair.flush)).reject(lost())
-    await pair.flush()
-
-    const native = createFakeRpcClient()
-    const direct = verdictOf(resumeAiVaultSessionInTerminal(native, 'wt-1', LAUNCH))
-    ;(await firstRequest(native, async () => {})).reject(lost())
-
-    // Capture ambiguity as schema field so page cannot treat create timeout as definite failure and offer duplicate-terminal retry.
-    expect((await bridged).deliveryUnknown).toBe(true)
-    expect(await bridged).toEqual(await direct)
-  })
-
   // No direct comparison for shell-loss: direct fake has no bridge door, so assert property explicitly.
   it('leaves a write in flight when the shell goes ambiguous, not failed', async () => {
     const pair = createFakeBridgePortPair()

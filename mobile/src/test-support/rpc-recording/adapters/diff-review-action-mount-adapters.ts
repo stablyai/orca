@@ -1,11 +1,11 @@
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type { MobileDiffReviewQueueItem } from '../../../session/mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from '../../../source-control/review/mobile-diff-review-queue'
 import type {
   ReviewScreenState,
   SendSheetState
-} from '../../../session/mobile-diff-review-screen-model'
+} from '../../../source-control/review/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
@@ -22,11 +22,13 @@ export function diffReviewActionMountAdapters(
   return {
     'session.diff-review-actions': ({ client, effect }) => {
       const useInteractions = modules.load<
-        typeof import('../../../session/use-mobile-diff-review-interactions')
-      >('mobile/src/session/use-mobile-diff-review-interactions.ts').useMobileDiffReviewInteractions
+        typeof import('../../../source-control/review/use-mobile-diff-review-interactions')
+      >(
+        'mobile/src/source-control/review/use-mobile-diff-review-interactions.ts'
+      ).useMobileDiffReviewInteractions
       const reviewSheets = modules.load<
-        typeof import('../../../session/mobile-diff-review-sheets')
-      >('mobile/src/session/mobile-diff-review-sheets.ts')
+        typeof import('../../../source-control/review/mobile-diff-review-sheets')
+      >('mobile/src/source-control/review/mobile-diff-review-sheets.ts')
       const staleInput = modules.load<typeof NativeChatStaleInput>(
         'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
       )

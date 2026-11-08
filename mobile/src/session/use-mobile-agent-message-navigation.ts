@@ -9,8 +9,8 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
 import { openMobileStructuredSession } from './open-mobile-structured-session'
-import { openMobileAgentMessageTerminal } from './mobile-agent-message-terminal'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import { openMobileAgentMessageTerminal } from '../terminal/session/mobile-agent-message-terminal'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 
 export function useMobileAgentMessageNavigation(
   client: RpcClient | null,

@@ -7,7 +7,7 @@ import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-
 import { useHostQuery } from '../../query/host-query'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import type { RpcClient } from '../../transport/rpc-client'
-import { prAssignableUsersQuery, prRepoParams } from '../../session/mobile-pr-queries'
+import { prAssignableUsersQuery, prRepoParams } from '../../source-control/review/mobile-pr-queries'
 
 export type ReviewerPeople = {
   // Undefined until a read for this repository lands; [] is an accepted empty list.

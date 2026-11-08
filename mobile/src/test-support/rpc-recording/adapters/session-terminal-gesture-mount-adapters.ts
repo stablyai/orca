@@ -31,8 +31,10 @@ export function sessionTerminalGestureMountAdapters(
   return {
     'session.terminal-gesture-input': ({ client, effect }) => {
       const useTerminalInput = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-input')
-      >('mobile/src/session/use-mobile-session-terminal-input.ts').useMobileSessionTerminalInput
+        typeof import('../../../terminal/session/use-mobile-session-terminal-input')
+      >(
+        'mobile/src/terminal/session/use-mobile-session-terminal-input.ts'
+      ).useMobileSessionTerminalInput
 
       const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
         'mobile/src/terminal/mobile-terminal-operations.ts'

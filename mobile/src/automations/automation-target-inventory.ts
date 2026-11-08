@@ -19,7 +19,7 @@ import {
   preflightDetectAgentsRead,
   preflightRefreshAgentsRead
 } from '../session/mobile-session-read-operations'
-import { buildMobileNewTabAgentOptions } from '../session/mobile-new-tab-agent-options'
+import { buildMobileNewTabAgentOptions } from '../session/agent-launch/mobile-new-tab-agent-options'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   automationAgentSettingsRead,

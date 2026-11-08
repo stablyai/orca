@@ -239,7 +239,7 @@
       "id": "settings-new-tab-ssh",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -336,7 +336,7 @@
       "id": "settings-bot-overrides-fulfilled",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -373,7 +373,7 @@
       "id": "settings-bot-overrides-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -405,7 +405,7 @@
       "id": "settings-bot-overrides-transport-error",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1976,7 +1976,7 @@
       "id": "settings-new-tab-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -2035,7 +2035,7 @@
       "id": "settings-new-tab-transport-error",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -2457,7 +2457,7 @@
       "id": "settings-bot-overrides-refresh-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -3191,7 +3191,7 @@
       "id": "probe-new-tab-both-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["both-refused"],
       "steps": [
         {
@@ -3253,7 +3253,7 @@
       "id": "probe-new-tab-refused-sibling-rejects",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["refused-sibling-rejects"],
       "steps": [
         {
@@ -3312,7 +3312,7 @@
       "id": "probe-new-tab-rejects-sibling-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["rejects-sibling-refused"],
       "steps": [
         {
@@ -3371,7 +3371,7 @@
       "id": "probe-new-tab-null-sibling-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["null-sibling-refused"],
       "steps": [
         {
@@ -7943,7 +7943,7 @@
       "id": "pr-read-surface",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8217,7 +8217,7 @@
       "id": "pr-read-fork-routing",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8322,7 +8322,7 @@
       "id": "pr-read-upstream-error",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8405,9 +8405,9 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/session/mobile-pr-queries.ts",
-        "mobile/src/session/mobile-pr-sidebar-state.ts"
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
       ],
       "schedules": [],
       "steps": [
@@ -8577,9 +8577,9 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/session/mobile-pr-queries.ts",
-        "mobile/src/session/mobile-pr-sidebar-state.ts"
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
       ],
       "schedules": [],
       "steps": [
@@ -8744,10 +8744,10 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/session/mobile-pr-queries.ts",
-        "mobile/src/session/mobile-pr-sidebar-state.ts",
-        "mobile/src/session/pr-comment-writes.ts"
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pr-comment-writes.ts"
       ],
       "schedules": [],
       "steps": [
@@ -8943,10 +8943,10 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/session/mobile-pr-queries.ts",
-        "mobile/src/session/mobile-pr-sidebar-state.ts",
-        "mobile/src/session/pr-comment-writes.ts"
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pr-comment-writes.ts"
       ],
       "schedules": [],
       "steps": [
@@ -9181,7 +9181,7 @@
       "id": "pr-mutation-status",
       "operation": "session.pr-mutations",
       "family": "github.pr-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9322,7 +9322,7 @@
       "id": "pr-mutation-in-band-failure",
       "operation": "session.pr-mutations",
       "family": "github.pr-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9423,7 +9423,7 @@
       "id": "pr-comment-mutation",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9550,7 +9550,7 @@
       "id": "pr-line-comment-and-file-viewed",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-review-line-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-review-line-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9627,7 +9627,7 @@
       "id": "pr-comment-resolve-unconfirmed",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9673,7 +9673,7 @@
       "id": "pr-title-mutation",
       "operation": "session.pr-mutations",
       "family": "github.pr-title-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9701,7 +9701,7 @@
       "id": "pr-title-unconfirmed",
       "operation": "session.pr-mutations",
       "family": "github.pr-title-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9751,7 +9751,7 @@
       "id": "pr-triage-launch",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9847,7 +9847,7 @@
       "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9940,7 +9940,7 @@
       "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10020,7 +10020,7 @@
       "id": "pr-triage-update-required",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10039,7 +10039,7 @@
       "id": "pr-branch-identity",
       "operation": "session.pr-branch-context",
       "family": "session.pr-branch-context",
-      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10146,7 +10146,7 @@
       "id": "pr-branch-repo-context",
       "operation": "session.pr-branch-context",
       "family": "session.pr-branch-context",
-      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10177,8 +10177,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -10291,8 +10291,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -10322,7 +10322,7 @@
       "id": "diff-review-worktree-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10404,7 +10404,7 @@
       "id": "diff-review-refused-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10489,7 +10489,7 @@
       "id": "diff-review-branch-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10539,8 +10539,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-commit-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-commit-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -10614,7 +10614,7 @@
       "id": "diff-review-branch-compare",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10730,8 +10730,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16590,7 +16590,7 @@
       "id": "aivault-resume-prepare-repin",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16622,7 +16622,7 @@
       "id": "aivault-resume-prepare-unavailable",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16654,7 +16654,7 @@
       "id": "aivault-resume-prepare-refused",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16686,7 +16686,7 @@
       "id": "aivault-resume-prepare-skipped",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16702,7 +16702,7 @@
       "id": "aivault-resume-launch-sent",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16760,7 +16760,7 @@
       "id": "aivault-resume-launch-locked",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16818,7 +16818,7 @@
       "id": "aivault-resume-launch-create-refused",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16850,7 +16850,7 @@
       "id": "aivault-resume-launch-invalid-tab",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16889,7 +16889,7 @@
       "id": "clipboard-image-upload-single-frame-fallback",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16930,7 +16930,7 @@
       "id": "clipboard-image-upload-chunked",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16983,7 +16983,7 @@
       "id": "clipboard-image-upload-aborts-on-chunk-failure",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17039,7 +17039,7 @@
       "id": "clipboard-image-upload-start-refused",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17070,8 +17070,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -17103,8 +17103,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -17179,8 +17179,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -17198,8 +17198,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -17254,8 +17254,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -17965,7 +17965,7 @@
       "id": "session-tab-activation-focus-and-activate",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18014,7 +18014,7 @@
       "id": "session-tab-activation-refused",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18047,7 +18047,7 @@
       "id": "session-tab-activation-transport-error",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18073,7 +18073,7 @@
       "id": "session-tabs-health-reconciled",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18109,7 +18109,7 @@
       "id": "session-tabs-health-refused",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18142,7 +18142,7 @@
       "id": "session-tabs-health-stale-application-revision",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18182,7 +18182,7 @@
       "id": "session-tabs-health-errored",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18212,7 +18212,7 @@
       "id": "file-tap-opens-worktree-file",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18278,7 +18278,7 @@
       "id": "file-tap-resolve-miss",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18311,7 +18311,7 @@
       "id": "file-tap-resolve-refused",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18344,7 +18344,7 @@
       "id": "file-tap-open-refused",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18398,7 +18398,7 @@
       "id": "file-tap-previews-absolute-artifact",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18667,7 +18667,7 @@
       "id": "session-markdown-tab-read",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18699,7 +18699,7 @@
       "id": "session-markdown-tab-disk-fallback",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18744,7 +18744,7 @@
       "id": "session-markdown-tab-refused",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18774,7 +18774,7 @@
       "id": "session-file-tab-read",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18805,7 +18805,7 @@
       "id": "session-terminal-list-merged",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18844,7 +18844,7 @@
       "id": "session-terminal-list-dedupes-handles",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18883,7 +18883,7 @@
       "id": "session-terminal-list-refused",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18914,7 +18914,7 @@
       "id": "session-terminal-list-empty-guarded",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19431,7 +19431,7 @@
       "id": "session-tab-close-terminal",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19459,7 +19459,7 @@
       "id": "session-tab-close-refused-keeps-tab",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19488,7 +19488,7 @@
       "id": "session-tab-rename",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19523,7 +19523,7 @@
       "id": "session-tab-close-session-tab",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19554,10 +19554,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19631,10 +19631,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19709,10 +19709,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19744,10 +19744,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19780,10 +19780,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19816,10 +19816,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19872,10 +19872,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -19957,7 +19957,7 @@
       "id": "session-diff-notes-loaded",
       "operation": "session.diff-notes",
       "family": "session.diff-notes",
-      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19996,7 +19996,7 @@
       "id": "session-diff-notes-load-refused",
       "operation": "session.diff-notes",
       "family": "session.diff-notes",
-      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20025,7 +20025,7 @@
       "id": "session-markdown-saved",
       "operation": "session.markdown-save",
       "family": "session.markdown-save",
-      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20058,7 +20058,7 @@
       "id": "session-markdown-save-conflict",
       "operation": "session.markdown-save",
       "family": "session.markdown-save",
-      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20090,7 +20090,7 @@
       "id": "quick-commands-loaded-and-saved",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20149,7 +20149,7 @@
       "id": "quick-commands-save-refused-rolls-back",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20202,7 +20202,7 @@
       "id": "quick-commands-load-refused",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20783,8 +20783,8 @@
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
       "sites": [
-        "mobile/src/session/use-mobile-terminal-paste.ts",
-        "mobile/src/session/use-mobile-session-accessory-selection.ts"
+        "mobile/src/terminal/session/use-mobile-terminal-paste.ts",
+        "mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20849,7 +20849,7 @@
       "id": "terminal-paste-refused",
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
-      "sites": ["mobile/src/session/use-mobile-terminal-paste.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-terminal-paste.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20910,7 +20910,7 @@
       "id": "terminal-worktree-connection-resolved",
       "operation": "session.terminal-clipboard",
       "family": "session.worktree-connection",
-      "sites": ["mobile/src/session/use-mobile-session-accessory-selection.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20967,7 +20967,7 @@
       "id": "terminal-live-input-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21461,7 +21461,7 @@
       "id": "live-worktree-name-stream",
       "operation": "session.live-worktree-name",
       "family": "live-worktree-name",
-      "sites": ["mobile/src/session/use-live-worktree-name.ts"],
+      "sites": ["mobile/src/worktree/use-live-worktree-name.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22684,7 +22684,7 @@
       "id": "terminal-gesture-flush-and-clear",
       "operation": "session.terminal-gesture-input",
       "family": "session.terminal-gesture-input",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-input.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-input.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23038,7 +23038,7 @@
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23123,7 +23123,7 @@
       "id": "session-create-terminal-replaces-active",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23179,7 +23179,7 @@
       "id": "session-create-terminal-refused",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23227,7 +23227,7 @@
       "id": "session-create-terminal-without-handle",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23283,7 +23283,7 @@
       "id": "session-create-terminal-without-active-tab",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23340,7 +23340,7 @@
       "id": "session-create-terminal-runs-a-quick-command",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23403,7 +23403,7 @@
       "id": "session-create-terminal-launches-an-agent-quick-command",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23466,7 +23466,7 @@
       "id": "session-create-terminal-ignores-a-second-create-in-flight",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23538,7 +23538,7 @@
       "id": "session-create-terminal-agent-launched",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23605,7 +23605,7 @@
       "id": "session-create-terminal-agent-launched-as-chat",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23673,7 +23673,7 @@
       "id": "session-create-terminal-diff-notes-launched",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23751,7 +23751,7 @@
       "id": "session-create-terminal-diff-notes-not-delivered",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23829,7 +23829,7 @@
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23886,7 +23886,7 @@
       "id": "session-terminal-display-mode-to-desktop",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23936,7 +23936,7 @@
       "id": "session-terminal-display-mode-drops-second-toggle",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24006,7 +24006,7 @@
       "id": "session-terminal-display-mode-auto-without-viewport",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24055,7 +24055,7 @@
       "id": "session-terminal-display-mode-auto-without-device-token",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24210,7 +24210,7 @@
       "id": "review-file-diff-shapes",
       "operation": "session.diff-review-load",
       "family": "session.review-file-diff",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24292,7 +24292,7 @@
       "id": "review-branch-diff-shapes",
       "operation": "session.diff-review-load",
       "family": "session.review-branch-diff",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24342,10 +24342,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.review-git-mutations",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -24397,10 +24397,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.review-send-sheet",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -24526,7 +24526,7 @@
       "id": "session-tab-renamed",
       "operation": "session.tab-close",
       "family": "session.tab-rename",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24561,7 +24561,7 @@
       "id": "session-tab-closed",
       "operation": "session.tab-close",
       "family": "session.tab-close-session",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24591,7 +24591,7 @@
       "id": "new-tab-local-agents",
       "operation": "settings.new-tab-agents",
       "family": "settings.new-tab-local-agents",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24754,7 +24754,7 @@
       "id": "session-markdown-disk-read",
       "operation": "session.tab-documents",
       "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -24799,7 +24799,7 @@
       "id": "session-markdown-disk-served",
       "operation": "session.tab-documents",
       "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {

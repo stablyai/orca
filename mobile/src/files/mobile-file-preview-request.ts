@@ -1,6 +1,6 @@
 import { terminalArtifactPreviewMatchesBase } from './mobile-file-preview-editability'
 import { mobileFileMedia } from './mobile-file-media'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcFailure, RpcResponse } from '../transport/types'
 import {

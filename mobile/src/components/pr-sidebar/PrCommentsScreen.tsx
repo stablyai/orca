@@ -12,9 +12,9 @@ import {
   type PRCommentGroup
 } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
-import { canAddRootComment } from '../../session/pr-comment-actions'
+import { canAddRootComment } from '../../source-control/review/pr-comment-actions'
 import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/source-control/review-comments/pr-comments-resolution-prompt'
-import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile-launch-agent-label'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'

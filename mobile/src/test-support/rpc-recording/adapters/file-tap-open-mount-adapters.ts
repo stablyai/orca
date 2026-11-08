@@ -12,9 +12,9 @@ export function fileTapOpenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.terminal-path-tap': ({ client, effect }) => {
-      const open = modules.load<typeof import('../../../session/mobile-file-tap-open')>(
-        'mobile/src/session/mobile-file-tap-open.ts'
-      ).openMobileFileTap
+      const open = modules.load<
+        typeof import('../../../files/session-documents/mobile-file-tap-open')
+      >('mobile/src/files/session-documents/mobile-file-tap-open.ts').openMobileFileTap
       type Tab = { id: string; relativePath?: string }
       const timers: ReturnType<typeof setTimeout>[] = []
       let sessionTabs: readonly Tab[] = []

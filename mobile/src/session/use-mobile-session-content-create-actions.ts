@@ -12,10 +12,10 @@ import {
   sessionMarkdownNoteCreate
 } from './mobile-session-launch-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import type { MobileBrowserNavigationMethod } from './MobileBrowserTabActionSheet'
+import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
 import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
 import type { MobileSessionTab } from './mobile-session-route-types'
-import type { MobileSessionTerminalCreateActionsModel } from './use-mobile-session-terminal-create-actions'
+import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/use-mobile-session-terminal-create-actions'
 
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,

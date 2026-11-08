@@ -14,9 +14,9 @@ export function sessionTerminalDisplayModeMountAdapters(
   return {
     'session.terminal-display-mode': ({ client, effect }) => {
       const useStreamDisplay = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-stream-display')
+        typeof import('../../../terminal/session/use-mobile-session-terminal-stream-display')
       >(
-        'mobile/src/session/use-mobile-session-terminal-stream-display.ts'
+        'mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts'
       ).useMobileSessionTerminalStreamDisplay
 
       const terminalModes = new Map<string, MobileDisplayMode>()

@@ -12,7 +12,7 @@ import {
   GITHUB_TARGET_CHECK_TIMED_OUT,
   supportsExactGitHubOperations,
   githubOperationResponse
-} from '../transport/github-target-invocation'
+} from '../source-control/review/github-target-invocation'
 import { openRpcRequestBudget } from '../transport/rpc-request-budget'
 import { readGitHubWorkItemByNumber } from './mobile-task-source-search-operations'
 import {

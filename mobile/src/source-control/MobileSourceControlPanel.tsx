@@ -35,7 +35,7 @@ import {
   type SourceControlHubRouteTab
 } from './mobile-source-control-hub-tab'
 import { groupMobileSourceControlMenu } from './mobile-source-control-actions'
-import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
+import { useMobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import { MobilePrTabBody } from '../components/MobilePRSidebar'
 import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
 import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'

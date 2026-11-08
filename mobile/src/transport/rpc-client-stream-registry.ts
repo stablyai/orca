@@ -1,7 +1,7 @@
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
-} from './browser-screencast-protocol'
+} from '../browser/browser-screencast-protocol'
 import type {
   RpcStreamingListener,
   RpcStreamSubscribeOptions,

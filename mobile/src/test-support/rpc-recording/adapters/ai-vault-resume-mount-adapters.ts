@@ -11,9 +11,9 @@ export function aiVaultResumeMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'aiVault.resume-preparation': ({ client }) => {
-      const prepare = modules.load<typeof import('../../../session/ai-vault-resume-preparation')>(
-        'mobile/src/session/ai-vault-resume-preparation.ts'
-      ).prepareMobileAiVaultSessionResume
+      const prepare = modules.load<
+        typeof import('../../../agent-history/ai-vault-resume-preparation')
+      >('mobile/src/agent-history/ai-vault-resume-preparation.ts').prepareMobileAiVaultSessionResume
       let prepared: unknown = 'unprepared'
       let failure: unknown = null
       return {
@@ -41,8 +41,8 @@ export function aiVaultResumeMountAdapters(
       }
     },
     'aiVault.resume-launch': ({ client }) => {
-      const resume = modules.load<typeof import('../../../session/ai-vault-resume-launch')>(
-        'mobile/src/session/ai-vault-resume-launch.ts'
+      const resume = modules.load<typeof import('../../../agent-history/ai-vault-resume-launch')>(
+        'mobile/src/agent-history/ai-vault-resume-launch.ts'
       ).resumeAiVaultSessionInTerminal
       let launched: unknown = 'unlaunched'
       let failure: unknown = null

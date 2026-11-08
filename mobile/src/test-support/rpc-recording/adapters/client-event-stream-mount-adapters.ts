@@ -13,8 +13,8 @@ export function clientEventStreamMountAdapters(
   return {
     'session.live-worktree-name': ({ client, effect }) => {
       const useLiveWorktreeName = modules.load<
-        typeof import('../../../session/use-live-worktree-name')
-      >('mobile/src/session/use-live-worktree-name.ts').useLiveWorktreeName
+        typeof import('../../../worktree/use-live-worktree-name')
+      >('mobile/src/worktree/use-live-worktree-name.ts').useLiveWorktreeName
       let value: ReturnType<typeof useLiveWorktreeName> | undefined
       const screen = hookScreenMount(() => {
         value = useLiveWorktreeName({

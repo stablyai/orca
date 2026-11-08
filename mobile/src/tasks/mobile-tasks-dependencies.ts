@@ -64,7 +64,7 @@ export type { GitHubPrFileDiffLine } from './github-pr-file-diff'
 export {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
-} from '../session/mobile-file-syntax'
+} from '../files/session-documents/mobile-file-syntax'
 export { buildGitHubCheckSummary } from './github-check-summary'
 export { buildGitLabCheckSummary } from './gitlab-check-summary'
 export {

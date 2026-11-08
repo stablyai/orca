@@ -36,13 +36,13 @@ function mountTerminalClipboard(
   { client, effect }: MountContext
 ) {
   const useAccessorySelection = modules.load<
-    typeof import('../../../session/use-mobile-session-accessory-selection')
+    typeof import('../../../terminal/session/use-mobile-session-accessory-selection')
   >(
-    'mobile/src/session/use-mobile-session-accessory-selection.ts'
+    'mobile/src/terminal/session/use-mobile-session-accessory-selection.ts'
   ).useMobileSessionAccessorySelection
   const useTerminalPaste = modules.load<
-    typeof import('../../../session/use-mobile-terminal-paste')
-  >('mobile/src/session/use-mobile-terminal-paste.ts').useMobileTerminalPaste
+    typeof import('../../../terminal/session/use-mobile-terminal-paste')
+  >('mobile/src/terminal/session/use-mobile-terminal-paste.ts').useMobileTerminalPaste
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
     'mobile/src/terminal/mobile-terminal-operations.ts'
   )
@@ -136,9 +136,9 @@ function mountTerminalInputSend(
   { client, effect }: MountContext
 ) {
   const useSendActions = modules.load<
-    typeof import('../../../session/use-mobile-session-terminal-send-actions')
+    typeof import('../../../terminal/session/use-mobile-session-terminal-send-actions')
   >(
-    'mobile/src/session/use-mobile-session-terminal-send-actions.ts'
+    'mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts'
   ).useMobileSessionTerminalSendActions
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
     'mobile/src/terminal/mobile-terminal-operations.ts'

@@ -19,7 +19,7 @@ import {
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
 import type { HostScreenState } from './use-host-screen-state'
-import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import { relaysToServers } from '../worktree/execution-host-scoped-rpc-client'
 import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
 import { WorktreeCatalogReadError } from '../worktree/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../query/host-query'

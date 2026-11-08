@@ -4,8 +4,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-triage-launch'
-import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
+import { launchAgentWithPrompt, promptedLaunchNotice } from './review/pr-ai-triage-launch'
+import { resolveMobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
 import {
   buildFixCommitFailurePrompt,
   hasExpandedCommitFailureDetails,

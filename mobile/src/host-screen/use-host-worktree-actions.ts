@@ -11,7 +11,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
-} from '../transport/execution-host-scoped-rpc-client'
+} from '../worktree/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import type { ConnectionState } from '../transport/types'
 import { leaveHostRoute } from '../host-route-exit'

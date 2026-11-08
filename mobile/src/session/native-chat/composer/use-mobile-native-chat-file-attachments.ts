@@ -11,7 +11,7 @@ import { useMediaPicker } from '../../../platform/media-picker'
 import type { PickedMobileFile } from '../../../platform/media-picker-contract'
 import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 import { agentSessionPastedTextName } from '../../../../../src/shared/agent-session/agent-session-attachments'
-import { uploadMobileAgentSessionAttachment } from '../../mobile-agent-session-attachment-upload'
+import { uploadMobileAgentSessionAttachment } from '../../../files/attachments/mobile-agent-session-attachment-upload'
 import {
   uploadPickedNativeChatFiles,
   type PendingNativeChatFile
