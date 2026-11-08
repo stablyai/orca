@@ -77,7 +77,7 @@ export function cwdBucketScopePrefixes(
   for (const scopePath of scopePaths) {
     for (const candidate of scopePathCandidates(scopePath)) {
       for (const prefix of layout.encodeScopePrefixes(candidate)) {
-        prefixes.add(prefix.toLowerCase())
+        prefixes.add(prefix.normalize('NFC').toLowerCase())
       }
     }
   }
@@ -111,11 +111,12 @@ export async function listProjectDirs(
     recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
-  // Case-folded: Windows cwds differ in case, and each bucket's cwd is still checked afterwards.
+  // Case- and NFC-folded: Windows cwds differ in case, macOS names can be NFD, and each bucket's cwd is still checked.
   return entries
     .filter(
       (entry) =>
-        entry.isDirectory() && layout.isDirInScope(entry.name.toLowerCase(), scopeProjectPrefixes)
+        entry.isDirectory() &&
+        layout.isDirInScope(entry.name.normalize('NFC').toLowerCase(), scopeProjectPrefixes)
     )
     .map((entry) => join(rootDir, entry.name))
 }

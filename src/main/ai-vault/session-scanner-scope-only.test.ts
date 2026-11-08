@@ -149,6 +149,29 @@ describe('scanAiVaultSessions scopeOnly', () => {
     await expect(workspaceSessionIds(root, scopePaths, { scopeOnly: true })).resolves.toEqual(main)
   })
 
+  it('matches a CodeBuddy bucket whose name uses the other Unicode form', async () => {
+    const root = await tempRoot()
+    const cwd = '/repo/cafe\u0301'
+    const dir = join(isolatedScanRoots(root).codebuddyProjectsDir, 'repo-cafe\u0301')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'nfd.jsonl'),
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-06-01T00:00:00.000Z',
+        sessionId: 'nfd',
+        cwd,
+        role: 'user',
+        content: [{ type: 'input_text', text: 'hi' }]
+      })
+    )
+    const scopePaths = [cwd.normalize('NFC')]
+
+    const main = await workspaceSessionIds(root, scopePaths, {})
+    expect(main).toEqual(['nfd'])
+    await expect(workspaceSessionIds(root, scopePaths, { scopeOnly: true })).resolves.toEqual(main)
+  })
+
   it('keeps every in-scope session main shows when the scope holds more than the limit', async () => {
     const root = await tempRoot()
     const claudeRoot = isolatedScanRoots(root).claudeProjectsDir
