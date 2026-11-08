@@ -6621,7 +6621,6 @@
       "src/renderer/src/lib/file-search-selection.test.ts": 51,
       "src/renderer/src/lib/find-query-bounds.test.ts": 45,
       "src/renderer/src/lib/finished-agent-resume-resurrection.test.ts": 1872,
-      "src/renderer/src/lib/fix-checks-agent-launch.test.ts": 730,
       "src/renderer/src/lib/focus-terminal-tab-surface.split-focus.test.ts": 331,
       "src/renderer/src/lib/foreground-terminal-tabs.test.ts": 55,
       "src/renderer/src/lib/github-links.test.ts": 76,
