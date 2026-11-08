@@ -11,7 +11,7 @@ import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
 import { applyJournalDomainContextCommand } from './journal-domain-context-command'
-import { applyJournalDomainTombstone } from './journal-domain-item-removal'
+import { applyJournalSqlTombstoneCommand } from './journal-sql-tombstone-command'
 import { applyJournalDomainGenerationSettlement } from './journal-domain-generation-settlement'
 import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
 import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
@@ -154,18 +154,14 @@ export class JournalSqlCommand {
           [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
       }
-      case 'tombstone': {
-        const result = applyJournalDomainTombstone(this.db, target, operation, savedAt)
-        return finishJournalSqlCommand(
+      case 'tombstone':
+      case 'goal-withdraw':
+        return applyJournalSqlTombstoneCommand(
           this.db,
           this.stateDirectory,
-          command,
-          { ...result, cards: [], receipts: [], inputChanged: true },
-          result.cursor,
-          [{ kind: 'tombstone', epoch: target.epoch, seq: result.cursor.sequence }],
-          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+          { ...command, operation },
+          savedAt
         )
-      }
       case 'queue-insert':
       case 'queue-update':
       case 'queue-hold':

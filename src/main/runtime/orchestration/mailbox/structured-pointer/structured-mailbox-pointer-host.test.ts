@@ -4,7 +4,6 @@ import {
   agentSessionRecordFixture
 } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 
 const hostRef: { current: unknown } = { current: null }
@@ -18,30 +17,9 @@ vi.mock(
 
 const {
   createStructuredMailboxPointerHost,
-  readStructuredSessionGateFacts,
   structuredPointerCallerKey,
   structuredSessionPointerCallerKey
 } = await import('./structured-mailbox-pointer-host')
-
-function runningTurn(): AgentJournalRenderItem {
-  return {
-    itemId: 'lifecycle-1',
-    revision: 1,
-    body: { kind: 'status', text: 'working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
-  } as unknown as AgentJournalRenderItem
-}
-
-function transcript(count: number): AgentJournalRenderItem[] {
-  return Array.from(
-    { length: count },
-    (_unused, index) =>
-      ({
-        itemId: `tool-${index}`,
-        revision: 1,
-        body: { kind: 'tool-call', name: 'Bash', input: {}, state: 'completed' }
-      }) as unknown as AgentJournalRenderItem
-  )
-}
 
 const NOTICE_SOURCE: AgentMessageSource = {
   kind: 'agent',
@@ -52,19 +30,6 @@ const NOTICE_SOURCE: AgentMessageSource = {
 describe('structured mailbox pointer host', () => {
   beforeEach(() => {
     hostRef.current = null
-  })
-
-  it('reads the gate facts from the FULL timeline, never a bounded tail', async () => {
-    // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
-    const items = [runningTurn(), ...transcript(500)]
-    hostRef.current = {
-      journalCurrentRead: () => ({ items, submissions: [] }),
-      currentWork: () => null
-    }
-    expect(await readStructuredSessionGateFacts('s1')).toEqual({
-      turnRunning: true,
-      awaitingHuman: false
-    })
   })
 
   it("passes on the chat host's own answer, never deciding it here", async () => {

@@ -11,7 +11,6 @@ import { readJournalDomainHistoryPage } from './journal-domain-history-page'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { ensureCommandReceiptsTable } from './writing/command-receipt-schema'
-import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -109,54 +108,89 @@ it('publishes and binds ordinary writes to the same public epoch as history afte
   })
 })
 
-it('rolls back missing and swept goal attachments and returns committed inverse accounting', async () => {
+it.each(['item', 'queue'] as const)(
+  'keeps goal attachments used by an independent %s when withdrawing the goal',
+  async (use) => {
+    const f = domainLifecycleFixture(cleanups)
+    ensureAgentSessionAttachmentClaimTables(f.db)
+    const upload = '10000000-0000-4000-8000-000000000001'
+    const root = agentSessionAttachmentStoreRoot(f.directory)
+    const file = join(root, upload, 'pasted.txt')
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      sentAs: 'goal' as const,
+      blocks: [{ type: 'text' as const, text: file }]
+    }
+    const operation = { kind: 'item-claiming' as const, identity: identity('goal'), body, options }
+    await expect(f.run(operation)).rejects.toThrow('no longer stored')
+    expect(f.item('orca:goal')).toBeUndefined()
+    mkdirSync(join(root, upload), { recursive: true })
+    writeFileSync(file, 'attachment')
+    f.db.prepare(`INSERT INTO agent_session_attachment_sweeps VALUES(?,50)`).run(upload)
+    await expect(f.run(operation)).rejects.toThrow('no longer stored')
+    expect(f.item('orca:goal')).toBeUndefined()
+    expect(f.db.prepare(`SELECT last_sequence FROM journal_chat_state`).get()).toEqual({
+      last_sequence: 0
+    })
+    f.db.prepare(`DELETE FROM agent_session_attachment_sweeps WHERE upload_id=?`).run(upload)
+    const committed = await f.run(operation)
+    expect(committed.goals).toEqual({
+      uploads: [[upload, ['orca:goal']]],
+      goals: [['orca:goal', [upload]]]
+    })
+    expect(committed.publication?.referencedUploads).toEqual([upload])
+    expect(
+      f.db.prepare(`SELECT upload_id,session_id FROM agent_session_attachment_claims`).all()
+    ).toEqual([{ upload_id: upload, session_id: 'chat' }])
+    const independent = await f.run(
+      use === 'item'
+        ? {
+            kind: 'item',
+            identity: identity('independent'),
+            body: { ...body, sentAs: undefined },
+            options
+          }
+        : {
+            kind: 'queue-insert',
+            input: { messageId: 'independent', body: { ...body, sentAs: undefined } }
+          },
+      { ...facts, goals: committed.goals }
+    )
+    const withdrawn = await f.run(
+      { kind: 'goal-withdraw', identity: identity('goal'), fence: 1 },
+      { ...facts, goals: independent.goals }
+    )
+    expect(withdrawn.goals).toEqual({ uploads: [], goals: [] })
+    expect(f.item('orca:goal')).toBeUndefined()
+    expect(f.db.prepare(`SELECT upload_id FROM agent_session_attachment_claims`).all()).toEqual([
+      { upload_id: upload }
+    ])
+  }
+)
+
+it('withdraws a goal and its exclusive attachment claim in the writer transaction', async () => {
   const f = domainLifecycleFixture(cleanups)
   ensureAgentSessionAttachmentClaimTables(f.db)
-  const upload = '10000000-0000-4000-8000-000000000001'
-  const root = agentSessionAttachmentStoreRoot(f.directory)
-  const file = join(root, upload, 'pasted.txt')
-  const body = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    sentAs: 'goal' as const,
-    blocks: [{ type: 'text' as const, text: file }]
-  }
-  const operation = { kind: 'item-claiming' as const, identity: identity('goal'), body, options }
-  await expect(f.run(operation)).rejects.toThrow('no longer stored')
-  expect(f.item('orca:goal')).toBeUndefined()
-  mkdirSync(join(root, upload), { recursive: true })
-  writeFileSync(file, 'attachment')
-  f.db.prepare(`INSERT INTO agent_session_attachment_sweeps VALUES(?,50)`).run(upload)
-  await expect(f.run(operation)).rejects.toThrow('no longer stored')
-  expect(f.item('orca:goal')).toBeUndefined()
-  expect(f.db.prepare(`SELECT last_sequence FROM journal_chat_state`).get()).toEqual({
-    last_sequence: 0
+  const upload = '10000000-0000-4000-8000-000000000002'
+  const root = join(agentSessionAttachmentStoreRoot(f.directory), upload)
+  mkdirSync(root, { recursive: true })
+  writeFileSync(join(root, 'pasted.txt'), 'attachment')
+  const goal = await f.run({
+    kind: 'item-claiming',
+    identity: identity('goal'),
+    options,
+    body: {
+      kind: 'message',
+      role: 'user',
+      sentAs: 'goal',
+      blocks: [{ type: 'text', text: join(root, 'pasted.txt') }]
+    }
   })
-  f.db.prepare(`DELETE FROM agent_session_attachment_sweeps WHERE upload_id=?`).run(upload)
-  const committed = await f.run(operation)
-  expect(committed.goals).toEqual({
-    uploads: [[upload, ['orca:goal']]],
-    goals: [['orca:goal', [upload]]]
-  })
-  expect(committed.publication?.referencedUploads).toEqual([upload])
-  expect(
-    f.db.prepare(`SELECT upload_id,session_id FROM agent_session_attachment_claims`).all()
-  ).toEqual([{ upload_id: upload, session_id: 'chat' }])
-  const independent = await f.run(
-    {
-      kind: 'item',
-      identity: identity('independent'),
-      body: { ...body, sentAs: undefined },
-      options
-    },
-    { ...facts, goals: committed.goals }
+  await f.run(
+    { kind: 'goal-withdraw', identity: identity('goal'), fence: 1 },
+    { ...facts, goals: goal.goals }
   )
-  const inverse = new JournalGoalAttachmentInverse('chat')
-  inverse.adopt(independent.goals!)
-  const withdraw = inverse.withdraw('orca:goal')
-  withdraw.write(f.db)
-  withdraw.committed?.()
-  expect(f.db.prepare(`SELECT upload_id FROM agent_session_attachment_claims`).all()).toEqual([
-    { upload_id: upload }
-  ])
+  expect(f.item('orca:goal')).toBeUndefined()
+  expect(f.db.prepare(`SELECT upload_id FROM agent_session_attachment_claims`).all()).toEqual([])
 })

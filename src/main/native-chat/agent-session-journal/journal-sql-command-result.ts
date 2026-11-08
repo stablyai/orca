@@ -100,6 +100,7 @@ function publicJournalSqlValue(
     operation === 'dispatch' ||
     operation === 'lifecycle' ||
     operation === 'tombstone' ||
+    operation === 'goal-withdraw' ||
     operation === 'context-clear' ||
     operation === 'context-rewind' ||
     operation === 'epoch-replace' ||

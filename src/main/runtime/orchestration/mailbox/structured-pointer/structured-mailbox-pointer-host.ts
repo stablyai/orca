@@ -5,19 +5,17 @@ import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-sessio
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
-import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
-import {
-  structuredSessionGateFacts,
-  type StructuredSessionGateFacts
-} from './structured-session-pointer-delivery'
+import type { StructuredSessionGateFacts } from './structured-session-pointer-delivery'
 import {
   sendAgentTurn,
   type StructuredSessionTurnOutcome
 } from '../../turn-delivery/send-agent-turn'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -29,27 +27,19 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
   return `trusted-local:orchestration:session:${sessionId}`
 }
 
-/** Use the full reduced timeline: a busy turn's revised lifecycle item can lie outside any tail page. */
+/** Current-work selects the live turn and actionable prompts in one reader snapshot. */
 export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
-  if (!snapshot) {
-    return null
-  }
-  // The host's projection of current work: an agent that ended is idle, whatever its rows say.
-  const work = await getStructuredAgentSessionHost()?.currentWork(sessionId)
-  return structuredSessionGateFacts(snapshot.items, work?.scope)
-}
-
-async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    // Opens a conversation the idle sweep closed; that starts no agent.
-    return await host.journalCurrentRead(sessionId)
+    const work = await host.currentWorkAtRest(sessionId)
+    return work
+      ? { turnRunning: work.activeTurnId() !== null, awaitingHuman: work.hasActionablePrompt() }
+      : null
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
@@ -121,19 +111,30 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     watchJournal(sessionId, onActivity) {
       const host = getStructuredAgentSessionHost()
-      let seen: string | undefined
+      let source: object | null = null
       // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
       // revision without adding a card, so a new card, the lane's own included, changes nothing),
       // handoffs settling, an accepted turn, a /clear, a new item. A streamed token changes none.
-      const relevant = (journal: AgentSessionJournal) => {
-        const order = journal.inputOrder
-        const state = journal.queuedMessages.inputState()
-        const cleared = state.queuePauseMarks.cleared?.sequence
-        const changes = state.queue.revision - state.queue.cards.size
-        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
-        const changed = key !== seen
-        seen = key
-        return changed
+      const relevant = (publication: JournalPublication) => {
+        const replaced = publication.source !== source
+        source = publication.source
+        const commit = publication.commit
+        if (!commit) {
+          return replaced && source !== null
+        }
+        const cards = commit.publication?.cards ?? []
+        const changedInput =
+          commit.inputChanged &&
+          (cards.length === 0 ||
+            cards.some((card) => card.revision > 0 || card.state !== 'waiting'))
+        return (
+          replaced ||
+          changedInput ||
+          commit.publication?.items.some(
+            (item) => readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body)
+          ) === true ||
+          commit.items.some((item) => item.deleted || item.revision === 0)
+        )
       }
       return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
     },

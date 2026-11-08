@@ -16,14 +16,14 @@ export function claimJournalSqlItemInputs(
   const userItems = publication.items.filter(
     (item) => item.body.kind === 'message' && item.body.role === 'user'
   )
-  if (operation.kind !== 'item-claiming' && userItems.length === 0) {
-    return { referencedUploads: publication.referencedUploads ?? [] }
-  }
   const goals = new JournalGoalAttachmentInverse(target.sessionId)
   if (command.facts?.goals) {
     goals.adopt(command.facts.goals)
   }
   const referencedUploads = [...(publication.referencedUploads ?? [])]
+  if (operation.kind !== 'item-claiming') {
+    goals.acquired(new Set(referencedUploads), [])
+  }
   if (operation.kind === 'item-claiming') {
     const itemId = agentJournalItemKey(operation.identity)
     const claim = claimAgentSessionAttachmentsInTransaction(db, {

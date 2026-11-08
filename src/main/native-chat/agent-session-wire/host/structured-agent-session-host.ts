@@ -149,8 +149,7 @@ export class StructuredAgentSessionHost {
     deps: this.deps,
     sessions: this.sessions,
     serialize: this.serialize,
-    readCommands: (id, commandsOnRequest) =>
-      this.clientDelivery.readCommandsSettled(id, commandsOnRequest),
+    readCommands: this.clientDelivery.readCommandsSettled,
     conversation: (id) => this.lifetime.conversation(id)
   }))
   sessionAgent = this.reads.sessionAgent
@@ -310,7 +309,6 @@ export class StructuredAgentSessionHost {
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer
-  /** What became of one send, answered by key, for callers that follow many sends. */
   sendAnswer = this.reads.sendAnswer
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
@@ -322,6 +320,7 @@ export class StructuredAgentSessionHost {
   appendAgentStart = this.startJournal.appendAgentStart
 
   currentWork = this.clientDelivery.readCurrentWork
+  currentWorkAtRest = this.reads.currentWorkAtRest
   readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
     this.backgroundTasks.currentRequests(...args)
 
