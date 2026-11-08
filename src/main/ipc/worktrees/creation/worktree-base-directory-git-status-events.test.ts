@@ -7,7 +7,7 @@ import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-lis
 import { getStatusLineStatsCacheKey } from '../../../git/source-control/status-branch-line-total-input'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { partialRuntimeStore } from '../../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
-import { makeStore } from '../../../runtime/paired-client-navigation-test-harness'
+import { makeStore } from '../../../runtime/client/navigation/paired-client-navigation-test-harness'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import {
   applyCachedGitStatusLineStats,
