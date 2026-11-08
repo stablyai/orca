@@ -9,6 +9,7 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
 import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
+import { pendingMovedTabSelections } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 
 const mocks = vi.hoisted(
   (): {
@@ -84,6 +85,33 @@ describe('dropTabThroughLayoutOwner', () => {
 
     expect(orderOf(right)).toEqual(['c', 'a'])
     expect(store().getState().activeGroupIdByWorktree[WT]).toBe(left)
+  })
+
+  describe('with a caller that selects the moved tab itself', () => {
+    it('registers no selection of its own and reports refusal', () => {
+      const { right } = seeded()
+      const completion = { refused: vi.fn(), moveHere: vi.fn() }
+      const intents = [...pendingMovedTabSelections()]
+
+      dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right }, completion)
+      expect(pendingMovedTabSelections().filter((intent) => !intents.includes(intent))).toEqual([])
+      lastHandlers().refused?.('group_not_found')
+
+      expect(completion.refused).toHaveBeenCalledTimes(1)
+      expect(groupOf('a')).not.toBe(right)
+    })
+
+    it('asks before moving a tab main hands back', () => {
+      const { right } = seeded()
+      const completion = { refused: vi.fn(), moveHere: vi.fn() }
+      dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right }, completion)
+
+      lastHandlers().asToday()
+      expect(groupOf('a')).not.toBe(right)
+      completion.moveHere.mock.calls[0]![0]()
+
+      expect(groupOf('a')).toBe(right)
+    })
   })
 
   it('moves as today when main cannot act, and not at all when main refuses', () => {

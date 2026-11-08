@@ -50,7 +50,7 @@ export function AutomationManager(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const catalog = useAutomationCatalog(props.client, !!props.executionHost)
+  const catalog = useAutomationCatalog(props.hostId, props.client, props.executionHost)
   const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
   const [view, setView] = useState<AutomationView>(startView)
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')

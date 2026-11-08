@@ -11,7 +11,8 @@ import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileDetectedAgents,
   MobileWorkspaceOnOtherRuntimeError,
-  type MobileAgentLaunchContext
+  type MobileAgentLaunchContext,
+  type MobileAgentRefresh
 } from './mobile-new-tab-agent-loader'
 
 type DetectionInput = { refusesOtherRuntime: boolean }
@@ -25,7 +26,7 @@ async function detectAgents(
   client: RpcClient,
   target: HostQueryTarget,
   input: DetectionInput,
-  refresh: boolean
+  refresh?: MobileAgentRefresh
 ): Promise<MobileDetectedAgents> {
   try {
     const detected = await loadMobileDetectedAgents({
@@ -48,7 +49,7 @@ export const detectedAgentsQuery = defineHostQuery({
   family: 'agents.detected',
   staleTime: 10 * 60_000,
   gcTime: 30 * 60_000,
-  fetch: (client, target, input: DetectionInput) => detectAgents(client, target, input, false)
+  fetch: (client, target, input: DetectionInput) => detectAgents(client, target, input)
 })
 
 // Rewrites the cached list after the host re-reads its login-shell PATH, as desktop's refresh does.
@@ -57,13 +58,14 @@ export async function refreshDetectedAgents(
   queryClient: QueryClient,
   host: { hostId: string; client: RpcClient },
   target: HostQueryTarget,
-  input: DetectionInput
+  input: DetectionInput,
+  onRefreshSent: () => void
 ): Promise<void> {
   const queryKey = hostQueryKey(host.hostId, detectedAgentsQuery.family, target, input)
   await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   queryClient.setQueryData(
     queryKey,
-    await detectAgents(hostReadClient(host.client), target, input, true)
+    await detectAgents(hostReadClient(host.client), target, input, { onSent: onRefreshSent })
   )
 }
 

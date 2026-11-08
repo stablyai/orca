@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { FileListingCancelledError } from '../../../shared/file-listing-cancellation'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 
 const { authorize, spawn } = vi.hoisted(() => ({ authorize: vi.fn(), spawn: vi.fn() }))
 

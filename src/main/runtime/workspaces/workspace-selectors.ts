@@ -16,7 +16,7 @@ import {
 } from './catalog/runtime-repo-selector'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
@@ -24,10 +24,10 @@ import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
+import { folderIdOfSelector } from '../../../shared/workspace-scope'
 import {
   folderCandidate,
   folderCatalogOf,
-  folderIdOfSelector,
   matchFolderWorkspaceRows,
   resolveKeyedFolderWorkspace,
   selectWorkspaceCandidate,

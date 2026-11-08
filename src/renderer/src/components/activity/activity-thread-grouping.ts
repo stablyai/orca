@@ -1,5 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
@@ -37,7 +38,8 @@ function activityStatusRank(thread: AgentPaneThread): number {
 
 export function getActivityThreadGroup(
   thread: AgentPaneThread,
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t: Translate = translate
 ): { key: string; label: string; state?: AgentDotState } {
   if (groupBy === 'none') {
     return { key: 'all', label: '' }
@@ -45,17 +47,14 @@ export function getActivityThreadGroup(
   if (groupBy === 'status') {
     // The key is the glyph every row in the group draws, so it heads the group too.
     const status = activityThreadStatusId(thread)
-    return { key: status, label: threadAgentStateLabel(thread), state: status }
+    return { key: status, label: threadAgentStateLabel(thread, t), state: status }
   }
   if (groupBy === 'project') {
     return thread.repo
       ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
       : {
           key: 'project:unknown',
-          label: translate(
-            'auto.components.activity.ActivityPrototypePage.5651b216c6',
-            'Unknown project'
-          )
+          label: t('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
         }
   }
   if (groupBy === 'worktree') {
@@ -66,7 +65,8 @@ export function getActivityThreadGroup(
 
 export function buildActivityThreadGroups(
   threads: AgentPaneThread[],
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t?: Translate
 ): ActivityThreadGroup[] {
   if (groupBy === 'none') {
     return threads.length > 0 ? [{ key: 'all', label: '', threads }] : []
@@ -74,7 +74,7 @@ export function buildActivityThreadGroups(
   const groups: ActivityThreadGroup[] = []
   const groupIndexByKey = new Map<string, number>()
   for (const thread of threads) {
-    const group = getActivityThreadGroup(thread, groupBy)
+    const group = getActivityThreadGroup(thread, groupBy, t)
     const existingIndex = groupIndexByKey.get(group.key)
     if (existingIndex === undefined) {
       groups.push({ ...group, threads: [thread] })

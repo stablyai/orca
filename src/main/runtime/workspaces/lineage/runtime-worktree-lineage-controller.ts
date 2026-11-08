@@ -16,7 +16,7 @@ import {
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage-row-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type {
   WorkspaceSelectorCandidate,
@@ -26,9 +26,8 @@ import { readStoreInstallationId } from '../../hosts/platform-probe/host-descrip
 import { assertParentInAnotherStore } from './cross-store-parent-store-check'
 import { savedInstanceIdReader } from './saved-lineage-reads'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
+import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from './runtime-lineage-error'
 import {
-  RuntimeLineageError,
-  LINEAGE_PARENT_AMBIGUOUS,
   formatAmbiguousCwdParentMessage,
   enforceCreateLineageHostBoundary,
   resolveRuntimeWorktreeCreateLineage,

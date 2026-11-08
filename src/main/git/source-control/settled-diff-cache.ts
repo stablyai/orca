@@ -89,6 +89,11 @@ export class SettledDiffCache<T> {
     return this.generation
   }
 
+  /** For results whose stamp inputs are derived from the result itself; skips stats and LRU order. */
+  peek(key: string): T | undefined {
+    return this.entries.peek(key)?.result
+  }
+
   get(key: string, stamp: WorktreeDiffStamp | null): T | undefined {
     if (!stamp) {
       this.unprovable += 1

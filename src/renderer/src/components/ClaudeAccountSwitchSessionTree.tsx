@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import { Folder, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { ClaudeAccountSwitchPromptSessions } from '@/lib/claude-account-switch-sessions'
@@ -46,7 +47,8 @@ export function ClaudeAccountSwitchSessionTree({
   sessions: ClaudeAccountSwitchPromptSessions
   previousAccountLabel: string
 }): React.JSX.Element {
-  const groups = sessionGroups(sessions, previousAccountLabel)
+  const t = useTranslate()
+  const groups = sessionGroups(sessions, previousAccountLabel, t)
   const treeRef = useRef<HTMLDivElement>(null)
   const pinnedIndex = useNextGroupBelowFold(treeRef, groups.length)
   return (
@@ -54,10 +56,7 @@ export function ClaudeAccountSwitchSessionTree({
       ref={treeRef}
       role="tree"
       tabIndex={0}
-      aria-label={translate(
-        'accounts.claude.switchSessions.listLabel',
-        'Claude sessions to restart'
-      )}
+      aria-label={t('accounts.claude.switchSessions.listLabel', 'Claude sessions to restart')}
       className="relative max-h-64 min-h-0 scroll-py-8 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
       onKeyDown={moveInTree}
     >
@@ -121,29 +120,30 @@ function useNextGroupBelowFold(
 
 function sessionGroups(
   sessions: ClaudeAccountSwitchPromptSessions,
-  previousAccountLabel: string
+  previousAccountLabel: string,
+  t: Translate = translate
 ): SessionGroup[] {
   const groups: SessionGroup[] = [
     {
       key: 'on-account',
-      title: translate('accounts.claude.switchSessions.groupOnAccount', 'Running on {{account}}', {
+      title: t('accounts.claude.switchSessions.groupOnAccount', 'Running on {{account}}', {
         account: previousAccountLabel
       }),
       sessions: sessions.onAccount
     },
     {
       key: 'elsewhere',
-      title: translate('accounts.claude.switchSessions.groupElsewhere', 'Not on {{account}}', {
+      title: t('accounts.claude.switchSessions.groupElsewhere', 'Not on {{account}}', {
         account: previousAccountLabel
       }),
       sessions: sessions.elsewhere.map((session) => ({ ...session, reason: session.accountLabel }))
     },
     {
       key: 'cant-move',
-      title: translate('accounts.claude.switchSessions.groupCantMove', "Can't move"),
+      title: t('accounts.claude.switchSessions.groupCantMove', "Can't move"),
       sessions: sessions.cantMove.map((session) => ({
         ...session,
-        reason: cantMoveReasonLabel(session.reason)
+        reason: cantMoveReasonLabel(session.reason, t)
       })),
       fixed: true
     }
@@ -151,24 +151,21 @@ function sessionGroups(
   return groups.filter((group) => group.sessions.length > 0)
 }
 
-function cantMoveReasonLabel(reason: ClaudeSessionCantMoveReason): string {
+function cantMoveReasonLabel(
+  reason: ClaudeSessionCantMoveReason,
+  t: Translate = translate
+): string {
   switch (reason) {
     case 'wsl-terminal':
-      return translate('accounts.claude.switchSessions.reasonWsl', 'WSL terminal')
+      return t('accounts.claude.switchSessions.reasonWsl', 'WSL terminal')
     case 'own-folder':
-      return translate(
-        'accounts.claude.switchSessions.reasonOwnFolder',
-        'Uses your own Claude folder'
-      )
+      return t('accounts.claude.switchSessions.reasonOwnFolder', 'Uses your own Claude folder')
     case 'unknown-account':
-      return translate('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
+      return t('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
     case 'no-session':
-      return translate('accounts.claude.switchSessions.reasonNoSession', "Can't resume")
+      return t('accounts.claude.switchSessions.reasonNoSession', "Can't resume")
     case 'shared-session':
-      return translate(
-        'accounts.claude.switchSessions.reasonSharedSession',
-        'Also open in another pane'
-      )
+      return t('accounts.claude.switchSessions.reasonSharedSession', 'Also open in another pane')
   }
 }
 
@@ -189,6 +186,7 @@ function GroupHeader({
   selected,
   onToggle
 }: SessionTreeProps & { group: SessionGroup; pinnedToBottom: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const ptyIds = group.sessions.map((session) => session.ptyId)
   const selection = resumeSelectionState(ptyIds, selected)
   return (
@@ -203,7 +201,7 @@ function GroupHeader({
         disabled={false}
         checkboxSlot={group.fixed ? EMPTY_CHECKBOX_SLOT : undefined}
         onCheckedChange={() => toggleResumeSelection(ptyIds, selection, onToggle)}
-        checkboxLabel={translate(
+        checkboxLabel={t(
           'accounts.claude.switchSessions.selectGroup',
           'Select all sessions in {{group}}',
           { group: group.title }
@@ -268,6 +266,7 @@ function SessionRow({
   checked: boolean
   onToggle: (ptyId: string, checked: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const paneKey = makePaneKey(session.tabId, session.leafId)
   const tabTitle = useAppStore((store) => {
     const tab = store.tabsByWorktree[session.worktreeId]?.find(
@@ -278,7 +277,7 @@ function SessionRow({
   const lastPrompt = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.prompt?.trim())
   const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
   const title =
-    lastPrompt || tabTitle || translate('accounts.claude.switchSessions.session', 'Claude session')
+    lastPrompt || tabTitle || t('accounts.claude.switchSessions.session', 'Claude session')
   return (
     <ResumeTreeRow
       depth={2}
@@ -308,8 +307,8 @@ function SessionRow({
       <span className="max-w-40 shrink-0 truncate text-[11px] text-muted-foreground">
         {session.reason ??
           (busy
-            ? translate('accounts.claude.switchSessions.busy', 'Working')
-            : translate('accounts.claude.switchSessions.idle', 'Idle'))}
+            ? t('accounts.claude.switchSessions.busy', 'Working')
+            : t('accounts.claude.switchSessions.idle', 'Idle'))}
       </span>
     </ResumeTreeRow>
   )

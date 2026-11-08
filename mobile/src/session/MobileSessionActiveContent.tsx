@@ -19,6 +19,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from './use-mobile-session-keyboard-lift'
+import { useOpenUrlInOrca } from './use-open-url-in-orca'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../transport/use-host-profile'
@@ -107,24 +108,11 @@ export function MobileSessionActiveContent({
     retryPendingTerminalRecovery,
     showLoadingState,
     showEmptyState,
-    createTabBusy,
-    handleCreateBrowserRef,
-    isFloatingWorkspaceRoute
+    createTabBusy
   } = controller
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
-  // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
-  // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
-  const canOpenUrlInOrca =
-    client !== null &&
-    controller.presentedConnState === 'connected' &&
-    !isFloatingWorkspaceRoute &&
-    browserScreencastSupported === true
-  const openUrlInOrca = useMemo(
-    () =>
-      canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
-    [canOpenUrlInOrca, handleCreateBrowserRef]
-  )
+  const openUrlInOrca = useOpenUrlInOrca(controller)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
@@ -155,6 +143,7 @@ export function MobileSessionActiveContent({
       <MobileSessionContentState
         connState={presentedConnState}
         hostName={hostTitle}
+        lastTabs={controller.visibleTabs.length > 0 ? { hostId, worktreeId } : null}
         loading={showLoadingState}
         creating={createTabBusy}
         createError={createError}

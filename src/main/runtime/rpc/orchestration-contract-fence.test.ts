@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'

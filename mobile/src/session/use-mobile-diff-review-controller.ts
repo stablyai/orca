@@ -96,6 +96,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
       : null
   const prSidebar = useMobilePrSidebarController({
+    hostId,
     client,
     connState,
     worktreeId,
@@ -104,6 +105,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   })
 
   const { github, applyViewed, setRemoteViewed, commentOnGitHub } = useMobileDiffReviewGitHub({
+    hostId,
     client,
     connState,
     worktreeId,
@@ -190,6 +192,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   })
 
   return {
+    hostId,
     ...interactions,
     ...prSidebar,
     // A past commit has no branch context to find its pull request from.

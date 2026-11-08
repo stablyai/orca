@@ -18,6 +18,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalsRef,
     setSessionTabs,
     readLastSessionTabs,
+    watchLastSessionTabs,
+    sessionTabsRef,
     appliedSnapshotMarkerRef,
     closedTabTombstonesRef,
     setTerminalsLoaded,
@@ -75,15 +77,30 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    // Paint the last strip until the host's snapshot replaces it (which treats it as the previous strip); offline keeps the empty-state body.
-    const lastTabs = connState === 'connected' ? readLastSessionTabs() : undefined
+    // Paint the last strip, from memory or the phone's store, until the host's snapshot replaces it (which treats
+    // it as the previous strip). Nothing is active yet, so the body still says connecting or offline.
+    const lastTabs = readLastSessionTabs()
     setSessionTabs(lastTabs ? withoutSessionTabHostOwnership(lastTabs) : [])
+    // A strip read from the store after this mount (a slow boot read, an in-page open) still paints while
+    // the host hasn't sent one and nothing is drawn.
+    const stopLateTabs = lastTabs
+      ? null
+      : watchLastSessionTabs((tabs) => {
+          stopLateTabs?.()
+          if (
+            appliedSnapshotMarkerRef.current.version === -1 &&
+            sessionTabsRef.current.length === 0
+          ) {
+            setSessionTabs(withoutSessionTabHostOwnership([...tabs]))
+          }
+        })
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
     clearDelayedActionTimers()
     return () => {
+      stopLateTabs?.()
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
       clearPendingLiveInputCommit()
@@ -95,7 +112,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     clearTerminalCache,
     setSplitTerminalHandles,
     terminalPaneViewportsRef,
-    readLastSessionTabs
+    readLastSessionTabs,
+    watchLastSessionTabs
   ])
 
   // Every setTimeout goes through addTimer into `timers`, which the returned cleanup clears.

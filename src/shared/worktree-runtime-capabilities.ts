@@ -26,6 +26,9 @@ export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
+// Hosts whose folderWorkspace.update/delete honor `requireUniqueId`; older hosts edit the first twin and delete every row with the id.
+export const FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY =
+  'folder-workspace.unique-id-mutation.v1' as const
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
@@ -113,6 +116,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,

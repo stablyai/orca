@@ -3,7 +3,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'

@@ -35,6 +35,11 @@ import {
 } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import {
+  nativeChatSideChatForkPoint,
+  nativeChatSlotOffersFork,
+  type NativeChatSideChatForkPoint
+} from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot =
@@ -84,6 +89,17 @@ export function buildNativeChatTranscriptSlots(
   input: NativeChatTranscriptSlotsInput,
   t?: Translate
 ): NativeChatTranscriptSlot[] {
+  return buildNativeChatTranscript(input, t).slots
+}
+
+/** The transcript's slots and, when asked (`forkOffer`), where a side chat forks. */
+export function buildNativeChatTranscript(
+  input: NativeChatTranscriptSlotsInput,
+  t?: Translate
+): {
+  slots: NativeChatTranscriptSlot[]
+  forkPoint: NativeChatSideChatForkPoint | null
+} {
   const {
     messages,
     unresolvedRowIds,
@@ -99,7 +115,8 @@ export function buildNativeChatTranscriptSlots(
     lifecycleWorking,
     subagentSections: sections = NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
     subagentChoices: choices = NO_NATIVE_CHAT_SUBAGENT_CHOICES,
-    liveReasoningId = null
+    liveReasoningId = null,
+    forkOffer
   } = input
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
@@ -211,8 +228,15 @@ export function buildNativeChatTranscriptSlots(
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
   const lastImageByTurn = new Map<string, NativeChatMessageSlot>()
+  let newestOffered: NativeChatMessageSlot | undefined
   for (const slot of drawn) {
-    if (slot.kind !== 'message' || slot.depth !== 0 || slot.turnKey === undefined) {
+    if (slot.kind !== 'message' || slot.depth !== 0) {
+      continue
+    }
+    if (forkOffer && nativeChatSlotOffersFork(slot, forkOffer)) {
+      newestOffered = slot
+    }
+    if (slot.turnKey === undefined) {
       continue
     }
     slot.endsResponse = false
@@ -251,5 +275,10 @@ export function buildNativeChatTranscriptSlots(
       slot.continuesTurn = true
     }
   }
-  return drawn
+  return {
+    slots: drawn,
+    forkPoint: forkOffer
+      ? nativeChatSideChatForkPoint(newestOffered, isWorking || lifecycleWorking)
+      : null
+  }
 }

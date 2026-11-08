@@ -198,6 +198,8 @@ export type PtyApi = {
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
+  /** Local sessions the provider answers are absent; omitted where no local main owns sessions. */
+  getGoneSessionIds?: (ids: string[]) => Promise<string[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (

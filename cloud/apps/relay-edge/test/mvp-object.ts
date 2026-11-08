@@ -20,6 +20,7 @@ import {
   ERASE_KEY,
   ERASER,
   ISSUER,
+  NEXT_SIGNING_KEY,
   ORIGIN,
   PORT,
   SIGNING_KEY,
@@ -41,6 +42,7 @@ import {
   type Host
 } from './harness-mvp-object'
 import { drainCheck, heartbeatCheck } from './mvp-object-hardening'
+import { replayCheck, rotationCheck } from './mvp-object-replay'
 
 async function mainRemote(): Promise<void> {
   // Deployed Worker: inline test JWKS (spike keys), no issuer check, no local dev server.
@@ -73,6 +75,7 @@ async function main(): Promise<void> {
     [
       'EDGE_BACKEND=object',
       `ADMIN_SIGNING_KEY=${SIGNING_KEY}`,
+      `ADMIN_SIGNING_KEY_NEXT=${NEXT_SIGNING_KEY}`,
       `ERASE_SIGNING_KEY=${ERASE_KEY}`,
       `ERASE_ISSUER=${ERASER}`,
       `ADMIN_ISSUER=${DIRECTOR}`,
@@ -104,7 +107,7 @@ async function main(): Promise<void> {
       await sleep(500)
     }
     await run(host, privateKey, () => jwksHits)
-    await Promise.all([heartbeatCheck(privateKey), drainCheck(privateKey)])
+    await Promise.all([heartbeatCheck(privateKey), drainCheck(privateKey), replayCheck(), rotationCheck()])
     await sweepCheck()
     await preAuthCheck(stateDir)
   } catch (error) {

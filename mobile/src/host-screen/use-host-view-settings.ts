@@ -42,16 +42,20 @@ export function useHostViewSettings(args: {
   state: HostScreenState
 }) {
   const { client, connState, state } = args
-  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
+  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef, rememberView } = state
 
   const localEditsRef = useRef(0)
   const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
   const pendingChanges = pendingViewChanges?.controls ?? null
 
-  const applyViewState = useCallback((next: MobileViewState) => {
-    viewRef.current = next
-    setView(next)
-  }, [])
+  const applyViewState = useCallback(
+    (next: MobileViewState) => {
+      viewRef.current = next
+      setView(next)
+      rememberView(next)
+    },
+    [rememberView]
+  )
 
   const syncViewSettingsFromDesktop = useCallback(
     async (options: { resend?: boolean } = {}) => {

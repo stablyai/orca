@@ -35,6 +35,7 @@ import {
 } from '@/components/link-actions/link-action-request'
 import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
 import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
+import { useTranslate } from '@/i18n/use-translate'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
 // Preview snapshots bound history; pane scrollback would only cost memory.
@@ -64,6 +65,7 @@ export function AgentTerminalPreview({
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const [linkRequest, setLinkRequest] = useState<LinkActionRequest | null>(null)
@@ -383,7 +385,7 @@ export function AgentTerminalPreview({
       ) : null}
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ ptyId })}
+          {terminalPreviewUnavailableMessage({ ptyId }, t)}
         </div>
       ) : null}
       <div

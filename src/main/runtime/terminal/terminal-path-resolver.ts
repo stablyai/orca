@@ -1,7 +1,7 @@
 import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-file-contracts'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
 import { homedir } from 'node:os'

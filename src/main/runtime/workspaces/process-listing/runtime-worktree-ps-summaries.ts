@@ -10,7 +10,7 @@ import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/workspace-
 import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace-review-facts'
 import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

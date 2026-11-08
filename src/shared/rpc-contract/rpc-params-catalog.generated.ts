@@ -7,6 +7,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
+import { AntigravityChatAuthConfigSchema } from '../antigravity-chat-auth-config'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -89,7 +90,6 @@ import {
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from './antigravity-accounts-params'
@@ -263,8 +263,8 @@ import {
 } from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
-  FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
 import {
@@ -641,7 +641,6 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
-  RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -649,17 +648,19 @@ import {
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
-  SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageMoveParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -845,6 +846,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
+  'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
@@ -1068,7 +1070,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.writeIfUnchanged': FileWriteIfUnchanged,
   'files.writeTerminalArtifact': TerminalArtifactFileWrite,
   'folderWorkspace.create': FolderWorkspaceCreate,
-  'folderWorkspace.delete': FolderWorkspaceSelector,
+  'folderWorkspace.delete': FolderWorkspaceDelete,
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,

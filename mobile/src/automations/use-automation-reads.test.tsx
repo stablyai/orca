@@ -15,6 +15,7 @@ import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { newAutomationDraft, validateAutomationDraft } from './automation-draft'
 import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
 import { AUTOMATION_OUTCOME_UNKNOWN } from './automation-error'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
@@ -229,7 +230,7 @@ describe('host-owned automation reads', () => {
         attempt: ReturnType<typeof useAutomationCreateAttempt>
       } | null = null
       function Probe() {
-        const catalog = useAutomationCatalog(port.client, false)
+        const catalog = useAutomationCatalog('desktop', port.client)
         const attempt = useAutomationCreateAttempt(
           catalog.rows,
           true,
@@ -240,7 +241,7 @@ describe('host-owned automation reads', () => {
         return null
       }
       await act(async () => {
-        tree = create(createElement(Probe))
+        tree = createWithQueryClient(createElement(Probe))
       })
       const read = () => latest(() => state)
       const targets = automationTargets()
@@ -534,35 +535,23 @@ describe('host-owned automation reads', () => {
     await act(async () => tree?.update(createElement(Probe, { revision: 2 })))
     expect(read().unavailable).toBe(true)
   })
-  it('ignores a previous connection snapshot and keeps delivery ambiguity until explicit refresh', async () => {
-    const pending = deferred<unknown>()
-    let listReads = 0
+  it('keeps delivery ambiguity through change events until an explicit refresh', async () => {
     const automation = savedAutomation()
     const catalogReply = {
       automations: [automation],
       items: [{ automationId: automation.id, selector: { kind: 'self' } }]
     }
-    const port = automationClient((method) => {
-      if (method === 'status.get') {
-        return { capabilities: [] }
-      }
-      return ++listReads === 1 ? pending.promise : catalogReply
-    })
+    const port = automationClient((method) =>
+      method === 'status.get' ? { capabilities: [] } : catalogReply
+    )
     let state: ReturnType<typeof useAutomationCatalog> | null = null
     function Probe() {
-      state = useAutomationCatalog(port.client, false)
+      state = useAutomationCatalog('desktop', port.client)
       return null
     }
     const read = () => latest(() => state)
     await act(async () => {
-      tree = create(createElement(Probe))
-    })
-    await act(async () => {
-      port.state('disconnected')
-      port.state('connected')
-    })
-    await act(async () => {
-      pending.resolve({ automations: [], items: [] })
+      tree = createWithQueryClient(createElement(Probe))
     })
     expect(read().rows.map((row) => row.automation.id)).toEqual(['automation-1'])
     let attempts = 0
@@ -592,11 +581,11 @@ describe('host-owned automation reads', () => {
     )
     let state: ReturnType<typeof useAutomationCatalog> | null = null
     function Probe() {
-      state = useAutomationCatalog(port.client, false)
+      state = useAutomationCatalog('desktop', port.client)
       return null
     }
     await act(async () => {
-      tree = create(createElement(Probe))
+      tree = createWithQueryClient(createElement(Probe))
     })
     const read = () => latest(() => state)
     const accept = vi.fn()

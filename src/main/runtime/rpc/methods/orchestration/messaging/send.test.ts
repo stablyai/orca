@@ -1,14 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import 'zod'
 import type { RpcContext, RpcRequest } from '../../../core'
+
 import { ORCHESTRATION_METHODS } from '../orchestration'
+
 import { RpcDispatcher } from '../../../dispatcher'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
+
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { MessageWake } from '../../../../runtime-message-waiters'
+
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 
 function lifecycleGroupRecipientError(
   type: 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'

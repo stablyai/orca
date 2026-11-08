@@ -2,6 +2,7 @@ import { getConnectionExecutionHostId } from '../../../../../../shared/execution
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
+import { markTerminalProviderSessionBound } from '../../../terminal/terminal-provider-gone-sessions'
 import { createPtyInputWriteQueue } from '../input/pty-input-write-queue'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { createPtyPreconnectInputBuffer } from '../input/pty-preconnect-input-buffer'
@@ -79,6 +80,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const bind = (id: string): void => {
     ptyId = id
     connected = true
+    markTerminalProviderSessionBound(id)
   }
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
