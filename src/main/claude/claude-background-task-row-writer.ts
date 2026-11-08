@@ -56,7 +56,6 @@ export class ClaudeBackgroundTaskRowWriter {
     for (const [key, pending] of this.pending) {
       const admission = writeClaudeBackgroundTaskRow(
         this.sink,
-        this.identities,
         pending.id,
         pending.row,
         this.turnScope,
@@ -86,6 +85,5 @@ export class ClaudeBackgroundTaskRowWriter {
 
   dispose(): void {
     this.pending.clear()
-    this.identities.clear()
   }
 }
