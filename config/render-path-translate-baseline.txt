@@ -570,7 +570,6 @@
 3 src/renderer/src/components/repo/NestedRepoScanLimitNotice.tsx
 8 src/renderer/src/components/repo/RepoCombobox.tsx
 1 src/renderer/src/components/repo/repo-fork-indicator.tsx
-1 src/renderer/src/components/right-sidebar/source-control/ai/use-ai.ts
 16 src/renderer/src/components/runtime-access/RuntimeHostAccessForm.tsx
 8 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
 3 src/renderer/src/components/setup-guide/SetupGuideModal.tsx
