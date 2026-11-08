@@ -37,7 +37,7 @@ vi.mock(
 )
 
 // Stub hook writes: this suite runs real handlers that would otherwise edit the developer's agent configs.
-vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
   getManagedAgentHookStatuses: vi.fn(() => [])
 }))

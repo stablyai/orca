@@ -26,7 +26,7 @@ import { useHostQuery } from '../query/host-query'
 import { hostReadClient } from '../query/host-read-client'
 import { hostScopeKey } from '../query/host-query-key'
 import { isHostNotConnectedError } from '../query/host-query-errors'
-import { refetchHostQueryAfterInFlight, useHostEventRouter } from '../query/host-event-router'
+import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import {
   isHostListQuery,
   HOST_LIST_BACKSTOP_POLL_MS,
@@ -97,7 +97,6 @@ export function useHostWorktreeCatalog(args: {
     }, [])
   )
   const subscribed = embedded || focused
-  useHostEventRouter(hostId, client)
 
   const host = { hostId: hostId ?? '', client }
   // The host's sidebar feed replaces the poll: its notices say when a row changed.

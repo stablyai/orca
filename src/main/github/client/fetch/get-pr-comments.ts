@@ -1,3 +1,4 @@
+import { GITHUB_BODY_MEDIA_TYPE } from '../../body-image-urls'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../../git/exec-error'
@@ -31,8 +32,6 @@ async function readPRComments(
   let restBudgetFailed = false
   try {
     if (ownerRepo) {
-      // Explicit refresh bypasses the polling cache.
-      const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
       // Retain successful comment sources when another endpoint fails.
@@ -60,9 +59,9 @@ async function readPRComments(
           )
         } catch (error) {
           // gh exits nonzero for partial GraphQL errors; keep the successful sources.
-          const { stdout } = extractExecError(error)
+          const { stdout, stderr } = extractExecError(error)
           threadsResult = stdout ? { stdout } : null
-          console.warn('Failed to fetch review threads:', error)
+          console.warn('Failed to fetch review threads:', stderr)
         }
       }
 
@@ -85,12 +84,12 @@ async function readPRComments(
         try {
           noteRepositoryRateLimitSpend(ownerRepo, 'core', reviews ? 1 : 2, ghOptions)
           const [{ stdout }, viewerLogin] = await Promise.all([
-            ghExecFileAsync(['api', ...cacheArgs, endpoint], ghOptions),
+            ghExecFileAsync(['api', '-H', GITHUB_BODY_MEDIA_TYPE, endpoint], ghOptions),
             reviews ? null : readViewerLogin(ghOptions)
           ])
           return parseRestPRComments(stdout, reviews, viewerLogin)
         } catch (error) {
-          console.warn('Failed to fetch PR conversation fallback:', error)
+          console.warn('Failed to fetch PR conversation fallback:', extractExecError(error).stderr)
           return []
         }
       }

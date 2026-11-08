@@ -17,6 +17,8 @@ import {
   refuseUndeliverableSessionRecipient,
   type SessionRecipientRefusal
 } from './session-recipient'
+import { reportFollowUpAction } from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { formatReportFollowUpNext } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
@@ -30,10 +32,27 @@ export function assertDispatchMailboxDeliverable(
   if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
     return
   }
-  const recipientRun = currentDispatchAssigneeRun(runtime, db, dispatch)?.id ?? dispatch.run_id
+  const workerRun = currentDispatchAssigneeRun(runtime, db, dispatch)
+  // The owning Run is usually the sender's own; only a Run the worker itself coordinates is its mailbox.
+  if (workerRun && workerRun.id !== dispatch.run_id) {
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${workerRun.id} instead, or start a new Dispatch for follow-up work.`
+    )
+  }
+  const followUp = reportFollowUpAction(db, dispatchId)
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${recipientRun} instead, or start a new Dispatch for follow-up work.`
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox.${
+      followUp
+        ? ` ${formatReportFollowUpNext(followUp)}${
+            followUp.kind === 'send' && !followUp.active
+              ? ' Only --type status, dispatch or handoff continues a worker; status is the default.'
+              : ''
+          }`
+        : ''
+    }`,
+    followUp ? { followUp } : undefined
   )
 }
 
@@ -139,13 +158,13 @@ export function selectRunBoundDispatchRecipient(
   }
 }
 
-// Replies share send routing; unresolved historical senders keep their original address.
+// Replies share send routing; an unresolvable bare sender is refused rather than stored where nothing reads.
 export function resolveReplyRecipient(params: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   originalFrom: string
   originalRunId: string | undefined
-}): { to: string; runId: string | undefined } {
+}): { to: string; runId: string | undefined; warning?: SendRecipientWarning } {
   const { runtime, db, originalFrom, originalRunId } = params
   const unchanged = { to: originalFrom, runId: originalRunId }
   if (originalFrom.startsWith('run:')) {
@@ -167,7 +186,16 @@ export function resolveReplyRecipient(params: {
     handle: originalFrom,
     senderRunId: originalRunId
   })
-  return recipient.ok ? { to: recipient.to, runId: recipient.runId ?? originalRunId } : unchanged
+  if (!recipient.ok) {
+    throw new OrchestrationError(recipient.code, `${recipient.message} No reply was sent.`, {
+      effectsApplied: false
+    })
+  }
+  return {
+    to: recipient.to,
+    runId: recipient.runId ?? originalRunId,
+    ...(recipient.warning ? { warning: recipient.warning } : {})
+  }
 }
 
 export type SendRecipientWarning = {

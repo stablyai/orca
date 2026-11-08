@@ -61,6 +61,7 @@ export function NativeChatModelCombobox({
       ) : null}
       <CommandList
         animateHeight
+        className="max-h-[min(233px,60vh)] h-[min(var(--cmdk-list-height),233px,60vh)]"
         // cmdk rows override inherited aria-disabled, so announce pending writes on the list too.
         aria-busy={busy}
         // Keep focus in search; model changes can remove or disable the clicked option.

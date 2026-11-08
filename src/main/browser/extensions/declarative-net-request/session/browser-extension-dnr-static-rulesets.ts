@@ -1,8 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { buildDnrRulesetInSlices, type DnrInvalidRulePolicy } from '../ruleset-builder'
-import type { DnrRulesetIndex } from '../ruleset-index'
-import type { DnrRulesetSource } from '../rule-types'
+import {
+  buildDnrRulesetInSlices,
+  type DnrInvalidRulePolicy
+} from '../rule-compilation/ruleset-builder'
+import type { DnrRulesetIndex } from '../indexing/ruleset-index'
+import type { DnrRulesetSource } from '../rule-compilation/rule-types'
 
 /** One manifest declarative_net_request.rule_resources entry. */
 export type DnrManifestRuleset = {

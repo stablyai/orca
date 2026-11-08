@@ -3,8 +3,8 @@ import { cleanup } from '@testing-library/react'
 
 import type { CommandMenuRendererFixtureModule } from '../../../../../shared/agent-session/agent-session-command-menu.test-fixture-contract'
 
-import { OMP } from '../../../../acp/acp-command-discovery.test-fixture'
-import { acpStructuredAgentDefinition } from '../../../../acp/acp-structured-agent-definitions'
+import { OMP } from '../../../../acp/discovery/testing/acp-command-discovery.test-fixture'
+import { acpStructuredAgentDefinition } from '../../../../acp/session/acp-structured-agent-definitions'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'
 import { StructuredAgentRegistry } from '../../providers/structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from '../../providers/structured-agent-session-adapter-router'

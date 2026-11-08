@@ -226,6 +226,8 @@
     "build:packages": "node config/scripts/workspace-package-build/build-workspace-packages.mjs",
     "check:process-host-imports": "node config/scripts/static-analysis/process-boundaries/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs",
+    "check:main-sync-fs-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-sync-fs-ratchet.mjs",
+    "check:recurring-timer-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-recurring-timer-ratchet.mjs",
     "check:compat-boundary-imports": "node config/scripts/static-analysis/process-boundaries/check-compat-boundary-imports.mjs",
     "check:import-boundaries": "bun config/scripts/static-analysis/process-boundaries/check-import-boundaries.mjs"
   },

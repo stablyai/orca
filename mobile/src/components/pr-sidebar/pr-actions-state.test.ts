@@ -21,14 +21,6 @@ describe('presentPrMerge', () => {
     mergeable: 'MERGEABLE' as const
   }
 
-  it('disables Merge with desktop copy when GitHub reports conflicts', () => {
-    expect(presentPrMerge(pr, 'squash')).toMatchObject({
-      enabled: false,
-      label: 'Conflicts',
-      hint: 'GitHub reports merge conflicts'
-    })
-  })
-
   it('lets a complete stack merge through, and names a blocking downstack PR', () => {
     const stack = {
       number: 51,

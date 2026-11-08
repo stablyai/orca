@@ -77,13 +77,15 @@ export const CLIENT_EVENT_METHODS = [
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
           return state ? [{ targetId: target.id, state }] : []
         })
+        const settings = runtime.getClientSettings()
         // Listen before snapshotting to close reload gaps without exposing HUB-private target configuration.
         emit({
           type: 'ready',
           subscriptionId,
           snapshot: {
             sshStates,
-            nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps
+            nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps,
+            nativeChatCiResultLines: settings.nativeChatCiResultLines
           }
         })
       })

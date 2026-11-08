@@ -9,7 +9,6 @@ import {
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
-  RelayPingMessageSchema,
   encodeRelayHostHello,
   parseRelayControlMessage,
   type RelayHostHelloAckMessage,
@@ -48,6 +47,7 @@ export class RelayControlClient {
     this.liveness = new RelayControlLiveness({
       cellUrl: this.relayOrigin,
       ping: () => this.socket?.ping(),
+      send: (frame) => this.socket?.send(frame),
       isLive: () => this.isLive(),
       terminate: () => this.socket?.terminate(),
       random: options.livenessRandom
@@ -200,8 +200,7 @@ export class RelayControlClient {
       this.failProtocol('control message before activation')
       return
     }
-    if (RelayPingMessageSchema.safeParse(message).success) {
-      this.socket?.send(JSON.stringify({ type: 'pong', t: message.t }))
+    if (this.liveness.handleLivenessMessage(message)) {
       return
     }
     const connection = RelayConnectionOpenMessageSchema.safeParse(message)

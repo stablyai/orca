@@ -12,7 +12,7 @@ import {
   agentConversationCopyRefusal
 } from '../../agent-conversation-copy-error'
 import { structuredAgentSessionForkBoundary } from './structured-agent-session-fork-boundary'
-import { acpAgentName } from '../../../acp/acp-structured-agent-definitions'
+import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'

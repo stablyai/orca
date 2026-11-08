@@ -1,5 +1,5 @@
-import { agentHookServer } from '../../agent-hooks/server'
-import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import {

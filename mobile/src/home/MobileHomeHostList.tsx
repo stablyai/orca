@@ -22,6 +22,8 @@ type MobileHomeHostListProps = {
   hostConnections: HomeHostConnections
   hosts: HostCatalogEntry[]
   hostStates: Record<string, ConnectionState>
+  /** Agents waiting on the user, per desktop. */
+  needsYouByHost: Readonly<Record<string, number>>
   worktreeInfo: Record<string, HostWorktreeInfo>
   onOpen: (host: HostCatalogEntry) => void
   onOpenActions: (host: HostCatalogEntry) => void
@@ -48,6 +50,7 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
               hostLastConnected={props.hostLastConnected}
               hostConnections={props.hostConnections}
               hostStates={props.hostStates}
+              needsYou={props.needsYouByHost[host.id] ?? 0}
               worktreeInfo={props.worktreeInfo}
               onOpen={props.onOpen}
               onOpenActions={props.onOpenActions}
@@ -86,7 +89,7 @@ type MobileHomeHostRowProps = Pick<
   | 'worktreeInfo'
   | 'onOpen'
   | 'onOpenActions'
-> & { item: HostCatalogEntry }
+> & { item: HostCatalogEntry; needsYou: number }
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
   const { item, onOpen, onOpenActions } = props
@@ -117,6 +120,7 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
       verdict={verdict}
       path={connection?.path ?? 'lan'}
       worktreeInfo={props.worktreeInfo[item.id]}
+      needsYou={props.needsYou}
       onPress={open}
       onLongPress={openActions}
     />

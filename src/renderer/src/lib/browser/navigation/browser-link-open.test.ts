@@ -1,5 +1,4 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import '@/store/testing/app-store-test-fixture'
@@ -66,71 +65,17 @@ function browser(groupId: string, url = URL_TO_OPEN) {
 }
 
 describe('browser link placement and exact page activation', () => {
-  it('prefers an old inactive nonadjacent match over a nearby browser without navigation or creation', async () => {
-    store.getState().createBrowserTab(WORKSPACE, 'https://nearby.example/', {
-      targetGroupId: 'b',
-      executionHostId: 'local',
-      browserRuntimeEnvironmentId: null,
-      activate: true
-    })
-    const existing = browser('c')
-    store.getState().createBrowserPage(existing.id, 'https://other.example/', {
-      activate: true,
-      browserRuntimeEnvironmentId: null
-    })
-    const navigate = vi.spyOn(store.getState(), 'setBrowserPageUrl')
-    const create = vi.spyOn(store.getState(), 'createBrowserTab')
-    const result = await open()
-    expect(result).toMatchObject({
-      status: 'opened',
-      result: {
-        browserWorkspaceId: existing.id,
-        browserPageId: existing.activePageId,
-        groupId: 'c'
-      }
-    })
-    expect(
-      store.getState().browserTabsByWorktree[WORKSPACE]?.find((tab) => tab.id === existing.id)
-        ?.activePageId
-    ).toBe(existing.activePageId)
-    expect(navigate).not.toHaveBeenCalled()
-    expect(create).not.toHaveBeenCalled()
-  })
-
-  it('reusing a page clears a pending address-bar request and focuses the page', async () => {
+  it('opens a new website tab when the same URL is already open', async () => {
     const existing = browser('b')
-    const pageId = existing.activePageId
-    if (!pageId) {
-      throw new Error('Expected page')
+    const result = await open(context(true))
+    expect(result.status).toBe('opened')
+    if (result.status !== 'opened') {
+      throw new Error('Expected opened link')
     }
-    store.setState({
-      pendingAddressBarFocusByPageId: { [pageId]: true },
-      pendingAddressBarFocusByTabId: { [existing.id]: true, [pageId]: true }
-    })
-    expect(await open()).toMatchObject({ status: 'opened', result: { browserPageId: pageId } })
-    expect(store.getState().pendingAddressBarFocusByPageId).toEqual({})
-    expect(store.getState().pendingAddressBarFocusByTabId).toEqual({})
-    expect(requestBrowserFocus).toHaveBeenLastCalledWith({ pageId, target: 'webview' })
-  })
-
-  it('rechecks a reused page after workspace activation without navigating it back', async () => {
-    const existing = browser('b')
-    const pageId = existing.activePageId
-    if (!pageId) {
-      throw new Error('Expected page')
-    }
-    const outcome = await openLocalBrowserLink({
-      destination: browserLinkTestDestination(),
-      context: context(),
-      url: URL_TO_OPEN,
-      ownsRoute: () => true,
-      reveal: () => store.getState().setBrowserPageUrl(pageId, 'https://navigated-away.example/')
-    })
-    expect(outcome).toEqual({ status: 'refused' })
-    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(
-      'https://navigated-away.example/'
-    )
-    expect(store.getState().activeGroupIdByWorktree[WORKSPACE]).toBe('c')
+    expect(result.result.browserWorkspaceId).not.toBe(existing.id)
+    expect(result.result.groupId).toBe('a')
+    expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(URL_TO_OPEN)
   })
 
   it('removes a newly created tab after an activation error while preserving existing tabs', async () => {

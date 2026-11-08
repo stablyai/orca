@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
-import { vi, type Mock } from 'vitest'
+import { vi } from 'vitest'
+import type { Mock } from 'vitest'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
-import type { BrowserManager } from '../browser-manager'
+import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 
 export type ExecFileCallback = (error: unknown, stdout?: string, stderr?: string) => void
 
