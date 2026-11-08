@@ -1,4 +1,5 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit, JournalWriterPublication } from './journal-writer-changes'
@@ -7,6 +8,10 @@ import { applyJournalDomainItem } from './journal-domain-item'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
+import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
+import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
+import { applyJournalDomainContextCommand } from './journal-domain-context-command'
+import { applyJournalDomainTombstone } from './journal-domain-item-removal'
 import { applyJournalSqlMessageSteps, type JournalSqlMessage } from './journal-sql-message-commit'
 
 /** Every command decides against current rows at its position on the sole writer. */
@@ -92,6 +97,83 @@ export class JournalSqlCommand {
             epoch: target.epoch,
             seq: position.cursor.sequence
           })),
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+        )
+      }
+      case 'pending-unknown':
+      case 'pending-reject':
+      case 'queued-reject':
+      case 'hold-unsent':
+      case 'command-open':
+      case 'command-settle': {
+        const result =
+          operation.kind === 'command-open' || operation.kind === 'command-settle'
+            ? applyJournalDomainCommandTurn(this.db, target, operation, savedAt)
+            : applyJournalDomainInputRecovery(
+                this.db,
+                target,
+                operation,
+                command.facts ?? {},
+                savedAt
+              )
+        return this.finish(
+          command,
+          result,
+          result.value,
+          result.coordinates.map((position) => ({
+            kind:
+              position.kind === 'queue-reopen'
+                ? 'tombstone'
+                : position.kind === 'command-settle'
+                  ? 'lifecycle-batch'
+                  : position.kind,
+            epoch: target.epoch,
+            seq: position.cursor.sequence
+          })),
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+        )
+      }
+      case 'context-clear':
+      case 'context-rewind':
+      case 'epoch-replace': {
+        if (operation.kind === 'epoch-replace' && !operation.providerHandle && !command.facts) {
+          throw new Error('journal context replacement omitted its identity facts')
+        }
+        const result = applyJournalDomainContextCommand(
+          this.db,
+          target,
+          operation.kind === 'epoch-replace'
+            ? {
+                ...operation,
+                providerHandle:
+                  operation.providerHandle ??
+                  agentSessionJournalProviderHandle(command.facts!.identity)
+              }
+            : operation,
+          savedAt
+        )
+        return this.finish(
+          command,
+          result,
+          result.cursor,
+          result.coordinates.map((position) => ({
+            kind:
+              position.kind === 'context-item' || position.kind === 'replacement-item'
+                ? 'item'
+                : 'tombstone',
+            epoch: result.cursor.epoch,
+            seq: position.cursor.sequence
+          })),
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+        )
+      }
+      case 'tombstone': {
+        const result = applyJournalDomainTombstone(this.db, target, operation, savedAt)
+        return this.finish(
+          command,
+          { ...result, cards: [], receipts: [], inputChanged: true },
+          result.cursor,
+          [{ kind: 'tombstone', epoch: target.epoch, seq: result.cursor.sequence }],
           [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
       }

@@ -15,6 +15,8 @@ export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'sto
 /** Host-memory facts a command needs; the writer never calls back into the host mid-transaction. */
 export type JournalWriterHostFacts = {
   identity: AgentSessionJournalIdentity
+  /** Physical admission boundary captured after ready and before this opening's recovery. */
+  openedThrough?: AgentJournalCursor
   /** This handle's unmarked reopen boundary. */
   reopenFloor?: AgentJournalCursor | null
   editLeases?: readonly QueuedMessageEditLease[]

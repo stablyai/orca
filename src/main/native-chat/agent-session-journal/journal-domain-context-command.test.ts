@@ -166,6 +166,7 @@ it('rolls back an epoch replacement completely when one replacement write fails'
     context({
       kind: 'epoch-replace',
       reason: 'legacy_import',
+      providerHandle: { kind: 'codex', threadId: 'conversation' },
       fence: 1,
       items: clientMessageIds.map((clientMessageId) => ({
         identity: { provider: 'orca', clientMessageId },

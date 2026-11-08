@@ -1,3 +1,11 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalAcceptanceReceipt
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
+import type { JournalDomainQueueClear } from './journal-domain-queue-clear'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import { applyJournalDomainItem } from './journal-domain-item'
@@ -14,7 +22,6 @@ import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   journalDomainPublicCursor,
   replaceJournalDomainContext,
-  type JournalDomainContextCommit,
   type JournalDomainContextReplacement
 } from './journal-domain-context-replacement'
 import { writeJournalDomainQueueClear } from './journal-domain-queue-clear'
@@ -24,6 +31,32 @@ type Target = { sessionId: string; epoch: string }
 export type JournalDomainContextOperation =
   | { kind: 'context-clear'; boundary: AgentSessionProviderContextBoundary }
   | JournalDomainContextReplacement
+
+export type JournalDomainContextCoordinate = {
+  kind: 'context-item' | 'context-removal' | 'replacement-item' | 'queue-clear'
+  cursor: AgentJournalCursor
+  fence: number
+  observedAt: number
+}
+
+export type JournalDomainContextCommit = {
+  /** Public context identity at the last position, as the conversation receipt binds it. */
+  cursor: AgentJournalCursor
+  physicalCursor: AgentJournalCursor
+  /** Set only when this command started a new context in the same physical epoch. */
+  contextBoundary: number | null
+  coordinates: JournalDomainContextCoordinate[]
+  items: AgentJournalRenderItem[]
+  removedItemIds: string[]
+  /** Turns this command removed; membership persists independently of their items. */
+  removedTurnIds: string[]
+  cards: QueuedMessageRow[]
+  clear: JournalDomainQueueClear | null
+  receipts: AgentJournalAcceptanceReceipt[]
+  inputChanged: boolean
+  acceptedInputs?: JournalSqlAcceptedInputs
+  editDeadline?: number | null
+}
 
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
 export function applyJournalDomainContextCommand(

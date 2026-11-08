@@ -1,34 +1,35 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+  journalHistoryOrigin,
+  sameJournalConversation,
+  type JournalHistoryOrigin
+} from './context-epochs/journal-history-origin'
+import { journalRowBase } from './writing/journal-row-builders'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalLinkageFields,
   isRootAgentJournalItem
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import type {
-  AgentJournalAcceptanceReceipt,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalEpochReason } from './durable-rows/journal-row-schema'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
-import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
-import { journalDomainEventItem, removeJournalDomainItem } from './journal-domain-item-removal'
-import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+import {
+  nextJournalDomainItemOrdinal,
+  writeJournalDomainCurrentItem
+} from './journal-domain-current-item'
+import {
+  journalDomainEventItem,
+  removeJournalDomainItem,
+  queuedJournalDomainSubmission
+} from './journal-domain-item-removal'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { JournalDerivedTurnScope } from './projection/journal-derived-turn-scope'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
-import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { assertJournalFence } from './writing/journal-write-guards'
-import {
-  queueClearRestatement,
-  writeJournalDomainQueueClear,
-  type JournalDomainQueueClear
-} from './journal-domain-queue-clear'
+import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-domain-queue-clear'
 import { restoreRetainedFailures, retainedFailures } from './journal-domain-retained-failures'
 
 type Target = { sessionId: string; epoch: string }
@@ -43,40 +44,21 @@ export type JournalDomainContextReplacement =
   | {
       kind: 'epoch-replace'
       reason: AgentJournalEpochReason
+      providerHandle?: AgentSessionJournalProviderHandle
       fence: number
       items: readonly JournalReplacementItem[]
     }
 
-export type JournalDomainContextCoordinate = {
-  kind: 'context-item' | 'context-removal' | 'replacement-item' | 'queue-clear'
-  cursor: AgentJournalCursor
-  fence: number
-  observedAt: number
-}
-
-export type JournalDomainContextCommit = {
-  /** Public context identity at the last position, as the conversation receipt binds it. */
-  cursor: AgentJournalCursor
-  physicalCursor: AgentJournalCursor
-  /** Set only when this command started a new context in the same physical epoch. */
-  contextBoundary: number | null
-  coordinates: JournalDomainContextCoordinate[]
-  items: AgentJournalRenderItem[]
-  removedItemIds: string[]
-  /** Turns this command removed; membership persists independently of their items. */
-  removedTurnIds: string[]
-  cards: QueuedMessageRow[]
-  clear: JournalDomainQueueClear | null
-  receipts: AgentJournalAcceptanceReceipt[]
-  inputChanged: boolean
-  acceptedInputs?: JournalSqlAcceptedInputs
-  editDeadline?: number | null
-}
+import type {
+  JournalDomainContextCommit,
+  JournalDomainContextCoordinate
+} from './journal-domain-context-command'
+export type { JournalDomainContextCommit } from './journal-domain-context-command'
 
 export function readJournalDomainContextHead(db: Database.Database, target: Target) {
   const head = db
     .prepare(`SELECT last_sequence, highest_fence, context_boundary, queue_clear_operation_id,
-      queue_failure_boundary FROM journal_chat_state WHERE session_id=? AND epoch=?`)
+      queue_failure_boundary, history_origin_json FROM journal_chat_state WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`)
     .get(target.sessionId, target.epoch)
   if (!head) {
     throw new Error('journal context command targets a retired chat epoch')
@@ -86,7 +68,11 @@ export function readJournalDomainContextHead(db: Database.Database, target: Targ
     highestFence: Number(head.highest_fence),
     contextBoundary: Number(head.context_boundary),
     cleared: head.queue_clear_operation_id !== null,
-    failureBoundary: Number(head.queue_failure_boundary)
+    failureBoundary: Number(head.queue_failure_boundary),
+    historyOrigin:
+      head.history_origin_json === null
+        ? null
+        : (JSON.parse(String(head.history_origin_json)) as JournalHistoryOrigin)
   }
 }
 
@@ -160,9 +146,30 @@ export function replaceJournalDomainContext(
     }
   }
   if (operation.kind === 'epoch-replace') {
+    const providerHandle = operation.providerHandle
+    if (!providerHandle) {
+      throw new Error('journal context replacement omitted its provider handle')
+    }
+    const previous = head.historyOrigin
+    const historyOrigin = journalHistoryOrigin({
+      kind: 'epoch',
+      ...journalRowBase(target.epoch, removalSequence, fence, savedAt),
+      reason:
+        operation.reason === 'legacy_import' && !operation.items.length
+          ? 'session_created'
+          : operation.reason,
+      providerHandle,
+      ...(previous && sameJournalConversation(previous.providerHandle, providerHandle)
+        ? { historyOrigin: previous.raw }
+        : {})
+    })
     // A new context in the same physical epoch: its public identity changes, its rows do not move.
-    db.prepare(`UPDATE journal_chat_state SET context_boundary=?, derived_turn_item_id=NULL
-      WHERE session_id=? AND epoch=?`).run(removalSequence, ...prefix)
+    db.prepare(`UPDATE journal_chat_state SET context_boundary=?, derived_turn_item_id=NULL, history_origin_json=?
+      WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`).run(
+      removalSequence,
+      historyOrigin === null ? null : JSON.stringify(historyOrigin),
+      ...prefix
+    )
     commit.contextBoundary = removalSequence
   }
   appendJournalSqlEvent(
@@ -224,7 +231,7 @@ export function replaceJournalDomainContext(
             }
           }
         : {}),
-      ordinal: stored ? Number(stored.ordinal) : sequence,
+      ordinal: stored ? Number(stored.ordinal) : nextJournalDomainItemOrdinal(db, target),
       hidden: Boolean(stored?.hidden),
       writtenSequence: sequence,
       ownerFence: item.ownerFence,
@@ -287,21 +294,4 @@ export function journalDomainPublicCursor(
     ),
     sequence
   }
-}
-
-/** Queued sends survive the rewind; their own handover still owns their placement. */
-function queuedJournalDomainSubmission(
-  db: Database.Database,
-  target: Target,
-  itemId: string
-): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  if (identity?.provider !== 'orca') {
-    return false
-  }
-  const row = db
-    .prepare(`SELECT payload_json FROM journal_submission_attempts
-    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
-    .get(target.sessionId, target.epoch, identity.clientMessageId)
-  return row !== undefined && isQueuedAgentJournalSubmission(JSON.parse(String(row.payload_json)))
 }

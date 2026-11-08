@@ -1,6 +1,10 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { refreshJournalDomainStopNotes } from './journal-domain-stop-notes'
@@ -205,4 +209,21 @@ export function journalDomainEventItem(item: AgentJournalRenderItem) {
     sequence: item.sequence,
     sequenceIndex: item.sequenceIndex ?? 0
   }
+}
+
+/** Queued sends survive the rewind; their own handover still owns their placement. */
+export function queuedJournalDomainSubmission(
+  db: Database.Database,
+  target: Target,
+  itemId: string
+): boolean {
+  const identity = parseAgentJournalItemKey(itemId)
+  if (identity?.provider !== 'orca') {
+    return false
+  }
+  const row = db
+    .prepare(`SELECT payload_json FROM journal_submission_attempts
+    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
+    .get(target.sessionId, target.epoch, identity.clientMessageId)
+  return row !== undefined && isQueuedAgentJournalSubmission(JSON.parse(String(row.payload_json)))
 }

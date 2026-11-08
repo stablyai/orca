@@ -142,6 +142,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           : ((await prepare?.(context)) ?? {})
         const facts: JournalWriterHostFacts = {
           identity: this.identity,
+          openedThrough: this.openedThrough,
           ...this.queuedMessages.facts(mail),
           ...settled(this.stopMarks.fact()),
           ...preparation.facts

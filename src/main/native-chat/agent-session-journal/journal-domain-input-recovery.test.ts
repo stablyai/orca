@@ -47,18 +47,8 @@ function fixture() {
   let db = new Database(filename)
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
-  // TEMPORARY: parent owns frozen001 plus recovered scalar writes; remove after its prerequisite merges.
-  db.exec(`ALTER TABLE journal_submission_attempts ADD COLUMN recovered INTEGER NOT NULL DEFAULT 0 CHECK(recovered IN (0,1));
-    CREATE INDEX journal_submission_recovery ON journal_submission_attempts(session_id,epoch,ordinal,message_id)
-      WHERE current=1 AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0));
-    CREATE TRIGGER recovery_insert AFTER INSERT ON journal_submission_attempts BEGIN
-      UPDATE journal_submission_attempts SET recovered=COALESCE(json_extract(NEW.payload_json,'$.recovered'),0)=1
-      WHERE rowid=NEW.rowid; END;
-    CREATE TRIGGER recovery_update AFTER UPDATE OF payload_json ON journal_submission_attempts BEGIN
-      UPDATE journal_submission_attempts SET recovered=COALESCE(json_extract(NEW.payload_json,'$.recovered'),0)=1
-      WHERE rowid=NEW.rowid; END;`)
-  db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('chat','epoch',10,1)`).run()
+  db.prepare(`INSERT INTO journal_chat_state(session_id,workspace_id,epoch,last_sequence,highest_fence)
+    VALUES('chat','workspace','epoch',10,1)`).run()
   cleanups.push(() => {
     db.close()
     rmSync(directory, { recursive: true, force: true })
@@ -254,7 +244,7 @@ it('keeps only admitted personal input or commands and never defaults an unknown
   f.admit('personal', { source: undefined })
   f.admit('automatic', { source: { kind: 'agent' } })
   f.db
-    .prepare(`UPDATE journal_submission_attempts SET admission_source_kind='future-source',
+    .prepare(`UPDATE journal_submission_attempts SET facts_json=json_set(facts_json,'$.admission.sourceKind','future-source'),
     payload_json=json_set(payload_json,'$.source.kind','future-source') WHERE message_id='automatic'`)
     .run()
   f.admit('command', {
