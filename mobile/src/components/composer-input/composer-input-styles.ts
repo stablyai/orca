@@ -176,6 +176,16 @@ export const composerInputStyles = themedStyleSheet(() => ({
   mono: {
     fontFamily: typography.monoFamily
   },
+  hiddenText: {
+    color: 'transparent'
+  },
+  inputOverlayHost: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    position: 'relative',
+    justifyContent: 'center'
+  },
   disabled: {
     opacity: feedback.disabledOpacity
   }
