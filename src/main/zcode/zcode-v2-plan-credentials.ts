@@ -7,7 +7,8 @@ import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/zcode-plan-sites'
 import { readSupportedZcodeV2Selection } from './zcode-v2-personal-overlay'
 
 const MAX_V2_FILE_BYTES = 4 * 1024 * 1024
-function readV2File(path: string): string {
+/** Bounded read of a ZCode v2 store file; oversized or special files are treated as unreadable. */
+export function readZcodeV2File(path: string): string {
   return readNodeFileSyncWithinLimit(path, MAX_V2_FILE_BYTES, {
     regularFileOnly: true
   }).buffer.toString('utf8')
@@ -47,8 +48,13 @@ function userPath(value: string, home: string): string {
   return value.startsWith('~/') ? join(home, value.slice(2)) : resolve(value)
 }
 
-// Read-only enc:v1 compatibility with ZCode 29628c9 credential-cipher.ts.
-function decrypt(value: string, host: ZcodeCredentialHost): string {
+/** ZCode v2 data dir; ZCODE_DATA_BASE_DIR redirects the whole store (tests and sandboxes). */
+export function zcodeV2DataDir(host: ZcodeCredentialHost): string {
+  return userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
+}
+
+/** Read-only enc:v1 compatibility with ZCode 29628c9 credential-cipher.ts. */
+export function decryptZcodeV2Secret(value: string, host: ZcodeCredentialHost): string {
   if (!value.startsWith('enc:v1:')) {
     return value
   }
@@ -77,14 +83,14 @@ function decrypt(value: string, host: ZcodeCredentialHost): string {
 export function readZcodeV2PlanCredential(
   host = localZcodeCredentialHost()
 ): ZcodeV2PlanCredential {
-  const base = userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
+  const base = zcodeV2DataDir(host)
   const configPath =
     (host.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE?.trim()
       ? userPath(host.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE.trim(), host.home)
       : '') || join(base, '.zcode', 'v2', 'provider_config.json')
   let rawConfig: string
   try {
-    rawConfig = readV2File(configPath)
+    rawConfig = readZcodeV2File(configPath)
   } catch (error) {
     return {
       status:
@@ -101,13 +107,13 @@ export function readZcodeV2PlanCredential(
       return { status: 'unavailable' }
     }
     const store = credentialSchema.parse(
-      JSON.parse(readV2File(join(base, '.zcode', 'v2', 'credentials.json')))
+      JSON.parse(readZcodeV2File(join(base, '.zcode', 'v2', 'credentials.json')))
     )
     const rawIdentity = store[`account-provider:${selection.providerId}:identity`]
     if (!rawIdentity) {
       return { status: 'unavailable' }
     }
-    const identity = decrypt(rawIdentity, host).trim()
+    const identity = decryptZcodeV2Secret(rawIdentity, host).trim()
     if (!identity) {
       return { status: 'unavailable' }
     }
@@ -118,7 +124,7 @@ export function readZcodeV2PlanCredential(
     if (!rawKey) {
       return { status: 'unavailable' }
     }
-    const apiKey = decrypt(rawKey, host).trim()
+    const apiKey = decryptZcodeV2Secret(rawKey, host).trim()
     if (!apiKey || /[\r\n]/.test(apiKey)) {
       return { status: 'error' }
     }
