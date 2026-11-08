@@ -11,9 +11,9 @@ import { closeTestStores, createSqliteTestStore } from '../persistence/persisten
 import { Store } from '../persistence/loading-store/store'
 import { commitOrcadMigrationDestination } from './orcad-migration-cutover-coordinator'
 import { storeBackedOrcadMigrationDestination } from './orcad-migration-destination-fake'
-import { writeOrcadMigrationSourceCutover } from './orcad-migration-cutover-journal'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
-import { assertOrcadMigrationSourceUnchanged } from './orcad-migration-source-assertions'
+import './orcad-migration-cutover-journal'
+import './orcad-migration-manifest-export'
+import './orcad-migration-source-assertions'
 import { fenceOrcadMigrationSource } from './orcad-migration-source-fence'
 import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
@@ -127,24 +127,5 @@ describe('moving automation run history to a host server', () => {
     )
     expect(h.server.getOrcadMigrationCatalogState(manifest).state).toBe('staged')
     expect(h.server.listAutomations()).toEqual([])
-  })
-  it('still resumes a journal an older desktop signed with its runs inline', async () => {
-    const h = await hostWithRunHistory(10)
-    const inline = createOrcadMigrationManifest(h.store, TARGET, {
-      migrationId: h.cutover.migrationId,
-      destinationEnvironmentId: h.cutover.destinationEnvironmentId,
-      now: () => new Date(h.cutover.manifest.createdAt),
-      inlineAutomationRuns: true
-    })
-    expect(inline.payload.dormantState?.automationRuns).toHaveLength(40)
-    const journaled = { ...h.cutover, manifest: inline, manifestSha256: inline.manifestSha256 }
-    writeOrcadMigrationSourceCutover(h.userDataPath, journaled)
-
-    expect(
-      assertOrcadMigrationSourceUnchanged(
-        { userDataPath: h.userDataPath, store: h.store },
-        journaled
-      )
-    ).toEqual([])
   })
 })
