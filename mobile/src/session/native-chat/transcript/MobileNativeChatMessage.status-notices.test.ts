@@ -159,14 +159,15 @@ describe('MobileNativeChatMessage status notices', () => {
     act(() => disclosure.props.onPress())
     expect(details().length).toBeGreaterThan(0)
     act(() => renderer?.unmount())
-    const custom = renderNotice(
-      {
-        kind: 'status',
-        text: 'Custom host advice: use the enterprise model.',
-        failure: agentSessionFailureFact('modelUnavailable')
-      },
-      { hostName: null, agentName: 'Codex' }
-    )
+    const hostAdvice: unknown = {
+      kind: 'status',
+      text: 'Custom host advice: use the enterprise model.',
+      failure: agentSessionFailureFact('modelUnavailable')
+    }
+    if (!isAdmissibleAgentJournalItemBody(hostAdvice) || hostAdvice.kind !== 'status') {
+      throw new Error('Expected host status row')
+    }
+    const custom = renderNotice(hostAdvice, { hostName: null, agentName: 'Codex' })
     expect(custom.props.children).toBe('Custom host advice: use the enterprise model.')
   })
 
