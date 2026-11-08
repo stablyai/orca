@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 
@@ -17,6 +17,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
   worktreePath,
+  branchName,
   compareBaseRef,
   isFolder,
   isBranchVisible,
@@ -27,6 +28,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
+  branchName: string
   compareBaseRef: string | null
   isFolder: boolean
   isBranchVisible: boolean
@@ -38,6 +40,7 @@ export function useSourceControlGitHistory({
   refreshGitHistory: (options?: HistoryRefresh) => Promise<void>
   refreshGitHistoryRef: RefObject<() => Promise<void>>
 } {
+  const scope = useSourceControlScope()
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
@@ -96,7 +99,7 @@ export function useSourceControlGitHistory({
         }
       })
       try {
-        const connectionId = getConnectionId(worktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, worktreeId)
         const result = await getRuntimeGitHistory(
           {
             // Read history on the repo owner, which may differ from the focused host.
@@ -135,6 +138,7 @@ export function useSourceControlGitHistory({
       }
     },
     [
+      scope,
       activeRepoTarget,
       activeWorktreeId,
       compareBaseRef,
@@ -172,6 +176,8 @@ export function useSourceControlGitHistory({
   }, [
     // History uses compareBaseRef, which can move independently of effectiveBaseRef.
     activeWorktreeId,
+    // A branch switch keeps the workspace and path; the open list must follow the new branch.
+    branchName,
     compareBaseRef,
     isBranchVisible,
     isFolder,

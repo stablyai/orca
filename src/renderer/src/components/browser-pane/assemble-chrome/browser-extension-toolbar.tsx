@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type {
@@ -157,6 +157,7 @@ function ExtensionMenuRow({
   action,
   onOpen
 }: ActionMenuProps & { onOpen: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -167,7 +168,7 @@ function ExtensionMenuRow({
       <DropdownMenuSubContent>
         <DropdownMenuItem disabled={!action.enabled} onSelect={onOpen}>
           <ExtensionIcon action={action} />
-          {translate('browser.extensions.open', 'Open')}
+          {t('browser.extensions.open', 'Open')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <PuzzleRowMenuEntries browserPageId={browserPageId} profileId={profileId} action={action} />
@@ -189,6 +190,7 @@ export function BrowserExtensionToolbar({
   state: BrowserExtensionToolbarState
   compact: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
@@ -211,7 +213,7 @@ export function BrowserExtensionToolbar({
     })
   }, [browserPageId])
 
-  const label = translate('browser.extensions.menu', 'Extensions')
+  const label = t('browser.extensions.menu', 'Extensions')
   return (
     <>
       {pinned.map((action) => (
@@ -251,7 +253,7 @@ export function BrowserExtensionToolbar({
         <DropdownMenuContent align="end" className="w-64">
           {state.actions.length === 0 ? (
             <DropdownMenuItem disabled>
-              {translate('browser.extensions.empty', 'No extensions are on for this profile')}
+              {t('browser.extensions.empty', 'No extensions are on for this profile')}
             </DropdownMenuItem>
           ) : (
             state.actions.map((action) => (
@@ -276,7 +278,7 @@ export function BrowserExtensionToolbar({
             onSelect={() => void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId)}
           >
             <Store className="size-3.5" />
-            {translate('browser.extensions.visitWebStore', 'Visit Chrome Web Store')}
+            {t('browser.extensions.visitWebStore', 'Visit Chrome Web Store')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
@@ -285,7 +287,7 @@ export function BrowserExtensionToolbar({
             }}
           >
             <Settings2 className="size-3.5" />
-            {translate('browser.extensions.manage', 'Manage extensions')}
+            {t('browser.extensions.manage', 'Manage extensions')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

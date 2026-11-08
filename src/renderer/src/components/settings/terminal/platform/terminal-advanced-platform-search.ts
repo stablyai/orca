@@ -1,14 +1,20 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export function getTerminalLimitSearchKeywords(): string[] {
+export function getTerminalLimitSearchKeywords(t?: Translate): string[] {
   return [
-    ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-    ...translateSearchKeyword('settings.terminal.limit.search.limit', 'limit'),
-    ...translateSearchKeyword('settings.terminal.limit.search.maximum', 'maximum'),
-    ...translateSearchKeyword('settings.terminal.limit.search.pty', 'pty'),
-    ...translateSearchKeyword('settings.terminal.limit.search.capacity', 'capacity')
+    ...translateSearchKeyword(
+      'auto.components.settings.terminal.search.f66a7cf715',
+      'terminal',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword('settings.terminal.limit.search.limit', 'limit', undefined, t),
+    ...translateSearchKeyword('settings.terminal.limit.search.maximum', 'maximum', undefined, t),
+    ...translateSearchKeyword('settings.terminal.limit.search.pty', 'pty', undefined, t),
+    ...translateSearchKeyword('settings.terminal.limit.search.capacity', 'capacity', undefined, t)
   ]
 }
 

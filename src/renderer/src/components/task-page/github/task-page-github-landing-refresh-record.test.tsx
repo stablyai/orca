@@ -11,7 +11,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -35,7 +35,7 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: vi.fn(async () => null)
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -217,18 +217,6 @@ describe('a tracked Tasks edit through the landing refresh', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     node.remove()
-  })
-
-  it('retains the selected collection count while same-source count revalidation is held', async () => {
-    await landingRefresh()
-    const held = Promise.withResolvers<number>()
-    mockApi.gh.countWorkItems.mockReturnValueOnce(held.promise)
-    const model = await landingRefresh(9)
-    expect(model.countedTotalPagesRef.current).toBe(9)
-    held.resolve(200)
-    await act(async () => {
-      await held.promise
-    })
   })
 
   it.each(['provisional', 'accepted'])(

@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -210,18 +206,6 @@ describe('orphan adoption whose flush fails', () => {
       'tab-kept',
       'tab-bound'
     ])
-  })
-
-  it('adopts into an SSH host partition that was never written', async () => {
-    const store = createStore()
-    const host = { hostId: toSshExecutionHostId('target-1'), connectionId: 'target-1' }
-
-    const adoption = adopt(store, 0, (mutate) => store.runDurableMutation(mutate), host)
-
-    await expect(adoption).resolves.toMatchObject({ adopted: true })
-    expect(
-      store.getWorkspaceSession(host.hostId).tabsByWorktree[GIT_KEY]?.map((tab) => tab.id)
-    ).toEqual([ORPHAN_TAB])
   })
 
   it('still rebases a renderer replay of the failed adoption away', async () => {

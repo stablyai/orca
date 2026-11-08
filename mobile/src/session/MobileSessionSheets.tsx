@@ -71,7 +71,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     toggleTabChatView,
     toggleDisplayMode,
     readFileTab,
-    leaveSession,
+    leaveSessionDroppingDrafts,
     discardMarkdownLocalContent,
     copyMarkdownPath,
     confirmDiscardMarkdown,
@@ -304,7 +304,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 .writeText(combined)
                 .then(() => {
                   setLeaveDrafts(null)
-                  leaveSession()
+                  leaveSessionDroppingDrafts(drafts)
                 })
                 .catch(() => {
                   triggerError()
@@ -318,7 +318,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             destructive: true,
             onPress: () => {
               setLeaveDrafts(null)
-              leaveSession()
+              leaveSessionDroppingDrafts(leaveDrafts ?? [])
             }
           }
         ]}

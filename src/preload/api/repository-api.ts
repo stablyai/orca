@@ -4,6 +4,7 @@ import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
+  ProjectGroupUpdate,
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
@@ -64,10 +65,11 @@ export type RepositoryApi = {
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -126,10 +128,7 @@ export type ProjectGroupsApi = {
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }) => Promise<ProjectGroup>
-  update: (args: {
-    groupId: string
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  }) => Promise<ProjectGroup | null>
+  update: (args: { groupId: string; updates: ProjectGroupUpdate }) => Promise<ProjectGroup | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {
     projectId: string

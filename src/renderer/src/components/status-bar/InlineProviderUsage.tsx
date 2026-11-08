@@ -13,7 +13,7 @@ import { barColor, clampUsedPercent } from './tooltip'
 import { formatRateLimitWindowChipLabel } from '../../../../shared/rate-limit-window-label'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function InlineUsageBars({
   limits,
@@ -22,6 +22,7 @@ export function InlineUsageBars({
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
@@ -40,14 +41,14 @@ export function InlineUsageBars({
       ? {
           key: 'weekly',
           used: clampUsedPercent(limits.weekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+          label: t('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
         }
       : null,
     limits.fableWeekly
       ? {
           key: 'fableWeekly',
           used: clampUsedPercent(limits.fableWeekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
+          label: t('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
         }
       : null,
     // Why: matches the status bar chip; monthly is the only limit when there is no 5h/7d window.
@@ -62,7 +63,7 @@ export function InlineUsageBars({
   // Why: a lapsed token or failed refresh is not a sign-out; ask for a sign-in only when one is confirmed.
   const emptyState =
     usageWindows.length === 0 && limits.status === 'error'
-      ? getUsageRosterRowState(limits, false)
+      ? getUsageRosterRowState(limits, false, t)
       : null
 
   return (
@@ -79,14 +80,14 @@ export function InlineUsageBars({
             />
           </div>
           <span className="min-w-[5.5rem] shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
-            {formatUsagePercentageLabel(window.used, display)} {window.label}
+            {formatUsagePercentageLabel(window.used, display, t)} {window.label}
           </span>
         </div>
       ))}
       {emptyState ? (
         <span className="text-3xs text-muted-foreground">
           {emptyState.kind === 'sign-in'
-            ? translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
+            ? t('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
             : emptyState.statusLabel}
         </span>
       ) : null}
@@ -115,6 +116,7 @@ export function InlineUsageSignInAction({
   accountLabel: string
   onSignIn: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuItem
       asChild
@@ -129,12 +131,12 @@ export function InlineUsageSignInAction({
         variant="outline"
         size="xs"
         disabled={disabled}
-        aria-label={`${translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
+        aria-label={`${t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
       >
         {isSigningIn ? (
           <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
         ) : null}
-        {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+        {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
       </Button>
     </DropdownMenuItem>
   )

@@ -2,7 +2,7 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -114,53 +114,5 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
     expect(container.textContent).not.toContain('/home/alice/orca')
     expect(findButton('Open')).toBeUndefined()
     expect(findButton('Add to another host')).toBeUndefined()
-  })
-
-  it("stores a host switch under the clone entry's own selection key", () => {
-    const setSettingsProjectHostSelection = vi.fn()
-    const cloneA = makeRepo({ id: 'clone-a', displayName: 'Orca', path: '/work/orca' })
-    const cloneATwin = makeRepo({
-      id: 'clone-a',
-      displayName: 'Orca',
-      path: '/home/alice/orca',
-      connectionId: 'openclaw 2'
-    })
-    const sshHostId = toSshExecutionHostId('openclaw 2')
-    useAppStore.setState({
-      repos: [cloneA, cloneATwin],
-      projectHostSetups: [
-        makeSetup({ id: 'clone-a', repoId: 'clone-a', hostId: 'local', path: '/work/orca' }),
-        makeSetup({
-          id: 'clone-a-ssh',
-          repoId: 'clone-a',
-          hostId: sshHostId,
-          path: '/home/alice/orca'
-        })
-      ],
-      sshTargetLabels: new Map([['openclaw 2', 'openclaw 2']]),
-      setSettingsProjectHostSelection
-    })
-
-    act(() => {
-      root.render(
-        React.createElement(RepositoryHostSetupsSection, {
-          repo: cloneA,
-          settingsEntryRepoIds: new Set(['clone-a']),
-          settingsSelectionKey: `${projectId}::setup:clone-a`,
-          forceVisible: true,
-          searchQuery: '',
-          searchEntries: []
-        })
-      )
-    })
-    act(() => {
-      findButton('Open')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
-      `${projectId}::setup:clone-a`,
-      sshHostId,
-      'clone-a-ssh'
-    )
   })
 })

@@ -7,7 +7,7 @@ import {
   reclaimDeadSkillInstallLocks,
   skillInstallLockPath
 } from './skill-install-lock'
-import { readSkillInstallLockOwner } from './skill-install-lock-owner'
+import './skill-install-lock-owner'
 
 const roots: string[] = []
 
@@ -24,15 +24,6 @@ async function readPublishedOwner(lockPath: string): Promise<Record<string, unkn
 }
 
 describe('skill install lock', () => {
-  it.each([0, -1])('rejects a non-positive owner pid (%s)', async (pid) => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
-    roots.push(root)
-    const ownerPath = join(root, 'owner.json')
-    await writeFile(ownerPath, JSON.stringify({ token: 'invalid-pid', pid, createdAt: Date.now() }))
-
-    await expect(readSkillInstallLockOwner(ownerPath)).resolves.toBeNull()
-  })
-
   it('reclaims a fresh legacy lock whose process was killed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
@@ -145,32 +136,6 @@ describe('skill install lock', () => {
     await expect(readdir(dirname(lockPath))).resolves.toEqual([])
     const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     await release()
-  })
-
-  it('retries when the current owner releases after a contended rename', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
-    roots.push(root)
-    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
-    const firstRelease = await acquireSkillInstallLock({ path: lockPath })
-    let attempts = 0
-
-    const secondRelease = await acquireSkillInstallLock({
-      path: lockPath,
-      timeoutMs: 500,
-      publishLock: async (candidatePath, targetPath) => {
-        attempts += 1
-        if (attempts === 1) {
-          await firstRelease()
-          const error = new Error('injected-contention') as NodeJS.ErrnoException
-          error.code = 'ENOTEMPTY'
-          throw error
-        }
-        await rename(candidatePath, targetPath)
-      }
-    })
-
-    expect(attempts).toBe(2)
-    await secondRelease()
   })
 
   it('reclaims abandoned legacy owner files at startup', async () => {

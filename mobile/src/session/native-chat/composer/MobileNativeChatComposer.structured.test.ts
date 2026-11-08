@@ -28,14 +28,27 @@ import { findByHostType } from '../../../test-support/react-test-renderer-host-n
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { createElement, type ComponentProps } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { useMobileStructuredAgentOptions } from '../../use-mobile-structured-agent-options'
+import {
+  optionsClient,
+  recordingMutate,
+  accepted
+} from '../../use-mobile-structured-agent-options.test-fixture'
+import type { AgentSessionOptionResult } from '../../../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
+import { createElement, useState, type ComponentProps } from 'react'
+import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MobileNativeChatComposer as NativeChatComposer,
   MobileNativeChatDraftComposer
 } from './MobileNativeChatComposer'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
 }))
@@ -65,6 +78,7 @@ vi.mock('react-native', async () => {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -89,6 +103,8 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   CornerDownRight: 'CornerDownRight',
   FileText: 'FileText',
+  Goal: 'Goal',
+  PencilRuler: 'PencilRuler',
   ListEnd: 'ListEnd',
   Mic: 'Mic',
   Package: 'Package',
@@ -146,6 +162,227 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       (node) => node.props.accessibilityLabel === label && node.props.onPress !== undefined
     )
   const drawers = () => renderer!.root.findAll((node) => node.props.onHidden !== undefined)
+
+  it.each(['claude', 'codex'] as const)(
+    '%s picks native mode without sending its draft or attachments',
+    async (agent) => {
+      const snapshot: SessionOptionDescriptor[] = [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ]
+      let eligible = false
+      const reply = Promise.withResolvers<boolean>()
+      const setOption = vi.fn(() => reply.promise)
+      const onSend = vi.fn(async () => true)
+      const focus = vi.fn()
+      const onRemoveAttachment = vi.fn()
+      function Conversation() {
+        const [value, onChangeText] = useState('keep /pl tail')
+        return draw({
+          agent,
+          value,
+          onChangeText,
+          onSend,
+          structured: structured(),
+          sessionOptions: {
+            isWorking: false,
+            controller: {
+              snapshot,
+              optionSurface: {
+                admits: () => eligible,
+                getSnapshot: () => snapshot,
+                setOption: async () => ({ snapshot }),
+                invokeAction: async () => ({ snapshot }),
+                subscribe: () => () => {}
+              },
+              pendingId: null,
+              setOption,
+              invokeAction: async () => false,
+              recordCommand: () => {}
+            }
+          },
+          attachments: [
+            { id: 'kept-image', path: '/remote/kept.png', previewUri: 'file:///kept.png' }
+          ],
+          onRemoveAttachment
+        })
+      }
+      await act(async () => {
+        renderer = createWithQueryClient(createElement(Conversation), {
+          createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+        })
+      })
+      act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(field().props.value).toBe('keep /pl tail')
+      expect(setOption).not.toHaveBeenCalled()
+      expect(labelled('/plan')).not.toHaveLength(0)
+      eligible = true
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'plan')
+      expect(field().props.value).toBe('keep  tail')
+      expect(field().props.selection).toEqual({ start: 5, end: 5 })
+      expect(focus).toHaveBeenCalled()
+      act(() => field().props.onChangeText('later typing'))
+      focus.mockClear()
+      await act(async () => reply.resolve(false))
+      expect(field().props.value).toBe('later typing')
+      expect(focus).not.toHaveBeenCalled()
+      if (agent === 'codex') {
+        act(() => field().props.onChangeText('/def'))
+        act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+        await act(async () => labelled('/default')[0]!.props.onPress())
+        expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
+        expect(field().props.value).toBe('')
+      }
+      expect(onSend).not.toHaveBeenCalled()
+      expect(onRemoveAttachment).not.toHaveBeenCalled()
+    }
+  )
+
+  it('retries a held opposite pick after settlement and exits Plan without consuming the draft', async () => {
+    let mode: 'default' | 'plan' = 'default'
+    const client = optionsClient(async () => ({
+      models: [],
+      current: { interactionMode: mode, acceptedInputSources: { interactionMode: 'saved' } }
+    }))
+    const reply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const exitReply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { calls, mutate } = recordingMutate(async (index, fields) =>
+      index === 0
+        ? reply.promise
+        : index === 4
+          ? exitReply.promise
+          : accepted({ key: String(fields.key), value: String(fields.value) }, true)
+    )
+    let options: ReturnType<typeof useMobileStructuredAgentOptions> | undefined
+    const focus = vi.fn()
+    const onSend = vi.fn(async () => true)
+    function Conversation() {
+      const [value, onChangeText] = useState('keep /pl tail')
+      options = useMobileStructuredAgentOptions({
+        agent: 'codex',
+        client: client.client,
+        sessionId: 'phone-plan-pending',
+        enabled: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate,
+        hostSupport: CAPABLE
+      })
+      return draw({
+        agent: 'codex',
+        value,
+        onChangeText,
+        onSend,
+        structured: structured(),
+        sessionOptions: {
+          isWorking: false,
+          controller: {
+            snapshot: options.optionSnapshot,
+            optionSurface: options.optionSurface,
+            pendingId: options.pendingOptionId,
+            setOption: options.setStructuredOption,
+            invokeAction: options.invokeStructuredOption,
+            recordCommand: () => {}
+          }
+        },
+        attachments: [{ id: 'retained', path: '/remote/kept.png', previewUri: 'file:///kept.png' }]
+      })
+    }
+    await act(async () => {
+      renderer = createWithQueryClient(createElement(Conversation), {
+        createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+      })
+    })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(1)
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(true)
+    expect(labelled('Exit plan mode')[0]!.props.accessibilityState).toEqual({ disabled: true })
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    await act(async () => {
+      await options!.setStructuredOption('effort', 'high')
+    })
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    act(() => field().props.onChangeText('keep /def tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 9 } } }))
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep /def tail')
+    expect(calls).toHaveLength(2)
+    expect(labelled('/default')).not.toHaveLength(0)
+    mode = 'plan'
+    await act(async () =>
+      reply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'plan', options: { interactionMode: 'plan' } },
+          true
+        )
+      )
+    )
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      true
+    )
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(false)
+    mode = 'default'
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(3)
+    expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    mode = 'plan'
+    act(() => field().props.onChangeText('keep /pl tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(calls).toHaveLength(4)
+    act(() => field().props.onChangeText('keep /def tail'))
+    focus.mockClear()
+    act(() => labelled('Exit plan mode')[0]!.props.onPress())
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    expect(field().props.value).toBe('keep /def tail')
+    expect(focus).toHaveBeenCalled()
+    expect(calls).toHaveLength(5)
+    expect(calls[4]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    mode = 'default'
+    await act(async () =>
+      exitReply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'default', options: { interactionMode: 'default' } },
+          true
+        )
+      )
+    )
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    expect(field().props.value).toBe('keep /def tail')
+    expect(
+      renderer!.root.findAll((node) => node.props.source?.uri === 'file:///kept.png')
+    ).not.toHaveLength(0)
+    expect(focus).toHaveBeenCalled()
+    expect(onSend).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['', 'accepted'],
@@ -212,6 +449,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent: 'codex',
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         const image = useMobileNativeChatImageAttachments({
@@ -238,7 +476,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         })
       }
       await act(async () => {
-        renderer = create(createElement(Conversation))
+        renderer = createWithQueryClient(createElement(Conversation))
       })
       act(() => publish?.(snapshotEvent()))
       expect(labelled('Remove image')[0]).toBeDefined()
@@ -321,6 +559,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent,
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         return createElement(MobileNativeChatDraftComposer, {
@@ -341,7 +580,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         })
       }
       await act(async () => {
-        renderer = create(createElement(Conversation))
+        renderer = createWithQueryClient(createElement(Conversation))
       })
       act(() => publish?.(snapshotEvent()))
       act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 3 } } }))
@@ -438,6 +677,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         ...drafts,
         agent: 'claude',
         sendStructured: session.sendWithOutcome,
+        holdUnconfirmed: session.holdUnconfirmed,
         onSendError: vi.fn()
       })
       const image = useMobileNativeChatImageAttachments({
@@ -463,7 +703,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       })
     }
     await act(async () => {
-      renderer = create(createElement(Conversation))
+      renderer = createWithQueryClient(createElement(Conversation))
     })
     await act(async () =>
       publish?.({
@@ -511,7 +751,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       skills: [{ name: 'review', path: '/remote/SKILL.md' }]
     }))
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(MobileNativeChatComposer, {
           draftScopeKey: scope,
           value: '$review draft',

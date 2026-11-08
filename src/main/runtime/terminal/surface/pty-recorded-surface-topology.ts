@@ -19,7 +19,7 @@ export function spawnSurfaceClaimSequence(graphSequence: number): number {
 }
 
 /** Write pane and graph standing together; main-owned layouts store no duplicate claim. */
-type SurfaceWrites = Pick<TerminalIdentitySource, 'setRecordedSurface'>
+type SurfaceWrites = Pick<TerminalIdentitySource, 'setRecordedSurface' | 'confirmPtyWorktree'>
 
 export function recordPtySurfaceClaim(
   source: SurfaceWrites,
@@ -48,6 +48,8 @@ export function recordPtySurface(
   paneKey: string,
   graphSequence: number
 ): void {
+  // A pane is a binding, so worktree stops and sleep act on it even if a cwd guess filed it (#36716).
+  source.confirmPtyWorktree(pty)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     return
   }

@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
@@ -39,15 +46,30 @@ import { FieldTextInput } from '../composer-input/FieldTextInput'
 
 type Fields = { title: string; body: string; base: string; draft: boolean }
 
+/** What Cancel leaves for the next open on the same workspace branch. */
+export type PrCreateKept = { key: string; draft: MobilePrCreateDraft; fields: Fields }
+
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
-export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
+export function PrCreateSheet({
+  tab,
+  kept,
+  onKeep
+}: {
+  tab: MobilePrTab
+  kept: PrCreateKept | null
+  onKeep: Dispatch<SetStateAction<PrCreateKept | null>>
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { client, worktreeId, gitBranch } = tab
   const creating = tab.creatingPr
   const setCreating = tab.setCreatingPr
-  const [draft, setDraft] = useState<MobilePrCreateDraft | null>(null)
-  const [fields, setFields] = useState<Fields | null>(null)
+  const keepKey = gitBranch ? `${worktreeId}\u0000${gitBranch}` : null
+  // Reopening on the same branch restores what was typed instead of re-seeding from commits.
+  const [restored] = useState(() => (kept && kept.key === keepKey ? kept : null))
+  const [draft, setDraft] = useState<MobilePrCreateDraft | null>(restored?.draft ?? null)
+  const [fields, setFields] = useState<Fields | null>(restored?.fields ?? null)
+  const editedRef = useRef(restored !== null)
   const [pickingBase, setPickingBase] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
@@ -68,7 +90,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
     commitsAheadRef.current = tab.commitsAhead
   })
   // Seed once per open: a reconnect or a status reload must not overwrite what the user typed.
-  const seededRef = useRef(false)
+  const seededRef = useRef(restored !== null)
 
   useEffect(() => {
     if (!client || !gitBranch || seededRef.current) {
@@ -101,25 +123,30 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
-  const update = (patch: Partial<Fields>) =>
+  const update = (patch: Partial<Fields>) => {
+    editedRef.current = true
     setFields((current) => (current ? { ...current, ...patch } : current))
+  }
 
-  // Closing the sheet cancels a running generation on the host and drops its late answer; a reconnect does neither.
+  // Closing the sheet cancels a running generation, drops its late answer and keeps typed fields; a reconnect does none.
   const generationRef = useRef(0)
   const generatingRef = useRef(false)
   useLayoutEffect(() => {
     generatingRef.current = generating
   })
-  const cancelTargetRef = useRef({ client, worktreeId })
+  const closeTargetRef = useRef({ client, worktreeId, keepKey, draft, fields, onKeep })
   useLayoutEffect(() => {
-    cancelTargetRef.current = { client, worktreeId }
+    closeTargetRef.current = { client, worktreeId, keepKey, draft, fields, onKeep }
   })
   useEffect(
     () => () => {
       generationRef.current += 1
-      const target = cancelTargetRef.current
+      const target = closeTargetRef.current
       if (generatingRef.current && target.client) {
         void cancelMobilePrFields(target.client, target.worktreeId).catch(() => {})
+      }
+      if (editedRef.current && target.keepKey && target.draft && target.fields) {
+        target.onKeep({ key: target.keepKey, draft: target.draft, fields: target.fields })
       }
     },
     []
@@ -163,6 +190,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
       return
     }
     createInFlightRef.current = true
+    const createdKey = keepKey
     setCreating(true)
     setMessage(null)
     setCommitFailure(null)
@@ -198,6 +226,10 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
       }
       triggerSuccess()
       setCreating(false)
+      // The PR exists now, so nothing carries over to the next Create on this branch, even text kept
+      // when a branch or client change closed this sheet mid-run.
+      editedRef.current = false
+      onKeep((current) => (current?.key === createdKey ? null : current))
       const created = {
         url: outcome.url,
         warning: outcome.warning ?? null,

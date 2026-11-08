@@ -15,7 +15,7 @@ import type {
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
-import { normalizeRuntimeRelativePath } from '../../runtime-relative-paths'
+import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 
@@ -36,6 +36,10 @@ export type RuntimeGitCommandHost = {
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
+  /** A user-facing reason when an agent is working in the checkout at this path, else null. */
+  getAgentSwitchBlocker?(worktreePath: string): Promise<string | null>
+  /** Clear the old branch's review links and push target, then publish the new branch to every client. */
+  recordBranchSwitched?(worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>): void
   /** Persist lazily created push remotes for orphan cleanup (#17842); sync materialization skips Store to avoid ownership/refspec side effects (#17828). */
   persistMaterializedPushTarget?(
     worktree: Pick<Worktree, 'id' | 'hostId'>,

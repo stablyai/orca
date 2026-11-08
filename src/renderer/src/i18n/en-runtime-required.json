@@ -644,6 +644,20 @@
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
+        "PluginAuthor": {
+          "publisher": "Publisher",
+          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
+          "publisherByline": "Publisher: {{publisher}}",
+          "declaredByline": "Declared publisher: {{publisher}}",
+          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
+          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
+          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
+          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
+          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
+          "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
+          "samePublisher": "More listed as {{value0}}"
+        },
         "PluginDevelopmentSection": {
           "title": "Development"
         },
@@ -1302,7 +1316,8 @@
       "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
-      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
+      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "managedHostServer": "Needs migration to {{host}}"
     }
   },
   "browser": {
@@ -1325,6 +1340,7 @@
         "importFailedTryClosing": "Could not import cookies from {{browser}}. Try closing {{browser}} first.",
         "importFailedWithLog": "Could not import cookies from {{browser}}: {{detail}}. Details were written to {{logPath}}.",
         "invalidBrowserProfile": "Invalid browser profile name.",
+        "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "noCookies": "No cookies found in {{browser}}.",
         "noValidCookies": "No valid cookies found in {{browser}}.",
         "notAuthorized": "Not authorized",
@@ -1483,6 +1499,7 @@
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
         "monitoring": "Monitoring background tasks",
+        "outputFile": "Output: {{value0}}",
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",
         "stateBlocked": "blocked",
@@ -1532,6 +1549,7 @@
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
         "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+        "antigravitySystemNotSignedIn": "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
         "argumentsPositionalPrompt": "Saved Arguments include a prompt.",
@@ -1594,11 +1612,14 @@
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+        "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in.",
+        "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
@@ -1652,6 +1673,7 @@
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
+        "forkedFrom": "Forked from",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -1663,6 +1685,10 @@
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
         "stoppedBeforeStart": "Stopped manually"
+      },
+      "openedPullRequests": {
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -2294,6 +2320,10 @@
     }
   },
   "sourceControl": {
+    "branchPicker": {
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches."
+    },
     "createReviewFailure": {
       "stacked": {
         "stackConflict": "The pull request already belongs to a different GitHub stack.",

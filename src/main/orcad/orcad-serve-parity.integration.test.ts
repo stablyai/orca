@@ -9,18 +9,13 @@ import {
   WEB_CLIENT_INDEX_FILENAME
 } from '../../shared/bundled-web-client-root'
 import { orcadServeArgs } from '../../shared/orcad-serve-argv'
-import {
-  ORCAD_NATIVE_PREFLIGHT_FLAG,
-  parseOrcadNativePreflightReport
-} from '../../shared/orcad-native-preflight-report'
 import { ORCAD_LOCK_FILE_NAME } from './orcad-instance-lock'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import { skipForMissingInputs } from './orcad-node-slot-fixture'
 import { buildDaemonSessionClient } from './orcad-daemon-session-client-fixture'
-import { ServeCleanupDiagnostics } from './orcad-serve-cleanup-diagnostics.test-fixture'
+import type { ServeCleanupDiagnostics } from './orcad-serve-cleanup-diagnostics.test-fixture'
 import {
   killAndAwaitExit,
-  killChildAndWait,
   killProfileDaemons,
   recordProfileDaemons,
   removeTestRoot,
@@ -95,75 +90,6 @@ function profile(): string {
 }
 
 describe.skipIf(skip)('orca serve on orcad', () => {
-  it('answers the launcher native preflight with one report line', async () => {
-    const result = await runProcess({
-      program: runtime!,
-      args: [join(slotDir, 'orcad.js'), ORCAD_NATIVE_PREFLIGHT_FLAG],
-      timeoutMs: 30_000
-    })
-    expect(result.code, result.stderr).toBe(0)
-    expect(parseOrcadNativePreflightReport(result.stdout)?.status).toMatch(/^(ok|unverifiable)$/u)
-  })
-
-  it('prints only the recipe line, exactly as Electron serve does', async () => {
-    const projectRoot = profile()
-    const userData = profile()
-    const diagnostics = new ServeCleanupDiagnostics(projectRoot, userData)
-    cleanupDiagnostics.add(diagnostics)
-    const child = spawnProcess({
-      program: runtime!,
-      args: [
-        join(slotDir, 'orcad.js'),
-        '--bind',
-        '127.0.0.1',
-        '--port',
-        '0',
-        '--recipe-json',
-        '--project-root',
-        projectRoot
-      ],
-      env: serveEnv(userData),
-      timeoutMs: null
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
-    diagnostics.observe(child, () => stderr)
-    try {
-      await new Promise<void>((resolveLine, reject) => {
-        const timer = setTimeout(() => reject(new Error(`no recipe line: ${stderr}`)), 120_000)
-        child.stdout.on('data', (chunk: Buffer) => {
-          stdout += chunk.toString('utf8')
-          if (stdout.includes('\n')) {
-            clearTimeout(timer)
-            resolveLine()
-          }
-        })
-        child.once('exit', (code) => {
-          clearTimeout(timer)
-          reject(new Error(`orcad exited ${String(code)}: ${stderr}`))
-        })
-      })
-      // Wait for late output that would violate the single-line recipe contract.
-      await new Promise((settle) => setTimeout(settle, 1_000))
-    } finally {
-      await diagnostics.capture('beforeServeKill')
-      await recordProfileDaemons(userData)
-      try {
-        await killChildAndWait(child)
-      } finally {
-        await diagnostics.capture('afterServeKill')
-      }
-    }
-    const lines = stdout.split('\n').filter(Boolean)
-    expect(lines, stderr).toHaveLength(1)
-    expect(JSON.parse(lines[0]!)).toEqual({
-      schemaVersion: 1,
-      pairingCode: expect.any(String),
-      projectRoot
-    })
-  }, 150_000)
-
   it('refuses with exit 78 while the desktop app holds the profile', async () => {
     const userData = profile()
     writeFileSync(

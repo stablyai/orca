@@ -48,12 +48,14 @@ export type UseComposerStateOptions = {
   initialProjectGroupId?: string
   initialName?: string
   initialPrompt?: string
+  initialNote?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean

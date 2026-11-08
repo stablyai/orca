@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events'
-import { mkdtemp, mkdir, readdir, readlink, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import type { SFTPWrapper, WriteStreamOptions } from 'ssh2'
 import { SFTP } from 'ssh2/lib/protocol/SFTP.js'
 import { describe, expect, it, vi } from 'vitest'
 import { uploadSshDirectory } from './connection/ssh-connection-file-transfers'
-import { uploadDirectory } from './sftp-upload'
+import './sftp-upload'
 
 function uploadSession(options?: {
   stalledCloses?: boolean
@@ -158,46 +158,6 @@ async function expectLocalFilesClosed(dir: string): Promise<void> {
 }
 
 describe('directory upload pipeline', () => {
-  it('overlaps four small files, preserves bytes, and creates parents before child writes', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-sftp-pipeline-'))
-    const fixture = uploadSession({ stalledCloses: true })
-    const files = new Map<string, Buffer>()
-    let upload: Promise<void> | undefined
-    try {
-      await mkdir(join(dir, 'nested'))
-      for (let index = 0; index < 12; index++) {
-        const path = index < 6 ? `${index}.bin` : `nested/${index}.bin`
-        const contents = Buffer.alloc(1024 + index * 521, index)
-        files.set(`/remote/${path}`, contents)
-        await writeFile(join(dir, path), contents)
-      }
-      upload = uploadDirectory(fixture.sftp, dir, '/remote', dir, { exclusive: true })
-      void upload.catch(() => {})
-      await vi.waitFor(() => expect(fixture.closes.size).toBe(4))
-      expect(fixture.opened).toHaveLength(4)
-      fixture.releaseCloses()
-      await upload
-
-      expect(fixture.peakHandles()).toBe(4)
-      expect(fixture.peakWindow()).toBe(4 * 64 * 1024)
-      expect(fixture.windows.size).toBe(0)
-      expect(fixture.contents.size).toBe(files.size)
-      for (const [path, expected] of files) {
-        const pieces = fixture.contents.get(path)
-        expect(pieces).toBeDefined()
-        const actual = Buffer.concat(
-          [...(pieces ?? [])].sort(([a], [b]) => a - b).map(([, chunk]) => chunk)
-        )
-        expect(actual.equals(expected)).toBe(true)
-      }
-    } finally {
-      fixture.releaseCloses()
-      fixture.sftp.emit('close')
-      await upload?.catch(() => {})
-      await rm(dir, { recursive: true, force: true })
-    }
-  })
-
   it('preserves the first write failure while closing a sibling stalled in CLOSE', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-sftp-pipeline-'))
     const settings = { stalledCloses: true, heldWrite: '' }

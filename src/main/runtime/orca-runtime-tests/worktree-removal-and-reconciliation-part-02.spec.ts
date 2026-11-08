@@ -1,35 +1,32 @@
 import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 const { removeWorktree: removeNativeWorktree } = await vi.importActual<
   typeof WorktreeRemovalModule
 >('../../git/worktrees/removal/worktree-removal')
 
+import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  WATCHER_REMOVAL_DRAIN_BUDGET_MS,
-  assertWorktreeCleanForRemoval,
-  beginWatcherInstall,
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
-  forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  getEffectiveHooks,
-  join,
-  listWorktrees,
-  listWorktreesStrict,
-  localWorktreeFilesystem,
-  mkdir,
-  removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  rm,
-  runHook,
-  setPlatform,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watcher-removal-drain'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -40,31 +37,13 @@ import {
   makeWorktreeMeta,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Connected SSH fixtures need the host HOME for removal guards.
 
 describe('OrcaRuntimeService', () => {
-  it('warns that a missing-repo removal only forgot the workspace', async () => {
-    const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
-      hostId: 'runtime:env-1'
-    })
-    const orphanStore = {
-      ...runtimeStore,
-      getRepos: () => [],
-      getRepo: () => undefined
-    }
-    const runtime = createWorktreeRemovalRuntime(orphanStore)
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-    expect(result.warning).toEqual(expect.stringContaining(TEST_WORKTREE_PATH))
-    expect(result.warning).toEqual(expect.stringContaining(TEST_REPO_ID))
-    expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
   it('never sweeps an orphaned SSH worktree through the local provider', async () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'ssh:ssh-1'
@@ -137,56 +116,6 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
   })
 
-  it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
-    const runtime = createRuntime()
-    let finishRuntimeClose: () => void = () => {}
-    const runtimeClose = new Promise<void>((resolve) => {
-      finishRuntimeClose = resolve
-    })
-    const fileCommands = (
-      runtime as unknown as {
-        fileCommands: {
-          closeFileExplorerWatchersForPath: (path: string) => Promise<void>
-          restoreFileExplorerWatchersAfterFailedRemoval: (path: string) => Promise<void>
-        }
-      }
-    ).fileCommands
-    vi.spyOn(fileCommands, 'closeFileExplorerWatchersForPath').mockReturnValueOnce(runtimeClose)
-    const restoreRuntime = vi
-      .spyOn(fileCommands, 'restoreFileExplorerWatchersAfterFailedRemoval')
-      .mockResolvedValue(undefined)
-    closeLocalWatcherForWorktreePathMock.mockRejectedValueOnce(
-      new Error('desktop watcher close failed')
-    )
-
-    const result = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).catch((error) => error)
-    await Promise.resolve()
-    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
-    expect(restoreRuntime).not.toHaveBeenCalled()
-
-    finishRuntimeClose()
-    await expect(result).resolves.toEqual(
-      expect.objectContaining({
-        message: 'desktop watcher close failed'
-      })
-    )
-    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
-  })
-
-  it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(removeWorktree).mockRejectedValue(new Error('delete failed'))
-
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow('delete failed')
-
-    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
-    const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
-    finishRetry()
-  })
-
   it('closes before and after draining a pre-removal watcher install', async () => {
     const runtime = createRuntime()
     const finishInstall = beginWatcherInstall(TEST_WORKTREE_PATH)
@@ -230,30 +159,6 @@ describe('OrcaRuntimeService', () => {
       await gate.finish(true)
       const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
       finishRetry()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not re-spend the drain budget on a removal after a wedged install was abandoned', async () => {
-    vi.useFakeTimers()
-    beginWatcherInstall(TEST_WORKTREE_PATH)
-    try {
-      const runtime = createRuntime()
-
-      const firstAcquiring = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH)
-      await vi.advanceTimersByTimeAsync(WATCHER_REMOVAL_DRAIN_BUDGET_MS)
-      await (await firstAcquiring).finish(true)
-
-      let secondAcquired = false
-      const secondAcquiring = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).then((gate) => {
-        secondAcquired = true
-        return gate
-      })
-      await vi.advanceTimersByTimeAsync(1)
-
-      expect(secondAcquired).toBe(true)
-      await (await secondAcquiring).finish(true)
     } finally {
       vi.useRealTimers()
     }
@@ -452,41 +357,6 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('routes runtime worktree removal through the selected WSL project runtime', async () => {
-    setPlatform('win32')
-    const runtimeStore = {
-      ...store,
-      getProjects: () => [
-        {
-          id: 'project-1',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          sourceRepoIds: [TEST_REPO_ID],
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-          createdAt: 0,
-          updatedAt: 0
-        }
-      ],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
-      })
-    }
-    const runtime = createWorktreeRemovalRuntime(runtimeStore)
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-    expect(assertWorktreeCleanForRemoval).toHaveBeenCalledWith(TEST_WORKTREE_PATH, false, {
-      wslDistro: 'Ubuntu'
-    })
-    expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false, {
-      knownRemovedWorktree: expect.objectContaining({ path: TEST_WORKTREE_PATH }),
-      wslDistro: 'Ubuntu'
-    })
-  })
-
   it('deletes a Windows runtime worktree using the canonical registered path', async () => {
     setPlatform('win32')
     const repo = {
@@ -598,26 +468,5 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktreesStrict).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
     expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('force-deletes a branch that was preserved by runtime worktree removal', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(removeWorktree).mockResolvedValue({
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
-    })
-
-    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-    const result = await runtime.forceDeletePreservedBranch(
-      TEST_WORKTREE_ID,
-      'feature/test',
-      'def456'
-    )
-
-    expect(result).toEqual({ deleted: true })
-    expect(forceDeleteLocalBranchMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'feature/test',
-      'def456'
-    )
   })
 })

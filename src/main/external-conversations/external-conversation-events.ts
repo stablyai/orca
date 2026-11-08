@@ -12,13 +12,13 @@ import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../runtime/terminal-agent-turn-news'
+} from '../runtime/push/notifications/terminal-agent-turn-news'
 import {
   allLinks,
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
-import type { AgentPromptExpectedBinding } from '../runtime/runtime-terminal-contracts'
+import type { AgentPromptExpectedBinding } from '../runtime/terminal/input/agent-prompt-write-options'
 import { sameBinding } from './external-conversation-send'
 import { workingStampedTurn } from './external-conversation-turn-id'
 import type { ConversationKey } from './external-conversation-types'

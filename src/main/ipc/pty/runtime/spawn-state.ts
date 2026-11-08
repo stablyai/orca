@@ -33,7 +33,7 @@ import type {
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
-import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -118,6 +118,7 @@ export type RuntimePtySpawnArgs = {
   cwd?: string
   command?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   commandDelivery?: 'renderer' | 'provider'

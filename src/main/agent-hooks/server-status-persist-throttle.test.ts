@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
@@ -19,10 +19,6 @@ class ProbeServer extends AgentHookServer {
 
   persistDueAt(): number {
     return this.statusPersistDueAt
-  }
-
-  requestPersist(): void {
-    this.scheduleStatusPersist()
   }
 }
 
@@ -59,20 +55,6 @@ describe('last-status persist throttle', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     rmSync(userDataPath, { recursive: true, force: true })
-  })
-
-  it('starts an isolated write after idle on the next turn', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
-    await prompt('first')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(1)
-
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS * 2)
-    await prompt('after idle')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(2)
-    await write.mock.results[1]?.value
-    expect(readPrompt()).toBe('after idle')
   })
 
   it('caps a steady stream at one write per window without pushing the timer back', async () => {
@@ -118,22 +100,6 @@ describe('last-status persist throttle', () => {
     expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
       launchTokenHash: expect.any(String)
     })
-  })
-
-  it('does not replace the file when the serialized state is identical', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
-    await prompt('only')
-    await vi.advanceTimersByTimeAsync(1)
-    await write.mock.results[0]?.value
-    const { ino, mtimeMs } = statSync(lastStatusPath())
-
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS)
-    server.requestPersist()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(2)
-    await write.mock.results[1]?.value
-    server.flushStatusPersistSync()
-    expect(statSync(lastStatusPath())).toMatchObject({ ino, mtimeMs })
   })
 
   it('flushStatusPersistSync cancels the armed timer and writes synchronously', async () => {

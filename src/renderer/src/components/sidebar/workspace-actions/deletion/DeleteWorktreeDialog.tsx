@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import './delete-worktree-flow'
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
@@ -30,7 +30,7 @@ import {
   getDeleteWorktreeLineageDialogDescription,
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
@@ -45,6 +45,7 @@ import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-tar
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -101,12 +102,15 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
   const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
-  const deleteCopy = getDeleteWorktreeDialogCopy({
-    isBatchDelete,
-    worktreeCount: worktrees.length,
-    folderWorkspaceDeleteCount: countFolderWorkspaceDeletes(repoMap, worktrees),
-    isFolderWorkspaceDelete
-  })
+  const deleteCopy = getDeleteWorktreeDialogCopy(
+    {
+      isBatchDelete,
+      worktreeCount: worktrees.length,
+      folderWorkspaceDeleteCount: countFolderWorkspaceDeletes(repoMap, worktrees),
+      isFolderWorkspaceDelete
+    },
+    t
+  )
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const lineageDelete = useMemo(
     () =>
@@ -125,11 +129,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () => countFolderWorkspaceDeletes(repoMap, lineageDelete.deleteAllTargets),
     [lineageDelete.deleteAllTargets, repoMap]
   )
-  const lineageDeleteDescription = getDeleteWorktreeLineageDialogDescription({
-    childWorkspaceCount,
-    deleteTargetCount: lineageDelete.deleteAllTargets.length,
-    folderWorkspaceDeleteCount: lineageFolderWorkspaceDeleteCount
-  })
+  const lineageDeleteDescription = getDeleteWorktreeLineageDialogDescription(
+    {
+      childWorkspaceCount,
+      deleteTargetCount: lineageDelete.deleteAllTargets.length,
+      folderWorkspaceDeleteCount: lineageFolderWorkspaceDeleteCount
+    },
+    t
+  )
   const allowSkipConfirm =
     !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
   const [dontAskAgain, setDontAskAgain] = useState(false)
@@ -153,7 +160,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () => deleteTargets.map(({ id, hostId }) => ({ id, hostId })),
     [deleteTargets]
   )
-  const deleteError = !isBatchDelete ? getWorktreeDeleteErrorToShow(worktree, deleteState) : null
+  const deleteError = !isBatchDelete ? getWorktreeDeleteErrorToShow(worktree, deleteState, t) : null
   const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
   const gitStatusByWorktreeIdentity = useDeleteWorktreeStatusHydration({
     isOpen,
@@ -333,14 +340,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         <DialogHeader>
           <DialogTitle className="text-sm">
             {isBatchDelete
-              ? translate(
-                  'auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257',
-                  'Delete Workspaces'
-                )
-              : translate(
-                  'auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf',
-                  'Delete Workspace'
-                )}
+              ? t('auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257', 'Delete Workspaces')
+              : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
           </DialogTitle>
           <DeleteWorktreeDialogDescription
             showChangeLossWarning={dirtyChanges.checkStates.size > 0}

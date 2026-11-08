@@ -9,12 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useComposerState } from './useComposerState'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
 

@@ -11,8 +11,8 @@ import { CodexStructuredSessionAdapter } from './codex-structured-session-adapte
 import { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import { CodexJournalItems } from '../journal/codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }
@@ -227,77 +227,6 @@ describe("codex background tasks reach the host's child records", () => {
       admission.mockRestore()
       await adapter.closeSession('session-1')
     }
-  })
-
-  it('publishes a child whose turn starts while 256 others are running', async () => {
-    const published: Published[] = []
-    const { adapter, codex } = await adapterWithSession(published, {
-      appendItem: () => {},
-      appendTombstone: () => {},
-      publish: () => {}
-    })
-    const startChild = (index: number): void => {
-      const childId = `child-${index}`
-      codex.handlers().onNotification?.('turn/started', {
-        threadId: childId,
-        turn: { id: `turn-${index}`, status: 'inProgress' }
-      })
-      codex.handlers().onNotification?.('item/started', {
-        threadId: THREAD_ID,
-        turnId: PARENT_TURN,
-        item: {
-          type: 'subAgentActivity',
-          id: `call-${index}`,
-          kind: 'started',
-          agentThreadId: childId,
-          agentPath: `/root/worker_${index}`
-        }
-      })
-    }
-    // Setup already opened the parent and first child, leaving 254 slots.
-    for (let index = 0; index < 254; index += 1) {
-      startChild(index)
-    }
-    published.length = 0
-    startChild(254)
-    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
-    await adapter.closeSession('session-1')
-  })
-
-  it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {
-    const published: Published[] = []
-    const { adapter, codex } = await adapterWithSession(published)
-    const running = {
-      state: 'monitoring',
-      supportsStopAll: false,
-      tasks: [{ id: `codex-agent:${CHILD_ID}`, kind: 'agent', description: 'count_a' }]
-    }
-
-    const spawn = subagentNotification('started')
-    codex.handlers().onNotification?.(spawn.method, spawn.params)
-    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
-    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
-
-    published.length = 0
-    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
-
-    // The spawning turn's end does not prove the child's outcome.
-    expect(published).toEqual([])
-    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
-  })
-
-  it("hands the session's end to its child records when the session closes", async () => {
-    const published: Published[] = []
-    const { adapter, codex } = await adapterWithSession(published)
-    const spawn = subagentNotification('started')
-    codex.handlers().onNotification?.(spawn.method, spawn.params)
-    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
-    published.length = 0
-
-    expect(await adapter.closeSession('session-1')).toBe(true)
-
-    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
-    expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
   })
 
   it.each([

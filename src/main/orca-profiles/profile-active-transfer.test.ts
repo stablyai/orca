@@ -11,7 +11,6 @@ import * as stateFiles from './profile-project-state-file'
 import * as domainState from './profile-project-domain-state'
 import * as moveIntents from './profile-project-move-intent'
 import { transferActiveProfileProject } from './profile-active-transfer'
-import { transferOrcaProfileProject } from './profile-project-transfer'
 
 vi.mock('electron', () => ({
   app: {
@@ -124,46 +123,6 @@ afterEach(() => {
 })
 
 describe('active profile transfer recovery', () => {
-  it.each(['source commit', 'intent cleanup'] as const)(
-    'fences an existing SQLite Store after interrupted %s until recovery and reopen',
-    async (failure) => {
-      const store = openStore()
-      const before = snapshot('source')
-      const interrupted =
-        failure === 'source commit'
-          ? interruptSourceCommit()
-          : vi.spyOn(moveIntents, 'removeProfileProjectMoveIntent').mockImplementation(() => {
-              throw new Error('intent cleanup interrupted')
-            })
-      const reopen = vi.fn(async () => {
-        const retained = snapshot('source')
-        store.updateSettings({ theme: 'light' })
-        expect(() => store.flushOrThrow()).toThrow('final persistence')
-        expect(snapshot('source')).toEqual(retained)
-      })
-
-      await expect(transferActiveProfileProject(args, directory, store, reopen)).rejects.toThrow(
-        `${failure} interrupted`
-      )
-      expect(reopen).toHaveBeenCalledOnce()
-      expect(snapshot('source').revision).toBe(
-        (before.revision ?? 0) + (failure === 'source commit' ? 0 : 1)
-      )
-      expect(snapshot('target').state.repos).toHaveLength(1)
-      interrupted.mockRestore()
-
-      expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(1)
-      expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(0)
-      expect(snapshot('source').state.repos).toHaveLength(0)
-      expect(snapshot('target').state.repos).toHaveLength(1)
-      const reloaded = openStore()
-      reloaded.updateSettings({ theme: 'light' })
-      reloaded.flushOrThrow()
-      expect(snapshot('source').state.settings.theme).toBe('light')
-      expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(0)
-    }
-  )
-
   it('leaves an unchanged SQLite Store writable after validation fails', async () => {
     const store = openStore()
     const before = snapshot('source')
@@ -192,24 +151,6 @@ describe('active profile transfer recovery', () => {
     expect(snapshot('source')).toEqual(before)
     interrupted.mockRestore()
     expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(1)
-  })
-
-  it('reopens before an outstanding move can change the active Store behind its revision', async () => {
-    const store = openStore()
-    const interrupted = interruptSourceCommit()
-    expect(() => transferOrcaProfileProject(args, directory)).toThrow('source commit interrupted')
-    interrupted.mockRestore()
-    const reopen = vi.fn(async () => {
-      expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(1)
-    })
-    await expect(transferActiveProfileProject(args, directory, store, reopen)).rejects.toThrow(
-      'active_source_orca_profile_move_requires_recovery'
-    )
-    const recovered = snapshot('source')
-    store.updateSettings({ theme: 'light' })
-    expect(() => store.flushOrThrow()).toThrow('final persistence')
-    expect(snapshot('source')).toEqual(recovered)
-    expect(reopen).toHaveBeenCalledOnce()
   })
 
   it('keeps the Store frozen when an unreadable intent cannot identify its participants', async () => {

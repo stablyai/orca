@@ -1,12 +1,12 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session/workspace-session-pane-ownership'
 import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
-} from '../../claude-agent-teams-types'
+} from '../agent-teams/claude-agent-teams-types'
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin

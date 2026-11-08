@@ -3,12 +3,11 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAgentPromptPasteBytes,
-  getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { setSshTargetRegistryHandlers } from '../../../ssh/targets/ssh-target-registry'
+
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { makeStore } from '../../runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
 const PTY_ID = 'pty-prompt'
@@ -61,244 +60,14 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 })
 
 // aider uses open-loop submission, exposing the delay under test.
-async function createPromptRuntime(): Promise<{
-  runtime: OrcaRuntimeService
-  handle: string
-  writes: string[]
-  submitTimes: number[]
-}> {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
-  const writes: string[] = []
-  const submitTimes: number[] = []
-  const startedAt = Date.now()
-  runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
-    write: (_ptyId, data) => {
-      writes.push(data)
-      if (data === '\r') {
-        submitTimes.push(Date.now() - startedAt)
-      }
-      return true
-    },
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
-    launchAgent: 'aider'
-  })
-  return { runtime, handle: terminal.handle, writes, submitTimes }
-}
 
 // One 12KB chunk costs no write-loop time but separates ConPTY from fast-host delay.
-const HOST_PROBE_PROMPT = 'p'.repeat(12_000)
 
 /** Patch spawn-time execution-host state to exercise remote and WSL panes. */
-function patchPtyRecord(runtime: OrcaRuntimeService, patch: Record<string, unknown>): void {
-  const ptys = (runtime as unknown as { ptysById: Map<string, Record<string, unknown>> }).ptysById
-  const record = ptys.get(PTY_ID)
-  expect(record).toBeDefined()
-  Object.assign(record!, patch)
-}
-
-function registerSshRemotePlatform(platform: NodeJS.Platform | undefined): void {
-  setSshTargetRegistryHandlers({
-    connect: null,
-    getState: () => ({ remotePlatform: platform }) as never
-  })
-}
 
 function countSubmits(writes: readonly string[]): number {
   return writes.filter((data) => data === '\r').length
 }
-
-function submitDelayFor(prompt: string, platform: NodeJS.Platform): number {
-  return getAgentPromptSubmitDelayMs(
-    platform,
-    Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8')
-  )
-}
-
-describe('agent prompt submit delay on a ConPTY host', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-    Object.defineProperty(process, 'platform', originalPlatform)
-    setSshTargetRegistryHandlers({ connect: null, getState: null })
-  })
-
-  it('holds Enter for the payload ingest plus the settle window', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    const delayMs = submitDelayFor('review this', 'win32')
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs - 1)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-
-  it('no longer burns the flat 1_500 ms on a common-sized prompt', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    const prompt = 'x'.repeat(8_000)
-    // 8KB ConPTY ingest measured 60–89ms; the old constant delayed 1500ms.
-    const delayMs = submitDelayFor(prompt, 'win32')
-    expect(delayMs).toBeLessThan(700)
-    const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-
-  it('does not write Enter while ConPTY is still ingesting a large paste', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes, submitTimes } = await createPromptRuntime()
-    const prompt = 'y'.repeat(320_000)
-    const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    // node-pty accepted the bytes, but measured 320KB ConPTY ingest continues for 3342ms.
-    await vi.advanceTimersByTimeAsync(3_342)
-    expect(writes.filter((data) => data.includes('\x1b[201~'))).toHaveLength(1)
-    expect(countSubmits(writes)).toBe(0)
-
-    await vi.runAllTimersAsync()
-    expect(submitTimes).toHaveLength(1)
-    expect(submitTimes[0]).toBeGreaterThan(3_342)
-    await stalled
-  })
-
-  it('charges a non-Windows host only the settle window', async () => {
-    useHostPlatform('darwin')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    const delayMs = submitDelayFor(HOST_PROBE_PROMPT, 'darwin')
-    expect(delayMs).toBeLessThan(submitDelayFor(HOST_PROBE_PROMPT, 'win32'))
-    const submission = runtime.sendTerminalAgentPrompt(handle, HOST_PROBE_PROMPT, {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs - 1)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-})
-
-describe('agent prompt submit delay follows the execution host', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-    Object.defineProperty(process, 'platform', originalPlatform)
-    setSshTargetRegistryHandlers({ connect: null, getState: null })
-  })
-
-  it('still charges ConPTY for a WSL pane, which is spawned through it', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    // Local WSL still ingests through Windows ConPTY despite reporting a Linux guest platform.
-    patchPtyRecord(runtime, { isWsl: true, wslDistro: 'Ubuntu' })
-    const delayMs = submitDelayFor(HOST_PROBE_PROMPT, 'win32')
-    expect(delayMs).toBeGreaterThan(submitDelayFor(HOST_PROBE_PROMPT, 'linux'))
-    const submission = runtime.sendTerminalAgentPrompt(handle, HOST_PROBE_PROMPT, {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs - 1)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-
-  it('waits the ConPTY delay for a Windows SSH host driven from macOS', async () => {
-    useHostPlatform('darwin')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    patchPtyRecord(runtime, { connectionId: 'ssh-target-1' })
-    registerSshRemotePlatform('win32')
-    const clientDelayMs = submitDelayFor(HOST_PROBE_PROMPT, 'darwin')
-    const hostDelayMs = submitDelayFor(HOST_PROBE_PROMPT, 'win32')
-    const submission = runtime.sendTerminalAgentPrompt(handle, HOST_PROBE_PROMPT, {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(clientDelayMs)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(hostDelayMs - clientDelayMs)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-
-  it('skips the ConPTY delay for a Linux SSH host driven from Windows', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    patchPtyRecord(runtime, { connectionId: 'ssh-target-1' })
-    registerSshRemotePlatform('linux')
-    const delayMs = submitDelayFor(HOST_PROBE_PROMPT, 'linux')
-    expect(delayMs).toBeLessThan(submitDelayFor(HOST_PROBE_PROMPT, 'win32'))
-    const submission = runtime.sendTerminalAgentPrompt(handle, HOST_PROBE_PROMPT, {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs - 1)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-
-  it('falls back to the remote worktree path flavor before the relay reports a platform', async () => {
-    useHostPlatform('darwin')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    patchPtyRecord(runtime, {
-      connectionId: 'ssh-target-1',
-      worktreeId: 'repo-1::C:\\worktrees\\worktree-a'
-    })
-    registerSshRemotePlatform(undefined)
-    const delayMs = submitDelayFor(HOST_PROBE_PROMPT, 'win32')
-    const submission = runtime.sendTerminalAgentPrompt(handle, HOST_PROBE_PROMPT, {
-      inputKind: 'driving'
-    })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.advanceTimersByTimeAsync(delayMs - 1)
-    expect(countSubmits(writes)).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(countSubmits(writes)).toBe(1)
-
-    await vi.runAllTimersAsync()
-    await stalled
-  })
-})
 
 describe('agent prompt render gate on a ConPTY host', () => {
   afterEach(() => {
@@ -309,7 +78,12 @@ describe('agent prompt render gate on a ConPTY host', () => {
   /** Model a closed-loop agent repainting mid-ingest, then going quiet. */
   async function createSettlementRuntime(
     // Continuous noise forces the hard cap so its arithmetic can be measured.
-    agentOutput: { markerDelayMs?: number; noiseUntilMs?: number } = {}
+    agentOutput: {
+      markerDelayMs?: number
+      noiseUntilMs?: number
+      composer?: string
+      noise?: string
+    } = {}
   ): Promise<{
     runtime: OrcaRuntimeService
     handle: string
@@ -329,9 +103,13 @@ describe('agent prompt render gate on a ConPTY host', () => {
           submitTimes.push(Date.now() - startedAt)
         }
         if (data.includes('\x1b[201~')) {
-          setTimeout(() => runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now()), markerDelayMs)
+          const frame = agentOutput.composer ? `\x1b[H\x1b[2J${agentOutput.composer}` : ''
+          setTimeout(
+            () => runtime.onPtyData(PTY_ID, `${frame}\x1b[?25h`, Date.now()),
+            markerDelayMs
+          )
           for (let at = markerDelayMs + 500; at <= (agentOutput.noiseUntilMs ?? 0); at += 500) {
-            setTimeout(() => runtime.onPtyData(PTY_ID, '.', Date.now()), at)
+            setTimeout(() => runtime.onPtyData(PTY_ID, agentOutput.noise ?? '.', Date.now()), at)
           }
         }
         return true
@@ -391,67 +169,58 @@ describe('agent prompt render gate on a ConPTY host', () => {
     await stalled
   })
 
-  it('still settles a normal prompt on the marker plus one quiet window', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, submitTimes } = await createSettlementRuntime()
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      inputKind: 'driving'
+  describe('with child work repainting forever', () => {
+    const prompt = 'review the background agent output and report'
+    const rule = '\u2500'.repeat(40)
+    // Claude parks the cursor at the end of its composer line.
+    const composer = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f ${text}\r\n${rule}\x1b[2;${text.length + 3}H`
+    // A dim suggestion with the cursor parked before it, as Claude paints one in an empty composer.
+    const suggesting = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f \x1b[2m${text}\x1b[22m\r\n${rule}\x1b[2;3H`
+
+    async function submitTime(shown: { before: string; after: string }): Promise<number> {
+      const { runtime, handle, submitTimes } = await createSettlementRuntime({
+        noiseUntilMs: 20_000,
+        // A progress row repainting elsewhere leaves the composer and its cursor as they were.
+        noise: '\x1b7\x1b[5;1Hworking\x1b8',
+        composer: shown.after.slice('\x1b[H\x1b[2J'.length)
+      })
+      runtime.onPtyData(PTY_ID, shown.before, Date.now())
+      const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
+      const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+      await vi.runAllTimersAsync()
+      await stalled
+      expect(submitTimes).toHaveLength(1)
+      return submitTimes[0]
+    }
+
+    it('submits once an empty composer keeps showing the whole paste', async () => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
+      const at = await submitTime({ before: composer(''), after: composer(prompt) })
+      expect(at).toBeGreaterThanOrEqual(400)
+      expect(at).toBeLessThan(1_500)
     })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
-    await vi.runAllTimersAsync()
-    expect(submitTimes).toHaveLength(1)
-    // A sub-chunk paste adds no measurable ingest beyond marker plus quiet window.
-    expect(submitTimes[0]).toBeGreaterThanOrEqual(1_600)
-    expect(submitTimes[0]).toBeLessThan(1_700)
-    await stalled
-  })
-})
-
-describe('plain terminal send suffix delay', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-    Object.defineProperty(process, 'platform', originalPlatform)
-  })
-
-  it('scales the Enter that follows plain text with the payload the host must ingest', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes, submitTimes } = await createPromptRuntime()
-    const send = runtime.sendTerminal(
-      handle,
-      { text: 'z'.repeat(320_000), enter: true },
-      { inputKind: 'driving' }
-    )
-
-    // A flat 500ms delay previously submitted Enter before this paste finished.
-    await vi.advanceTimersByTimeAsync(3_342)
-    expect(countSubmits(writes)).toBe(0)
-
-    await vi.runAllTimersAsync()
-    await send
-    expect(submitTimes).toHaveLength(1)
-    expect(submitTimes[0]).toBeGreaterThan(3_342)
-  })
-
-  it('abandons the scaled suffix wait when the request is aborted', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const controller = new AbortController()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    const send = runtime.sendTerminal(
-      handle,
-      { text: 'z'.repeat(320_000), enter: true },
-      { inputKind: 'driving', signal: controller.signal }
-    )
-    const rejected = expect(send).rejects.toThrow('request_aborted')
-
-    await vi.advanceTimersByTimeAsync(100)
-    controller.abort()
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(countSubmits(writes)).toBe(0)
+    it.each([
+      [
+        'only the end of the paste is shown',
+        { before: composer(''), after: composer(prompt.slice(8)) }
+      ],
+      [
+        'the composer already held the prompt',
+        { before: composer(prompt), after: composer(prompt) }
+      ],
+      [
+        'a dim suggestion already showed the prompt',
+        { before: suggesting(prompt), after: suggesting(prompt) }
+      ]
+    ])('waits for the cap when %s', async (_case, shown) => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      expect(await submitTime(shown)).toBeGreaterThanOrEqual(8_000)
+    })
   })
 })

@@ -6,7 +6,7 @@ import {
 } from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
-import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
+import { conversationCommandBlocked } from '../native-chat/agent-session-wire/operations/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'

@@ -5,9 +5,14 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import {
+  clipboardImageCopyErrorDescription,
+  imageCopyFailedMessage
+} from '@/lib/clipboard-image-copy'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
-import { renderImagePngDataUrl } from './image-png-export'
+import { imageClipboardPngDataUrl } from './image-png-export'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
@@ -38,13 +43,13 @@ async function copyImageAsPng(
 ): Promise<void> {
   try {
     await window.api.ui.writeClipboardImage(
-      await renderImagePngDataUrl(src, size, background ?? null)
+      await imageClipboardPngDataUrl(src, size, background ?? null)
     )
     toast.success(translate('auto.components.editor.PanZoomImageDialog.copiedPng', 'Copied as PNG'))
-  } catch {
-    toast.error(
-      translate('auto.components.editor.PanZoomImageDialog.copyPngFailed', 'Could not copy image')
-    )
+  } catch (error) {
+    toast.error(imageCopyFailedMessage(), {
+      description: clipboardImageCopyErrorDescription(error)
+    })
   }
 }
 
@@ -144,6 +149,7 @@ function PanZoomImageCanvas({
   PanZoomImageDialogProps,
   'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
 > & { onClose: () => void }): React.JSX.Element {
+  const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
@@ -183,28 +189,28 @@ function PanZoomImageCanvas({
           ) : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
             <ToolbarButton
-              label={translate('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
+              label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!panZoom.canZoomOut}
               onClick={() => panZoom.zoomBy(1 / IMAGE_VIEWER_ZOOM_STEP)}
             >
               <ZoomOut />
             </ToolbarButton>
             <ToolbarButton
-              label={translate('auto.components.editor.PanZoomImageDialog.zoomIn', 'Zoom in')}
+              label={t('auto.components.editor.PanZoomImageDialog.zoomIn', 'Zoom in')}
               disabled={!panZoom.canZoomIn}
               onClick={() => panZoom.zoomBy(IMAGE_VIEWER_ZOOM_STEP)}
             >
               <ZoomIn />
             </ToolbarButton>
             <ToolbarButton
-              label={translate('auto.components.editor.PanZoomImageDialog.fit', 'Fit to screen')}
+              label={t('auto.components.editor.PanZoomImageDialog.fit', 'Fit to screen')}
               disabled={panZoom.isFitted}
               onClick={panZoom.fit}
             >
               <Maximize />
             </ToolbarButton>
             <ToolbarButton
-              label={translate('auto.components.editor.PanZoomImageDialog.copyPng', 'Copy as PNG')}
+              label={t('auto.components.editor.PanZoomImageDialog.copyPng', 'Copy as PNG')}
               disabled={!imageSrc || !content}
               onClick={() =>
                 imageSrc && content && void copyImageAsPng(imageSrc, content, background)
@@ -214,7 +220,7 @@ function PanZoomImageCanvas({
             </ToolbarButton>
             {toolbarActions}
             <ToolbarButton
-              label={translate('auto.components.editor.PanZoomImageDialog.close', 'Close')}
+              label={t('auto.components.editor.PanZoomImageDialog.close', 'Close')}
               onClick={onClose}
             >
               <X />

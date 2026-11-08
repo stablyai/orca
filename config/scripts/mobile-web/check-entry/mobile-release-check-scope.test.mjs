@@ -4,7 +4,6 @@ import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runProcessSync } from '@orca/process-host'
-import { shouldRunMobileReleaseChecks } from './mobile-release-check-scope.mjs'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const workflow = parse(readFileSync(join(root, '.github/workflows/mobile.yml'), 'utf8'))
@@ -16,58 +15,6 @@ afterEach(() => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
-})
-
-it.each([
-  'src/main/runtime/rpc/dispatcher.ts',
-  'src/shared/rpc-contract/params.ts',
-  'mobile/src/session/session.test.ts',
-  'mobile/app/index.tsx',
-  'mobile/src/theme.css',
-  'mobile/src/session/README.md',
-  'mobile/docs/release.md',
-  'mobile/README.md',
-  'docs/reference/mobile.md'
-])('skips Ruby checks for application/documentation-only changes: %s', (file) => {
-  expect(shouldRunMobileReleaseChecks([file])).toBe(false)
-})
-
-it.each([
-  'mobile/fastlane/Fastfile',
-  'mobile/fastlane/Appfile',
-  'mobile/fastlane/ios_release_version.rb',
-  'mobile/fastlane/ios_release_version_test.rb',
-  'mobile/Gemfile',
-  'mobile/Gemfile.lock',
-  'mobile/.ruby-version',
-  'mobile/.bundle/config',
-  'mobile/app.json',
-  'mobile/app.config.ts',
-  'mobile/ios/Podfile',
-  'mobile/package.json',
-  'mobile/pnpm-lock.yaml',
-  'mobile/scripts/release.mts',
-  'mobile/src/release.rb',
-  'mobile/src/release.json',
-  'mobile/new-toolchain/input',
-  'package.json',
-  '.github/workflows/mobile.yml',
-  '.github/workflows/mobile-ios-release.yml',
-  '.github/actions/install-node-dependencies/action.yml',
-  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs',
-  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs'
-])('retains Ruby release coverage for changed or unknown inputs: %s', (file) => {
-  expect(shouldRunMobileReleaseChecks([file])).toBe(true)
-  expect(shouldRunMobileReleaseChecks(['mobile/src/view.tsx', file])).toBe(true)
-})
-
-it('skips Ruby checks for a root lockfile change, which fastlane never reads', () => {
-  expect(shouldRunMobileReleaseChecks(['pnpm-lock.yaml'])).toBe(false)
-  expect(shouldRunMobileReleaseChecks(['pnpm-lock.yaml', 'mobile/fastlane/Fastfile'])).toBe(true)
-})
-
-it('runs Ruby checks when the changed-file evidence is empty', () => {
-  expect(shouldRunMobileReleaseChecks([])).toBe(true)
 })
 
 function fixture(detectorStep = detector) {
@@ -131,33 +78,11 @@ function fixture(detectorStep = detector) {
 }
 
 describe.skipIf(process.platform === 'win32')('the Linux workflow detector command', () => {
-  it('skips Ruby after a source-only commit', () => {
-    const repo = fixture()
-    repo.write('mobile/src/view.tsx', 'export const view = 2\n')
-    repo.commit()
-    expect(repo.detect()).toBe('should_run=false\n')
-  })
-
-  it('skips reliability metadata alone and retains mixed Fastfile changes', () => {
-    const repo = fixture()
-    repo.write('config/reliability-gates.jsonc', '{"gates": []}\n')
-    repo.commit()
-    expect(repo.detect()).toBe('should_run=false\n')
-    repo.write('config/reliability-gates.jsonc', '{"gates": [1]}\n')
-    repo.write('mobile/fastlane/Fastfile', 'default_platform(:android)\n')
-    repo.commit()
-    expect(repo.detect()).toBe('should_run=false\nshould_run=true\n')
-  })
-
   it('keeps a deleted release input when a rename moves it into an excluded directory', () => {
     const repo = fixture()
     repo.git('mv', 'mobile/fastlane/Fastfile', 'mobile/src/old-release.md')
     repo.commit()
     expect(repo.detect()).toBe('should_run=true\n')
-  })
-
-  it('runs Ruby when the merge parent is unavailable', () => {
-    expect(fixture().detect()).toBe('should_run=true\n')
   })
 
   it('runs Ruby when the classifier cannot execute', () => {

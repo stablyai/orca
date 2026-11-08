@@ -1,9 +1,49 @@
 import { writeFile, appendFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { dir, kill, pane, drain } from './claude-helper-kill.test-fixture'
+import { dir, kill, pane, drain, prompt, stamp } from './claude-helper-kill.test-fixture'
 
 describe('Claude helper provider evidence', () => {
+  it.each([false, true])(
+    'ignores mixed server-result echoes after a kill; real prompt: %s',
+    async (realPrompt) => {
+      const p = await pane()
+      try {
+        await writeFile(p.child('a123'), prompt(1))
+        await appendFile(p.path, kill(2))
+        await appendFile(
+          p.child('a123'),
+          `${JSON.stringify({
+            type: 'user',
+            timestamp: stamp(3),
+            message: {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'server context' },
+                {
+                  type: 'advisor_tool_result',
+                  tool_use_id: 'server',
+                  content: { type: 'advisor_redacted_result' }
+                }
+              ]
+            }
+          })}\n`
+        )
+        if (realPrompt) {
+          await appendFile(p.child('a123'), prompt(4))
+        }
+        await drain(p)
+        if (realPrompt) {
+          expect(p.row().payload.subagents?.[0]?.state).toBe('working')
+        } else {
+          expect(p.row().payload.subagents ?? []).toEqual([])
+        }
+      } finally {
+        p.poller.clearAll()
+      }
+    }
+  )
+
   it('forgets kills on parent file replacement', async () => {
     const p = await pane()
     try {

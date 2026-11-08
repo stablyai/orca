@@ -61,6 +61,8 @@ export class BridgeHostSubscriptions {
       onBinaryFrameDropped: (dropped: BridgeDroppedBinaryFrame) => void
       onTerminalBacklog?: (report: BridgeTerminalBacklogReport) => void
       terminalTimers?: TerminalBacklogTimers
+      // A reconnect re-sends the page's streams only when its verdict lets it.
+      holdReplay?: (id: string, resend: () => void) => boolean
     }
   ) {}
 
@@ -103,15 +105,20 @@ export class BridgeHostSubscriptions {
     const onBinaryFrame = wantsBinary
       ? (frame: BrowserScreencastFrame) => this.deliverBinaryFrame(id, frame)
       : undefined
+    const { holdReplay } = this.options
     let unsubscribe: () => void
     try {
       unsubscribe = this.options.client.subscribe(
         method,
         params,
         (payload) => this.deliver(id, payload),
-        onBinaryFrame === undefined && envelope === undefined
+        onBinaryFrame === undefined && envelope === undefined && holdReplay === undefined
           ? undefined
-          : { onBinaryFrame, envelope }
+          : {
+              onBinaryFrame,
+              envelope,
+              holdReplay: holdReplay && ((resend) => holdReplay(id, resend))
+            }
       )
     } catch (error) {
       this.open.delete(id)

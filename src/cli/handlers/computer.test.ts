@@ -15,7 +15,13 @@ vi.mock('../runtime-client', async () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
 
 describe('orca computer observation CLI handlers', () => {
   beforeEach(() => {
@@ -165,6 +171,7 @@ describe('orca computer observation CLI handlers', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_state', sampleSnapshot())
     )
 
@@ -181,7 +188,7 @@ describe('orca computer observation CLI handlers', () => {
       '/tmp/repo/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'computer.getAppState', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'computer.getAppState', {
       app: 'Finder',
       worktree: 'id:repo::/tmp/repo',
       noScreenshot: true,

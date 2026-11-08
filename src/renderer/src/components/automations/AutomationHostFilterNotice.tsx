@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { AutomationHostStatusBadges } from './AutomationHostBadges'
 import type { AutomationHostFilterResolution } from './automation-host-filter-resolution'
@@ -65,27 +66,29 @@ type AutomationHostFilterNoticeProps = {
   className?: string
 }
 
-function noticeCopy(resolution: AutomationHostFilterResolution): string | null {
+function noticeCopy(
+  resolution: AutomationHostFilterResolution,
+  t: Translate = translate
+): string | null {
   const label =
-    resolution.entry?.label ??
-    translate('auto.components.automations.emptyState.unknownHost', 'this host')
+    resolution.entry?.label ?? t('auto.components.automations.emptyState.unknownHost', 'this host')
   switch (resolution.status) {
     case 'loading':
-      return translate('auto.components.automations.hostNotice.loading', 'Loading host…')
+      return t('auto.components.automations.hostNotice.loading', 'Loading host…')
     case 'unavailable':
-      return translate(
+      return t(
         'auto.components.automations.hostNotice.unavailable',
         '{{hostLabel}} could not be reached. Showing the automations last loaded from it.',
         { hostLabel: label }
       )
     case 'ghost':
-      return translate(
+      return t(
         'auto.components.automations.hostNotice.ghost',
         '{{hostLabel}} was removed. Automations still assigned to it remain listed.',
         { hostLabel: label }
       )
     case 'removed':
-      return translate(
+      return t(
         'auto.components.automations.hostNotice.removed',
         'The selected host is no longer available. Showing all hosts.'
       )
@@ -100,8 +103,9 @@ export function AutomationHostFilterNotice({
   onRecover,
   className
 }: AutomationHostFilterNoticeProps): React.JSX.Element {
+  const t = useTranslate()
   const [announcedFallback, setAnnouncedFallback] = useState<string>('')
-  const message = noticeCopy(resolution)
+  const message = noticeCopy(resolution, t)
   const recovery = resolution.entry ? automationHostRecoveryActions(resolution.entry) : null
   const action = recovery?.authority ?? recovery?.execution ?? null
   const isLoading = resolution.status === 'loading'
@@ -149,7 +153,7 @@ export function AutomationHostFilterNotice({
               className="border-amber-500/40 bg-background font-medium text-foreground shadow-xs hover:bg-muted"
               onClick={() => onRecover(action)}
             >
-              {recoveryActionLabel(action)}
+              {recoveryActionLabel(action, t)}
             </Button>
           ) : null}
         </div>

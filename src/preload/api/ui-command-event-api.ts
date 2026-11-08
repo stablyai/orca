@@ -1,14 +1,14 @@
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
-} from '../../shared/runtime-file-contracts'
+} from '../../shared/file-access/runtime-editor-file-open'
 import type { JiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation
 } from '../../shared/jira/jira-saved-filters'
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
@@ -18,6 +18,10 @@ import type {
 } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
+import type {
+  TerminalPaneMoveToNewTabReply,
+  TerminalPaneMoveToNewTabRequest
+} from '../../shared/workspace-layout/terminal-leaf-move'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
@@ -143,6 +147,7 @@ export type UiCommandEventApi = {
     code?: 'browser_tab_not_found'
   }) => void
   onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
+  onToggleProjectsCollapse: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
@@ -262,6 +267,10 @@ export type UiCommandEventApi = {
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void
+  onTerminalPaneMoveToNewTabRequest?: (
+    callback: (request: TerminalPaneMoveToNewTabRequest) => void
+  ) => () => void
+  replyTerminalPaneMoveToNewTab?: (reply: TerminalPaneMoveToNewTabReply) => void
   onOpenFileFromMobile: (
     callback: (data: {
       worktreeId: string

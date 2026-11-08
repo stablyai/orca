@@ -1,7 +1,7 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { RuntimeAgentOrchestrationProjection } from '../../runtime-agent-orchestration-projection'
-import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
-import { RuntimeOrchestrationSenderNames } from '../../runtime-orchestration-sender-names'
+import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
+import { readOrchestrationFleetAgentStatusSnapshot } from '../addressing/orchestration-fleet-agent-status-snapshot'
+import { RuntimeOrchestrationSenderNames } from '../mailbox/senders/runtime-orchestration-sender-names'
 
 import { afterEach, expect, it, vi } from 'vitest'
 

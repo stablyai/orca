@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
-import type { PtyTransientFact } from '../../../providers/pty-provider-contract'
+import type { PtyTransientFact } from '../../../providers/pty-provider-events'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -13,7 +13,7 @@ import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

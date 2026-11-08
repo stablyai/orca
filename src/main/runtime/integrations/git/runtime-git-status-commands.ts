@@ -4,12 +4,15 @@ import type {
 } from '../../../../shared/git/history/git-history-types'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
+import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-target'
+import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
 import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult
 } from '../../../../shared/git/status/git-status-types'
 import type {
+  RuntimeGitSwitchResult,
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
 } from '../../../../shared/runtime-worktree-contracts'
@@ -69,6 +72,11 @@ export class RuntimeGitStatusCommands {
     return requireRuntimeGitProvider(target).checkIgnoredPaths(target.worktree.path, relativePaths)
   }
 
+  async getRuntimeGitRefs(worktreeSelector: string, query?: string) {
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
+    return requireRuntimeGitProvider(target).getHistoryRefs(target.worktree.path, query)
+  }
+
   async getRuntimeGitHistory(
     worktreeSelector: string,
     options: GitHistoryOptions = {}
@@ -98,8 +106,56 @@ export class RuntimeGitStatusCommands {
     branch: string
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).checkoutBranch(target.worktree.path, branch)
-    return { ok: true, branch }
+    const provider = requireRuntimeGitProvider(target)
+    const worktreePath = target.worktree.path
+    const result = await switchBranchGuarded(
+      worktreePath,
+      branch,
+      localGitOptionsForTarget(target),
+      {
+        getStatus: () =>
+          provider.getStatus(worktreePath, {
+            admissionTier: 'interactive',
+            includeLineStats: false
+          }),
+        checkout: () => provider.checkoutBranch(worktreePath, branch),
+        getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
+        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+      }
+    )
+    return { ok: true, branch: result.branch }
+  }
+
+  async switchRuntimeGitBranch(
+    worktreeSelector: string,
+    branchTarget: BranchSwitchTarget
+  ): Promise<RuntimeGitSwitchResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = requireRuntimeGitProvider(target)
+    const path = target.worktree.path
+    try {
+      const result = await switchBranchGuarded(
+        path,
+        branchTarget,
+        localGitOptionsForTarget(target),
+        {
+          getStatus: () =>
+            provider.getStatus(path, { admissionTier: 'interactive', includeLineStats: false }),
+          checkout: (branch, creation) =>
+            creation
+              ? provider.checkoutBranch(path, branch, creation)
+              : provider.checkoutBranch(path, branch),
+          getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(path) ?? null,
+          onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        }
+      )
+      return { ok: true, branch: result.branch }
+    } catch (error) {
+      if (error instanceof BranchSwitchLandedWithWarningError) {
+        return { ok: true, branch: error.branch, warning: error.message }
+      }
+      throw error
+    }
   }
 
   async listRuntimeGitLocalBranches(worktreeSelector: string): Promise<RuntimeGitLocalBranches> {

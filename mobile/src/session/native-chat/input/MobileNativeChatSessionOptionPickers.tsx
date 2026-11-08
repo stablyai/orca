@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
+  Clock,
   FilePenLine,
   Hand,
   LockKeyhole,
@@ -125,7 +126,8 @@ export function MobileNativeChatSessionOptionPickers({
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
-  const { snapshot, pendingId } = controller
+  const { pendingId } = controller
+  const snapshot = controller.snapshot.filter((descriptor) => descriptor.id !== 'interactionMode')
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
@@ -162,10 +164,10 @@ export function MobileNativeChatSessionOptionPickers({
   }, [showWorkingNotice])
 
   const options = sortNativeChatSessionOptions(snapshot)
-  if (!model && !permission) {
+  if (!model && !permission && options.length === 0) {
     return null
   }
-  const home = model ?? permission!
+  const home = model ?? permission ?? options[0]!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // Structured picks and permission mode affect the next send, not the running turn.
@@ -220,6 +222,7 @@ export function MobileNativeChatSessionOptionPickers({
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}
+        leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
             ? permissionColor
@@ -262,7 +265,9 @@ export function MobileNativeChatSessionOptionPickers({
                 subtitle={
                   pendingId !== null
                     ? t('chat.sessionOptionPickers.applying', 'Applying…')
-                    : undefined
+                    : controller.appliesOnAttach
+                      ? t('chat.sessionOptionPickers.onAttach', 'Applies when the chat attaches')
+                      : undefined
                 }
                 trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
               />

@@ -1,6 +1,6 @@
 import { MessagesSquare, SquareTerminal } from 'lucide-react'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Shell text, not prose: what a terminal shows when the agent's CLI starts.
 const DEMO_PROMPT = '~/uploader ❯'
@@ -8,7 +8,8 @@ const DEMO_COMMAND = 'gemini'
 
 // Pixel positions here are the keyframe targets in main.css (.onboarding-launch-demo).
 export function TerminalLaunchDemo(): React.JSX.Element {
-  const cli = translate('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')
+  const t = useTranslate()
+  const cli = t('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')
   return (
     <div
       aria-hidden
@@ -35,10 +36,10 @@ export function TerminalLaunchDemo(): React.JSX.Element {
       </div>
       <div className="absolute inset-x-0 bottom-0 top-7 flex flex-col gap-1.5 p-2.5">
         <span className="max-w-[75%] self-end rounded-lg bg-foreground px-2 py-1 text-background">
-          {translate('components.onboarding.launchDemo.userMessage', 'Fix the flaky upload test')}
+          {t('components.onboarding.launchDemo.userMessage', 'Fix the flaky upload test')}
         </span>
         <span className="max-w-[80%] rounded-lg border border-border px-2 py-1">
-          {translate(
+          {t(
             'components.onboarding.launchDemo.agentMessage',
             "Found it. The retry timer wasn't mocked."
           )}
@@ -52,7 +53,7 @@ export function TerminalLaunchDemo(): React.JSX.Element {
           <span className="text-status-success">{DEMO_PROMPT}</span> {DEMO_COMMAND}
         </div>
         <div className="text-muted-foreground">
-          {translate('components.onboarding.launchDemo.cliReady', '{{agent}} CLI ready.', {
+          {t('components.onboarding.launchDemo.cliReady', '{{agent}} CLI ready.', {
             agent: getAgentLabel('gemini')
           })}
         </div>

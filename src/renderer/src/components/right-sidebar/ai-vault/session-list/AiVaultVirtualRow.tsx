@@ -34,6 +34,7 @@ import {
   canResumeAiVaultSearchHit,
   hasAiVaultSearchHitPath
 } from '../search/ai-vault-search-session'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
@@ -70,6 +71,7 @@ export function AiVaultVirtualRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHits,
   searchHitHostLabels,
@@ -107,6 +109,7 @@ export function AiVaultVirtualRow({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  onRevealArtifacts: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
   searchHitHostLabels?: ReadonlyMap<string, string> | null
@@ -116,6 +119,7 @@ export function AiVaultVirtualRow({
   /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
   onPickSession?: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!row) {
     return null
   }
@@ -143,7 +147,7 @@ export function AiVaultVirtualRow({
     row.type === 'session'
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
       : { resumeDisabled: true, canCopyResumeCommand: false }
-  const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
+  const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState, t) : ''
   const searchHit = row.type === 'session' ? searchHits?.get(row.session.id) : undefined
   const {
     canJumpToOriginalPane,
@@ -294,6 +298,11 @@ export function AiVaultVirtualRow({
           onOpenCwd={
             searchPathAllowed && canOpenLocalSessionPaths && row.session.cwd
               ? () => onOpenCwd(row.session)
+              : undefined
+          }
+          onRevealArtifacts={
+            searchPathAllowed && canOpenLocalSessionPaths && row.session.antigravityArtifactPath
+              ? () => onRevealArtifacts(row.session)
               : undefined
           }
           onRequestDelete={searchPathAllowed ? onRequestDelete : undefined}

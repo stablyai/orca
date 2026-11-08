@@ -74,9 +74,11 @@ import type { ConnectionState } from '../transport/types'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import { useWorkspaceClient, WorkspaceServerContext } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { useWorkspaceExecutionHost } from './workspace-execution-host'
 import { WorkspaceRoute } from './workspace-route'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 const RELAYS = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
 
@@ -169,7 +171,11 @@ async function render(element: ReactElement, gates: HostStatusGates): Promise<Re
   serverReport.current = RUNNING
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(createElement(HostStatusGatesContext.Provider, { value: gates }, element))
+    renderer = create(
+      documentQueryClient().wrap(
+        createElement(HostStatusGatesContext.Provider, { value: gates }, element)
+      )
+    )
   })
   if (!renderer) {
     throw new Error('did not render')

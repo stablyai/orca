@@ -1,3 +1,4 @@
+import { retireMobileSessionTabSelection } from '../session-tabs/mobile-session-tab-selection'
 /** Share tab retirement between user close and orchestration settlement so dead tabs cannot reattach sessions. */
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
@@ -29,20 +30,11 @@ export function retireStructuredAgentSessionTabFrom(
     return null
   }
   const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
-  const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-  return {
-    ...snapshot,
-    snapshotVersion: snapshot.snapshotVersion + 1,
-    activeTabId: active?.id ?? null,
-    activeTabType: active?.type ?? null,
-    tabGroups: (snapshot.tabGroups ?? []).map((group) => ({
-      ...group,
-      tabOrder: group.tabOrder.filter((id) => id !== tab.id),
-      activeTabId: group.activeTabId === tab.id ? null : group.activeTabId,
-      recentTabIds: group.recentTabIds?.filter((id) => id !== tab.id)
-    })),
-    tabs: nextTabs
-  }
+  return retireMobileSessionTabSelection(
+    { ...snapshot, snapshotVersion: snapshot.snapshotVersion + 1 },
+    nextTabs,
+    new Set([tab.id])
+  )
 }
 
 /** Retire only after proven close; missing/older runtime methods and snapshot errors must not turn a settled stop into release_unknown. No renderer required. */

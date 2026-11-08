@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
@@ -86,8 +87,8 @@ export function getClientHostedBrowserRows(worktreeId: string): readonly ClientH
 }
 
 export function useClientHostedBrowserRows(worktreeId: string): readonly ClientHostedBrowserRow[] {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return getClientHostedBrowserRows(worktreeId)
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => getClientHostedBrowserRows(worktreeId))
 }
 
 export function selectClientHostedBrowserRow(next: ClientHostedBrowserRowSelection): void {
@@ -109,8 +110,8 @@ export function getClientHostedBrowserRowSelection(): ClientHostedBrowserRowSele
 }
 
 export function useClientHostedBrowserRowSelection(): ClientHostedBrowserRowSelection | null {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return selection
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => selection)
 }
 
 /** Expire selection when the underlying group’s active tab changes, regardless of click/keyboard/palette source. */

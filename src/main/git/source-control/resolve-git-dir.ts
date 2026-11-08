@@ -24,3 +24,17 @@ export async function resolveGitDir(
 
   return dotGitPath
 }
+
+/** Linked worktrees name their shared object store in `commondir`; a main gitdir is its own. */
+export async function resolveGitCommonDir(gitDir: string): Promise<string> {
+  try {
+    const entry = (await readFile(path.join(gitDir, 'commondir'), 'utf-8')).trim()
+    return entry ? path.resolve(gitDir, entry) : gitDir
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return gitDir
+    }
+    throw error
+  }
+}

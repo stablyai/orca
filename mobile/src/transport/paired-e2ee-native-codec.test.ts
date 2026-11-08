@@ -15,12 +15,24 @@ import type { PairedE2EENativeBindings } from './paired-e2ee-native-codec'
 
 // Use the package’s wasm libsodium under Node; Kotlin/Swift tests pin the separate codec stand-in.
 const secretboxOpenCalls = vi.fn()
+const secretboxSealCalls = vi.fn()
 let bindings: PairedE2EENativeBindings | null = null
 
 function libsodiumBindings(): PairedE2EENativeBindings {
   return {
     sodium: {
       fromBase64: (value, variant) => sodium.from_base64(value, variant).slice().buffer,
+      toBase64: (value, variant) => sodium.to_base64(new Uint8Array(value), variant),
+      secretboxSeal: (message, nonce, key) => {
+        secretboxSealCalls(message.byteLength)
+        return sodium
+          .crypto_secretbox_easy(
+            new Uint8Array(message),
+            new Uint8Array(nonce),
+            new Uint8Array(key)
+          )
+          .slice().buffer
+      },
       secretboxOpen: (box, nonce, key) => {
         secretboxOpenCalls(box.byteLength)
         return sodium
@@ -189,6 +201,29 @@ describe('the native paired E2EE codec', () => {
         expect(secretboxOpenCalls).not.toHaveBeenCalled()
       }
     }
+  })
+
+  it('seals through native exactly the frames tweetnacl seals', async () => {
+    const { native } = await load(true)
+    const key = Uint8Array.from({ length: 32 }, (_, index) => index)
+    const nonce = Uint8Array.from({ length: 24 }, (_, index) => index)
+    const box = native!.sealSecretbox(new TextEncoder().encode('ok'), nonce, key)
+    expect(native!.encodeBase64(box)).toBe('sqQBX9c2fQaZ4F6j8gHDpjGU')
+    expect(new TextDecoder().decode(nacl.secretbox.open(box, nonce, key)!)).toBe('ok')
+
+    const sealed: string[][] = []
+    for (const mode of ['native', 'original']) {
+      const { primitives } = await load(mode === 'native')
+      const { session } = pairedSession(primitives)
+      secretboxSealCalls.mockClear()
+      sealed.push(PAYLOADS.map((payload) => session.sealText(payload)))
+      if (mode === 'native') {
+        expect(secretboxSealCalls).toHaveBeenCalled()
+      } else {
+        expect(secretboxSealCalls).not.toHaveBeenCalled()
+      }
+    }
+    expect(sealed[0]).toEqual(sealed[1])
   })
 
   it('uses native once provided, even after a lookup with no provider', async () => {

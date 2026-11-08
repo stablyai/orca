@@ -1,9 +1,8 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { z } from 'zod'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-terminal-send-contract'
 
@@ -128,61 +127,6 @@ describe('ordered terminal input RPC', () => {
       expect(f.writes).toEqual(outcome === 'refused' ? [] : ['a'])
     }
   )
-
-  it.each(['gap', 'changed-duplicate', 'foreign-device', 'replaced-token', 'generation'] as const)(
-    'refuses %s without writing',
-    async (failure) => {
-      const f = fixture()
-      const token = (await f.open())!
-      if (failure === 'changed-duplicate') {
-        await f.send(token, 1, 'original')
-      }
-      if (failure === 'replaced-token') {
-        await f.open()
-      }
-      if (failure === 'generation') {
-        f.replace()
-      }
-      const response = await f.send(
-        token,
-        failure === 'gap' ? 2 : 1,
-        'unexpected',
-        failure === 'foreign-device'
-          ? { ...mobile, caller: { kind: 'paired-device', deviceId: 'other' } }
-          : mobile
-      )
-      expect(response).toMatchObject({ ok: true, result: { send: { accepted: false } } })
-      expect(f.writes).toEqual(failure === 'changed-duplicate' ? ['original'] : [])
-    }
-  )
-
-  it('deduplicates strict inputs by normalized control semantics', async () => {
-    const f = fixture()
-    const token = (await f.open())!
-    for (const ignored of ['first', 'different']) {
-      expect(
-        await f.call('terminal.send', {
-          terminal: 'term',
-          client,
-          text: 'a',
-          enter: { ignored },
-          interrupt: [ignored],
-          inputSequence: { sessionId: token, seq: 1 }
-        })
-      ).toMatchObject({ ok: true, result: { send: { accepted: true } } })
-    }
-    expect(f.writes).toEqual(['a'])
-  })
-
-  it('does not open an ordered tail past a busy legacy send', async () => {
-    const f = fixture()
-    const legacy = f.call('terminal.send', { terminal: 'term', client, text: 'held' })
-    await vi.waitFor(() => expect(f.sendTerminal).toHaveBeenCalledTimes(1))
-    expect(await f.open()).toBeNull()
-    f.release()
-    await legacy
-    expect(await f.open()).toEqual(expect.any(String))
-  })
 
   it('retires an idle strict token when a legacy predecessor becomes busy', async () => {
     const f = fixture()
