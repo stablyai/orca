@@ -9,6 +9,7 @@ export type ClaudeTaskInvocation = {
   excluded: boolean
   monitor: boolean
   ended?: string
+  /** Only accepted current evidence proves an alias is historical after replacement. */
   observed: boolean
 }
 
@@ -46,7 +47,7 @@ export class ClaudeTaskInvocations {
       const selection = this.select(id, run, start)
       const { invocation, acceptsStart } = selection
       if ((!start && !roster) || acceptsStart) {
-        invocation.observed = true
+        invocation.observed ||= selection.current
         invocation.toolUseId ??= run
         invocation.reportedParentTaskId =
           taskAliasId(frame.parent_task_id) ?? invocation.reportedParentTaskId

@@ -84,6 +84,39 @@ it('retains explicit ambient and skip-transcript exclusion when roster omits tho
     expect(run.records().find((row) => row.kind === 'command')).toMatchObject({
       membership: 'live'
     })
+    run.send(
+      system('task_progress', {
+        task_id: 'excluded',
+        tool_use_id: 'tool-pending',
+        parent_task_id: 'pending-owner',
+        [flag]: true
+      })
+    )
+    run.send(
+      system('task_notification', {
+        task_id: 'excluded',
+        tool_use_id: 'tool-new',
+        status: 'stopped'
+      })
+    )
+    run.send(
+      system('task_started', {
+        task_id: 'excluded',
+        task_type: 'local_bash',
+        tool_use_id: 'tool-pending',
+        is_backgrounded: true
+      })
+    )
+    expect(run.records().filter((row) => row.membership === 'live')).toEqual([])
+    expect(
+      [...run.journalItems.values()].some(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.blocks.some(
+            (block) => block.type === 'background-task' && block.parentToolUseId === 'tool-pending'
+          )
+      )
+    ).toBe(false)
   }
 })
 
@@ -179,6 +212,24 @@ it('uses the matching durable generation ownership when an earlier run receives 
   expect(rootRow?.body.kind === 'message' ? rootRow.body.blocks : []).toContainEqual(
     expect.objectContaining({ taskId: 'reused', parentToolUseId: 'tool-root', state: 'done' })
   )
+  translator.handle({
+    type: 'message',
+    sessionId: 'orca-session',
+    message: system('task_started', {
+      task_id: 'reused',
+      task_type: 'local_bash',
+      tool_use_id: 'tool-first',
+      parent_task_id: 'owner-first',
+      is_backgrounded: true
+    })
+  })
+  expect(await deferred.drained()).toEqual({ ok: true })
+  const oldBody = journal
+    .snapshot()
+    .items.find((row) => row.providerParentRef === 'tool-first')?.body
+  expect(oldBody?.kind === 'message' ? oldBody.blocks : []).toContainEqual(
+    expect.objectContaining({ parentToolUseId: 'tool-first', state: 'done' })
+  )
   translator.dispose()
   deferred.close()
   const queued = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
@@ -196,7 +247,12 @@ it('uses the matching durable generation ownership when an earlier run receives 
     parent_task_id: 'owner-first',
     is_backgrounded: true
   })
-  feed('task_updated', { task_id: 'queued', patch: { status: 'killed' } })
+  feed('task_notification', { task_id: 'queued', tool_use_id: 'queued-old', status: 'stopped' })
+  feed('task_progress', {
+    task_id: 'queued',
+    tool_use_id: 'queued-new',
+    description: 'New operation before announcement'
+  })
   feed('task_started', {
     task_id: 'queued',
     task_type: 'local_bash',
@@ -314,6 +370,24 @@ it.each(['notification', 'killed', 'failed'])(
           })
         : system('task_updated', { task_id: 'reused', patch: { status: ending } })
     )
+    run.send(
+      system('task_progress', {
+        task_id: 'reused',
+        tool_use_id: 'tool-root',
+        description: 'New operation before announcement'
+      })
+    )
+    expect(run.records().find((row) => row.kind === 'command')).toMatchObject({
+      membership: 'settled',
+      stoppable: false
+    })
+    expect(
+      [...run.journalItems.values()].filter(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.blocks.some((block) => block.type === 'background-task')
+      )
+    ).toHaveLength(1)
     run.send(toolUse('tool-root', 'Bash', { command: 'sleep 1', run_in_background: true }))
     run.send(
       system('task_started', {
@@ -407,3 +481,84 @@ it.each([false, true])(
     expect(run.records().some((row) => row.membership === 'live')).toBe(true)
   }
 )
+
+it('retains pending ownership and terminal evidence without granting a partial frame live authority', async () => {
+  const run = await producer()
+  run.send(
+    system('task_started', {
+      task_id: 'reused',
+      task_type: 'local_bash',
+      tool_use_id: 'tool-old',
+      is_backgrounded: true
+    })
+  )
+  run.send(
+    system('task_progress', {
+      task_id: 'reused',
+      tool_use_id: 'tool-owned',
+      parent_task_id: 'owner'
+    })
+  )
+  run.send(
+    system('task_notification', {
+      task_id: 'reused',
+      tool_use_id: 'tool-old',
+      status: 'stopped'
+    })
+  )
+  run.send(
+    system('task_started', {
+      task_id: 'reused',
+      task_type: 'local_bash',
+      tool_use_id: 'tool-owned',
+      is_backgrounded: true
+    })
+  )
+  expect(run.records().find((row) => row.kind === 'command')).toMatchObject({
+    membership: 'live',
+    stoppable: true
+  })
+  expect(
+    [...run.journalItems.values()].find(
+      (row) =>
+        row.body.kind === 'message' &&
+        row.body.blocks.some(
+          (block) => block.type === 'background-task' && block.parentToolUseId === 'tool-owned'
+        )
+    )
+  ).toMatchObject({ agentId: 'reused' })
+  run.send(
+    system('task_notification', {
+      task_id: 'reused',
+      tool_use_id: 'tool-stopped-before-start',
+      status: 'stopped'
+    })
+  )
+  run.send(
+    system('task_notification', {
+      task_id: 'reused',
+      tool_use_id: 'tool-owned',
+      status: 'stopped'
+    })
+  )
+  run.send(
+    system('task_started', {
+      task_id: 'reused',
+      task_type: 'local_bash',
+      tool_use_id: 'tool-stopped-before-start',
+      is_backgrounded: true
+    })
+  )
+  expect(run.records().filter((row) => row.membership === 'live')).toEqual([])
+  const stoppedBody = [...run.journalItems.values()].find(
+    (row) =>
+      row.body.kind === 'message' &&
+      row.body.blocks.some(
+        (block) =>
+          block.type === 'background-task' && block.parentToolUseId === 'tool-stopped-before-start'
+      )
+  )?.body
+  expect(stoppedBody?.kind === 'message' ? stoppedBody.blocks : []).toContainEqual(
+    expect.objectContaining({ parentToolUseId: 'tool-stopped-before-start', state: 'idle' })
+  )
+})
