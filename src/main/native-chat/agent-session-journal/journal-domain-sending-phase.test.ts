@@ -5,8 +5,13 @@ import {
   lifecycleTarget as target
 } from './journal-domain-lifecycle.test-fixture'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { JournalSqlScope } from './journal-sql-scope'
+import {
+  journalDomainEnteredInputs,
+  journalDomainSendingInputs
+} from './journal-domain-input-populations'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
-import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
+import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-epoch.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -23,15 +28,16 @@ afterEach(() => {
   }
 })
 
-it('preserves independent phase orders through handover, refresh, atomic groups and rollback', async () => {
+it('keeps queued and entered membership through handover, refresh, atomic groups and rollback', async () => {
   const f = domainLifecycleFixture(cleanups)
   const phase = (name: 'sending' | 'entered') =>
-    f.db
-      .prepare(`SELECT message_id FROM journal_submission_attempts
-      WHERE session_id='chat' AND epoch='epoch' AND current=1 AND ${name}_phase_ordinal IS NOT NULL
-      ORDER BY ${name}_phase_ordinal,message_id`)
-      .all()
-      .map((row) => row.message_id)
+    [
+      ...(name === 'sending' ? journalDomainSendingInputs : journalDomainEnteredInputs)(
+        new JournalSqlScope(f.db, 'chat', 'epoch')
+      )
+    ]
+      .map((send) => send.clientMessageId)
+      .sort()
   const admit = (id: string, held = false) =>
     f.run({
       kind: 'submission',
@@ -52,22 +58,22 @@ it('preserves independent phase orders through handover, refresh, atomic groups 
     input: { clientMessageId: 'A', state: 'pending', fence: 1, turnScope: { kind: 'thread' } }
   })
   await admit('C')
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   await f.run({ kind: 'dispatch', input: { clientMessageId: 'A', state: 'unknown', fence: 1 } })
   expect(phase('sending')).toEqual(['B', 'C'])
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   await f.run({
     kind: 'dispatch',
     input: { clientMessageId: 'A', state: 'pending', fence: 1, turnScope: { kind: 'thread' } }
   })
-  expect(phase('sending')).toEqual(['B', 'C', 'A'])
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('sending')).toEqual(['A', 'B', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   await f.run({
     kind: 'dispatch',
     input: { clientMessageId: 'B', state: 'pending', fence: 1, turnScope: { kind: 'thread' } }
   })
-  expect(phase('sending')).toEqual(['B', 'C', 'A'])
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('sending')).toEqual(['A', 'B', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   await f.run({
     kind: 'lifecycle',
     input: {
@@ -80,8 +86,8 @@ it('preserves independent phase orders through handover, refresh, atomic groups 
       ]
     }
   })
-  expect(phase('sending')).toEqual(['C', 'A', 'B'])
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('sending')).toEqual(['A', 'B', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   f.db.exec('BEGIN IMMEDIATE')
   applyJournalDomainDispatch(
     f.db,
@@ -92,11 +98,11 @@ it('preserves independent phase orders through handover, refresh, atomic groups 
     },
     100
   )
-  expect(phase('sending')).toEqual(['C', 'B'])
+  expect(phase('sending')).toEqual(['B', 'C'])
   expect(phase('entered')).toEqual(['B', 'C'])
   f.db.exec('ROLLBACK')
-  expect(phase('sending')).toEqual(['C', 'A', 'B'])
-  expect(phase('entered')).toEqual(['B', 'A', 'C'])
+  expect(phase('sending')).toEqual(['A', 'B', 'C'])
+  expect(phase('entered')).toEqual(['A', 'B', 'C'])
   await f.run({
     kind: 'dispatch',
     input: { clientMessageId: 'A', state: 'accepted', providerIdentity: null, fence: 1 }
@@ -106,16 +112,13 @@ it('preserves independent phase orders through handover, refresh, atomic groups 
     input: { clientMessageId: 'A', state: 'pending', fence: 1, turnScope: { kind: 'thread' } }
   })
   f.reopen()
-  expect(phase('sending')).toEqual(['C', 'B'])
+  expect(phase('sending')).toEqual(['B', 'C'])
   expect(phase('entered')).toEqual(['B', 'C'])
 })
 
-it.each([
-  { outcome: false, sending: ['B', 'C', 'A'], entered: ['B', 'A', 'C'] },
-  { outcome: true, sending: ['A', 'B', 'C'], entered: ['A', 'B', 'C'] }
-])(
-  'imports the actual restored sending and entered orders (outcome=$outcome) and keeps it on reopen',
-  ({ outcome, sending, entered }) => {
+it.each([false, true])(
+  'imports current dispatch membership (outcome=%s) and keeps it on reopen',
+  (outcome) => {
     const f = domainLifecycleFixture(cleanups)
     const { db: source } = openJournalDatabase(':memory:')
     cleanups.push(() => source.close())
@@ -189,20 +192,13 @@ it.each([
     }
     runJournalTransaction(f.db, () => finishJournalDomainImport(f.db, imported))
     f.reopen()
+    const scope = new JournalSqlScope(f.db, 'chat', 'epoch')
     expect(
-      f.db
-        .prepare(`SELECT message_id FROM journal_submission_attempts
-      WHERE current=1 AND sending_phase_ordinal IS NOT NULL ORDER BY sending_phase_ordinal,message_id`)
-        .all()
-        .map((row) => row.message_id)
-    ).toEqual(sending)
+      [...journalDomainSendingInputs(scope)].map((send) => send.clientMessageId).sort()
+    ).toEqual(['A', 'B', 'C'])
     expect(
-      f.db
-        .prepare(`SELECT message_id FROM journal_submission_attempts
-      WHERE current=1 AND entered_phase_ordinal IS NOT NULL ORDER BY entered_phase_ordinal,message_id`)
-        .all()
-        .map((row) => row.message_id)
-    ).toEqual(entered)
+      [...journalDomainEnteredInputs(scope)].map((send) => send.clientMessageId).sort()
+    ).toEqual(['A', 'B', 'C'])
     expect(
       f.db
         .prepare(

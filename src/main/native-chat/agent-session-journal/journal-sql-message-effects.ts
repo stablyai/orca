@@ -87,7 +87,7 @@ export function acceptJournalSqlMessageEcho(
     resolvedAt: row.ts
   }
   delete accepted.recovered
-  db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,sending_phase_ordinal=NULL,entered_phase_ordinal=NULL,
+  db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,
       ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       echo_observed=1,admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(

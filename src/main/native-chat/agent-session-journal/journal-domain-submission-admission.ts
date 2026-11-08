@@ -1,6 +1,4 @@
 import type Database from '../../sqlite/sync-database'
-import { journalDomainSendingPhaseOrdinal } from './journal-domain-sending-phase'
-import { journalDomainEnteredPhaseOrdinal } from './journal-domain-entered-phase'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -161,9 +159,9 @@ export function applyJournalDomainSubmission(
     )
   }
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,
-    item_id,ordinal,candidate,sending_phase_ordinal,entered_phase_ordinal,admitted_personal,payload_json,
+    item_id,ordinal,candidate,admitted_personal,payload_json,
     admission_body_json,admission_family_id,facts_json,${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.join(',')})
-    VALUES(${Array.from({ length: 16 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')})`).run(
+    VALUES(${Array.from({ length: 14 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')})`).run(
     ...prefix,
     input.clientMessageId,
     sequence,
@@ -172,8 +170,6 @@ export function applyJournalDomainSubmission(
     itemId,
     ordinal,
     1,
-    journalDomainSendingPhaseOrdinal(db, target, null, true),
-    journalDomainEnteredPhaseOrdinal(db, target, null, submission),
     Number(
       familyId !== undefined
         ? selected !== null && journalDomainAdmittedPersonal(selected.card)

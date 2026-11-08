@@ -7,54 +7,17 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 
 const PAGE = 128
 
-/** Entered membership and order are independent of both sending and admission. */
+/** Phase membership is current dispatch state; callers test existence, never entry order. */
 export function* journalDomainEnteredInputs(scope: JournalSqlScope) {
-  let after: [number, string] | undefined
-  for (;;) {
-    const rows = scope.db
-      .prepare(`SELECT message_id,entered_phase_ordinal FROM journal_submission_attempts
-      WHERE session_id=? AND epoch=? AND current=1 AND entered_phase_ordinal IS NOT NULL
-      ${after ? 'AND (entered_phase_ordinal,message_id)>(?,?)' : ''}
-      ORDER BY entered_phase_ordinal,message_id LIMIT ?`)
-      .all(...scope.prefix, ...(after ?? []), PAGE)
-    for (const row of rows) {
-      scope.examined(row)
-      const input = journalDomainSubmission(scope, String(row.message_id))
-      if (input) {
-        yield input
-      }
+  for (const input of journalDomainUnsettledInputs(scope)) {
+    if (!isQueuedAgentJournalSubmission(input)) {
+      yield input
     }
-    const last = rows.at(-1)
-    if (rows.length < PAGE || !last) {
-      return
-    }
-    after = [Number(last.entered_phase_ordinal), String(last.message_id)]
   }
 }
 
-/** Rank presence is the writer's sending membership, separate from admission order. */
 export function* journalDomainSendingInputs(scope: JournalSqlScope) {
-  let after: [number, string] | undefined
-  for (;;) {
-    const rows = scope.db
-      .prepare(`SELECT message_id,sending_phase_ordinal FROM journal_submission_attempts
-      WHERE session_id=? AND epoch=? AND current=1 AND sending_phase_ordinal IS NOT NULL
-      ${after ? 'AND (sending_phase_ordinal,message_id)>(?,?)' : ''}
-      ORDER BY sending_phase_ordinal,message_id LIMIT ?`)
-      .all(...scope.prefix, ...(after ?? []), PAGE)
-    for (const row of rows) {
-      scope.examined(row)
-      const input = journalDomainSubmission(scope, String(row.message_id))
-      if (input) {
-        yield input
-      }
-    }
-    const last = rows.at(-1)
-    if (rows.length < PAGE || !last) {
-      return
-    }
-    after = [Number(last.sending_phase_ordinal), String(last.message_id)]
-  }
+  yield* journalDomainUnsettledInputs(scope, true)
 }
 
 /** Ordinary outstanding inputs, including recovered unknowns which remain unsettled. */
