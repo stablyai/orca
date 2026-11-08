@@ -67,6 +67,8 @@ describe('switchBranchGuarded', () => {
     } catch (error) {
       expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
       expect(String(error)).toContain('HEAD.lock')
+      expect(String(error)).not.toContain('Command failed:')
+      expect(String(error)).not.toContain('\n')
     }
     expect(await currentBranch()).toBe('main')
   })

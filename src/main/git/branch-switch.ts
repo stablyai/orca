@@ -294,9 +294,10 @@ export async function switchBranchGuarded(
         landedTarget !== branch ||
         (commitTarget && (await readCurrentBranch(worktreePath, options)) !== null)
       ) {
-        throw typeof target === 'string' || commitTarget
-          ? error
-          : branchSwitchFailure(error, branch)
+        if (commitTarget) {
+          throw new Error(gitFailureLine(readGitCommandFailureStderr(error) ?? '') ?? undefined)
+        }
+        throw typeof target === 'string' ? error : branchSwitchFailure(error, branch)
       }
       deps.onSwitched?.()
       const stderr = readGitCommandFailureStderr(error) ?? ''
