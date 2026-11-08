@@ -9,7 +9,7 @@ import {
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
@@ -58,6 +58,7 @@ export function OnboardingInlineCommandTerminal({
   onTerminalExit,
   onCommandFinished
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
+  const t = useTranslate()
   // Brand synthetic IDs so remote runtimes recognize the floating terminal scope.
   const worktreeId = useMemo(
     () => brandEphemeralSetupTerminalWorktreeId(worktreeIdProp),
@@ -329,7 +330,7 @@ export function OnboardingInlineCommandTerminal({
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              {translate(
+              {t(
                 'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
                 'Starting terminal...'
               )}

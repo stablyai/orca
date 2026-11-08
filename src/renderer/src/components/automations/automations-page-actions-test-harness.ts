@@ -14,7 +14,7 @@ import { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtim
 import { act } from 'react'
 import { expect, vi } from 'vitest'
 import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
-import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationDraft } from './AutomationEditorDialog'

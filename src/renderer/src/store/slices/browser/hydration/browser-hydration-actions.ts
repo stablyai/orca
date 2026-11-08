@@ -5,7 +5,7 @@ import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/wor
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/degraded-repo-worktree-validity'
 import { destroyWorkspaceWebviews } from '../cleanup/browser-webview-cleanup'
 import { projectHydratedBrowserSession } from './browser-hydration-state'
-import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 

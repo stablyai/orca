@@ -11,7 +11,7 @@ import {
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
-import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'
+import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../terminal/output/decorative-title-fact-emission'
 
 describe('terminal side-effect fact channel', () => {
   it('defers desktop-only output scanners until a headless runtime is promoted', () => {

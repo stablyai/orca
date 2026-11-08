@@ -10,8 +10,8 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
-import { MessageWake } from '../runtime-message-waiters'
+import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('OrcaRuntimeService', () => {
   it('leaves rows a live filtered waiter reserved out of the pushed batch', async () => {

@@ -1,7 +1,7 @@
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/native-file-drop'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/file-import/native-file-drop'
 import {
   isSameComposerWorkspace,
   nativeChatAttachmentOwnerUnchanged,

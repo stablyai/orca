@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

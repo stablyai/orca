@@ -324,13 +324,20 @@ describe('mobile native-chat draft persistence', () => {
       return null
     }
 
-    function StructuredChat({ submissions }: { submissions: AgentJournalSubmission[] }): null {
+    function StructuredChat({
+      submissions,
+      confirmRecorded
+    }: {
+      submissions: AgentJournalSubmission[]
+      confirmRecorded?: (clientMessageId: string) => Promise<boolean>
+    }): null {
       useMobileStructuredSends({
         sessionKey: 'chat-a',
         sessionId: 'session-a',
         submissions,
         queuedMessages: null,
-        onSendError
+        onSendError,
+        confirmRecorded
       })
       return null
     }
@@ -432,14 +439,9 @@ describe('mobile native-chat draft persistence', () => {
       expect(onSendError).not.toHaveBeenCalled()
     })
 
-    it('restores a structured send the journal never recorded, and not one it did', async () => {
-      vi.useFakeTimers()
-      publishPageDeviceStore(deviceStore)
+    async function sendStructuredThenKill(sends: [text: string, clientMessageId: string][]) {
       await mount(createElement(TerminalChat, { messages: [] }))
-      for (const [text, clientMessageId] of [
-        ['landed', 'm-landed'],
-        ['lost', 'm-lost']
-      ]) {
+      for (const [text, clientMessageId] of sends) {
         act(() => drafts?.setComposerText(text))
         const origin = drafts?.captureSendOrigin(text)
         if (!origin) {
@@ -450,8 +452,39 @@ describe('mobile native-chat draft persistence', () => {
       await settle()
       act(() => renderer?.unmount())
       resetMobileNativeChatDraftStoreForTests()
+    }
+
+    it('restores a structured send the journal never recorded, and not one it did', async () => {
+      vi.useFakeTimers()
+      publishPageDeviceStore(deviceStore)
+      await sendStructuredThenKill([
+        ['landed', 'm-landed'],
+        ['lost', 'm-lost']
+      ])
 
       await mount(createElement(StructuredChat, { submissions: [acceptedSubmission('m-landed')] }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+
+      expect(draftText(TAB_A)).toBe('lost')
+      expect(onSendError).toHaveBeenCalledTimes(1)
+    })
+
+    it('asks the host before restoring a structured send its loaded page does not show', async () => {
+      vi.useFakeTimers()
+      publishPageDeviceStore(deviceStore)
+      await sendStructuredThenKill([
+        ['pages back', 'm-far'],
+        ['lost', 'm-lost']
+      ])
+
+      await mount(
+        createElement(StructuredChat, {
+          submissions: [],
+          confirmRecorded: async (clientMessageId) => clientMessageId === 'm-far'
+        })
+      )
       await act(async () => {
         await vi.advanceTimersByTimeAsync(20_000)
       })

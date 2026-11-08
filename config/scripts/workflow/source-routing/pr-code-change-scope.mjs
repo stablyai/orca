@@ -252,7 +252,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
-  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -574,7 +573,8 @@ export function isUnitTestSupportSource(file) {
     file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
     file ===

@@ -14,6 +14,7 @@ import {
 } from '@/components/native-chat/host-access/native-chat-sign-in'
 
 import { i18n } from '@/i18n/i18n'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 
 import {
@@ -80,7 +81,8 @@ function renderStatus(
           />
         </NativeChatSignInContext.Provider>
       </NativeChatOrcaStopContext.Provider>
-    </TooltipProvider>
+    </TooltipProvider>,
+    { wrapper: TranslationScopeProvider }
   )
 }
 

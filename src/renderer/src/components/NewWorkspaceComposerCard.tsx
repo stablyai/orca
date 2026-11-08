@@ -17,6 +17,7 @@ import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
@@ -55,6 +56,7 @@ const SetProjectLocationDialog = lazyWithRetry(
 export default function NewWorkspaceComposerCard(
   props: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const {
     contextualTourSource,
@@ -136,11 +138,11 @@ export default function NewWorkspaceComposerCard(
     needsSetupProjectHostSetupOptions.length > 0
   const sshStatusLabel = selectedRepoSshStatus
     ? getSshStatusLabel(selectedRepoSshStatus)
-    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
+    : t('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
-      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
+      ? t('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : t('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()

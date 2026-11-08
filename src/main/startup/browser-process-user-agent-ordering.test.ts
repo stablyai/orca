@@ -83,7 +83,9 @@ vi.mock('./main-process-error-guards', () => ({
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
-vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
+vi.mock('../runtime/hosts/management/remote-server-updater', () => ({
+  configureRemoteServerUpdater: vi.fn()
+}))
 vi.mock('../updater/updater-service', () => ({
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
@@ -139,7 +141,7 @@ vi.mock('../../shared/secret-store', () => ({
 vi.mock('../host/electron-secret-store')
 vi.mock('../ipc/pty/pty-host-bindings')
 vi.mock('../host/electron-runtime-desktop-surface')
-vi.mock('../runtime/runtime-desktop-surface')
+vi.mock('../runtime/construction/runtime-desktop-surface')
 vi.mock('../host/electron-browser-commands')
 vi.mock('../runtime/browser/installation/runtime-browser-commands-factory')
 vi.mock('../host/electron-http-client')

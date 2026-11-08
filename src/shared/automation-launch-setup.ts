@@ -5,6 +5,7 @@ import type {
 } from './automations-types'
 import { AutomationLaunchSetupPatch as PatchSchema } from './rpc-contract/automation-params'
 import {
+  automationCanonicalLaunchSetup,
   automationLaunchInputs,
   automationLegacyArguments,
   editAutomationLegacyArguments,
@@ -18,23 +19,7 @@ import {
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { retireAutomationChoiceSources } from './automation-launch-source-edits'
 
-export function automationCanonicalLaunchSetup(
-  automation: AutomationLaunchSetup & { launchSetup?: AutomationLaunchSetup }
-): AutomationLaunchSetup {
-  if (automation.launchSetup) {
-    return { ...automation.launchSetup }
-  }
-  return {
-    ...(automation.surface !== undefined ? { surface: automation.surface } : {}),
-    ...(automation.extraAgentArgs !== undefined
-      ? { extraAgentArgs: automation.extraAgentArgs }
-      : {}),
-    ...(automation.launchPreferences !== undefined
-      ? { launchPreferences: automation.launchPreferences }
-      : {}),
-    ...(automation.agentArgs !== undefined ? { agentArgs: automation.agentArgs } : {})
-  }
-}
+export { automationCanonicalLaunchSetup } from './automation-launch-setup-source'
 
 export function hasModernAutomationLaunchSetup(setup: AutomationLaunchSetup): boolean {
   return setup.launchPreferences !== undefined || setup.agentArgs !== undefined

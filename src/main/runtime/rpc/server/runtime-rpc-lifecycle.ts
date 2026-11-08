@@ -2,7 +2,7 @@ import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
-import { watchRuntimeMetadataOwnership } from '../../runtime-metadata-ownership-watch'
+import { watchRuntimeMetadataOwnership } from './runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { PinnedPortUnavailableError, WebSocketTransport } from '../ws-transport'
@@ -13,7 +13,7 @@ import {
   writeWsFallbackPort
 } from '../ws-fallback-port-store'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../mobile-socket-wiring'
 import { createServeNetworkSourceGuard } from './serve-network-source-policy'

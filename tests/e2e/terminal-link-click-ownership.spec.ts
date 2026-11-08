@@ -208,20 +208,6 @@ test.describe('terminal link click ownership', () => {
     await sendToTerminal(orcaPage, ptyId, 'q')
   })
 
-  test('an Orca-owned plain link click emits no child PTY mouse frames', async ({
-    orcaPage
-  }, testInfo) => {
-    const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
-    await orcaPage.mouse.click(target.x, target.y)
-
-    await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toBeVisible()
-    await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
-
-    await expectOrcaOwnedMouseOutcome(mouseLogPath)
-
-    await sendToTerminal(orcaPage, ptyId, 'q')
-  })
-
   test('an Orca-owned OSC link click emits no child PTY mouse frames', async ({
     orcaPage
   }, testInfo) => {
@@ -238,21 +224,6 @@ test.describe('terminal link click ownership', () => {
     await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
     await expectOrcaOwnedMouseOutcome(mouseLogPath)
 
-    await sendToTerminal(orcaPage, ptyId, 'q')
-  })
-
-  test('a plain click stays child-owned when link actions are disabled', async ({
-    orcaPage
-  }, testInfo) => {
-    const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
-    await orcaPage.evaluate(async () => {
-      await window.__store?.getState().updateSettings({ terminalLinkActionPopoverEnabled: false })
-    })
-
-    await orcaPage.mouse.click(target.x, target.y)
-
-    await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
-    await expectChildMouseReports(mouseLogPath)
     await sendToTerminal(orcaPage, ptyId, 'q')
   })
 

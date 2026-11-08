@@ -1,5 +1,5 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
+import { useChatSettingsOwnPermissions } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

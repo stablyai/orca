@@ -17,7 +17,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { AutomationService } from './service'
-import { RuntimeAutomationController } from '../runtime/runtime-automation-controller'
+import { RuntimeAutomationController } from '../runtime/integrations/automations/runtime-automation-controller'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 let hasCreatedStoreInCase = false

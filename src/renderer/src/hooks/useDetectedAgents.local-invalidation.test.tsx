@@ -11,11 +11,11 @@ import {
   useSourceControlActionAgentInventory
 } from '@/components/settings/source-control/use-source-control-action-agent'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { useHostStructuredAgentsSync } from '@/runtime/host-structured-agents-sync'
+import { useHostStructuredAgentsSync } from '@/runtime/native-chat/agent-catalogs/host-structured-agents-sync'
 import {
   readHostStructuredAgentsForRuntime,
   resetHostStructuredAgentsForTests
-} from '@/runtime/host-structured-agents'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'

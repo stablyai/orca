@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
+import { resetDocumentEditDraftsForTests } from '../drafts/document-edit-draft-rows'
 import type { MobileFilePreviewRouteState } from './mobile-file-preview-route'
 
 const transport = vi.hoisted(() => ({
@@ -108,6 +109,8 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  // A page keeps unsaved edits for its whole life; each test is a fresh page.
+  resetDocumentEditDraftsForTests()
 })
 
 describe('file saves after the preview document is discarded', () => {

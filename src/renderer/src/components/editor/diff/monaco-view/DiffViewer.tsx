@@ -11,6 +11,7 @@ import { useContextualCopySetup } from '../../useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
@@ -63,6 +64,7 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
+  const t = useTranslate()
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
@@ -380,12 +382,15 @@ export default function DiffViewer({
           <LargeDiffFallback
             filePath={relativePath}
             renderLimit={renderLimit}
-            action={getDiffViewerLargeDiffSaveAction({
-              editable,
-              modifiedContent,
-              onSave,
-              saveContentAvailable: largeDiffSaveContentAvailable
-            })}
+            action={getDiffViewerLargeDiffSaveAction(
+              {
+                editable,
+                modifiedContent,
+                onSave,
+                saveContentAvailable: largeDiffSaveContentAvailable
+              },
+              t
+            )}
           />
         ) : (
           <DiffEditor

@@ -20,9 +20,12 @@ export function captureBrowserLinkReveal(
   const activeView = initial.activeView
   let ownsSelection = true
   const observe = (state: SelectionState): boolean => {
-    ownsSelection &&= isWorkspaceSelected(state, selection) && state.activeView === activeView
+    ownsSelection &&=
+      isWorkspaceSelected(state, selection) &&
+      state.activeView === activeView &&
+      canReveal?.() !== false
     return ownsSelection
   }
   const dispose = subscribe?.(observe) ?? (() => {})
-  return { canReveal: () => observe(getState()) && canReveal?.() !== false, dispose }
+  return { canReveal: () => observe(getState()), dispose }
 }

@@ -5,11 +5,8 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
-import {
-  WorkspaceSleepCoordinator,
-  type RecipeVmOpening,
-  type RecipeVmState
-} from './workspace-sleep-runtime'
+import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'

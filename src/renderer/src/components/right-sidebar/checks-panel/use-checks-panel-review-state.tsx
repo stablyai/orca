@@ -30,8 +30,10 @@ import {
 import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
+  const t = useTranslate()
   const {
     activeReview,
     activeWorktree,
@@ -188,7 +190,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
   const isGitHubReviewContext = hostedReviewCreation
     ? hostedReviewCreation.provider === 'github'
     : !hasNonGitHubLinkedReview
-  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider, t)
   // Demote cached absence to unknown across eligibility contexts; PR cache keys omit push targets.
   const prCachedHasPRForContext =
     hostedReviewCreationSnapshot && hostedReviewCreationSnapshot.contextKey !== panelContextKey

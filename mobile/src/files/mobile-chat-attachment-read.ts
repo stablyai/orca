@@ -6,7 +6,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   attachmentTextChunkSchema,
   type AttachmentTextRead
-} from '../../../src/shared/attachment-text-source'
+} from '../../../src/shared/attachment-text/attachment-text-source'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 

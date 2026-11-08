@@ -25,6 +25,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     subscribeSeqRef,
     initialModesSeenRef,
     webReadyHandlesRef,
+    terminalResume,
     terminalRefs,
     terminalUnsubsRef,
     viewportResubscribeBudgetRef,
@@ -90,6 +91,12 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               terminalRefs.current.delete(handle)
               viewportResubscribeBudgetRef.current.forget(handle)
             }
+            for (const handle of webReadyHandlesRef.current) {
+              if (shouldPrune(handle)) {
+                // Its pane remounts a new, empty document if the handle comes back.
+                terminalResume.forget(handle)
+              }
+            }
             for (const cache of [
               ptyModesRef.current,
               terminalCwdRef.current,
@@ -145,7 +152,14 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         opts.onPhysicalRequestStarted
       )
     },
-    [client, worktreeId, nativeChatStream, terminalInventoryRequest, unsubscribeTerminal]
+    [
+      client,
+      worktreeId,
+      nativeChatStream,
+      terminalInventoryRequest,
+      terminalResume,
+      unsubscribeTerminal
+    ]
   )
   return {
     lastKnownTerminalCountRef,

@@ -20,7 +20,7 @@ import {
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/orchestration-runtime-capabilities'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 

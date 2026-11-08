@@ -11,9 +11,12 @@ import {
   ContextMenuContent,
   ContextMenuItem
 } from '@/components/ui/context-menu'
-import { normalizeSearchFileMatchCount } from '../../../../../../shared/search-match-count'
-import type { SearchFileResult, SearchMatch } from '../../../../../../shared/code-search-types'
-import { translate } from '@/i18n/i18n'
+import { normalizeSearchFileMatchCount } from '../../../../../../shared/file-search/search-match-count'
+import type {
+  SearchFileResult,
+  SearchMatch
+} from '../../../../../../shared/file-search/code-search-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ToggleButton({
   active,
@@ -65,6 +68,7 @@ export function FileResultRow({
   onToggleCollapse: () => void
   collapsed: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -114,10 +118,7 @@ export function FileResultRow({
                 onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
               >
                 <Copy className="size-3.5" />
-                {translate(
-                  'auto.components.right.sidebar.SearchResultItems.3596b9668d',
-                  'Copy Path'
-                )}
+                {t('auto.components.right.sidebar.SearchResultItems.3596b9668d', 'Copy Path')}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -140,6 +141,7 @@ export function MatchResultRow({
   relativePath: string
   onClick: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const parts = useMemo(() => {
     const content = match.lineContent
     const col = (match.displayColumn ?? match.column) - 1
@@ -203,10 +205,7 @@ export function MatchResultRow({
           onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SearchResultItems.cc06595a3b',
-            'Copy Line Path'
-          )}
+          {t('auto.components.right.sidebar.SearchResultItems.cc06595a3b', 'Copy Line Path')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

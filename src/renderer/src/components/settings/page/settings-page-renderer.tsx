@@ -4,6 +4,7 @@ import { SettingsSidebar } from '../navigation/SettingsSidebar'
 import { PluginInstallTrustDialogHost } from '../../plugins/dialogs/PluginInstallTrustDialog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsRenderContext } from './settings-render-context'
 import {
@@ -62,7 +63,8 @@ import {
 } from '../host-scope/SettingsHostScopePicker'
 
 export function renderSettingsLoading(
-  interactions: SettingsInteractionController
+  interactions: SettingsInteractionController,
+  t: Translate = translate
 ): React.JSX.Element {
   return (
     <div
@@ -70,13 +72,16 @@ export function renderSettingsLoading(
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        {translate('auto.components.settings.Settings.c7ad095d96', 'Loading settings...')}
+        {t('auto.components.settings.Settings.c7ad095d96', 'Loading settings...')}
       </div>
     </div>
   )
 }
 
-export function renderSettingsPage(context: SettingsRenderContext): React.JSX.Element {
+export function renderSettingsPage(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, interactions, navigation, actions, view } = context
   return (
     <div
@@ -124,7 +129,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
           >
             {navigation.visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.Settings.noSettingsFoundForQuery',
                   'No settings found for "{{value0}}"',
                   { value0: model.settingsSearchQuery.trim() }
@@ -133,42 +138,42 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
             ) : (
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                  {renderAgentsSettingsSection(context)}
-                  {renderAccountsSettingsSection(context)}
-                  {renderOrchestrationSettingsSection(context)}
-                  {renderLinearSettingsSection(context)}
-                  {renderDesktopCapabilitySettingsSections(context)}
-                  {renderOrcaAccountSettingsSection(context)}
-                  {renderSetupGuideSettingsSection(context)}
-                  {renderGeneralSettingsSection(context)}
-                  {renderIntegrationsSettingsSection(context)}
-                  {renderMobileSettingsSection(context)}
-                  {renderAutomationsSettingsSection(context)}
-                  {renderArtifactsSettingsSection(context)}
-                  {renderShareSkillsSettingsSection(context)}
-                  {renderSessionHistorySettingsSection(context)}
-                  {renderGitSettingsSection(context)}
-                  {renderTasksSettingsSection(context)}
-                  {renderTerminalSettingsSection(context)}
-                  {renderQuickCommandsSettingsSection(context)}
-                  {renderBrowserSettingsSection(context)}
-                  {renderMobileEmulatorSettingsSection(context)}
-                  {renderFloatingWorkspaceSettingsSection(context)}
-                  {renderAppearanceSettingsSection(context)}
+                  {renderAgentsSettingsSection(context, t)}
+                  {renderAccountsSettingsSection(context, t)}
+                  {renderOrchestrationSettingsSection(context, t)}
+                  {renderLinearSettingsSection(context, t)}
+                  {renderDesktopCapabilitySettingsSections(context, t)}
+                  {renderOrcaAccountSettingsSection(context, t)}
+                  {renderSetupGuideSettingsSection(context, t)}
+                  {renderGeneralSettingsSection(context, t)}
+                  {renderIntegrationsSettingsSection(context, t)}
+                  {renderMobileSettingsSection(context, t)}
+                  {renderAutomationsSettingsSection(context, t)}
+                  {renderArtifactsSettingsSection(context, t)}
+                  {renderShareSkillsSettingsSection(context, t)}
+                  {renderSessionHistorySettingsSection(context, t)}
+                  {renderGitSettingsSection(context, t)}
+                  {renderTasksSettingsSection(context, t)}
+                  {renderTerminalSettingsSection(context, t)}
+                  {renderQuickCommandsSettingsSection(context, t)}
+                  {renderBrowserSettingsSection(context, t)}
+                  {renderMobileEmulatorSettingsSection(context, t)}
+                  {renderFloatingWorkspaceSettingsSection(context, t)}
+                  {renderAppearanceSettingsSection(context, t)}
                   {renderChatSettingsSection(context)}
-                  {renderInputSettingsSection(context)}
-                  {renderNotificationsSettingsSection(context)}
-                  {renderShortcutsSettingsSection(context)}
-                  {renderStatsSettingsSection(context)}
-                  {renderServersSettingsSection(context)}
-                  {renderSshSettingsSection(context)}
-                  {renderDeveloperPermissionsSettingsSection(context)}
-                  {renderPrivacySettingsSection(context)}
-                  {renderAdvancedSettingsSection(context)}
-                  {renderDevSettingsSection(context)}
-                  {renderExperimentalSettingsSection(context)}
+                  {renderInputSettingsSection(context, t)}
+                  {renderNotificationsSettingsSection(context, t)}
+                  {renderShortcutsSettingsSection(context, t)}
+                  {renderStatsSettingsSection(context, t)}
+                  {renderServersSettingsSection(context, t)}
+                  {renderSshSettingsSection(context, t)}
+                  {renderDeveloperPermissionsSettingsSection(context, t)}
+                  {renderPrivacySettingsSection(context, t)}
+                  {renderAdvancedSettingsSection(context, t)}
+                  {renderDevSettingsSection(context, t)}
+                  {renderExperimentalSettingsSection(context, t)}
                   {renderPluginsSettingsSection(context)}
-                  {renderProjectSettingsSections(context)}
+                  {renderProjectSettingsSections(context, t)}
                 </ActiveSettingsSectionProvider>
               </SettingsContentScrollElementProvider>
             )}

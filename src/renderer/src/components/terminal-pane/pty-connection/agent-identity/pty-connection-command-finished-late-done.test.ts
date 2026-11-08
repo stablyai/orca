@@ -2,7 +2,7 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { flushAsyncTicks } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
@@ -10,19 +10,19 @@ import {
   createManager,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -43,7 +43,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 

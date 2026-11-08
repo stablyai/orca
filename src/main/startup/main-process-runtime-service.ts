@@ -31,7 +31,7 @@ import {
   acceptEphemeralVmWorkspaceWake,
   resumeEphemeralVmWorkspace
 } from '../ephemeral-vm/workspace-resume'
-import { registerRecipeVmWaker } from '../runtime/recipe-vm-waker-registry'
+import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
@@ -44,11 +44,11 @@ import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/enviro
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
-import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../runtime/agent-status-observed-pane-identity'
+} from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'

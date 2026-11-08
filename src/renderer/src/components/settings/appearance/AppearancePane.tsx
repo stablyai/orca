@@ -12,8 +12,8 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import { getAppIconEntries } from './appearance-app-icon-search'
 import {
-  getAppIconEntries,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getLayoutEntries,

@@ -1,6 +1,6 @@
 import { groupFederatedDispatches } from './federated-fleet-host-groups'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
-import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration-runtime-capabilities'
 import {
   refreshOrchestrationFleetLivenessAttention,
   type FleetDurableWorker,

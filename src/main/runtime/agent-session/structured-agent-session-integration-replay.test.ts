@@ -14,7 +14,7 @@ import {
   THREAD,
   TURN,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const { journalOpenHold } = vi.hoisted(() => {

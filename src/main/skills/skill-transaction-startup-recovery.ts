@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import {
   acquireSkillInstallLock,
   reclaimDeadSkillInstallLocks,

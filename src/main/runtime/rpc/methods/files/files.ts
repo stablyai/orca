@@ -7,7 +7,7 @@ import {
   assertDirListingWithinRemoteBudget,
   remoteFileContentBudget
 } from './files-remote-content-budget'
-import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../../shared/quick-open-transport-budget'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../../shared/quick-open/quick-open-transport-budget'
 import {
   FileOpen,
   FileWatch,
@@ -31,7 +31,7 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from '../../../../../shared/rpc-contract/files-params'
-import { limitSearchResultToContentBudget } from '../../../../../shared/search-result-transport-budget'
+import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
 

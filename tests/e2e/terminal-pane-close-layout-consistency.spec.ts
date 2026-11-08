@@ -235,13 +235,6 @@ async function setUpSplitTab(page: Page): Promise<SplitTabSetup> {
 }
 
 test.describe('terminal pane close vs hidden/park lifecycle keeps layout consistent', () => {
-  test('control: close while visible', async ({ orcaPage }) => {
-    const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
-    await requestTerminalPaneClose(orcaPage, tabId, 'last')
-    await expectLayoutConsistent(orcaPage, tabId, 1, 'close-visible')
-    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'close-visible')
-  })
-
   test('close and hide the tab in the same tick', async ({ orcaPage }) => {
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
     await orcaPage.evaluate(

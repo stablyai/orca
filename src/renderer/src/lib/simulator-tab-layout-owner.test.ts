@@ -15,7 +15,7 @@ import { makeRuntimeOwnedWorktree } from '@/store/slices/worktrees/worktree-owne
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { runtimeOwnedRepoState } from '@/store/repos/repo.test-fixture'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -46,12 +46,12 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

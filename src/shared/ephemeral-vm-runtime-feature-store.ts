@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from './file-content/node-bounded-file-reader'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from './node-bounded-json-stringify'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+} from './json-stream/node-bounded-json-stringify'
+import { writeSecureJsonFileWithinLimit } from './secure-storage/bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-storage/secure-file'
 import {
   EphemeralVmRuntimeRecordSchema,
   type EphemeralVmRuntimeRecord

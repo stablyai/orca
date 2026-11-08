@@ -25,7 +25,7 @@ import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-pl
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
 import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { restoreActiveTabIdByWorktree } from './workspace-terminal-active-tabs'
-import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/paired-terminal-tab-close-intents'
+import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/web-session-tabs-sync/closing/paired-terminal-tab-close-intents'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,

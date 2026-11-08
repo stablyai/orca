@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
-import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
+import { resetLocalStructuredChatsForTests } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -19,8 +19,11 @@ import {
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   // A failed row opens the status feed; these cases never drive it.
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))

@@ -14,7 +14,8 @@ import { join } from 'node:path'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
+import { RpcDispatcher } from '../rpc/dispatcher'
+import { TERMINAL_METHODS } from '../rpc/methods/terminal/terminal'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,

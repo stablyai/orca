@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { classifySynchronousRipgrepSpawnFailure } from '../../shared/ripgrep-process-availability'
+import { classifySynchronousRipgrepSpawnFailure } from '../../shared/ripgrep/ripgrep-process-availability'
 
 const dirs: string[] = []
 

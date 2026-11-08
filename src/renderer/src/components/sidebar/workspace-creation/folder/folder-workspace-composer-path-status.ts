@@ -9,6 +9,7 @@ import {
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import { recomputeOn } from '@/lib/recompute-on'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useFolderWorkspaceComposerPathStatus(
   projectGroup: ProjectGroup | null,
@@ -18,6 +19,7 @@ export function useFolderWorkspaceComposerPathStatus(
   pathStatusBlocksCreate: boolean
   pathStatusProjectError: string | null
 } {
+  const t = useTranslate()
   const {
     folderWorkspacePathStatuses,
     fetchFolderWorkspacePathStatus,
@@ -163,11 +165,11 @@ export function useFolderWorkspaceComposerPathStatus(
     pathStatus ?? (cachedBlockingPathStatus ? (cachedPathStatusEntry?.status ?? null) : null)
   const title =
     displayPathStatus?.exists === false
-      ? getFolderWorkspacePathStatusTitle(displayPathStatus)
+      ? getFolderWorkspacePathStatusTitle(displayPathStatus, t)
       : null
   const pathStatusProjectError =
     title && displayPathStatus
-      ? `${title}. ${getFolderWorkspacePathStatusDescription(displayPathStatus)}`
+      ? `${title}. ${getFolderWorkspacePathStatusDescription(displayPathStatus, t)}`
       : null
 
   return { pathStatusBlocksCreate, pathStatusProjectError }

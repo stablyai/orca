@@ -4,11 +4,12 @@ import type { NativeChatStructuredViewProps } from '@/components/native-chat/nat
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
-  NativeChatForkSlotContext
+  NativeChatForkSlotContext,
+  NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
-import type { NativeChatForkSurface } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
@@ -16,13 +17,13 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 export function NativeChatRowActionsProvider({
   pane,
   chat,
-  fork,
+  forks,
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
   chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
-  /** The session's fork, shared with its `/fork` command. */
-  fork: NativeChatForkSurface | undefined
+  /** The session's fork, shared with its `/fork` and `/btw` commands. */
+  forks: NativeChatPaneForks
   children: React.ReactNode
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
@@ -45,10 +46,14 @@ export function NativeChatRowActionsProvider({
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
-      <NativeChatForkContext.Provider value={fork}>
-        <NativeChatForkedFromContext.Provider value={openSource}>
-          <NativeChatForkSlotContext.Provider value>{children}</NativeChatForkSlotContext.Provider>
-        </NativeChatForkedFromContext.Provider>
+      <NativeChatForkContext.Provider value={forks.fork}>
+        <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
+          <NativeChatForkedFromContext.Provider value={openSource}>
+            <NativeChatForkSlotContext.Provider value>
+              {children}
+            </NativeChatForkSlotContext.Provider>
+          </NativeChatForkedFromContext.Provider>
+        </NativeChatSideChatForkPointContext.Provider>
       </NativeChatForkContext.Provider>
     </NativeChatRewindContext.Provider>
   )

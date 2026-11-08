@@ -4,7 +4,7 @@ import './contract-constants'
 import './messages/mailbox-routing-page'
 import './dispatch-row-writer'
 import './attempt-outcome-projection'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration-runtime-capabilities'
 import { createRootDispatch, reattachDispatchConsumer } from './root-dispatch-test-fixture'
 import type { DeliveryRow } from './orchestration-records'
 

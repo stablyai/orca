@@ -7,7 +7,7 @@ import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route
 import {
   layoutFramesHoldTerminalPane,
   layoutFrameTerminalTab
-} from '@/runtime/layout-frame-terminal-panes'
+} from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { resolveTerminalTabPtyOwnership } from '../../terminal-tab-for-pty-id'
 import type {

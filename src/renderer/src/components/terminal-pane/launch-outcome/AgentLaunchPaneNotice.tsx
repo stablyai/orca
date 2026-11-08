@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { agentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'
 import { createPortal } from 'react-dom'
@@ -15,23 +15,21 @@ export function AgentLaunchPaneNotice({
   agentId?: string | null
   tabId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const prompt = agentLaunchPanePrompt(tabId)
   return (
     <div
       data-agent-launch-pane-notice={refusal.kind}
       className="pointer-events-auto absolute inset-x-3 bottom-3 z-50 flex items-start justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-popover-foreground"
     >
-      <span className="min-w-0">{agentLaunchPaneNoticeText(refusal, agentId)}</span>
+      <span className="min-w-0">{agentLaunchPaneNoticeText(refusal, agentId, t)}</span>
       {prompt ? (
         <Button
           variant="outline"
           size="xs"
           onClick={() => void window.api.ui.writeClipboardText(prompt)}
         >
-          {translate(
-            'auto.components.terminal.pane.AgentLaunchPaneNotice.copyPrompt',
-            'Copy prompt'
-          )}
+          {t('auto.components.terminal.pane.AgentLaunchPaneNotice.copyPrompt', 'Copy prompt')}
         </Button>
       ) : null}
     </div>
