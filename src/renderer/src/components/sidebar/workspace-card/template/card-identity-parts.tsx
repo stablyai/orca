@@ -148,7 +148,9 @@ export const CARD_IDENTITY_PARTS = {
     ) : null
   ),
   ConflictBadge: part([], (_props, _children, { conflictOperation }) =>
-    conflictOperation ? <WorktreeCardConflictBadge operation={conflictOperation} /> : null
+    conflictOperation && conflictOperation !== 'merge' ? (
+      <WorktreeCardConflictBadge operation={conflictOperation} />
+    ) : null
   ),
   CacheTimer: part([], (_props, _children, { cacheStartedAt, cacheTtlMs }) =>
     cacheStartedAt != null ? <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} /> : null

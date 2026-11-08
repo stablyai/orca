@@ -80,7 +80,10 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     (!compactCards || branch !== worktree.displayName)
   // Why: rebases already surface in source control, so dense cards skip the persistent rebase chip.
   const showConflictOperationBadge =
-    !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
+    !!conflictOperation &&
+    conflictOperation !== 'unknown' &&
+    conflictOperation !== 'rebase' &&
+    conflictOperation !== 'merge'
   const hasMetadataBadge = showConflictOperationBadge
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
