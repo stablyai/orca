@@ -64,10 +64,15 @@ it('admits revision zero and moves the same item without changing its admission 
 
 it('publishes exact committed snapshots and their final body in order', async () => {
   const { db, batch, commit, item, published } = fixture()
+  db.prepare('UPDATE journal_chat_state SET context_boundary=7').run()
   expect((await commit(message('first'))).outcomes[0]).toMatchObject({
     committed: true,
     value: {
-      cursor: { epoch: 'epoch', sequence: 11 }
+      cursor: { epoch: 'epoch', sequence: 11 },
+      publicCursor: {
+        epoch: 'context-v1:2aa4945736094af6247b635644bf6763d06f6ba2c1f8d5a69f5ef000feafd5f1',
+        sequence: 11
+      }
     }
   })
   const result = await commitJournalSqlMessages(
@@ -79,6 +84,10 @@ it('publishes exact committed snapshots and their final body in order', async ()
     (result) => published.push(result)
   )
   expect(result.outcomes.map((entry) => entry.committed)).toEqual([true, true])
+  expect(published.at(-1)?.publicCursor).toEqual({
+    epoch: 'context-v1:2aa4945736094af6247b635644bf6763d06f6ba2c1f8d5a69f5ef000feafd5f1',
+    sequence: 13
+  })
   expect(published.map((entry) => entry.items[0]?.body)).toEqual([
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'second' }] },

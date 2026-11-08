@@ -113,9 +113,9 @@ function receipt(adopt: (committed: boolean) => void, draft = 'retained'): Journ
 it('adopts a row-bound receipt before publishing and reads the persisted revision after restart', async () => {
   const { root, database, journal } = await fixture()
   const opening = journal.openingCursor()
-  expect(opening.sequence).toBe(1)
+  expect(opening.sequence).toBe(0)
   expect(journal.wroteBeforeOpen(undefined)).toBe(false)
-  expect(journal.wroteBeforeOpen(1)).toBe(true)
+  expect(journal.wroteBeforeOpen(0)).toBe(true)
   let adopted = false
   const publications: boolean[] = []
   journal.observeCommits(() => publications.push(adopted))
@@ -126,11 +126,11 @@ it('adopts a row-bound receipt before publishing and reads the persisted revisio
   }))
   expect(publications).toEqual([true])
   expect(journal.openingCursor()).toEqual(opening)
-  expect(journal.cursor().sequence).toBe(2)
-  expect(journal.wroteBeforeOpen(2)).toBe(false)
+  expect(journal.cursor().sequence).toBe(1)
+  expect(journal.wroteBeforeOpen(1)).toBe(false)
   expect(await database.readCommandReceipt({ kind: 'global' }, 'operation')).toMatchObject({
     verdict: 'readable',
-    receipt: { result: { kind: 'journal-row', sequence: 2 } }
+    receipt: { result: { kind: 'journal-row', sequence: 1 } }
   })
   const revision = journal.write(item('revised'))
   const reading = journal.readInOrder((reads) => reads.item('orca:item'))
@@ -142,8 +142,8 @@ it('adopts a row-bound receipt before publishing and reads the persisted revisio
   await database.close()
   const reopened = await open(root)
   const next = await SqlAgentSessionJournal.open({ database: reopened.journalDatabase, identity })
-  expect(next.wroteBeforeOpen(2)).toBe(true)
-  expect(next.openingCursor().sequence).toBe(3)
+  expect(next.wroteBeforeOpen(1)).toBe(true)
+  expect(next.openingCursor().sequence).toBe(2)
   expect(next.observationHandle()).not.toBe(journal.observationHandle())
   expect(await next.reads.item('orca:item')).toMatchObject({
     revision: 2,
@@ -169,7 +169,7 @@ it('discards staged adoption and the row together when a receipt conflicts', asy
   })
   expect(await database.readCommandReceipt({ kind: 'global' }, 'operation')).toMatchObject({
     verdict: 'readable',
-    receipt: { result: { sequence: 2 } }
+    receipt: { result: { sequence: 1 } }
   })
   expect((await database.loadRecords()).unreadableRecords.get('session')).toEqual({
     reason: 'unsupported_schema',

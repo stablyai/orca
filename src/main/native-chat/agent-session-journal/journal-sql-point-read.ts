@@ -1,3 +1,4 @@
+import { readJournalDomainEntity } from './journal-domain-entity-read'
 import { readJournalDomainLifecycle } from './journal-sql-lifecycle-reads'
 import type Database from '../../sqlite/sync-database'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
@@ -11,15 +12,9 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalItemEcho } from './projection/journal-item-echo'
-import type { JournalInputSource } from './input-order/journal-input-source-schema'
-import { journalInputSourceBody } from './input-order/journal-input-source'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
-import { JournalSqlReadValues } from './journal-sql-read-values'
 import { readJournalSqlProjection } from './journal-sql-read-transaction'
-import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
 import { readJournalSqlInput } from './journal-sql-input-reads'
@@ -40,7 +35,6 @@ import {
 } from './context-epochs/journal-stop-turn-end'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import {
-  detachJournalSqlStop,
   readJournalSqlQueue,
   type JournalSqlQueueRead,
   type JournalSqlQueueReadResult
@@ -127,18 +121,6 @@ function read(
   scope: JournalSqlScope,
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
-  const values = new JournalSqlReadValues(scope, () => {})
-  const scalars = new JournalSqlScalars(scope, 'reducer')
-  const epoch = () => journalContextEpoch(scope.epoch, scalars.get('contextBoundary', 1))
-  const canonical = (itemId: string) => values.get<string>('aliases', itemId) ?? itemId
-  const visible = (itemId: string) => {
-    const identity = parseAgentJournalItemKey(itemId)
-    return (
-      identity?.provider !== 'orca' ||
-      !values.has('inputs.rejections', identity.clientMessageId) ||
-      values.has('inputs.presentations', identity.clientMessageId)
-    )
-  }
   switch (operation.kind) {
     case 'work':
       return {
@@ -198,106 +180,24 @@ function read(
         { sessionId: scope.sessionId, epoch: scope.epoch },
         operation
       )
-    case 'metadata': {
-      const sequence = scalars.get('lastSequence', 0)
-      return {
-        kind: 'metadata',
-        cursor: { epoch: epoch(), sequence },
-        physicalCursor: { epoch: scope.epoch, sequence },
-        oldestSequence: scalars.get('oldestSequence', 1),
-        highestFence: scalars.get('highestFence', 0),
-        lastActivityAt: scalars.get('lastActivityAt', 0),
-        historyOrigin: scalars.get<JournalReducerState['historyOrigin']>('historyOrigin', null)
-      }
-    }
+    case 'metadata':
     case 'item':
-      return {
-        kind: 'item',
-        item: visible(operation.itemId)
-          ? (values.get<AgentJournalRenderItem>('items', operation.itemId) ?? null)
-          : null
-      }
     case 'submission':
-      return {
-        kind: 'submission',
-        submission: values.get<AgentJournalSubmission>('submissions', operation.clientMessageId)
-      }
     case 'submission-body':
-      return {
-        kind: 'submission-body',
-        body: journalInputSourceBody(
-          values.get<JournalInputSource>('inputs.sources', operation.clientMessageId)
-        )
-      }
-    case 'acceptance': {
-      const receipt = values.get<AgentJournalAcceptanceReceipt>(
-        'receipts',
-        operation.clientMessageId
-      )
-      return {
-        kind: 'acceptance',
-        receipt: receipt ? { ...receipt, cursor: { ...receipt.cursor, epoch: epoch() } } : null
-      }
-    }
-    case 'item-provenance': {
-      const echoOf = values.get<JournalItemEcho['echoOf']>('itemEchoes', operation.itemId)
-      return {
-        kind: 'item-provenance',
-        provenance: {
-          ...(values.has('itemEchoes', operation.itemId) ? { echoOf } : {}),
-          ownerFence: values.get<number>('itemFences', operation.itemId),
-          executionOwner: values.get<number>('itemExecutionOwners', operation.itemId)
-        }
-      }
-    }
+    case 'acceptance':
+    case 'item-provenance':
     case 'has-recorded-item':
-      return {
-        kind: 'has-recorded-item',
-        recorded:
-          values.has('items', operation.itemId) || values.has('tombstones', operation.itemId)
-      }
-    case 'presentation-removed': {
-      const itemId = canonical(operation.itemId)
-      return {
-        kind: 'presentation-removed',
-        removed: values.has('tombstones', itemId) || !visible(itemId)
-      }
-    }
+    case 'presentation-removed':
     case 'canonical-item-id':
-      return { kind: 'canonical-item-id', itemId: canonical(operation.itemId) }
     case 'has-items':
-      for (const row of scope.db
-        .prepare('SELECT entry_key FROM journal_proj_items WHERE session_id=? AND epoch=?')
-        .iterate(...scope.prefix)) {
-        scope.examined(row)
-        if (visible(String(JSON.parse(String(row.entry_key))))) {
-          return { kind: 'has-items', hasItems: true }
-        }
-      }
-      return { kind: 'has-items', hasItems: false }
     case 'provider-activity':
-      return {
-        kind: 'provider-activity',
-        at: values.get<number>('providerActivityAt', operation.fence)
-      }
-    case 'latest-stop': {
-      const marks = new JournalSqlScalars(scope, 'pause-marks')
-      const { latestStop } = marks.get<{ latestStop: JournalLatestStop | null }>('header', {
-        latestStop: null
-      })
-      return { kind: 'latest-stop', stop: detachJournalSqlStop(latestStop) }
-    }
+    case 'latest-stop':
+    case 'turn-removed':
+      return readJournalDomainEntity(scope, operation)
     case 'accepted-send-unopened':
       return {
         kind: 'accepted-send-unopened',
         unopened: latestAcceptedSendUnopened(new JournalSqlReducer(scope, scope.epoch).state)
-      }
-    case 'turn-removed':
-      return {
-        kind: 'turn-removed',
-        removed: new JournalSqlReducer(scope, scope.epoch).state.removedTurnIds.has(
-          operation.turnId
-        )
       }
     case 'queue':
       return { kind: 'queue', result: readJournalSqlQueue(scope, operation.operation) }
