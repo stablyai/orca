@@ -83,7 +83,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'to-x': '--to-x <x>             Destination window-local x coordinate',
   'to-y': '--to-y <y>             Destination window-local y coordinate',
   worktree:
-    '--worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+    '--worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id> (where the command takes folder workspaces), name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   workspace: '--workspace <selector> Existing worktree selector for automation runs',
   'workspace-status':
     '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',

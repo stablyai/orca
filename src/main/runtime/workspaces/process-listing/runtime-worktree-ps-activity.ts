@@ -219,9 +219,11 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
   for (const summary of args.summaries.values()) {
     const repo = args.repoById.get(summary.repoId)
-    const session = args.store?.getWorkspaceSession?.(repo ? getRepoExecutionHostId(repo) : 'local')
+    // Same-id repos on two hosts share one repoById entry; the row's own host names its session.
+    const hostId = summary.hostId ?? (repo ? getRepoExecutionHostId(repo) : 'local')
+    const session = args.store?.getWorkspaceSession?.(hostId)
     if (session) {
-      sessionsByHostId.set(repo ? getRepoExecutionHostId(repo) : 'local', session)
+      sessionsByHostId.set(hostId, session)
     }
   }
   // Each host's session names that host's copy of a same-id workspace.

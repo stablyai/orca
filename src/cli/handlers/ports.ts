@@ -62,9 +62,10 @@ async function worktreeIdAtSelector(
 async function runtimeMatchesFolderSelectors(
   client: Pick<HandlerContext['client'], 'call'>
 ): Promise<boolean> {
-  const status = await client.call<RuntimeStatus>('status.get')
+  // An unanswered probe keeps the older lookup, which is also correct on capable runtimes.
+  const status = await client.call<RuntimeStatus>('status.get').catch(() => null)
   return (
-    status.result.capabilities?.includes(WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY) ===
+    status?.result.capabilities?.includes(WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY) ===
     true
   )
 }

@@ -131,8 +131,9 @@ Per-worktree visibility rules still apply.
 Selectors:
 
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`, `identity:<identityKey>`
-- `folder:<folderId>` names a folder workspace. `path:` and `name:` also match folder workspaces, so `--worktree path:<folderPath>` reaches the folder; `branch:`, `issue:` and `identity:` match worktrees only. `ORCA worktree ps --json` lists folder workspaces; `worktree list` does not.
-- When several workspaces match, the error lists each choice's kind, host, path and exact selector; pass one of those. A folder id that two folder workspaces share can't be selected; the error says how to repair it.
+- `folder:<folderId>` names a folder workspace, for commands that take one (`worktree set`, `rm` and `activate` don't yet). `path:` and `name:` also match folder workspaces, so `--worktree path:<folderPath>` reaches the folder; `branch:`, `issue:` and `identity:` match worktrees only. `ORCA worktree ps --json` lists folder workspaces; `worktree list` does not.
+- Older Orca versions match `path:` and `name:` against worktrees only, and may pick a worktree at the folder's path. If a folder is meant, pass `folder:<folderId>`.
+- When several workspaces match, the error usually lists each choice's kind, host, path and exact selector; pass one of those. If it lists none, find the exact `identity:` or `folder:` selector with `ORCA worktree ps --json`. A folder id that two folder workspaces share can't be selected; the error says how to repair it.
 - For a workspace in another environment, add `--environment <id>` to the command, as with any other selector.
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
