@@ -1,3 +1,4 @@
+import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -52,6 +53,9 @@ function reuseExpandedPanesIfEqual(
 export function createFloatingTerminalPanelInputsSelector(
   dependencies: SelectorDependencies = {}
 ): (state: FloatingTerminalPanelState) => FloatingTerminalPanelInputs {
+  let browserSource: AppState['browserTabsByWorktree'] | null = null
+  let browserTabSource: AppState['unifiedTabsByWorktree'][string] | null = null
+  let browserTabs = EMPTY_BROWSER_TABS
   let openFilesSource: AppState['openFiles'] | null = null
   let floatingFiles = EMPTY_FILES
   let expandedTabsSource: FloatingTerminalPanelInputs['tabs'] | null = null
@@ -61,12 +65,22 @@ export function createFloatingTerminalPanelInputsSelector(
 
   return (state) => {
     const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
-    const browserTabs =
-      state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
     const groups = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_GROUPS
     const unifiedTabs =
       state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
 
+    if (browserSource !== state.browserTabsByWorktree || browserTabSource !== unifiedTabs) {
+      browserTabs = reuseArrayIfEqual(
+        browserTabs,
+        workspaceBrowserTabs(
+          state.browserTabsByWorktree,
+          FLOATING_TERMINAL_WORKTREE_ID,
+          unifiedTabs
+        )
+      )
+      browserSource = state.browserTabsByWorktree
+      browserTabSource = unifiedTabs
+    }
     if (state.openFiles !== openFilesSource) {
       const nextFloatingFiles = [] as AppState['openFiles']
       for (const file of state.openFiles) {

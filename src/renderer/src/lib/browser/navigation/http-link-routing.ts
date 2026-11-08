@@ -1,5 +1,8 @@
+import { resolveModifierRouting } from './http-link-modifier-routing'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import {
   localhostLabelRouteForHttpLink,
+  resolveLabeledLocalhostDisplayUrl,
   openLabeledLocalhostLink,
   type LocalhostLinkRepo,
   type LocalhostLinkProject,
@@ -135,22 +138,6 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
-// Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
-/** Shift traditionally forces system browser; the inversion setting instead chooses the other destination when system is already default. */
-function resolveModifierRouting(
-  modifierHeld: boolean,
-  openLinksInApp: boolean,
-  modifierInverts: boolean
-): { wantsOrca: boolean; wantsSystemBrowser: boolean } {
-  if (!modifierHeld) {
-    return { wantsOrca: false, wantsSystemBrowser: false }
-  }
-  if (!modifierInverts) {
-    return { wantsOrca: false, wantsSystemBrowser: true }
-  }
-  return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
-}
-
 function reportHttpLinkBrowserOpenFailure(error: unknown): void {
   toast.error(
     error instanceof Error
@@ -189,7 +176,17 @@ function executeHttpLink(
   if (opts.linkContext?.isCurrentRequest?.() === false) {
     return
   }
-  const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
+  const {
+    worktreeId: sourceWorktreeId,
+    allowRemoteInApp,
+    forceSystemBrowser,
+    forceInApp,
+    sourceOwner
+  } = opts
+  const worktreeId =
+    opts.floatingWorkspace && sourceOwner?.kind === 'local'
+      ? FLOATING_TERMINAL_WORKTREE_ID
+      : sourceWorktreeId
   if (sourceOwner?.kind === 'unknown') {
     return
   }
@@ -219,7 +216,10 @@ function executeHttpLink(
       (!effectiveSourceOwner && remoteRuntimeActive))
   ) {
     if (workspaceHttpLinkBrowserOpener && state) {
-      const fields = prepareRemoteHttpLinkTab(state, worktreeId)
+      const fields = prepareRemoteHttpLinkTab(
+        state,
+        opts.floatingWorkspace ? FLOATING_TERMINAL_WORKTREE_ID : worktreeId
+      )
       const reveal = captureBrowserLinkReveal(
         () => storeAccessor?.() ?? state,
         storeSubscriber,
@@ -227,10 +227,15 @@ function executeHttpLink(
       )
       const opening = workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
+        ...(opts.floatingWorkspace ? { placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID } : {}),
         url,
         intent: { kind: 'url' },
         ...fields,
-        linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+        linkContext: {
+          ...opts.linkContext,
+          linkIntent: opts.floatingWorkspace ? null : (opts.linkContext?.linkIntent ?? null),
+          canReveal: reveal.canReveal
+        },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
@@ -261,7 +266,11 @@ function executeHttpLink(
           workspaceId: worktreeId,
           url: chosenUrl,
           intent: { kind: 'url' },
-          linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+          linkContext: {
+            ...opts.linkContext,
+            linkIntent: opts.floatingWorkspace ? null : (opts.linkContext?.linkIntent ?? null),
+            canReveal: reveal.canReveal
+          },
           ...(isHttpLinkBackgroundOpen(state)
             ? { focusOnCreate: false, selectWorktree: false }
             : {})
@@ -303,23 +312,10 @@ function executeHttpLink(
   })
 }
 
-export async function resolveLocalhostHttpLinkDisplayUrl(
+/** Return the source-owned localhost display URL, or null when labeling is unavailable. */
+export function resolveLocalhostHttpLinkDisplayUrl(
   url: string,
   sourceOwner?: HttpLinkSourceOwner
 ): Promise<string | null> {
-  const state = storeAccessor?.()
-  if (!state) {
-    return null
-  }
-  // Resolve hover and click through the same route so remote loopback cannot borrow a local workspace label.
-  const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
-  if (!localhostRoute) {
-    return null
-  }
-  try {
-    const result = await window.api.localhostWorktreeLabels.register(localhostRoute)
-    return result.url
-  } catch {
-    return null
-  }
+  return resolveLabeledLocalhostDisplayUrl(url, storeAccessor?.(), sourceOwner)
 }

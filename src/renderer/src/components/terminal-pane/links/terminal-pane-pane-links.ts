@@ -12,6 +12,7 @@ import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import {
   type LinkHandlerDeps,
   createFilePathLinkProvider,
+  verifiedFileLinkAtMouseEvent,
   installFilePathLinkClickFallback
 } from './files/terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './handles/terminal-handle-links'
@@ -50,7 +51,7 @@ type PaneLinkContext = {
   requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   getHttpLinkSourceOwnerForPane: (paneId: number) => HttpLinkSourceOwner
   getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
-  getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
+  getLinkActionContext: (paneId: number, event?: MouseEvent) => TerminalLinkActionContext | null
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
   onShowSessionRestoredBanner: (paneId: number) => void
@@ -107,9 +108,11 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     pane.id,
     installHttpLinkClickFallback(pane.terminal, {
       ...linkDeps,
+      isValidatedFileLink: (event) =>
+        Boolean(verifiedFileLinkAtMouseEvent(pane.id, pane.terminal, event, linkDeps)),
       getSourceOwner: () => getHttpLinkSourceOwnerForPane(pane.id),
       requestOpenLinksInAppPreference,
-      getLinkActionContext: () => getLinkActionContext(pane.id),
+      getLinkActionContext: (event) => getLinkActionContext(pane.id, event),
       getActionDestinations: () => getHttpLinkActionDestinations(pane.id)
     })
   )
@@ -180,10 +183,11 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       const handled = handleOscLink(text, event as MouseEvent | undefined, {
         ...linkDeps,
         startupCwd: getPaneLinkCwd(pane.id),
+        terminalHandle: linkDeps.getRuntimeTerminalHandleForPane?.(pane.id) ?? null,
         runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
         sourceOwner: getHttpLinkSourceOwnerForPane(pane.id),
         requestOpenLinksInAppPreference,
-        linkActionContext: getLinkActionContext(pane.id),
+        linkActionContext: getLinkActionContext(pane.id, event),
         actionDestinations: getHttpLinkActionDestinations(pane.id)
       })
       if (handled) {

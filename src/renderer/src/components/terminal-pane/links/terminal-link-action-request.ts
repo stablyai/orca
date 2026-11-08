@@ -1,6 +1,7 @@
 import type { TerminalLinkPointerGesture } from './gestures/terminal-link-pointer-gesture'
 import {
   isTerminalLinkActionActivation,
+  isTerminalLinkFloatingActivation,
   isTerminalMiddleClickActivation
 } from './gestures/terminal-link-activation'
 import type { TerminalLinkClickBehavior } from './gestures/terminal-link-click-behavior'
@@ -27,6 +28,24 @@ type LinkActionDetails = Pick<
   TerminalLinkActionRequest,
   'destination' | 'copyValue' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
 >
+
+/** Claim an eligible floating click once, after the caller has hit-tested a supported file or HTTP(S) link. */
+export function claimTerminalFloatingLink(
+  event: MouseEvent | undefined,
+  context: TerminalLinkActionContext | null | undefined
+): boolean {
+  if (
+    !event ||
+    event.defaultPrevented ||
+    !isTerminalLinkFloatingActivation(event) ||
+    !context?.pointerGesture.canRequestAction(event) ||
+    !context.claimPtyMouse()
+  ) {
+    return false
+  }
+  event.preventDefault()
+  return true
+}
 
 export function requestTerminalLinkAction(
   event: MouseEvent | undefined,

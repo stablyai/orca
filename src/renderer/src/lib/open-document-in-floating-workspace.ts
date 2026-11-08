@@ -1,27 +1,40 @@
-import type { FileDocument } from '../../../shared/filesystem-entry-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
 import { detectLanguage } from './language-detect'
 
-/** Open picker/shell-resolved absolute local files in the floating workspace; focused runtime routing would read the wrong machine. */
+/** Place an owner-resolved document in floating; omitted ownership stays client-local without active-runtime fallback. */
 export function openDocumentInFloatingWorkspace(
   openFile: EditorFilesSlice['openFile'],
-  document: Pick<FileDocument, 'filePath' | 'relativePath'>,
-  options: { targetGroupId?: string } = {}
+  document: Pick<OpenFile, 'filePath' | 'relativePath'> &
+    Partial<
+      Pick<
+        OpenFile,
+        | 'worktreeId'
+        | 'runtimeEnvironmentId'
+        | 'externalSshTargetId'
+        | 'terminalArtifactGrantId'
+        | 'operationProvenance'
+        | 'readOnly'
+      >
+    >,
+  options: { targetGroupId?: string; executionHostId?: ExecutionHostId } = {}
 ): string {
   return openFile(
     {
-      filePath: document.filePath,
-      relativePath: document.relativePath,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      ...document,
+      worktreeId: document.worktreeId ?? FLOATING_TERMINAL_WORKTREE_ID,
       language: detectLanguage(document.relativePath),
       mode: 'edit',
-      runtimeEnvironmentId: null
+      runtimeEnvironmentId: document.runtimeEnvironmentId ?? null
     },
     {
       preview: false,
+      placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      executionHostId: options.executionHostId,
       targetGroupId: options.targetGroupId,
-      suppressActiveRuntimeFallback: true
+      suppressActiveRuntimeFallback: !document.runtimeEnvironmentId
     }
   )
 }

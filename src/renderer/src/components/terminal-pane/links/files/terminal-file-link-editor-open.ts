@@ -1,3 +1,6 @@
+import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import '@/lib/language-detect'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store/index'
@@ -38,15 +41,17 @@ function isOpenedEditorViewCurrent(worktreeId: string, opened: EditorOpenResult)
   )
 }
 
-/** Opens a resolved link target beside its source, then reveals its line in exactly that view. */
+/** Open beside the source, or in floating when floatingHostId is supplied, and reveal the line in that view. */
 export function openLinkedFileInEditor(
   file: Omit<OpenFile, 'id' | 'isDirty' | 'language' | 'mode'>,
   intent: EditorOpenLinkIntent | null,
   position: { line: number | null; column: number | null },
-  isCurrentRequest: () => boolean
+  isCurrentRequest: () => boolean,
+  floatingHostId?: ExecutionHostId
 ): EditorOpenResult | null {
+  const placementWorkspaceId = floatingHostId ? FLOATING_TERMINAL_WORKTREE_ID : file.worktreeId
   const language = detectLanguage(file.filePath)
-  const existingViews = useAppStore.getState().unifiedTabsByWorktree?.[file.worktreeId] ?? []
+  const existingViews = useAppStore.getState().unifiedTabsByWorktree?.[placementWorkspaceId] ?? []
   // Why on shown: a layout-owner build draws a new view only with main's frame.
   const reveal = (shown: EditorOpenResult | null): void => {
     if (!shown) {
@@ -75,9 +80,28 @@ export function openLinkedFileInEditor(
       shown.fileId,
       {
         viewStateId: shown.viewStateId,
-        canApply: () => isCurrentRequest() && isOpenedEditorViewCurrent(file.worktreeId, shown)
+        canApply: () => isCurrentRequest() && isOpenedEditorViewCurrent(placementWorkspaceId, shown)
       }
     )
+  }
+  if (floatingHostId) {
+    let opened: EditorOpenResult | null = null
+    const state = useAppStore.getState()
+    revealFloatingWorkspacePanel(state)
+    openDocumentInFloatingWorkspace(
+      (document, options) => {
+        opened = state.openFileForLink(
+          document,
+          { ...options, forceContentReload: true },
+          null,
+          reveal
+        )
+        return opened?.fileId ?? ''
+      },
+      file,
+      { executionHostId: floatingHostId }
+    )
+    return opened
   }
   return useAppStore
     .getState()

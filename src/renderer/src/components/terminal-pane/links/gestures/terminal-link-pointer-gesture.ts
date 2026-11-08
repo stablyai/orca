@@ -1,5 +1,8 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
+import {
+  isTerminalOwnedLinkGesture,
+  isTerminalLinkFloatingActivation
+} from './terminal-link-activation'
 
 const DRAG_THRESHOLD_PX = 4
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
@@ -13,6 +16,7 @@ type PendingGesture = {
   clientY: number
   hadSelection: boolean
   moved: boolean
+  floating: boolean
 }
 
 export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalLinkPointerGesture {
@@ -33,6 +37,7 @@ export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalL
       clientX: event.clientX,
       clientY: event.clientY,
       hadSelection: terminal.hasSelection(),
+      floating: isTerminalLinkFloatingActivation(event),
       moved: false
     }
   }
@@ -55,8 +60,16 @@ export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalL
   ownerWindow?.addEventListener('blur', clear)
 
   return {
-    canRequestAction: () =>
-      Boolean(pending && !pending.moved && !pending.hadSelection && !terminal.hasSelection()),
+    canRequestAction: (event) =>
+      Boolean(
+        pending &&
+        pending.floating === isTerminalLinkFloatingActivation(event) &&
+        !pending.moved &&
+        !pending.hadSelection &&
+        !terminal.hasSelection() &&
+        Math.hypot(event.clientX - pending.clientX, event.clientY - pending.clientY) <=
+          DRAG_THRESHOLD_PX
+      ),
     dispose: () => {
       clear()
       terminalElement?.removeEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)

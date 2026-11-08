@@ -58,6 +58,11 @@ export function createBrowserCloseActions(
             return current
           }
 
+          owningWorktreeId =
+            Object.values(s.unifiedTabsByWorktree)
+              .flat()
+              .find((tab) => tab.contentType === 'browser' && tab.entityId === tabId)?.worktreeId ??
+            owningWorktreeId
           const closedPages = s.browserPagesByWorkspace[tabId] ?? []
           const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
           delete nextBrowserPagesByWorkspace[tabId]

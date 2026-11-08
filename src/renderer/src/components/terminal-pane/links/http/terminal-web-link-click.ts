@@ -4,7 +4,10 @@ import type {
 } from '@/lib/browser/navigation/http-link-destinations'
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from '../files/terminal-link-handlers'
-import { isTerminalOwnedLinkGesture } from '../gestures/terminal-link-activation'
+import {
+  isTerminalOwnedLinkGesture,
+  isTerminalLinkFloatingActivation
+} from '../gestures/terminal-link-activation'
 import { handleOscLink } from '../terminal-osc-link-routing'
 import {
   findHttpLinkAtTerminalMouseEvent,
@@ -22,6 +25,7 @@ type TerminalWebLinkClickDeps = Pick<
   | 'terminalHomePath'
   | 'sourceTabId'
 > & {
+  terminalHandle?: string | null
   terminal: Terminal | null
   sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
@@ -54,7 +58,9 @@ export function handleTerminalWebLinkClick(
       actionDestinations: deps.actionDestinations
     })
     // Use logical hit testing because WebLinksAddon knows only a physical row of wrapped URLs.
-    event.preventDefault()
+    if (handled || !isTerminalLinkFloatingActivation(event)) {
+      event.preventDefault()
+    }
   } else {
     handled = handleOscLink(url, event, deps)
   }

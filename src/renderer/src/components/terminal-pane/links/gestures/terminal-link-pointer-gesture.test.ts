@@ -71,6 +71,29 @@ describe('terminal link pointer gesture', () => {
     expect(gesture.canRequestAction(down)).toBe(false)
   })
 
+  it.each(['Macintosh', 'Windows', 'Linux'])(
+    'protects floating clicks from drag and previous selection on %s',
+    (userAgent) => {
+      vi.stubGlobal('navigator', { userAgent })
+      const { element, gesture, setSelection } = createGesture()
+      const modifiers = userAgent === 'Macintosh' ? { metaKey: true } : { ctrlKey: true }
+      const down = new MouseEvent('mousedown', {
+        bubbles: true,
+        button: 0,
+        altKey: true,
+        ...modifiers
+      })
+      element.dispatchEvent(down)
+      expect(gesture.canRequestAction(down)).toBe(true)
+      const up = new MouseEvent('mouseup', { button: 0, altKey: true, clientX: 10, ...modifiers })
+      expect(gesture.canRequestAction(up)).toBe(false)
+      setSelection(true)
+      element.dispatchEvent(down)
+      setSelection(false)
+      expect(gesture.canRequestAction(down)).toBe(false)
+    }
+  )
+
   it('removes its listeners on dispose', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const { element, gesture } = createGesture()

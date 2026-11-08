@@ -53,7 +53,9 @@ export function closeBrowserTabThroughLayoutOwner(
     .flat()
     .find((tab) => tab.contentType === 'browser' && tab.entityId === browserTabId)
   const record = entry
-    ? state.browserTabsByWorktree[entry.worktreeId]?.find((tab) => tab.id === browserTabId)
+    ? Object.values(state.browserTabsByWorktree)
+        .flat()
+        .find((tab) => tab.id === browserTabId)
     : undefined
   if (!entry || !record) {
     return false

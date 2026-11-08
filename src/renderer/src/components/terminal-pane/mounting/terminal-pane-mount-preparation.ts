@@ -1,3 +1,4 @@
+import { isTerminalLinkFloatingActivation } from '../links/gestures/terminal-link-activation'
 import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
@@ -60,7 +61,7 @@ export type TerminalPaneMountPreparation = {
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
   getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
-  getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
+  getLinkActionContext: (paneId: number, event?: MouseEvent) => TerminalLinkActionContext | null
   linkDeps: LinkHandlerDeps
   queueResizeAll: (focusActive: boolean) => void
   cancelResizeAll: () => void
@@ -134,10 +135,14 @@ export function prepareTerminalPaneMount(
       getHttpLinkSourceOwnerForPane(paneId),
       canOpenOwnedBrowserForPane(paneId)
     )
-  const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
+  const getLinkActionContext = (paneId: number, event?: MouseEvent) => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
     const middleClickBehavior = deps.settingsRef.current?.terminalUrlMiddleClickBehavior ?? 'open'
-    if (plainClickBehavior === 'none' && middleClickBehavior === 'none') {
+    if (
+      plainClickBehavior === 'none' &&
+      middleClickBehavior === 'none' &&
+      !isTerminalLinkFloatingActivation(event)
+    ) {
       return null
     }
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)

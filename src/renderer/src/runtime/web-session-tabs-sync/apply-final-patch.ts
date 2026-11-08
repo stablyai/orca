@@ -1,3 +1,4 @@
+import { createKeptWorktreeSurfacePruners } from '@/store/slices/tabs/kept-worktree-surface-pruning'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
@@ -32,11 +33,11 @@ export function buildWebSessionTabsFinalPatch(
     mirroredTerminalIds,
     nextOpenFiles,
     nextBrowserTabsByWorktree,
-    nextUnifiedTabsByWorktree,
-    nextGroupsByWorktree,
+    nextUnifiedTabsByWorktree: unprunedUnifiedTabsByWorktree,
+    nextGroupsByWorktree: unprunedGroupsByWorktree,
     nextActiveGroupIdByWorktree,
     nextLayoutByWorktree,
-    nextTabBarOrderByWorktree,
+    nextTabBarOrderByWorktree: unprunedTabBarOrderByWorktree,
     nextPtyIdsByTabId,
     nextTerminalLayoutsByTabId,
     nextLocalOnlyScrollbackByTabId,
@@ -49,7 +50,7 @@ export function buildWebSessionTabsFinalPatch(
     nextRemoteBrowserPageHandlesByPageId,
     nextBrowserCertificateFailuresByPageId,
     nextActiveTabIdByWorktree,
-    nextActiveBrowserTabIdByWorktree,
+    nextActiveBrowserTabIdByWorktree: unprunedActiveBrowserTabIdByWorktree,
     nextActiveFileIdByWorktree,
     nextActiveTabId,
     nextActiveBrowserTabId,
@@ -116,6 +117,32 @@ export function buildWebSessionTabsFinalPatch(
             (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)
           )
         )
+
+  const retiredBrowserIds = new Set(
+    [...context.removedBrowserWorkspaceIds].filter(
+      (id) => !context.nextBrowserTabs?.some((workspace) => workspace.id === id)
+    )
+  )
+  const pruners =
+    retiredBrowserIds.size > 0
+      ? createKeptWorktreeSurfacePruners(state, {
+          worktreeIds: new Set(
+            Object.keys(unprunedUnifiedTabsByWorktree).filter((id) => id !== worktreeId)
+          ),
+          browserTabIds: retiredBrowserIds,
+          terminalTabIds: new Set(),
+          fileIds: new Set(),
+          unifiedTabIds: new Set()
+        })
+      : null
+  const nextUnifiedTabsByWorktree =
+    pruners?.unifiedTabs(unprunedUnifiedTabsByWorktree) ?? unprunedUnifiedTabsByWorktree
+  const nextGroupsByWorktree = pruners?.groups(unprunedGroupsByWorktree) ?? unprunedGroupsByWorktree
+  const nextTabBarOrderByWorktree =
+    pruners?.tabBarOrder(unprunedTabBarOrderByWorktree) ?? unprunedTabBarOrderByWorktree
+  const nextActiveBrowserTabIdByWorktree =
+    pruners?.activeBrowserTabIds(unprunedActiveBrowserTabIdByWorktree) ??
+    unprunedActiveBrowserTabIdByWorktree
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...runtimePaneTitlePatch,

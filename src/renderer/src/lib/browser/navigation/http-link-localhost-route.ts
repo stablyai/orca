@@ -32,6 +32,23 @@ export function localhostLabelRouteForHttpLink(
   return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
+/** Resolve the hover URL through the click route so remote loopback cannot borrow a local workspace label. */
+export async function resolveLabeledLocalhostDisplayUrl(
+  url: string,
+  state: HttpLinkStoreState | undefined,
+  sourceOwner?: HttpLinkSourceOwner
+): Promise<string | null> {
+  const route = state && localhostLabelRouteForHttpLink(url, state, sourceOwner)
+  if (!route) {
+    return null
+  }
+  try {
+    return (await window.api.localhostWorktreeLabels.register(route)).url
+  } catch {
+    return null
+  }
+}
+
 export async function openLabeledLocalhostLink(
   fallbackUrl: string,
   route: LocalhostWorktreeLabelRoute,

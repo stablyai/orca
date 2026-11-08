@@ -33,6 +33,8 @@ import { selectWebRuntimeSessionBrowserWorktree } from './web-runtime-session-wo
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
+  /** Client-only tab placement; worktreeId remains the host RPC scope. */
+  placementWorkspaceId?: string
   isCurrentRequest?: () => boolean
   onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
@@ -77,7 +79,7 @@ export function createWebRuntimeBrowserCreationContext(
 ): WebRuntimeBrowserCreationContext {
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
-  const shouldFocusOnCreate = args.focusOnCreate !== false
+  const shouldFocusOnCreate = args.focusOnCreate !== false && !args.placementWorkspaceId
   const provisionalPageId = createBrowserUuid()
   const advertisedCapabilities =
     useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
@@ -99,7 +101,7 @@ export function createWebRuntimeBrowserCreationContext(
     intentOwner,
     callEnvironment,
     shouldFocusOnCreate,
-    shouldSelectWorktree: args.selectWorktree !== false,
+    shouldSelectWorktree: args.selectWorktree !== false && !args.placementWorkspaceId,
     provisionalPageId,
     hostSupportsKnownPageId,
     expectsClientHosting,
@@ -142,7 +144,8 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
     environmentId,
     worktreeId: args.worktreeId,
     remotePageId: provisionalPageId,
-    activate: shouldFocusOnCreate,
+    placementWorkspaceId: args.placementWorkspaceId,
+    activate: args.focusOnCreate !== false,
     ...(args.url !== undefined ? { url: args.url } : {}),
     ...(args.stagedTitle !== undefined ? { title: args.stagedTitle } : {}),
     ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),

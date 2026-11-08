@@ -12,6 +12,8 @@ import {
 } from '@/lib/browser/navigation/http-link-routing'
 
 export type OpenHttpLinkOptions = {
+  /** Place explicitly in-app opens in floating while retaining the source host for routing. */
+  floatingWorkspace?: boolean
   worktreeId?: string | null
   /** Opt-in for routing a remote-owned source through its managed browser. */
   allowRemoteInApp?: boolean
@@ -32,6 +34,8 @@ export type HttpLinkBrowserCompletion = { pageId: string | null; background: boo
 
 type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   workspaceId: string
+  /** Client tab destination; workspaceId still identifies the browser’s owning workspace. */
+  placementWorkspaceId?: string
   url: string
   intent: { kind: 'url' }
   linkContext?: BrowserLinkOpenContext
@@ -160,6 +164,8 @@ export type HttpLinkRoutingPreferenceRequester = (
 ) => boolean | Promise<boolean> | null | undefined
 
 export type RoutedHttpLinkOptions = {
+  /** Place explicitly in-app opens in floating while retaining the source host for routing. */
+  floatingWorkspace?: boolean
   onBrowserOpenComplete?: (result: HttpLinkBrowserCompletion) => void
   worktreeId: string
   sourceTabId?: string | null
@@ -189,6 +195,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
+      floatingWorkspace: deps.floatingWorkspace,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
       sourceOwner,

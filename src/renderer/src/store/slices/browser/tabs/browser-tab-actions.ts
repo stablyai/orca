@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
@@ -38,6 +39,7 @@ export function createBrowserTabActions(
     createBrowserTab: (worktreeId, url, options) => {
       options?.validateLinkPlacement?.(get())
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
+      const placementWorkspaceId = options?.placementWorkspaceId ?? worktreeId
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
       if (
@@ -107,19 +109,19 @@ export function createBrowserTabActions(
               ...s.browserPagesByWorkspace,
               [workspaceId]: [page]
             },
-            ...browserTabOpenView(s, worktreeId, browserTab, page, options)
+            ...browserTabOpenView(s, placementWorkspaceId, browserTab, page, options)
           }
         })
 
         const state = get()
-        const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+        const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[placementWorkspaceId] ?? []).some(
           (t) => t.contentType === 'browser' && t.entityId === workspaceId
         )
         if (!alreadyHasUnifiedTab) {
           const shouldActivate = options?.activate ?? true
           let created
           try {
-            created = state.createUnifiedTab(worktreeId, 'browser', {
+            created = state.createUnifiedTab(placementWorkspaceId, 'browser', {
               ...(options?.validateLinkPlacement
                 ? { validatePlacement: options.validateLinkPlacement }
                 : {}),
@@ -130,7 +132,11 @@ export function createBrowserTabActions(
               ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
               ...(options?.showInGroup ? { showInGroup: true } : {}),
               // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
-              ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
+              ...(placementWorkspaceId !== worktreeId
+                ? { executionHostId: LOCAL_EXECUTION_HOST_ID }
+                : options?.executionHostId
+                  ? { executionHostId: options.executionHostId }
+                  : {}),
               activate: shouldActivate
             })
           } catch (error) {
@@ -141,7 +147,7 @@ export function createBrowserTabActions(
           }
           // Why: unified creation already selected the tab and recorded the visit; only the group moves.
           if (shouldActivate && created) {
-            get().focusGroup(worktreeId, created.groupId)
+            get().focusGroup(placementWorkspaceId, created.groupId)
           }
         }
         admitLinkPageMount()
@@ -150,12 +156,15 @@ export function createBrowserTabActions(
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         openBrowserTabThroughLayoutOwner(get, {
-          worktreeId,
+          worktreeId: placementWorkspaceId,
           browserTab,
           page,
-          options,
+          options:
+            placementWorkspaceId !== worktreeId
+              ? { ...options, executionHostId: LOCAL_EXECUTION_HOST_ID }
+              : options,
           showView: () => {
-            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+            set((s) => browserTabOpenView(s, placementWorkspaceId, browserTab, page, options))
             admitLinkPageMount()
           },
           drawHere

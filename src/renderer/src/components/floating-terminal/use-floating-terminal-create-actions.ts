@@ -52,11 +52,9 @@ export function useFloatingTerminalCreateActions({
         setActiveTab(item.entityId)
         focusTerminalTabSurface(item.entityId)
       } else if (item.contentType === 'browser') {
-        const workspace = useAppStore
-          .getState()
-          .browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
-            (tab) => tab.id === item.entityId
-          )
+        const workspace = Object.values(useAppStore.getState().browserTabsByWorktree)
+          .flat()
+          .find((tab) => tab.id === item.entityId)
         if (workspace?.activePageId && window.api?.browser) {
           void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
         }

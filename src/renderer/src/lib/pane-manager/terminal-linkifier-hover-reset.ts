@@ -1,3 +1,5 @@
+import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal/links/terminal-osc-link-target'
+import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/input/pointer/terminal-mouse-buffer-position'
 import type { Terminal } from '@xterm/xterm'
 
 type LinkifierHoverCache = {
@@ -83,4 +85,38 @@ export function isTerminalLinkifierHoverActive(terminal: Terminal): boolean {
   } catch {
     return false
   }
+}
+
+/** Only a link covering this cell may reserve an Alt click from xterm. */
+export function isTerminalLinkifierHoverAtMouseEvent(
+  terminal: Terminal,
+  event: MouseEvent
+): boolean {
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  // SAFETY: xterm's pinned linkifier shape is checked before reading its range.
+  const current = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier?._currentLink
+  if (!position || !current || typeof current !== 'object' || !('link' in current)) {
+    return false
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: optional fields of the pinned xterm link are checked before use.
+  const link = current.link as {
+    text?: string
+    range?: { start: { x: number; y: number }; end: { x: number; y: number } }
+    isBufferValid?: () => boolean
+  }
+  const range = link?.range
+  const supported =
+    typeof link?.text === 'string' &&
+    classifyTerminalOscLinkTarget(link.text, {
+      windowsPathsFirst: navigator.userAgent.includes('Windows'),
+      allowUncHost: navigator.userAgent.includes('Windows')
+    })
+  return Boolean(
+    supported &&
+    range?.start &&
+    range.end &&
+    (typeof link.isBufferValid !== 'function' || link.isBufferValid()) &&
+    (position.y > range.start.y || (position.y === range.start.y && position.x >= range.start.x)) &&
+    (position.y < range.end.y || (position.y === range.end.y && position.x <= range.end.x))
+  )
 }

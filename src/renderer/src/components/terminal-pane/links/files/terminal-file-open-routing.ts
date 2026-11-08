@@ -48,6 +48,8 @@ type TerminalFileOpenDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  /** Place a document in floating while retaining its resolved filesystem owner; directories are skipped. */
+  floatingWorkspace?: boolean
   /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
   openWithSystemDefault?: boolean
   /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
@@ -117,7 +119,7 @@ export function openDetectedFilePath(
       })
       return
     }
-    if (!openWithSystemDefault) {
+    if (!openWithSystemDefault && !deps.floatingWorkspace) {
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(
         mappedFilePath,
         useAppStore.getState(),
@@ -188,6 +190,7 @@ export function openDetectedFilePath(
       !clientLocal &&
       hostGrant === null &&
       !explicitGroupRequest &&
+      !deps.floatingWorkspace &&
       isHtmlFilePath(mappedFilePath)
         ? (deps.browserDestination ??
           httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
@@ -207,6 +210,9 @@ export function openDetectedFilePath(
     }
 
     if (statResult.isDirectory) {
+      if (deps.floatingWorkspace) {
+        return
+      }
       if (refuseExplicitNonEditorRoute()) {
         return
       }
@@ -228,7 +234,7 @@ export function openDetectedFilePath(
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
     // Why: a read-only grant comes from a host that re-grants only to the printing terminal, so preview reads would fail.
-    if (isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
+    if (!deps.floatingWorkspace && isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -278,7 +284,7 @@ export function openDetectedFilePath(
       return
     }
 
-    if (targetWorktreeId) {
+    if (targetWorktreeId && !deps.floatingWorkspace) {
       // Route by workspace shape and resolved host: folder keys are valid and worktree ids can repeat across hosts.
       activateAndRevealWorkspace(targetWorktreeId, {
         providesInitialSurface: true,
@@ -304,7 +310,8 @@ export function openDetectedFilePath(
       },
       linkIntent,
       { line, column },
-      isCurrentRequest
+      isCurrentRequest,
+      deps.floatingWorkspace ? targetExecutionHostId : undefined
     )
     if (!opened) {
       refuseExplicitNonEditorRoute()

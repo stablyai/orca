@@ -5,7 +5,10 @@ import { extractTerminalFileLinkReadings } from '../../../../../../shared/termin
 import { preferLongestNonOverlappingMatches } from '../../../../../../shared/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { buildCandidateLogicalLinesForBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
-import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+import {
+  openFilePathLinkAtBufferPosition,
+  findVerifiedFilePathLinkAtBufferPosition
+} from './terminal-file-link-hit-testing'
 import './terminal-file-open-routing'
 import { shouldOpenTerminalFileWithSystemDefault } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
@@ -20,7 +23,10 @@ import {
   getTerminalWorktreePathOpenHint,
   getTerminalFileOpenHint
 } from '../terminal-link-open-hints'
-import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalLinkFloatingActivation
+} from '../gestures/terminal-link-activation'
 import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -40,7 +46,8 @@ export type LinkHandlerDeps = {
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
   /** The pane's terminal on its paired server, which may grant files it printed. */
   getRuntimeTerminalHandleForPane?: (paneId: number) => string | null
-  getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
+  /** Pass the activation event so floating chords remain available when plain and middle clicks are disabled. */
+  getLinkActionContext?: (paneId: number, event?: MouseEvent) => TerminalLinkActionContext | null
   /** The terminal tab whose panes print these links; editor opens place beside its group. */
   sourceTabId?: string
 }
@@ -147,7 +154,7 @@ export function createFilePathLinkProvider(
                       sourceTabId: deps.sourceTabId,
                       onOpenFailure: (failure) => showFileLinkOpenFailureToast(mappedPath, failure)
                     },
-                    deps.getLinkActionContext?.(paneId)
+                    deps.getLinkActionContext?.(paneId, event)
                   )
                 ) {
                   pane.terminal.clearSelection?.()
@@ -203,6 +210,24 @@ export function createFilePathLinkProvider(
   }
 }
 
+/** Resolve a cached file hit using this pane’s current cwd and runtime owner before reserving its mouse input. */
+export function verifiedFileLinkAtMouseEvent(
+  paneId: number,
+  terminal: Terminal,
+  event: MouseEvent,
+  deps: LinkHandlerDeps
+) {
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return position
+    ? findVerifiedFilePathLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
+        ...deps,
+        startupCwd: deps.getPaneLinkCwd?.(paneId) ?? deps.startupCwd,
+        runtimeEnvironmentId:
+          deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId
+      })
+    : null
+}
+
 export function installFilePathLinkClickFallback(
   paneId: number,
   terminal: Terminal,
@@ -210,6 +235,29 @@ export function installFilePathLinkClickFallback(
 ): IDisposable {
   const mouseUpListenerOptions = { capture: true }
   const handleMouseUp = (event: MouseEvent): void => {
+    if (isTerminalLinkFloatingActivation(event)) {
+      const link = verifiedFileLinkAtMouseEvent(paneId, terminal, event, deps)
+      if (
+        link &&
+        handleTerminalFileLink(
+          link.absolutePath,
+          link.line,
+          link.column,
+          event,
+          {
+            ...deps,
+            runtimeEnvironmentId:
+              deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId,
+            terminalHandle: deps.getRuntimeTerminalHandleForPane?.(paneId),
+            onOpenFailure: (failure) => showFileLinkOpenFailureToast(link.absolutePath, failure)
+          },
+          deps.getLinkActionContext?.(paneId, event)
+        )
+      ) {
+        terminal.clearSelection()
+      }
+      return
+    }
     if (!isTerminalLinkDirectActivation(event)) {
       return
     }

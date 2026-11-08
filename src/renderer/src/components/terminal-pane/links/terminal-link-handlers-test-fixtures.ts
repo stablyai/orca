@@ -1,3 +1,5 @@
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
+import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
@@ -34,7 +36,7 @@ export type TerminalLinkStoreState = {
       runtimeOwnerEnvironmentId?: string
     }[]
   >
-  folderWorkspaces: []
+  folderWorkspaces: FolderWorkspace[]
 }
 
 export type TerminalLinkTestDoubles = {
@@ -75,7 +77,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const openFileForLinkMock = vi.fn(
     (
       file: { filePath: string; worktreeId: string },
-      options: unknown,
+      options: OpenFileOptions | undefined,
       _intent: unknown,
       onShown?: (shown: { fileId: string; viewStateId: string; groupId: string }) => void
     ) => {
@@ -84,10 +86,14 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
         typeof returned === 'string'
           ? returned
           : (storeState.activeFileIdByWorktree[file.worktreeId] ?? file.filePath)
+      const placementWorkspaceId = options?.placementWorkspaceId ?? file.worktreeId
       const view = { id: `view:${fileId}`, entityId: fileId, groupId: 'group-1' }
       storeState.unifiedTabsByWorktree = {
         ...storeState.unifiedTabsByWorktree,
-        [file.worktreeId]: [...(storeState.unifiedTabsByWorktree[file.worktreeId] ?? []), view]
+        [placementWorkspaceId]: [
+          ...(storeState.unifiedTabsByWorktree[placementWorkspaceId] ?? []),
+          view
+        ]
       }
       const shown = { fileId, viewStateId: view.id, groupId: view.groupId }
       // As today's store: the view is drawn at once.

@@ -12,15 +12,21 @@ function terminalLinkActionHintPrefix(showActions: boolean): string {
   return showActions ? 'Click for actions, ' : ''
 }
 
+function terminalFloatingLinkHint(): string {
+  return isMacPlatform()
+    ? '⌘⌥+click for Floating Workspace, '
+    : 'Ctrl+Alt+click for Floating Workspace, '
+}
+
 export function getTerminalFileOpenHint(showActions = true): string {
-  const prefix = terminalLinkActionHintPrefix(showActions)
+  const prefix = terminalLinkActionHintPrefix(showActions) + terminalFloatingLinkHint()
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for default app`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
 }
 
 export function getTerminalOrcaFileOpenHint(showActions = true): string {
-  const prefix = showActions ? 'Click for actions or ' : ''
+  const prefix = terminalLinkActionHintPrefix(showActions) + terminalFloatingLinkHint()
   return isMacPlatform()
     ? `${prefix}⌘+click to open in Orca`
     : `${prefix}Ctrl+click to open in Orca`
@@ -69,7 +75,8 @@ export function terminalUrlOpenHintOptionsFor(
 // With inversion, Shift means the other destination; name the resolved one instead of always promising the system browser.
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
   const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
-  const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
+  const prefix =
+    terminalLinkActionHintPrefix(options.showActions !== false) + terminalFloatingLinkHint()
   if (invertsToOrca) {
     return isMacPlatform()
       ? `${prefix}⌘+click to open, or ⇧⌘+click to open in Orca`

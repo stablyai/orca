@@ -10,9 +10,13 @@ import {
   terminalLinkWslDistro
 } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalLinkFloatingActivation
+} from '../gestures/terminal-link-activation'
 import {
   requestTerminalLinkAction,
+  claimTerminalFloatingLink,
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -52,6 +56,13 @@ export function handleTerminalFileLink(
   actionContext?: TerminalLinkActionContext | null,
   actionDestination?: string
 ): boolean {
+  if (isTerminalLinkFloatingActivation(event)) {
+    if (!claimTerminalFloatingLink(event, actionContext)) {
+      return false
+    }
+    openDetectedFilePath(filePath, line, column, { ...deps, floatingWorkspace: true })
+    return true
+  }
   if (isTerminalLinkDirectActivation(event)) {
     event?.preventDefault?.()
     openDetectedFilePath(filePath, line, column, {

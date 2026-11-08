@@ -8,6 +8,7 @@ import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
+  isTerminalLinkFloatingActivation,
   isTerminalLinkDirectActivation
 } from './gestures/terminal-link-activation'
 import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
@@ -37,7 +38,11 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
     return false
   }
   // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
-  return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
+  return (
+    isTerminalLinkFloatingActivation(event) ||
+    isTerminalLinkDirectActivation(event) ||
+    isTerminalLinkActionActivation(event)
+  )
 }
 
 export function handleOscLink(
@@ -50,6 +55,7 @@ export function handleOscLink(
         'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro' | 'sourceTabId'
       >
     > & {
+      terminalHandle?: string | null
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
       linkActionContext?: TerminalLinkActionContext | null

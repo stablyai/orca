@@ -1,3 +1,4 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import { useAppStore } from '../store'
@@ -65,6 +66,47 @@ describe('paired browser creation placement', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('places a remote page in floating while snapshots retain its original host and workspace', async () => {
+    const floating = FLOATING_TERMINAL_WORKTREE_ID
+    const before = useAppStore.getState().unifiedTabsByWorktree[WT]!.map((tab) => tab.id)
+    const opening = openLinkFromSource({
+      placementWorkspaceId: floating,
+      clientAfterTabId: undefined
+    })
+    const pageId = pendingCreates[0].params.page!
+    const staged = Object.values(useAppStore.getState().unifiedTabsByWorktree)
+      .flat()
+      .find((tab) =>
+        (useAppStore.getState().browserPagesByWorkspace[tab.entityId] ?? []).some(
+          (page) => page.id === pageId
+        )
+      )
+    expect(staged).toMatchObject({
+      worktreeId: 'global-floating-terminal',
+      executionHostId: 'local'
+    })
+    pendingCreates[0].resolve()
+    await expect(opening).resolves.toBe(true)
+    publishHostSnapshot()
+    const state = useAppStore.getState()
+    expect(state.unifiedTabsByWorktree[WT]!.map((tab) => tab.id)).toEqual(before)
+    expect(state.unifiedTabsByWorktree[floating]).toEqual([
+      expect.objectContaining({ id: staged!.id })
+    ])
+    expect(state.remoteBrowserPageHandlesByPageId[pageId]).toMatchObject({
+      environmentId: ENV,
+      remotePageId: pageId
+    })
+    expect(state.remoteBrowserPageHandlesByPageId[pageId]?.staged).toBeUndefined()
+    expect(state.browserPagesByWorkspace[staged!.entityId]).toEqual([
+      expect.objectContaining({ worktreeId: WT, browserRuntimeEnvironmentId: ENV })
+    ])
+    hostPages.splice(0)
+    publishHostSnapshot()
+    expect(useAppStore.getState().unifiedTabsByWorktree[floating] ?? []).toEqual([])
+    expect(useAppStore.getState().groupsByWorktree[floating]?.[0]?.tabOrder ?? []).toEqual([])
   })
 
   it('stages each background link after its source before any await and keeps source, 3, 2, 1', async () => {

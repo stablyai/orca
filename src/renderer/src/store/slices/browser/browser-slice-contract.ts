@@ -34,6 +34,8 @@ import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contr
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  /** Visible tab destination; the browser record and page keep the source workspace and host. */
+  placementWorkspaceId?: string
   /** Link-only guard, checked before records and again at the unified-tab mutation. */
   validateLinkPlacement?: (state: AppState) => void
   activate?: boolean

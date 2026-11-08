@@ -30,9 +30,9 @@ export function findBrowserWorkspaceForRemotePage(
           workspace,
           page,
           unifiedTab:
-            (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-              (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
-            ) ?? null
+            Object.values(state.unifiedTabsByWorktree)
+              .flat()
+              .find((tab) => tab.contentType === 'browser' && tab.entityId === workspace.id) ?? null
         }
       }
     }
@@ -225,13 +225,16 @@ export function buildMirroredBrowserTabs(
       remotePageId: tab.browserPageId,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
-      unifiedTab: buildBrowserUnifiedTab(
-        workspace,
-        tab,
-        existing?.unifiedTab ?? null,
-        groupId,
-        environmentId
-      ),
+      unifiedTab:
+        existing?.unifiedTab && existing.unifiedTab.worktreeId !== snapshot.worktree
+          ? existing.unifiedTab
+          : buildBrowserUnifiedTab(
+              workspace,
+              tab,
+              existing?.unifiedTab ?? null,
+              groupId,
+              environmentId
+            ),
       hostTabId: tab.id,
       ...(clientGroupId ? { clientGroupId } : {})
     }

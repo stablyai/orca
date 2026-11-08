@@ -341,6 +341,28 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
 })
 
+it('opens a floating link beside the source without selecting the source browser layout', async () => {
+  const before = useAppStore.getState().unifiedTabsByWorktree[WORKSPACE]!.map((tab) => tab.id)
+  openRoutedHttpLink('https://example.com/floating-link', {
+    worktreeId: WORKSPACE,
+    sourceTabId: 'source',
+    sourceOwner: { kind: 'local' },
+    forceDestination: 'orca',
+    floatingWorkspace: true
+  })
+  await vi.waitFor(() =>
+    expect(
+      useAppStore.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+    ).toHaveLength(1)
+  )
+  const state = useAppStore.getState()
+  expect(state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => tab.id)).toEqual(before)
+  expect(state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]?.url).toBe(
+    'https://example.com/floating-link'
+  )
+  expect(state.activeWorktreeId).toBe(WORKSPACE)
+})
+
 it('reuses an exact page for an HTTP link without source context', async () => {
   const browser = useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
     targetGroupId: 'b',

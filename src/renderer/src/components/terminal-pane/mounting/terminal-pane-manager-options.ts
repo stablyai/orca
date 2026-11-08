@@ -180,13 +180,14 @@ export function createTerminalPaneManagerOptions(
       handleTerminalWebLinkClick(url, event, {
         ...context.linkDeps,
         terminal: activePane?.terminal ?? null,
+        terminalHandle: context.linkDeps.getRuntimeTerminalHandleForPane?.(paneId) ?? null,
         startupCwd: activePane ? context.getPaneLinkCwd(paneId) : context.startupCwd,
         runtimeEnvironmentId: activePane
           ? (context.linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null)
           : null,
         sourceOwner: activePane ? context.getHttpLinkSourceOwnerForPane(paneId) : { kind: 'local' },
         requestOpenLinksInAppPreference,
-        linkActionContext: context.getLinkActionContext(paneId),
+        linkActionContext: context.getLinkActionContext(paneId, event),
         actionDestinations: context.getHttpLinkActionDestinations(paneId)
       })
     },
