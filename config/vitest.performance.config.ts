@@ -23,7 +23,20 @@ const contracts = [
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
-  'src/main/claude-usage/store-checkpoint-persistence.test.ts'
+  'src/main/claude-usage/store-checkpoint-persistence.test.ts',
+  // Renderer hot paths: render, identity and publication counts at N and 10N (agent status, sidebar, tab strip, chat).
+  'src/renderer/src/store/slices/agent-status/agent-status-batch.performance.test.ts',
+  'src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-agent-rows.performance.test.tsx',
+  'src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-status.performance.test.tsx',
+  'src/renderer/src/components/sidebar/worktree-list/listing/use-visible-worktrees.performance.test.tsx',
+  'src/renderer/src/components/tab-bar/use-terminal-tab-activity.performance.test.tsx',
+  'src/renderer/src/components/tab-bar/tab-agent-types-by-tab-id.performance.test.ts',
+  'src/renderer/src/app-shell/use-runtime-graph-sync.performance.test.tsx',
+  'src/renderer/src/components/native-chat/markdown/NativeChatMarkdown.streaming.performance.test.tsx',
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.composer-typing.performance.test.tsx',
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatResolvedView.streaming-input.test.tsx',
+  'src/renderer/src/components/native-chat/viewport/virtualization/NativeChatMessageList.windowing.performance.test.tsx',
+  'src/renderer/src/components/activity/use-agent-pane-threads.performance.test.tsx'
 ]
 for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {

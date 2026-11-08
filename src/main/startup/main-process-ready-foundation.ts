@@ -29,7 +29,7 @@ import {
   configureWindowsHostGitEnvironmentReadiness,
   setDefaultWslDistroOverride
 } from '../git/runner'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
@@ -60,7 +60,7 @@ import {
   reconcileManagedWslCliRegistrations
 } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'

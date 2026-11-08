@@ -17,7 +17,7 @@ import {
   WINDOW_ID_CURRENT,
   getBrowserExtensionWindow
 } from '../tabs-and-windows/browser-extension-window-model'
-import { browserExtensionHostPatternsInSession } from './permissions'
+import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 
 // Chrome's default JPEG quality for tabs.captureVisibleTab.
 const DEFAULT_JPEG_QUALITY = 90

@@ -47,7 +47,7 @@ vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn()
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: vi.fn()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
