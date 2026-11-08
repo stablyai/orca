@@ -142,7 +142,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         ...base,
         action: 'terminal-command',
         command: command.slice(0, MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
-        appendEnter: record.appendEnter !== false
+        appendEnter: record.appendEnter !== false,
+        ...(record.closeTabOnSuccess === true ? { closeTabOnSuccess: true as const } : {})
       })
     }
   }
@@ -193,8 +194,12 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
       command.prompt === expected.prompt
     )
   }
+  const terminalKeys = ['id', 'label', 'action', 'command', 'appendEnter', 'scope']
   return (
-    hasExactKeys(command, ['id', 'label', 'action', 'command', 'appendEnter', 'scope']) &&
+    hasExactKeys(
+      command,
+      expected.closeTabOnSuccess ? [...terminalKeys, 'closeTabOnSuccess'] : terminalKeys
+    ) &&
     command.action === 'terminal-command' &&
     command.command === expected.command &&
     command.appendEnter === expected.appendEnter
@@ -232,6 +237,14 @@ export function applyTerminalQuickCommandMutation(
     return [...commands, mutation.command]
   }
   return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
+}
+
+export function withoutCloseTabOnSuccess(command: TerminalQuickCommand): TerminalQuickCommand {
+  if (!('closeTabOnSuccess' in command)) {
+    return command
+  }
+  const { closeTabOnSuccess: _omitted, ...rest } = command
+  return rest
 }
 
 export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {

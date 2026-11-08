@@ -3,7 +3,6 @@ import { confirmShellForegroundProcess } from '../providers/agent-foreground-pro
 import { getFreshProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import { getProcessTableIndex } from '../../shared/process-table-index'
 import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
-import type { TerminalProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 /** POSIX: the PTY's root shell owns the terminal's foreground group and nothing under it is stopped. */
 export async function confirmRootShellAloneFromProcessTable(rootPid: number): Promise<boolean> {
@@ -17,15 +16,4 @@ export async function confirmRootShellAloneFromProcessTable(rootPid: number): Pr
   } catch {
     return false
   }
-}
-
-/** Windows: the host's job-based child census found nothing under the shell. */
-export function inspectionShowsShellAlone(inspection: TerminalProcessInspection | null): boolean {
-  if (!inspection || inspection.verdict === 'unverifiable') {
-    return false
-  }
-  return (
-    inspection.childProcessEvidence === 'no-children' &&
-    (inspection.foregroundProcess === null || isShellProcess(inspection.foregroundProcess))
-  )
 }

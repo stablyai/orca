@@ -10,6 +10,7 @@ export type TerminalQuickCommandDialogAction = 'terminal-command' | 'agent-promp
 export type TerminalQuickCommandDialogDraftMemory = {
   terminalCommand: string
   terminalAppendEnter: boolean
+  terminalCloseTabOnSuccess: boolean
   agent: TuiAgent
   agentPrompt: string
 }
@@ -22,6 +23,7 @@ export function createTerminalQuickCommandDialogDraftMemory(
     return {
       terminalCommand: '',
       terminalAppendEnter: true,
+      terminalCloseTabOnSuccess: false,
       agent: command.agent,
       agentPrompt: command.prompt
     }
@@ -29,6 +31,7 @@ export function createTerminalQuickCommandDialogDraftMemory(
   return {
     terminalCommand: command.command,
     terminalAppendEnter: command.appendEnter,
+    terminalCloseTabOnSuccess: command.closeTabOnSuccess === true,
     agent: fallbackAgent,
     agentPrompt: ''
   }
@@ -48,7 +51,8 @@ export function rememberTerminalQuickCommandDialogDraft(
   return {
     ...memory,
     terminalCommand: draft.command,
-    terminalAppendEnter: draft.appendEnter
+    terminalAppendEnter: draft.appendEnter,
+    terminalCloseTabOnSuccess: draft.closeTabOnSuccess === true
   }
 }
 
@@ -86,7 +90,8 @@ export function switchTerminalQuickCommandDialogAction(
       ...base,
       action: 'terminal-command',
       command: nextMemory.terminalCommand,
-      appendEnter: nextMemory.terminalAppendEnter
+      appendEnter: nextMemory.terminalAppendEnter,
+      ...(nextMemory.terminalCloseTabOnSuccess ? { closeTabOnSuccess: true as const } : {})
     }
   }
 }

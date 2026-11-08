@@ -17,6 +17,7 @@ import {
 } from '../session-tabs-runtime-capabilities'
 import type { RuntimeCapability } from '../protocol-version'
 import {
+  TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
 } from '../terminal/quick-commands/terminal-quick-command-capabilities'
@@ -46,6 +47,7 @@ export function remoteRuntimeClientCapabilities(
       REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
       TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
       TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
+      TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
       // Switch point: every desktop socket, browser hosting's included, leaves the unread flag to
       // a host that raises it.
       ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY] : []),

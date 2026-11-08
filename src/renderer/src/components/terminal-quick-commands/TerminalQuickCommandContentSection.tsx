@@ -25,7 +25,10 @@ import { cn } from '@/lib/utils'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
-import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import {
+  TerminalQuickCommandAppendEnterSwitch,
+  TerminalQuickCommandCloseTabOnSuccessSwitch
+} from './TerminalQuickCommandAppendEnterSwitch'
 
 const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
 const QUICK_COMMAND_PICKER_MODEL: NewTabAgentMenuModel = {
@@ -52,6 +55,7 @@ type TerminalQuickCommandContentSectionProps = {
   draftMemoryRef: MutableRefObject<TerminalQuickCommandDialogDraftMemory>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
   toggleAppendEnter: () => void
+  toggleCloseTabOnSuccess: () => void
 }
 
 function getBodyLengthLabel(bodySize: TerminalQuickCommandBodySize): string {
@@ -92,7 +96,8 @@ export function TerminalQuickCommandContentSection({
   bodySize,
   draftMemoryRef,
   setDraft,
-  toggleAppendEnter
+  toggleAppendEnter,
+  toggleCloseTabOnSuccess
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
   useUiLanguageRevision()
   const unsupportedLabel = translate(
@@ -252,11 +257,17 @@ export function TerminalQuickCommandContentSection({
 
         <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/50 px-3 py-2">
           {!isTerminalAgentQuickCommand(draft) ? (
-            <TerminalQuickCommandAppendEnterSwitch
-              appendEnter={draft.appendEnter}
-              onToggle={toggleAppendEnter}
-              compact
-            />
+            <div className="flex min-w-0 items-center gap-4">
+              <TerminalQuickCommandAppendEnterSwitch
+                appendEnter={draft.appendEnter}
+                onToggle={toggleAppendEnter}
+                compact
+              />
+              <TerminalQuickCommandCloseTabOnSuccessSwitch
+                closeTabOnSuccess={draft.closeTabOnSuccess === true}
+                onToggle={toggleCloseTabOnSuccess}
+              />
+            </div>
           ) : (
             <span className="text-[11px] text-muted-foreground">
               {translate(

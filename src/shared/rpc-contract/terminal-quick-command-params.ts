@@ -27,6 +27,7 @@ export const TerminalQuickCommandUpdateItem = z.union([
       action: z.literal('terminal-command').optional(),
       command: z.string().max(MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
       appendEnter: z.boolean(),
+      closeTabOnSuccess: z.boolean().optional(),
       scope: TerminalQuickCommandScopeUpdate.optional()
     })
     .strict(),
