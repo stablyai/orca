@@ -19,6 +19,8 @@ import {
   terminalPhaseInTurn
 } from '../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { publishWorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
@@ -130,12 +132,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       this.crewChanges.notify(new Set(['status', 'names']))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
+    // The sidebar feed's activity facts already announce row changes when it is on.
+    const detachRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
+      ? () => {}
+      : publishWorktreeRowsChanges(store, (event) => this.emitClientEvent(event))
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
       detachCrew()
+      detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
       detachTransitions()
