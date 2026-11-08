@@ -5,6 +5,7 @@ import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
 import { readJournalDomainHistoryPage } from './journal-domain-history-page'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
 
 const databases: Database.Database[] = []
 const maintainers: JournalSqlBackgroundMaintenance[] = []
@@ -100,7 +101,7 @@ it('expires replay during continuous activity even while conversion and sweeps w
         }
       }
     },
-    { database: async () => ({ kind: 'sessions', sessionIds: [] }) },
+    { database: async (operation) => readJournalSqlDatabase(db, operation) },
     { ensure: async () => null },
     activity,
     (error) => {

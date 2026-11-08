@@ -57,7 +57,7 @@ export function applyJournalSqlMaintenance(
     case 'import-finish':
       return finishJournalDomainImport(db, operation.header)
     case 'domain-retired-prune':
-      return pruneJournalDomainRetiredPage(db)
+      return pruneJournalDomainRetiredPage(db, operation)
     case 'page-reclaim':
       return reclaimJournalDomainPage(db)
     case 'compaction-state':

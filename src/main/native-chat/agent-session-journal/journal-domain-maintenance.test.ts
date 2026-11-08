@@ -2,7 +2,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { messageFixture } from './journal-sql-message.test-fixture'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
-import { pruneJournalDomainRetiredPage } from './journal-domain-maintenance'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
@@ -27,20 +26,13 @@ function fixture() {
   databases.push(db)
   db.pragma('auto_vacuum=INCREMENTAL')
   messageFixture(db)
-  db.exec(`CREATE TABLE IF NOT EXISTS journal_item_subagent_names (
-    session_id TEXT NOT NULL, epoch TEXT NOT NULL, subagent_id TEXT NOT NULL, item_id TEXT NOT NULL,
-    PRIMARY KEY(session_id,epoch,subagent_id,item_id)
-  ) WITHOUT ROWID`)
   return db
 }
 
 function maintain(db: Database.Database, operation: JournalSqlMaintenance) {
   db.exec('BEGIN IMMEDIATE')
   try {
-    const result =
-      operation.kind === 'domain-retired-prune'
-        ? pruneJournalDomainRetiredPage(db, operation)
-        : applyJournalSqlMaintenance(db, operation)
+    const result = applyJournalSqlMaintenance(db, operation)
     db.exec('COMMIT')
     return result
   } catch (error) {
@@ -64,7 +56,8 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
       ...prefix
     )
     db.prepare(`INSERT INTO journal_item_tombstones VALUES(?,?,'deleted',1)`).run(...prefix)
-    db.prepare(`INSERT INTO journal_item_subagent_names VALUES(?,?,'agent','body')`).run(...prefix)
+    db.prepare(`INSERT INTO journal_item_subagent_names
+      VALUES(?,?,'agent','body',1,0,1,0)`).run(...prefix)
     db.prepare(`INSERT INTO journal_item_aliases VALUES(?,?,'provider','body',0,NULL)`).run(
       ...prefix
     )
@@ -86,7 +79,11 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
   db.exec(`INSERT INTO agent_session_records VALUES('chat','saved record');
     INSERT INTO agent_session_tabs VALUES('tab','chat',1)`)
   db.exec('BEGIN IMMEDIATE')
-  pruneJournalDomainRetiredPage(db, { sessionId: 'chat', epoch: 'epoch' })
+  applyJournalSqlMaintenance(db, {
+    kind: 'domain-retired-prune',
+    sessionId: 'chat',
+    epoch: 'epoch'
+  })
   applyJournalSqlMaintenance(db, { kind: 'compaction-complete', now: 200 })
   db.exec('ROLLBACK')
   expect(
@@ -260,8 +257,8 @@ it.each([100, 1_000])(
       retired.run('later', `old-${index}`)
     }
     db.exec(`INSERT INTO journal_item_subagent_names VALUES
-      ('chat','before','agent-a','old'),('chat','later','agent-b','old'),
-      ('chat','later','agent-c','old');
+      ('chat','before','agent-a','old',1,0,1,0),('chat','later','agent-b','old',1,0,1,0),
+      ('chat','later','agent-c','old',1,0,1,0);
       INSERT INTO journal_events VALUES('chat','later',1,1,'{}')`)
     db.exec('COMMIT')
 
