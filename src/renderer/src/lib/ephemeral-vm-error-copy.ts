@@ -82,6 +82,29 @@ const COPY: Record<EphemeralVmFailureCode, (params: Params | undefined) => strin
     translate('ephemeralVm.errors.provisionedRootResultRequired', EN.provisionedRootResultRequired),
   provisionedRootNotConfigured: () =>
     translate('ephemeralVm.errors.provisionedRootNotConfigured', EN.provisionedRootNotConfigured),
+  suspendExited: (p) => {
+    const exitCode = num(p, 'exitCode')
+    return exitCode === null
+      ? null
+      : translate('ephemeralVm.errors.suspendExited', EN.suspendExited, { exitCode })
+  },
+  suspendExitedWithoutCode: () =>
+    translate('ephemeralVm.errors.suspendExitedWithoutCode', EN.suspendExitedWithoutCode),
+  resumeExited: (p) => {
+    const exitCode = num(p, 'exitCode')
+    return exitCode === null
+      ? null
+      : translate('ephemeralVm.errors.resumeExited', EN.resumeExited, { exitCode })
+  },
+  resumeExitedWithoutCode: () =>
+    translate('ephemeralVm.errors.resumeExitedWithoutCode', EN.resumeExitedWithoutCode),
+  recipeTimedOut: (p) => {
+    const mode = text(p, 'mode')
+    const timeout = text(p, 'timeout')
+    return mode === null || timeout === null
+      ? null
+      : translate('ephemeralVm.errors.recipeTimedOut', EN.recipeTimedOut, { mode, timeout })
+  },
   destroyExited: (p) => {
     const exitCode = num(p, 'exitCode')
     return exitCode === null

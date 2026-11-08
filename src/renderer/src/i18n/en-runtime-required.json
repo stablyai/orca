@@ -2043,12 +2043,17 @@
       "recipeResultNotJsonObject": "Recipe stdout must be one JSON object.",
       "recipeResultPairingCodeInvalid": "Recipe result pairingCode is not a valid Orca pairing code.",
       "recipeResultProjectRootNotAbsolute": "Recipe result projectRoot must be an absolute runtime path.",
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
       "remoteRepoUnsupported": "Ephemeral VM recipes run on the local desktop host in v1.",
       "repoNotFound": "Repo not found: {{repoId}}",
+      "resumeExited": "Resume exited with code {{exitCode}}.",
+      "resumeExitedWithoutCode": "Resume exited with code unknown.",
       "runtimeNotFound": "Unknown ephemeral VM runtime: {{runtimeId}}",
       "runtimeRepoMissing": "Ephemeral VM runtime has no repo id: {{runtimeId}}",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
-      "startRefUnresolved": "Could not resolve provisioned-root start ref: {{ref}}"
+      "startRefUnresolved": "Could not resolve provisioned-root start ref: {{ref}}",
+      "suspendExited": "Suspend exited with code {{exitCode}}.",
+      "suspendExitedWithoutCode": "Suspend exited with code unknown."
     }
   },
   "jira": {
