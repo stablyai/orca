@@ -187,9 +187,14 @@ export function foldedJournalReads(
     }),
     continuationContext: now(() => {
       const snapshot = journal.snapshot()
+      const { items, submissions } = agentSessionCurrentContextRows(
+        snapshot.items,
+        snapshot.submissions
+      )
       return {
         cursor: snapshot.cursor,
-        ...agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
+        items,
+        submissions
       }
     }),
     threadGoalSource: now(journal.threadGoalSource),

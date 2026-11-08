@@ -1,5 +1,5 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { AgentSessionJournalReads } from '../../agent-session-journal/journal-reads'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
@@ -10,7 +10,7 @@ const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality', 'interact
 /** A different Codex control needs a new turn: steer has no choice parameters. */
 export async function waitsForCodexTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
-  journal: Pick<AgentSessionJournal, 'reads'>,
+  journal: { reads: Pick<AgentSessionJournalReads, 'messageOptions'> },
   next: AgentJournalSubmission,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'readAppliedInputOptions'>

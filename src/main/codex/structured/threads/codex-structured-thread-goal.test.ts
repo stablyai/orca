@@ -146,12 +146,9 @@ describe('direct goal settings application', () => {
       waitsForCodexTurnOptions(
         { provider: 'codex', sessionId: 'session-1' },
         {
-          newestTurn: () => ({ turnId: 'goal-turn', state: 'running' }),
-          itemBody: () => ({
-            kind: 'message',
-            role: 'user',
-            blocks: [{ type: 'text', text: 'Continue' }]
-          })
+          reads: {
+            messageOptions: async () => ({ ordinaryMessage: true, runningTurn: true })
+          }
         },
         {
           clientMessageId: 'follow-up',
@@ -208,8 +205,8 @@ describe('direct goal settings application', () => {
       ).length
       expect(await goal('observation-only-c', 'medium')).toEqual({ ok: true })
       expect(proof()).toEqual({ active: appliedGoal, next: turnProof })
-      expect(held(appliedGoal)).toBe(false)
-      expect(held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
+      expect(await held(appliedGoal)).toBe(false)
+      expect(await held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
       ).toHaveLength(callsBeforeEquivalent)
@@ -221,7 +218,7 @@ describe('direct goal settings application', () => {
         active: { effort: 'low', interactionMode: 'default' },
         next: turnProof
       })
-      expect(held()).toBe(true)
+      expect(await held()).toBe(true)
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
       expect(proof()).toEqual({ active: turnProof, next: turnProof })
       codex.routes['thread/settings/update'] = () => {
@@ -234,8 +231,8 @@ describe('direct goal settings application', () => {
       ).length
       expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
       expect(proof()).toEqual({ active: turnProof, next: turnProof })
-      expect(held()).toBe(false)
-      expect(held(appliedGoal)).toBe(true)
+      expect(await held()).toBe(false)
+      expect(await held(appliedGoal)).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
       ).toHaveLength(callsBeforeCached)
