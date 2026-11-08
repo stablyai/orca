@@ -144,28 +144,38 @@ describe('the side chat fork point the transcript finds while laying out', () =>
   })
 })
 
-it('offers the inherited source tip while a later child response is running', () => {
+it('offers only the copied fork-point tip while a later child response is running', () => {
   const { input, latestTurnKey } = conversation(
     [
-      { ask: 'inherited-user', replies: [row('legacy:opencode:source:reply-1', 'assistant', 1)] },
-      { ask: 'own-user', replies: [row('legacy:opencode:child:reply-2', 'assistant', 4)] }
+      { ask: 'older-user', replies: [row('legacy:opencode:source:reply-0', 'assistant', 1)] },
+      { ask: 'inherited-user', replies: [row('legacy:opencode:source:reply-1', 'assistant', 3)] },
+      { ask: 'own-user', replies: [row('legacy:opencode:child:reply-2', 'assistant', 6)] }
     ],
     true
   )
   const inventory = nativeChatForkInventory([
     {
-      itemId: 'legacy:opencode:source:reply-1',
+      itemId: 'legacy:opencode:source:reply-0',
       sequence: 1,
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'older copied reply' }]
+      }
+    },
+    {
+      itemId: 'legacy:opencode:source:reply-1',
+      sequence: 3,
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'copied' }] }
     },
     {
       itemId: 'orca:forked-from',
-      sequence: 1,
+      sequence: 4,
       body: { kind: 'status', text: 'Forked from source', presentation: 'forked-from' }
     },
     {
       itemId: 'legacy:opencode:child:reply-2',
-      sequence: 4,
+      sequence: 6,
       body: {
         kind: 'message',
         role: 'assistant',
@@ -178,6 +188,20 @@ it('offers the inherited source tip while a later child response is running', ()
     contextFloorSequence: 0,
     ...inventory
   } as const
+  const olderRow = {
+    message: row('legacy:opencode:source:reply-0', 'assistant', 1),
+    inSubagentSection: false,
+    turnWorking: false,
+    inLatestTurn: false
+  }
+  expect(nativeChatRowOffersFork(olderRow, chat)).toBe(false)
+  // Checkpoint providers still offer earlier inherited replies without original-tip support.
+  expect(
+    nativeChatRowOffersFork(olderRow, {
+      ...chat,
+      support: { kind: 'known', fork: 'checkpoint' }
+    })
+  ).toBe(true)
   expect(
     buildNativeChatTranscript({
       ...input,
@@ -190,7 +214,7 @@ it('offers the inherited source tip while a later child response is running', ()
   expect(
     buildNativeChatTranscript({
       ...input,
-      forkOffer: { chat: { ...chat, contextFloorSequence: 2 }, latestTurnKey }
+      forkOffer: { chat: { ...chat, contextFloorSequence: 4 }, latestTurnKey }
     }).forkPoint
   ).toEqual({ kind: 'reply-running' })
 })

@@ -23,7 +23,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   forkOriginalMissing:
     '{{agent}} could not find this response in the original chat. Open it and fork from there.',
   forkOriginalUnavailable:
-    '{{agent}} cannot fork this response in the original chat right now. Open it and fork from there.',
+    '{{agent}} cannot fork this response in the original chat. Open it and fork from there.',
+  forkOriginalMissingNamed:
+    '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalUnavailableNamed:
+    '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
@@ -270,8 +274,23 @@ export function agentSessionForkSourceFailureWords(
   agent: string,
   say: AgentSessionFailureSay
 ): string | null {
-  const id = (['forkOriginalMissing', 'forkOriginalUnavailable'] as const).find(
-    (piece) => message === sayAgentSessionFailureEnglish(piece, { agent })
-  )
-  return id ? say(id, { agent }) : null
+  for (const id of [
+    'forkOriginalMissing',
+    'forkOriginalUnavailable',
+    'forkOriginalMissingNamed',
+    'forkOriginalUnavailableNamed'
+  ] as const) {
+    const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
+    if (
+      suffix === undefined
+        ? message === prefix
+        : message.startsWith(prefix) && message.endsWith(suffix)
+    ) {
+      return say(id, {
+        agent,
+        ...(suffix === undefined ? {} : { detail: message.slice(prefix.length, -suffix.length) })
+      })
+    }
+  }
+  return null
 }

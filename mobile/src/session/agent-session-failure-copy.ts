@@ -22,6 +22,18 @@ const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyVa
       AGENT_SESSION_FAILURE_COPY.forkOriginalUnavailable,
       values
     ),
+  forkOriginalMissingNamed: (values) =>
+    translate(
+      'session.failure.forkOriginalMissingNamed',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalMissingNamed,
+      values
+    ),
+  forkOriginalUnavailableNamed: (values) =>
+    translate(
+      'session.failure.forkOriginalUnavailableNamed',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalUnavailableNamed,
+      values
+    ),
   pluginInputRequired: (values) =>
     translate(
       'session.failure.pluginInputRequired',

@@ -48,13 +48,15 @@ export function nativeChatForkInventory(
   items: readonly Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'agentId' | 'sequence'>[]
 ): { forkableItemIds: ReadonlySet<string>; inheritedThroughSequence: number } {
   const forkableItemIds = new Set<string>()
+  // The inherited tip is the last root response before the divider, not every copied response.
   let inheritedThroughSequence = 0
+  let lastRootReplySequence = 0
   for (const item of items) {
     if (
       item.body.kind === 'status' &&
       item.body.presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION
     ) {
-      inheritedThroughSequence = item.sequence
+      inheritedThroughSequence = lastRootReplySequence
     }
     if (
       item.body.kind === 'message' &&
@@ -62,6 +64,7 @@ export function nativeChatForkInventory(
       isRootAgentJournalItem(item)
     ) {
       forkableItemIds.add(item.itemId)
+      lastRootReplySequence = item.sequence
     }
   }
   return { forkableItemIds, inheritedThroughSequence }
@@ -121,7 +124,7 @@ export function nativeChatRowOffersFork(
     (chat.support.kind === 'unknown' ||
       chat.support.fork === 'checkpoint' ||
       row.inLatestTurn ||
-      (chat.support.inheritedOriginal === true && sequence <= (chat.inheritedThroughSequence ?? 0)))
+      (chat.support.inheritedOriginal === true && sequence === chat.inheritedThroughSequence))
   )
 }
 

@@ -19747,7 +19747,9 @@
       "reasoning": "Reasoning",
       "failureWords": {
         "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
-        "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat right now. Open it and fork from there.",
+        "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+        "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+        "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",

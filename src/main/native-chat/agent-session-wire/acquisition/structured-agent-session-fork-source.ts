@@ -11,7 +11,10 @@ import {
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionForkSourceAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import { AGENT_SESSION_FAILURE_COPY } from '../../../../shared/agent-session/failures/agent-session-failure-copy'
+import {
+  AGENT_SESSION_FAILURE_COPY,
+  sayAgentSessionFailureEnglish
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import {
   AgentConversationCopyError,
   agentConversationCopyRefusal
@@ -82,9 +85,13 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
         message
       )
       if (original) {
-        refusal.refusal.message = AGENT_SESSION_FAILURE_COPY[
+        const piece =
           reason === 'savedConversationMissing' ? 'forkOriginalMissing' : 'forkOriginalUnavailable'
-        ].replace('{{agent}}', name)
+        const title = record.conversationName?.trim()
+        refusal.refusal.message = sayAgentSessionFailureEnglish(title ? `${piece}Named` : piece, {
+          agent: name,
+          detail: title
+        })
         refusal.cause = new AgentConversationCopyError(refusal.refusal.message)
       }
       throw refusal

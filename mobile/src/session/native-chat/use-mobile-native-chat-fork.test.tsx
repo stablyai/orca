@@ -208,24 +208,34 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   const copied = {
     ...message,
     id: 'legacy:opencode:source:reply-1',
-    journalPosition: { sequence: 2, index: 0 }
+    journalPosition: { sequence: 5, index: 0 }
   }
   const copiedPrompt: NativeChatMessage = {
     ...message,
     id: 'legacy:opencode:source:user-1',
     role: 'user',
-    journalPosition: { sequence: 1, index: 0 }
+    journalPosition: { sequence: 4, index: 0 }
   }
   const ownPrompt: NativeChatMessage = {
     ...message,
     id: 'legacy:opencode:child:user-2',
     role: 'user',
-    journalPosition: { sequence: 4, index: 0 }
+    journalPosition: { sequence: 7, index: 0 }
   }
   const own = {
     ...message,
     id: 'legacy:opencode:child:reply-2',
-    journalPosition: { sequence: 5, index: 0 }
+    journalPosition: { sequence: 8, index: 0 }
+  }
+  const olderPrompt: NativeChatMessage = {
+    ...copiedPrompt,
+    id: 'legacy:opencode:source:user-0',
+    journalPosition: { sequence: 1, index: 0 }
+  }
+  const older = {
+    ...copied,
+    id: 'legacy:opencode:source:reply-0',
+    journalPosition: { sequence: 2, index: 0 }
   }
   function ForkProbe({
     hostCapabilities,
@@ -240,28 +250,36 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
       hostStatusPending,
       agent: 'opencode',
       sessionId: 'child',
-      messages: [copiedPrompt, copied, ownPrompt, own],
+      messages: [olderPrompt, older, copiedPrompt, copied, ownPrompt, own],
       turnJournal: {
         items: [
           {
             ...reply,
+            itemId: olderPrompt.id,
+            sequence: 1,
+            body: { kind: 'message', role: 'user', blocks: [] }
+          },
+          { ...reply, itemId: older.id, sequence: 2 },
+          {
+            ...reply,
             itemId: copiedPrompt.id,
+            sequence: 4,
             body: { kind: 'message', role: 'user', blocks: copiedPrompt.blocks }
           },
-          { ...reply, itemId: copied.id, sequence: 2 },
+          { ...reply, itemId: copied.id, sequence: 5 },
           {
             ...reply,
             itemId: 'orca:forked-from',
-            sequence: 2,
+            sequence: 6,
             body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
           },
           {
             ...reply,
             itemId: ownPrompt.id,
-            sequence: 4,
+            sequence: 7,
             body: { kind: 'message', role: 'user', blocks: ownPrompt.blocks }
           },
-          { ...reply, itemId: own.id, sequence: 5 }
+          { ...reply, itemId: own.id, sequence: 8 }
         ],
         submissions: []
       },
@@ -285,6 +303,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     )
   })
   expect(latest?.offerFor(copied)).toBe('available')
+  expect(latest?.offerFor(older)).toBe('reserved')
   await act(async () => {
     renderer!.update(
       createElement(ForkProbe, {
