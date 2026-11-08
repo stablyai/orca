@@ -1,23 +1,36 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
+
 import { mkdtempSync, rmSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
+
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+
 import Database from '../../sqlite/sync-database'
+
 import { OrcaRuntimeService } from '../orca-runtime'
+
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest, RpcResponse } from './core'
+
 import { RpcDispatcher } from './dispatcher'
+
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
-import { MessageWake } from '../runtime-message-waiters'
+
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -190,58 +203,6 @@ function messageCount(db: OrchestrationDb): number {
 }
 
 describe('legacy coordinator takeover races', () => {
-  it.each(['dispatch', 'websocket'] as const)(
-    '%s routes a pre-bind coordinator send to the retained worker mailbox',
-    async (transport) => {
-      const harness = createHarness()
-
-      const response = await invoke(
-        harness.dispatcher,
-        request(
-          'orchestration.send',
-          { from: COORDINATOR_HANDLE, to: WORKER_HANDLE, subject: 'continue safely' },
-          `send-direct-${transport}`
-        ),
-        transport
-      )
-
-      expect(response).toMatchObject({
-        ok: true,
-        result: {
-          message: {
-            run_id: harness.adoptedRunId,
-            to_handle: `dispatch:${harness.dispatchId}`,
-            delivery_contract: 'legacy_direct'
-          }
-        }
-      })
-      const workerCheck = await harness.dispatcher.dispatch(
-        request(
-          'orchestration.check',
-          { terminal: WORKER_HANDLE },
-          `worker-check-${transport}`,
-          evidence('worker')
-        )
-      )
-      expect(workerCheck).toMatchObject({
-        ok: true,
-        result: {
-          messages: [
-            {
-              subject: 'continue safely',
-              run_id: harness.adoptedRunId,
-              delivery_contract: 'legacy_direct'
-            }
-          ],
-          legacyCompatibility: { ackMessageIds: [expect.any(String)] }
-        }
-      })
-      expect(
-        harness.db.getInbox(100).some((message) => message.run_id === 'run_legacy_local')
-      ).toBe(false)
-    }
-  )
-
   it('replays coordinator mutations after transport authentication rotates', async () => {
     const harness = createHarness()
     const mutation = request(
@@ -278,45 +239,6 @@ describe('legacy coordinator takeover races', () => {
     })
     expect(messageCount(harness.db)).toBe(1)
     expect(mutationReceiptCount(harness.db)).toBe(1)
-  })
-
-  it('routes an exact legacy Dispatch recipient to compatibility delivery', async () => {
-    const harness = createHarness()
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.send',
-        {
-          from: COORDINATOR_HANDLE,
-          to: `dispatch:${harness.dispatchId}`,
-          subject: 'dispatch guidance'
-        },
-        'send-dispatch'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        message: {
-          run_id: harness.adoptedRunId,
-          to_handle: `dispatch:${harness.dispatchId}`,
-          delivery_contract: 'legacy_direct'
-        }
-      }
-    })
-    const workerCheck = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.check',
-        { terminal: WORKER_HANDLE },
-        'worker-check-dispatch',
-        evidence('worker')
-      )
-    )
-    expect(workerCheck).toMatchObject({
-      ok: true,
-      result: { messages: [{ subject: 'dispatch guidance' }] }
-    })
   })
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {

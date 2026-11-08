@@ -7,7 +7,7 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
@@ -125,6 +125,7 @@ export function AiVaultSessionVirtualList({
   /** Set in `/resume`: picking a row resumes it in that chat, and rows offer no other action. */
   resumeHere?: AiVaultResumeHere
 }): React.JSX.Element {
+  const t = useTranslate()
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
@@ -263,7 +264,7 @@ export function AiVaultSessionVirtualList({
 
         {!loading && sessionsCount === 0 && !error ? (
           <EmptyState
-            title={translate(
+            title={t(
               'auto.components.right.sidebar.AiVaultPanel.noAgentSessionsFound',
               'No agent sessions found'
             )}
@@ -274,11 +275,11 @@ export function AiVaultSessionVirtualList({
           <EmptyState
             title={
               noAgentsSelected
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
                     'No agents selected'
                   )
-                : translate(
+                : t(
                     'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
                     'No sessions match the current filters'
                   )

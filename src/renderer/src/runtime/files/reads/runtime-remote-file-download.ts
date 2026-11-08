@@ -1,13 +1,13 @@
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeFileDownloadResult } from '../runtime-file-client-types'
 import type { getRemoteFileArgs } from '../runtime-file-routing'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024

@@ -7,7 +7,7 @@ import {
   type TabChange
 } from './tab-change-through-layout-owner'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
-import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
+import { captureStructuredChatRename } from '@/runtime/native-chat/naming/structured-chat-rename-action'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 
 type RoutedActions = Pick<
@@ -73,7 +73,7 @@ export function routeTerminalTabChangesThroughLayoutOwner(
         return
       }
       const action = captureStructuredChatRename(get, chat)
-      void import('@/runtime/structured-chat-rename')
+      void import('@/runtime/native-chat/naming/structured-chat-rename')
         .then(({ renameStructuredChatTab }) =>
           renameStructuredChatTab(get, chat, title, opts, renameOnTab, action)
         )

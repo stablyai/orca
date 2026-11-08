@@ -28,7 +28,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
+import { withPendingPaneTitleRenames } from './naming/pending-pane-title-renames'
 import {
   isMirroredTerminalOfAnotherEnvironment,
   type MirrorRowOwnershipState

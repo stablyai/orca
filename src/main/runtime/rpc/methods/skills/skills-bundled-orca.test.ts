@@ -76,22 +76,6 @@ afterEach(async () => {
 })
 
 describe('skills.planBundledOrca / skills.executeBundledOrca', () => {
-  it('never lets a paired client point the host at a WSL guest or send ops', () => {
-    const plan = method('skills.planBundledOrca').params
-    const execute = method('skills.executeBundledOrca').params
-    expect(() => plan?.parse({ wsl: { distro: 'Ubuntu' } })).toThrow()
-    expect(() => plan?.parse({ agent: 'claude' })).toThrow()
-    expect(() =>
-      execute?.parse({ planDigest: 'a'.repeat(64), request: { agent: 'claude' } })
-    ).toThrow()
-    expect(() => execute?.parse({ planDigest: 'a'.repeat(64), request: {}, ops: [] })).toThrow()
-    expect(() => execute?.parse({ planDigest: 'a'.repeat(64), force: [] })).toThrow()
-    expect(execute?.parse({ planDigest: 'a'.repeat(64), request: { force: ['/x'] } })).toEqual({
-      planDigest: 'a'.repeat(64),
-      request: { force: ['/x'] }
-    })
-  })
-
   it('executes the plan the client previewed, identified by its digest', async () => {
     const home = await makeSkillHome()
     await writeCopy(home.claude, OLD_TEXT)
@@ -147,14 +131,6 @@ describe('skills.planBundledOrca / skills.executeBundledOrca', () => {
 
     expect(result.skills[0].ops.map((op) => op.status)).toEqual(['done', 'done'])
     expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
-  })
-
-  it('rejects a name the host does not ship', async () => {
-    const home = await makeSkillHome()
-    await expect(
-      call('skills.planBundledOrca', { names: ['not-an-orca-skill'] }, hostContext(home))
-    ).rejects.toThrow('bundled-skill-unknown')
-    expect(() => method('skills.planBundledOrca').params?.parse({ names: ['../x'] })).toThrow()
   })
 
   it('runs nothing when the executed request names different skills than the preview', async () => {

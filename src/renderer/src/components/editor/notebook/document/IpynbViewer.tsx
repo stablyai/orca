@@ -13,7 +13,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { editorShortcutMatches } from '../../editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
@@ -50,6 +50,7 @@ export default function IpynbViewer({
   onDirtyStateHint,
   onSave
 }: IpynbViewerProps): React.JSX.Element {
+  const t = useTranslate()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const rootPath = useAppStore(
     (s) => findFirstIndexedWorktree(selectWorktreesByRepo(s), worktreeId)?.path ?? null
@@ -62,10 +63,8 @@ export default function IpynbViewer({
     } catch (error) {
       return {
         notebook: null,
-        error:
-          error instanceof Error
-            ? error.message
-            : translate('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')
+        // Translated at render so the fallback follows the UI language without reparsing.
+        error: error instanceof Error ? error.message : null
       }
     }
   }, [content])
@@ -148,12 +147,12 @@ export default function IpynbViewer({
           <AlertCircle className="mt-0.5 size-4 text-destructive" />
           <div>
             <div className="font-medium text-foreground">
-              {translate(
-                'auto.components.editor.IpynbViewer.c1601b23b2',
-                'Unable to render notebook'
-              )}
+              {t('auto.components.editor.IpynbViewer.c1601b23b2', 'Unable to render notebook')}
             </div>
-            <div className="mt-1">{parsed.error}</div>
+            <div className="mt-1">
+              {parsed.error ??
+                t('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')}
+            </div>
           </div>
         </div>
       </div>
@@ -174,7 +173,7 @@ export default function IpynbViewer({
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
         <span>
-          {translate('auto.components.editor.IpynbViewer.cellCount', '{{count}} cells', {
+          {t('auto.components.editor.IpynbViewer.cellCount', '{{count}} cells', {
             count: notebook.cells.length,
             defaultValue_one: '{{count}} cell'
           })}
@@ -190,7 +189,7 @@ export default function IpynbViewer({
             />
           ) : null}
           <IpynbToolbarButton
-            label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
+            label={t('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
             shortcut={saveShortcut}
             onClick={() => void saveNotebook()}
           >
@@ -201,7 +200,7 @@ export default function IpynbViewer({
       <div className="mx-auto flex max-w-[980px] flex-col gap-2 py-5 pr-5 pl-2">
         {notebook.cells.length === 0 ? (
           <div className="flex items-center justify-center rounded-md border border-border bg-background p-8 text-sm text-muted-foreground">
-            {translate('auto.components.editor.IpynbViewer.d6f37a640b', 'Empty notebook')}
+            {t('auto.components.editor.IpynbViewer.d6f37a640b', 'Empty notebook')}
           </div>
         ) : (
           notebook.cells.map((cell, index) => {
@@ -267,10 +266,10 @@ export default function IpynbViewer({
         <DialogContent surface="security" className="max-w-md sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {translate('auto.components.editor.IpynbViewer.9e06ae5d36', 'Run Notebook Code?')}
+              {t('auto.components.editor.IpynbViewer.9e06ae5d36', 'Run Notebook Code?')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate(
+              {t(
                 'auto.components.editor.IpynbViewer.10ed04a685',
                 'Notebook cells execute local Python on this machine from the notebook folder. Only run cells from files you trust.'
               )}
@@ -278,10 +277,10 @@ export default function IpynbViewer({
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" size="sm" onClick={execution.cancelPendingRun}>
-              {translate('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
+              {t('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
             </Button>
             <Button type="button" size="sm" autoFocus onClick={execution.confirmPendingRun}>
-              {translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
+              {t('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
             </Button>
           </DialogFooter>
         </DialogContent>

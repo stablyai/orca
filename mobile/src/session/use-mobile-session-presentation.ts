@@ -38,7 +38,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     visibleTabs,
     forceReconnectHost
   } = scope
-  const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
+  // A strip drawn from cache has no active tab until the host's snapshot lands, so the body shows a state, not an empty frame.
+  const nothingActive = scope.activeSessionTab === null && !activeHandle
+  const showLoadingState = connState === 'connected' && !terminalsLoaded && nothingActive
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
@@ -68,11 +70,11 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
-  // A cold session with nothing to draw says it is offline instead of showing an empty frame.
-  const showOfflineState = presentedConnState !== 'connected' && visibleTabs.length === 0
+  // A session with nothing to draw says it is offline instead of showing an empty frame.
+  const showOfflineState = presentedConnState !== 'connected' && nothingActive
   const terminalSummary =
     presentedConnState === 'connected'
-      ? showLoadingState
+      ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
         : visibleTabs.length === 1
           ? t('session.presentation.oneTab', '1 tab')

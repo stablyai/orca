@@ -9,26 +9,31 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AiVaultSortMenu } from '../scope/ai-vault-sort-options'
 
 /** Left-hand label while searching: how many hits the list is showing. */
-export function aiVaultResultCountLabel(count: number): string {
-  return translate('sessionSearch.panel.resultCount', '{{count}} results', {
+export function aiVaultResultCountLabel(count: number, t: Translate = translate): string {
+  return t('sessionSearch.panel.resultCount', '{{count}} results', {
     count,
     defaultValue_one: '{{count}} result'
   })
 }
 
 /** Left-hand label while browsing: the count, and how much of the scan filters hid. */
-export function aiVaultSessionCountLabel(shown: number, loaded: number): string {
+export function aiVaultSessionCountLabel(
+  shown: number,
+  loaded: number,
+  t: Translate = translate
+): string {
   if (shown !== loaded) {
-    return translate(
-      'sessionSearch.panel.sessionsShownOfLoaded',
-      '{{shown}} of {{count}} sessions',
-      { shown, count: loaded, defaultValue_one: '{{shown}} of {{count}} session' }
-    )
+    return t('sessionSearch.panel.sessionsShownOfLoaded', '{{shown}} of {{count}} sessions', {
+      shown,
+      count: loaded,
+      defaultValue_one: '{{shown}} of {{count}} session'
+    })
   }
-  return translate('sessionSearch.panel.sessionCount', '{{count}} sessions', {
+  return t('sessionSearch.panel.sessionCount', '{{count}} sessions', {
     count: shown,
     defaultValue_one: '{{count}} session'
   })

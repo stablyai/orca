@@ -1312,7 +1312,8 @@
       "project": "Project {{repo}}",
       "child": "Child",
       "children_one": "{{count}} child",
-      "children_other": "{{count}} children"
+      "children_other": "{{count}} children",
+      "unsavedName": "Unsaved name: {{name}}"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -1425,6 +1426,14 @@
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode"
       }
+    },
+    "hostOfflineBanner": {
+      "offline": "{{host}} is offline",
+      "reconnecting": "Reconnecting to {{host}}…",
+      "asOf": "Showing what was here as of {{time}}"
+    },
+    "offlineAsOfTime": {
+      "yesterday": "yesterday, {{time}}"
     }
   },
   "pullRequest": {
@@ -1900,7 +1909,13 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
-      "unavailable": "Unavailable on mobile"
+      "unavailable": "Unavailable on mobile",
+      "showMore": "Show {{rows}} more",
+      "loadedOfTotal": "{{loaded}} of {{total}}",
+      "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
+      "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
+      "searchAll": "Search all",
+      "searchAllIn": "Search all of {{folder}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
@@ -1921,6 +1936,13 @@
       "bytes": "{{size}} B",
       "kilobytes": "{{size}} KB",
       "megabytes": "{{size}} MB"
+    },
+    "unsavedEditsOffer": {
+      "unsavedFrom": "Unsaved edits from {{time}}",
+      "changedSince": "Changed on desktop since your edits from {{time}}",
+      "discard": "Discard",
+      "restore": "Restore",
+      "copyMyEdits": "Copy My Edits"
     }
   },
   "session": {
@@ -2791,7 +2813,8 @@
     "contentState": {
       "connectingTo": "Connecting to {{host}}…",
       "connecting": "Connecting…",
-      "tabsStalled": "Tabs are taking longer than expected"
+      "tabsStalled": "Tabs are taking longer than expected",
+      "tabsAsOf": "Tabs as of {{time}}"
     },
     "presentation": {
       "loadingTabs": "Loading tabs",
@@ -2889,6 +2912,13 @@
       "queuedState": "Queued",
       "editMessage": "Edit message"
     },
+    "offlineQueue": {
+      "failed": "Couldn't send — tap Send to retry",
+      "waitingFor": "Sends when {{host}} is back",
+      "waiting": "Sends when the desktop is back",
+      "behind": "Waiting — a message ahead needs attention",
+      "closed": "Not sent before Orca closed"
+    },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
@@ -2900,6 +2930,8 @@
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",
+      "onAttach": "Applies when the chat attaches",
+      "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
       "optionsSection": "Options"
     },
     "sessionOptionRows": {
@@ -3158,7 +3190,6 @@
       "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
-      "reconnecting": "Reconnecting…",
       "waitingForTerminal": "Waiting for terminal…",
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
@@ -4713,5 +4744,11 @@
         }
       }
     }
+  },
+  "hostMutation": {
+    "renameOffline": "{{host}} is offline. Your text stays here until you can save.",
+    "renameUnconfirmed": "Not confirmed yet. Orca checks the name when {{host}} is back.",
+    "saving": "Saving",
+    "serverUnreachable": "Its server can't be reached."
   }
 }

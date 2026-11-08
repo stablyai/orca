@@ -119,7 +119,7 @@ it.skipIf(process.platform === 'win32')(
     const managedAcp = join(stateDirectory, 'antigravity-chat', 'antigravity-acp')
     await mkdir(managedAcp, { recursive: true })
     await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
-    await writeFile(join(managedAcp, 'antigravity-oauth-token'), '{}')
+    await writeFile(join(managedAcp, 'acp_token.json'), '{}')
     await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
   }
 )

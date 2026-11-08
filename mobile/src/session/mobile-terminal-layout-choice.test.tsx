@@ -75,6 +75,7 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+import { TerminalResumeState } from './terminal-stream-resume'
 
 vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
@@ -271,6 +272,7 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       connState: 'connected',
       terminalDiagnosticsRef: useRef(new MobileTerminalDiagnostics()),
       terminalUnsubsRef: useRef(new Map()),
+      terminalResume: new TerminalResumeState(),
       terminalRefs: useRef(new Map()),
       terminalPaneViewportsRef: useRef(new Map()),
       terminalGestureInputBucketsRef: useRef(new Map()),

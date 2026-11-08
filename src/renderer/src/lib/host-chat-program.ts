@@ -22,19 +22,19 @@ import {
 import {
   readHostStructuredAgentAvailability,
   subscribeHostStructuredAgentAvailability
-} from '@/runtime/host-structured-agent-availability'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agent-availability'
 import {
   hostStructuredAgentsReadFailed,
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
-} from '@/runtime/host-structured-agents'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { subscribeLocalRuntimeCapabilityObservation } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'

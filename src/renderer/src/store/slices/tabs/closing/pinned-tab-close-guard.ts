@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabLabel } from '../../../../../../shared/tab-title-resolution'
-import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { readStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '../../../types'
 
 export function resolvePinnedTabLabel(

@@ -198,7 +198,10 @@ describe('automation setup CLI contract', () => {
     const args = createArgs.filter((arg) => arg !== '--repo' && arg !== 'id:repo-1')
     await main([...args, '--setup', 'run'], '/tmp/repo/feature')
     expect(process.exitCode).toBe(1)
-    expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.list'])
+    expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+      'worktree.list',
+      'folderWorkspace.list'
+    ])
     expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).error.message).toBe(
       '--setup only applies to automations that create a new worktree per run, but this one runs in an existing worktree (with no target, create uses the current worktree). Pass --workspace-mode new-per-run or omit --setup.'
     )

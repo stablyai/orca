@@ -4,7 +4,7 @@ import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-t
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { getWorkspaceFilePreviewPlan } from '@/lib/file-preview'
 import type { AppState } from '@/store/types'
-import { htmlFilePathFromUrl } from '../../../shared/html-file-url'
+import { htmlFilePathFromUrl } from '../../../shared/file-links/html-file-url'
 import { authorityKey } from '../../../shared/host-authority'
 import { resolveOwner } from './resolve-owner'
 import { translate } from '@/i18n/i18n'

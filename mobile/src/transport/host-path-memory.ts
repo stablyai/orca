@@ -46,13 +46,17 @@ async function readNetworkFingerprint(): Promise<string | null> {
 
 type NetworkReading = { type: string; local: string | null } | null
 
-// Every paired host's supervisor reads on the same nudge; share one native read across them.
+// Paired hosts read in one synchronous nudge fan-out, so share that tick's read; a later caller reads again
+// because a read started before its event can report the network the phone just left.
 let networkRead: Promise<NetworkReading> | null = null
 
 function readNetwork(): Promise<NetworkReading> {
-  networkRead ??= readNetworkNow().finally(() => {
-    networkRead = null
-  })
+  if (!networkRead) {
+    networkRead = readNetworkNow()
+    queueMicrotask(() => {
+      networkRead = null
+    })
+  }
   return networkRead
 }
 

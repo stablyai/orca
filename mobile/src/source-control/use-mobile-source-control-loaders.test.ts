@@ -13,9 +13,14 @@ import {
   settleQueryNotifications
 } from '../test-support/rpc-recording/hook-mount'
 
+// Changes under Review is unfocused; flipping this and re-rendering models the push and the return.
+const focus = vi.hoisted(() => ({ current: true }))
 vi.mock('expo-router', async () => {
   const React = await import('react')
-  return { useFocusEffect: (effect: () => void) => React.useEffect(effect, [effect]) }
+  return {
+    useFocusEffect: (effect: () => (() => void) | void) =>
+      React.useEffect(() => (focus.current ? effect() : undefined), [effect, focus.current])
+  }
 })
 
 // Mock icons reached through screen state; this hook harness renders no UI.
@@ -106,6 +111,15 @@ async function settleCompare(calls: PendingCall[], baseRef: string): Promise<voi
   }
   const [call] = calls.splice(index, 1)
   await act(async () => call.settle(compareReply(baseRef)))
+  await settleQueryNotifications()
+}
+
+async function failCompare(calls: PendingCall[]): Promise<void> {
+  await settleOldest(calls, 'git.branchCompare', {
+    id: 'call',
+    ok: false,
+    error: { code: 'git_failed', message: 'compare failed' }
+  })
 }
 
 async function settleBaseRefLookup(calls: PendingCall[], baseRef: string): Promise<void> {
@@ -209,6 +223,44 @@ describe('useMobileSourceControlLoaders branch compare', () => {
 
     await settleCompare(calls, 'origin/dev')
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
+  })
+
+  it('shows the compare again at once after switching away and back while the status read is still fresh', async () => {
+    const calls: PendingCall[] = []
+    const read: { loaders: Loaders | null } = { loaders: null }
+    const rerender = await mount(fakeClient(calls), read)
+
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await settleBaseRefLookup(calls, 'origin/dev')
+    await settleCompare(calls, 'origin/dev')
+    expect(read.loaders?.branchCompareState.kind).toBe('ready')
+
+    // The other worktree's status never lands, so nothing compares in between.
+    await rerender('host-1:repo42::/other', 'repo42::/other')
+    await rerender(IDENTITY, WORKTREE)
+    expect(read.loaders?.branchCompareState.kind).toBe('ready')
+  })
+
+  it('retries a failed compare when Changes is back on top', async () => {
+    const calls: PendingCall[] = []
+    const read: { loaders: Loaders | null } = { loaders: null }
+    const rerender = await mount(fakeClient(calls), read)
+
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await settleBaseRefLookup(calls, 'origin/dev')
+    await failCompare(calls)
+    expect(read.loaders?.branchCompareState).toEqual({ kind: 'error', message: 'compare failed' })
+
+    focus.current = false
+    await rerender(IDENTITY, WORKTREE)
+    expect(pendingCount(calls, 'worktree.show')).toBe(0)
+    focus.current = true
+    await rerender(IDENTITY, WORKTREE)
+
+    await settleBaseRefLookup(calls, 'origin/dev')
+    await settleCompare(calls, 'origin/dev')
+    expect(read.loaders?.branchCompareState.kind).toBe('ready')
+    expect(pendingCount(calls, 'git.status')).toBe(0)
   })
 })
 

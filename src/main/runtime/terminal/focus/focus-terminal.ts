@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
-import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalFocus } from '../../../../shared/runtime-terminal-contracts'
 import type {
   RuntimeTerminalReveal,
   TerminalPaneRevealTarget

@@ -11,7 +11,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-command-source-policy'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getRepositoryLocalCommandsSectionId } from '../repository-settings-targets'
@@ -54,6 +54,7 @@ export function RepositoryHooksSection({
   onCopyTemplate,
   onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const selectedHostId = getRepoExecutionHostId(repo)
@@ -77,7 +78,7 @@ export function RepositoryHooksSection({
     repoHostIdentity,
     selectedHostId
   })
-  const localHookFields = getLocalHookFields()
+  const localHookFields = getLocalHookFields(t)
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
   const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
@@ -94,33 +95,30 @@ export function RepositoryHooksSection({
     hookSettingsDraft.commandSourcePolicy,
     { hasLocalScript }
   )
-  const localCommandSourceNotice = getLocalCommandSourcePolicyNotice({
-    hooksInspectionReady,
-    currentPolicy: selectedCommandSourcePolicy,
-    setupScript: hookSettingsDraft.scripts.setup,
-    archiveScript: hookSettingsDraft.scripts.archive,
-    hasSharedScript
-  })
+  const localCommandSourceNotice = getLocalCommandSourcePolicyNotice(
+    {
+      hooksInspectionReady,
+      currentPolicy: selectedCommandSourcePolicy,
+      setupScript: hookSettingsDraft.scripts.setup,
+      archiveScript: hookSettingsDraft.scripts.archive,
+      hasSharedScript
+    },
+    t
+  )
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
     <div ref={flushScriptDraftOnUnmount}>
       <SettingsGroup
-        title={translate(
-          'auto.components.settings.RepositoryHooksSection.ff082fe7c6',
-          'Worktree Hooks'
-        )}
-        description={translate(
+        title={t('auto.components.settings.RepositoryHooksSection.ff082fe7c6', 'Worktree Hooks')}
+        description={t(
           'auto.components.settings.RepositoryHooksSection.8567127a40',
           'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
         )}
       >
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.RepositoryHooksSection.52b31baf02',
-            'Setup Script'
-          )}
-          description={translate(
+          title={t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script')}
+          description={t(
             'auto.components.settings.RepositoryHooksSection.30d555acd2',
             'Local and shared scripts that run after a new worktree is created.'
           )}
@@ -149,11 +147,11 @@ export function RepositoryHooksSection({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.RepositoryHooksSection.fb6bebcf7e',
             'When to Run Setup'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.RepositoryHooksSection.63e1783173',
             'Choose the default behavior when a setup script is available.'
           )}
@@ -173,11 +171,8 @@ export function RepositoryHooksSection({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.RepositoryHooksSection.9a100323ff',
-            'Archive Script'
-          )}
-          description={translate(
+          title={t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script')}
+          description={t(
             'auto.components.settings.RepositoryHooksSection.b91a0f297d',
             'Local and shared scripts that run before a worktree is archived.'
           )}
@@ -215,11 +210,11 @@ export function RepositoryHooksSection({
           </div>
         ) : null}
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.RepositoryHooksSection.13394103bd',
             'Custom GitHub Issue Command'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.RepositoryHooksSection.2cc27dc12b',
             'Optional per-user override for the linked-issue command.'
           )}
@@ -230,11 +225,8 @@ export function RepositoryHooksSection({
           <RepositoryIssueCommandSetting {...issueCommand} />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.RepositoryHooksSection.c9bc1bfd8f',
-            'Advanced'
-          )}
-          description={translate(
+          title={t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
+          description={t(
             'auto.components.settings.RepositoryHooksSection.610d90fdbd',
             'Command source and orca.yaml details.'
           )}

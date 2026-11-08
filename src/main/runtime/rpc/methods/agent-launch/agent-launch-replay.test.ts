@@ -1,5 +1,4 @@
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import '../../unused-default-rpc-methods.test-fixture'
 /** Exercise at-most-once launch and truthful replay against the durable ledger; adjacent ablations prove each guard prevents duplication. */
 
 import { mkdtemp, rm } from 'node:fs/promises'

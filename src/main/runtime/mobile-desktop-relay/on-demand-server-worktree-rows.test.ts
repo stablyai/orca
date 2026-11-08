@@ -7,7 +7,7 @@ import {
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'

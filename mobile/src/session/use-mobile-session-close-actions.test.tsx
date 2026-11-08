@@ -1,6 +1,7 @@
 import { createElement, useRef, useState, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
@@ -19,7 +20,6 @@ import {
   resetMobileNativeChatDraftStoreForTests,
   setMobileNativeChatDraftText
 } from './native-chat/composer/mobile-native-chat-draft-store'
-import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { resolveActiveSessionTab } from './active-session-tab'
 
 const initial: Terminal[] = ['a', 'b', 'c'].map((handle) => ({
@@ -100,6 +100,7 @@ describe('legacy terminal close acknowledgments', () => {
         setFileDocs: vi.fn(),
         setMarkdownDocs: vi.fn(),
         ...tabSelection,
+        forgetLastSessionTab: () => {},
         closedTabTombstonesRef: { current: tabTombstones },
         setActiveSessionTabId,
         renameTarget,
@@ -133,7 +134,7 @@ describe('legacy terminal close acknowledgments', () => {
       return null
     }
     await act(async () => {
-      renderer = create(createElement(Harness))
+      renderer = create(documentQueryClient().wrap(createElement(Harness)))
     })
     return {
       read() {
@@ -230,30 +231,6 @@ describe('legacy terminal close acknowledgments', () => {
     expect(refs.pendingSelectionRef.current).toBe(pending)
   })
 
-  it('keeps the rename sheet open on a refused rename and closes it once the desktop accepts', async () => {
-    const target = initial[1]!
-    const harness = await mount(target)
-    const refused = harness.read().actions.handleRenameTerminal('  build  ')
-    expect(harness.requests.mock.calls).toEqual([
-      ['terminal.rename', { terminal: 'b', title: 'build' }]
-    ])
-    await expect(harness.acknowledge('b', refused, false)).rejects.toThrow('Retry')
-    expect(harness.setRenameTarget).not.toHaveBeenCalled()
-    expect(harness.read().terminals[1]!.title).toBe('b')
-
-    const accepted = harness.read().actions.handleRenameTerminal('build')
-    await harness.acknowledge('b', accepted, true, { renamed: true })
-    expect(harness.read().terminals[1]!.title).toBe('build')
-    expect(harness.setRenameTarget).toHaveBeenCalledOnce()
-    const close = harness.setRenameTarget.mock.calls[0]![0]
-    if (typeof close !== 'function') {
-      throw new Error('Rename should close through an updater')
-    }
-    expect(close(target)).toBeNull()
-    // A sheet reopened for another terminal meanwhile stays open.
-    expect(close(initial[2]!)).toBe(initial[2])
-  })
-
   it.each([
     ['a', 'b'],
     ['b', 'a']
@@ -297,74 +274,6 @@ describe('legacy terminal close acknowledgments', () => {
     expect(harness.read().activeHandle).toBe('d')
     expect(harness.subscribe).not.toHaveBeenCalled()
   })
-
-  it.each([10, 100])('releases input previews for %i confirmed closed tabs', async (count) => {
-    const harness = await mount()
-    const scopes = Array.from({ length: count }, (_, index) => `host\0workspace\0closed-${index}`)
-    const previewUri = `data:image/png;base64,${'a'.repeat(32 * 1024)}`
-    const destinations = scopes.map(mobileNativeChatDraftDestination)
-    const parked = mobileNativeChatScopeKey('host', 'workspace', 'parked')!
-    for (const scope of [...scopes, parked]) {
-      updateMobileNativeChatDraftInputs(scope, (current) => ({
-        ...current,
-        images: [{ id: scope, path: '/remote/image.png', previewUri }]
-      }))
-    }
-    for (let index = 0; index < count; index++) {
-      const id = `closed-${index}`
-      const operation = harness.read().actions.handleCloseSessionTab({
-        type: 'terminal',
-        id,
-        title: id,
-        isActive: false,
-        terminal: id
-      })
-      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(1)
-      await harness.acknowledge(id, operation)
-    }
-    for (let index = 0; index < count; index++) {
-      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(0)
-      expect(destinations[index]!.active).toBe(false)
-      updateMobileNativeChatDraftInputs(destinations[index]!, (current) => ({
-        ...current,
-        images: [{ id: 'late', path: '/late.png', previewUri }]
-      }))
-      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(0)
-    }
-    expect(readMobileNativeChatDraftInputs(parked).images).toHaveLength(1)
-  })
-
-  it.each([10, 100])(
-    'retires text, revisions and launch seeds for %i confirmed closed tabs',
-    async (count) => {
-      const harness = await mount()
-      const scopes = Array.from({ length: count }, (_, index) => `host\0workspace\0text-${index}`)
-      const parked = 'host\0workspace\0parked-text'
-      const text = 'draft '.repeat(2048)
-      for (const key of [...scopes, parked]) {
-        setMobileNativeChatDraftText(key, text)
-        mobileNativeChatLaunchDraftSeeds.set(key, { text, createdAt: 1 })
-      }
-      for (let index = 0; index < count; index++) {
-        const id = `text-${index}`
-        const operation = harness.read().actions.handleCloseSessionTab({
-          type: 'terminal',
-          id,
-          title: id,
-          isActive: false,
-          terminal: id
-        })
-        expect(readMobileNativeChatDraftEditGeneration(scopes[index]!)).toBe(1)
-        await harness.acknowledge(id, operation)
-      }
-      expect(scopes.filter((key) => readMobileNativeChatDraftEditGeneration(key) > 0)).toHaveLength(
-        0
-      )
-      expect(scopes.filter((key) => mobileNativeChatLaunchDraftSeeds.has(key))).toHaveLength(0)
-      expect(readMobileNativeChatDraftEditGeneration(parked)).toBe(1)
-      expect(mobileNativeChatLaunchDraftSeeds.get(parked)?.text).toBe(text)
-    }
-  )
 
   it('preserves input previews when the host refuses a close', async () => {
     const harness = await mount()

@@ -3,7 +3,7 @@ import type {
   EditorDialogProps,
   DeleteDialogProps
 } from './automations-page-child-props.test-fixture'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 

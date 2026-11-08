@@ -15,18 +15,18 @@ import {
 } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import {
-  callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostCapabilityState,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
-} from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
-import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent

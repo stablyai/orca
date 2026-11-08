@@ -1,20 +1,21 @@
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
-import { normalizeRelativePath } from '@/lib/path'
+import { normalizeRelativePath } from '../../../../shared/cross-platform-path'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { tabItemLabel } from './tab-bar-item-label'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
+import type { Translate } from '@/i18n/use-translate'
 
 export type TabBarItem =
   | {
@@ -76,12 +77,14 @@ export function resolveEditorTabGitStatus(
 export function getTabDragLabel(
   item: TabBarItem,
   generatedTitlesEnabled: boolean,
-  conversationName: string | null
+  conversationName: string | null,
+  t?: Translate
 ): string {
   return tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? item.data.customLabel?.trim() || conversationName : null
+    item.type === 'agent-session' ? item.data.customLabel?.trim() || conversationName : null,
+    t
   )
 }
 
@@ -97,12 +100,16 @@ export function getTabLayoutSignature(
     isExpanded: boolean
     status?: string | null
     chatNames: StructuredChatTabNames
-  }
+  },
+  t?: Translate
 ): string {
   const label = tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? projectedStructuredChatTabSavedName(item.data, chatNames) : null
+    item.type === 'agent-session'
+      ? projectedStructuredChatTabSavedName(item.data, chatNames)
+      : null,
+    t
   )
   if (item.type === 'terminal') {
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
@@ -280,19 +287,24 @@ export function buildTabStripLayoutKey(
   generatedTitlesEnabled: boolean,
   expandedPaneByTabId: Record<string, boolean>,
   statusByRelativePath: Map<string, string>,
-  chatNames: StructuredChatTabNames
+  chatNames: StructuredChatTabNames,
+  t?: Translate
 ): string {
   return items
     .map((item) =>
-      getTabLayoutSignature(item, {
-        generatedTitlesEnabled,
-        chatNames,
-        isExpanded: expandedPaneByTabId[item.id] === true,
-        status:
-          item.type === 'editor'
-            ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
-            : null
-      })
+      getTabLayoutSignature(
+        item,
+        {
+          generatedTitlesEnabled,
+          chatNames,
+          isExpanded: expandedPaneByTabId[item.id] === true,
+          status:
+            item.type === 'editor'
+              ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+              : null
+        },
+        t
+      )
     )
     .join('\u001f')
 }

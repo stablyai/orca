@@ -17,7 +17,7 @@ import {
 } from '../../../../../shared/browser-viewport-presets'
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { setBrowserPageAgentViewportSize } from '../host-guest/browser-page-viewport'
@@ -44,6 +44,7 @@ export function BrowserToolbarMenu({
   onOpenSourceFile,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
@@ -162,7 +163,7 @@ export function BrowserToolbarMenu({
     // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
-      translate(
+      t(
         'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
         'Switched to {{value0}} profile',
         { value0: profile?.label ?? 'Default' }
@@ -183,7 +184,7 @@ export function BrowserToolbarMenu({
       if (!profile) {
         if (mountedRef.current) {
           toast.error(
-            translate(
+            t(
               'auto.components.browser.pane.BrowserToolbarMenu.4d2f9f13a7',
               'Failed to create profile.'
             )
@@ -202,7 +203,7 @@ export function BrowserToolbarMenu({
       onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
       toast.success(
-        translate(
+        t(
           'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
           'Created and switched to {{value0}} profile',
           { value0: profile.label }
@@ -225,7 +226,7 @@ export function BrowserToolbarMenu({
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
-          ? translate(
+          ? t(
               'auto.components.browser.pane.BrowserToolbarMenu.c5f0e4d3b2a1',
               'Imported {{value0}} cookies from {{value1}} ({{value2}}).',
               {
@@ -234,7 +235,7 @@ export function BrowserToolbarMenu({
                 value2: browserProfile
               }
             )
-          : translate(
+          : t(
               'auto.components.browser.pane.BrowserToolbarMenu.d6a1f5e4c3b2',
               'Imported {{value0}} cookies from {{value1}}.',
               {
@@ -254,7 +255,7 @@ export function BrowserToolbarMenu({
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
-        translate(
+        t(
           'auto.components.browser.pane.BrowserToolbarMenu.53bbe3dab4',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }

@@ -42,7 +42,7 @@ export type PRComment = {
   diffHunk?: string
   /** Provider-reported bot identity beats login heuristics (qodo/coderabbit use varied names). Absent when non-GitHub gh fallbacks cannot report it. */
   isBot?: boolean
-  /** True only when GitHub GraphQL says the signed-in gh account wrote it; absent from REST and older hosts. */
+  /** True only when the gh account that read the thread wrote it (GraphQL's flag, or its login on REST reads); absent from older hosts. */
   viewerDidAuthor?: boolean
 }
 

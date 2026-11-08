@@ -19,7 +19,7 @@ import {
   normalizePromptField,
   normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
 import {
   normalizeAgentSubagentsField,

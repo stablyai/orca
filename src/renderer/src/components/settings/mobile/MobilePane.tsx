@@ -18,6 +18,7 @@ import { MobilePairingSetupSection } from './pairing/MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../../mobile/mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from '../../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
@@ -29,6 +30,7 @@ import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
 import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
+  const t = useTranslate()
   const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -389,10 +391,7 @@ export function MobilePane(): React.JSX.Element {
 
         <span className="sr-only" role="status" aria-live="polite">
           {pairingUrl != null && !loading
-            ? translate(
-                'auto.components.settings.MobilePane.pairingCodeReady',
-                'Pairing code ready'
-              )
+            ? t('auto.components.settings.MobilePane.pairingCodeReady', 'Pairing code ready')
             : ''}
         </span>
 

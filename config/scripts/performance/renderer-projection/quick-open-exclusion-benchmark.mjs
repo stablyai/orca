@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
 const bundled = await build({
-  entryPoints: ['src/shared/quick-open-filter.ts'],
+  entryPoints: ['src/shared/quick-open/quick-open-filter.ts'],
   bundle: true,
   platform: 'node',
   format: 'esm',

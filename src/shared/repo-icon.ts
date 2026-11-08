@@ -1,4 +1,4 @@
-import { validateRasterImageDataUri } from './image-data-uri'
+import { validateRasterImageDataUri } from './file-preview/image-data-uri'
 
 export type RepoIconImageSource = 'upload' | 'file' | 'favicon' | 'github'
 

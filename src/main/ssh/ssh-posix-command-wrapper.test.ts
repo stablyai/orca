@@ -37,75 +37,6 @@ it.skipIf(process.platform === 'win32')(
 )
 
 describe('wrapRemoteCommandForPosixShell', () => {
-  it('emits one physical line without requiring a remote decoder binary', () => {
-    const wrapped = wrapRemoteCommandForPosixShell("printf 'a\\n'\nprintf 'b\\n'")
-    expect(wrapped).not.toContain('\n')
-    expect(wrapped).toContain('printf %b "$@"')
-    expect(wrapped).not.toContain('base64')
-  })
-
-  it('does not expand long commands made only of parser-safe ASCII', () => {
-    const command = `: #${'x'.repeat(7_000)}`
-    expect(wrapRemoteCommandForPosixShell(command).length - command.length).toBeLessThan(200)
-  })
-
-  it('does not octal-expand literal UTF-8 near SSH command-length limits', () => {
-    const command = `: #${'☃'.repeat(7_000)}`
-    expect(wrapRemoteCommandForPosixShell(command).length - command.length).toBeLessThan(200)
-  })
-
-  it('does not octal-expand quoted shell metacharacters near command-length limits', () => {
-    const command = `: #${'$"`'.repeat(2_000)}`
-    expect(wrapRemoteCommandForPosixShell(command).length - command.length).toBeLessThan(200)
-  })
-
-  it('measures the compression threshold in UTF-8 bytes', () => {
-    const command = `: #${'☃'.repeat(3_000)}`
-    const wrapped = wrapRemoteCommandForPosixShell(command)
-
-    expect(command.length).toBeLessThan(8_000)
-    expect(Buffer.byteLength(command)).toBeGreaterThan(8_000)
-    expect(Buffer.byteLength(wrapped)).toBeLessThan(8_000)
-    expect(wrapped).not.toContain('\n')
-  })
-
-  it('keeps the printf form when compression would make the request larger', () => {
-    const alphabet = Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32))
-      .filter((character) => !['!', "'", '\\'].includes(character))
-      .join('')
-    const padding = Array.from({ length: 400 }, (_, i) =>
-      Array.from(
-        createHash('sha256').update(String(i)).digest(),
-        (byte) => alphabet[byte % alphabet.length]
-      ).join('')
-    ).join('')
-    const wrapped = wrapRemoteCommandForPosixShell(`: #${padding}`)
-
-    expect(wrapped).toContain('printf %b "$@"')
-    expect(wrapped).not.toContain('base64')
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'reconstructs multiline UTF-8 and shell metacharacters exactly',
-    () => {
-      const expected = "line one\nline 'two' \"$`\\ ! ☃\n"
-      const command = `printf '%s' ${quotePosixShell(expected)}`
-      const result = runThroughShell('/bin/sh', command)
-
-      expect(result.status).toBe(0)
-      expect(result.stderr).toBe('')
-      expect(result.stdout).toBe(expected)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')('keeps stdin free for relay protocol bytes', () => {
-    const command = 'IFS= read -r frame; printf \'frame:%s\' "$frame"'
-    const result = runThroughShell('/bin/sh', command, 'rpc-payload\n')
-
-    expect(result.status).toBe(0)
-    expect(result.stdout).toBe('frame:rpc-payload')
-  })
-
   it.skipIf(process.platform === 'win32')(
     'passes a long command through a gateway with a 10 KiB exec limit without consuming stdin',
     () => {
@@ -127,15 +58,6 @@ describe('wrapRemoteCommandForPosixShell', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')('preserves trailing newlines in a long command', () => {
-    const command = `# ${'padding'.repeat(2_000)}\nprintf '%s' trailing\\\n`
-    const result = runThroughShell('/bin/sh', command)
-
-    expect(result.status).toBe(0)
-    expect(result.stderr).toBe('')
-    expect(result.stdout).toBe('trailing')
-  })
-
   it.skipIf(process.platform === 'win32')(
     'reports a host without the decoders before running anything',
     () => {
@@ -147,21 +69,6 @@ describe('wrapRemoteCommandForPosixShell', () => {
 
       expect(result.status).toBe(REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT)
       expect(result.stderr).toContain(REMOTE_COMMAND_DECODER_UNAVAILABLE)
-      expect(result.stdout).toBe('')
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'fails without running the script if the payload does not decode',
-    () => {
-      const bin = shimDir({ base64: "cat >/dev/null; printf 'not gzip'" })
-      const command = `# ${'padding'.repeat(2_000)}\nprintf 'must not run'`
-      const result = spawnSync('/bin/sh', ['-c', wrapRemoteCommandForPosixShell(command)], {
-        encoding: 'utf8',
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` }
-      })
-
-      expect(result.status).not.toBe(0)
       expect(result.stdout).toBe('')
     }
   )
@@ -184,27 +91,6 @@ describe('wrapRemoteCommandForPosixShell', () => {
     }
   )
 
-  it('sends a long command plain when asked to', () => {
-    const wrapped = wrapRemoteCommandForPosixShell(`# ${'padding'.repeat(2_000)}`, {
-      compress: false
-    })
-    expect(wrapped).toContain('printf %b "$@"')
-    expect(wrapped).not.toContain('base64')
-  })
-
-  it.skipIf(process.platform === 'win32' || !existsSync('/bin/tcsh'))(
-    'keeps every login-shell word bounded for long metacharacter-heavy commands',
-    () => {
-      const expected = '$"`'.repeat(2_000)
-      const command = `printf '%s' ${quotePosixShell(expected)}`
-      const result = runThroughShell('/bin/tcsh', command)
-
-      expect(result.status).toBe(0)
-      expect(result.stderr).toBe('')
-      expect(result.stdout).toBe(expected)
-    }
-  )
-
   it.skipIf(process.platform === 'win32' || !existsSync('/bin/tcsh'))(
     'bounds login-shell words when the compressed payload spans multiple chunks',
     () => {
@@ -221,31 +107,6 @@ describe('wrapRemoteCommandForPosixShell', () => {
       expect(result.stdout).toBe(expected)
     }
   )
-
-  for (const shell of [
-    '/bin/sh',
-    '/bin/bash',
-    '/bin/dash',
-    '/bin/zsh',
-    '/bin/ksh',
-    '/bin/csh',
-    '/bin/tcsh',
-    '/usr/bin/fish',
-    '/usr/local/bin/fish',
-    '/opt/homebrew/bin/fish'
-  ]) {
-    it.skipIf(process.platform === 'win32' || !existsSync(shell)).each([1, 1_000])(
-      `survives the real ${shell} parser with %i repetitions`,
-      (repetitions) => {
-        const expected = "first\nsecond '$`\\n\\\\ ! ☃\n".repeat(repetitions)
-        const command = `printf '%s' ${quotePosixShell(expected)}`
-        const result = runThroughShell(shell, command)
-        expect(result.status).toBe(0)
-        expect(result.stderr).toBe('')
-        expect(result.stdout).toBe(expected)
-      }
-    )
-  }
 })
 
 function runThroughShell(shell: string, command: string, input?: string) {

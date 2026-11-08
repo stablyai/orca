@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalWorkspaceDialogs({
@@ -16,6 +16,7 @@ export function TerminalWorkspaceDialogs({
 }: {
   controller: TerminalController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     confirmNativeWindowClose,
     handleSaveDialogCancel,
@@ -40,30 +41,27 @@ export function TerminalWorkspaceDialogs({
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {translate('auto.components.Terminal.21295c6b8c', 'Unsaved Changes')}
+              {t('auto.components.Terminal.21295c6b8c', 'Unsaved Changes')}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? translate(
+                ? t(
                     'auto.components.Terminal.61ed600d29',
                     '"{{value0}}" has unsaved changes. Do you want to save before closing?',
                     { value0: basename(saveDialogFile.relativePath) }
                   )
-                : translate(
-                    'auto.components.Terminal.46e08bc5c8',
-                    'This file has unsaved changes.'
-                  )}
+                : t('auto.components.Terminal.46e08bc5c8', 'This file has unsaved changes.')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogCancel}>
-              {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
+              {t('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogDiscard}>
-              {translate('auto.components.Terminal.0037b21794', "Don't Save")}
+              {t('auto.components.Terminal.0037b21794', "Don't Save")}
             </Button>
             <Button type="button" size="sm" onClick={handleSaveDialogSave}>
-              {translate('auto.components.Terminal.cd51e28d8b', 'Save')}
+              {t('auto.components.Terminal.cd51e28d8b', 'Save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -80,15 +78,15 @@ export function TerminalWorkspaceDialogs({
         <DialogContent className="max-w-sm" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {translate('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
+              {t('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {windowCloseDialogKind === 'unverifiable'
-                ? translate(
+                ? t(
                     'auto.components.Terminal.b7c1f0a934',
                     'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
                   )
-                : translate(
+                : t(
                     'auto.components.Terminal.7958465754',
                     'There are terminals with running processes. Close the window anyway?'
                   )}
@@ -101,7 +99,7 @@ export function TerminalWorkspaceDialogs({
               size="sm"
               onClick={() => setWindowCloseDialogOpen(false)}
             >
-              {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
+              {t('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button
               type="button"
@@ -113,7 +111,7 @@ export function TerminalWorkspaceDialogs({
                 confirmNativeWindowClose()
               }}
             >
-              {translate('auto.components.Terminal.73768427cf', 'Close')}
+              {t('auto.components.Terminal.73768427cf', 'Close')}
             </Button>
           </DialogFooter>
         </DialogContent>

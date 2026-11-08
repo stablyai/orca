@@ -73,7 +73,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../../runtime/rpc/targets/use-worktree-runtime-target', () => ({
   useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
     runtimeEnvironmentId
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }

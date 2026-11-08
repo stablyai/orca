@@ -21,6 +21,7 @@ export const ProjectGroupUpdateArgs = z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: z.string().nullable().optional()
   })
 })

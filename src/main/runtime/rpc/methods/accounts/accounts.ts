@@ -1,7 +1,7 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import type { OrcadFeature } from '../../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../../rpc-caller-identity'
-import { HostAccountSignInFlows } from '../../../host-account-sign-in-flows'
+import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AddDataAccountParams,

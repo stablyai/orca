@@ -17,7 +17,7 @@ import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/op
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './AgentChoiceOptionField'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -67,6 +67,7 @@ export function AgentChoiceFields({
 }: Omit<AgentChoiceControlsProps, 'onChange'> & {
   onSelect: (patch: AgentChoicePatch) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const picksModel = sourceControlActionAgentPicksModel(agent)
   if (!agent || !picksModel) {
     return null
@@ -81,12 +82,12 @@ export function AgentChoiceFields({
       (Boolean(model) || option.category !== 'mode') &&
       (!optionIds || optionIds.includes(option.id))
   )
-  const defaultLabel = translate('settings.sourceControl.actionModel.effortDefault', 'Default')
+  const defaultLabel = t('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
     <div className={layout === 'contents' ? 'contents' : 'grid min-w-0 grid-cols-1 gap-2'}>
       {catalog ? (
         <AgentChoiceMenu
-          label={translate('settings.sourceControl.actionModel.model', 'Model')}
+          label={t('settings.sourceControl.actionModel.model', 'Model')}
           row={layout === 'rows'}
           value={selected?.model ?? AGENT_DEFAULT_VALUE}
           disabled={disabled}
@@ -96,7 +97,7 @@ export function AgentChoiceFields({
               value: AGENT_DEFAULT_VALUE,
               label:
                 defaultLabels?.model ??
-                translate('settings.sourceControl.actionModel.agentDefault', 'Agent default')
+                t('settings.sourceControl.actionModel.agentDefault', 'Agent default')
             },
             ...catalog.models.map(({ id, label }) => ({ value: id, label })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
@@ -111,11 +112,11 @@ export function AgentChoiceFields({
             : [
                 {
                   value: 'true',
-                  label: translate('settings.sourceControl.actionModel.on', 'On')
+                  label: t('settings.sourceControl.actionModel.on', 'On')
                 },
                 {
                   value: 'false',
-                  label: translate('settings.sourceControl.actionModel.off', 'Off')
+                  label: t('settings.sourceControl.actionModel.off', 'Off')
                 }
               ]
         const current = selected?.options?.[option.id]
@@ -124,7 +125,7 @@ export function AgentChoiceFields({
             key={option.id}
             label={option.label}
             row={layout === 'rows'}
-            hint={sourceControlActionRouteHint(route)}
+            hint={sourceControlActionRouteHint(route, t)}
             value={current ?? AGENT_DEFAULT_VALUE}
             disabled={disabled}
             onOpenChange={onOpenChange}

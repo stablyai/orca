@@ -3,8 +3,8 @@ import type { SshConnectionManager } from './connection/ssh-connection-manager'
 import type { SshExecOptions } from './connection/ssh-exec-options'
 import { powerShellCommand } from './ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
-import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../shared/file-name-sort'
+import type { FilesystemPathFlavor } from '../../shared/file-access/filesystem-path-flavor'
+import { sortDirEntries } from '../../shared/file-listing/file-name-sort'
 import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
 type RemoteDirEntry = {

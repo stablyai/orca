@@ -13,7 +13,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
-} from '@/runtime/host-session-mirror-hydration'
+} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 import {
   clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests

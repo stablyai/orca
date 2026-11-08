@@ -7,7 +7,8 @@ import {
   type Session,
   type WebContents
 } from 'electron'
-import { renameSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
+import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
 import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
 import { BrowserPopupCompatibilityManager } from './browser-popup-compatibility-manager-fixture'
 import { BrowserRouteWebContentsRegistry } from '../../routing/guest-authority/browser-route-webcontents-registry'
@@ -48,6 +49,7 @@ const authority = Symbol('fixture-route-authority')
 let fixtureAuthority: symbol | null = authority
 let fixtureAuthorityThrows = false
 let revision = 0
+let failure: string | undefined
 const adapterProbe =
   process.env.ORCA_POPUP_FIXTURE_ADAPTER_PROBE === '1'
     ? new BrowserPopupAdapterProbeFixture(() => writeStatus())
@@ -65,14 +67,16 @@ const native = new BrowserPopupNativeFixture({
   writeStatus
 })
 
+// Later teardown snapshots must not hide the initiating failure.
 function writeStatus(error?: string): void {
+  failure ??= error
   writeFileSync(
     `${fixtureStatusPath}.next`,
     JSON.stringify({
       revision: ++revision,
       ready,
       phase,
-      error,
+      error: failure,
       tabOpens: manager.tabOpens,
       childRequests: manager.childRequests,
       native: native.snapshot(),
@@ -92,7 +96,7 @@ function writeStatus(error?: string): void {
       guestIds: Object.fromEntries([...guests].map(([name, guest]) => [name, guest.id]))
     })
   )
-  renameSync(`${fixtureStatusPath}.next`, fixtureStatusPath)
+  renameFileWithWindowsRetry(`${fixtureStatusPath}.next`, fixtureStatusPath)
 }
 
 async function createHost(name: string, partition: string, nativeControl = false): Promise<void> {
@@ -178,7 +182,7 @@ async function createHost(name: string, partition: string, nativeControl = false
           })
         }
         await guest.loadURL(`${fixtureOrigin}/${name}`)
-        guest.once('destroyed', writeStatus)
+        guest.once('destroyed', () => writeStatus())
         resolve()
       })().catch(reject)
     })

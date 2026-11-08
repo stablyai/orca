@@ -33,12 +33,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   return runtimeRpcClientWithLayoutApply({ ...actual, callRuntimeRpc: mockCallRuntimeRpc })
 })
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

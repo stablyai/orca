@@ -1,21 +1,32 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeOrchestrationSenderNames } from '../../../runtime-orchestration-sender-names'
+
+import type { RuntimeOrchestrationSenderNames } from '../senders/runtime-orchestration-sender-names'
+
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
+
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
+
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSendOutcome
 } from './structured-mailbox-pointer-host-contract'
+
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
+
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
+
 import { MAX_PROMPT_BYTES } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
 
 type Mail = {
