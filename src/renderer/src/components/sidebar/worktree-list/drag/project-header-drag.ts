@@ -1,5 +1,5 @@
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import {
   computeProjectHeaderDropPreview,
@@ -53,7 +53,9 @@ export function useRepoHeaderDrag({
   const onCommitProjectGroupOrderRef = useRef(onCommitProjectGroupOrder)
   onCommitProjectGroupOrderRef.current = onCommitProjectGroupOrder
   const rootDragRef = useRef({ rootProjectHeaderKeys, onCommitRootProjectOrder })
-  rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder }
+  useLayoutEffect(() => {
+    rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder }
+  }, [rootProjectHeaderKeys, onCommitRootProjectOrder])
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
