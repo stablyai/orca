@@ -60,8 +60,14 @@ export const gitStatusQuery = defineHostQuery({
   family: 'git.status',
   staleTime: 3_000,
   refetchOnWindowFocus: true,
-  fetch: (client, target, _input: Record<string, never>, previous: GitStatusRead | undefined) =>
-    readGitStatus(client, target.worktree ?? '', previous !== undefined),
+  // Rows from an earlier launch are shown but unconfirmed, so that first read runs at full priority.
+  fetch: (
+    client,
+    target,
+    _input: Record<string, never>,
+    previous: GitStatusRead | undefined,
+    { previousFromStore }
+  ) => readGitStatus(client, target.worktree ?? '', previous !== undefined && !previousFromStore),
   persist: {
     version: 1,
     dataSchema: z.discriminatedUnion('kind', [

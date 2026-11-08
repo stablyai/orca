@@ -226,6 +226,7 @@ export function createHostQueryPersistence(
       settledAt.delete(query.queryHash)
       lastStored.delete(query.queryHash)
       restored.delete(query.queryHash)
+      missedAtBoot.delete(query.queryHash)
       return
     }
     // Fetches and setQueryData both land as success; only data newer than what the key holds on disk is written.

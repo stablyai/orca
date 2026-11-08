@@ -65,6 +65,9 @@ function withoutAgentState(row: Worktree): Worktree {
     sidebarStatus: _sidebarStatus,
     hasHostSidebarActivity: _hasHostSidebarActivity,
     agents: _agents,
+    // Terminal output: never stored, and nothing on the page draws it.
+    preview: _preview,
+    lastOutputAt: _lastOutputAt,
     ...rest
   } = row
   return rest

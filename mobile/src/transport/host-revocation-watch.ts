@@ -13,20 +13,25 @@ function isRevoked(client: RevocationSignals): boolean {
   )
 }
 
-/** Reports whether the desktop has revoked this phone (K6): now, then on each change. */
+/**
+ * Reports a revocation each time the desktop is found to have revoked this phone (K6), and its end only
+ * once the phone authenticates again: a rebuilt client that is still dialing proves nothing.
+ */
 export function watchHostRevocation(
   client: RevocationSignals,
   onChange: (revoked: boolean) => void
 ): () => void {
-  let revoked = isRevoked(client)
-  onChange(revoked)
+  let revoked = false
   const check = (): void => {
-    const next = isRevoked(client)
-    if (next !== revoked) {
-      revoked = next
-      onChange(next)
+    if (!revoked && isRevoked(client)) {
+      revoked = true
+      onChange(true)
+    } else if (client.getState() === 'connected') {
+      revoked = false
+      onChange(false)
     }
   }
+  check()
   const stopState = client.onStateChange(check)
   const stopPath = client.onConnectionPathChange(check)
   return () => {

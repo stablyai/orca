@@ -6,6 +6,7 @@ import {
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
 } from '../host-screen/host-list-queries'
+import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
 import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
 import { sessionTabsFamily, sessionTabsKey } from '../session/mobile-session-last-tabs'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
@@ -36,6 +37,7 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
     screen === undefined
       ? [
           persistedHostQueryKey(hostWorktreeCatalogQuery, hostWorktreeCatalogKey(hostId)),
+          persistedHostQueryKey(hostViewFamily, hostViewKey(hostId)),
           persistedHostQueryKey(
             hostRepoCatalogQuery,
             hostQueryKey(hostId, hostRepoCatalogQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
