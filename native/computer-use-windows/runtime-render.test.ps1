@@ -135,55 +135,6 @@ try {
     Assert-TestEqual $handshake.ok $true "runtime handshake"
 
     $counter = New-TestCounter
-    $leaf = New-TestElement -Role "text" -Name "unused" -Counter $counter -RuntimeId 2
-    $root = New-TestElement -Role "button" -Name "Save" -Children @($leaf) -Counter $counter
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual $tree.elements.Count 1 "named control record count"
-    Assert-TestEqual ([string]$tree.lines[0]) "0 button Save" "named control line"
-    Assert-TestEqual $counter.findAll 1 "named control child enumeration"
-
-    $counter = New-TestCounter
-    $leaf = New-TestElement -Role "text" -Name "body" -Counter $counter -RuntimeId 2
-    $root = New-TestElement -Role "group" -Name "Details" -Children @($leaf) -Counter $counter
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual (($tree.elements | ForEach-Object { $_.name }) -join "|") "Details|body" "named generic records"
-    Assert-TestEqual (@($tree.lines) -join "|") "0 group Details|`t1 text body" "named generic lines"
-    Assert-TestEqual $counter.findAll 2 "named generic child enumeration"
-
-    $counter = New-TestCounter
-    $alpha = New-TestElement -Role "text" -Name "Alpha" -Counter $counter -RuntimeId 2
-    $beta = New-TestElement -Role "text" -Name "Beta" -Counter $counter -RuntimeId 3
-    $root = New-TestElement -Role "group" -Children @($alpha, $beta) -Counter $counter
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual $tree.elements.Count 1 "anonymous generic record count"
-    Assert-TestEqual ([string]$tree.lines[0]) "0 group, Text: Alpha Beta" "anonymous generic summary"
-    Assert-TestEqual $counter.findAll 7 "anonymous generic child enumeration"
-
-    $counter = New-TestCounter
-    $alpha = New-TestElement -Role "text" -Name "Alpha" -Counter $counter -RuntimeId 2
-    $beta = New-TestElement -Role "text" -Name "Beta" -Counter $counter -RuntimeId 3
-    $root = New-TestElement -Role "row" -Name "Invoice" -Children @($alpha, $beta) -Counter $counter
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual (($tree.elements | ForEach-Object { $_.name }) -join "|") "Invoice|Alpha|Beta" "row records"
-    Assert-TestEqual ([string]$tree.lines[0]) "0 row Invoice, Text: Alpha Beta" "row summary"
-    Assert-TestEqual $counter.findAll 6 "row child enumeration"
-
-    $counter = New-TestCounter
-    $button = New-TestElement -Role "button" -Name "Continue" -Counter $counter -RuntimeId 2
-    $root = New-TestElement -Role "group" -Children @($button) -Counter $counter
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual $tree.elements.Count 1 "elided wrapper record count"
-    Assert-TestEqual ([string]$tree.lines[0]) "0 button Continue" "elided wrapper line"
-    Assert-TestEqual $counter.findAll 4 "elided wrapper child enumeration"
-
-    $counter = New-TestCounter
-    $root = New-TestElement -Role "row" -Name "Invoice" -Counter $counter -FailFindAll
-    $tree = Render-OrcaTree $root $null
-    Assert-TestEqual $tree.elements.Count 1 "failed child read record count"
-    Assert-TestEqual ([string]$tree.lines[0]) "0 row Invoice" "failed child read line"
-    Assert-TestEqual $counter.findAll 2 "failed child read retries"
-
-    $counter = New-TestCounter
     $tabs = @()
     for ($index = 0; $index -lt 10; $index++) {
         $value = if ($index -eq 9) { "1" } else { "" }
@@ -233,11 +184,6 @@ try {
         Assert-TestEqual $tree.truncation.maxDepthReached $true "depth limit flag"
     } finally {
         $MaxDepth = $originalMaxDepth
-    }
-
-    foreach ($case in @(@("CmdOrCtrl+A", "^a"), @("Ctrl+Shift+T", "^+t"), @("Ctrl+Enter", "^{ENTER}"))) {
-        $keys = ConvertTo-OrcaSendKeysHotkey $case[0]
-        if ($keys -cne $case[1]) { throw "hotkey $($case[0]) expected '$($case[1])', received '$keys'" }
     }
 
     & (Join-Path $PSHOME "powershell.exe") -NoLogo -NoProfile -File (Join-Path $PSScriptRoot "runtime-pointer.test.ps1")

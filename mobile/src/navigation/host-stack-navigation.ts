@@ -1,3 +1,6 @@
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
+
 export type HostStackNavigationState = Readonly<{
   key?: string
   index: number
@@ -23,17 +26,23 @@ export type HostStackReplaceAction = Readonly<{
   payload: HostStackRouteTarget
 }>
 
+export type HostStackPushAction = Readonly<{
+  type: 'PUSH'
+  target: string
+  payload: HostStackRouteTarget
+}>
+
+export type HostStackSetParamsAction = Readonly<{
+  type: 'SET_PARAMS'
+  target: string
+  source: string
+  payload: { params: Readonly<Record<string, string>> }
+}>
+
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
   dispatch: (
-    action:
-      | HostStackReplaceAction
-      | Readonly<{
-          type: 'SET_PARAMS'
-          target: string
-          source: string
-          payload: { params: Readonly<Record<string, string>> }
-        }>
+    action: HostStackReplaceAction | HostStackPushAction | HostStackSetParamsAction
   ) => void
   // Wait for hydration: notification taps can arrive before the root navigator has committed state.
   getState: () => HostStackNavigationState | undefined
@@ -47,7 +56,7 @@ export type HostStackRouteHref = Readonly<{
 }>
 
 export type HostStackRouter = {
-  push: (route: HostStackHostRoute) => void
+  push: (route: HostStackHostRoute | HostStackRouteHref) => void
   replace: (route: HostStackRouteHref) => void
 }
 
@@ -62,12 +71,36 @@ export type PendingHostStackNavigation = Readonly<{
   controller: HostStackNavigationController
 }>
 
+export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
+const HOST_INDEX_ROUTE = '[hostId]/index'
+
+// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
+function opensOverHostList(target: HostStackRouteTarget): boolean {
+  return target.name === HOST_SESSION_ROUTE
+}
+
+const SETTLED_NAVIGATION: HostStackNavigationController = {
+  cancel: () => {},
+  isActive: () => false,
+  retarget: () => {}
+}
+
 export function hostStackHostRoute(hostId: string): HostStackHostRoute {
   return `/h/${encodeURIComponent(hostId)}`
 }
 
 export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRouteHref {
   return { pathname: `/h/${target.name}`, params: target.params }
+}
+
+// The host screen hands this to its page (`open`), which resolves it through Expo's linking as an in-page tap would; null when it can't fit the param.
+function sessionOpenHref(target: HostStackRouteTarget): string | null {
+  const { hostId = '', worktreeId = '', ...query } = target.params
+  const search = Object.entries(query)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&')
+  const href = `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${search === '' ? '' : `?${search}`}`
+  return href.length <= BRIDGE_MAX_ROUTE_PARAM_CHARS ? href : null
 }
 
 // Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
@@ -109,7 +142,7 @@ function mountedHostStack(
   const hostRoute = hostState?.routes[hostState.index]
   if (
     !hostState?.key ||
-    hostRoute?.name !== '[hostId]/index' ||
+    hostRoute?.name !== HOST_INDEX_ROUTE ||
     !hostRoute.key ||
     !hostParamMatches(hostRoute.params?.hostId, expectedHostId)
   ) {
@@ -118,12 +151,32 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
-// Mount the host first, then replace after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
+// Pending until the pushed host route commits, so a second tap for this host folds into the first instead of pushing another document.
+function pendingUntilHostRoute(navigation: HostStackRootNavigation): HostStackNavigationController {
+  let active = true
+  let unsubscribe = () => {}
+  const stop = () => {
+    if (active) {
+      active = false
+      unsubscribe()
+    }
+  }
+  unsubscribe = navigation.addListener('state', () => {
+    const state = navigation.getState()
+    if (state && focusedHostRoute(state)) {
+      stop()
+    }
+  })
+  return { cancel: stop, isActive: () => active, retarget: () => {} }
+}
+
+// Mount the host first, then open the target after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
 export function navigateToHostStackRoute(
   navigation: HostStackRootNavigation,
   router: HostStackRouter,
   hostId: string,
-  target: HostStackRouteTarget
+  target: HostStackRouteTarget,
+  openInHostDocument = false
 ): HostStackNavigationController {
   const state = navigation.getState()
   const hostState = state && focusedHostRoute(state)?.state
@@ -141,7 +194,30 @@ export function navigateToHostStackRoute(
       source: focused.key,
       payload: { params: target.params }
     })
-    return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+    return SETTLED_NAVIGATION
+  }
+  // The host screen opens the session inside its document when its cached page can, else pushes it as before.
+  const href = openInHostDocument && opensOverHostList(target) ? sessionOpenHref(target) : null
+  // useLocalSearchParams decodes every value once more, which would undo the target's own escapes.
+  const open = href === null ? null : encodeURIComponent(href)
+  const inThisHost = hostState?.key && hostParamMatches(focused?.params?.hostId, hostId)
+  if (open !== null && inThisHost && focused?.key && focused.name === HOST_INDEX_ROUTE) {
+    navigation.dispatch({
+      type: 'SET_PARAMS',
+      target: hostState.key,
+      source: focused.key,
+      payload: { params: { [BRIDGE_OPEN_ROUTE_PARAM]: open } }
+    })
+    return SETTLED_NAVIGATION
+  }
+  // Already inside this host: pushing the host route again would stack a second list.
+  if (opensOverHostList(target) && inThisHost) {
+    navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+    return SETTLED_NAVIGATION
+  }
+  if (open !== null) {
+    router.push({ pathname: '/h/[hostId]', params: { hostId, [BRIDGE_OPEN_ROUTE_PARAM]: open } })
+    return pendingUntilHostRoute(navigation)
   }
 
   let active = true
@@ -171,21 +247,31 @@ export function navigateToHostStackRoute(
       dispose()
       return
     }
+    const overHostList = opensOverHostList(selectedTarget)
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
-        router.replace(hostStackRouteHref(selectedTarget))
+        const href = hostStackRouteHref(selectedTarget)
+        if (overHostList) {
+          router.push(href)
+        } else {
+          router.replace(href)
+        }
       }
       return
     }
     dispose()
-    navigation.dispatch({
-      type: 'REPLACE',
-      target: hostStack.key,
-      source: hostStack.routeKey,
-      payload: selectedTarget
-    })
+    navigation.dispatch(
+      overHostList
+        ? { type: 'PUSH', target: hostStack.key, payload: selectedTarget }
+        : {
+            type: 'REPLACE',
+            target: hostStack.key,
+            source: hostStack.routeKey,
+            payload: selectedTarget
+          }
+    )
   }
 
   try {
@@ -211,7 +297,8 @@ export function coordinateHostStackNavigation(
   navigation: HostStackRootNavigation,
   router: HostStackRouter,
   hostId: string,
-  target: HostStackRouteTarget
+  target: HostStackRouteTarget,
+  openInHostDocument = false
 ): PendingHostStackNavigation {
   if (current?.hostId === hostId && current.controller.isActive()) {
     current.controller.retarget(target)
@@ -220,6 +307,6 @@ export function coordinateHostStackNavigation(
   current?.controller.cancel()
   return {
     hostId,
-    controller: navigateToHostStackRoute(navigation, router, hostId, target)
+    controller: navigateToHostStackRoute(navigation, router, hostId, target, openInHostDocument)
   }
 }

@@ -1,6 +1,6 @@
 // Use status previews until transcript replies catch up; share desktop/mobile visibility to avoid duplicate bubbles.
 
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 
 /** Stable preview id across ticks lets the real turn replace it without key churn. */
 export const NATIVE_CHAT_STREAMING_ID = 'streaming'
@@ -23,6 +23,9 @@ export function latestNativeChatReplyText(
 ): string {
   for (let index = messages.length - 1; index > after; index -= 1) {
     const message = messages[index]!
+    if (message.queued || message.pendingSend === 'queued') {
+      continue
+    }
     if (message.role === 'user') {
       return ''
     }
@@ -41,7 +44,7 @@ export function deriveNativeChatStreamingText(args: {
   working: boolean
   previewIsToolOutput?: boolean
 }): string | null {
-  const { messages, previewText, working, previewIsToolOutput } = args
+  const { previewText, working, previewIsToolOutput } = args
   if (!working || previewIsToolOutput) {
     return null
   }
@@ -49,7 +52,10 @@ export function deriveNativeChatStreamingText(args: {
   if (!text) {
     return null
   }
-  const lastText = assistantText(messages.at(-1))
+  const messages = args.messages
+  const lastText = assistantText(
+    messages.findLast((message) => !message.queued && message.pendingSend !== 'queued')
+  )
   if (lastText.includes(text) || text.length <= lastText.length) {
     return null
   }

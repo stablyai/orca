@@ -1,3 +1,4 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,6 +29,9 @@ describe('useIpcEvents updater integration', () => {
     const sshStateListenerRef: {
       current: ((data: { targetId: string; state: unknown }) => void) | null
     } = {
+      current: null
+    }
+    const targetRemovedListenerRef: { current: ((data: { targetId: string }) => void) | null } = {
       current: null
     }
     const storeState = {
@@ -74,7 +78,7 @@ describe('useIpcEvents updater integration', () => {
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,
-        experimentalNativeChat: false
+        nativeChatProviders: { claude: false, codex: false }
       }
     }
     vi.doMock('react', async () => {
@@ -100,21 +104,22 @@ describe('useIpcEvents updater integration', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))
-    vi.doMock('@/components/settings/SettingsConstants', () => ({
+    vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+      ...(await importOriginal<typeof UIZoomLevelModule>()),
       zoomLevelToPercent: vi.fn(() => 100),
-      ZOOM_MIN: -3,
-      ZOOM_MAX: 3
+      UI_ZOOM_MIN: -3,
+      UI_ZOOM_MAX: 3
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
@@ -228,7 +233,11 @@ describe('useIpcEvents updater integration', () => {
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},
-          onDetectedPortsChanged: () => () => {}
+          onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: (listener: (data: { targetId: string }) => void) => {
+            targetRemovedListenerRef.current = listener
+            return () => {}
+          }
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -363,5 +372,10 @@ describe('useIpcEvents updater integration', () => {
 
     expect(setSshConnectionState).toHaveBeenCalledTimes(1)
     expect(setSshConnectionState).toHaveBeenCalledWith('conn-refresh-failure', refreshFailureState)
+
+    // Removal by any client (Settings, CLI, paired client) clears the target's live state.
+    clearRemovedSshTargetState.mockClear()
+    targetRemovedListenerRef.current?.({ targetId: 'conn-1' })
+    expect(clearRemovedSshTargetState).toHaveBeenCalledWith('conn-1')
   })
 })

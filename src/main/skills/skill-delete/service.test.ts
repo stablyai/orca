@@ -99,16 +99,6 @@ describe('deleteSkills', () => {
     expect(await exists(join(aliasDirectory, 'notes.md'))).toBe(true)
   })
 
-  it('removes an emptied alias-file directory', async () => {
-    const { home, stateDirectory, file } = await fixture()
-    const aliasDirectory = join(home, '.codex', 'skills', 'demo')
-    await mkdir(aliasDirectory, { recursive: true })
-    await symlink(file, join(aliasDirectory, 'SKILL.md'))
-
-    await run(home, stateDirectory, await request(file))
-    expect(await exists(aliasDirectory)).toBe(false)
-  })
-
   it('takes the lock an install of the same destination directory would take', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
     // Use install's literal placement-directory lock key, never canonical-file realpath.

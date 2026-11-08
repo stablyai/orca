@@ -1,6 +1,6 @@
 // Apply binding-only changes directly to pane trees and resolve focus like full builds; fall back when direct binding cannot reproduce a build.
 
-import { resolvePtyBoundActiveLeafId } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { resolvePtyBoundActiveLeafId } from '../components/terminal-pane/layout/ownership/terminal-layout-active-leaf'
 import type { AppState } from '@/store/types'
 import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'

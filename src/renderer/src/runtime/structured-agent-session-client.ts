@@ -1,39 +1,43 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
+import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
 import {
-  AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import {
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
-} from '../../../shared/agent-session-create-capabilities'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+} from '../../../shared/agent-session/agent-session-create-capabilities'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
-import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { subscribeRuntimeRpc } from './rpc/subscriptions/runtime-rpc-subscribe'
+import { STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS } from './native-chat/requests/structured-agent-session-request-timeouts'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -41,15 +45,29 @@ export async function structuredAgentSessionHostSupports(
   target: RuntimeClientTarget,
   capability: RuntimeCapability
 ): Promise<boolean> {
+  return (await structuredAgentSessionHostCapabilityState(target, capability)) === 'supported'
+}
+
+/** The same read, keeping a failed or unanswered probe (`unknown`) apart from a host that
+ *  answered without the capability, for a decision an unverified host must not pass. */
+export async function structuredAgentSessionHostCapabilityState(
+  target: RuntimeClientTarget,
+  capability: RuntimeCapability
+): Promise<StructuredAgentSessionHostCapabilityState> {
   try {
-    if (target.kind === 'local') {
-      const known = readLocalRuntimeCapabilitiesOrUnknown()
-      const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
-      return capabilities?.includes(capability) === true
+    if (target.kind !== 'local') {
+      const supported = await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+      return supported ? 'supported' : 'unsupported'
     }
-    return await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+    const capabilities =
+      readLocalRuntimeCapabilitiesOrUnknown() ?? (await ensureLocalRuntimeCapabilities())
+    return capabilities?.includes(capability)
+      ? 'supported'
+      : capabilities
+        ? 'unsupported'
+        : 'unknown'
   } catch {
-    return false
+    return 'unknown'
   }
 }
 
@@ -149,17 +167,6 @@ export async function readStructuredAgentSessionItem(
   )
   return result?.item ?? null
 }
-
-const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
-  ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
-  // The host may start an agent at rest before rewinding it, as it does for a command.
-  ['agentSession.rewind', 195_000],
-  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
-  ['agentSession.modelCatalog', 90_000],
-  ['agentSession.sleepWorkspace', 120_000],
-  // All bounded-concurrency provider starts and dispatch settlements precede the reply.
-  ['agentSession.restartContinue', 600_000]
-])
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,

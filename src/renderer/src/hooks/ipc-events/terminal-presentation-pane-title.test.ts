@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
@@ -33,7 +30,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwner.isMain
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -144,13 +141,6 @@ describe('a revealed terminal’s title, in a layout-owner build', () => {
     expect(layoutApplyTestTransport.sentOfType('renameTab')).toEqual([
       expect.objectContaining({ tabId: TAB, kind: 'custom', title: 'Build' })
     ])
-    expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
-    expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
-  })
-
-  it('writes no pane title into a tab the window already holds', async () => {
-    const state = await setup(true)
-
     expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
   })

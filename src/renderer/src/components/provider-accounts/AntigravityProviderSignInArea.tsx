@@ -1,0 +1,66 @@
+import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
+import { translate } from '@/i18n/i18n'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  AntigravityChatSignInAction,
+  AntigravityChatSignInBadge
+} from './AntigravityChatSignInAction'
+import {
+  antigravityChatSignInBlocked,
+  useAntigravityChatSignInControls
+} from './AntigravityChatSignInRow'
+
+type ActiveInstall = Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
+
+const CHANGING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
+
+/** Require an installed server outside install/removal; retain space while host status is unknown. */
+export function antigravityProviderSignInShown(install: ActiveInstall): boolean {
+  const { snapshot } = install
+  if (snapshot.kind !== 'known') {
+    return true
+  }
+  const { source, operation } = snapshot.state
+  return source !== null && !(operation && CHANGING_PHASES.has(operation.phase))
+}
+
+export function AntigravityProviderSignInArea(props: {
+  owner: RuntimeClientTarget
+  label: string
+  install: ActiveInstall
+}): React.JSX.Element {
+  const signIn = useAntigravityChatSignInControls({
+    owner: props.owner,
+    label: props.label,
+    disabled: antigravityChatSignInBlocked(props.install)
+  })
+  return (
+    <div className="space-y-3 border-y border-border py-3">
+      <AntigravityChatAuthForm
+        owner={props.owner}
+        disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
+        onSignIn={signIn.start}
+        signInError={signIn.alert}
+        heading={
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium leading-none">
+                {translate('settings.chat.providers.antigravityAccount', 'Account')}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {translate(
+                  'accounts.antigravity.chatSeparate',
+                  'Separate from your agy terminal account.'
+                )}
+              </p>
+            </div>
+            <AntigravityChatSignInBadge signIn={signIn} />
+          </div>
+        }
+      >
+        {(auth) => <AntigravityChatSignInAction signIn={signIn} auth={auth} size="sm" />}
+      </AntigravityChatAuthForm>
+    </div>
+  )
+}

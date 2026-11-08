@@ -3,7 +3,8 @@ import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -12,7 +13,7 @@ import {
 import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
 import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
-import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
+import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -29,13 +30,12 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type {
   ActivityGroupBy,
-  ActivityThreadGroup,
-  AgentPaneThread,
   ThreadReadFilter
-} from './activity-thread-types'
+} from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 export type AgentPaneThreadsStoreData = Pick<
   AppState,
@@ -57,8 +57,8 @@ export type AgentPaneThreadsStoreData = Pick<
 > & {
   /** Current native-chat originals and terminal tabs with semantic identity reuse. */
   activityTabs: ActivityTabProjection
-  worktreeMap: ReturnType<typeof getWorktreeMapFromState>
-  repoMap: ReturnType<typeof getRepoMapFromState>
+  worktreeMap: ReturnType<typeof getIndexedWorktreeMap>
+  repoMap: ReturnType<typeof getIndexedRepoMap>
   generatedTitlesEnabled: boolean
   /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
   defaultHostId: ExecutionHostId
@@ -131,8 +131,8 @@ export function useAgentPaneThreads(args: {
       floatingWorkspacePath: s.floatingWorkspacePath,
       detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
       getKnownWorktreeById: s.getKnownWorktreeById,
-      worktreeMap: getWorktreeMapFromState(s),
-      repoMap: getRepoMapFromState(s),
+      worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
+      repoMap: getIndexedRepoMap(s.repos),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
@@ -231,8 +231,8 @@ export function useAgentPaneThreads(args: {
   )
 
   // Classify children over all threads so scoped-out parents do not orphan workers; skip when children are shown.
-  const childAgentPaneKeys = useMemo(
-    () => (showChildAgents ? EMPTY_PANE_KEYS : collectChildAgentPaneKeys(allThreads)),
+  const hiddenChildAgentPaneKeys = useMemo(
+    () => (showChildAgents ? EMPTY_PANE_KEYS : collectHiddenChildAgentPaneKeys(allThreads)),
     [allThreads, showChildAgents]
   )
 
@@ -252,10 +252,10 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
-      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks.
+      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks; a live child always keeps its own row.
       if (
         !showChildAgents &&
-        childAgentPaneKeys.has(thread.paneKey) &&
+        hiddenChildAgentPaneKeys.has(thread.paneKey) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
@@ -272,7 +272,7 @@ export function useAgentPaneThreads(args: {
     deferredQuery,
     effectiveSelectedPaneKey,
     showChildAgents,
-    childAgentPaneKeys
+    hiddenChildAgentPaneKeys
   ])
 
   const markAllReadThreads = useMemo(
@@ -280,10 +280,10 @@ export function useAgentPaneThreads(args: {
       allThreads.filter(
         (thread) =>
           showChildAgents ||
-          !childAgentPaneKeys.has(thread.paneKey) ||
+          !hiddenChildAgentPaneKeys.has(thread.paneKey) ||
           thread.paneKey === effectiveSelectedPaneKey
       ),
-    [allThreads, showChildAgents, childAgentPaneKeys, effectiveSelectedPaneKey]
+    [allThreads, showChildAgents, hiddenChildAgentPaneKeys, effectiveSelectedPaneKey]
   )
 
   const visibleThreadGroups = useMemo(

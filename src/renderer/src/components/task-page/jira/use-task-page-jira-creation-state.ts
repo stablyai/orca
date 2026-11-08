@@ -8,16 +8,7 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
   const {
     providerRuntimeContextKey,
     newLinearIssueOpen,
-    setNewLinearIssueOpen,
-    setNewLinearIssueTitle,
-    setNewLinearIssueBody,
-    setNewLinearIssueTeamId,
-    setNewLinearIssueSubmitting,
-    setNewLinearIssueStateId,
-    setNewLinearIssueAssigneeId,
-    setNewLinearIssuePriority,
-    setNewLinearIssueProjectId,
-    setNewLinearIssueLabelIds,
+    resetNewLinearIssue,
     setNewLinearIssueProjects,
     setNewLinearIssueProjectsLoading
   } = model
@@ -54,19 +45,10 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
       return
     }
     previousProviderRuntimeContextKeyRef.current = providerRuntimeContextKey
+    resetNewLinearIssue()
     if (newLinearIssueOpen) {
-      setNewLinearIssueOpen(false)
-      setNewLinearIssueTitle('')
-      setNewLinearIssueBody('')
-      setNewLinearIssueTeamId(null)
-      setNewLinearIssueStateId(null)
-      setNewLinearIssueAssigneeId(null)
-      setNewLinearIssuePriority(0)
-      setNewLinearIssueProjectId(null)
-      setNewLinearIssueLabelIds([])
       setNewLinearIssueProjects([])
       setNewLinearIssueProjectsLoading(false)
-      setNewLinearIssueSubmitting(false)
     }
     if (newJiraIssueOpen) {
       setNewJiraIssueOpen(false)
@@ -88,19 +70,10 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
   }, [
     newJiraIssueOpen,
     newLinearIssueOpen,
+    resetNewLinearIssue,
     providerRuntimeContextKey,
-    setNewLinearIssuePriority,
-    setNewLinearIssueBody,
     setNewLinearIssueProjectsLoading,
-    setNewLinearIssueTeamId,
-    setNewLinearIssueStateId,
-    setNewLinearIssueAssigneeId,
-    setNewLinearIssueTitle,
-    setNewLinearIssueSubmitting,
-    setNewLinearIssueProjects,
-    setNewLinearIssueLabelIds,
-    setNewLinearIssueOpen,
-    setNewLinearIssueProjectId
+    setNewLinearIssueProjects
   ])
   const nextModel = model as typeof model & {
     newJiraIssueOpen: typeof newJiraIssueOpen

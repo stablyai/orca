@@ -6,9 +6,9 @@ import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
 } from '../../../shared/plain-ssh-terminal'
-import { buildInheritedLocalPtyEnvironment } from '../../providers/local-pty-spawn-environment'
-import { spawnPtyExecutable } from '../../providers/local-pty-utils'
-import { destroyPtyProcess } from '../../providers/local-pty-termination'
+import { buildInheritedLocalPtyEnvironment } from '../../providers/local-pty/local-pty-spawn-environment'
+import { spawnPtyExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
+import { destroyPtyProcess } from '../../providers/local-pty/local-pty-termination'
 import { buildPlainSshTerminalArgs } from './plain-ssh-terminal-args'
 
 export type PlainSshTerminalDeps = {

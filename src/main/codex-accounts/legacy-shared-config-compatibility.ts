@@ -1,5 +1,8 @@
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { syncSystemConfigIntoLegacySharedCodexHome } from '../codex/codex-config-mirror'
+import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoLegacySharedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
 
 type LegacySharedCodexConfigPaths = {
   sharedRuntimeHome: string

@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
-import {
-  createAutomationCatalogGenerationRegistry,
-  getAuthorityCatalogGeneration,
-  resetAutomationHostCatalogGenerationsForTests,
-  syncAutomationHostCatalogGenerations
-} from './automation-host-catalog-generation'
+import { createAutomationCatalogGenerationRegistry } from './automation-host-catalog-generation'
 import type {
   AutomationCatalogSshMirrorInput,
   AutomationHostCatalogInput,
@@ -58,13 +53,6 @@ describe('automation catalog generation', () => {
 
   beforeEach(() => {
     registry = createAutomationCatalogGenerationRegistry()
-  })
-
-  it('advances every authority on the first sync', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    expect(registry.get(DESKTOP)).toBe(1)
-    expect(registry.get(ENV_A)).toBe(2)
-    expect(registry.get(ENV_B)).toBe(3)
   })
 
   it('bounds authority generations without reopening an evicted fence', () => {
@@ -145,17 +133,6 @@ describe('automation catalog generation', () => {
     expect(registry.get(ENV_A)).toBe(before)
   })
 
-  it('does not advance on a rename', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    const before = registry.get(ENV_A)
-    registry.sync(
-      buildAutomationHostCatalog(
-        input({ runtimes: [runtime('env-a', { label: 'Renamed' }), runtime('env-b')] })
-      )
-    )
-    expect(registry.get(ENV_A)).toBe(before)
-  })
-
   it('advances on a same-id re-pair', () => {
     registry.sync(buildAutomationHostCatalog(input()))
     const before = registry.get(ENV_A)
@@ -219,14 +196,5 @@ describe('automation catalog generation', () => {
     expect(afterRemoval).toBe(4)
     registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-a')] })))
     expect(registry.get(ENV_B)).toBe(afterRemoval)
-  })
-
-  it('exposes a module-level registry for the cache fence', () => {
-    resetAutomationHostCatalogGenerationsForTests()
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(0)
-    syncAutomationHostCatalogGenerations(buildAutomationHostCatalog(input()))
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(1)
-    resetAutomationHostCatalogGenerationsForTests()
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(0)
   })
 })

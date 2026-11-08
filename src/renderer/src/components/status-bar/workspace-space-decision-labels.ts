@@ -1,4 +1,4 @@
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceSpaceStatusLabel } from './workspace-space-format'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'

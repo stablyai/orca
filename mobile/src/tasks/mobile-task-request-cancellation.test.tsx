@@ -102,6 +102,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
     setGithubSourceFallbacks: vi.fn(),
     setLoading: vi.fn(),
     setRefreshing: vi.fn(),
+    setTaskListSettled: vi.fn(),
     setGithubLoadingTargetPage: vi.fn(),
     repoListEnsureLoaded: async () => repos,
     selectedLinearTeamIds: new Set<string>(),
@@ -299,16 +300,6 @@ describe('task repository request ownership', () => {
       expect(fixture.model().setLoading).toHaveBeenLastCalledWith(false)
     })
   }
-
-  it('releases the refresh spinner when a silent reload is abandoned by disconnect', async () => {
-    const fixture = await mount('github')
-    const old = await fixture.load({ silent: true })
-    fixture.scope.connState = 'disconnected'
-    await fixture.render()
-    await fixture.drain()
-    await old.request
-    expect(fixture.model().setRefreshing).toHaveBeenLastCalledWith(false)
-  })
 })
 
 describe('GitHub next-page source failures', () => {

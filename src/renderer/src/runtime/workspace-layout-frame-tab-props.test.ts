@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { testContext } from '../../../shared/workspace-layout/workspace-layout-command.test-fixture'
@@ -18,8 +18,8 @@ import {
   bootWindowFromPartitions,
   projectStartupWindowView
 } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { withLayoutOwnerTabProps } from '../components/tab-bar/tab-bar-layout-owner-props'
 import { useAppStore } from '@/store'
 import type { AppState } from '../store/types'
@@ -36,7 +36,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
 }))
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

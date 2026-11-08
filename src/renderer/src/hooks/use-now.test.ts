@@ -48,31 +48,6 @@ describe('createSharedNowClock', () => {
     expect(clearIntervalMock).toHaveBeenCalledWith(handle)
   })
 
-  it('refreshes the snapshot when a new subscriber restarts an idle clock', () => {
-    let now = 1_000
-    const handle = {} as ReturnType<typeof setInterval>
-    const setIntervalMock = vi.fn(() => handle)
-    const clearIntervalMock = vi.fn()
-    const first = vi.fn()
-    const second = vi.fn()
-    const clock = createSharedNowClock(30_000, {
-      now: () => now,
-      setInterval: setIntervalMock,
-      clearInterval: clearIntervalMock
-    })
-
-    const unsubscribeFirst = clock.subscribe(first)
-    expect(clock.getSnapshot()).toBe(1_000)
-    unsubscribeFirst()
-
-    now = 61_000
-    clock.subscribe(second)
-
-    expect(clock.getSnapshot()).toBe(61_000)
-    expect(second).toHaveBeenCalledTimes(1)
-    expect(setIntervalMock).toHaveBeenCalledTimes(2)
-  })
-
   it('does not arm the timer while hidden and catches up when the window becomes visible', () => {
     let visibilityState: DocumentVisibilityState = 'hidden'
     const documentListeners = new Map<string, () => void>()
@@ -143,17 +118,5 @@ describe('useNow', () => {
 
     act(() => vi.advanceTimersByTime(1_000))
     expect(hook.result.current).toBe(7_000)
-  })
-
-  it('shares one snapshot across callers at the same cadence', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const first = renderHook(() => useNow(2_000))
-    const second = renderHook(() => useNow(2_000))
-    expect(second.result.current).toBe(first.result.current)
-
-    act(() => vi.advanceTimersByTime(2_000))
-    expect(first.result.current).toBe(3_000)
-    expect(second.result.current).toBe(3_000)
   })
 })

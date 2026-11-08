@@ -1,0 +1,2704 @@
+{
+  "scope": "SOURCE-MODEL; exact release firstparty with current zod/Vite/Oxc dependencies; no native/transport/gesture assertion",
+  "host": "cd43b222162edbabf440740443eae2181ba3a476",
+  "serialization": "Recursive key sort; arrays retain order. Root prefix and validated body fingerprints substituted consistently. Only epoch values and canonical queued-attempt identity references receive bijective tokens. Fixed test clock. Full input/output hashes include all surrounding rows/context/metadata. Readable outputs select actual user IDs plus all controls/notices; private raw full records retained.",
+  "releases": [
+    {
+      "pin": "2ff42fd37c9511ed17d9a41bf9c03a817f63bccd",
+      "modules": {
+        "src/shared/structured-agent-session-message-projection.ts": "d2e6babfbee1be47f330769f13de0ed6047f4becea44424f0ec57de15aa56431",
+        "src/shared/agent-session-journal-item-key.ts": "09ebe4758e3f38b5b7591f07f7b4dbfd04c7cc01713c9b0afe03b07b656d1fe8",
+        "src/shared/agent-session-queued-submission.ts": "05ebe62962f0dc0a6bc70d63d1660e92f6b7d04151e5a0290f22f20d2c87bdbd",
+        "src/shared/native-chat-provider-retry-runs.ts": "c54e09f00e0d8a08ddba39fce3aeade322568221bcc3855a4c19828bf4095c72",
+        "src/shared/agent-session-journal-producer.ts": "0f5983d862e36513ef49a5b58901b41f7fffc25fb8ed0191377996759aebfc4e",
+        "src/shared/agent-session-context-clear.ts": "b26aac8d132e1d36d41e80910b6063ad5237b45ed6d2ab506bc2fa83df10bbd9",
+        "src/shared/agent-session-provider-context.ts": "f3131bee71f7d39255838a0f39f84b4a393eaa5db700948f3aba8dc07474f3f6",
+        "src/shared/native-chat-stopped-before-start.ts": "3837a154b64da0ef8c2d7320e06116a53181e2fe4d2e1e8adb1790568d421f9a",
+        "src/shared/agent-session-journal-position.ts": "defc64ce55d44423bcc4fac12ea2aaf7b64c43a7b44cbe3e21817c9c6a369ee7",
+        "src/shared/native-chat-send-order.ts": "f7d7115c950630d43686f67b65bcd610dc788c97393e6b9d058ae39fd47536ea",
+        "src/shared/native-chat-turn-membership.ts": "20245b275eea11cf0c0c3957c0bc727c6ac132305941b8ebe064b7854e19c616",
+        "src/shared/agent-session-turn-record.ts": "88f4d091d24783de5a0a1c00a65ac2c645e610f24d92f62705e6482ff83fa4b2",
+        "src/shared/agent-session-journal-types.ts": "2f45c381604cbda8d63c956617c6c1c70fe6533b5d288c886202f6c4289e076b",
+        "src/shared/agent-turn-outcome.ts": "245f61f5b43933854fca1fde8d775d90df6ed409a8e11658ff2dcbae33642f57",
+        "src/shared/agent-session-context-usage-schema.ts": "189e1d597a8250523e33170abf9dfb31fae45de8af874bf50ae7b621a6fb9f2f",
+        "src/shared/agent-session-context-usage.ts": "cf8ce6a5f9b813f0965a784e91f8b5c7d23e20d7858e79ddb7c8e89072469355",
+        "src/shared/agent-turn-lifecycle-text.ts": "cc011849fdc23f59a4dfc6d4eea69694db523189d950a0844617548bc6b70696",
+        "src/shared/tui-agent-display-names.ts": "114a31281133787a273733e50838cadaaed00151cb0c6fc966b3a398c076520d",
+        "src/shared/native-chat-turn-grouping.ts": "aa623b1cb0fba80f4f88eed4dacb4dc28d6b02b955b179750e49415cf17ee0d2",
+        "src/shared/structured-agent-session-dispatch-rejection.ts": "b89636272a2608cfcaf2ded13f8f7647b2a93f9968d27c98cbaf61af59d6d68d",
+        "src/shared/agent-session-failure.ts": "3851a15dd12ba645fabc417fa3a0b738787bd9011d42b3e552a535cb8fc682b2",
+        "src/shared/agent-session-argument-problem.ts": "697da1b1ae30ff618610a8b1c1a077175b41601c6ae6efbc3f10a56fe07ee046",
+        "src/shared/structural-value-equality.ts": "cf6c8f0c6cc128b8c150aa90f23b2065df4db4660cdc98f37593e955c2024455",
+        "src/shared/agent-session-wire-refusals.ts": "f58298ad8b2918cd6ab5a18165fe9fcb599fce9bf35334a139ff322a654c35a1",
+        "src/shared/agent-session-refusal-details.ts": "9d7153a1b8ca16ad2973441ba12aac43a8e9af9d4c06e71fbbab741cffba8cb2",
+        "src/shared/codex-cli-installation.ts": "deb192c6fe1e51fd1b1982c8f41c05eaf16cf3ccedf6548aae4996162b5a9bc9",
+        "src/shared/app-version.ts": "0d099730158a366125b189602f9136c46e3339bb1d3a5ac815bddcf71e108bc0",
+        "src/shared/agent-session-journal-schemas.ts": "02d567558dfc528783a9b3dff3bd09213bc113112f143b156b344675768fc8bd",
+        "src/shared/agent-session-journal-thread-goal-schema.ts": "f0eb37f8a2bd42688fb8592053fe06a858c35d291666d00576e6471721c3ba08",
+        "src/shared/agent-session-journal-open-union.ts": "2205366bd9f2c93bd36966d2833d33b5ae3c4d0ad7548d1ee0e0189585e36954",
+        "src/shared/agent-session-failure-fact-schema.ts": "b1674dbd7c66c2b9cde0d604217a5e0835eb5d6d747fbf10889d900058ce183b",
+        "src/shared/agent-session-rewind.ts": "144d9015a42941a68ccc57299213d5d6705a4291b58603e44f3ecb38bfbcbe98",
+        "src/shared/structured-agent-session-live-turn.ts": "61eec83c7ecdb8ce464d6f148fd0d77df74de4b4e2f0c667345b0e0c219c4f5e",
+        "src/shared/structured-agent-session-tool-call-block.ts": "2bfcf1bba56b94154ca7f5b3fc44a517754e61352512c5e486457e5ea4744e7e",
+        "src/shared/native-chat-messages-waiting-behind-live-turn.ts": "a597f082fe6286e91fc37064c6a1e336b48a360b3dc0e396ff2bec90c4fa2e15",
+        "src/shared/structured-agent-session-command-entry.ts": "5c05b1852e1dc214b3308197b1fb7dba20eb5576732f1ec5e5eafb2bc9c3d390",
+        "src/shared/structured-agent-session-opening-send.ts": "b6826f91d34150a2c66df71308226f32d2176e6e86cff071b0b6ddad449dd2cf",
+        "src/shared/native-chat-turn-row-attribution.ts": "a441a6dccfa304c95e18f6886fbc7a6c6bdc98c6fec65a637d0b7ad320028386",
+        "src/shared/native-chat-transcript-projection.ts": "759da00a606fd6a8d2bb6fe6a7ba2a319a33bdf9553e21b77b7792a2df984884",
+        "src/shared/native-chat-types.ts": "e673362465c1323d199fc1a0c63039539de9a63c974d0016225664ad0a5fd96f",
+        "src/shared/native-chat-noise.ts": "052e9ee8883fcac5b38e032670e325a5797d89a5edb0dd747612eb84b6bc680e",
+        "src/shared/harness-injected-user-turns.ts": "c4ddb96ca6fc15fb9ff8012ef883ca8fdd152ab0bff18dac70e12beec89e0c5b",
+        "src/shared/native-chat-tool-fold.ts": "97b6a7e7bad809827178fd72a3343be9e6d9956c4eb30631de081f35d8126253",
+        "src/shared/native-chat-provider-frame-summary.ts": "594241490db5a6bd39983280969ce5129eaca2b28c101afe9627906de5669a80",
+        "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881",
+        "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+        "src/shared/native-chat-subagent-items.ts": "82425fe855195da42d3802c23f58311635f2a3a758584ad84b12d3f6fb0c9b39",
+        "src/shared/native-chat-subagent-summary.ts": "a41a36bcc304c32d6f955f4a675dda361817d50c97ec9568f1732a7183c885f0",
+        "src/shared/structured-agent-session-projection.ts": "5f59cdfd8f51f745c652524ace0844d2c71d4dfa1f6532dde911e1de36f3f8f0",
+        "src/shared/agent-status-field-normalization.ts": "a826255ed297b59483a7c27a6e4c4ad8c80a4e3811957613213a8b05b5e0bc79",
+        "src/shared/orca-dispatch-status-prompt.ts": "43bb7f3e89603a76add787a5fe99ee682cfa9d76e6b2b2b720bede914dfa9a97",
+        "src/shared/agent-journal-tool-call-lifecycle.ts": "983081303500e9553a7278c8a64bb909eaf99742aad45fb5c9c3eee93b275768",
+        "src/shared/structured-agent-session-status-block.ts": "39c38b26490b4930f1a2879b92a5d3ebd547246c599fad89e995c7d6c2d3dc76",
+        "src/shared/agent-session-orca-stop.ts": "c4ed738c8d9b516dbc56789c5461c1de622889ad10d20a946eb394bd7118e050",
+        "src/shared/agent-session-compaction.ts": "090179bd1a79501b16eff210f275ca85b07fbed7f1829f661434c0c8a7d8a26a",
+        "src/shared/provider-timeline-item-key.ts": "456ab813dd8cd82a0687c3c7d869f60bc64d9be3eb4f9ba58fbac3c1e6f8481c",
+        "src/shared/agent-status-types.ts": "db6383c6e0a375aa545b461349fa5856dd2639466542f0c509f220921abb1e1a",
+        "src/shared/json-text-structure-limit.ts": "3a3508fd11c5ec5e6b802cdaf44dfa903fe3da825ea2450d760346bae3c1b839",
+        "src/shared/agent-status-subagent-snapshot.ts": "a138675476b9eb0caacc3f23127d3196fe4dd866930b9837981db84584996d05",
+        "src/shared/main-agent-status.ts": "b3aec592eecfce32bad51cf7d184a15bcb36acf10f3fddc4cdeb4db6640885dc",
+        "src/shared/agent-state-history.ts": "bbdb1a06c8db9d2e9f3bd57f7b4f1f88a157ebe9e3992e09be5e0ec3657139fa",
+        "src/shared/agent-status-freshness.ts": "4b751d3d0f0cd1514d6bded4062d936ae0a6a04086f97036adba4aa244f27440",
+        "src/shared/native-chat-tool-summary.ts": "501f748758c37eefce9b28b5d65db87111d768a98addbbef652757beb12317bf",
+        "src/shared/native-chat-tool-preview-prefix.ts": "42c2d527b81f8868b22c991da27fc326e2a219c92167d9bcb4850e3b32a63fda",
+        "src/shared/structured-agent-session-latest-request.ts": "4b8ffc95ced705a47b24379bb75d19636bb254a6eb0ce6595d51ecc4ca55f513",
+        "src/shared/native-chat-visual-directive.ts": "4d2c308435b64175a8ffe00b8c7ec49b906fc4d55345ecd94a18f6fa2bda81f5",
+        "src/shared/structured-agent-session-unanswered-dispatch.ts": "83a0403b01eb7c77246edd9a62cd20158fc1f0dfca6fc1271edb7413b3db0ae7",
+        "src/shared/sha256.ts": "4f5a7ec69361f80c744ef142a0200ddda98b78d8cd0c1ef1ee95ee7210e1c810",
+        "src/shared/agent-session-message-source.ts": "3d4461d5f2c3227d8a52433db2a2d0643a5003e347b5d243c9f07142d825f38d",
+        "src/shared/agent-session-conversation-name.ts": "f732ba58dbb855a4df0cc243c9112c06667611f7e790cb3ef610d71c39f439b9",
+        "src/shared/surrogate-safe-text-slice.ts": "c93077a966a142e8c4e4c4145801e219cee54c7616607a3cb989b6dabe7dadfd",
+        "src/shared/orca-session-address.ts": "cf821ba18a36194293efac045bd826a250c6d000e8442c7c66b92a12ec7d9d0d",
+        "src/shared/agent-session-record.ts": "187c512b462da023a1f3ddd8bdf4680e67b5e3d29ad266503456da9352e17bb2",
+        "src/shared/agent-session-launch-args.ts": "4001086933c5e189cf9c824df053abb9a139fe812c725f5e7823d5629e5b851f",
+        "src/shared/agent-session-legacy-handoff-lease.ts": "5894948104c7abb90851e5fdb8de2ffcffdaf1da185ae18b9afdd59ee63eab68",
+        "src/shared/agent-session-conversation-command.ts": "c3c5bac0d9569aadc2f7fde32e453ae317c818cdbcccd357b4fb5eacfedacb1d",
+        "src/shared/agent-session-provider-handle.ts": "67b1fb7025f84d31fa507340e4757af846ec0be8e341e8b094a43d6b1fe1ce52",
+        "src/shared/agent-session-provider-handle-replacement.ts": "9e236b2c2c082c9c3ec4aca3827ce5d8f75926dd6b139c7053d9264e9b301cf7",
+        "src/shared/agent-session-provider-handle-encoding.ts": "d3404ef90f8533fbf37720ae7eac43cd0a1ebdbce335bce20eb05adeabea5d8f",
+        "src/shared/agent-session-account-home.ts": "d4d7fe74f62c7b3075f1fc4256cb4d13f03e56825436d1c9481663fe61e09f52",
+        "src/shared/structured-worker-handle.ts": "b7dfa2c1e832ee48d589869cb92598c8b1ffa256057b5edfe5f0ec673a88599f",
+        "src/shared/orca-session-address-prefix.ts": "d44a4bf817c56f7e83c2e4d48991bacb088e6114eefce43c34e6baa949b7c6ee",
+        "src/shared/zod-salvage.ts": "0c752ffb1d80f98cd1e6d7687adb619d1354ad9b454c40f71144f3a6ec3c640c",
+        "src/shared/structured-agent-session-status-started-at.ts": "c1fae8cd3e76a6b7846a20d8c46887a982d93c9fbd3322f74d2fbb89a0884fad",
+        "src/shared/structured-agent-session-owed-work.ts": "e3f14adc02ed7d14d49a66f6fa6d0a0b0ef5aa01d2945c97a8a67baa544b910c",
+        "src/shared/structured-agent-session-main-agent-working.ts": "34f24e986b93328c4059c1e9da8fc97792abf7f00659eef5c7c28fafc361c9fc",
+        "mobile/src/session/mobile-native-chat-message-plain-text.ts": "870e2c942d8d86d90ef0319b0f3ccb248d004887191f28ed582847203f1367b9",
+        "src/shared/agent-session-host-status-rows.ts": "02c293f1c4e6e3b666ec394c7be85a8edf587e38b00cfb20785ca0b413106d89",
+        "mobile/src/session/mobile-native-chat-render-data.ts": "9e9b38b605df799ff27c074cbd76282820a877bf38b4b0a20df1f346e6c45779",
+        "src/shared/agent-type-label.ts": "8caa6b29fcc80aa6675fa9dcc84691d47ba92ec1146f11c29f07a198f5035930",
+        "src/shared/native-chat-empty-state.ts": "30fb51da467432f19ee668faee56b6690378f8a46229dcf6d0582c3fc02a0692",
+        "src/shared/native-chat-message-preparation.ts": "4a1fadb78258ee5ac460428ac2cfe001359b23e108e4e9ad554c78928db5a6e0",
+        "src/shared/native-chat-agent-profiles.ts": "40758e5d8ade9f09534ffdcf36fe529184930ad6c2f3012be1805728f0c080dd",
+        "src/shared/native-chat-slash-commands.ts": "225e5a5df715a748cc56552c9cfa537e8df398eede54c00acbccc2d71db1ae49",
+        "src/shared/native-chat-command-envelope.ts": "31ae104daf1546979e69d22e9a0090bbd50a2ee0dab53526b9ff078c985670f1",
+        "src/shared/native-chat-command-output.ts": "39d67041ed86dabd1e64d9d1bcb711d40828f3a8ab2b298bec1388a03656d0e6",
+        "src/shared/ansi-escape-sequences.ts": "8953471ecfb0535adac690610272ba97ca8b4579d927b7515f315a75b617bc17",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+        "src/shared/native-chat-image-transcript-markers.ts": "4c387c3273798706a4b9326e9e17368382012eac3de43e11e70e649fe019fd5b",
+        "src/shared/claude-pasted-content.ts": "f155ecaa82274a49f55ed0a4039a3a6b6d377b8c48182ad95234c20da190f308",
+        "mobile/src/session/mobile-native-chat-image-transcript-markers.ts": "ddb44478e79f4addf6207e049ec749efdfa9898810517029fc8c35e42b5c368a",
+        "mobile/src/session/mobile-structured-queued-message-cards.ts": "70b3d06da26ad1451c21a34b78ad5c858e9f09dba9f07d4f96cc6b8203ebf9c9",
+        "src/shared/agent-session-visible-failures.ts": "858607950224790f27ed69d1c5d2c5a09d6b3e917d1233489060c74141d6a187",
+        "src/shared/structured-agent-session-start-failure-row-key.ts": "bb0e0545ec8d9dce534c4c0cdc01f57e4bea340be10e1f4a49bd984b60bb1092",
+        "src/shared/agent-session-refusal-notice.ts": "b1e980810858a6d29abf3810eebc99f4c68d814f40e462ad8abe78729aa4f97c",
+        "src/shared/agent-session-failure-words.ts": "a3a8a06be7c2f59fdff1d25dfd963bc9e59a85b096f1534669948d9221971dbf",
+        "src/shared/agent-session-availability-sentences.ts": "2540ee62fa5990db86bdb60fe3717cd6373ba94f73049b23cc3e8018ee8bb1b3",
+        "src/shared/agent-session-availability.ts": "314a4b96b8b4819eb89b534e002f0d82435889f15d2a3c949f0e8243af66c970",
+        "src/shared/agent-session-sign-in.ts": "090545d231570ff4bd862dfd624de2b850c18bfec7354cc514c28946233da151",
+        "src/shared/sentence-joining.ts": "d539181fb3fffa8e93fb4e730c33d357729d92c75d68280941a164fcbee6ba1f",
+        "src/shared/agent-session-failure-copy.ts": "442a13de669378c111505678cc0f5f4677d73e5fa0c5455b59c41bd3d8e29c3c",
+        "src/shared/claude-profile-routing.ts": "fb5c39a7faf8d3a98704e9fa74c8eab515c22c3cd57f9eb54e8df59aa8228b12",
+        "src/shared/agent-session-start-refusal-resumable.ts": "af99223d13aa845a4a1ba0bf510c621ecd828a77e8c00f1c82832d333b8fe81c",
+        "src/shared/agent-session-provider-retry-words.ts": "ed041f8dde45ccbad4d71432f40b985ef45f5888682bd5af0f153a33e7d26029",
+        "src/shared/agent-session-command-refusal-words.ts": "1f96ac54fe460a21b3d3ca81a93ffbbcc85f3830b9ab6e56632e4b7945594fb5",
+        "src/shared/agent-session-write-notice-copy.ts": "5e8e8501dd4f890e2d36fcdd490c5639e6a41a36d03439e21fe9c8c9382954e8",
+        "src/shared/agent-session-write-failure.ts": "c729236b76a6b8a7b3e7e5c982c825b7f95687a7c663d51b3150e2675aeb2a5f",
+        "src/shared/agent-session-refusal-reason-words.ts": "a1cf844c339ed561f9dcd9077c18ca3f6369f8445d46e1e59eaa51787450049c",
+        "src/shared/structured-agent-session-rejection-words.ts": "f48db7cf33dacb1cb117280bf57b95c5e2ecedba91d5d4dd98d553a5d668036e",
+        "src/shared/agent-session-wire.ts": "726aecbbde4fb3b560b06030a5d2702841352c9e1a972dc33bdd973925866b2d",
+        "src/shared/agent-session-queued-message-wire.ts": "eca8ae32bad170742737777bbdc9910f355a1527bb915926b19602bb4754122f",
+        "src/shared/agent-session-turn-completion-wire.ts": "1fbee9a8f8e56e443f3d95ff2f5f2bbc8dd1810a92d9f10c5143ca459c04236d",
+        "src/shared/agent-session-background-task-wire.ts": "60566bb776b69bb443f28a0b64474341ef8a39aabe1dab330588248b8cfb6687",
+        "mobile/src/session/mobile-agent-message-attribution.ts": "1e5b77808f3b9214310ab07a199e52612238097c145f095df47c01fe04caaedb",
+        "mobile/src/session/mobile-native-chat-unsent-notices.ts": "2b95c031cc2e0388b05bbe346a83b2bd0653aa9b656b41c3f2d3355c09d8cf14"
+      }
+    },
+    {
+      "pin": "071747853f5995ee233b36751613f09a60007c2b",
+      "modules": {
+        "src/shared/structured-agent-session-message-projection.ts": "d2e6babfbee1be47f330769f13de0ed6047f4becea44424f0ec57de15aa56431",
+        "src/shared/agent-session-journal-item-key.ts": "09ebe4758e3f38b5b7591f07f7b4dbfd04c7cc01713c9b0afe03b07b656d1fe8",
+        "src/shared/agent-session-queued-submission.ts": "05ebe62962f0dc0a6bc70d63d1660e92f6b7d04151e5a0290f22f20d2c87bdbd",
+        "src/shared/native-chat-provider-retry-runs.ts": "c54e09f00e0d8a08ddba39fce3aeade322568221bcc3855a4c19828bf4095c72",
+        "src/shared/agent-session-journal-producer.ts": "0f5983d862e36513ef49a5b58901b41f7fffc25fb8ed0191377996759aebfc4e",
+        "src/shared/agent-session-context-clear.ts": "2fa9f342ebb87b2287e2b2428df1e330134c39eb089005b6ca2acf21c1c4ed84",
+        "src/shared/agent-session-provider-context.ts": "f3131bee71f7d39255838a0f39f84b4a393eaa5db700948f3aba8dc07474f3f6",
+        "src/shared/native-chat-stopped-before-start.ts": "3837a154b64da0ef8c2d7320e06116a53181e2fe4d2e1e8adb1790568d421f9a",
+        "src/shared/agent-session-journal-position.ts": "defc64ce55d44423bcc4fac12ea2aaf7b64c43a7b44cbe3e21817c9c6a369ee7",
+        "src/shared/native-chat-send-order.ts": "f7d7115c950630d43686f67b65bcd610dc788c97393e6b9d058ae39fd47536ea",
+        "src/shared/native-chat-turn-membership.ts": "20245b275eea11cf0c0c3957c0bc727c6ac132305941b8ebe064b7854e19c616",
+        "src/shared/agent-session-turn-record.ts": "88f4d091d24783de5a0a1c00a65ac2c645e610f24d92f62705e6482ff83fa4b2",
+        "src/shared/agent-session-journal-types.ts": "58a24de7c259083a5be6f5b59506529a14dc89f47a7cbda4933bb51066cc7ead",
+        "src/shared/agent-turn-outcome.ts": "245f61f5b43933854fca1fde8d775d90df6ed409a8e11658ff2dcbae33642f57",
+        "src/shared/agent-session-context-usage-schema.ts": "189e1d597a8250523e33170abf9dfb31fae45de8af874bf50ae7b621a6fb9f2f",
+        "src/shared/agent-session-context-usage.ts": "cf8ce6a5f9b813f0965a784e91f8b5c7d23e20d7858e79ddb7c8e89072469355",
+        "src/shared/agent-turn-lifecycle-text.ts": "cc011849fdc23f59a4dfc6d4eea69694db523189d950a0844617548bc6b70696",
+        "src/shared/tui-agent-display-names.ts": "114a31281133787a273733e50838cadaaed00151cb0c6fc966b3a398c076520d",
+        "src/shared/native-chat-turn-grouping.ts": "aa623b1cb0fba80f4f88eed4dacb4dc28d6b02b955b179750e49415cf17ee0d2",
+        "src/shared/structured-agent-session-dispatch-rejection.ts": "96d131a855602b284730cc537f1643acc13683d1dde59bf274632757a7988770",
+        "src/shared/agent-session-failure.ts": "fba60dec4af599ee8e18081da67c9f0b91c0f415b1a013150437422acd7e7a4a",
+        "src/shared/agent-session-argument-problem.ts": "697da1b1ae30ff618610a8b1c1a077175b41601c6ae6efbc3f10a56fe07ee046",
+        "src/shared/agent-session-usage-limit.ts": "ae2f4d84ef8d9e69014085fd367e3822b68b16dd7594b02eab7e2847d995ac84",
+        "src/shared/agent-session-request-timeout.ts": "eb91b531ccb4274062b1731306187e2bc0aa1ab05ffdcf9eec271fc4821f1b44",
+        "src/shared/structural-value-equality.ts": "cf6c8f0c6cc128b8c150aa90f23b2065df4db4660cdc98f37593e955c2024455",
+        "src/shared/agent-session-wire-refusals.ts": "f58298ad8b2918cd6ab5a18165fe9fcb599fce9bf35334a139ff322a654c35a1",
+        "src/shared/agent-session-refusal-details.ts": "89b90e76b4a76c0bea578b0b6e73de36bfff51c3374eeef5e7e36770e451e095",
+        "src/shared/codex-cli-installation.ts": "deb192c6fe1e51fd1b1982c8f41c05eaf16cf3ccedf6548aae4996162b5a9bc9",
+        "src/shared/app-version.ts": "0d099730158a366125b189602f9136c46e3339bb1d3a5ac815bddcf71e108bc0",
+        "src/shared/agent-session-journal-schemas.ts": "d36cb1be1db0dcb4e8454a481816594ae33c541a7741045656851309185ce3bc",
+        "src/shared/agent-session-journal-thread-goal-schema.ts": "f0eb37f8a2bd42688fb8592053fe06a858c35d291666d00576e6471721c3ba08",
+        "src/shared/agent-session-journal-open-union.ts": "2205366bd9f2c93bd36966d2833d33b5ae3c4d0ad7548d1ee0e0189585e36954",
+        "src/shared/agent-session-failure-fact-schema.ts": "92dc53265545ab27bccd56e40a57b5d9627f8ddb083d9934f0513c97e6ea6606",
+        "src/shared/agent-session-rewind.ts": "fa04c35dfac7a0080a9f1db1b5c01917d9f454d7efdef3a435b367aeca5ed508",
+        "src/shared/structured-agent-session-live-turn.ts": "61eec83c7ecdb8ce464d6f148fd0d77df74de4b4e2f0c667345b0e0c219c4f5e",
+        "src/shared/structured-agent-session-tool-call-block.ts": "2bfcf1bba56b94154ca7f5b3fc44a517754e61352512c5e486457e5ea4744e7e",
+        "src/shared/native-chat-messages-waiting-behind-live-turn.ts": "a597f082fe6286e91fc37064c6a1e336b48a360b3dc0e396ff2bec90c4fa2e15",
+        "src/shared/structured-agent-session-command-entry.ts": "5c05b1852e1dc214b3308197b1fb7dba20eb5576732f1ec5e5eafb2bc9c3d390",
+        "src/shared/structured-agent-session-opening-send.ts": "b6826f91d34150a2c66df71308226f32d2176e6e86cff071b0b6ddad449dd2cf",
+        "src/shared/native-chat-turn-row-attribution.ts": "a441a6dccfa304c95e18f6886fbc7a6c6bdc98c6fec65a637d0b7ad320028386",
+        "src/shared/native-chat-transcript-projection.ts": "759da00a606fd6a8d2bb6fe6a7ba2a319a33bdf9553e21b77b7792a2df984884",
+        "src/shared/native-chat-types.ts": "17935c8f6d881a60067518c3c9503612f0030d2a389fbbe16b64a6c1baad6bc9",
+        "src/shared/native-chat-noise.ts": "052e9ee8883fcac5b38e032670e325a5797d89a5edb0dd747612eb84b6bc680e",
+        "src/shared/harness-injected-user-turns.ts": "c4ddb96ca6fc15fb9ff8012ef883ca8fdd152ab0bff18dac70e12beec89e0c5b",
+        "src/shared/native-chat-tool-fold.ts": "6d9dca0855efa98ff4035cc09937dca0065f61c24b394a4807598b7eeb6f817b",
+        "src/shared/native-chat-provider-frame-summary.ts": "594241490db5a6bd39983280969ce5129eaca2b28c101afe9627906de5669a80",
+        "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881",
+        "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+        "src/shared/native-chat-subagent-items.ts": "82425fe855195da42d3802c23f58311635f2a3a758584ad84b12d3f6fb0c9b39",
+        "src/shared/native-chat-subagent-summary.ts": "a41a36bcc304c32d6f955f4a675dda361817d50c97ec9568f1732a7183c885f0",
+        "src/shared/structured-agent-session-projection.ts": "ca5caaecd160e06d2e753a545833cee8500636a53e0991227a60ec76f512f85f",
+        "src/shared/agent-status-field-normalization.ts": "a826255ed297b59483a7c27a6e4c4ad8c80a4e3811957613213a8b05b5e0bc79",
+        "src/shared/orca-dispatch-status-prompt.ts": "43bb7f3e89603a76add787a5fe99ee682cfa9d76e6b2b2b720bede914dfa9a97",
+        "src/shared/agent-journal-tool-call-lifecycle.ts": "983081303500e9553a7278c8a64bb909eaf99742aad45fb5c9c3eee93b275768",
+        "src/shared/structured-agent-session-status-block.ts": "3114fc0927d0c48e1ad13a3da1fb4d8157878618a5b9d28a70f649cef10fb88b",
+        "src/shared/agent-session-orca-stop.ts": "c4ed738c8d9b516dbc56789c5461c1de622889ad10d20a946eb394bd7118e050",
+        "src/shared/agent-session-compaction.ts": "090179bd1a79501b16eff210f275ca85b07fbed7f1829f661434c0c8a7d8a26a",
+        "src/shared/provider-timeline-item-key.ts": "456ab813dd8cd82a0687c3c7d869f60bc64d9be3eb4f9ba58fbac3c1e6f8481c",
+        "src/shared/agent-status-types.ts": "940f490d4e9e78217640f95d37f6efe357dee1bcec27533b97dad82fc688682c",
+        "src/shared/json-text-structure-limit.ts": "3a3508fd11c5ec5e6b802cdaf44dfa903fe3da825ea2450d760346bae3c1b839",
+        "src/shared/agent-status-subagent-snapshot.ts": "b25956957016fb6d3a548ce84bc53f26cda3b6e725a3c47ddfc55059f4616ba2",
+        "src/shared/main-agent-status.ts": "b3aec592eecfce32bad51cf7d184a15bcb36acf10f3fddc4cdeb4db6640885dc",
+        "src/shared/agent-state-history.ts": "bbdb1a06c8db9d2e9f3bd57f7b4f1f88a157ebe9e3992e09be5e0ec3657139fa",
+        "src/shared/agent-status-freshness.ts": "f1ee4a37fdb779678533c666d28f6e69250bf4cc4ee6bba2c28fe56912577da7",
+        "src/shared/native-chat-tool-summary.ts": "501f748758c37eefce9b28b5d65db87111d768a98addbbef652757beb12317bf",
+        "src/shared/native-chat-tool-preview-prefix.ts": "42c2d527b81f8868b22c991da27fc326e2a219c92167d9bcb4850e3b32a63fda",
+        "src/shared/structured-agent-session-latest-request.ts": "a5791e3ff8ca73ac86a9436abd3a8c8213da246a4e4faf510fa0c9793f09cb1a",
+        "src/shared/native-chat-visual-directive.ts": "4d2c308435b64175a8ffe00b8c7ec49b906fc4d55345ecd94a18f6fa2bda81f5",
+        "src/shared/structured-agent-session-unanswered-dispatch.ts": "83a0403b01eb7c77246edd9a62cd20158fc1f0dfca6fc1271edb7413b3db0ae7",
+        "src/shared/sha256.ts": "4f5a7ec69361f80c744ef142a0200ddda98b78d8cd0c1ef1ee95ee7210e1c810",
+        "src/shared/agent-session-message-source.ts": "3d4461d5f2c3227d8a52433db2a2d0643a5003e347b5d243c9f07142d825f38d",
+        "src/shared/agent-session-conversation-name.ts": "f732ba58dbb855a4df0cc243c9112c06667611f7e790cb3ef610d71c39f439b9",
+        "src/shared/surrogate-safe-text-slice.ts": "c93077a966a142e8c4e4c4145801e219cee54c7616607a3cb989b6dabe7dadfd",
+        "src/shared/orca-session-address.ts": "cf821ba18a36194293efac045bd826a250c6d000e8442c7c66b92a12ec7d9d0d",
+        "src/shared/agent-session-record.ts": "842c4dbd8395a26ff50adf7da3fafdfe959e04eb314c7caf6c725a6df7050747",
+        "src/shared/agent-session-launch-args.ts": "4001086933c5e189cf9c824df053abb9a139fe812c725f5e7823d5629e5b851f",
+        "src/shared/agent-session-legacy-handoff-lease.ts": "5894948104c7abb90851e5fdb8de2ffcffdaf1da185ae18b9afdd59ee63eab68",
+        "src/shared/agent-session-conversation-command.ts": "c3c5bac0d9569aadc2f7fde32e453ae317c818cdbcccd357b4fb5eacfedacb1d",
+        "src/shared/agent-session-provider-handle.ts": "67b1fb7025f84d31fa507340e4757af846ec0be8e341e8b094a43d6b1fe1ce52",
+        "src/shared/agent-session-provider-handle-replacement.ts": "9e236b2c2c082c9c3ec4aca3827ce5d8f75926dd6b139c7053d9264e9b301cf7",
+        "src/shared/agent-session-provider-handle-encoding.ts": "d3404ef90f8533fbf37720ae7eac43cd0a1ebdbce335bce20eb05adeabea5d8f",
+        "src/shared/agent-session-account-home.ts": "d4d7fe74f62c7b3075f1fc4256cb4d13f03e56825436d1c9481663fe61e09f52",
+        "src/shared/structured-worker-handle.ts": "b7dfa2c1e832ee48d589869cb92598c8b1ffa256057b5edfe5f0ec673a88599f",
+        "src/shared/orca-session-address-prefix.ts": "d44a4bf817c56f7e83c2e4d48991bacb088e6114eefce43c34e6baa949b7c6ee",
+        "src/shared/zod-salvage.ts": "0c752ffb1d80f98cd1e6d7687adb619d1354ad9b454c40f71144f3a6ec3c640c",
+        "src/shared/structured-agent-session-status-started-at.ts": "c1fae8cd3e76a6b7846a20d8c46887a982d93c9fbd3322f74d2fbb89a0884fad",
+        "src/shared/structured-agent-session-owed-work.ts": "e3f14adc02ed7d14d49a66f6fa6d0a0b0ef5aa01d2945c97a8a67baa544b910c",
+        "src/shared/structured-agent-session-main-agent-working.ts": "34f24e986b93328c4059c1e9da8fc97792abf7f00659eef5c7c28fafc361c9fc",
+        "mobile/src/session/mobile-native-chat-message-plain-text.ts": "870e2c942d8d86d90ef0319b0f3ccb248d004887191f28ed582847203f1367b9",
+        "src/shared/agent-session-host-status-rows.ts": "02c293f1c4e6e3b666ec394c7be85a8edf587e38b00cfb20785ca0b413106d89",
+        "mobile/src/session/mobile-native-chat-render-data.ts": "6880e2551d874e2c2fb67b9114d86c065e732653b10016fd4daa581fc04de32d",
+        "src/shared/agent-type-label.ts": "8caa6b29fcc80aa6675fa9dcc84691d47ba92ec1146f11c29f07a198f5035930",
+        "src/shared/native-chat-empty-state.ts": "6899a863d55ee9713da8592138f5172da9d884a80f964d9e83101c3438bedc43",
+        "src/shared/native-chat-streaming.ts": "e1d6ffc4f4ec8305e85da96b0e0ca047166f9535e5736f23864c880d60013f4c",
+        "src/shared/native-chat-task-list-frames.ts": "3326bc577d723385b079c196ff9d26898e099b685964be85c742fbc3c8172408",
+        "src/shared/native-chat-task-list.ts": "da33c797daf5d8ce3baba22a8e3cce0df8e862540035fef5cbffac6bf78b0938",
+        "src/shared/native-chat-message-preparation.ts": "4a1fadb78258ee5ac460428ac2cfe001359b23e108e4e9ad554c78928db5a6e0",
+        "src/shared/native-chat-agent-profiles.ts": "7bf5a8275b6f9afb1b07bf9787af445459d4ac0825b30419440596d4c6413ed4",
+        "src/shared/native-chat-slash-commands.ts": "1672f91eb09a66ea93ab062ac9b9d5d8eebf7d9a08395a94c03169e2c5d43eee",
+        "src/shared/native-chat-command-envelope.ts": "31ae104daf1546979e69d22e9a0090bbd50a2ee0dab53526b9ff078c985670f1",
+        "src/shared/native-chat-command-output.ts": "39d67041ed86dabd1e64d9d1bcb711d40828f3a8ab2b298bec1388a03656d0e6",
+        "src/shared/ansi-escape-sequences.ts": "8953471ecfb0535adac690610272ba97ca8b4579d927b7515f315a75b617bc17",
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+        "src/shared/native-chat-image-transcript-markers.ts": "fbf491be37557aad1a733ecf2d348d9f277789e707379ec21444ce0768e4ec65",
+        "src/shared/claude-pasted-content.ts": "f155ecaa82274a49f55ed0a4039a3a6b6d377b8c48182ad95234c20da190f308",
+        "src/shared/native-chat-image-reference.ts": "3b8e42779f3fffa1b94e44294ba3a10bb0927e09c00b59de1bb50e48bdec2071",
+        "src/shared/agent-image-paste.ts": "e6cdf54f039166b34db75c71c60829af34647f2eb292f46279d7498d6820e401",
+        "src/shared/image-paste-following-text.ts": "f1adc657f004c317c965e526c4b24d4e864c98f1c88285facb7cc1d9b6829965",
+        "src/shared/cross-platform-path.ts": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3",
+        "src/shared/wsl-paths.ts": "8271d75fb65b85b6bfd279f2a12636f79ddeb3ffe4d9d409dd77f5cce2a46219",
+        "src/shared/file-uri-path.ts": "e584a0db4780a5742960d0592c05500a98ce137c09ee6fbe0d8f96fe29065571",
+        "mobile/src/session/mobile-native-chat-image-transcript-markers.ts": "ddb44478e79f4addf6207e049ec749efdfa9898810517029fc8c35e42b5c368a",
+        "mobile/src/session/mobile-structured-queued-message-cards.ts": "70b3d06da26ad1451c21a34b78ad5c858e9f09dba9f07d4f96cc6b8203ebf9c9",
+        "src/shared/agent-session-visible-failures.ts": "858607950224790f27ed69d1c5d2c5a09d6b3e917d1233489060c74141d6a187",
+        "src/shared/structured-agent-session-start-failure-row-key.ts": "bb0e0545ec8d9dce534c4c0cdc01f57e4bea340be10e1f4a49bd984b60bb1092",
+        "src/shared/agent-session-refusal-notice.ts": "de7378bad861748cacbcb9321449824f401b48434b36bbc1779157e32abb2ecb",
+        "src/shared/agent-session-failure-words.ts": "5149d74736a19a97b186b1e26d9ed6971a66cb9a1dbb9dab09f2226f02d5509b",
+        "src/shared/agent-session-availability-sentences.ts": "50bb1224d9aa892d1da8f168b800a79702588108b353ce25e8875937b5bd2270",
+        "src/shared/agent-session-availability.ts": "b36392ba91c98b8d4f1d79fc69454cd21638600d757ffcbc5441cd1aca582462",
+        "src/shared/agent-session-sign-in.ts": "798128ac1c01819ccd6bea8344f3f973bf417091dcfdc2ab10eb8540d1138857",
+        "src/shared/sentence-joining.ts": "d539181fb3fffa8e93fb4e730c33d357729d92c75d68280941a164fcbee6ba1f",
+        "src/shared/agent-session-failure-copy.ts": "03efdcafaac5593400fe94e87ffbd83fe254122f7ab2812abbe7a8f965efd42c",
+        "src/shared/claude-profile-routing.ts": "fb5c39a7faf8d3a98704e9fa74c8eab515c22c3cd57f9eb54e8df59aa8228b12",
+        "src/shared/agent-session-start-refusal-resumable.ts": "af99223d13aa845a4a1ba0bf510c621ecd828a77e8c00f1c82832d333b8fe81c",
+        "src/shared/agent-session-provider-retry-words.ts": "ed041f8dde45ccbad4d71432f40b985ef45f5888682bd5af0f153a33e7d26029",
+        "src/shared/agent-session-usage-limit-words.ts": "f7d3d99381cad686dfa351d74778a94162b1d2e47237d515f0360db75927c0f6",
+        "src/shared/agent-session-command-refusal-words.ts": "1f96ac54fe460a21b3d3ca81a93ffbbcc85f3830b9ab6e56632e4b7945594fb5",
+        "src/shared/agent-session-attachment-failure-words.ts": "e892f60bcd961862a116ce55757b99c1b9d830e8c89d8fddda43979446425687",
+        "src/shared/agent-session-write-notice-copy.ts": "e2d858a4721e05488678beef522fc039fba66ca61f37db8e686105beefd8f6b3",
+        "src/shared/agent-session-write-failure.ts": "a3c1a8fc39b3b46720c0e383a234ce5c4b432d8afd2adb6414b014c18715ea52",
+        "src/shared/agent-session-refusal-reason-words.ts": "792874933fc8f21c32c7063c09362b82eaf968747475217ea16714680cd1ea99",
+        "src/shared/structured-agent-session-rejection-words.ts": "f48db7cf33dacb1cb117280bf57b95c5e2ecedba91d5d4dd98d553a5d668036e",
+        "src/shared/agent-session-wire.ts": "31aa5cd7bb4dd15d1c998d96d4c7a456cbf77d3f06158c9c312d67c96bbbf3d3",
+        "src/shared/agent-session-queued-message-wire.ts": "76aa352ed496a21ed29a53560f77334c6f046fa4485cb706c12ff1d266255953",
+        "src/shared/agent-session-turn-completion-wire.ts": "1fbee9a8f8e56e443f3d95ff2f5f2bbc8dd1810a92d9f10c5143ca459c04236d",
+        "src/shared/agent-session-background-task-wire.ts": "7478d1afda832a9dd0596031d6c3307c14a4735483307ef9c43226b579503c13",
+        "mobile/src/session/mobile-agent-message-attribution.ts": "1e5b77808f3b9214310ab07a199e52612238097c145f095df47c01fe04caaedb",
+        "mobile/src/session/mobile-native-chat-unsent-notices.ts": "2b95c031cc2e0388b05bbe346a83b2bd0653aa9b656b41c3f2d3355c09d8cf14"
+      }
+    }
+  ],
+  "tuples": {
+    "T1:0": {
+      "kind": "history",
+      "inputSha256": "aa3ec5c480649094f6596d957201e340f606863dbe862de30fb03b7b0f1361d0",
+      "wholeReaderOutputSha256": "116686447ddeef0f8f60f192b6ce4fb9120e6644bea22d8c8b54e97208c38c46",
+      "visibleOutput": "c770350cefd871ce8b4e7425ceec9dc4d6a6f4b9f3837cf5889878f65b67782d",
+      "canonicalSha256": "db023fa9311dc560a9969cdf4b5b93225b797ce5bf095d4c59a12283a350c726"
+    },
+    "T1:1": {
+      "kind": "source-check",
+      "inputSha256": "15ddc5cd7db2382a42973f72979e64c9c57711df5db251f968e07d3738686b7e",
+      "wholeReaderOutputSha256": "116686447ddeef0f8f60f192b6ce4fb9120e6644bea22d8c8b54e97208c38c46",
+      "visibleOutput": "c770350cefd871ce8b4e7425ceec9dc4d6a6f4b9f3837cf5889878f65b67782d",
+      "canonicalSha256": "db023fa9311dc560a9969cdf4b5b93225b797ce5bf095d4c59a12283a350c726"
+    },
+    "T1:2": {
+      "kind": "history",
+      "inputSha256": "c0f73a5d30752e838a8859399798a752cf019ab606366209593e28fcf3a88c53",
+      "wholeReaderOutputSha256": "0133be36819f2315c602abf625bf18e32f80ee1a4bd4032ba6e00ef766db6f25",
+      "visibleOutput": "6be42ad27f632a2f28a07dcbddb71ee54b05aa4e83ce0cf81bda0b6580dc488a",
+      "canonicalSha256": "db023fa9311dc560a9969cdf4b5b93225b797ce5bf095d4c59a12283a350c726"
+    },
+    "T1:3": {
+      "kind": "source-check",
+      "inputSha256": "bdc809bb25f1349da7737906844154966235f1893148c41dfab1085c1d2a1ddc",
+      "wholeReaderOutputSha256": "0133be36819f2315c602abf625bf18e32f80ee1a4bd4032ba6e00ef766db6f25",
+      "visibleOutput": "6be42ad27f632a2f28a07dcbddb71ee54b05aa4e83ce0cf81bda0b6580dc488a",
+      "canonicalSha256": "db023fa9311dc560a9969cdf4b5b93225b797ce5bf095d4c59a12283a350c726"
+    },
+    "T1:4": {
+      "kind": "source-check",
+      "inputSha256": "4e30d21b25e2098508c801f4004f73fe6ce8f3bf6a38293743bbae4b466d0b6a",
+      "wholeReaderOutputSha256": "116686447ddeef0f8f60f192b6ce4fb9120e6644bea22d8c8b54e97208c38c46",
+      "visibleOutput": "c770350cefd871ce8b4e7425ceec9dc4d6a6f4b9f3837cf5889878f65b67782d",
+      "canonicalSha256": "db023fa9311dc560a9969cdf4b5b93225b797ce5bf095d4c59a12283a350c726"
+    },
+    "T1:5": {
+      "kind": "history",
+      "inputSha256": "9813770bc8e4aeba3e482a39f3e45bc64db69c5f302e9ee7ec0a4acc798b2765",
+      "wholeReaderOutputSha256": "f7286fbef81d255ed3508baa0d3beb593dd5ca90289c8cf925e416fe1a8902ca",
+      "visibleOutput": "d79339b384524720ada28e32957c0423bf41b49f3db869805bd4cdb124d55602",
+      "canonicalSha256": "7c1929402fb12d5c42acd0b5f52f53ed50b9b7dd6703fc2f66e769dcc0f31d2b"
+    },
+    "T1:7": {
+      "kind": "source-check",
+      "inputSha256": "e363b51495023dfb316f7a0a45a25e0cf0015d5c1d166e02c912e024a047fe30",
+      "wholeReaderOutputSha256": "f7286fbef81d255ed3508baa0d3beb593dd5ca90289c8cf925e416fe1a8902ca",
+      "visibleOutput": "d79339b384524720ada28e32957c0423bf41b49f3db869805bd4cdb124d55602",
+      "canonicalSha256": "7c1929402fb12d5c42acd0b5f52f53ed50b9b7dd6703fc2f66e769dcc0f31d2b"
+    },
+    "T1:8": {
+      "kind": "source-check",
+      "inputSha256": "e4664e0d3813a6221eec13369f8be7c6fa2204b88ad91320d6c21f3c28e0975b",
+      "wholeReaderOutputSha256": "f7286fbef81d255ed3508baa0d3beb593dd5ca90289c8cf925e416fe1a8902ca",
+      "visibleOutput": "d79339b384524720ada28e32957c0423bf41b49f3db869805bd4cdb124d55602",
+      "canonicalSha256": "7c1929402fb12d5c42acd0b5f52f53ed50b9b7dd6703fc2f66e769dcc0f31d2b"
+    },
+    "T1:9": {
+      "kind": "history",
+      "inputSha256": "4a77c9117e010bdb9e0b02f707d60c8107ba4ad385660d6599a31d15d6ae2393",
+      "wholeReaderOutputSha256": "109f9497d84f8e91c2fecdca83754f919d703084a12ddaa291689c45bc90321f",
+      "visibleOutput": "e5249cc0ae7b2d729378e7b488881bf04929d3b325e11b2639f18e7c07acdfeb",
+      "canonicalSha256": "3fd8680687417d5679079e8717e24e5c2f2f0fffd39ea2fb813d69fae85f41d7"
+    },
+    "T1:10": {
+      "kind": "source-check",
+      "inputSha256": "85c4ce9d2692202d62821b8802b6d7480268ee30a65e421e59e028e719dd16f0",
+      "wholeReaderOutputSha256": "109f9497d84f8e91c2fecdca83754f919d703084a12ddaa291689c45bc90321f",
+      "visibleOutput": "e5249cc0ae7b2d729378e7b488881bf04929d3b325e11b2639f18e7c07acdfeb",
+      "canonicalSha256": "3fd8680687417d5679079e8717e24e5c2f2f0fffd39ea2fb813d69fae85f41d7"
+    },
+    "T1:11": {
+      "kind": "history",
+      "inputSha256": "5905d8ce4ca9e87816792a80638fc0d79f8be08053be31b35bb629510b865f6f",
+      "wholeReaderOutputSha256": "6d59b73ffa0e0f1681d4cf207cb7f568c47747b575e20f7261aaf368e7fc4106",
+      "visibleOutput": "e59208b2c98b69dfa24b053be607950270af767b7ef0435efacc7d06900679d0",
+      "canonicalSha256": "3d8b69e98cfe7d9ca6d853e1dcb37fc3c7b20ffdc88c2e265e3666e369de26a5"
+    },
+    "T1:12": {
+      "kind": "source-check",
+      "inputSha256": "7e3c9929be9a07899bdc583e954844e2837963e536bbd056b7daa254e5e657dd",
+      "wholeReaderOutputSha256": "6d59b73ffa0e0f1681d4cf207cb7f568c47747b575e20f7261aaf368e7fc4106",
+      "visibleOutput": "e59208b2c98b69dfa24b053be607950270af767b7ef0435efacc7d06900679d0",
+      "canonicalSha256": "3d8b69e98cfe7d9ca6d853e1dcb37fc3c7b20ffdc88c2e265e3666e369de26a5"
+    },
+    "T1:13": {
+      "kind": "source-check",
+      "inputSha256": "3f3c7aba4f48f64b13b2b8aea2360f2b4b6cadbb29330eba99fddade1b79a02a",
+      "wholeReaderOutputSha256": "6d59b73ffa0e0f1681d4cf207cb7f568c47747b575e20f7261aaf368e7fc4106",
+      "visibleOutput": "e59208b2c98b69dfa24b053be607950270af767b7ef0435efacc7d06900679d0",
+      "canonicalSha256": "3d8b69e98cfe7d9ca6d853e1dcb37fc3c7b20ffdc88c2e265e3666e369de26a5"
+    },
+    "T2:0": {
+      "kind": "history",
+      "inputSha256": "5eaa6f9f164a5266850d584dd4d12f6c25f625fdb7f0fd9f811b2bf46037d0da",
+      "wholeReaderOutputSha256": "deae29ffe95488fb548bad3a33facda46d154e4394547930737c73790009feaf",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:1": {
+      "kind": "history",
+      "inputSha256": "88ac578ff949f86354abdc7cd9fa4575602216f0f2f7434ee029457e84e2fffd",
+      "wholeReaderOutputSha256": "fd8ceb7c9490d8689d9708dc6b49218c417c928e74169bba21b391b9a8b969e3",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:2": {
+      "kind": "history",
+      "inputSha256": "96a6b88ac98f5d58a1b3c916deed1a8c6162b5dbb0c8bc755de7c244d40c3db0",
+      "wholeReaderOutputSha256": "545d271465840aef2579c407c5bb2125abb16ad3c8280c2a1a8138e39c58320d",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:3": {
+      "kind": "history",
+      "inputSha256": "387c2c77c8efa028d38f2ff4ff5c325bfc1b56f499846390a705a08fe2081648",
+      "wholeReaderOutputSha256": "cf649a27d5a5908a8442bef112b9c45daf6968eff32eb922d2202e928b53596a",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:4": {
+      "kind": "history",
+      "inputSha256": "ba222826a0e6edaa997ed3baaeac50765466af714ed010a9370dcd1b3d3ee4f0",
+      "wholeReaderOutputSha256": "c6b6db84aceb89a15eb08b6e6c2732e910996d05246786ef1f41799b97efce7c",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:5": {
+      "kind": "history",
+      "inputSha256": "0ae3d8cf61f97de9d805afbe66d1239a7dca776b6a42a075290f87542e09e66e",
+      "wholeReaderOutputSha256": "81f18db7a5a33ea8b3d5f0194b46d38f4e01b411da35619f92a24f83dabe88b3",
+      "visibleOutput": "9365359c36c3297fd516ee93e20a8b113dcf27ec660777c7c7e20ae1c20d08fb",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:6": {
+      "kind": "source-check",
+      "inputSha256": "fb773e64e8bbad9d2390d1002ad26ad29bd613bb92582350dbe8caaf836e228e",
+      "wholeReaderOutputSha256": "81f18db7a5a33ea8b3d5f0194b46d38f4e01b411da35619f92a24f83dabe88b3",
+      "visibleOutput": "9365359c36c3297fd516ee93e20a8b113dcf27ec660777c7c7e20ae1c20d08fb",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:7": {
+      "kind": "history",
+      "inputSha256": "f60b784f46bde98a6f5fea563b8c5dd7417a596208600f0f63954a3fa865550d",
+      "wholeReaderOutputSha256": "6763269b5aceafa59683c02a62bc794d1ecf81149d570346da415c6dd6f12267",
+      "visibleOutput": "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95",
+      "canonicalSha256": "a6ff1827fc6f8d21a85997ef8e8ce83af726f9d2fc94838267e08fb1f60bdf8c"
+    },
+    "T2:9": {
+      "kind": "history",
+      "inputSha256": "6d5564540462cb5103ef925092f06303abd28354bb67c91833e50e20503b35db",
+      "wholeReaderOutputSha256": "d244b8d153f061d6df6ee9200544e1a888ac9cae37f47074209f72177d0cb7cb",
+      "visibleOutput": "f3b80a6534583f47131b26a4f5cf6eadf3edf6d1106309de7acaed2fd21544ff",
+      "canonicalSha256": "bdeb8cfe05b7a5ddcdcf0888149dd0d0ad5f51cb29e313ee47be8976be961d65"
+    },
+    "T2:10": {
+      "kind": "source-check",
+      "inputSha256": "6cb86359bf4a8996a5218bf965a25c4d5c51bfac3857e5278ee86b61eb034ad9",
+      "wholeReaderOutputSha256": "d244b8d153f061d6df6ee9200544e1a888ac9cae37f47074209f72177d0cb7cb",
+      "visibleOutput": "f3b80a6534583f47131b26a4f5cf6eadf3edf6d1106309de7acaed2fd21544ff",
+      "canonicalSha256": "bdeb8cfe05b7a5ddcdcf0888149dd0d0ad5f51cb29e313ee47be8976be961d65"
+    },
+    "T2:11": {
+      "kind": "history",
+      "inputSha256": "809b6a87c9ff672d51da5589c98abba74c0501c88190bbfe3034448d0dd6a78a",
+      "wholeReaderOutputSha256": "d7d5990380fede4b6d099317dc68eccde7afc345e9cb9e2197e1bf91f1bb7a4b",
+      "visibleOutput": "f3b80a6534583f47131b26a4f5cf6eadf3edf6d1106309de7acaed2fd21544ff",
+      "canonicalSha256": "bdeb8cfe05b7a5ddcdcf0888149dd0d0ad5f51cb29e313ee47be8976be961d65"
+    },
+    "T3:2": {
+      "kind": "history",
+      "inputSha256": "12216c210dfa5703e015026d0aad175c6e30d98a7f521b9132a0dd9de4dcf951",
+      "wholeReaderOutputSha256": "488d5012139bdff5b317749524dc406ad5fffc24aec4bd40e9f57f3bd19e9d4f",
+      "visibleOutput": "288110f83c40ae287dc1410ec88e99f9a3e6e6f71b8eb44f2e815b418e8c5978",
+      "canonicalSha256": "750e46e9e8e7e4bfe02070cde52231d72567669b6774d018c451426052fdbfe3"
+    },
+    "T3:3": {
+      "kind": "source-check",
+      "inputSha256": "883fb943b4d9e9bd0c260019ac31e9dcbbbd63d9b0b5b6779a017487a427a104",
+      "wholeReaderOutputSha256": "488d5012139bdff5b317749524dc406ad5fffc24aec4bd40e9f57f3bd19e9d4f",
+      "visibleOutput": "288110f83c40ae287dc1410ec88e99f9a3e6e6f71b8eb44f2e815b418e8c5978",
+      "canonicalSha256": "750e46e9e8e7e4bfe02070cde52231d72567669b6774d018c451426052fdbfe3"
+    },
+    "T3:4": {
+      "kind": "source-check",
+      "inputSha256": "9c24603454cc8316b7d6d144eaaf163364dfa3686bb79b103c6337c2ff04406c",
+      "wholeReaderOutputSha256": "488d5012139bdff5b317749524dc406ad5fffc24aec4bd40e9f57f3bd19e9d4f",
+      "visibleOutput": "288110f83c40ae287dc1410ec88e99f9a3e6e6f71b8eb44f2e815b418e8c5978",
+      "canonicalSha256": "750e46e9e8e7e4bfe02070cde52231d72567669b6774d018c451426052fdbfe3"
+    },
+    "T3:5": {
+      "kind": "history",
+      "inputSha256": "329be07d5c4b074fe33a80861df74fa76bda8a791c6f71a3a2c062cfb990d5a5",
+      "wholeReaderOutputSha256": "c71fc50989f9d13ae68fb7db8401c59aa36268cb9a43308d4ec575fdd709bbfd",
+      "visibleOutput": "48e2bddc8753ed16cad35b82e9aebb51e544fb5013c1172923cd0f35f53bff27",
+      "canonicalSha256": "750e46e9e8e7e4bfe02070cde52231d72567669b6774d018c451426052fdbfe3"
+    },
+    "T3:6": {
+      "kind": "history",
+      "inputSha256": "65dc1aa147953f0ef0066a4c44b748cf561241620f530d1a44df43bfd5a07100",
+      "wholeReaderOutputSha256": "be1905cae52979176c6373c5eefa0e415a67be6294ef601cb7ae1c853ab8797c",
+      "visibleOutput": "5df687491e4551d75a36205c880fefa423835738791c7311e47f8eaa8e0168b0",
+      "canonicalSha256": "5ecdf6bc0f5b6c5d5ac7932a281758a32b9937c69f86a80415d2f31e37174d49"
+    },
+    "T3:7": {
+      "kind": "history",
+      "inputSha256": "3f3efc0b6a3db53e6895375389b13ce064a5872901733364eed2e929df92dab0",
+      "wholeReaderOutputSha256": "c4a24e9c462d6e1ffe55c79abe909558deeec844ac6c5873156ca7b8d8ceaded",
+      "visibleOutput": "b4cf3b661af418f1456bf0569a1167454d927f56f710eda6ed37c59897b3b729",
+      "canonicalSha256": "f80f398ee9670fb00458a5c3ccf50b06cf61f7fef1479f5bfe13b439522c1b68"
+    },
+    "T3:8": {
+      "kind": "source-check",
+      "inputSha256": "0609182307aa2e7992ca0e998fab1eed721957867b0b22f6cffacf687ff560bd",
+      "wholeReaderOutputSha256": "c4a24e9c462d6e1ffe55c79abe909558deeec844ac6c5873156ca7b8d8ceaded",
+      "visibleOutput": "b4cf3b661af418f1456bf0569a1167454d927f56f710eda6ed37c59897b3b729",
+      "canonicalSha256": "f80f398ee9670fb00458a5c3ccf50b06cf61f7fef1479f5bfe13b439522c1b68"
+    },
+    "T4:0": {
+      "kind": "history",
+      "inputSha256": "44f4e4c8d063e57ee538ea5a5a4bc838005a3941963e99f5ec6ca1c2ce61dfa1",
+      "wholeReaderOutputSha256": "a4e3004ccb9108ff82e2a3c7568fa528b8d80352f14d09643c9e70905898ed63",
+      "visibleOutput": "c78e9699151bd192712515647daab6508f67592b5d695d86db77abe881689161",
+      "canonicalSha256": "5503bcb96f552b84475d791ca79bc89c8150f9538da7f594406bd163355bf4a5"
+    },
+    "T4:1": {
+      "kind": "source-check",
+      "inputSha256": "44824a1214a3607f4f7d2a95783bc5129e29f35b429923f4eb462c76fe8676c0",
+      "wholeReaderOutputSha256": "a4e3004ccb9108ff82e2a3c7568fa528b8d80352f14d09643c9e70905898ed63",
+      "visibleOutput": "c78e9699151bd192712515647daab6508f67592b5d695d86db77abe881689161",
+      "canonicalSha256": "5503bcb96f552b84475d791ca79bc89c8150f9538da7f594406bd163355bf4a5"
+    },
+    "T4:2": {
+      "kind": "history",
+      "inputSha256": "782eb0243c692f2e7f1f112fb7ae1df09c6caf2c162d06377c7d15d34eaf2609",
+      "wholeReaderOutputSha256": "b82474a6a0e41cb5805b8aea7a2d599630719ebb1878d15725833cf716ef254a",
+      "visibleOutput": "abff1c412cc03a273a2bb8c7020599f1ba59fd4c0682fa622c07497565ac28d0",
+      "canonicalSha256": "674f99a156f8b73a42a487124dd93aa23e91ae481e6e25c8d6627ad2ac284a34"
+    },
+    "T4:3": {
+      "kind": "source-check",
+      "inputSha256": "0d1dbcc129530339588052b838447ac0fa754662c2935ea8caa8aa9b16ccd6eb",
+      "wholeReaderOutputSha256": "b82474a6a0e41cb5805b8aea7a2d599630719ebb1878d15725833cf716ef254a",
+      "visibleOutput": "abff1c412cc03a273a2bb8c7020599f1ba59fd4c0682fa622c07497565ac28d0",
+      "canonicalSha256": "674f99a156f8b73a42a487124dd93aa23e91ae481e6e25c8d6627ad2ac284a34"
+    },
+    "T4:4": {
+      "kind": "source-check",
+      "inputSha256": "a8a78bacf747f31f255844295d48f291ea684f036811dabe32dedff742d07eaa",
+      "wholeReaderOutputSha256": "b82474a6a0e41cb5805b8aea7a2d599630719ebb1878d15725833cf716ef254a",
+      "visibleOutput": "abff1c412cc03a273a2bb8c7020599f1ba59fd4c0682fa622c07497565ac28d0",
+      "canonicalSha256": "674f99a156f8b73a42a487124dd93aa23e91ae481e6e25c8d6627ad2ac284a34"
+    },
+    "T4:5": {
+      "kind": "history",
+      "inputSha256": "2c7a62e42baf57324b9e00ae0b192832e8aae42b841f19b33e5feef17c6d7b38",
+      "wholeReaderOutputSha256": "9229e6bf2d0fe9da05c642d003c6e7a7299f6504070992121900b57c562428e9",
+      "visibleOutput": "4fe3a02ee454bee2946db07fba7728c688b3587bcf717706b2826ed0502003e2",
+      "canonicalSha256": "674f99a156f8b73a42a487124dd93aa23e91ae481e6e25c8d6627ad2ac284a34"
+    },
+    "T4:6": {
+      "kind": "history",
+      "inputSha256": "adec7c8c2cca56cf4bdbc959d97d3f299033b39d1d71aad6386d4b419fbb0aa8",
+      "wholeReaderOutputSha256": "fed3e97e68f0414e1bafba910633a41fd6803321ee2ef0851bb3bae16ecc92d3",
+      "visibleOutput": "930700eb5bc92fbfbae81b2175ba7286a39f159e7eac66c2e55bc1b95c476627",
+      "canonicalSha256": "bc81250adbba9173fc3261dffe45fada79c5d9cfa2ab9d5d66b733c1e5561571"
+    },
+    "T4:7": {
+      "kind": "history",
+      "inputSha256": "1cb76acd93797b782a8f637f7baffa939451bdd724284ae4b988aca02f6b12ef",
+      "wholeReaderOutputSha256": "78f43e790fd4551a34823371dff437dfb9cb6871eaa6b8201f8d3ac766decf07",
+      "visibleOutput": "3a964147c7e94b698ace28a8ba1d329d83fa75dfd4b1630358ac2001257a5bfa",
+      "canonicalSha256": "e777bff93167dad46b52f3da086780c36aba2023d4d51e398fedd5215deb5840"
+    },
+    "T4:8": {
+      "kind": "source-check",
+      "inputSha256": "988e2fd2e2611ee86d7e7e2424ad370413178ad68f60df8da358870f18893526",
+      "wholeReaderOutputSha256": "78f43e790fd4551a34823371dff437dfb9cb6871eaa6b8201f8d3ac766decf07",
+      "visibleOutput": "3a964147c7e94b698ace28a8ba1d329d83fa75dfd4b1630358ac2001257a5bfa",
+      "canonicalSha256": "e777bff93167dad46b52f3da086780c36aba2023d4d51e398fedd5215deb5840"
+    },
+    "T5:0": {
+      "kind": "history",
+      "inputSha256": "50633bc42a8d68c997ce9819dd33027176708ff7b048ba6e896f089180252f9b",
+      "wholeReaderOutputSha256": "b9365dae8ef5a5889687622d90379220831e8c5d8eb087bb18736ea9422e4371",
+      "visibleOutput": "6d09cb52345917df564584ebff8f7c3fe2ba1b4c158f4d2a653b1a1a2f8b57f1",
+      "canonicalSha256": "87631c2314c9a0be3636fa012c2af4936b21d65d1af8ad31eddb6381f14a0a62"
+    },
+    "T5:1": {
+      "kind": "history",
+      "inputSha256": "68b29a93483591807326ab2fb6cb899a446d9a69ebe407ee30cda0f2551ef49b",
+      "wholeReaderOutputSha256": "c469a89af542a71e697f4d36258253b555b571687f7501835d063fcacc895d81",
+      "visibleOutput": "7d4d63d499eeac61eaed2f65df491ff2d1b61d3ec51d071ea037cf30139eeb5a",
+      "canonicalSha256": "d77e5eb028bfd8f1e0f5e47c5366bf12bb94c1e1b420c76e8ca6556e745bf3de"
+    },
+    "T5:2": {
+      "kind": "history",
+      "inputSha256": "283e7d371de1f012189252bc34747eadb38c31655d56749259e41af5cf276344",
+      "wholeReaderOutputSha256": "6a953ecbf9bd45d3f1c34a5d97c4f44dc035169a7713a686eda62f28343c979e",
+      "visibleOutput": "84353b4c567e074c54f50a5798c289c99709b86b78e01d85a62e15414443e5bb",
+      "canonicalSha256": "ba02e0a1a75f95d16df5115d1c9772c347744a39a873181a007f9e21fced658c"
+    },
+    "T6:0": {
+      "kind": "history",
+      "inputSha256": "f9374a9e6fc0217900dd04c9928ca6f10725b7990edbce5b6a6fd0b6a4c484d4",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "e1b385eeb7b5c02ab281ff0558ac7744009d0f64847b89bd24da3a7e30c07e02"
+    },
+    "T6:1": {
+      "kind": "source-check",
+      "inputSha256": "c87017cd7cda15e4580fadcc7a8aab5dbc52a6ffedeca168a7d685b5b4b84292",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "e1b385eeb7b5c02ab281ff0558ac7744009d0f64847b89bd24da3a7e30c07e02"
+    },
+    "T6:2": {
+      "kind": "source-check",
+      "inputSha256": "5ea737d209c5f1cfd3ec74abf5e4f1953def29f81c61c5f7763315093748d208",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "e1b385eeb7b5c02ab281ff0558ac7744009d0f64847b89bd24da3a7e30c07e02"
+    },
+    "T6:5": {
+      "kind": "history",
+      "inputSha256": "dd03c8f6472789ca502a2cd29520627d70c0b2d78f7af04a235550c35199374d",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "980ca41df5bf3ed5798c2597208b2ddc37f1a12082752abbb8b7a318b38a10d2"
+    },
+    "T6:6": {
+      "kind": "source-check",
+      "inputSha256": "dcba7ec4ed612894021bc868d9433a7180ff7e51370a7babce29973a572a9a4d",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "980ca41df5bf3ed5798c2597208b2ddc37f1a12082752abbb8b7a318b38a10d2"
+    },
+    "T6:7": {
+      "kind": "source-check",
+      "inputSha256": "918e5dd010d5c07cfea067cfb8d631b03af66622d89d36d68a7fefd78c94cf76",
+      "wholeReaderOutputSha256": "996efbacc221357bf28a812a91353d4ca20642686660e04c68b4599285bcfdba",
+      "visibleOutput": "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366",
+      "canonicalSha256": "980ca41df5bf3ed5798c2597208b2ddc37f1a12082752abbb8b7a318b38a10d2"
+    },
+    "T7:0": {
+      "kind": "history",
+      "inputSha256": "b473b188161aacd7e77ff02cdecd33b6e73e639a8a4103cbadcd38092e7f72d9",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "37abba78532e2dc3ffaf1c2d72351e709d4fc37ecb82700d30aad16eaf498877"
+    },
+    "T7:1": {
+      "kind": "source-check",
+      "inputSha256": "95df497792dd35e24f4bfcc87dc2e719ae3d56ad5080522de451e904b8c9fa0d",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "37abba78532e2dc3ffaf1c2d72351e709d4fc37ecb82700d30aad16eaf498877"
+    },
+    "T7:2": {
+      "kind": "source-check",
+      "inputSha256": "118c62ea6bcea63514681293098154b14360945e829c81e0fcab455ff225940e",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "37abba78532e2dc3ffaf1c2d72351e709d4fc37ecb82700d30aad16eaf498877"
+    },
+    "T7:5": {
+      "kind": "history",
+      "inputSha256": "e63869499f2dee710a547cf94c4d3a5b12c2627034120d604a02845d1553a534",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "4a001e1028e3ea7bca2738f9a03710ab601e7e5532deba70abfbfb19017f711f"
+    },
+    "T7:6": {
+      "kind": "source-check",
+      "inputSha256": "1ce928c08009ba7ac4aa027ae0fee259d3d073f4211f98e88ca3d013ec55465c",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "4a001e1028e3ea7bca2738f9a03710ab601e7e5532deba70abfbfb19017f711f"
+    },
+    "T7:7": {
+      "kind": "source-check",
+      "inputSha256": "1d9b19cb7585ea8314c91748545357c93f747dd6f29e059b5c6f2094123677dd",
+      "wholeReaderOutputSha256": "cd9e58413dfc2a3f3c4c80ad36bbeac8ca869bfca0b23811d23eff5dad45bdc4",
+      "visibleOutput": "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca",
+      "canonicalSha256": "4a001e1028e3ea7bca2738f9a03710ab601e7e5532deba70abfbfb19017f711f"
+    },
+    "T8:0": {
+      "kind": "history",
+      "inputSha256": "5050dd397f4e8d0dde23bce519c25b5b2c2f14f215fd8f9770e81febaf2e6cd5",
+      "wholeReaderOutputSha256": "2abf573138a539ba43138fbf12d27095da5d9e145979c7ce1d54c1e62eadcfad",
+      "visibleOutput": "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888",
+      "canonicalSha256": "0ea650d54f539b71c83a78f162acb90997a316f0dbf9941581d42c4e0d119073"
+    },
+    "T8:1": {
+      "kind": "source-check",
+      "inputSha256": "779db4d1fc094f084451e2c0fc5cb2afd2074c8ec78b4cc1a403fc1298387234",
+      "wholeReaderOutputSha256": "2abf573138a539ba43138fbf12d27095da5d9e145979c7ce1d54c1e62eadcfad",
+      "visibleOutput": "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888",
+      "canonicalSha256": "0ea650d54f539b71c83a78f162acb90997a316f0dbf9941581d42c4e0d119073"
+    },
+    "T8:2": {
+      "kind": "source-check",
+      "inputSha256": "5972f5c9782abfe99920fc107d974814e200ecd9655905238ac8e04bb4da9a15",
+      "wholeReaderOutputSha256": "2abf573138a539ba43138fbf12d27095da5d9e145979c7ce1d54c1e62eadcfad",
+      "visibleOutput": "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888",
+      "canonicalSha256": "0ea650d54f539b71c83a78f162acb90997a316f0dbf9941581d42c4e0d119073"
+    },
+    "T8:3": {
+      "kind": "history",
+      "inputSha256": "cec621d0710a195d2b25322572b09033c9afe326aa92c03706716423ef8e3635",
+      "wholeReaderOutputSha256": "2abf573138a539ba43138fbf12d27095da5d9e145979c7ce1d54c1e62eadcfad",
+      "visibleOutput": "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888",
+      "canonicalSha256": "8ef156eb2799092daffd00e46ec1de2d7fea4b4ad192ba731fe1c1675662d01c"
+    },
+    "T8:4": {
+      "kind": "source-check",
+      "inputSha256": "67e7a2a567ca6037141d318005671a57f179ba491827f06bdfd880b37ee2990a",
+      "wholeReaderOutputSha256": "2abf573138a539ba43138fbf12d27095da5d9e145979c7ce1d54c1e62eadcfad",
+      "visibleOutput": "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888",
+      "canonicalSha256": "8ef156eb2799092daffd00e46ec1de2d7fea4b4ad192ba731fe1c1675662d01c"
+    },
+    "T8:5": {
+      "kind": "history",
+      "inputSha256": "aa347a588bf9fcd1451c7850a727dc9fab5d932846b058eb130322bea25f67f5",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "868d23917f666b20d9bf33fd6e28b605d9e89dec3a6e2890d46da716647e5253"
+    },
+    "T8:6": {
+      "kind": "source-check",
+      "inputSha256": "467d5f00d88eb56a2bc4b47162c6c218c16c2a62fc89b190a942d340f668e429",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "868d23917f666b20d9bf33fd6e28b605d9e89dec3a6e2890d46da716647e5253"
+    },
+    "T8:7": {
+      "kind": "history",
+      "inputSha256": "23d02b33eae03025e5b1d21a594a4eace489016ca832d1b3b24ad9a3cb303cf1",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "447dc512f5724cc6a36496425cf81c165ce1932b3cac2b5e152299c658f76756"
+    },
+    "T8:9": {
+      "kind": "source-check",
+      "inputSha256": "391c48dca5344df7f32ff1d01752a2bc1d0d37f9ae3ff31edc1c913dbedf1649",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "447dc512f5724cc6a36496425cf81c165ce1932b3cac2b5e152299c658f76756"
+    },
+    "T8:10": {
+      "kind": "source-check",
+      "inputSha256": "19cf9c6e9ab20cc2e5dbad2b0ef0c90375d020338192e87e3c192c5586573b18",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "447dc512f5724cc6a36496425cf81c165ce1932b3cac2b5e152299c658f76756"
+    },
+    "T8:11": {
+      "kind": "history",
+      "inputSha256": "b9a7663c9a8a4640cbdb14f6c4c4c84bdd3931cb9c38ec1c71524f816dad85d8",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "20da96925b7e8a6b206aa89780a9a96c42623110a2bbd2a0cfbdd3adedf5d7dd"
+    },
+    "T8:12": {
+      "kind": "source-check",
+      "inputSha256": "ffb84816b2fd9f0d61ac3bf56e23985eb0702c93f07fd6ffa2c3c53ac53e3119",
+      "wholeReaderOutputSha256": "6fc97d221503ceb1905f3e142714e8dafb693a4732bb073e378cfc032b226a7c",
+      "visibleOutput": "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f",
+      "canonicalSha256": "20da96925b7e8a6b206aa89780a9a96c42623110a2bbd2a0cfbdd3adedf5d7dd"
+    },
+    "T9:0": {
+      "kind": "history",
+      "inputSha256": "042f5fab75918730c85d3423c6db5dab94a7b40693091a42de3419e5c07c4f4f",
+      "wholeReaderOutputSha256": "eecfefb9aa37b5cec30e63b77ed6030fa838f050589d32966c9027897f2e20cf",
+      "visibleOutput": "d9c4f72ec64626d141f6a81ec376f795718d83659307352f9e58a86843a5c6c4",
+      "canonicalSha256": "5ecaef6ae707d3db6afe34e64ffbf068e04717302c55f21b222e535533edd53b"
+    },
+    "T9:1": {
+      "kind": "history",
+      "inputSha256": "853ac1ea6f0265c3dbb920407fdeee565e6656759da0d2c57dab95ffd319b08c",
+      "wholeReaderOutputSha256": "82ba1be8c5192a850d7336d356f625eff015bc3a12e93293934af0ef31de948d",
+      "visibleOutput": "99b8ae435b68658833d56345601e9397f8208c1f8d179bbd1937a2fa372daa1c",
+      "canonicalSha256": "cf8399b12d1e0363c832a680868c15c38da68850f41de713391c2ec9831e81d2"
+    },
+    "T9:2": {
+      "kind": "history",
+      "inputSha256": "676e559db5cde4826197e111e00d034a505ed329ca926f0300a4e7ba95388376",
+      "wholeReaderOutputSha256": "82ba1be8c5192a850d7336d356f625eff015bc3a12e93293934af0ef31de948d",
+      "visibleOutput": "99b8ae435b68658833d56345601e9397f8208c1f8d179bbd1937a2fa372daa1c",
+      "canonicalSha256": "ea02c2e54df7f0904fe17299f768dc685d7a7c37a18a6e5942ed87a009163103"
+    },
+    "T9:3": {
+      "kind": "history",
+      "inputSha256": "61b4aa65902e30baa2148ad3eed684ddba9dbb0032463fc21e9fb2545b94a38d",
+      "wholeReaderOutputSha256": "82ba1be8c5192a850d7336d356f625eff015bc3a12e93293934af0ef31de948d",
+      "visibleOutput": "99b8ae435b68658833d56345601e9397f8208c1f8d179bbd1937a2fa372daa1c",
+      "canonicalSha256": "20e727ec8f6f8c5dbeacbdcd7dafac280815e95b0d09c8f8afba0cbb8e626119"
+    }
+  },
+  "tests": {
+    "installs old-reader source and exact controls through RPC, disk reopen, Send and Delete without changing capable readers": [
+      "T1:0",
+      "T1:1",
+      "T1:2",
+      "T1:3",
+      "T1:4",
+      "T1:5",
+      "T1:5",
+      "T1:7",
+      "T1:8",
+      "T1:9",
+      "T1:10",
+      "T1:11",
+      "T1:12",
+      "T1:13",
+      "T1:11",
+      "T1:12"
+    ],
+    "keeps a hidden original pageable beyond1024 rows and preserves edited recovery through a refused original settlement": [
+      "T2:0",
+      "T2:1",
+      "T2:2",
+      "T2:3",
+      "T2:4",
+      "T2:5",
+      "T2:6",
+      "T2:7",
+      "T2:5",
+      "T2:9",
+      "T2:10",
+      "T2:11"
+    ],
+    "retires the source after changed Save (second failed handoff: false), retaining its exact live control and independent edited handoff": [
+      "T1:0",
+      "T1:1",
+      "T3:2",
+      "T3:3",
+      "T3:4",
+      "T3:5",
+      "T3:6",
+      "T3:7",
+      "T3:8"
+    ],
+    "retires the source after changed Save (second failed handoff: true), retaining its exact live control and independent edited handoff": [
+      "T4:0",
+      "T4:1",
+      "T4:2",
+      "T4:3",
+      "T4:4",
+      "T4:5",
+      "T4:6",
+      "T4:7",
+      "T4:8"
+    ],
+    "keeps an image-only waiting queue and pause visible through Resume and a failed queued start": [
+      "T5:0",
+      "T5:1",
+      "T5:2"
+    ],
+    "keeps ordinary uncertain original through cold/late proof, independent of a saved physical edit (false/false)": [
+      "T6:0",
+      "T6:1",
+      "T6:2",
+      "T6:0",
+      "T6:1",
+      "T6:5",
+      "T6:6",
+      "T6:7",
+      "T6:5",
+      "T6:6"
+    ],
+    "keeps ordinary uncertain original through cold/late proof, independent of a saved physical edit (true/false)": [
+      "T7:0",
+      "T7:1",
+      "T7:2",
+      "T7:0",
+      "T7:1",
+      "T7:5",
+      "T7:6",
+      "T7:7",
+      "T7:5",
+      "T7:6"
+    ],
+    "keeps ordinary uncertain original through cold/late proof, independent of a saved physical edit (true/true)": [
+      "T8:0",
+      "T8:1",
+      "T8:2",
+      "T8:3",
+      "T8:4",
+      "T8:5",
+      "T8:6",
+      "T8:7",
+      "T8:7",
+      "T8:9",
+      "T8:10",
+      "T8:11",
+      "T8:12"
+    ],
+    "keeps a saved physical hold independent while its own rejected retry blocks the ordered suffix": [
+      "T9:0",
+      "T9:1",
+      "T9:2",
+      "T9:3"
+    ]
+  },
+  "visibleOutputs": {
+    "c770350cefd871ce8b4e7425ceec9dc4d6a6f4b9f3837cf5889878f65b67782d": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 4
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 4
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+        ]
+      }
+    },
+    "6be42ad27f632a2f28a07dcbddb71ee54b05aa4e83ce0cf81bda0b6580dc488a": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original"
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "d79339b384524720ada28e32957c0423bf41b49f3db869805bd4cdb124d55602": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000003": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+        ]
+      }
+    },
+    "e5249cc0ae7b2d729378e7b488881bf04929d3b325e11b2639f18e7c07acdfeb": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        },
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 13
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "text": "original"
+        },
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        },
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000005-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 13
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000005",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000005",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000005", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000003": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+        ],
+        "orca:1800000000000-00000000000000000000000000000005": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000005-1.png"
+        ]
+      }
+    },
+    "e59208b2c98b69dfa24b053be607950270af767b7ef0435efacc7d06900679d0": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000005", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000003": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+        ]
+      }
+    },
+    "f71c52cc85c4401a6a6a1af3f3c0b4a94795e3c7b025cd516e5c267a9a8d6a95": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "9365359c36c3297fd516ee93e20a8b113dcf27ec660777c7c7e20ae1c20d08fb": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 2
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 2
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        [
+          "orca:1800000000000-00000000000000000000000000000002",
+          "Codex couldn't restart. Send your message to try again."
+        ]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+        ]
+      }
+    },
+    "f3b80a6534583f47131b26a4f5cf6eadf3edf6d1106309de7acaed2fd21544ff": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "changed\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Codex couldn't restart.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "changed\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "288110f83c40ae287dc1410ec88e99f9a3e6e6f71b8eb44f2e815b418e8c5978": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "48e2bddc8753ed16cad35b82e9aebb51e544fb5013c1172923cd0f35f53bff27": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original"
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "5df687491e4551d75a36205c880fefa423835738791c7311e47f8eaa8e0168b0": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "edited original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000004",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "queued": true,
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000004",
+          "text": "edited original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "edited original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000004-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000004",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "queued": true,
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000004": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000004-1.png"
+        ]
+      }
+    },
+    "b4cf3b661af418f1456bf0569a1167454d927f56f710eda6ed37c59897b3b729": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        [
+          "orca:1800000000000-00000000000000000000000000000004",
+          "Orca restarted before this message was sent."
+        ]
+      ],
+      "resumableCard": true,
+      "previews": {}
+    },
+    "c78e9699151bd192712515647daab6508f67592b5d695d86db77abe881689161": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "text": "original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000003",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 7
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000003", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000003": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000003-1.png"
+        ]
+      }
+    },
+    "abff1c412cc03a273a2bb8c7020599f1ba59fd4c0682fa622c07497565ac28d0": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000003", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "4fe3a02ee454bee2946db07fba7728c688b3587bcf717706b2826ed0502003e2": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "edited original"
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000003", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {}
+    },
+    "930700eb5bc92fbfbae81b2175ba7286a39f159e7eac66c2e55bc1b95c476627": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "edited original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 10
+          },
+          "queued": true,
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "text": "edited original"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "edited original",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000005-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000005",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 10
+          },
+          "queued": true,
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000003", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000005": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000005-1.png"
+        ]
+      }
+    },
+    "3a964147c7e94b698ace28a8ba1d329d83fa75dfd4b1630358ac2001257a5bfa": {
+      "messages": [],
+      "plaintext": [],
+      "transient": [],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "edited original\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000002", "Your message was not sent."],
+        ["orca:1800000000000-00000000000000000000000000000003", "Your message was not sent."],
+        [
+          "orca:1800000000000-00000000000000000000000000000005",
+          "Orca restarted before this message was sent."
+        ]
+      ],
+      "resumableCard": true,
+      "previews": {}
+    },
+    "6d09cb52345917df564584ebff8f7c3fe2ba1b4c158f4d2a653b1a1a2f8b57f1": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "prior work"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": null,
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [],
+      "resumableCard": true,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+        ]
+      }
+    },
+    "7d4d63d499eeac61eaed2f65df491ff2d1b61d3ec51d071ea037cf30139eeb5a": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        },
+        {
+          "blocks": [
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-57df654a46d5482f8664d37950cda4ad",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 11
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "prior work"
+        },
+        {
+          "id": "orca:1800000000000-57df654a46d5482f8664d37950cda4ad",
+          "text": ""
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        },
+        {
+          "blocks": [
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-57df654a46d5482f8664d37950cda4ad-0.png"
+            }
+          ],
+          "id": "orca:1800000000000-57df654a46d5482f8664d37950cda4ad",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 11
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000,
+          "unsent": true
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "command": true,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-57df654a46d5482f8664d37950cda4ad", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+        ],
+        "orca:1800000000000-57df654a46d5482f8664d37950cda4ad": [
+          "file:///device/orca%3A1800000000000-57df654a46d5482f8664d37950cda4ad-0.png"
+        ]
+      }
+    },
+    "84353b4c567e074c54f50a5798c289c99709b86b78e01d85a62e15414443e5bb": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "prior work"
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "prior work",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [
+        ["orca:1800000000000-57df654a46d5482f8664d37950cda4ad", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+        ]
+      }
+    },
+    "5098df7aa295bca5fd7ef8ccdd216cb9cdbac7bba3e5ba7bc34d7b82a6350366": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": []
+      }
+    },
+    "e4534fc3d43279f5004f62e56dd9ff8a540c44d0b95e5653e038a111d39c8dca": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph.\n\nFinal prose after the image."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [],
+      "busy": [],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png",
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+        ]
+      }
+    },
+    "8c4175abc1c5a430935ed882d5232beec666993efbcc9679b7c1fac911034888": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph.\n\nFinal prose after the image."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "command": true,
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png\nFinal prose after the image.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "command": true,
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png\nFinal prose after the image.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png",
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+        ]
+      }
+    },
+    "bfef2f2c6aa4cec2b5c19bf0efcea865738b64f3f59c2db7ede012729a54de5f": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Original first paragraph.\n\nKeep the complete final paragraph.\n\nFinal prose after the image."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Original first paragraph.\n\nKeep the complete final paragraph.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png"
+            },
+            {
+              "text": "Final prose after the image.",
+              "type": "text"
+            },
+            {
+              "path": "<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+              "type": "image-ref",
+              "url": "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "command": true,
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Independent changed prose.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png"
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "command": true,
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Independent changed prose.\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png\n<host-root>/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a/shot.png",
+          "waitsForAgent": true
+        }
+      ],
+      "notices": [],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": [
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-1.png",
+          "file:///device/orca%3A1800000000000-00000000000000000000000000000002-3.png"
+        ]
+      }
+    },
+    "d9c4f72ec64626d141f6a81ec376f795718d83659307352f9e58a86843a5c6c4": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Complete immutable original.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Complete immutable original."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Complete immutable original.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Complete immutable original."
+        },
+        {
+          "attribution": null,
+          "caption": null,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "First complete waiting input."
+        },
+        {
+          "attribution": null,
+          "caption": null,
+          "messageId": "1800000000000-00000000000000000000000000000004",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "Second complete waiting input."
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Paused",
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": false,
+          "paused": true,
+          "state": "waiting",
+          "text": "Complete immutable original."
+        },
+        {
+          "attribution": null,
+          "caption": null,
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "First complete waiting input."
+        },
+        {
+          "attribution": null,
+          "caption": null,
+          "messageId": "1800000000000-00000000000000000000000000000004",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "Second complete waiting input."
+        }
+      ],
+      "notices": [],
+      "resumableCard": true,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": []
+      }
+    },
+    "99b8ae435b68658833d56345601e9397f8208c1f8d179bbd1937a2fa372daa1c": {
+      "messages": [
+        {
+          "blocks": [
+            {
+              "text": "Complete immutable original.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "plaintext": [
+        {
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "text": "Complete immutable original."
+        }
+      ],
+      "transient": [
+        {
+          "blocks": [
+            {
+              "text": "Complete immutable original.",
+              "type": "text"
+            }
+          ],
+          "id": "orca:1800000000000-00000000000000000000000000000002",
+          "journalPosition": {
+            "index": 0,
+            "sequence": 3
+          },
+          "role": "user",
+          "source": "transcript",
+          "timestamp": 1800000000000
+        }
+      ],
+      "idle": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "Complete immutable original."
+        },
+        {
+          "attribution": null,
+          "caption": "Waiting \u2014 a message ahead needs attention",
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "First complete waiting input."
+        },
+        {
+          "attribution": null,
+          "caption": "Waiting \u2014 a message ahead needs attention",
+          "messageId": "1800000000000-00000000000000000000000000000004",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "Second complete waiting input."
+        }
+      ],
+      "busy": [
+        {
+          "attribution": null,
+          "caption": "Your message was not sent.",
+          "messageId": "recovery:1800000000000-00000000000000000000000000000002",
+          "needsAttention": true,
+          "paused": false,
+          "state": "returned",
+          "text": "Complete immutable original."
+        },
+        {
+          "attribution": null,
+          "caption": "Waiting \u2014 a message ahead needs attention",
+          "messageId": "1800000000000-00000000000000000000000000000003",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "First complete waiting input."
+        },
+        {
+          "attribution": null,
+          "caption": "Waiting \u2014 a message ahead needs attention",
+          "messageId": "1800000000000-00000000000000000000000000000004",
+          "needsAttention": false,
+          "paused": false,
+          "state": "waiting",
+          "text": "Second complete waiting input."
+        }
+      ],
+      "notices": [
+        ["orca:1800000000000-00000000000000000000000000000006", "Your message was not sent."]
+      ],
+      "resumableCard": false,
+      "previews": {
+        "orca:1800000000000-00000000000000000000000000000002": []
+      }
+    }
+  }
+}

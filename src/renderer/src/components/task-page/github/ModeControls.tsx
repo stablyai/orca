@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitHubModeControls({
   model
 }: {
@@ -71,7 +71,7 @@ export function TaskPageGitHubModeControls({
           })}
         </div>
       ) : null}
-      {/* Why: Project rows are repo-scoped, so the selection must stay visible in both GitHub modes. */}
+      {/* Repository-backed Project rows follow this selection in both GitHub modes. */}
       <div className="min-w-0 max-w-[220px] shrink-0">
         <TaskProjectSourceCombobox
           groups={taskPickerGroups}

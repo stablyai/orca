@@ -19,10 +19,16 @@ let reloadOwed = false
 // A commit request is out: its outcome, not a rewrite pass that happens to end, decides the reload.
 let commitPending = false
 let getWindow: () => WslMoveReloadableWindow | null = () => null
+let landOnReload: () => void = () => {}
 
 /** The app window's contents, or null when none is open. */
 export function setWslMoveReloadableWindow(get: () => WslMoveReloadableWindow | null): void {
   getWindow = get
+}
+
+/** Picks the view the reloaded page (or, with the window gone, the next launch) opens on. */
+export function setWslMoveReloadLanding(land: () => void): void {
+  landOnReload = land
 }
 
 export function isWslMoveWindowWriteHeld(): boolean {
@@ -75,6 +81,12 @@ export function reloadWslMoveWindowWithWritesHeld(onReloaded: () => void = () =>
     return
   }
   reloadOwed = false
+  // Best-effort: a failed landing must not strand the hold or skip the reload.
+  try {
+    landOnReload()
+  } catch (error) {
+    console.warn('[wsl-move] Could not pick the view the reload opens on:', error)
+  }
   const window = getWindow()
   if (!window || window.isDestroyed()) {
     held = false
@@ -103,4 +115,5 @@ export function resetWslMoveWindowWriteHoldForTests(): void {
   reloadOwed = false
   commitPending = false
   getWindow = () => null
+  landOnReload = () => {}
 }

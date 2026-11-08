@@ -1,4 +1,4 @@
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 type FailedCreateCleanupActions = {

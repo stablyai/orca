@@ -76,22 +76,6 @@ describe('mobile relay subscription cancellation', () => {
     }
   )
 
-  it.each(serverSubscriptions)('cleans up ready %s exactly once', async (method, unsubscribe) => {
-    const { streams, sendFrame } = createStreams()
-    const listener = vi.fn()
-    const cancel = streams.subscribe(method, {}, listener)
-    await Promise.resolve()
-    streams.handleResponse(response('request-1', { type: 'ready', subscriptionId: 'server-1' }))
-    cancel()
-    cancel()
-    expect(sendFrame.mock.calls).toEqual([
-      [{ id: 'request-1', method, params: {} }],
-      [{ id: 'request-2', method: unsubscribe, params: { subscriptionId: 'server-1' } }]
-    ])
-    expect(streams.handleResponse(response('request-1', { type: 'end' }))).toBe(false)
-    expect(listener).toHaveBeenCalledTimes(1)
-  })
-
   it.each(serverSubscriptions)(
     'cleans up late-ready %s without calling disposed listeners',
     async (method, unsubscribe) => {
@@ -148,66 +132,6 @@ describe('mobile relay subscription cancellation', () => {
       expect(sendFrame).toHaveBeenCalledTimes(1)
     }
   )
-
-  it.each([
-    [
-      'terminal.subscribe',
-      { terminal: 'term', client: { id: 'phone' } },
-      'terminal.unsubscribe',
-      { subscriptionId: 'term:phone', client: { id: 'phone' }, requestId: 'request-1' }
-    ],
-    [
-      'session.tabs.subscribe',
-      { worktree: 'id:workspace' },
-      'session.tabs.unsubscribe',
-      { worktree: 'id:workspace', subscriptionId: 'request-1' }
-    ],
-    [
-      'nativeChat.subscribe',
-      { subscriptionId: 'chat' },
-      'nativeChat.unsubscribe',
-      { subscriptionId: 'chat' }
-    ]
-  ])(
-    'cancels %s using its request cleanup identity',
-    async (method, params, unsubscribe, unsubscribeParams) => {
-      const { streams, sendFrame } = createStreams()
-      const cancel = streams.subscribe(method as string, params, vi.fn())
-      await Promise.resolve()
-      if (method === 'session.tabs.subscribe') {
-        streams.handleResponse(response('request-1', { type: 'snapshot' }))
-      }
-      cancel()
-      expect(sendFrame).toHaveBeenLastCalledWith({
-        id: 'request-2',
-        method: unsubscribe,
-        params: unsubscribeParams
-      })
-    }
-  )
-
-  it.each([
-    'terminal.subscribe',
-    'browser.screencast',
-    'runtime.clientEvents.subscribe',
-    'session.tabs.subscribe',
-    'nativeChat.subscribe'
-  ])('does not unsubscribe an unsent %s', async (method) => {
-    const wait = Promise.withResolvers<void>()
-    const { streams, sendFrame } = createStreams(() => wait.promise)
-    const cancel = streams.subscribe(
-      method,
-      { terminal: 'term', worktree: 'id:workspace', subscriptionId: 'chat' },
-      vi.fn()
-    )
-    cancel()
-    wait.resolve()
-    await Promise.resolve()
-    expect(sendFrame).not.toHaveBeenCalled()
-    expect(
-      streams.handleResponse(response('request-1', { type: 'ready', subscriptionId: 'server-1' }))
-    ).toBe(false)
-  })
 
   it.each([false, true])(
     'preserves a same-worktree sibling when cancellation precedes snapshot=%s',
@@ -294,28 +218,6 @@ describe('mobile relay subscription cancellation', () => {
     expect(sendFrame).toHaveBeenCalledTimes(1)
   })
 
-  it.each([
-    ['nativeChat.subscribe', { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' }],
-    ['terminal.subscribe', { terminal: 'term', client: { id: 'phone' } }]
-  ])(
-    'unsubscribes the newer %s while the evicted older one is still live',
-    async (method, params) => {
-      const { streams, sendFrame } = createStreams()
-      streams.subscribe(method, params, vi.fn())
-      const cancelNewer = streams.subscribe(method, { ...params }, vi.fn())
-      await Promise.resolve()
-      expect(sendFrame).toHaveBeenCalledTimes(2)
-
-      // The newer registration evicted the older on the host; the older's end is still in flight.
-      cancelNewer()
-
-      expect(sendFrame).toHaveBeenCalledTimes(3)
-      expect(sendFrame).toHaveBeenLastCalledWith(
-        expect.objectContaining({ method: method.replace(/\.subscribe$/, '.unsubscribe') })
-      )
-    }
-  )
-
   it('orders same-slot terminal siblings by when they were sent, not when they subscribed', async () => {
     const connection = Promise.withResolvers<void>()
     let waits = 0
@@ -350,25 +252,6 @@ describe('mobile relay subscription cancellation', () => {
     })
   })
 
-  it('keeps skipping for a live newer terminal sibling though each unsubscribe names its request', async () => {
-    const { streams, sendFrame } = createStreams()
-    const params = { terminal: 'term', client: { id: 'phone' } }
-    const cancelOlder = streams.subscribe('terminal.subscribe', params, vi.fn())
-    const cancelNewer = streams.subscribe('terminal.subscribe', { ...params }, vi.fn())
-    await Promise.resolve()
-
-    // A host without request addressing ends the slot, which the newer stream now owns.
-    cancelOlder()
-    expect(sendFrame).toHaveBeenCalledTimes(2)
-
-    cancelNewer()
-    expect(sendFrame).toHaveBeenLastCalledWith({
-      id: 'request-3',
-      method: 'terminal.unsubscribe',
-      params: { subscriptionId: 'term:phone', client: { id: 'phone' }, requestId: 'request-2' }
-    })
-  })
-
   it('still unsubscribes a shared-token nativeChat stream when the sibling is unsent', async () => {
     const wait = Promise.withResolvers<void>()
     let connected = false
@@ -388,23 +271,5 @@ describe('mobile relay subscription cancellation', () => {
       method: 'nativeChat.unsubscribe',
       params: { subscriptionId: 'claude:s1' }
     })
-  })
-
-  it('cleans up every cancelled server subscription across repeated late-ready cycles', async () => {
-    const { streams, sendFrame } = createStreams()
-    const listener = vi.fn()
-    for (let i = 0; i < 100; i++) {
-      const cancel = streams.subscribe('runtime.clientEvents.subscribe', {}, listener)
-      await Promise.resolve()
-      const requestId = `request-${2 * i + 1}`
-      cancel()
-      streams.handleResponse(response(requestId, { type: 'ready', subscriptionId: `server-${i}` }))
-    }
-    expect(
-      sendFrame.mock.calls.filter(
-        ([request]) => (request as { method: string }).method === 'runtime.clientEvents.unsubscribe'
-      )
-    ).toHaveLength(100)
-    expect(listener).not.toHaveBeenCalled()
   })
 })

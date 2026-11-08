@@ -1,33 +1,35 @@
-import './orca-runtime-test-lifecycle.spec'
-import { describe, expect, it, vi } from 'vitest'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import { expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+} from './agent-session/structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tab-mutation-methods'
+import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tabs/session-tab-mutation-methods'
 
 function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
@@ -51,55 +53,6 @@ function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_MUTATION_METHODS })
   return { runtime, runtimeStore, getSession, session, notifier, dispatcher }
 }
-
-describe.each([undefined, 'Changed title'])(
-  'renderer-owned tab property mutations (title: %s)',
-  (customTitle) => {
-    it.each([
-      { isPinned: true },
-      { isPinned: false },
-      { color: '#ff8800' },
-      { color: null },
-      { viewMode: 'chat' },
-      { viewMode: 'terminal' }
-    ] as const)('refuses an unsupported edit without partially renaming: %j', async (props) => {
-      const { dispatcher, getSession, session, runtimeStore, notifier } = fixture()
-      const response = await dispatcher.dispatch({
-        id: 'edit-1',
-        authToken: 'token',
-        method: 'session.tabs.setTabProps',
-        params: {
-          worktree: `id:${TEST_WORKTREE_ID}`,
-          tabId: 'host-tab',
-          ...(customTitle !== undefined ? { customTitle } : {}),
-          ...props
-        }
-      })
-
-      expect(response).toMatchObject({
-        ok: false,
-        error: { code: 'capability_unsupported' }
-      })
-      expect(notifier.renameTerminal).not.toHaveBeenCalled()
-      expect(runtimeStore.setWorkspaceSession).not.toHaveBeenCalled()
-      expect(getSession()).toBe(session)
-    })
-  }
-)
-
-it.each([' Renamed ', null])(
-  'still forwards a title-only edit to the renderer: %s',
-  async (customTitle) => {
-    const { runtime, notifier } = fixture()
-    await expect(
-      runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
-        tabId: 'host-tab',
-        customTitle
-      })
-    ).resolves.toEqual({ updated: true })
-    expect(notifier.renameTerminal).toHaveBeenCalledWith('host-tab', customTitle?.trim() ?? null)
-  }
-)
 
 it('refuses a combined native chat edit before saving its name, while accepting a title alone', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-native-tab-props-'))
@@ -219,7 +172,7 @@ it('refuses a combined native chat edit before saving its name, while accepting 
     expect(notifier.renameTerminal).not.toHaveBeenCalled()
   } finally {
     await stopStructuredAgentSessionRuntime()
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   }
 })

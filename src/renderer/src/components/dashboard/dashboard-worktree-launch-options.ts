@@ -5,17 +5,20 @@ import {
   type DashboardCard,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   filterEnabledTuiAgents,
   TUI_AGENT_AUTO_PICK_ORDER
-} from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { worktreeLaunchWorkspace, type AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
+import {
+  worktreeLaunchWorkspace,
+  type AgentLaunchRouteView
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type DashboardLaunchDetectionState = Pick<
   AppState,

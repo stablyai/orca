@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Why a cap: Esc posts no hook, so a dismissed dialog's row can outlive it; a draft can be abandoned.
 export const USER_INPUT_HOLD_CAP_MS = 10 * 60_000
@@ -36,9 +36,10 @@ export function isClaudeDialogHoldingPane(args: {
     return false
   }
   const lines = args.readScreenLines()
-  if (lines === null) {
-    return true
-  }
+  return lines === null || showsClaudeDialog(lines)
+}
+
+export function showsClaudeDialog(lines: readonly string[]): boolean {
   const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }

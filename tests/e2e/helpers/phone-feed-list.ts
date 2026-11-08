@@ -4,12 +4,14 @@ import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-f
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
+import { NO_WORKTREE_HOST_CONTEXT } from '../../../mobile/src/worktree/worktree-host-context-labels'
 import {
   readHostSidebarFeed,
   type HostSidebarFeedRead
 } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
 import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
+import type { SharedClientEventsClient } from '../../../mobile/src/transport/shared-client-events'
 import {
   hostPlatformRead,
   hostViewSettingsRead
@@ -68,8 +70,11 @@ function socketPort(socket: PairedMobileSocket) {
 }
 
 /** The socket's client-event stream as the page's client subscribes to it, frames in order. */
-function socketEventClient(socket: PairedMobileSocket) {
+function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient {
   return {
+    // One socket for the helper's life: always connected, no reconnects to tell apart.
+    getState: () => 'connected',
+    getLastConnectedAt: () => null,
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)
@@ -127,8 +132,7 @@ export async function openPhoneFeedList(
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
     // The list reads rows and catalog from the feed alone; worktree.ps adds only card content.
-    fetchWorktrees: async () => {},
-    fetchRepoMetadata: async () => {},
+    refreshWorktrees: () => {},
     syncViewSettings,
     sidebarFeed: {
       refresh: () => reader.refresh(),
@@ -162,6 +166,7 @@ export async function openPhoneFeedList(
       rows: built.sectionRows,
       lastVisited,
       liveRows: [],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       repoHostIdByRepoId: new Map(),
       search: ''
     })
@@ -171,7 +176,9 @@ export async function openPhoneFeedList(
     (await sections())?.flatMap((section) => [
       // Titles only: the desktop draws a header's count on hover, not in its text.
       `HEADER ${section.title}`,
-      ...section.data.map((row) => `ITEM ${row.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`)
+      ...section.data.map(
+        ({ row, view }) => `ITEM ${view.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`
+      )
     ]) ?? [readHostSidebarFeed(read).kind]
 
   return {

@@ -3,6 +3,10 @@ import type { ResolvedRuntimeFileTarget, ResolvedRuntimeFileWorktree } from './f
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contracts'
+import type {
+  NativeChatMediaPathRequest,
+  NativeChatMediaPathResolution
+} from '../../native-chat/native-chat-media-path'
 
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
@@ -14,6 +18,9 @@ export type RuntimeFileCommandHost = {
   ): Promise<(ResolvedRuntimeFileTarget & { relativePath: string }) | null>
   resolveTerminalCwd?(terminalHandle: string): string | null | Promise<string | null>
   resolveTerminalFileUriHostname?(terminalHandle: string): string | null | Promise<string | null>
+  resolveNativeChatMediaPath?(
+    request: NativeChatMediaPathRequest
+  ): Promise<NativeChatMediaPathResolution>
   // executionHostId distinguishes runtime/local hosts; connectionId cannot. See runtime-git/file-command-target.
   resolveRuntimeGitTarget(
     selector: string
@@ -32,6 +39,7 @@ export type RuntimeFileCommandHost = {
     relativePath: string,
     staged: boolean,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    oldPath?: string
   ): void
 }

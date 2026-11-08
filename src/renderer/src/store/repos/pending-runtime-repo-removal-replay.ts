@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { ERROR_TOAST_DURATION } from './repo-state'

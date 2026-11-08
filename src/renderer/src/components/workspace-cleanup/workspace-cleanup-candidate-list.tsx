@@ -6,7 +6,7 @@ type WorkspaceCleanupListRow = { worktreeId: string }
 // Keep small fleets in natural flow; window only large lists where streaming/typing incurs O(N) churn.
 export const WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS = 40
 // Estimate collapsed row height; measureElement corrects expanded rows and error banners.
-const WORKSPACE_CLEANUP_ROW_ESTIMATE_PX = 48
+const WORKSPACE_CLEANUP_ROW_ESTIMATE_PX = 56
 const WORKSPACE_CLEANUP_ROW_OVERSCAN = 8
 
 /** Window large lists in their dedicated ScrollArea; no sibling content means zero scroll margin. */

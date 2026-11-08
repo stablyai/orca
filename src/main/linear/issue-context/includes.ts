@@ -1,7 +1,6 @@
 import type {
   LinearCollectionMeta,
   LinearIssueAttachment,
-  LinearIssueChildNode,
   LinearIssueCommentNode,
   LinearIssueContextResult
 } from '../../../shared/linear/agent-result-types'
@@ -10,7 +9,6 @@ import type { LinearIssueInclude, LinearIssueRequest } from '../../../shared/lin
 import {
   LINEAR_ATTACHMENTS_CAP,
   LINEAR_ACTIVITY_CAP,
-  LINEAR_CHILDREN_NODE_CAP,
   LINEAR_COMMENTS_CAP,
   LINEAR_COMMENT_BODY_CAP,
   clampLinearIssueDepth
@@ -23,14 +21,12 @@ import { includeErrorCode } from './errors'
 import { readConnectionPages } from './pagination'
 import { ACTIVITY_QUERY, mapActivity, type RawActivityResponse } from '../issue-activity-raw'
 import { readIssueRelations } from './relations'
+import { readChildren } from './children'
 import {
   ATTACHMENTS_QUERY,
-  CHILDREN_QUERY,
   COMMENTS_QUERY,
   collectionMeta,
-  mapIssue,
   type RawAttachmentsResponse,
-  type RawChildrenResponse,
   type RawCommentsResponse
 } from './raw'
 
@@ -159,75 +155,6 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   return {
     items,
     meta: collectionMeta(items.length, LINEAR_COMMENTS_CAP, response.hasMore)
-  }
-}
-
-async function readChildren(
-  resolved: ResolvedIssue,
-  depth: number
-): Promise<{ items: LinearIssueChildNode[]; meta: LinearCollectionMeta }> {
-  if (depth <= 0) {
-    return { items: [], meta: collectionMeta(0, LINEAR_CHILDREN_NODE_CAP, false) }
-  }
-  const entry = getRequiredEntry(resolved.workspace.id)
-  let returned = 0
-  let capReached = false
-  let depthReached = false
-
-  const readLevel = async (issueId: string, level: number): Promise<LinearIssueChildNode[]> => {
-    if (level > depth || returned >= LINEAR_CHILDREN_NODE_CAP) {
-      depthReached = true
-      return []
-    }
-    const remaining = LINEAR_CHILDREN_NODE_CAP - returned
-    const response = await readConnectionPages(remaining, async (page) => {
-      return await withLinearRead(entry, async () => {
-        const client = getPublicFileUrlClient(entry)
-        const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
-          CHILDREN_QUERY,
-          { id: issueId, ...page }
-        )
-        return raw.data?.issue?.children ?? null
-      })
-    })
-    const nodes = response.nodes
-    if (response.hasMore || nodes.length > remaining) {
-      capReached = true
-    }
-    const children = nodes.slice(0, remaining).map((node) => {
-      returned += 1
-      return { raw: node, child: mapIssue(node) as LinearIssueChildNode }
-    })
-    if (returned >= LINEAR_CHILDREN_NODE_CAP) {
-      capReached = true
-    }
-
-    // Stop nested reads when no additional nodes could fit the output cap.
-    const canReadNested = level < depth && returned < LINEAR_CHILDREN_NODE_CAP
-    if (!canReadNested && level >= depth && children.length > 0) {
-      depthReached = true
-    }
-    const mappedChildren: LinearIssueChildNode[] = []
-    for (const { raw, child } of children) {
-      const nested = canReadNested ? await readLevel(raw.id, level + 1) : []
-      if (nested.length > 0) {
-        child.children = nested
-      }
-      child.mayHaveMore = level >= depth || returned >= LINEAR_CHILDREN_NODE_CAP || response.hasMore
-      mappedChildren.push(child)
-    }
-    return mappedChildren
-  }
-
-  const items = await readLevel(resolved.issue.id, 1)
-  return {
-    items,
-    meta: {
-      returned,
-      cap: LINEAR_CHILDREN_NODE_CAP,
-      capReached,
-      mayHaveMore: capReached || depthReached
-    }
   }
 }
 

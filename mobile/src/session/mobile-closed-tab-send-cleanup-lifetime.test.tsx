@@ -1,6 +1,7 @@
 import { createElement, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
 import { useMobileNativeChatFileAttachments } from './native-chat/composer/use-mobile-native-chat-file-attachments'
@@ -111,9 +112,8 @@ async function mount(structured: boolean) {
       setFileDocs: vi.fn(),
       setMarkdownDocs: vi.fn(),
       sessionTabsRef: { current: [] },
-      reconcileBufferedDraftsRef: { current: vi.fn() },
+      forgetLastSessionTab: () => {},
       closedTabTombstonesRef: { current: new Map() },
-      clearTerminalLiveInputDefault: vi.fn(),
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: setTab,
       activeSessionTabIdRef: activeTabRef,
@@ -152,7 +152,7 @@ async function mount(structured: boolean) {
     return null
   }
   await act(async () => {
-    renderer = create(createElement(Harness))
+    renderer = create(documentQueryClient().wrap(createElement(Harness)))
   })
   await act(async () => appendStoredInputs(ORIGINAL, 'sent', structured))
   const read = () => {
@@ -212,7 +212,7 @@ it.each([
   [true, 'accepted'],
   [true, 'unknown']
 ] as const)(
-  'clears only the sent inputs on the original live tab after navigation: structured=%s, outcome=%s',
+  'cleans only submitted inputs after navigation while preserving newer and other scopes: structured=%s, outcome=%s',
   async (structured, outcome) => {
     const screen = await mount(structured)
     const send = await screen.begin()
@@ -222,11 +222,12 @@ it.each([
       appendStoredInputs(OTHER, 'other', structured)
     })
     expect(await send.finish(outcome)).toBe(true)
-    expect(readMobileNativeChatDraftInputs(ORIGINAL).images.map((image) => image.id)).toEqual([
-      'newer'
-    ])
+    const original = ['newer']
+    expect(readMobileNativeChatDraftInputs(ORIGINAL).images.map((image) => image.id)).toEqual(
+      original
+    )
     expect(readMobileNativeChatDraftInputs(ORIGINAL).files.map((file) => file.id)).toEqual(
-      structured ? ['newer'] : []
+      structured ? original : []
     )
     expect(readMobileNativeChatDraftInputs(OTHER).images.map((image) => image.id)).toEqual([
       'other'

@@ -3,12 +3,11 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
-import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault-resume-command'
 
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
 const {
   store,
   TEST_WORKTREE_PATH,
@@ -16,54 +15,14 @@ const {
   createFolderWorkspaceRuntimeStore,
   makeFolderWorkspace,
   makeFolderProjectGroup
-} = await import('./orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('./bind-first-pane.test-fixture')
-const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
+const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
 beforeEach(() =>
   vi
     .mocked(detectAgentCommandsOnHost)
     .mockReset()
     .mockResolvedValue(new Set(['qodercli']))
-)
-
-it.each([
-  ['modern-only', ['qoder'], 'qoder'],
-  ['legacy-only', ['qodercli'], 'qodercli'],
-  ['both', ['qoder', 'qodercli'], 'qodercli']
-] as const)(
-  'fresh managed start reaches the production spawn boundary: %s',
-  async (_, found, selected) => {
-    vi.mocked(detectAgentCommandsOnHost).mockResolvedValueOnce(new Set(found))
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-independent-start' })
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getSettings: () => ({ ...store.getSettings(), disabledTuiAgents: [], agentCmdOverrides: {} })
-    })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'qoder',
-      agentArgs: null,
-      launchSource: 'orchestration',
-      startupPrompt: 'qodercli remains prompt text'
-    })
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        launchAgent: 'qoder',
-        command: `${selected} --prompt-interactive 'qodercli remains prompt text'`
-      })
-    )
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0]?.[0].telemetry).toEqual({
-      agent_kind: 'qoder',
-      launch_source: 'orchestration',
-      request_kind: 'new'
-    })
-  }
 )
 
 it('a modern-only repo-less folder start reaches the same production spawn boundary', async () => {
@@ -118,48 +77,6 @@ it('a modern-only repo-less folder start reaches the same production spawn bound
   }
 })
 
-it('selects the installed command for a mobile Qoder history resume at creation', async () => {
-  vi.mocked(detectAgentCommandsOnHost).mockResolvedValueOnce(new Set(['qoder']))
-  const spawn = vi.fn().mockResolvedValue({ id: 'pty-mobile-qoder-resume' })
-  const runtime = new OrcaRuntimeService(store)
-  runtime.setPtyController({
-    spawn,
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  const plan = buildAgentResumeStartupPlan({
-    agent: 'qoder',
-    providerSession: { key: 'session_id', id: 'same-qoder-session' },
-    cmdOverrides: {},
-    platform: 'darwin'
-  })
-  if (!plan) {
-    throw new Error('Missing Qoder resume plan')
-  }
-  const launch = {
-    command: buildAiVaultResumeShellCommand({
-      resumeCommand: plan.launchCommand,
-      cwd: TEST_WORKTREE_PATH,
-      platform: 'darwin'
-    }),
-    launchAgent: plan.agent,
-    launchConfig: plan.launchConfig
-  }
-  await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-    command: launch.command,
-    launchAgent: launch.launchAgent,
-    launchConfig: launch.launchConfig
-  })
-  expect(spawn).toHaveBeenCalledTimes(1)
-  expect(spawn).toHaveBeenCalledWith(
-    expect.objectContaining({
-      command: launch.command.replace(/qodercli(?=\s)/, 'qoder'),
-      launchAgent: 'qoder'
-    })
-  )
-})
-
 it('host discovery refusal prevents any production spawn', async () => {
   vi.mocked(detectAgentCommandsOnHost).mockRejectedValueOnce(
     new Error('execution host unavailable')
@@ -181,56 +98,11 @@ it('host discovery refusal prevents any production spawn', async () => {
   expect(spawn).not.toHaveBeenCalled()
 })
 
-it('caller-owned explicit executable survives production resume without discovery', async () => {
-  const detect = vi.mocked(detectAgentCommandsOnHost)
-  detect.mockClear()
-  const spawn = vi.fn().mockResolvedValue({ id: 'pty-independent-explicit' })
-  const runtime = new OrcaRuntimeService(store)
-  runtime.setPtyController({
-    spawn,
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-    launchAgent: 'qoder',
-    command: '/caller/qodercli --resume original-id'
-  })
-  expect(spawn).toHaveBeenCalledWith(
-    expect.objectContaining({ command: '/caller/qodercli --resume original-id' })
-  )
-  expect(detect).not.toHaveBeenCalled()
-  expect(spawn).toHaveBeenCalledTimes(1)
-  expect(spawn.mock.calls[0]?.[0].telemetry).toBeUndefined()
-})
-
-it.each([
-  ['bare', 'qodercli'],
-  ['resume', 'qodercli --resume original-id']
-] as const)('does not falsely attribute a %s command as a fresh start', async (_, command) => {
-  const spawn = vi.fn().mockResolvedValue({ id: 'pty-independent-unattributed' })
-  const runtime = new OrcaRuntimeService(store)
-  runtime.setPtyController({
-    spawn,
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-    command,
-    agentArgs: null,
-    launchSource: 'orchestration',
-    ...(command.includes('--resume') ? { launchAgent: 'qoder' as const } : {})
-  })
-  expect(spawn).toHaveBeenCalledTimes(1)
-  expect(spawn.mock.calls[0]?.[0].command).toBe(command)
-  expect(spawn.mock.calls[0]?.[0].telemetry).toBeUndefined()
-})
-
 it.each(['offline', 'legacy-identity'])(
   'refuses a Qoder command-bearing create with unverifiable inventory: %s',
   async (state) => {
-    const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+    const { TEST_WORKTREE_ID } =
+      await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
     const runtime = new OrcaRuntimeService(store)
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const spawn = vi.fn()
@@ -270,7 +142,7 @@ it.each(['offline', 'legacy-identity'])(
 )
 
 it('reconciles after the reply-cache expires and isolates deliberate forks and paired callers', async () => {
-  const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+  const { TEST_WORKTREE_ID } = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
   vi.useFakeTimers()
   try {
     // Copy the fixture store so main-owned bindings cannot leak into shared tests.

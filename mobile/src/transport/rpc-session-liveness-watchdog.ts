@@ -3,8 +3,14 @@ import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './
 export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
 export const MISSED_PROBE_LIMIT = 3
+export const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 // One miss ends a session already suspected dead; long enough for radio wake and TCP retransmit before redial.
 export const DECISIVE_PROBE_TIMEOUT_MS = 4_000
+
+// Older desktops ignore the probe flag and answer the full status; either reply proves liveness.
+export function livenessProbeFrame(id: string): { id: string; method: string; params: object } {
+  return { id, method: 'status.get', params: { probe: true } }
+}
 
 declare const rpcSessionIdentityBrand: unique symbol
 
@@ -13,9 +19,11 @@ export type RpcSessionIdentity = object & { readonly [rpcSessionIdentityBrand]?:
 
 type WatchdogOptions = {
   transport: 'direct' | 'relay'
-  sendProbe: (identity: RpcSessionIdentity) => boolean
+  sendProbe: (identity: RpcSessionIdentity, id: string) => boolean
   terminate: (identity: RpcSessionIdentity) => void
   onTimeout?: (evidence: LivenessTimeoutEvidence) => void
+  // A probe reply can queue behind a large reply or stream backlog, so tolerant misses don't count while the link is busy.
+  isLinkBusy?: (framesArrivedDuringProbe: boolean, silentMs: number) => boolean
   idleProbeMs?: number | null
   probeTimeoutMs?: number
   missedProbeLimit?: number
@@ -36,7 +44,8 @@ export type LivenessTimeoutEvidence = {
 export class RpcSessionLivenessWatchdog {
   private identity: RpcSessionIdentity | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
-  private probing = false
+  private probeId: string | null = null
+  private probeSequence = 0
   private probingDecisively = false
   private missedProbes = 0
   private lastInboundAt = 0
@@ -63,7 +72,7 @@ export class RpcSessionLivenessWatchdog {
   start(identity: RpcSessionIdentity): void {
     this.clearActiveTimer()
     this.identity = identity
-    this.probing = false
+    this.probeId = null
     this.missedProbes = 0
     this.lastInboundAt = this.now()
     this.lastVoluntaryProbeAt = null
@@ -81,18 +90,13 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.lastInboundAt = this.now()
-    if (this.missedProbes > 0) {
-      console.log('[net] activity-probe recovered', {
-        transport: this.options.transport,
-        priorMissedProbes: this.missedProbes
-      })
-    }
-    if (!this.probing && this.missedProbes === 0) {
+  }
+
+  noteProbeReply(identity: RpcSessionIdentity, id: string): void {
+    if (this.identity !== identity || this.probeId !== id) {
       return
     }
-    this.missedProbes = 0
-    this.probing = false
-    this.armIdle(identity)
+    this.settleProbe(identity)
   }
 
   // A decisive probe ends the session on its first miss when suspension may have killed the link.
@@ -111,7 +115,10 @@ export class RpcSessionLivenessWatchdog {
     afterBackground = false
   ): void {
     const decisive = decisiveTimeoutMs !== null
-    if (this.identity !== identity || (this.probing && (!decisive || this.probingDecisively))) {
+    if (
+      this.identity !== identity ||
+      (this.probeId !== null && (!decisive || this.probingDecisively))
+    ) {
       return
     }
     const now = this.now()
@@ -121,7 +128,7 @@ export class RpcSessionLivenessWatchdog {
       : this.voluntaryProbeMinIntervalMs
     if (
       !afterBackground &&
-      !this.probing &&
+      this.probeId === null &&
       lastProbeAt !== null &&
       now - lastProbeAt < minIntervalMs
     ) {
@@ -147,7 +154,7 @@ export class RpcSessionLivenessWatchdog {
   // For a caller that stopped hearing back: a session heard from within the window is not suspect, no foreground rate limit applies, and a tolerant probe already running is cut short.
   probeCurrentDecisively(): void {
     const identity = this.identity
-    const decisiveRunning = this.probing && this.probingDecisively
+    const decisiveRunning = this.probeId !== null && this.probingDecisively
     if (
       identity &&
       !decisiveRunning &&
@@ -163,11 +170,17 @@ export class RpcSessionLivenessWatchdog {
     }
     this.clearActiveTimer()
     this.identity = null
-    this.probing = false
+    this.probeId = null
     this.missedProbes = 0
     this.lastInboundAt = 0
     this.lastVoluntaryProbeAt = null
     this.lastDecisiveProbeAt = null
+  }
+
+  private settleProbe(identity: RpcSessionIdentity): void {
+    this.missedProbes = 0
+    this.probeId = null
+    this.armIdle(identity)
   }
 
   private armIdle(identity: RpcSessionIdentity, delayMs = this.idleProbeMs): void {
@@ -194,12 +207,12 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.clearActiveTimer()
-    this.probing = true
+    this.probeId = `${LIVENESS_REQUEST_ID_PREFIX}${++this.probeSequence}`
     this.probingDecisively = decisiveTimeoutMs !== null
     const sentAt = this.now()
     let sent = false
     try {
-      sent = this.options.sendProbe(identity)
+      sent = this.options.sendProbe(identity, this.probeId)
     } catch {
       sent = false
     }
@@ -233,6 +246,13 @@ export class RpcSessionLivenessWatchdog {
       this.startProbe(identity, decisiveTimeoutMs)
       return
     }
+    if (
+      decisiveTimeoutMs === null &&
+      this.options.isLinkBusy?.(this.lastInboundAt > sentAt, this.now() - this.lastInboundAt)
+    ) {
+      this.settleProbe(identity)
+      return
+    }
     this.missedProbes += 1
     const missedProbeLimit = decisiveTimeoutMs === null ? this.missedProbeLimit : 1
     if (this.missedProbes >= missedProbeLimit) {
@@ -257,7 +277,7 @@ export class RpcSessionLivenessWatchdog {
     }
     this.clearActiveTimer()
     this.identity = null
-    this.probing = false
+    this.probeId = null
     console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
       transport: this.options.transport,
       missedProbes: this.missedProbes,

@@ -2,7 +2,7 @@
 
 import type { Automation } from './automations-types'
 import type { AutomationUsageSummary } from './automation-usage-summary'
-import type { FolderWorkspaceHost } from './folder-workspace-execution-host'
+import type { FolderWorkspaceHost } from './folder-workspaces/folder-workspace-execution-host'
 import { getAutomationRunRepoId } from './automation-run-identity'
 import { parseExecutionHostId } from './execution-host'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'
@@ -43,10 +43,12 @@ export const AUTOMATION_ORPHAN_ISSUES = {
   targetMissing: 'Its SSH host is no longer registered.',
   targetReplaced: 'Its SSH host was removed and re-added, so it must be re-adopted.',
   scheduledElsewhere: 'It is stored here but scheduled against a remote runtime.',
+  workspaceOnPairedServer: 'Its workspace belongs to a paired server, so it cannot run here.',
   projectMissing: 'Its project no longer exists, so its host cannot be resolved.',
   projectUnverified: 'Its project could not be checked from here, so its host is unconfirmed.',
   workspaceHostAmbiguous: 'Its workspace spans more than one host, so it has no single owner.',
-  malformed: 'Its stored host record is incomplete.'
+  malformed: 'Its stored host record is incomplete.',
+  hostReselection: 'Edit this automation and reselect its host before running it.'
 } as const
 
 /** Where a record's workspace executes; `unpinned` leaves the repo to decide. */
@@ -57,10 +59,11 @@ export type AutomationWorkspaceHost =
 export type AutomationProjectionContext = {
   /** The process that owns this store; runtime scheduling markers are local only on a runtime. */
   storageAuthority?: 'desktop' | 'runtime'
+  requiresHostReselection?: (automation: Automation) => boolean
   /** Current registration generation of a saved SSH target; undefined once it is gone. */
   sshTargetGeneration: (targetId: string) => number | undefined
   /** `undefined` = the repo is gone; `null` = a local repo; a string = its SSH connection. */
-  repoConnectionId: (repoId: string) => string | null | undefined
+  repoConnectionId: (repoId: string, automation?: Automation) => string | null | undefined
   /** Host the record's workspace pins it to; omitted means no side knows of a pin. */
   workspaceHost?: (automation: Automation) => AutomationWorkspaceHost
   /** Registration a generation was allocated to; omitted leaves a re-pin unproven. */
@@ -140,18 +143,24 @@ export function projectAutomationSelector(
     return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous)
   }
   if (workspaceHost.kind === 'runtime') {
-    return orphan(AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere)
+    return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer)
   }
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {
     return workspacePinSelector(automation, workspaceHost.targetId, context)
   }
-  const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation))
+  const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation), automation)
   if (connectionId === undefined) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.projectMissing)
   }
   // A local record whose project points at an SSH connection contradicts itself.
-  return connectionId ? orphan(AUTOMATION_ORPHAN_ISSUES.malformed) : { kind: 'self' }
+  return connectionId
+    ? orphan(
+        context.requiresHostReselection?.(automation)
+          ? AUTOMATION_ORPHAN_ISSUES.hostReselection
+          : AUTOMATION_ORPHAN_ISSUES.malformed
+      )
+    : { kind: 'self' }
 }
 
 /** The orphan diagnoses that answer "does this record still have one usable host?" */
@@ -159,13 +168,20 @@ export type AutomationCapturedHostIssue =
   | typeof AUTOMATION_ORPHAN_ISSUES.targetMissing
   | typeof AUTOMATION_ORPHAN_ISSUES.targetReplaced
   | typeof AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous
+  | typeof AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer
+  | typeof AUTOMATION_ORPHAN_ISSUES.malformed
+  | typeof AUTOMATION_ORPHAN_ISSUES.hostReselection
 
 // Key by the diagnosis union so every new host issue must also reach dispatch at compile time.
 const CAPTURED_HOST_ISSUES: Record<AutomationCapturedHostIssue, true> = {
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]: true,
+  [AUTOMATION_ORPHAN_ISSUES.malformed]: true,
+  [AUTOMATION_ORPHAN_ISSUES.hostReselection]: true,
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: true,
   // No single owner is as unrunnable as no owner: dispatching would pick a host the user never chose.
-  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: true
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: true,
+  // A local record never routes to the server that now owns its folder.
+  [AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer]: true
 }
 
 function isCapturedHostIssue(issue: string): issue is AutomationCapturedHostIssue {
@@ -179,6 +195,12 @@ export function automationCapturedHostIssue(
 ): AutomationCapturedHostIssue | null {
   const selector = projectAutomationSelector(automation, context)
   if (selector.kind !== 'orphan') {
+    return null
+  }
+  if (
+    selector.issue === AUTOMATION_ORPHAN_ISSUES.malformed &&
+    !context.requiresHostReselection?.(automation)
+  ) {
     return null
   }
   return isCapturedHostIssue(selector.issue) ? selector.issue : null

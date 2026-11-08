@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ArrowUpRight, Plus, Save, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
@@ -108,13 +108,11 @@ export function SetupScriptAction(): React.JSX.Element {
   const canConfigure = repo !== null
   const [setupScript, setSetupScript] = useState('pnpm install')
 
-  useEffect(() => {
-    if (!canConfigure) {
-      setSetupScript('pnpm install')
-      return
-    }
-    setSetupScript(repo.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
-  }, [canConfigure, repo])
+  const [seededFromRepo, setSeededFromRepo] = useState<typeof repo | undefined>(undefined)
+  if (seededFromRepo !== repo) {
+    setSeededFromRepo(repo)
+    setSetupScript(repo?.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
+  }
 
   const openLocalCommandSettings = useCallback(() => {
     if (!repo || !isGitRepoKind(repo)) {

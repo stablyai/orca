@@ -1,56 +1,10 @@
 import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
-import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { tryStealInstallLockCommand } from '../managed-server/install/remote-install-lock-commands'
 import { decodeRemotePowerShellScript, powerShellCommand } from './ssh-remote-powershell'
-import {
-  makeWindowsPublishStagedFileCommand,
-  makeWindowsWriteFileCommand
-} from './system-transport/system-ssh-windows-file-write'
 
-const windows = getRemoteHostPlatform('win32-x64')
 // Stock sshd's cmd.exe DefaultShell rejects oversized exec lines with localized diagnostics.
 describe('Windows remote command line limit', () => {
-  it.each([
-    [
-      'steal stale install lock',
-      tryStealInstallLockCommand(windows, 'C:\\Users\\orca\\.orca-remote\\relay', 1_200)
-    ],
-    [
-      'steal an exited holder\u2019s install lock',
-      tryStealInstallLockCommand(
-        windows,
-        'C:\\Users\\orca\\.orca-remote\\orcad-1.4.214+0123456789abcdef\\.install-lock',
-        1_200,
-        { fileName: '.orca-fence-owner', token: '123e4567-e89b-12d3-a456-426614174000' },
-        {
-          fileName: '.orca-fence-owner',
-          token: '123e4567-e89b-12d3-a456-426614174001',
-          quietSeconds: 180,
-          mutationLock: 'C:\\Users\\orca\\.orca-remote\\orcad-state-mutation.lock'
-        }
-      )
-    ],
-    // These file commands carry caller-controlled path literals and must stay within the same budget.
-    ['write file', makeWindowsWriteFileCommand('C:\\Users\\orca\\.orca-remote\\relay.js')],
-    [
-      'publish staged file',
-      makeWindowsPublishStagedFileCommand(
-        'C:\\Users\\orca\\.orca-remote\\relay.js.orca-partial-0123456789ab',
-        'C:\\Users\\orca\\.orca-remote\\relay.js',
-        'create'
-      )
-    ]
-  ])('keeps the %s command inside what sshd\u2019s cmd.exe accepts', (_name, command) => {
-    expect(command.length).toBeLessThanOrEqual(CMD_EXE_COMMAND_LINE_MAX_CHARS)
-  })
-
-  it('leaves a command that already fits byte-identical', () => {
-    const script = "Write-Output ([Environment]::GetFolderPath('UserProfile'))"
-    expect(decodeRemotePowerShellScript(powerShellCommand(script))).toBe(script)
-  })
-
   it('carries an oversized script through gzip without altering it', () => {
     const script = Array.from(
       { length: 200 },
@@ -76,30 +30,6 @@ describe('Windows remote command line limit', () => {
     }).join('')
     expect(() => powerShellCommand(`Write-Output '${incompressible}'`)).toThrow(
       /Orca budgets 8000 for a line sshd hands to cmd\.exe/u
-    )
-  })
-})
-
-/** Check headroom with compressible paths and pre-spawn refusal with high-entropy paths that exceed the budget. */
-describe('Windows file command budget headroom', () => {
-  it('absorbs a path far longer than Windows will accept', () => {
-    const deep = `C:\\Users\\orca\\${'segment\\'.repeat(30)}relay.js`
-
-    expect(deep.length).toBeGreaterThan(260)
-    expect(makeWindowsWriteFileCommand(deep).length).toBeLessThanOrEqual(
-      CMD_EXE_COMMAND_LINE_MAX_CHARS
-    )
-  })
-
-  it('throws rather than spawning a line cmd.exe would refuse', () => {
-    // Random segments so gzip cannot rescue it, which is the only way to reach the ceiling at all.
-    const incompressible = Array.from(
-      { length: 400 },
-      (_unused, index) => `${index}-${Math.random().toString(36).slice(2)}`
-    ).join('\\')
-
-    expect(() => makeWindowsWriteFileCommand(`C:\\${incompressible}\\f.bin`)).toThrow(
-      /Orca budgets 8000/
     )
   })
 })

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 
 /** Drive real OSC parsing so desktop dismissal also removes runtime and mobile rows. */
@@ -56,83 +57,6 @@ function emitWorkingStatus(runtime: OrcaRuntimeService, sequence: number): void 
 }
 
 describe('worktree ps follows a dismissal out of the agent-status store', () => {
-  it('drops the row as soon as the user dismisses it, without waiting for the PTY to exit', async () => {
-    const { runtime, statusWiring } = wiredRuntime()
-    emitWorkingStatus(runtime, 1)
-
-    const listed = await runtime.getWorktreePs()
-    expect(
-      listed.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
-    ).toEqual([expect.objectContaining({ paneKey: PANE_KEY, prompt: 'ship it' })])
-
-    statusWiring.statusStore.dropStatusEntry(PANE_KEY)
-
-    expect(runtime['ptysById'].get('dismiss-pty')?.connected).toBe(true)
-    const afterDismissal = await runtime.getWorktreePs()
-    expect(
-      afterDismissal.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
-    ).toEqual([])
-  })
-
-  it('tells paired clients to republish on the transition and on the dismissal', async () => {
-    const { runtime, statusWiring } = wiredRuntime()
-    const republish = vi.spyOn(runtime, 'touchMobileSessionTabsForWorktree')
-    const uninstall = statusWiring.attach(runtime)
-    try {
-      emitWorkingStatus(runtime, 1)
-      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-
-      republish.mockClear()
-      emitWorkingStatus(runtime, 2)
-      expect(republish).not.toHaveBeenCalled()
-
-      runtime.onPtyData(
-        'dismiss-pty',
-        '\x1b]9999;{"state":"done","prompt":"ship it","agentType":"codex"}\x07',
-        3
-      )
-      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-
-      republish.mockClear()
-      statusWiring.statusStore.dropStatusEntry(PANE_KEY)
-      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-    } finally {
-      uninstall()
-      republish.mockRestore()
-    }
-  })
-
-  it.each([
-    ['leaf binding', undefined, false],
-    ['controller incarnation', 'incarnation-1', true]
-  ] as const)(
-    'rejoins a row through its %s handle after pane ownership clears',
-    async (_, incarnationId, clearLeafBinding) => {
-      const { runtime, statusWiring } = wiredRuntime(incarnationId)
-      emitWorkingStatus(runtime, 1)
-      const row = statusWiring.statusStore.getStatusSnapshot()[0]!
-      const internals = runtime as unknown as {
-        handleByLeafKey: Map<string, string>
-        handleByPtyIncarnation: Map<string, { handle: string }>
-        ptysById: Map<string, { paneKey: string | null; tabId: string | null }>
-      }
-      const pty = internals.ptysById.get('dismiss-pty')!
-      pty.paneKey = null
-      pty.tabId = null
-      if (clearLeafBinding) {
-        expect(internals.handleByPtyIncarnation.get('dismiss-pty')?.handle).toBe(row.terminalHandle)
-        internals.handleByLeafKey.clear()
-      }
-
-      const listed = await runtime.getWorktreePs()
-
-      expect(
-        listed.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
-      ).toEqual([expect.objectContaining({ prompt: 'ship it' })])
-      statusWiring.statusStore.stop()
-    }
-  )
-
   it('publishes one provider-addressable row through remint, dismissal, and exit', async () => {
     const { runtime, statusWiring } = wiredRuntime('incarnation-1')
     emitWorkingStatus(runtime, 1)

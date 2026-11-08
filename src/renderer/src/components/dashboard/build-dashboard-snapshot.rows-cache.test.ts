@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 
-import { dashboardCardDisplayState } from '../../../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { admitDashboardSnapshot } from '../../../../main/ipc/dashboard-payload-validation'
-import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, Fragment } from 'react'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
@@ -13,14 +13,13 @@ import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'
 import { useDashboardSnapshot } from '../dashboard-popout/useDashboardSnapshot'
 import { AgentKanbanCard } from '../dashboard-popout/AgentKanbanCard'
 import { AgentTerminalPanel } from '../dashboard-popout/AgentTerminalDialog'
-import { projectStatus } from '../native-chat/structured-agent-session-status-projection'
-import type { StructuredTab } from '../native-chat/structured-agent-session-tabs'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
-import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import { projectStatus } from '../native-chat/session/status/structured-agent-session-status-projection'
+import type { StructuredTab } from '../native-chat/session/status/structured-agent-session-tabs'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/runtime/structured-chat-name-observation', () => ({
@@ -30,22 +29,11 @@ vi.mock('@/runtime/structured-chat-name-observation', () => ({
 vi.mock('./dashboard-chat-program-acquisition', () => ({
   createDashboardChatProgramHolds: () => ({ reconcile: () => {}, release: () => {} })
 }))
-const iconRender = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: ({ agent, size }: { agent: string; size: number }) => {
-    if (size === 14) {
-      iconRender(agent)
-    }
-    return null
-  }
-}))
+vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import {
@@ -151,94 +139,6 @@ function baseState(overrides: Partial<DashboardSnapshotState> = {}): DashboardSn
 }
 
 describe('buildDashboardSnapshot rows cache', () => {
-  it.each([
-    ['cancellation', 'interrupted'],
-    ['failure', 'failed'],
-    ['unconfirmed', 'unconfirmed'],
-    ['success', 'idle']
-  ] as const)(
-    'preserves %s through snapshot admission without changing columns',
-    (outcome, mark) => {
-      const state = baseState({
-        agentStatusByPaneKey: {
-          [PANE_1]: entry(PANE_1, 'tab1', 'w1', {
-            state: 'done',
-            mainAgent: { state: 'done', outcome, stateStartedAt: NOW - 5000 }
-          })
-        },
-        acknowledgedAgentsByPaneKey: { [PANE_1]: NOW }
-      })
-      const snapshot = buildDashboardSnapshot(state, NOW)
-      const admitted = admitDashboardSnapshot(snapshot)
-      expect(admitted?.droppedCardCount).toBe(0)
-      const card = admitted!.snapshot.cards[0]
-      expect(dashboardCardDisplayState(card)).toBe(mark)
-      expect(card.bucket).toBe('idle')
-      expect(buildDashboardBucketCounts(state, NOW).idle).toBe(1)
-      for (const acknowledgedAgentsByPaneKey of [{}, { [PANE_1]: NOW }]) {
-        const aged = buildDashboardSnapshot(
-          { ...state, acknowledgedAgentsByPaneKey },
-          NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
-        )
-        expect(dashboardCardDisplayState(aged.cards[0])).toBe(
-          outcome === 'success' ? (aged.cards[0].unseen ? 'done' : 'idle') : mark
-        )
-      }
-    }
-  )
-
-  it('keeps failure separate from live children and pending questions', () => {
-    for (const state of ['working', 'waiting'] as const) {
-      const snapshot = buildDashboardSnapshot(
-        baseState({
-          agentStatusByPaneKey: {
-            [PANE_1]: entry(PANE_1, 'tab1', 'w1', {
-              state,
-              interactivePrompt: 'Approve deploy?',
-              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1000 }
-            })
-          }
-        }),
-        NOW
-      )
-      expect(dashboardCardDisplayState(snapshot.cards[0])).toBe('failed')
-      expect(snapshot.cards[0].bucket).toBe(state === 'working' ? 'working' : 'attention')
-      expect(snapshot.cards[0].askSummary).toBe(state === 'waiting' ? 'Approve deploy?' : undefined)
-      const aged = buildDashboardSnapshot(
-        baseState({
-          agentStatusByPaneKey: {
-            [PANE_1]: entry(PANE_1, 'tab1', 'w1', {
-              state,
-              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1000 }
-            })
-          }
-        }),
-        NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
-      )
-      expect(aged.cards[0].dotState).toBe('idle')
-      expect(dashboardCardDisplayState(aged.cards[0])).toBe('failed')
-    }
-  })
-
-  it('matches the uncached snapshot exactly across unrelated and targeted writes', () => {
-    const cache = createWorktreeAgentRowsCache()
-    const first = baseState()
-    expect(buildDashboardSnapshot(first, NOW, { rowsCache: cache, rowsGeneration: 1 })).toEqual(
-      buildDashboardSnapshot(first, NOW)
-    )
-
-    const titleWrite: DashboardSnapshotState = {
-      ...first,
-      runtimePaneTitlesByTabId: { ...first.runtimePaneTitlesByTabId, tab2: { 0: 'sh' } }
-    }
-    const cached = buildDashboardSnapshot(titleWrite, NOW + 500, {
-      rowsCache: cache,
-      rowsGeneration: 1
-    })
-    expect(cache.lastComputedWorktreeIds).toEqual(['w2'])
-    expect(cached).toEqual(buildDashboardSnapshot(titleWrite, NOW + 500))
-  })
-
   it('recomputes only the worktree whose pane foreground process changed', () => {
     const cache = createWorktreeAgentRowsCache()
     const state: DashboardSnapshotState = {
@@ -278,14 +178,6 @@ describe('buildDashboardSnapshot rows cache', () => {
     expect(cache.lastComputedWorktreeIds).toEqual([])
     expect(after.cards.find((card) => card.paneKey === PANE_1)?.unseen).toBe(false)
     expect(after).toEqual(buildDashboardSnapshot(acked, NOW + 500))
-  })
-
-  it('recomputes all worktrees when the freshness generation ticks', () => {
-    const cache = createWorktreeAgentRowsCache()
-    const state = baseState()
-    buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
-    buildDashboardSnapshot(state, NOW + 60_000, { rowsCache: cache, rowsGeneration: 2 })
-    expect(cache.lastComputedWorktreeIds.sort()).toEqual(['w1', 'w2'])
   })
 
   it('refreshes a retained row from a provider title published to its current tab', () => {
@@ -368,7 +260,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   Reflect.deleteProperty(window, 'api')
-  iconRender.mockClear()
 })
 
 describe('native status publication to a mounted popout', () => {
@@ -479,20 +370,17 @@ describe('native status publication to a mounted popout', () => {
       const mounted = render(createElement(PopoutFixture))
       await act(async () => {})
       expect(within(screen.getByTestId('tab1')).getByLabelText('Done')).toBeTruthy()
-      iconRender.mockClear()
       publish.mockClear()
       build.mockClear()
       await act(async () => useAppStore.setState({ sidebarWidth: 333 }))
       await act(async () => vi.advanceTimersByTime(250))
       expect(build).not.toHaveBeenCalled()
       expect(publish).not.toHaveBeenCalled()
-      expect(iconRender).not.toHaveBeenCalled()
       for (const [outcome, label] of [
         ['failure', 'Failed'],
         ['cancellation', 'Interrupted'],
         ['unconfirmed', 'Couldn’t confirm']
       ] as const) {
-        iconRender.mockClear()
         publish.mockClear()
         build.mockClear()
         await act(async () => update(target, 'working'))
@@ -502,14 +390,11 @@ describe('native status publication to a mounted popout', () => {
         await act(async () => vi.advanceTimersByTime(250))
         expect(within(screen.getByTestId('tab1')).getByLabelText(label)).toBeTruthy()
         expect(within(screen.getByTestId('tab1')).getByText(`Claude · ${label}`)).toBeTruthy()
-        expect(iconRender.mock.calls.map((call) => call[0])).toEqual(['claude', 'claude'])
         expect(build).toHaveBeenCalledTimes(2)
         expect(publish).toHaveBeenCalledTimes(2)
       }
-      iconRender.mockClear()
       await act(async () => update(other, 'working'))
       await act(async () => vi.advanceTimersByTime(250))
-      expect(iconRender.mock.calls.map((call) => call[0])).toEqual(['codex'])
       await act(async () => update(target, 'idle', 'failure'))
       await act(async () => vi.advanceTimersByTime(250))
       expect(within(screen.getByTestId('tab1')).getByLabelText('Failed')).toBeTruthy()

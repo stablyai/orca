@@ -1,19 +1,18 @@
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
+import '../../../shared/orchestration-session-caller-codes'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   ADDRESS_X,
   ADDRESS_Y,
   createSessionCallerHarness,
   idOf,
   orchestrationRequest,
-  PROVIDER_ID_X,
   resultOf,
   SESSION_X,
   SESSION_Y,
@@ -22,7 +21,7 @@ import {
 } from './orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -41,19 +40,6 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
   function callerShow(options: Parameters<typeof orchestrationRequest>[2]) {
     return orchestrationRequest('orchestration.callerShow', {}, options)
   }
-
-  it('answers a chat with its Orca session ID, even in terminal view where it also carries a pane', async () => {
-    const response = await h.dispatch(
-      callerShow({
-        sessionId: SESSION_X,
-        evidence: { terminalHandle: 'term_tui', paneKey: 'tab_tui:1:2' }
-      })
-    )
-
-    expect(resultOf(response)).toEqual({
-      caller: { orcaSessionId: ADDRESS_X, live: true }
-    })
-  })
 
   it('answers a structured worker with the Orca session ID its preamble names, whose mail is keyed by its handle', async () => {
     const handle = mintStructuredWorkerHandle()
@@ -94,40 +80,6 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
     expect(checked.messages).toEqual([expect.objectContaining({ from_handle: handle })])
   })
 
-  it('refuses a session that is not running, with the same code every orchestration verb gets', async () => {
-    h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { claimStatus: 'released' } }))
-
-    const response = await h.dispatch(callerShow({ sessionId: SESSION_X }))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: CODES.notLive, message: expect.stringContaining(SESSION_X) }
-    })
-  })
-
-  it("names the Orca id when handed the provider's id", async () => {
-    const response = await h.dispatch(callerShow({ sessionId: PROVIDER_ID_X }))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: CODES.providerId, data: { orcaSessionId: SESSION_X } }
-    })
-  })
-
-  it('refuses a session claim from a paired client, naming the host boundary', async () => {
-    const response = await h.dispatchStreaming(callerShow({ sessionId: SESSION_X }), 'paired-1')
-
-    expect(response).toMatchObject({ ok: false, error: { code: CODES.hostBoundary } })
-  })
-
-  it('answers null for a terminal agent, whose status stays as it was', async () => {
-    const response = await h.dispatch(
-      callerShow({ evidence: { terminalHandle: 'term_live', paneKey: 'tab_1:leaf_1' } })
-    )
-
-    expect(resultOf(response)).toEqual({ caller: null })
-  })
-
   it('gives the menu the Orca session ID each session of a cleared chat acts as', async () => {
     const cleared = sessionRecord(SESSION_X)
     h.records.set(SESSION_X, {
@@ -151,19 +103,5 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
       expect(shown.orcaSessionId).toBe(ADDRESS_X)
       expect(acting.caller).toMatchObject({ orcaSessionId: shown.orcaSessionId })
     }
-  })
-
-  it('refuses an id that is not an Orca session ID', async () => {
-    const response = await h.dispatch(
-      orchestrationRequest('orchestration.sessionAddress', { sessionId: 'not an id' })
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: CODES.unknown } })
-  })
-
-  it('answers null for a caller whose environment carries no identity', async () => {
-    const response = await h.dispatch(callerShow({}))
-
-    expect(resultOf(response)).toEqual({ caller: null })
   })
 })

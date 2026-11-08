@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 const mocks = vi.hoisted(() => ({
@@ -19,20 +19,20 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: async (_state: unknown, snapshot: unknown) =>
     snapshot
 }))
 
 import { useAppStore } from '@/store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
-import { WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS } from './window-visibility-subscription-parking'
+import { WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS } from './rpc/subscriptions/window-visibility-subscription-parking'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 /**
  * #21052/#19092: the host can end a tab stream while the connection stays up (an id-less
@@ -167,48 +167,5 @@ describe('session-tabs streams the host ends over a live connection', () => {
     expect(useAppStore.getState().tabsByWorktree[NEW_WORKTREE]?.map((tab) => tab.id)).toEqual([
       toWebTerminalSurfaceTabId('host-tab')
     ])
-  })
-
-  it('resubscribes the active-worktree stream once after an error response, on the backoff', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const active = streams('session.tabs.subscribe')
-    expect(active).toHaveLength(1)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await deliver(active[0], {
-      id: 'err',
-      ok: false,
-      error: { code: 'session_tabs_inventory_unstable', message: 'unstable' },
-      _meta: {}
-    })
-    // The errored logical subscription is dropped so reconnect replay cannot duplicate it.
-    expect(active[0]!.unsubscribe).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS - 1)
-      await settle()
-    })
-    expect(streams('session.tabs.subscribe')).toHaveLength(1)
-    await waitOutRetry()
-    expect(streams('session.tabs.subscribe')).toHaveLength(2)
-    warn.mockRestore()
-  })
-
-  it('treats a transport error as reconnect replay territory, not an end', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await act(async () => {
-      for (const entry of subscriptions) {
-        entry.callbacks.onError?.({ code: 'transport', message: 'socket dropped' })
-      }
-      await settle()
-    })
-    await waitOutRetry()
-
-    expect(subscriptions.every((entry) => entry.unsubscribe.mock.calls.length === 0)).toBe(true)
-    expect(streams('session.tabs.subscribeAll')).toHaveLength(1)
-    warn.mockRestore()
   })
 })

@@ -17,6 +17,7 @@ export type OpenStream = {
   emit: (payload: unknown) => void
   emitBinary: ((frame: BrowserScreencastFrame) => void) | null
   envelope: RpcEnvelopeFields | undefined
+  holdReplay: ((resend: () => void) => boolean) | undefined
   unsubscribes: number
 }
 
@@ -32,7 +33,15 @@ export type FakeRpcClient = RpcClient & {
 type ClientGetters = Partial<
   Pick<
     RpcClient,
-    'getState' | 'getReconnectAttempt' | 'getLastConnectedAt' | 'getLastInboundAt' | 'getGeneration'
+    | 'getState'
+    | 'getReconnectAttempt'
+    | 'getLastConnectedAt'
+    | 'getLastInboundAt'
+    | 'getGeneration'
+    | 'getActivePath'
+    | 'getPendingPath'
+    | 'getRelayHostReachability'
+    | 'onConnectionPathChange'
   >
 >
 
@@ -54,6 +63,7 @@ export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient 
         emit: onData,
         emitBinary: options?.onBinaryFrame ?? null,
         envelope: options?.envelope,
+        holdReplay: options?.holdReplay,
         unsubscribes: 0
       }
       streams.push(stream)

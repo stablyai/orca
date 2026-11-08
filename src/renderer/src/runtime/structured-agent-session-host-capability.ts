@@ -1,45 +1,50 @@
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
 import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  useAppStateViewActive,
+  useAppViewExternalStore,
+  useAppStateValue
+} from '@/store/retained-views/app-state-view'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
+import { useEffect, useState } from 'react'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import {
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilityObservation
-} from './local-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export function structuredAgentSessionHostKey(target: RuntimeClientTarget): string {
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-/** Unknown before verification or after revocation; a contact outage retains the known build. */
-export type StructuredAgentSessionHostCapabilityState = 'unknown' | 'supported' | 'unsupported'
+export type { StructuredAgentSessionHostCapabilityState }
 
 /** Displays the existing host status; connection lifecycle owns probing. */
 export function useStructuredAgentSessionOwnPermissionState(
   target: RuntimeClientTarget | null
 ): StructuredAgentSessionHostCapabilityState {
+  const viewActive = useAppStateViewActive()
   const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   // Select the verdict, not the map: unrelated host flips must not rerender every chat.
-  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
+  const remote = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
     if (environmentId === null) {
       return 'unknown'
     }
@@ -51,16 +56,16 @@ export function useStructuredAgentSessionOwnPermissionState(
         : 'unsupported'
       : 'unknown'
   })
-  const local = useSyncExternalStore(
+  const local = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     () => localCapabilityState(capability),
     () => 'unknown' as const
   )
   useEffect(() => {
-    if (target?.kind === 'local') {
+    if (viewActive && target?.kind === 'local') {
       void ensureLocalRuntimeCapabilities()
     }
-  }, [target?.kind])
+  }, [target?.kind, viewActive])
   return !target ? 'unknown' : environmentId === null ? local : remote
 }
 

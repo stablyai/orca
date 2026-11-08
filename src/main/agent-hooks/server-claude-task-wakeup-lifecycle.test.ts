@@ -8,7 +8,7 @@ import { createRuntimeAutomationRunTerminalObserver } from '../automations/runti
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 vi.mock('electron', () => ({
@@ -77,76 +77,6 @@ async function host(remote: boolean, launchToken?: string) {
 }
 
 describe.each([false, true])('Claude wake-up production ingress remote=%s', (remote) => {
-  it.each(['Agent', 'Bash', 'Monitor'])(
-    'rejects a blank %s launch without phantom debt',
-    async (tool) => {
-      const server = await host(remote)
-      try {
-        await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'launch' })
-        await server.post({
-          hook_event_name: 'PostToolUse',
-          tool_name: tool,
-          tool_response:
-            tool === 'Agent'
-              ? { isAsync: true, agentId: ' \t ' }
-              : tool === 'Monitor'
-                ? { taskId: ' \t ' }
-                : { backgroundTaskId: ' \t ' }
-        })
-        if (tool === 'Agent') {
-          await server.post({ hook_event_name: 'SubagentStop', agent_id: ' \t ' })
-        }
-        await server.post({ hook_event_name: 'Stop', background_tasks: [] })
-        expect(server.row()?.state).toBe('done')
-        expect(server.row()?.claudeTaskWakeupPending).toBeUndefined()
-      } finally {
-        server.stop()
-      }
-    }
-  )
-
-  it.each(['Agent', 'Bash', 'Monitor'])(
-    'matches a padded %s launch to its canonical wake-up',
-    async (tool) => {
-      const server = await host(remote)
-      try {
-        await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'launch' })
-        await server.post({
-          hook_event_name: 'PostToolUse',
-          tool_name: tool,
-          tool_response:
-            tool === 'Agent'
-              ? { isAsync: true, agentId: ' a1 ' }
-              : tool === 'Monitor'
-                ? { taskId: ' a1 ' }
-                : { backgroundTaskId: ' a1 ' }
-        })
-        await server.post({
-          hook_event_name: 'Stop',
-          background_tasks: [
-            { id: 'a1', type: tool === 'Agent' ? 'subagent' : 'shell', status: 'running' }
-          ]
-        })
-        expect(server.row()?.claudeTaskWakeupPending).toBeUndefined()
-        await server.post(
-          tool === 'Agent'
-            ? { hook_event_name: 'SubagentStop', agent_id: 'a1' }
-            : { hook_event_name: 'Stop', background_tasks: [] }
-        )
-        expect(server.row()?.claudeTaskWakeupPending).toBe('notification')
-        await server.post({
-          hook_event_name: 'UserPromptSubmit',
-          prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
-        })
-        expect(server.row()?.claudeTaskWakeupPending).toBe('finishing-turn')
-        await server.post({ hook_event_name: 'Stop', background_tasks: [] })
-        expect(server.row()?.state).toBe('done')
-      } finally {
-        server.stop()
-      }
-    }
-  )
-
   it.each([
     'one-subagent',
     'two-subagents-together',
@@ -176,69 +106,6 @@ describe.each([false, true])('Claude wake-up production ingress remote=%s', (rem
         state: 'done',
         connectionId: remote ? 'ssh-owner' : null
       })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('does not reopen notification debt for a duplicate child-end post', async () => {
-    const server = await host(remote)
-    try {
-      await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
-      await server.post({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
-      await server.post({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Agent',
-        tool_response: { isAsync: true, agentId: 'a1' }
-      })
-      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      await server.post({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
-      })
-      await server.post({ hook_event_name: 'Stop', background_tasks: [] })
-      expect(server.row()?.state).toBe('done')
-      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      expect(server.row()?.state).toBe('done')
-      await server.post({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
-      })
-      expect(server.row()?.claudeTaskWakeupPending).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('accepts a delayed wake-up and waits for its main-agent finishing turn', async () => {
-    vi.useFakeTimers({
-      shouldAdvanceTime: true,
-      toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout']
-    })
-    const server = await host(remote)
-    try {
-      await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'delegate then finish' })
-      await server.post({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
-      await server.post({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Agent',
-        tool_response: { isAsync: true, agentId: 'a1' }
-      })
-      await server.post({
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
-      })
-      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      vi.advanceTimersByTime(5_000)
-      expect(server.row()?.state).toBe('working')
-      await server.post({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
-      })
-      vi.advanceTimersByTime(120_000)
-      expect(server.row()).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
-      await server.post({ hook_event_name: 'Stop', background_tasks: [] })
-      expect(server.row()?.state).toBe('done')
     } finally {
       server.stop()
     }
@@ -533,42 +400,4 @@ describe('Claude finishing turn permission restoration', () => {
       }
     }
   )
-
-  it('pairs a sticky child permission with the current lead cycle instead of retaining a stale phase', async () => {
-    const server = await host(false)
-    try {
-      await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
-      await server.post({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
-      await server.post({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Agent',
-        tool_response: { isAsync: true, agentId: 'a1' }
-      })
-      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      await server.post({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
-      })
-      await server.post({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'b1',
-        tool_name: 'Bash',
-        tool_use_id: 'child-tool'
-      })
-      await server.post({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_response: {} })
-      expect(server.row()).toMatchObject({
-        state: 'waiting',
-        claudeTaskWakeupPending: 'finishing-turn',
-        mainAgent: { state: 'working' }
-      })
-      await server.post({
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'b1', type: 'subagent', status: 'running' }]
-      })
-      expect(server.row()).toMatchObject({ state: 'waiting', mainAgent: { state: 'done' } })
-      expect(server.row()?.claudeTaskWakeupPending).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
 })

@@ -7,6 +7,7 @@ export type DocPreviewGrantOwner =
       environmentId: string
       worktreeSelector: string
       worktreeRoot: string
+      fileAccess?: 'terminal-artifact'
     }
 
 export type DocPreviewGrantRequest = {

@@ -3,15 +3,19 @@
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
-import { terminalLayoutsPatch } from '@/store/workspace-layout-frame-store-patch'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import {
+  applyLayoutFrame,
+  EMPTY_WORKSPACE_LAYOUT_CACHE,
+  type WorkspaceLayoutCache
+} from '@/store/workspace-layout/workspace-layout-cache'
+
+import { terminalLayoutsPatch } from '@/store/workspace-layout/frames/workspace-layout-frame-store-patch'
 import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
 } from './workspace-layout-frame-drawn-workspaces'
-import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
+import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-title-batch'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { liveTitleUpdates } from './workspace-layout-frame-changes'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
@@ -21,7 +25,7 @@ import {
   type LayoutFrameBuildHolds,
   type LayoutFrameBuildPatch
 } from './workspace-layout-frame-builds'
-import { eitherHeld } from '@/store/workspace-layout-frame-held-tabs'
+import { eitherHeld } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import { heldTabGroupFocus } from './held-tab-group-follow'
 import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
 import { provideLayoutFrameWorkspaces } from './layout-frame-workspaces'
@@ -88,8 +92,8 @@ export function openWorkspaceLayoutFrameSync(
 
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
-  const show = (patch: LayoutFrameBuildPatch): void => {
-    selectionsTaken.push(...showFramePatch(store, patch))
+  const show = (patch: LayoutFrameBuildPatch, rebuiltWorkspaces?: readonly string[]): void => {
+    selectionsTaken.push(...showFramePatch(store, patch, rebuiltWorkspaces))
   }
 
   // Each change against the cache's copy it applies to, before the frame replaces it.
@@ -189,16 +193,14 @@ export function openWorkspaceLayoutFrameSync(
     // One update: a move's or rename's content rekeys with the frame that shows it.
     const rekeyed = shownContentRekeyPatch(state, cache)
     const base: AppState = { ...state, ...rekeyed }
-    show({
-      ...rekeyed,
-      ...layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
-    })
+    const builtKeys = [...fullBuilt, ...workspaceBuilt]
+    const patch = layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
+    show({ ...rekeyed, ...patch }, builtKeys)
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }
     showFramePaneStarts(store, changed, cache, paneStartsShown)
     // Run after the apply check: the focus is the user's selection, not the frame's.
-    const builtKeys = [...fullBuilt, ...workspaceBuilt]
     const followHeldTabs = heldTabGroupFocus(base, store, builtKeys, holds.held)
     for (const key of builtKeys) {
       shown.add(key)

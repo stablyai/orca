@@ -2,7 +2,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
   type TerminalStreamFrame
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSnapshotRequestFrame
@@ -100,6 +100,13 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         if (discardsQueuedOutput) {
           notePausedOutputDropped(state, stream)
         }
+      }
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.SetOutputCadence && stream.supportsOutputCadence) {
+      const payload = decodeTerminalStreamJson<{ cadence?: unknown }>(frame.payload)
+      if (payload?.cadence === 'focused' || payload?.cadence === 'background') {
+        stream.outputBatcher.setCadence(payload.cadence)
       }
       return
     }

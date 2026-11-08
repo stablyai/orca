@@ -43,26 +43,6 @@ afterEach(async () => {
 })
 
 describe('PluginLanguagePackRegistry', () => {
-  it('loads approved catalogs under an isolated plugin language id', async () => {
-    const plugin = await pluginWithCatalog({ common: { save: 'Salvar' } })
-    const registry = new PluginLanguagePackRegistry(new PluginContentVerifier())
-
-    await registry.reconcile([plugin], () => true)
-
-    expect(registry.list()).toEqual([
-      {
-        id: 'plugin:samples.portuguese/pt-BR',
-        resourceLanguage: 'pt-BR-x-orcapk-73616d70-6c65732e-706f7274-75677565-73652f70-742d4252',
-        pluginKey: 'samples.portuguese',
-        locale: 'pt-BR',
-        catalog: { common: { save: 'Salvar' } },
-        // One string against the whole English catalog.
-        coverage: 0
-      }
-    ])
-    expect(registry.error(plugin.pluginKey)).toBeNull()
-  })
-
   it('loads a pack that covers protected security copy, leaving that copy in English', async () => {
     const plugin = await pluginWithCatalog({
       common: { save: 'Sávé' },

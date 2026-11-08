@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitRunner from '../git/runner'
+import type * as GitRunner from '../git/command-runner/git-exec-file'
 
 const { gitExecFileAsyncMock, readLocalGitConfigSignatureMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn<() => Promise<string | undefined>>(async () => 'sig-1')
 }))
 
-vi.mock('../git/runner', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GitRunner>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))

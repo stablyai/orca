@@ -19,8 +19,8 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-pr
 import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
 import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { encodePairingOffer } from '../../src/shared/pairing'
-import { addWslHostEnvironment } from '../../src/shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import type {
   WslMovePreview,
@@ -421,16 +421,16 @@ test('with the internal gate closed, no move entry shows and main refuses', asyn
       await page.evaluate((distro) => window.api.wslMove.preview({ distro }), DISTRO)
     ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
     expect(await page.evaluate(() => window.api.wslMove.listUnfinished())).toEqual([])
-    await page.evaluate(() => {
-      const state = window.__store?.getState()
-      state?.openSettingsPage()
-      state?.openSettingsTarget({ pane: 'servers', repoId: null })
-    })
-    await expect(page.getByText('No saved servers', { exact: true })).toBeVisible({
-      timeout: 30_000
-    })
-    await expect(page.locator('[data-settings-section="wsl-hosts"]')).toHaveCount(0)
-    await expect(page.getByText('Move projects from this distro…')).toHaveCount(0)
+    // Serve-only (#34683): the saved host still lists, but nothing new is added or moved.
+    await openServersPane(page)
+    const hosts = page.locator('[data-settings-section="wsl-hosts"]')
+    await expect(hosts.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
+    await hosts.getByRole('button', { name: `More actions for ${DISTRO} (WSL)` }).click()
+    await expect(page.getByRole('menuitem', { name: 'Remove…' })).toBeVisible()
+    await expect(
+      page.getByRole('menuitem', { name: 'Move projects from this distro…' })
+    ).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await expect(page.getByTestId('wsl-move-dialog')).toHaveCount(0)
   } finally {
     await desktop.dispose()

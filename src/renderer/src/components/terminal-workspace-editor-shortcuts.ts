@@ -3,8 +3,8 @@ import { useAppStore } from '../store'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
-} from './editor/editor-autosave'
-import { getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
+} from './editor/autosave/editor-autosave'
+import { getEditorCmdSaveFileId } from './editor/save/commands/editor-cmd-save-target'
 import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {

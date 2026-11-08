@@ -4,8 +4,8 @@ import {
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer
-} from '../../../../../src/shared/native-chat-ask-answer'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
@@ -22,8 +22,8 @@ import {
   nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from '../../../../../src/shared/native-chat-agent-support'
-import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
+} from '../../../../../src/shared/native-chat/native-chat-agent-support'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 
 export type MobileNativeChatAnswerSend = {
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>

@@ -5,9 +5,12 @@ import type { PageClosurePins } from './page-closure'
 
 export const C5_PAGE_CLOSURE: PageClosurePins = {
   'aiVault.history': {
+    'aivault-history-scan-association': 'write-ordinal',
     'aivault-history-scan-fulfilled': 'write-ordinal',
+    'aivault-history-scan-refresh': 'write-ordinal',
+    'aivault-history-scan-revisit': 'write-ordinal',
     'aivault-history-scan-unsupported': 'write-ordinal',
-    'aivault-history-scan-worktrees-late': 'write-ordinal',
+    'aivault-history-scan-worktrees-late': 'identical',
     'matrix-aivault.history-aivault.listsessions-1': 'result-absent-settlement',
     'matrix-aivault.history-status.get-1': 'result-absent-settlement'
   },
@@ -15,7 +18,6 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
     'aivault-history-screen-listed': 'write-ordinal',
     'aivault-history-screen-worktrees': 'write-ordinal',
     'matrix-aivault.history-screen-platform-status': 'result-absent-settlement',
-    'matrix-aivault.history-screen-status.get-2': 'result-absent-settlement',
     'matrix-aivault.history-screen-worktree.ps-1': 'result-absent-settlement'
   },
   'aiVault.resume-launch': {
@@ -69,7 +71,9 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'host.worktree-actions': {
     'host-worktree-actions-pin-open-delete': 'identical',
+    'host-worktree-delete-archive-hook-failed': 'identical',
     'host-worktree-delete-refused': 'identical',
+    'matrix-host.worktree-actions-repo.hooks-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.activate-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.rm-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.set-1': 'result-absent-settlement'

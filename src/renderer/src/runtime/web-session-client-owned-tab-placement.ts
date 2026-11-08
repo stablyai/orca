@@ -4,12 +4,14 @@ import {
   pickNextActiveTab,
   pushRecentTabId,
   sanitizeRecentTabIds
-} from '../store/slices/tab-group-state'
+} from '../store/slices/tabs/tab-selection-history'
 
 /** A snapshot tab the client has not placed yet, plus the group it should join. */
 export type ClientOwnedAdoptedTab = {
   tabId: string
   groupId: string
+  /** The tab before it in the host's own order; a first adoption lands after it when it's here. */
+  afterTabId?: string
 }
 
 export type ClientOwnedPlacementInput = {
@@ -80,7 +82,7 @@ type WorkingGroup = {
   tabOrder: string[]
 }
 
-/** Append unseen snapshot tabs, apply client placements/rekeys and drop vanished tabs with local-close focus repair. Existing tabs keep client order/groups; only explicit intent changes focus. */
+/** Place unseen snapshot tabs after their host predecessor (else append), apply client placements/rekeys and drop vanished tabs with local-close focus repair. Existing tabs keep client order/groups; only explicit intent changes focus. */
 export function reconcileClientOwnedTabPlacement(
   input: ClientOwnedPlacementInput
 ): ClientOwnedPlacementResult {
@@ -175,7 +177,8 @@ export function reconcileClientOwnedTabPlacement(
     }
     const target = ensureGroup(targetGroupId)
     if (!target.tabOrder.includes(adopted.tabId)) {
-      target.tabOrder.push(adopted.tabId)
+      const after = adopted.afterTabId ? target.tabOrder.indexOf(adopted.afterTabId) : -1
+      target.tabOrder.splice(after < 0 ? target.tabOrder.length : after + 1, 0, adopted.tabId)
     }
   }
 

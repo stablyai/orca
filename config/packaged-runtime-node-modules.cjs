@@ -9,13 +9,16 @@ const {
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
-const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
+const {
+  PE_MACHINE,
+  readPeMachine
+} = require('./scripts/native-build/windows/windows-pe-machine.cjs')
 const { adoptPackagedNativeBuildEntries } = require('./packaged-native-build-entries.cjs')
 const { runtimePackageExcludeFilter } = require('./packaged-windows-only-runtime-files.cjs')
 const {
   NATIVE_BUILD_PACKAGES,
   TRANSIENT_NATIVE_BUILD_ENTRY_FILTER
-} = require('./scripts/native-build-entry.cjs')
+} = require('./scripts/native-build/node-addons/native-build-entry.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))

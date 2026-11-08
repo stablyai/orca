@@ -1,31 +1,28 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
-import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
-import type {
-  WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../../../shared/worktree/types'
+
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import {
   getHeaderDragRepo,
-  type GroupHeaderRow,
-  type WorktreeGroupBy
+  isSingleHostProjectHeader,
+  type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
-import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
-import { resolveProjectGroupHeaderColor } from '../../project-header-color'
-import { ProjectHeaderActions } from '../../ProjectHeaderActions'
+import { resolveProjectGroupHeaderColor } from './project-header-color'
+import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
@@ -38,41 +35,16 @@ import {
 } from './project-group-header-actions'
 import {
   RepoHeaderCreateWorkspaceButton,
-  RepoHeaderProjectActionsMenu,
-  type RepoHeaderProjectActions
+  RepoHeaderProjectActionsMenu
 } from './repo-header-project-actions'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
-  shouldIgnoreRepoHeaderToggle
+  shouldIgnoreRepoHeaderToggle,
+  toggleSectionHeaderCollapse
 } from './header-event-guards'
-import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
-
-export type SectionHeaderRowContext = {
-  groupBy: WorktreeGroupBy
-  projectHeaderHostContexts?: ReadonlyMap<string, ProjectHeaderHostContext>
-  collapsedGroups: Set<string>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  projectGroups: readonly ProjectGroup[]
-  highlightedRevealRowKey: string | null
-  dragOverStatus: WorkspaceStatus | null
-  pinDragOver: boolean
-  headerDrag: WorktreeSidebarHeaderDrag
-  getCachedFolderWorkspacePathStatus: (request: {
-    scope: 'project-group'
-    projectGroupId: string
-  }) => FolderWorkspacePathStatus | null
-  toggleGroupWithScrollAnchor: (groupKey: string) => void
-  projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-  onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
-  onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
-  onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
-  onWorkspacePinDragOver: (event: React.DragEvent) => void
-  onWorkspacePinDragLeave: (event: React.DragEvent) => void
-  onWorkspaceStatusDrop: (event: React.DragEvent, status: WorkspaceStatus) => void
-}
+import type { SectionHeaderRowContext } from './section-header-row-context'
+import type { Translate } from '@/i18n/use-translate'
 
 // The folder-scan project group whose parent path is gone can't create new workspaces.
 function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
@@ -82,15 +54,18 @@ function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | nul
   )
 }
 
-export function renderWorktreeSectionHeaderRow(args: {
-  ctx: SectionHeaderRowContext
-  row: GroupHeaderRow
-  vItem: VirtualItem
-  isActiveStickyHeader: boolean
-  hasStickyHost: boolean
-  hasHeaderTopSpacing: boolean
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-}): React.JSX.Element {
+export function renderWorktreeSectionHeaderRow(
+  args: {
+    ctx: SectionHeaderRowContext
+    row: GroupHeaderRow
+    vItem: VirtualItem
+    isActiveStickyHeader: boolean
+    hasStickyHost: boolean
+    hasHeaderTopSpacing: boolean
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  },
+  t?: Translate
+): React.JSX.Element {
   const { ctx, row, vItem, isActiveStickyHeader } = args
   const { headerDrag } = ctx
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
@@ -151,7 +126,7 @@ export function renderWorktreeSectionHeaderRow(args: {
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
       : null
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
-  const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses)
+  const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses, t)
   const label = row.label ?? headerVisual.label ?? ''
   const hostContext =
     ctx.groupBy === 'repo' ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
@@ -176,6 +151,8 @@ export function renderWorktreeSectionHeaderRow(args: {
     : null
   const collapseKey = row.collapseKey ?? row.key
   const isHeaderCollapsed = ctx.collapsedGroups.has(collapseKey)
+  const toggleHeader = (event: React.MouseEvent | React.KeyboardEvent): void =>
+    toggleSectionHeaderCollapse(event, collapseKey, ctx)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
     row.count > 0 &&
@@ -288,10 +265,9 @@ export function renderWorktreeSectionHeaderRow(args: {
                 : undefined
           }
           onClick={(event) => {
-            if (shouldIgnoreRepoHeaderToggle(event)) {
-              return
+            if (!shouldIgnoreRepoHeaderToggle(event)) {
+              toggleHeader(event)
             }
-            ctx.toggleGroupWithScrollAnchor(collapseKey)
           }}
           onKeyDown={(e) => {
             if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -299,7 +275,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             }
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              ctx.toggleGroupWithScrollAnchor(collapseKey)
+              toggleHeader(e)
             }
           }}
         >
@@ -353,7 +329,7 @@ export function renderWorktreeSectionHeaderRow(args: {
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
-                  ctx.toggleGroupWithScrollAnchor(collapseKey)
+                  toggleHeader(event)
                 }}
               >
                 <ChevronDown
@@ -367,6 +343,8 @@ export function renderWorktreeSectionHeaderRow(args: {
                 groupId={projectGroupIdForHeader}
                 hostId={projectGroupHostIdForHeader}
                 label={label}
+                projectGroup={folderBackedProjectGroup}
+                onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
                 onDelete={ctx.onDeleteProjectGroup}
               />
@@ -396,7 +374,7 @@ export function renderWorktreeSectionHeaderRow(args: {
                 key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
                 repo={row.repo}
                 label={label}
-                pinHost={row.hostId !== undefined}
+                pinHost={isSingleHostProjectHeader(row)}
                 onCreateForRepo={ctx.projectActions.onCreateForRepo}
               />
             ) : null}

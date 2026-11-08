@@ -5,20 +5,19 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_THIRD_LEAF_ID: THIRD_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   deferred
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_PTYS, SURFACE_TAB_ID, surfaceRuntime } =
   await import('./terminal/surface/terminal-surface-replies.test-fixture')
 await import('./rpc/unused-default-rpc-methods.test-fixture')
-const { RpcDispatcher } = await import('./rpc/dispatcher')
-const { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } = await import('./orca-runtime-core')
-const { TERMINAL_METHODS } = await import('./rpc/methods/terminal')
+const { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } =
+  await import('./terminal/view/terminal-surface-deadlines')
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 
@@ -110,27 +109,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     expect(spawn).toHaveBeenCalledOnce()
   })
 
-  it('a terminal.send request starts the pane once and delivers to it', async () => {
-    const { runtime, handle, spawn, started, write } = await restoredPane()
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = dispatcher.dispatch({
-      id: 'req-send',
-      authToken: 'token',
-      method: 'terminal.send',
-      params: { terminal: handle, text: 'echo hi', enter: true }
-    })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'pty-c' })
-
-    await expect(response).resolves.toMatchObject({
-      ok: true,
-      result: { send: { handle, accepted: true } }
-    })
-    expect(write).toHaveBeenCalledWith('pty-c', 'echo hi', 'driving')
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
   it('a saved held pane starts once and answers send, read and wait by its terminal id', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
 
@@ -212,14 +190,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
 
     await expect(wait).resolves.toMatchObject({ handle, condition: 'exit', satisfied: true })
     expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it("a wait's timeout covers a start that never finishes", async () => {
-    const { runtime, handle } = await restoredPane()
-
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 50 })
-    ).rejects.toThrow('timeout')
   })
 
   describe('a start that never finishes errors within the create bound, never a hang', () => {

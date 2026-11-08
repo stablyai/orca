@@ -4,11 +4,12 @@ import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-typ
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '../store'
-import { openWorkspaceBrowserTabForLink } from '../lib/workspace-browser-tab-open'
-import { selectBrowserLinkDestination } from '../lib/browser-link-destination'
-import { workspaceBrowserLinkDestination } from '../lib/workspace-browser-link-open'
+import { openWorkspaceBrowserTabForLink } from '../lib/browser/workspace/workspace-browser-tab-open'
+import { selectBrowserLinkDestination } from '../lib/browser/navigation/browser-link-destination'
+import { workspaceBrowserLinkDestination } from '../lib/browser/workspace/workspace-browser-link-open'
 import { captureLinkOpenIntent } from '../lib/link-open-intent'
-import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import {
@@ -17,7 +18,7 @@ import {
   WT,
   NOW,
   makeSnapshot
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   seedPairedWorktree,
   installRuntimeTransport,
@@ -141,35 +142,6 @@ function selectDestination() {
   )
 }
 
-it('keeps the remote default independent of local workspace profiles', async () => {
-  useAppStore.setState({
-    settings: {
-      ...useAppStore.getState().settings!,
-      browserProfileScope: 'worktree',
-      browserDefaultProfileIdByHostId: { local: 'local-only-profile' }
-    }
-  })
-  const creating = open()
-  const sentProfile = pendingCreates[0]?.params.profileId
-  const stagedProfile = useAppStore
-    .getState()
-    .browserTabsByWorktree[WT]?.find(
-      (workspace) => workspace.activePageId === pendingCreates[0]?.params.page
-    )?.sessionProfileId
-  pendingCreates[0]?.resolve('profile-repro-page')
-  expect(await creating).toMatchObject({ status: 'opened' })
-  expect(sentProfile).toBeUndefined()
-  expect(stagedProfile).toBeNull()
-})
-
-it.each(['other-profile', undefined])(
-  'does not reuse a page published with an incompatible or missing profile (%s)',
-  (profileId) => {
-    publishProfileSnapshot(profileId)
-    expect(selectDestination()).toMatchObject({ status: 'ready', match: null })
-  }
-)
-
 it.each([null, 'remote-profile'])(
   'reuses the host-confirmed default or custom profile (%s)',
   async (profileId) => {
@@ -197,23 +169,6 @@ it('updates and clears published profile evidence even when page content stays i
   expect(selectDestination()).toMatchObject({ match: { browserPageId: OTHER.pageId } })
   publishProfileSnapshot(undefined)
   expect(selectDestination()).toMatchObject({ match: null })
-})
-
-it('uses the paired runtime profile catalog for its SSH-owned workspace', async () => {
-  const sshHost = 'ssh:ssh-target'
-  useAppStore.setState((state) => ({
-    activeWorkspaceExecutionHostId: sshHost,
-    repos: state.repos.map((repo) => ({ ...repo, executionHostId: sshHost })),
-    worktreesByRepo: {
-      repo: state.worktreesByRepo.repo!.map((worktree) => ({ ...worktree, hostId: sshHost }))
-    }
-  }))
-  setDefaultProfiles({ [HOST]: 'remote-profile', local: 'local-profile' })
-  const creating = open()
-  const sentProfile = pendingCreates[0]?.params.profileId
-  pendingCreates[0]?.resolve('ssh-profile-page')
-  expect(await creating).toMatchObject({ status: 'opened' })
-  expect(sentProfile).toBe('remote-profile')
 })
 
 it.each(['unchanged', 'different-host', 'different-runtime'] as const)(

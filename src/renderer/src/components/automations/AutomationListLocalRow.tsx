@@ -1,12 +1,15 @@
-import React from 'react'
-import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+  capturedAutomationOwner,
+  type AutomationCapturedOwner,
+  type AutomationRowAction
+} from './automation-captured-owner'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
+import React from 'react'
+import { MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { MenuItem, MenuRunItem, MenuSeparator } from './AutomationListRowContextMenuItems'
+import { pendingAutomationSetupReviewFromSummary } from './automation-setup-review'
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +33,7 @@ import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
-import type { AutomationRowAction } from './automation-captured-owner'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AutomationHostTarget } from './automation-host-client'
 import {
   getAutomationRowLastRunSnapshot,
@@ -42,12 +43,8 @@ import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAgentLabel } from './automation-draft-model'
-import type { AutomationListRow } from './automation-list-row-identity'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  type AutomationUsageSummary
-} from './automation-usage-model'
+import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
+import { formatAutomationUsageSummary } from './automation-usage-model'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
   LIST_TABLE_ROW_CLASS,
@@ -62,6 +59,7 @@ import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
+  capturedOwners?: ReadonlyMap<string, AutomationCapturedOwner>
   selectedRowKey: string | null | undefined
   isSelectedLocal: boolean
   lastRunByAutomationId: ReadonlyMap<string, AutomationRun>
@@ -72,48 +70,24 @@ export type AutomationListLocalRowProps = {
   worktreeForRow?: (row: AutomationListRow, repo: Repo | undefined) => Worktree | undefined
   projectHostSetups: readonly ProjectHostSetup[]
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
-  automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   onSelect: (rowKey: string) => void
   onRunNow: (row: AutomationListRow) => void
   onEdit: (row: AutomationListRow) => void
   onToggle: (row: AutomationListRow) => void
   onDelete: (row: AutomationListRow) => void
+  onReviewSetup?: (row: AutomationListRow, content: SetupTrustMismatch) => void
 }
 
 const EMPTY_HOST_LABELS: ReadonlyMap<string, string> = new Map()
 
-function automationUsageText(summary: AutomationUsageSummary | undefined): string {
-  if (!summary || summary.unavailableRuns > 0) {
-    return summary?.knownRuns
-      ? usageAmountText(summary)
-      : translate(
-          'auto.components.automations.AutomationsPage.usageUnavailable',
-          'Usage unavailable'
-        )
-  }
-  return summary.knownRuns > 0
-    ? usageAmountText(summary)
-    : translate('auto.components.automations.AutomationsPage.noRunUsageYet', 'No run usage yet')
-}
-
-function usageAmountText(summary: AutomationUsageSummary): string {
-  return translate(
-    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
-    '{{cost}} est. · {{tokens}} tokens',
-    {
-      count: summary.totalTokens,
-      cost: formatAutomationCost(summary.estimatedCostUsd),
-      tokens: formatAutomationTokens(summary.totalTokens),
-      defaultValue_one: '{{cost}} est. · {{tokens}} token'
-    }
-  )
-}
-
 export function AutomationListLocalRow({
+  capturedOwners,
   row,
   selectedRowKey,
   isSelectedLocal,
@@ -125,36 +99,43 @@ export function AutomationListLocalRow({
   worktreeForRow,
   projectHostSetups,
   sshConnectionStates,
+  sshStateByEnvironment,
   runtimeStatusByEnvironmentId,
   hostTargetFor,
-  automationSourceHostAvailabilityByRowKey,
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
+  needsMigration,
   onSelect,
   onRunNow,
   onEdit,
   onToggle,
-  onDelete
+  onDelete,
+  onReviewSetup
 }: AutomationListLocalRowProps): React.JSX.Element {
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
-  const automationRepo = repoForRow?.(row) ?? repoMap.get(getAutomationRunRepoId(automation))
+  const automationRepo = repoForRow
+    ? repoForRow(row)
+    : repoMap.get(getAutomationRunRepoId(automation))
   const automationWorktree = automation.workspaceId
-    ? (worktreeForRow?.(row, automationRepo) ?? worktreeMap.get(automation.workspaceId))
+    ? worktreeForRow
+      ? worktreeForRow(row, automationRepo)
+      : worktreeMap.get(automation.workspaceId)
     : null
   const automationRunAvailability = getAutomationTargetAvailability({
     automation,
+    capturedOwner: capturedAutomationOwner(capturedOwners, row.key),
     repo: automationRepo,
     workspace: automationWorktree,
     projectHostSetups,
     sshConnectionStates,
+    sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
-    automationHostTarget: hostTargetFor(row),
-    sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(row.key)
+    automationHostTarget: hostTargetFor(row)
   })
   const projectLabel =
-    automationRepo?.displayName ??
+    automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
     translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
   const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
   const nextRunLabel = automation.enabled
@@ -173,7 +154,7 @@ export function AutomationListLocalRow({
     (hostId
       ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
       : getLocalExecutionHostLabel())
-  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
+  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
   // Use the projected newest retained run when history is absent; the list does not download history.
@@ -181,10 +162,38 @@ export function AutomationListLocalRow({
     ? getLocalAutomationLastRunSnapshot(automation, lastRun)
     : getAutomationRowLastRunSnapshot(row)
 
+  const setupReview = pendingAutomationSetupReviewFromSummary(automation, row.usageSummary)
+  const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
+  const reviewSetupLabel = translate(
+    'automations.setupTrust.reviewAction',
+    'Review and approve setup'
+  )
+
+  const dropdownRunItem = (
+    <DropdownMenuItem
+      disabled={!canRunNow}
+      onSelect={() => {
+        if (canRunNow) {
+          onRunNow(row)
+        }
+      }}
+    >
+      <Play className="size-3.5" />
+      <span className="min-w-0 truncate">
+        {automationRunAvailability.canRunNow
+          ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
+          : automationRunAvailability.message}
+      </span>
+    </DropdownMenuItem>
+  )
+
   const actionItems = (
     <>
       <MenuRunItem
         disabled={!canRunNow}
+        disabledReason={
+          automationRunAvailability.canRunNow ? undefined : automationRunAvailability.message
+        }
         label={
           automationRunAvailability.canRunNow
             ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
@@ -208,6 +217,13 @@ export function AutomationListLocalRow({
         }
         onSelect={() => onToggle(row)}
       />
+      {reviewContent ? (
+        <MenuItem
+          icon={<ShieldCheck className="size-3.5" />}
+          label={reviewSetupLabel}
+          onSelect={() => onReviewSetup?.(row, reviewContent)}
+        />
+      ) : null}
       <MenuSeparator />
       <MenuItem
         disabled={!allows(row, 'delete')}
@@ -263,7 +279,12 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
+          <AutomationListStatusCell
+            enabled={automation.enabled}
+            movedToDistro={movedToDistro}
+            needsMigration={needsMigration?.(row)}
+            setupSkipped={Boolean(setupReview)}
+          />
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -294,21 +315,11 @@ export function AutomationListLocalRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                disabled={!canRunNow}
-                onSelect={() => {
-                  if (canRunNow) {
-                    onRunNow(row)
-                  }
-                }}
-              >
-                <Play className="size-3.5" />
-                <span className="min-w-0 truncate">
-                  {automationRunAvailability.canRunNow
-                    ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
-                    : automationRunAvailability.message}
-                </span>
-              </DropdownMenuItem>
+              {automationRunAvailability.canRunNow ? (
+                dropdownRunItem
+              ) : (
+                <div title={automationRunAvailability.message}>{dropdownRunItem}</div>
+              )}
               <DropdownMenuItem disabled={!allows(row, 'edit')} onSelect={() => onEdit(row)}>
                 <Pencil className="size-3.5" />
                 {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
@@ -323,6 +334,12 @@ export function AutomationListLocalRow({
                   ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
                   : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
               </DropdownMenuItem>
+              {reviewContent ? (
+                <DropdownMenuItem onSelect={() => onReviewSetup?.(row, reviewContent)}>
+                  <ShieldCheck className="size-3.5" />
+                  {reviewSetupLabel}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -339,55 +356,4 @@ export function AutomationListLocalRow({
       <ContextMenuContent className="w-48">{actionItems}</ContextMenuContent>
     </ContextMenu>
   )
-}
-
-function MenuRunItem({
-  disabled,
-  label,
-  onSelect
-}: {
-  disabled: boolean
-  label: string
-  onSelect: () => void
-}): React.JSX.Element {
-  return (
-    <ContextMenuItem
-      disabled={disabled}
-      onSelect={(event) => {
-        if (disabled) {
-          event.preventDefault()
-          return
-        }
-        onSelect()
-      }}
-    >
-      <Play className="size-3.5" />
-      <span className="min-w-0 truncate">{label}</span>
-    </ContextMenuItem>
-  )
-}
-
-function MenuItem({
-  disabled,
-  icon,
-  label,
-  onSelect,
-  variant
-}: {
-  disabled?: boolean
-  icon: React.ReactNode
-  label: string
-  onSelect: () => void
-  variant?: 'destructive'
-}): React.JSX.Element {
-  return (
-    <ContextMenuItem disabled={disabled} variant={variant} onSelect={onSelect}>
-      {icon}
-      {label}
-    </ContextMenuItem>
-  )
-}
-
-function MenuSeparator(): React.JSX.Element {
-  return <ContextMenuSeparator />
 }

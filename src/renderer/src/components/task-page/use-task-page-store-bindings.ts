@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { useRepoMap, useAllWorktrees } from '@/store/selectors'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
 import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import {
@@ -9,7 +10,7 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useTaskPageStoreBindings() {
   useTranslation()
@@ -45,7 +46,6 @@ export function useTaskPageStoreBindings() {
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
-  const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
@@ -122,7 +122,6 @@ export function useTaskPageStoreBindings() {
     selectLinearWorkspace,
     searchLinearIssues,
     listLinearIssues,
-    linearListInvalidationToken,
     folderWorkspaces,
     invalidateLinearIssueLists,
     getCachedLinearIssues,

@@ -12,7 +12,7 @@ import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-hist
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
-} from '@/store/slices/worktree-nav-history'
+} from '@/store/slices/ui/workspace-navigation-history'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'

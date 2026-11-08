@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import type { ChatUnavailableReason, NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type {
+  ChatUnavailableReason,
+  NewTabAgentMenuRow
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
   switch (reason) {
@@ -30,6 +33,11 @@ export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
       return translate(
         'auto.components.tab.bar.QuickLaunchButton.chatNotOnHost',
         'No chat on this host'
+      )
+    case 'windows':
+      return translate(
+        'auto.components.tab.bar.QuickLaunchButton.chatNotOnWindows',
+        'No chat on Windows yet'
       )
   }
 }

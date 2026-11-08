@@ -1,8 +1,8 @@
-import { parsePaneKey } from '../../../src/shared/stable-pane-id'
+import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 // Keep native/web navigation’s pane lookup separate: importing the native sibling by name on web resolves back to the web file itself.

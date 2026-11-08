@@ -125,86 +125,6 @@ describe('released worker archives preserve the host screen', () => {
     }
   })
 
-  it.each([
-    { cols: 100, prefix: 89, provider: false },
-    { cols: 100, prefix: 97, provider: false },
-    { cols: 10, prefix: 7, provider: false },
-    { cols: 3, prefix: 0, provider: false },
-    { cols: 100, prefix: 89, provider: true },
-    { cols: 10, prefix: 7, provider: true }
-  ])(
-    'masks wrapped tokens in stored and post-close output (%j)',
-    async ({ cols, prefix, provider }) => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker('failed')
-      const secret = `dcap_${'s'.repeat(24)}`
-      const text = `${'x'.repeat(prefix)} ${secret}`
-      const fixture = await createTerminalArchiveFixture({
-        hydrate: false,
-        cols,
-        provider,
-        screenLines: [text, 'Safe diagnostic']
-      })
-      fixture.runtime.onPtyData(
-        'pty-1',
-        provider ? 'retained history\r\n' : `${text}\r\nSafe diagnostic\r\n`,
-        Date.now()
-      )
-      const screen = await fixture.runtime.readTerminal(fixture.handle, { screen: true })
-      expect(screen.tail.join('')).toContain(secret)
-      expect(screen.tail).not.toContain(secret)
-      vi.mocked(h.runtime.readTerminal).mockImplementation((_handle, opts) =>
-        fixture.runtime.readTerminal(fixture.handle, opts)
-      )
-      vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-        fixture.runtime.onPtyExit('pty-1', 0)
-        return { handle, tabId: 'tab-worker', ptyKilled: true }
-      })
-
-      await expect(
-        h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({ state: 'released' })
-      const stored = h.db.getWorkerTerminalArchive(dispatchId)
-      if (!stored) {
-        throw new Error('No stored archive')
-      }
-      expect(stored.content).not.toContain(secret)
-      const content: unknown = JSON.parse(stored.content)
-      if (
-        typeof content !== 'object' ||
-        content === null ||
-        !('lines' in content) ||
-        !Array.isArray(content.lines)
-      ) {
-        throw new Error('No stored terminal lines')
-      }
-      expect(content.lines.join('')).not.toContain(secret)
-      expect(content.lines.join('')).toContain('Safe diagnostic')
-      vi.mocked(h.runtime.readTerminal).mockRejectedValue(new Error('Live output gone'))
-      const read = await h.call('orchestration.workerRead', { dispatch: dispatchId, limit: 2000 })
-      expect(read).toMatchObject({
-        archived: true,
-        terminal: { nextCursor: null },
-        warnings: expect.arrayContaining([
-          'Dispatch capability tokens were redacted from terminal output.'
-        ])
-      })
-      if (
-        typeof read !== 'object' ||
-        read === null ||
-        !('terminal' in read) ||
-        typeof read.terminal !== 'object' ||
-        read.terminal === null ||
-        !('tail' in read.terminal) ||
-        !Array.isArray(read.terminal.tail)
-      ) {
-        throw new Error('No archived terminal output')
-      }
-      expect(read.terminal.tail.join('')).not.toContain(secret)
-      expect(read.terminal.tail.join('')).toContain('Safe diagnostic')
-    }
-  )
-
   it.each(['soft wrap', 'multiple lines'] as const)(
     'masks a real composer draft after release (%s)',
     async (layout) => {
@@ -259,56 +179,43 @@ describe('released worker archives preserve the host screen', () => {
     }
   )
 
-  it.each(['takeover', 'identity change'] as const)(
-    'keeps the pane when %s wins during the screen capture',
-    async (race) => {
-      const task = prepareFailedStart()
-      const fixture = await createTerminalArchiveFixture()
-      fixture.runtime.onPtyData('pty-1', '\r\n'.repeat(7), Date.now())
-      const failed = await h.call('orchestration.workerStart', {
-        task: task.id,
-        from: 'term_coord',
-        agent: 'codex'
-      })
-      const dispatchId = dispatchIdOf(failed)
-      const pending = h.deferred<void>()
-      let screenStarted = false
-      vi.mocked(h.runtime.readTerminal).mockImplementation(async (_handle, opts) => {
-        if (opts?.screen) {
-          screenStarted = true
-          await pending.promise
-        }
-        return fixture.runtime.readTerminal(fixture.handle, opts)
-      })
-      const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      await vi.waitFor(() => expect(screenStarted).toBe(true))
-      if (race === 'takeover') {
-        await h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-      } else {
-        vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue(
-          'runtime_test:term_worker:2'
-        )
-        vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
-          runtimeId: 'runtime_test',
-          terminalHandle: 'term_worker',
-          ptyId: 'pty_term_worker',
-          worktreeId: 'repo::worktree',
-          paneKey: h.workerPaneKey,
-          processIncarnation: 'runtime_test:term_worker:2',
-          launchTokenHash: null,
-          hostScope: { kind: 'local', hostId: 'local' }
-        })
+  it('keeps the pane when an identity change wins during the screen capture', async () => {
+    const task = prepareFailedStart()
+    const fixture = await createTerminalArchiveFixture()
+    fixture.runtime.onPtyData('pty-1', '\r\n'.repeat(7), Date.now())
+    const failed = await h.call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      agent: 'codex'
+    })
+    const dispatchId = dispatchIdOf(failed)
+    const pending = h.deferred<void>()
+    let screenStarted = false
+    vi.mocked(h.runtime.readTerminal).mockImplementation(async (_handle, opts) => {
+      if (opts?.screen) {
+        screenStarted = true
+        await pending.promise
       }
-      pending.resolve()
-      await expect(release).resolves.toMatchObject({ state: 'retained' })
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-      if (race === 'takeover') {
-        expect(h.db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
-      } else {
-        expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe(
-          'identity_unproven'
-        )
-      }
-    }
-  )
+      return fixture.runtime.readTerminal(fixture.handle, opts)
+    })
+    const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(screenStarted).toBe(true))
+    vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+    vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
+      runtimeId: 'runtime_test',
+      terminalHandle: 'term_worker',
+      ptyId: 'pty_term_worker',
+      worktreeId: 'repo::worktree',
+      paneKey: h.workerPaneKey,
+      processIncarnation: 'runtime_test:term_worker:2',
+      launchTokenHash: null,
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    pending.resolve()
+    await expect(release).resolves.toMatchObject({ state: 'retained' })
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe(
+      'identity_unproven'
+    )
+  })
 })

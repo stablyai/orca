@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AutomationService } from './service'
-import type { Store } from '../persistence'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
+import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -58,9 +59,14 @@ describe('automation background writer durability', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const { store, automation } = await fixture()
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
-      const runs = await Promise.all([service.runNow(automation.id), service.runNow(automation.id)])
+      const runs = await Promise.all([
+        runNowSettled(service, store, automation.id),
+        runNowSettled(service, store, automation.id)
+      ])
       expect(new Set(runs.map((run) => run.id)).size).toBe(1)
       expect(dispatcher).toHaveBeenCalledOnce()
     } finally {
@@ -82,9 +88,11 @@ describe('automation background writer durability', () => {
       )
       return launch
     })
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
-      const run = service.runNow(automation.id)
+      const run = runNowSettled(service, store, automation.id)
       await Promise.resolve()
       expect(dispatcher).not.toHaveBeenCalled()
       gate.resolve()
@@ -99,10 +107,41 @@ describe('automation background writer durability', () => {
     const { store, automation } = await fixture()
     vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(new Error('disk full'))
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
       await expect(service.runNow(automation.id)).rejects.toThrow('disk full')
       expect(dispatcher).not.toHaveBeenCalled()
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('keeps a launched run dispatched when its dispatched write fails to flush', async () => {
+    const { store, automation } = await fixture()
+    const flush = store.flushPendingOrThrowAsync.bind(store)
+    let failed = false
+    // Fail the one flush that persists the dispatched write.
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementation(async (options) => {
+      const dispatched = store
+        .listAutomationRuns(automation.id)
+        .some((entry) => entry.status === 'dispatched')
+      if (dispatched && !failed) {
+        failed = true
+        throw new Error('disk full')
+      }
+      await flush(options)
+    })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: async () => launch, available: () => true }
+    })
+    try {
+      const run = await runNowSettled(service, store, automation.id)
+      expect(
+        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
+      ).toMatchObject({ status: 'dispatched', terminalSessionId: 'run-tab' })
+      expect(failed).toBe(true)
     } finally {
       service.stop()
     }
@@ -127,7 +166,9 @@ describe('automation background writer durability', () => {
       await store.flushPendingOrThrowAsync()
       clock.mockReturnValue(dueAt + lateness)
       const dispatcher = vi.fn(async () => launch)
-      const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+      const service = new AutomationService(store, {
+        terminalLauncher: { launch: dispatcher, available: () => true }
+      })
       try {
         service.start()
         await vi.waitFor(() => {
@@ -149,13 +190,17 @@ describe('automation background writer durability', () => {
     const { store, automation } = await fixture()
     const acknowledgement = blockAcknowledgement(store, index)
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
-    const pending = service.runNow(automation.id)
-    const rejected = expect(pending).rejects.toThrow('stopped before')
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
+    const pending = runNowSettled(service, store, automation.id)
     await acknowledgement.blocked
     service.stop()
     acknowledgement.release()
-    await rejected
+    // The reconciler strands the row on the next start.
+    await expect(pending).resolves.toMatchObject({
+      status: index === 1 ? 'pending' : 'dispatching'
+    })
     expect(dispatcher).not.toHaveBeenCalled()
   })
 
@@ -163,14 +208,15 @@ describe('automation background writer durability', () => {
     const { store, automation, readState } = await fixture()
     const acknowledgement = blockAcknowledgement(store, 2)
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
-      const pending = service.runNow(automation.id)
-      const rejected = expect(pending).rejects.toThrow('removed before')
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.deleteAutomation(automation.id)
       acknowledgement.release()
-      await rejected
+      await pending
       expect(dispatcher).not.toHaveBeenCalled()
       expect(
         readState().automationRuns.some(
@@ -186,9 +232,11 @@ describe('automation background writer durability', () => {
     const { store, automation } = await fixture()
     const acknowledgement = blockAcknowledgement(store, index)
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
-      const pending = service.runNow(automation.id)
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.updateAutomation(automation.id, { prompt: 'Different instructions' })
       acknowledgement.release()
@@ -206,9 +254,11 @@ describe('automation background writer durability', () => {
     const { store, automation } = await fixture()
     const acknowledgement = blockAcknowledgement(store, index)
     const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, { headlessDispatcher: dispatcher })
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => true }
+    })
     try {
-      const pending = service.runNow(automation.id)
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.updateRepo({ id: 'repo-local' }, { executionHostId: 'runtime:other-host' })
       acknowledgement.release()
@@ -219,27 +269,23 @@ describe('automation background writer durability', () => {
     }
   })
 
-  it.each(['disconnect', 'replacement'] as const)(
-    'refuses an unready renderer after %s during acknowledgement',
-    async (change) => {
-      const { store, automation } = await fixture()
-      const acknowledgement = blockAcknowledgement(store, 2)
-      const renderer = { isDestroyed: () => false, send: vi.fn() }
-      const replacement = { isDestroyed: () => false, send: vi.fn() }
-      const service = new AutomationService(store)
-      service.setWebContents(renderer)
-      service.setRendererReady()
-      try {
-        const pending = service.runNow(automation.id)
-        await acknowledgement.blocked
-        service.setWebContents(change === 'disconnect' ? null : replacement)
-        acknowledgement.release()
-        await expect(pending).resolves.toMatchObject({ status: 'skipped_unavailable' })
-        expect(renderer.send).not.toHaveBeenCalled()
-        expect(replacement.send).not.toHaveBeenCalled()
-      } finally {
-        service.stop()
-      }
+  it('refuses a run whose window graph closed during acknowledgement', async () => {
+    const { store, automation } = await fixture()
+    const acknowledgement = blockAcknowledgement(store, 2)
+    const dispatcher = vi.fn(async () => launch)
+    let available = true
+    const service = new AutomationService(store, {
+      terminalLauncher: { launch: dispatcher, available: () => available }
+    })
+    try {
+      const pending = runNowSettled(service, store, automation.id)
+      await acknowledgement.blocked
+      available = false
+      acknowledgement.release()
+      await expect(pending).resolves.toMatchObject({ status: 'skipped_unavailable' })
+      expect(dispatcher).not.toHaveBeenCalled()
+    } finally {
+      service.stop()
     }
-  )
+  })
 })

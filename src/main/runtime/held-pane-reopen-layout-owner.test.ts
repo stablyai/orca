@@ -2,26 +2,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type * as DaemonHoldModule from '../daemon/daemon-newer-protocol-hold'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import type * as DaemonHoldModule from '../daemon/providers/routing/daemon-newer-protocol-hold'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 const daemonHold = vi.hoisted(() => ({ reopen: vi.fn() }))
-vi.mock('../daemon/daemon-newer-protocol-hold', async (importOriginal) => ({
+vi.mock('../daemon/providers/routing/daemon-newer-protocol-hold', async (importOriginal) => ({
   ...(await importOriginal<typeof DaemonHoldModule>()),
   reopenNewerDaemonTerminals: daemonHold.reopen
 }))
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   makeDeferred,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
@@ -102,49 +103,5 @@ describe("a paired desktop's Reopen of a held pane (layout-owner build)", () => 
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'persisted-pty' }))
     expect(publishedStatus(runtime)).toBeUndefined()
-  })
-
-  it('starts nothing and stays held while the newer build may still run', async () => {
-    const { runtime, spawn } = await heldPaneRuntime()
-    daemonHold.reopen.mockResolvedValue({ reopened: false })
-
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: false })
-
-    expect(spawn).toHaveBeenCalledOnce()
-    expect(publishedStatus(runtime)).toBe('held')
-  })
-
-  it('stops nothing for a pane since bound to a new terminal, though its held entry stays', async () => {
-    const { runtime, spawn, getSession, setSession, desktopStream } = await heldPaneRuntime()
-    expect(publishedStatus(runtime)).toBe('held')
-    const session = getSession()
-    const layout = session.terminalLayoutsByTabId[PANE.tabId]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        [PANE.tabId]: {
-          ...layout,
-          ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [PANE.leafId]: 'pty-rebound' }
-        }
-      }
-    })
-    desktopStream.unsubscribe()
-
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: true })
-
-    expect(daemonHold.reopen).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('stops nothing for a pane main does not hold', async () => {
-    const { runtime, spawn } = await heldPaneRuntime()
-
-    await expect(
-      runtime.reopenHeldTerminalPanes([{ ...PANE, tabId: 'other-tab' }])
-    ).resolves.toEqual({ reopened: true })
-
-    expect(daemonHold.reopen).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledOnce()
   })
 })

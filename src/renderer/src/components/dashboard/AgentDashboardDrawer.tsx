@@ -4,12 +4,12 @@ import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-acti
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
+import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
-} from '../sidebar/use-workspace-kanban-outside-dismiss'
+} from '../sidebar/workspace-board/surface/use-workspace-kanban-outside-dismiss'
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
@@ -72,6 +72,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onBrowserForeground={onFocusHandoff}
       onClose={onClose}
       headerActions={
         <AgentDashboardSettingsMenu
@@ -136,11 +137,9 @@ export function AgentDashboardDrawer({
     close()
   }, [close])
   // Store-driven closes bypass close(); clear menu state for sidebar collapse and workspace-board exclusivity too.
-  useEffect(() => {
-    if (!open) {
-      setMenuOpen(false)
-    }
-  }, [open])
+  if (!open && menuOpen) {
+    setMenuOpen(false)
+  }
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       // Radix can request coordinate-free dismissal; allow only the drawer’s guarded Escape/outside/close paths.

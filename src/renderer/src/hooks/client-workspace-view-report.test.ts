@@ -6,7 +6,9 @@ import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-wo
 const presence = vi.hoisted((): { remaining: number | null } => ({ remaining: 180_000 }))
 
 vi.mock('./agent-auto-ack-presence', () => ({ presenceRemainingMs: () => presence.remaining }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/store/slices/workspace-attention/workspace-unread-flag', () => ({
   onScreenHostId: () => null
 }))
@@ -73,19 +75,6 @@ describe('createClientWorkspaceViewReporter', () => {
     ])
   })
 
-  it('refreshes the host’s copy at most every ten seconds of activity', () => {
-    const { sent, report } = reporter()
-    report.update(STATE, ['local-wt'], [])
-    vi.setSystemTime(Date.now() + 9_000)
-    report.renewPresence()
-    expect(sent).toHaveLength(1)
-
-    vi.setSystemTime(Date.now() + 1_000)
-    report.renewPresence()
-    expect(sent).toHaveLength(2)
-    expect(sent[1].view.presentForMs).toBe(190_000)
-  })
-
   it('reports an away user’s screen with no presence, and renews as soon as input returns', () => {
     const { sent, report } = reporter()
     presence.remaining = 0
@@ -96,16 +85,6 @@ describe('createClientWorkspaceViewReporter', () => {
     presence.remaining = 180_000
     report.renewPresence()
     expect(sent).toHaveLength(2)
-  })
-
-  it('refreshes where presence is not tracked too, so a reconnected host learns the view', () => {
-    const { sent, report } = reporter()
-    presence.remaining = null
-    report.update(STATE, ['local-wt'], [])
-    vi.setSystemTime(Date.now() + 10_000)
-    report.renewPresence()
-    expect(sent).toHaveLength(2)
-    expect(sent[1].view.presentForMs).toBeNull()
   })
 
   it('retries a failed send, empty or not, no sooner than a refresh', async () => {

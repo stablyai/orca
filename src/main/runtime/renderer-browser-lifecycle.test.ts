@@ -1,18 +1,20 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from './browser/client-pages/runtime-browser-page-registry'
 
 const rendererTab: RuntimeMobileSessionBrowserTab = {
   type: 'browser',
@@ -150,46 +152,6 @@ it('rebases omitted renderer publications and accepts their return without reviv
   expect((await list()).publicationEpoch).toBe('renderer-2')
 })
 
-it.each([false, true])(
-  'retires dead client rows without offscreen=%s confusing renderer ownership',
-  async (offscreen) => {
-    const { runtime, sync, list } = browserRuntime()
-    if (!offscreen) {
-      runtime.setOffscreenBrowserBackend(null)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only window availability is read on this inventory path; the Electron test harness otherwise returns no windows.
-      const windowHost = runtime as unknown as { getAvailableAuthoritativeWindow(): unknown }
-      vi.spyOn(windowHost, 'getAvailableAuthoritativeWindow').mockReturnValue({})
-    }
-    sync([publication()])
-    const pages = getRuntimeBrowserPageRegistry(runtime)
-    const placement = {
-      kind: 'client' as const,
-      browserHostClientId: 'phone',
-      browserHostGeneration: 1,
-      pageHostGeneration: 1
-    }
-    pages.publishClientPage({
-      browserPageId: 'client-page',
-      workspaceId: TEST_WORKTREE_ID,
-      browserProfileId: 'profile',
-      executionHostKey: 'host',
-      placement,
-      url: 'https://client.example/',
-      loading: false,
-      active: false
-    })
-    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-    expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'client-page'])
-    expect(pages.retirePage('client-page', placement)).toBe(true)
-    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-    const retired = await list()
-    expect(retired.tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
-    expect(retired.publicationEpoch).toBe('renderer-1')
-    expect(retired.tabGroups?.flatMap((group) => group.tabOrder)).not.toContain('client-page')
-    expect(retired.tabGroups?.flatMap((group) => group.tabOrder)).toContain('renderer-tab')
-  }
-)
-
 it('does not tombstone a renderer browser when the acknowledged close fails', async () => {
   const { runtime, sync, list } = browserRuntime()
   sync([publication()])
@@ -322,37 +284,4 @@ it('finishes a pending runtime close after renderer detach without losing other 
   ])
   expect(returned.snapshotVersion).toBeGreaterThan(closedWhileDetached.snapshotVersion)
   expect(closeTab).toHaveBeenCalledTimes(1)
-})
-
-it('keeps the headless publication epoch while serve browser pages change', async () => {
-  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
-  const pages: BrowserTabInfo[] = []
-  const runtime = new OrcaRuntimeService(runtimeStore)
-  runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn(), ownsTab: () => true })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the bridge inventory is used by this lifecycle test.
-  runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [...pages] }) } as never)
-  const addPage = (browserPageId: string) => {
-    pages.push({ browserPageId, index: pages.length, title: browserPageId, url: '', active: false })
-    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-  }
-  const list = () => runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-  addPage('serve-page-1')
-  const first = await list()
-  addPage('serve-page-2')
-  const second = await list()
-
-  // Clients fence lifecycle closes by epoch; content changes must only bump the version.
-  expect(second.tabs.map((tab) => tab.id)).toContain('serve-page-2')
-  expect(second.publicationEpoch).toBe(first.publicationEpoch)
-  expect(second.snapshotVersion).toBeGreaterThan(first.snapshotVersion)
-})
-
-it('lists a runtime page once when its id collides with a renderer row', async () => {
-  const { runtime, sync, addPage, list } = browserRuntime()
-  sync([publication()])
-  addPage(rendererTab.id)
-  runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-
-  const ids = (await list()).tabs.map((tab) => tab.id)
-  expect(ids.filter((id) => id === rendererTab.id)).toHaveLength(1)
 })

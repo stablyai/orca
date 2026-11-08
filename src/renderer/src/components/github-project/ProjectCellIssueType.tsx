@@ -5,11 +5,10 @@ import { CircleDot } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
-import type { ListIssueTypesBySlugResult } from '../../../../shared/github/project-result-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 
 export function ProjectIssueTypeCell({
@@ -46,19 +45,11 @@ export function ProjectIssueTypeCell({
     let cancelled = false
     setLoading(true)
     const target = ownerTarget ?? sourceTarget
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<ListIssueTypesBySlugResult>(
-            target,
-            'github.project.listIssueTypesBySlug',
-            { owner, repo, ...(sourceHost ? { host: sourceHost } : {}) },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listIssueTypesBySlug({
-            owner,
-            repo,
-            ...(sourceHost ? { host: sourceHost } : {})
-          })
+    const request = gitHubSlugApiForTarget(target).listIssueTypesBySlug({
+      owner,
+      repo,
+      ...(sourceHost ? { host: sourceHost } : {})
+    })
     void request
       .then((result) => {
         if (!cancelled && result.ok) {

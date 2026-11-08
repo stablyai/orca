@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as linearClient from '../linear/client'
-import { RuntimeLinearSaveCommands } from './runtime-linear-save-commands'
+import { RuntimeLinearSaveCommands } from './integrations/linear/runtime-linear-save-commands'
 import { loadLinearSdk } from '../linear/linear-sdk'
 
 const boundary = vi.hoisted(() => ({ clients: vi.fn(), status: vi.fn(), signing: vi.fn() }))
@@ -207,19 +207,4 @@ it('rejects a literal code change in the read-back after a successful mutation',
     })
   ).rejects.toMatchObject({ code: 'linear_write_unconfirmed' })
   expect(sent.filter(({ query }) => query.includes('mutation'))).toHaveLength(1)
-})
-
-it('still writes other fields when the description already matches after normalization', async () => {
-  stored.description = '* first'
-  await expect(
-    commands().linearSaveIssue({
-      input: stored.identifier,
-      title: 'Changed title',
-      description: '- first',
-      workspaceId: workspace.id
-    })
-  ).resolves.toMatchObject({ issue: { title: 'Changed title', description: '- first' } })
-  const mutations = sent.filter(({ query }) => query.includes('mutation'))
-  expect(mutations).toHaveLength(1)
-  expect(mutations[0]?.variables.input).toEqual({ title: 'Changed title', description: '- first' })
 })

@@ -7,7 +7,7 @@ import {
   Terminal,
   Trash2
 } from 'lucide-react'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { HoverCardContent } from '../ui/hover-card'

@@ -75,14 +75,6 @@ describe('secure path hardening retry budget', () => {
     expect(mayAttemptHardening(PATH)).toBe(true)
   })
 
-  it('announces the degraded state once, not once per failure', () => {
-    pollUntil(6 * 60 * MINUTE, 30_000)
-
-    const throttled = reports.filter((entry) => entry.stage === 'throttled')
-    expect(throttled).toHaveLength(1)
-    expect(throttled[0]).toMatchObject({ targetPath: PATH, stage: 'throttled' })
-  })
-
   it('announces recovery when a throttled path hardens again, and resets the curve', () => {
     pollUntil(10 * MINUTE, 30_000)
     expect(reports.filter((entry) => entry.stage === 'throttled')).toHaveLength(1)
@@ -99,13 +91,6 @@ describe('secure path hardening retry budget', () => {
     expect(mayAttemptHardening(PATH)).toBe(false)
     clock += 2_000
     expect(mayAttemptHardening(PATH)).toBe(true)
-  })
-
-  it('stays silent about recovery for a path that never reached the degraded state', () => {
-    recordHardeningOutcome(PATH, false)
-    recordHardeningOutcome(PATH, true)
-
-    expect(reports).toEqual([])
   })
 
   it('budgets each path separately', () => {

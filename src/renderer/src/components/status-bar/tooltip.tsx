@@ -6,11 +6,13 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+  getUsageWindowSections,
+  type UsageWindowSection
+} from '../../../../shared/usage-provider-windows'
+import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -29,25 +31,21 @@ export {
 
 export { clampUsedPercent }
 
-export {
-  getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
-export function formatTimeAgo(ts: number): string {
+export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
+    return t('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+    return t('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
       minutes: mins
     })
   }
   const hours = Math.floor(mins / 60)
-  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
+  return t('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.
@@ -55,7 +53,8 @@ export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
-  count: number
+  count: number,
+  t: Translate = translate
 ): string | null {
   if (!expiresAt) {
     return null
@@ -63,14 +62,14 @@ export function formatResetCreditExpiry(
   const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
-      ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
-      : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
+      ? t('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
+      : t('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
   }
   return count > 1
-    ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
+    ? t('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
         value0: duration
       })
-    : translate('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
+    : t('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
         value0: duration
       })
 }
@@ -99,6 +98,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'zcode') {
     return <AgentIcon agent="zcode" size={13} />
+  }
+  if (provider === 'muse') {
+    return <AgentIcon agent="muse" size={13} />
   }
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
@@ -144,54 +146,29 @@ function ErrorMessage({
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
-  if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [
-      ...bucketSections,
-      // Include Cursor’s monthly plan total because pools can understate proximity to its cap.
-      ...(p.monthly
-        ? [
-            {
-              label:
-                p.provider === 'cursor'
-                  ? translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
-                  : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
-              window: p.monthly
-            }
-          ]
-        : []),
-      {
-        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-        window: p.weekly
-      }
-    ]
+  return getUsageWindowSections(p).map((section) => ({
+    label: getWindowSectionLabel(section),
+    window: section.window
+  }))
+}
+
+function getWindowSectionLabel(section: UsageWindowSection): string {
+  switch (section.kind) {
+    case 'bucket':
+      return section.name
+    case 'session':
+      return translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+    case 'weekly':
+      return translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
+    case 'fableWeekly':
+      return translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable')
+    case 'monthly':
+      return translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly')
+    case 'plan':
+      return translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
+    case 'mcp':
+      return translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
   }
-  const sections: { label: string; window: RateLimitWindow | null }[] = [
-    {
-      label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
-      window: p.session
-    },
-    {
-      label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-      window: p.weekly
-    }
-  ]
-  if (p.fableWeekly !== undefined && p.fableWeekly !== null) {
-    sections.push({
-      label: translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable'),
-      window: p.fableWeekly
-    })
-  }
-  if (p.monthly !== undefined && p.monthly !== null) {
-    sections.push({
-      label:
-        p.provider === 'zcode'
-          ? translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
-          : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
-      window: p.monthly
-    })
-  }
-  return sections
 }
 
 // Tooltips invert the theme; use background text tokens for legible primary and secondary content.
@@ -243,13 +220,16 @@ export function ProviderPanel({
   inverted = false,
   className,
   showResetCredits = true,
-  usagePercentageDisplay = 'used'
+  usagePercentageDisplay = 'used',
+  embedded = false
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
+  /** Inside an account card that already names the provider; tracks must contrast with the card. */
+  embedded?: boolean
 }): React.JSX.Element {
   const windowSections = p ? getWindowSections(p) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
@@ -257,7 +237,7 @@ export function ProviderPanel({
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
   const dividerClass = inverted ? 'border-background/15' : 'border-border/70'
-  const emptyBarClass = inverted ? 'bg-background/20' : 'bg-muted'
+  const emptyBarClass = inverted ? 'bg-background/20' : embedded ? 'bg-foreground/10' : 'bg-muted'
 
   if (!p) {
     return (
@@ -272,10 +252,12 @@ export function ProviderPanel({
   if (p.status === 'unavailable') {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
         <div className={mutedClass}>
           {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
         </div>
@@ -286,11 +268,13 @@ export function ProviderPanel({
   if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="mt-2">
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
+        <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p)}
             message={getProviderUsageErrorMessage(p)}
@@ -317,25 +301,30 @@ export function ProviderPanel({
 
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
-      <div>
-        <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className={faintClass}>{updatedAgo}</div>
-        {resetCreditCount !== null && resetCreditCount !== undefined ? (
-          <div className={mutedClass}>
-            {translate(
-              'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
-              '{{count}} rate-limit resets available',
-              { count: resetCreditCount, defaultValue_one: '{{count}} rate-limit reset available' }
-            )}
+      {!embedded ? (
+        <div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
           </div>
-        ) : null}
-        {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
-      </div>
+          <div className={faintClass}>{updatedAgo}</div>
+          {resetCreditCount !== null && resetCreditCount !== undefined ? (
+            <div className={mutedClass}>
+              {translate(
+                'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+                '{{count}} rate-limit resets available',
+                {
+                  count: resetCreditCount,
+                  defaultValue_one: '{{count}} rate-limit reset available'
+                }
+              )}
+            </div>
+          ) : null}
+          {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
+        </div>
+      ) : null}
 
-      <div className={`border-t ${dividerClass}`} />
+      {embedded ? null : <div className={`border-t ${dividerClass}`} />}
 
       {windowSections.map((s) => (
         <ProviderRateLimitWindowSection

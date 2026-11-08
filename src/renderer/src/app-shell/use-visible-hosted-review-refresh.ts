@@ -2,12 +2,12 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { createVisibleHostedReviewRefreshScheduler } from '@/store/github/visible-hosted-review-refresh-scheduler'
-import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-reference-refresh-targets'
+import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
+import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
-} from '@/store/github/visible-hosted-review-refresh-targets'
+} from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 
 export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean }): void {
   useEffect(() => {

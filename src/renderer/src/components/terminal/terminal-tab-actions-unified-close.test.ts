@@ -9,13 +9,13 @@ vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
@@ -31,11 +31,13 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: vi.fn(() => Promise.resolve())
 }))
 
-const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-test-harness')
 createTabsSliceMockApi()
 
-const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
-  await import('@/store/slices/store-test-helpers')
+const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
+  { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture'),
+  { makeTabGroup, makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+  { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))
@@ -147,7 +149,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
@@ -165,7 +167,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(FOLDER_WT)
@@ -182,7 +184,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
@@ -205,9 +207,25 @@ describe('closeTerminalTab unified close contract', () => {
       includeChatTab: false
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('keeps an emptied worktree selected for a caller about to open its replacement', () => {
+    seedWorktreeWithTabs(GIT_WT, {
+      terminalIds: ['term-1'],
+      groupOrder: ['u-term-1'],
+      recentTabIds: ['u-term-1'],
+      activeUnifiedTabId: 'u-term-1',
+      activeTerminalId: 'term-1',
+      includeChatTab: false
+    })
+
+    closeTerminalTab('term-1', { reason: 'user', preserveWorktreeSelection: true })
+
+    expect(store.getState().activeWorktreeId).toBe(GIT_WT)
+    expect(store.getState().unifiedTabsByWorktree[GIT_WT]).toEqual([])
   })
 
   it('lands on an open editor tab instead of deactivating when the last terminal closes', () => {
@@ -246,7 +264,7 @@ describe('closeTerminalTab unified close contract', () => {
       }
     }))
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)

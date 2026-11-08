@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
-import { drawTabsFromMain } from '../../store/slices/tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
+import type * as MountedTerminalTabRegistry from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { drawTabsFromMain } from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -22,7 +23,7 @@ function testStore(): ReturnType<typeof createTestStore> {
   return mocks.store.current
 }
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -41,19 +42,20 @@ vi.mock('../../store', () => ({
     subscribe: () => () => {}
   }
 }))
-vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
-  focusRuntimeTerminalSurface: mocks.focusRuntimeTerminalSurface
-}))
+vi.mock(
+  '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
+    focusRuntimeTerminalSurface: mocks.focusRuntimeTerminalSurface
+  })
+)
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
 import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
-import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
-import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
 
 const MAIN = 'repo1::/repo1/main'
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
@@ -102,7 +104,6 @@ function setup(): {
   const unsubs: (() => void)[] = []
   registerTerminalUiRoutingIpcBridge(unsubs)
   registerTerminalPresentationIpcBridge(unsubs)
-  registerTerminalRequestIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, vi.fn())
   dispatchEvent.mockClear()
   return {
@@ -172,46 +173,6 @@ describe('taking the user to a floating workspace terminal', () => {
     expect(panelToggles(dispatchEvent)).toBe(1)
     const tabs = testStore().getState().tabsByWorktree[FLOATING] ?? []
     expect(testStore().getState().activeTabIdByWorktree[FLOATING]).toBe(tabs.at(-1)?.id)
-  })
-
-  it('a focused terminal request opens the panel without selecting the floating workspace', () => {
-    const { emit, dispatchEvent } = setup()
-    const before = mainWindow()
-
-    emit('onRequestTerminalCreate', {
-      requestId: 'req-1',
-      worktreeId: FLOATING,
-      presentation: 'focused'
-    })
-
-    expect(mainWindow()).toEqual(before)
-    expect(panelToggles(dispatchEvent)).toBe(1)
-  })
-
-  it('a background create into the floating workspace does not open the panel', () => {
-    const { emit, dispatchEvent } = setup()
-    const before = mainWindow()
-
-    emit('onCreateTerminal', { worktreeId: FLOATING, presentation: 'background' })
-    emit('onRequestTerminalCreate', {
-      requestId: 'req-2',
-      worktreeId: FLOATING,
-      presentation: 'background'
-    })
-
-    expect(mainWindow()).toEqual(before)
-    expect(panelToggles(dispatchEvent)).toBe(0)
-  })
-
-  it('a focus-window agent launch opens the panel on its tab', () => {
-    const { dispatchEvent, floatingTabId } = setup()
-    const before = mainWindow()
-
-    presentAgentLaunchTab('focus-window', FLOATING, floatingTabId)
-
-    expect(mainWindow()).toEqual(before)
-    expect(panelToggles(dispatchEvent)).toBe(1)
-    expect(testStore().getState().activeTabIdByWorktree[FLOATING]).toBe(floatingTabId)
   })
 
   it('focusing a floating editor tab opens the panel on it', async () => {

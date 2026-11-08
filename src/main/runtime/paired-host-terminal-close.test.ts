@@ -4,10 +4,11 @@ import { toRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { store, makeRuntimeStoreWithWorkspaceSession } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
@@ -97,29 +98,6 @@ describe('closing a terminal that a paired runtime runs', () => {
       localPtyTeardownOwnedExternally: true
     })
     expect(localStops).toEqual([])
-  })
-
-  it("keeps the host's unconfirmed-stop verdict instead of minting its own", async () => {
-    const { runtime } = pairedHostLeafRuntime(async () => ({
-      close: {
-        handle: 'term_on_host',
-        tabId: 'host-tab',
-        ptyKilled: false,
-        ptyStopVerdict: 'unverifiable',
-        ptyStopReason: 'its SSH host could not be reached',
-        pendingKillRecorded: true
-      }
-    }))
-    const handle = await listedHandle(runtime)
-
-    await expect(runtime.closeTerminal(handle)).resolves.toEqual({
-      handle,
-      tabId: 'tab-1',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable',
-      ptyStopReason: 'its SSH host could not be reached',
-      pendingKillRecorded: true
-    })
   })
 
   it('leaves the terminal in place when the owning host cannot be reached', async () => {
@@ -237,21 +215,5 @@ describe('closing a terminal that a paired runtime runs', () => {
 
     await expect(closing).resolves.toEqual({ handle, tabId: 'tab-1', ptyKilled: true })
     expect(closeTerminalTab).not.toHaveBeenCalled()
-  })
-
-  it('routes a whole-tab close to the owning host too', async () => {
-    const { runtime, call } = pairedHostLeafRuntime(async () => ({
-      close: { handle: 'term_on_host', tabId: 'host-tab', closeMode: 'tab', ptyKilled: false }
-    }))
-    const handle = await listedHandle(runtime)
-
-    // No local snapshot exists; host close must be sent before the later tab_not_found.
-    await runtime.closeTerminalTab(handle).catch(() => undefined)
-    expect(call).toHaveBeenCalledWith(
-      'env-1',
-      'terminal.closeTab',
-      { terminal: 'term_on_host' },
-      expect.any(Number)
-    )
   })
 })

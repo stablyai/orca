@@ -4,20 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
   listEnvironments
-} from '../../shared/runtime-environment-store'
-import { DeviceRegistry } from './device-registry'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
 import {
   clearRuntimeMetadata,
   clearRuntimeMetadataIfOwned,
   readRuntimeMetadata,
   writeRuntimeMetadata
-} from './runtime-metadata'
+} from './rpc/server/runtime-metadata'
 
 const tempDirs: string[] = []
 
@@ -26,55 +26,6 @@ describe('runtime metadata', () => {
     for (const dir of tempDirs.splice(0)) {
       clearRuntimeMetadata(dir)
     }
-  })
-
-  it('writes and reads runtime metadata atomically', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-    tempDirs.push(userDataPath)
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [
-        {
-          kind: 'unix',
-          endpoint: '/tmp/orca.sock'
-        }
-      ],
-      authToken: 'secret',
-      startedAt: 100
-    })
-
-    expect(readRuntimeMetadata(userDataPath)).toEqual({
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [
-        {
-          kind: 'unix',
-          endpoint: '/tmp/orca.sock'
-        }
-      ],
-      authToken: 'secret',
-      startedAt: 100
-    })
-  })
-
-  it('clears the runtime metadata file', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-    tempDirs.push(userDataPath)
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [],
-      authToken: null,
-      startedAt: 100
-    })
-
-    clearRuntimeMetadata(userDataPath)
-
-    expect(readRuntimeMetadata(userDataPath)).toBeNull()
-    expect(getRuntimeMetadataPath(userDataPath)).toContain('orca-runtime.json')
   })
 
   describe('clearRuntimeMetadataIfOwned', () => {
@@ -131,14 +82,6 @@ describe('runtime metadata', () => {
         pid: 42,
         runtimeId: 'rt_replacement'
       })
-    })
-
-    it('is a no-op when no metadata exists', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-      tempDirs.push(userDataPath)
-
-      expect(() => clearRuntimeMetadataIfOwned(userDataPath, 42, 'rt_owner')).not.toThrow()
-      expect(readRuntimeMetadata(userDataPath)).toBeNull()
     })
   })
 

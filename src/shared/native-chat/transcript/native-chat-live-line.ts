@@ -4,7 +4,7 @@ import {
   selectNativeChatLiveReasoning,
   type NativeChatLiveReasoning
 } from './native-chat-reasoning-row'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 export type NativeChatLiveLine = {
   /** The turn is reasoning now; the label reads "Thinking" unless activity text outranks it. */

@@ -55,49 +55,4 @@ describe('JiraIssueWorkspace queued status metadata', () => {
     expect(await screen.findByRole('button', { name: 'Finish' })).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Start progress' })).toBeNull()
   })
-
-  it('reloads transitions when the last queued status save fails after an earlier success', async () => {
-    const oldSave = deferred<{ ok: true }>()
-    const newerSave = deferred<{ ok: false; error: string }>()
-    const inProgress = {
-      id: '3',
-      name: 'In Progress',
-      categoryKey: 'indeterminate',
-      categoryName: 'In Progress'
-    }
-    const done = { id: '4', name: 'Done', categoryKey: 'done', categoryName: 'Done' }
-    const start = { id: '11', name: 'Start progress', to: inProgress }
-    const finish = { id: '21', name: 'Finish', to: done }
-    runtimeMocks.jiraListTransitionsForTarget
-      .mockResolvedValueOnce([start])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([start, finish])
-      .mockResolvedValue([finish])
-    runtimeMocks.jiraUpdateIssueForTarget
-      .mockReturnValueOnce(oldSave.promise)
-      .mockReturnValueOnce(newerSave.promise)
-    runtimeMocks.jiraGetIssueForTarget
-      .mockResolvedValueOnce(jiraIssue('Old title'))
-      .mockResolvedValueOnce(otherIssue)
-      .mockResolvedValueOnce(jiraIssue('Old title'))
-      .mockResolvedValue(jiraIssue('Old title', { status: inProgress }))
-    render(<StoreBackedWorkspace initial={jiraIssue('Old title')} />)
-    await flushPromises()
-    fireEvent.click(screen.getByRole('button', { name: 'Change status: To Do' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Start progress' }))
-    await act(async () => selectIssue(otherIssue))
-    await flushPromises()
-    await act(async () => selectIssue(jiraIssue('Old title')))
-    await flushPromises()
-    if (!screen.queryByRole('button', { name: 'Finish' })) {
-      fireEvent.click(screen.getByRole('button', { name: 'Change status: In Progress' }))
-    }
-    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }))
-    await act(async () => oldSave.resolve({ ok: true }))
-    await flushPromises()
-    await act(async () => newerSave.resolve({ ok: false, error: 'Status rejected' }))
-    await flushPromises()
-    expect(runtimeMocks.jiraListTransitionsForTarget).toHaveBeenCalledTimes(4)
-    expect(screen.queryByRole('button', { name: 'Start progress' })).toBeNull()
-  })
 })

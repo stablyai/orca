@@ -1,0 +1,360 @@
+// @vitest-environment happy-dom
+
+import { Editor } from '@tiptap/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import { toast } from 'sonner'
+import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
+import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
+
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
+  importExternalPathsToRuntime: vi.fn()
+}))
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/store/index', () => ({
+  useAppStore: {
+    getState: vi.fn(() => ({
+      target: { kind: 'local' as const },
+      folderWorkspaces: [],
+      worktreesByRepo: {},
+      openFiles: []
+    }))
+  }
+}))
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
+
+type ImportResult = Awaited<ReturnType<typeof importExternalPathsToRuntime>>
+const editors: Editor[] = []
+
+function richEditor(markdown = 'hello world'): Editor {
+  const element = document.createElement('div')
+  document.body.append(element)
+  const editor = new Editor({
+    element,
+    extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+    content: markdown,
+    contentType: 'markdown'
+  })
+  editors.push(editor)
+  return editor
+}
+
+function imported(filename = 'image.png'): ImportResult {
+  return {
+    results: [
+      {
+        sourcePath: '/tmp/image.png',
+        status: 'imported',
+        destPath: `/repo/${filename}`,
+        kind: 'file',
+        renamed: false
+      }
+    ]
+  }
+}
+
+function pendingImport() {
+  let resolve: (result: ImportResult) => void = () => {}
+  const promise = new Promise<ImportResult>((complete) => {
+    resolve = complete
+  })
+  return { promise, resolve }
+}
+
+function pasteImage(editor: Editor): void {
+  const clipboardData = new DataTransfer()
+  clipboardData.items.add(new File(['image'], 'image.png', { type: 'image/png' }))
+  const event = new ClipboardEvent('paste', { clipboardData, cancelable: true })
+  expect(
+    handleRichMarkdownImagePaste({ editor, event, filePath: '/repo/note.md', worktreeId: null })
+  ).toBe(true)
+  expect(event.defaultPrevented).toBe(true)
+}
+
+async function flushPromises(): Promise<void> {
+  for (let index = 0; index < 16; index++) {
+    await Promise.resolve()
+  }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { ui: { saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/image.png') } }
+  })
+  vi.mocked(importExternalPathsToRuntime).mockResolvedValue(imported())
+})
+
+afterEach(() => {
+  editors.splice(0).forEach((editor) => editor.destroy())
+  document.body.replaceChildren()
+})
+
+describe('rich Markdown asynchronous image paste', () => {
+  it.each([false, true])('replaces the complete selected text, reversed=%s', async (reversed) => {
+    const editor = richEditor()
+    editor.commands.setTextSelection(reversed ? { from: 12, to: 7 } : { from: 7, to: 12 })
+    pasteImage(editor)
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('hello ![](image.png)')
+    expect(editor.state.selection.empty).toBe(true)
+    expect(editor.state.selection.from).toBe(8)
+    editor.state.doc.check()
+  })
+
+  it('maps edits during both clipboard saving and runtime import', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection(7)
+    let completeSave: (path: string) => void = () => {}
+    vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeSave = resolve
+        })
+    )
+    const pending = pendingImport()
+    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+    pasteImage(editor)
+    editor.view.dispatch(editor.state.tr.insertText('prefix ', 1))
+    completeSave('/tmp/image.png')
+    await flushPromises()
+    editor.view.dispatch(editor.state.tr.insertText('later ', 14))
+    pending.resolve(imported())
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('prefix hello ![](image.png)later world')
+  })
+
+  it('keeps typing after text entered at the pending paste caret', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection(7)
+    const pending = pendingImport()
+    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+    pasteImage(editor)
+    await flushPromises()
+    editor.commands.insertContent('x')
+    pending.resolve(imported())
+    await flushPromises()
+    editor.commands.insertContent('y')
+    expect(editor.getMarkdown()).toBe('hello ![](image.png)xyworld')
+  })
+
+  it('keeps the live caret when editing another paragraph during import', async () => {
+    const editor = richEditor('hello world\n\nsecond paragraph')
+    editor.commands.setTextSelection(7)
+    const pending = pendingImport()
+    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+    pasteImage(editor)
+    await flushPromises()
+    editor.commands.setTextSelection(14)
+    editor.commands.insertContent('x')
+    pending.resolve(imported())
+    await flushPromises()
+    editor.commands.insertContent('y')
+    expect(editor.getMarkdown()).toBe('hello ![](image.png)world\n\nxysecond paragraph')
+  })
+
+  it.each(['delete', 'replace'])(
+    'cancels when the selected content is %s during import',
+    async (operation) => {
+      const editor = richEditor()
+      editor.commands.setTextSelection({ from: 7, to: 12 })
+      const pending = pendingImport()
+      vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+      pasteImage(editor)
+      await flushPromises()
+      editor.view.dispatch(
+        operation === 'delete'
+          ? editor.state.tr.delete(7, 12)
+          : editor.state.tr.insertText('new', 7, 12)
+      )
+      const afterEdit = editor.getMarkdown()
+      pending.resolve(imported())
+      await flushPromises()
+      expect(editor.getMarkdown()).toBe(afterEdit)
+    }
+  )
+
+  it('does not resurrect the selected range after partial deletion and Undo', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection({ from: 7, to: 12 })
+    const pending = pendingImport()
+    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+    pasteImage(editor)
+    await flushPromises()
+    editor.view.dispatch(editor.state.tr.delete(8, 10))
+    expect(editor.getMarkdown()).toBe('hello wld')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.getMarkdown()).toBe('hello world')
+    pending.resolve(imported())
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('hello world')
+    expect(toast.info).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([false, true])(
+    'keeps simultaneous pastes at one caret in request order, reversed completion=%s',
+    async (reversed) => {
+      const editor = richEditor()
+      editor.commands.setTextSelection(7)
+      const first = pendingImport()
+      const second = pendingImport()
+      vi.mocked(importExternalPathsToRuntime)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise)
+      pasteImage(editor)
+      pasteImage(editor)
+      await flushPromises()
+      const completeFirst = () => first.resolve(imported('first.png'))
+      const completeSecond = () => second.resolve(imported('second.png'))
+      const completionOrder = reversed
+        ? [completeSecond, completeFirst]
+        : [completeFirst, completeSecond]
+      completionOrder[0]()
+      await flushPromises()
+      completionOrder[1]()
+      await flushPromises()
+      expect(editor.getMarkdown()).toBe('hello ![](first.png)![](second.png)world')
+    }
+  )
+
+  it.each([false, true])(
+    'keeps the remaining concurrent import after Undo, reversed completion=%s',
+    async (reversed) => {
+      const editor = richEditor()
+      editor.commands.setTextSelection(7)
+      const first = pendingImport()
+      const second = pendingImport()
+      vi.mocked(importExternalPathsToRuntime)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise)
+      pasteImage(editor)
+      pasteImage(editor)
+      await flushPromises()
+      const completed = reversed ? second : first
+      const remaining = reversed ? first : second
+      completed.resolve(imported(reversed ? 'second.png' : 'first.png'))
+      await flushPromises()
+      expect(editor.commands.undo()).toBe(true)
+      expect(editor.getMarkdown()).toBe('hello world')
+      remaining.resolve(imported(reversed ? 'first.png' : 'second.png'))
+      await flushPromises()
+      expect(editor.getMarkdown()).toBe(`hello ![](${reversed ? 'first.png' : 'second.png'})world`)
+      expect(toast.info).not.toHaveBeenCalled()
+      expect(toast.error).not.toHaveBeenCalled()
+      editor.state.doc.check()
+    }
+  )
+
+  it('keeps different pending insertion positions as another paste finishes', async () => {
+    const editor = richEditor()
+    const first = pendingImport()
+    const second = pendingImport()
+    vi.mocked(importExternalPathsToRuntime)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    editor.commands.setTextSelection(1)
+    pasteImage(editor)
+    editor.commands.setTextSelection(7)
+    pasteImage(editor)
+    await flushPromises()
+    first.resolve(imported('first.png'))
+    await flushPromises()
+    second.resolve(imported('second.png'))
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('![](first.png)hello ![](second.png)world')
+  })
+
+  it('lets a later request succeed after the earlier import was canceled', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection(7)
+    const first = pendingImport()
+    const second = pendingImport()
+    vi.mocked(importExternalPathsToRuntime)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    pasteImage(editor)
+    pasteImage(editor)
+    await flushPromises()
+    first.resolve({
+      results: [{ sourcePath: '/tmp/image.png', status: 'skipped', reason: 'missing' }]
+    })
+    await flushPromises()
+    second.resolve(imported('second.png'))
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('hello ![](second.png)world')
+  })
+
+  it('cancels an overlapping request after the first paste replaces its selection', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection({ from: 7, to: 12 })
+    const first = pendingImport()
+    const second = pendingImport()
+    vi.mocked(importExternalPathsToRuntime)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    pasteImage(editor)
+    pasteImage(editor)
+    await flushPromises()
+    first.resolve(imported('first.png'))
+    await flushPromises()
+    second.resolve(imported('second.png'))
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('hello ![](first.png)')
+  })
+
+  it.each(['destroy', 'disconnect', 'disable'])(
+    'ignores an imported image after editor %s',
+    async (operation) => {
+      const editor = richEditor()
+      editor.commands.setTextSelection(7)
+      const pending = pendingImport()
+      vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+      pasteImage(editor)
+      await flushPromises()
+      if (operation === 'destroy') {
+        editor.destroy()
+      } else if (operation === 'disconnect') {
+        editor.view.dom.remove()
+      } else {
+        editor.setEditable(false)
+      }
+      pending.resolve(imported())
+      await flushPromises()
+      expect(editor.getMarkdown()).toBe('hello world')
+    }
+  )
+
+  it('preserves a pending selection through a no-op content reload', async () => {
+    const editor = richEditor()
+    editor.commands.setTextSelection({ from: 7, to: 12 })
+    const pending = pendingImport()
+    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
+    pasteImage(editor)
+    await flushPromises()
+    editor.commands.setContent(editor.getJSON())
+    pending.resolve(imported())
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('hello ![](image.png)')
+  })
+
+  it('replaces selected code with an image while keeping both fence halves', async () => {
+    const editor = richEditor('```js\nbefore selected after\n```')
+    editor.commands.setTextSelection({ from: 8, to: 16 })
+    pasteImage(editor)
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('```js\nbefore \n```\n\n![](image.png)\n\n```js\n after\n```')
+    editor.state.doc.check()
+  })
+
+  it('replaces a selection spanning blocks without deleting surrounding text', async () => {
+    const editor = richEditor('before selected\n\nselected after')
+    editor.commands.setTextSelection({ from: 8, to: 26 })
+    pasteImage(editor)
+    await flushPromises()
+    expect(editor.getMarkdown()).toBe('before ![](image.png) after')
+    editor.state.doc.check()
+  })
+})

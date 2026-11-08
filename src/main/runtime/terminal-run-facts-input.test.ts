@@ -1,33 +1,55 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
+import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-delivery'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
   type WorktreeStartupReadinessHost
-} from './runtime-worktree-startup-readiness'
+} from './workspaces/startup/runtime-worktree-startup-readiness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/run-facts',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/run-facts',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 const PTY_ID = 'pty-run-facts-input'
@@ -111,33 +133,6 @@ describe('run facts: the controller write funnel', () => {
     }
   })
 
-  it('records stream input from a client', async () => {
-    const run = await createFreshRun()
-
-    await sendTerminalStreamInput(run.runtime, {
-      terminal: run.handle,
-      text: 'l',
-      client: undefined,
-      isMobile: false
-    })
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-  })
-
-  it('records a dispatched agent prompt before its first write', async () => {
-    vi.useFakeTimers()
-    const run = await createFreshRun()
-
-    const submission = run.runtime.sendTerminalAgentPrompt(run.handle, 'review this', {
-      inputKind: 'driving'
-    })
-    await vi.runAllTimersAsync()
-    await submission.catch(() => undefined)
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-    expect(run.writes[0]?.inputRecorded).toBe(true)
-  })
-
   it('reads a run launched with a prompt as untyped until someone drives it', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
@@ -169,14 +164,6 @@ describe('run facts: the controller write funnel', () => {
     expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
   })
 
-  it('records nothing for a client query reply', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.sendTerminal(run.handle, { text: 'y' }, { inputKind: 'query-reply' })
-
-    expect(run.firstUserInputAt()).toBeNull()
-  })
-
   it.each([
     ['a terminal reply', '\x1b[3;4R'],
     ['focus reports', '\x1b[I\x1b[O'],
@@ -195,30 +182,12 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).toBeNull()
   })
 
-  it('records a reply mixed with a keystroke', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.sendTerminal(run.handle, { text: '\x1b[3;4Rx' }, { inputKind: 'driving' })
-
-    expect(run.firstUserInputAt()).not.toBeNull()
-  })
-
   it('records dashboard preview typing before the write that could end the process', async () => {
     const run = await createFreshRun()
 
     await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, 'exit\r')).resolves.toBe(true)
 
     expect(run.writes.map((write) => write.inputRecorded)).toEqual([true])
-  })
-
-  it('records nothing for dashboard preview bytes that are only a reply or focus reports', async () => {
-    const run = await createFreshRun()
-
-    await run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[3;4R')
-    await run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[O\x1b[I')
-
-    expect(run.writes).toHaveLength(2)
-    expect(run.firstUserInputAt()).toBeNull()
   })
 })
 

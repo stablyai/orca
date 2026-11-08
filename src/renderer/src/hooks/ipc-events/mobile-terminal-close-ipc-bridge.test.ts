@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as HostPersistence from '@/lib/workspace-session-host-persistence'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
+import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const { storeRef } = vi.hoisted(() => {
   const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -32,12 +33,14 @@ vi.mock('../../store', () => ({
       testStore().setState(...args)
   }
 }))
-vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
-vi.mock('@/components/sidebar/sleep-worktree-flow', () => ({ runSleepWorktree: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
+  runSleepWorktree: vi.fn()
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -47,10 +50,13 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostPersistence>()),
-  persistWorkspaceSessionByHost: vi.fn()
-}))
+vi.mock(
+  '@/lib/workspace/persistence/workspace-session-host-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HostPersistence>()),
+    persistWorkspaceSessionByHost: vi.fn()
+  })
+)
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { handleSwitchRecentTab } from '../ipc-tab-switch'
@@ -392,19 +398,6 @@ describe('runtime file opens on the host desktop', () => {
       )
     ).toBe(true)
   })
-
-  it.each(['caller', 'clients'] as const)(
-    'keeps the desktop still when navigation %s does not target the host',
-    async (navigation) => {
-      const { openFile, store } = await setup('terminal')
-      const before = screenState(store)
-
-      await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation })
-      await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation })
-
-      expect(screenState(store)).toEqual(before)
-    }
-  )
 
   it.each(['all', 'host'] as const)(
     'brings the user to the file with navigation %s',

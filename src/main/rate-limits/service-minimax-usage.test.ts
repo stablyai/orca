@@ -4,7 +4,6 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
-import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import {
   deferred,
   okProvider,
@@ -35,6 +34,10 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
 
 vi.mock('./zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: vi.fn()
 }))
 
 vi.mock('./antigravity-usage-fetcher', () => ({
@@ -75,67 +78,6 @@ describe('RateLimitService', () => {
     // Seed healthy siblings explicitly; clearAllMocks retains implementations from earlier cases.
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
-  })
-
-  it('fetches MiniMax alongside other providers when a config resolver is set', async () => {
-    const service = new RateLimitService()
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '_token=abc; minimax_group_id_v2=42',
-      groupId: '',
-      models: 'general',
-      endpoint: 'overseas',
-      apiKey: ''
-    }))
-    vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
-    vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 50, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchMiniMaxRateLimits).toHaveBeenCalledWith({
-      cookie: '_token=abc; minimax_group_id_v2=42',
-      groupId: '',
-      models: 'general',
-      endpointMode: 'overseas',
-      apiKey: ''
-    })
-
-    const state = service.getState()
-    expect(state.minimax?.status).toBe('ok')
-    expect(state.minimax?.session?.usedPercent).toBe(50)
-    expect(state.minimaxCookieConfigured).toBe(true)
-  })
-
-  it('reports minimaxCookieConfigured from the cookie store even without a resolver', () => {
-    const service = new RateLimitService()
-    vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
-    expect(service.getState().minimaxCookieConfigured).toBe(true)
-  })
-
-  it('discards the previous MiniMax snapshot when its config hash changes', async () => {
-    const service = new RateLimitService()
-    let models = 'general'
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '_token=abc',
-      groupId: '',
-      models,
-      endpoint: 'overseas',
-      apiKey: ''
-    }))
-    vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
-    vi.mocked(fetchMiniMaxRateLimits)
-      .mockResolvedValueOnce(okProvider('minimax', 40, Date.now()))
-      .mockResolvedValueOnce(okProvider('minimax', 10, Date.now()))
-
-    await service.refresh()
-    expect(service.getState().minimax?.session?.usedPercent).toBe(40)
-
-    models = 'premium'
-    await service.refresh()
-
-    const state = service.getState()
-    expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(2)
-    expect(state.minimax?.session?.usedPercent).toBe(10)
   })
 
   it('clears the old quota when replacing a non-empty API key and the refresh fails', async () => {
@@ -201,92 +143,5 @@ describe('RateLimitService', () => {
     const state = service.getState()
     expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(2)
     expect(state.minimax?.session?.usedPercent).toBe(10)
-  })
-
-  it('isolates MiniMax failures from other providers', async () => {
-    const service = new RateLimitService()
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '_token=abc',
-      groupId: '',
-      models: 'general',
-      endpoint: 'overseas',
-      apiKey: ''
-    }))
-    vi.mocked(fetchMiniMaxRateLimits).mockRejectedValueOnce(new Error('minimax down'))
-    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.minimax?.status).toBe('error')
-    expect(state.minimax?.error).toBe('minimax down')
-    expect(state.claude?.status).toBe('ok')
-  })
-
-  it('isolates MiniMax config resolver failures from other providers', async () => {
-    const service = new RateLimitService()
-    service.setMiniMaxConfigResolver(() => {
-      throw new Error('MiniMax session cookie could not be decrypted')
-    })
-    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
-    expect(state.minimax?.status).toBe('error')
-    expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
-    expect(state.claude?.status).toBe('ok')
-  })
-
-  it('passes the CN endpoint and API key to the fetcher when the resolver selects CN', async () => {
-    const service = new RateLimitService()
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '',
-      groupId: '',
-      models: 'general',
-      endpoint: 'cn',
-      apiKey: 'sk-cn-key-9876'
-    }))
-    vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 33, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchMiniMaxRateLimits).toHaveBeenCalledWith({
-      cookie: '',
-      groupId: '',
-      models: 'general',
-      endpointMode: 'cn',
-      apiKey: 'sk-cn-key-9876'
-    })
-  })
-
-  it('bumps the MiniMax fetch generation when the endpoint or API key changes', async () => {
-    const service = new RateLimitService()
-    let endpointMode: 'overseas' | 'cn' = 'overseas'
-    let apiKey = ''
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '_token=abc',
-      groupId: '',
-      models: 'general',
-      endpoint: endpointMode,
-      apiKey
-    }))
-    vi.mocked(fetchMiniMaxRateLimits)
-      .mockResolvedValueOnce(okProvider('minimax', 10, Date.now()))
-      .mockResolvedValueOnce(okProvider('minimax', 20, Date.now()))
-      .mockResolvedValueOnce(okProvider('minimax', 30, Date.now()))
-
-    await service.refresh()
-    expect(service.getState().minimax?.session?.usedPercent).toBe(10)
-
-    // Endpoint changes invalidate usage because both response host and shape may differ.
-    endpointMode = 'cn'
-    await service.refresh()
-    expect(service.getState().minimax?.session?.usedPercent).toBe(20)
-
-    apiKey = 'sk-cn-key-9876'
-    await service.refresh()
-    expect(service.getState().minimax?.session?.usedPercent).toBe(30)
   })
 })

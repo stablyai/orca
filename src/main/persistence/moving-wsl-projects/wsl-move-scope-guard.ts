@@ -5,7 +5,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { onWslMoveJournalChange } from './wsl-move-cutover-journal'
-import { onWslDriveUncConversionJournalChange } from '../../wsl/wsl-drive-unc-conversion-journal'
+import { onWslDriveUncConversionJournalChange } from '../../wsl/filesystem/wsl-drive-unc-conversion-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
 import { comparableWslPath, isAtOrUnder } from './wsl-move-comparable-path'
 import {

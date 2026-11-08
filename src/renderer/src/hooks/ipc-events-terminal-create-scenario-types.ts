@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 // Annotate scenario spy shapes because inferred types cannot be named across module boundaries.
 
@@ -117,7 +117,7 @@ export type TerminalCreateSurfacingStore = {
   clearTabPtyId: SpyMock
   settings: {
     terminalFontSize: number
-    experimentalNativeChat: boolean
+    nativeChatProviders: Record<string, boolean>
     activeRuntimeEnvironmentId: string | undefined
   }
 }

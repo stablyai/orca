@@ -1,15 +1,15 @@
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { OrchestrationDb } from './orchestration/db'
-
-const cliPath = join(process.cwd(), 'src/cli/index.ts')
-const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
+import { buildOrcadCli } from '../../../config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 
 const entity = z.object({ id: z.string() })
 const check = z.object({
@@ -30,9 +30,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Sequential source-CLI subprocesses and a disk-backed runtime restart exceed the default test budget.
+// Sequential packaged-CLI subprocesses and a disk-backed runtime restart exceed the default test budget.
 it("retains CLI work and mail across restart, refuses a worker's own Run, and completes a separate Run handoff", async () => {
   const home = mkdtempSync(join(tmpdir(), 'orca-cli-restart-handoff-'))
+  // One bundle of the real CLI avoids a TypeScript loader start in each of ~25 subprocesses.
+  const cliPath = join(home, 'cli', 'index.js')
+  await buildOrcadCli(cliPath)
   for (const name of [
     'HOME',
     'USERPROFILE',
@@ -64,9 +67,9 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   ]) {
     vi.stubEnv(name, '')
   }
-  const { OrcaRuntimeRpcServer } = await import('./runtime-rpc')
+  const { OrcaRuntimeRpcServer } = await import('./rpc/server/runtime-rpc')
   const fixture = await import('./orchestration-mailbox-notification-test-harness')
-  const { registerBoundPty } = await import('./bind-first-pane.test-fixture')
+  const { registerBoundPty } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
   const coord = fixture.TERMINAL_HANDLE
   const worker = fixture.SECOND_TERMINAL_HANDLE
   const predecessor = 'term_predecessor'
@@ -89,35 +92,23 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   let runtime = runtimeForDatabase()
   let server = new OrcaRuntimeRpcServer({ runtime, userDataPath: home })
   async function cli(handle: string, args: string[], exitCode = 0): Promise<unknown> {
-    const child = spawn(
-      process.execPath,
-      [
-        '--import',
-        tsxLoader,
-        '--conditions=orca-source',
-        cliPath,
-        'orchestration',
-        ...args,
-        '--json'
-      ],
-      {
-        cwd: home,
-        env: {
-          ...process.env,
-          ORCA_TERMINAL_HANDLE: handle,
-          ORCA_PANE_KEY: runtime.getTerminalPaneKey(handle) ?? '',
-          ORCA_AGENT_LAUNCH_TOKEN:
-            handle === coord
-              ? fixture.LAUNCH_TOKEN
-              : handle === worker
-                ? fixture.SECOND_LAUNCH_TOKEN
-                : ''
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-        timeout: 15_000
-      }
-    )
+    const child = spawn(process.execPath, [cliPath, 'orchestration', ...args, '--json', '--full'], {
+      cwd: home,
+      env: {
+        ...process.env,
+        ORCA_TERMINAL_HANDLE: handle,
+        ORCA_PANE_KEY: runtime.getTerminalPaneKey(handle) ?? '',
+        ORCA_AGENT_LAUNCH_TOKEN:
+          handle === coord
+            ? fixture.LAUNCH_TOKEN
+            : handle === worker
+              ? fixture.SECOND_LAUNCH_TOKEN
+              : ''
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      timeout: 15_000
+    })
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
@@ -172,14 +163,16 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
     expect(await cli(coord, ['task-list'])).toMatchObject({
       result: { tasks: [{ id: task, status: 'dispatched', dispatch_id: dispatch }] }
     })
-    expect(check.parse(await cli(coord, ['check'])).result).toEqual(retainedBatch)
+    expect(await cli(coord, ['check'])).toMatchObject({ result: { count: 0, deliveryId: null } })
+    expect(await cli(coord, ['check', '--all'])).toMatchObject({
+      result: { runId: root, messages: [{ id: retainedMessage }] }
+    })
 
     const bindingBefore = db.getRunRaw(root)
     expect(await cli(worker, ['run-use', '--id', root], 1)).toMatchObject({
       error: { code: 'worker_cannot_coordinate_own_run', data: { effectsApplied: false } }
     })
     expect(db.getRunRaw(root)).toEqual(bindingBefore)
-    expect(check.parse(await cli(coord, ['check'])).result).toEqual(retainedBatch)
     expect(await cli(coord, ['check', '--ack', retainedBatch.deliveryId])).toMatchObject({
       result: { acknowledged: retainedBatch.deliveryId, count: 0 }
     })
@@ -221,11 +214,10 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
         }
       ]
     })
-    expect(db.getMessageById(reply)?.read).toBe(0)
+    expect(db.getMessageById(reply)?.read).toBe(1)
     expect(await cli(worker, ['check', '--ack', replyBatch.deliveryId])).toMatchObject({
       result: { runId: separate, acknowledged: replyBatch.deliveryId, count: 0 }
     })
-    expect(db.getMessageById(reply)?.read).toBe(1)
     await cli(coord, ['check', '--ack', questionBatch.deliveryId])
 
     const continuedDispatch = idOf(

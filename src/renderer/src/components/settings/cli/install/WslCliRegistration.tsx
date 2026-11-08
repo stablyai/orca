@@ -1,0 +1,290 @@
+import { useCallback, useEffect, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
+import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
+import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { Button } from '../../../ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../../../ui/dialog'
+import { Label } from '../../../ui/label'
+import { Switch } from '../../../ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+
+type WslCliRegistrationProps = {
+  currentPlatform: string
+}
+
+export function WslCliRegistration({
+  currentPlatform
+}: WslCliRegistrationProps): React.JSX.Element | null {
+  const t = useTranslate()
+  const [status, setStatus] = useState<CliInstallStatus | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const mountedRef = useMountedRef()
+  const { wslAvailable } = useWindowsTerminalCapabilities(currentPlatform === 'win32')
+  const showWslCli = currentPlatform === 'win32' && wslAvailable
+
+  // Mount reads must not start a stopped distro; the refresh button is a user act that may.
+  const refreshStatus = useCallback(
+    async (wakeWslDistro = false): Promise<void> => {
+      setLoading(true)
+      try {
+        const next = await window.api.cli.getWslInstallStatus(
+          wakeWslDistro ? { wakeWslDistro: true } : undefined
+        )
+        if (mountedRef.current) {
+          setStatus(next)
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.settings.WslCliRegistration.26b4b3b00f',
+                  'Failed to load WSL CLI status.'
+                )
+          )
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
+        }
+      }
+    },
+    [mountedRef]
+  )
+
+  useEffect(() => {
+    if (showWslCli) {
+      void refreshStatus()
+    }
+  }, [refreshStatus, showWslCli])
+
+  if (!showWslCli) {
+    return null
+  }
+
+  const isEnabled = status?.state === 'installed'
+  const isSupported = status?.supported ?? false
+  const commandName = status?.commandName ?? 'orca-ide'
+
+  const handleInstall = async (): Promise<void> => {
+    setBusyAction('install')
+    try {
+      const next = await window.api.cli.installWsl()
+      if (!mountedRef.current) {
+        return
+      }
+      setStatus(next)
+      setDialogOpen(false)
+      toast.success(
+        t(
+          'auto.components.settings.WslCliRegistration.951536dda5',
+          'Registered `{{value0}}` in WSL.',
+          { value0: next.commandName }
+        )
+      )
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(
+                'auto.components.settings.WslCliRegistration.6f91ad1333',
+                'Failed to register `{{value0}}` in WSL.',
+                { value0: commandName }
+              )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
+    }
+  }
+
+  const handleRemove = async (): Promise<void> => {
+    setBusyAction('remove')
+    try {
+      const next = await window.api.cli.removeWsl()
+      if (!mountedRef.current) {
+        return
+      }
+      setStatus(next)
+      setDialogOpen(false)
+      toast.success(
+        t(
+          'auto.components.settings.WslCliRegistration.89c7414cf5',
+          'Removed `{{value0}}` from WSL.',
+          { value0: next.commandName }
+        )
+      )
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(
+                'auto.components.settings.WslCliRegistration.52d990420e',
+                'Failed to remove `{{value0}}` from WSL.',
+                { value0: commandName }
+              )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
+    }
+  }
+
+  const wslShellCommandLabel = t(
+    'auto.components.settings.WslCliRegistration.d9c6880dbd',
+    'WSL shell command'
+  )
+
+  return (
+    <>
+      <div data-settings-row="" className="space-y-3 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label>{wslShellCommandLabel}</Label>
+            <p className="text-xs text-muted-foreground">
+              {loading
+                ? t(
+                    'auto.components.settings.WslCliRegistration.0307677bb9',
+                    'Checking WSL CLI registration...'
+                  )
+                : (status?.detail ??
+                  t(
+                    'auto.components.settings.WslCliRegistration.7aa456a460',
+                    'Register `orca-ide` in ~/.local/bin inside WSL.'
+                  ))}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <TooltipProvider delayDuration={250}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => void refreshStatus(true)}
+                    disabled={loading || busyAction !== null}
+                    aria-label={t(
+                      'auto.components.settings.WslCliRegistration.ab6b022a5c',
+                      'Refresh WSL CLI status'
+                    )}
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {t('auto.components.settings.WslCliRegistration.9b6627522c', 'Refresh')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Switch
+              aria-label={t(
+                'auto.components.settings.WslCliRegistration.d9c6880dbd',
+                'WSL shell command'
+              )}
+              checked={isEnabled}
+              disabled={loading || !isSupported || busyAction !== null}
+              onCheckedChange={() => setDialogOpen(true)}
+              className="disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        {status?.commandPath ? (
+          <p className="text-xs text-muted-foreground">
+            {t('auto.components.settings.WslCliRegistration.554305956d', 'Command path:')}{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
+          </p>
+        ) : null}
+
+        {status?.state === 'stale' && status.currentTarget ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {t(
+              'auto.components.settings.WslCliRegistration.1dbb0377d9',
+              'Existing launcher target:'
+            )}{' '}
+            <code>{status.currentTarget}</code>
+          </p>
+        ) : null}
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isEnabled
+                ? t(
+                    'auto.components.settings.WslCliRegistration.61ac55278e',
+                    'Remove `{{value0}}` from WSL?',
+                    { value0: commandName }
+                  )
+                : t(
+                    'auto.components.settings.WslCliRegistration.e49688f67f',
+                    'Register `{{value0}}` in WSL?',
+                    { value0: commandName }
+                  )}
+            </DialogTitle>
+            <DialogDescription>
+              {isEnabled
+                ? t(
+                    'auto.components.settings.WslCliRegistration.d8216eb22e',
+                    'This removes the WSL shell command. Orca itself remains installed on Windows.'
+                  )
+                : t(
+                    'auto.components.settings.WslCliRegistration.7ee4e52b99',
+                    'Orca will register {{value0}} so the command works from WSL terminals.',
+                    { value0: status?.commandPath ?? commandName }
+                  )}
+            </DialogDescription>
+          </DialogHeader>
+          {status?.commandPath ? (
+            <p className="text-xs text-muted-foreground">
+              {t('auto.components.settings.WslCliRegistration.119fef6cd2', 'Target path:')}{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={busyAction !== null}
+            >
+              {t('auto.components.settings.WslCliRegistration.c6f6f89d7c', 'Cancel')}
+            </Button>
+            <Button
+              onClick={() => void (isEnabled ? handleRemove() : handleInstall())}
+              disabled={busyAction !== null || !isSupported}
+            >
+              {busyAction === 'remove'
+                ? t('auto.components.settings.WslCliRegistration.4598b18464', 'Removing...')
+                : busyAction === 'install'
+                  ? t('auto.components.settings.WslCliRegistration.4c4a9178a3', 'Registering...')
+                  : isEnabled
+                    ? t('auto.components.settings.WslCliRegistration.f951f85196', 'Remove')
+                    : t('auto.components.settings.WslCliRegistration.290bfff3ab', 'Register')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

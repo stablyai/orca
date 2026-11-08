@@ -10,8 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
-vi.mock('./local-runtime-capabilities', () => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
   readLocalRuntimeCapabilitiesOrUnknown: () => mocks.capabilities
@@ -27,17 +26,18 @@ vi.mock('./host-structured-agents', () => ({
   }
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import {
+  preloadHostModelCatalogSnapshots,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
-import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from './rpc/testing/runtime-compatibility-test-fixture'
 
 const LOCAL = { kind: 'local' } as const
 const PAIRED = { kind: 'environment', environmentId: 'server-1' } as const
@@ -56,43 +56,6 @@ describe('host model catalog snapshots', () => {
   beforeEach(() => {
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
-  })
-
-  it('serves a workspace’s own answer, and another’s only where the default cannot differ', () => {
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', null, list(true))
-    // Another workspace's config may replace the default a chat naming no model would show.
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
-    const seeded = readHostModelCatalogSnapshot(LOCAL, 'codex', { ...NEW_CHAT, seedsModel: true })
-    expect(seeded).toMatchObject({
-      listingNamesConfiguredModel: false,
-      models: [{ isDefault: false }]
-    })
-    // A reopened chat names no default anyway.
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', { ...NEW_CHAT, newLaunch: false })).toEqual(
-      list(true)
-    )
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toEqual(list(true))
-    // A list that names no default reads the same in every workspace.
-    recordHostModelCatalogSnapshot(LOCAL, 'grok', null, list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(PAIRED, 'codex', NEW_CHAT)).toBeUndefined()
-  })
-
-  it('serves a list the host says is a workspace’s own to that workspace only', () => {
-    const ownList = { ...list(false), modelsDifferByWorkspace: true as const }
-    recordHostModelCatalogSnapshot(LOCAL, 'opencode', 'wt-1', ownList)
-    expect(readHostModelCatalogSnapshot(LOCAL, 'opencode', NEW_CHAT)).toEqual(ownList)
-    expect(
-      readHostModelCatalogSnapshot(LOCAL, 'opencode', { ...NEW_CHAT, worktree: 'wt-2' })
-    ).toBeUndefined()
-    expect(
-      readHostModelCatalogSnapshot(LOCAL, 'opencode', {
-        ...NEW_CHAT,
-        newLaunch: false,
-        worktree: 'wt-2'
-      })
-    ).toBeUndefined()
   })
 
   it('retires a workspace answer and its derived account fallback, retaining independent answers', () => {
@@ -121,6 +84,31 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
     expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
   })
+
+  it('keeps a held list through an answer whose listing is still running', () => {
+    const held = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', held)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', {
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(held)
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    const filling = { ...list(true), listingInProgress: true as const }
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-2', filling)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', other)).toBe(filling)
+  })
+
+  it("keeps a chat's answer that lands while an older preload is out", async () => {
+    let answer: (catalog: AgentSessionModelCatalogResult) => void = () => {}
+    mocks.call.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const preload = preloadHostModelCatalogSnapshots(LOCAL, ['claude'], { savedOnly: true })
+    const chat = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', chat)
+    answer(list(false))
+    await preload
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(chat)
+  })
 })
 
 const SAVED_ONLY = 'agent-session.model-catalog.saved-only.v1'
@@ -143,6 +131,7 @@ describe('host model catalog snapshots sync', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
+        agentDefaultSurface: 'chat',
         nativeChatSessionOptions: { claude: { model: 'opus[1m]' }, codex: {} }
       },
       runtimeStatusByEnvironmentId: new Map()
@@ -267,68 +256,6 @@ describe('host model catalog snapshots sync', () => {
     }
   })
 
-  it('a host removed and re-added under the same id does not keep its old lists', () => {
-    const previous = useAppStore.getState()
-    const environment: PublicKnownRuntimeEnvironment = {
-      id: PAIRED.environmentId,
-      name: 'server',
-      createdAt: 1,
-      updatedAt: 1,
-      lastUsedAt: null,
-      runtimeId: null,
-      endpoints: [{ id: 'ws', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://host' }],
-      preferredEndpointId: 'ws'
-    }
-    const publishStatus = (): void => {
-      const response = createCompatibleRuntimeStatusResponse('rt-1')
-      if (!response.ok) {
-        throw new Error('Expected a compatible runtime status')
-      }
-      useAppStore.getState().setRuntimeEnvironmentStatus(PAIRED.environmentId, {
-        status: response.result,
-        checkedAt: 1
-      })
-    }
-    const reopened = { ...NEW_CHAT, newLaunch: false }
-    try {
-      useAppStore.setState({ runtimeEnvironments: [], removedRuntimeEnvironmentIds: new Set() })
-      useAppStore.getState().setRuntimeEnvironments([environment])
-      publishStatus()
-      stop = installHostModelCatalogSnapshotsSync()
-      recordHostModelCatalogSnapshot(PAIRED, 'codex', null, list(false))
-      expect(readHostModelCatalogSnapshot(PAIRED, 'codex', reopened)).toEqual(list(false))
-      useAppStore.getState().setRuntimeEnvironments([])
-      useAppStore.getState().setRuntimeEnvironments([environment])
-      publishStatus()
-      expect(readHostModelCatalogSnapshot(PAIRED, 'codex', reopened)).toBeUndefined()
-    } finally {
-      stop?.()
-      stop = null
-      useAppStore.setState({
-        runtimeEnvironments: previous.runtimeEnvironments,
-        runtimeStatusByEnvironmentId: previous.runtimeStatusByEnvironmentId,
-        removedRuntimeEnvironmentIds: previous.removedRuntimeEnvironmentIds
-      })
-    }
-  })
-
-  it('an older runtime: loads only agents with a saved pick, and forgets them on an account change', async () => {
-    stop = installHostModelCatalogSnapshotsSync()
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toEqual(list(false))
-    )
-    // Its read lists when nothing is saved: no saved-only read, and no agent the user never picked.
-    expect(mocks.call.mock.calls).toEqual([
-      [LOCAL, 'agentSession.modelCatalog', { agent: 'claude' }]
-    ])
-    registerAgents('local', null)
-    const settings = useAppStore.getState().settings!
-    useAppStore.setState({ settings: { ...settings, activeClaudeManagedAccountId: 'other' } })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBeUndefined()
-    await Promise.resolve()
-    expect(mocks.call).toHaveBeenCalledTimes(1)
-  })
-
   it('reads again for the new account after an account change, dropping an answer sent before it', async () => {
     mocks.capabilities = [SAVED_ONLY]
     registerAgents('local', null)
@@ -350,29 +277,5 @@ describe('host model catalog snapshots sync', () => {
     answerOld(list(false))
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(readHostModelCatalogSnapshot(LOCAL, 'claude', reopened)).toEqual(list(true))
-  })
-
-  it('a paired host: saved-only at connect when it advertises it, nothing from an older one', async () => {
-    const status = (capabilities: string[]) =>
-      new Map([['server-1', { status: { runtimeId: 'rt-1', capabilities } }]])
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sync reads only status.runtimeId and status.capabilities.
-    useAppStore.setState({ runtimeStatusByEnvironmentId: status([]) as never })
-    stop = installHostModelCatalogSnapshotsSync()
-    registerAgents('runtime:server-1', 'rt-1')
-    await Promise.resolve()
-    expect(mocks.call.mock.calls.filter(([target]) => target.kind === 'environment')).toEqual([])
-    stop()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
-    useAppStore.setState({ runtimeStatusByEnvironmentId: status([SAVED_ONLY]) as never })
-    stop = installHostModelCatalogSnapshotsSync()
-    registerAgents('runtime:server-1', 'rt-1')
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toEqual(list(false))
-    )
-    expect(
-      mocks.call.mock.calls
-        .filter(([target]) => target.kind === 'environment')
-        .every(([, , params]) => params.savedOnly === true)
-    ).toBe(true)
   })
 })

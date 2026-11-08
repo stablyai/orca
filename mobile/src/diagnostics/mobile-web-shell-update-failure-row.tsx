@@ -7,6 +7,7 @@ import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 
 type Line = { readonly hostId: string; readonly text: string }
 
@@ -50,11 +51,12 @@ export function MobileWebShellUpdateFailureRow() {
   }
   return (
     <View testID="mobile-web-shell-update-failures">
-      <Text style={styles.sectionHeading}>
-        {t('diagnostics.mobileWebShellUpdateFailureRow.title', 'Workspace updates')}
-      </Text>
-      <View style={styles.section}>
-        <View style={styles.accordionBody}>
+      <SectionHeader
+        title={t('diagnostics.mobileWebShellUpdateFailureRow.title', 'Workspace updates')}
+        first
+      />
+      <ListGroup style={styles.group}>
+        <View key="lines" style={styles.noteBody}>
           {lines.map((line) => (
             <Text
               key={line.hostId}
@@ -65,7 +67,7 @@ export function MobileWebShellUpdateFailureRow() {
             </Text>
           ))}
         </View>
-      </View>
+      </ListGroup>
     </View>
   )
 }
