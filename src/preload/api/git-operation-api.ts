@@ -19,6 +19,7 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   syncFork: (args: {
     worktreePath: string
@@ -31,11 +32,13 @@ export type GitOperationApi = {
     forceWithLease?: boolean
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   pull: (args: {
     worktreePath: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   fastForward: (args: {
     worktreePath: string
@@ -51,6 +54,7 @@ export type GitOperationApi = {
     worktreePath: string
     message: string
     connectionId?: string
+    submodulePath?: string
   }) => Promise<{ success: boolean; error?: string }>
   completeMerge: (args: {
     worktreePath: string
@@ -105,7 +109,12 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<void>
-  stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>
+  stage: (args: {
+    worktreePath: string
+    filePath: string
+    connectionId?: string
+    submodulePath?: string
+  }) => Promise<void>
   resolveConflict: (args: {
     worktreePath: string
     filePath: string
@@ -117,16 +126,19 @@ export type GitOperationApi = {
     filePaths: string[]
     connectionId?: string
     scope?: GitStageWorktreeScope
+    submodulePath?: string
   }) => Promise<void>
   unstage: (args: {
     worktreePath: string
     filePath: string
     connectionId?: string
+    submodulePath?: string
   }) => Promise<void>
   bulkUnstage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    submodulePath?: string
   }) => Promise<void>
   discard: (args: {
     worktreePath: string

@@ -33,6 +33,8 @@ import {
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { applyGitStatusUpstreamRefWatchRequest } from '../worktrees/git/git-status-upstream-ref-watch-request'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { resolveGitActionPath } from './git-remote/submodule-action-target'
+import { gitStatusReadOptions } from './git-status-read-options'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
@@ -62,22 +64,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         requestToken?: string
         /** The active workspace's first status: a user act that may start its WSL distro. */
         wakeWslDistro?: boolean
+        /** Read this submodule of the worktree instead of the worktree itself. */
+        submodulePath?: string
       }
     ): Promise<GitStatusResult> => {
       const controller = gitStatusCancellations.begin(event, args.requestToken)
-      const options = {
-        includeIgnored: args.includeIgnored ?? false,
-        admissionTier: args.admissionTier ?? ('status' as const),
-        ...(args.includeLineStats === false ? { includeLineStats: false } : {}),
-        ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
-        ...(args.branchLineTotalMergeBase === undefined
-          ? {}
-          : { branchLineTotalMergeBase: args.branchLineTotalMergeBase }),
-        ...(args.bypassEffectiveUpstreamNegativeCache === true
-          ? { bypassEffectiveUpstreamNegativeCache: true }
-          : {}),
-        ...(controller ? { signal: controller.signal } : {})
-      }
+      const options = gitStatusReadOptions(args, controller)
       try {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         // The active workspace's first status is a user act: it may start its stopped WSL distro.
@@ -91,12 +83,15 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         const status = await runAsWslUserAct(wakeDistro, async () => {
           // Background poll: its Git or UNC read would boot a stopped WSL distro (E9).
           await assertWslUncPathRunning(args.worktreePath)
-          const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+          const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
           // Reuse one registered-worktree lookup for frequent status polls and repo metadata reads.
-          const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+          const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, registeredPath)
           const gitOptions = getLocalGitOptionsForRepo(store, repo)
-          await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
-          const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+          await assertWslUncPathRunning(registeredPath, gitOptions.wslDistro)
+          const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
+          // Shared-link paths belong to the parent worktree, not a submodule inside it.
+          const sharedLinkPaths =
+            repo && args.submodulePath === undefined ? getWorktreeSharedLinkPaths(repo) : []
           return getStatus(worktreePath, {
             ...options,
             ...gitOptions,
