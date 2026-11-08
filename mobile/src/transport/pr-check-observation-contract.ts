@@ -4,6 +4,7 @@ import type { RpcOperationSender } from './rpc-operation-sender'
 import { captureGitHubInvocation, supportsExactGitHubOperations } from './github-target-invocation'
 import { readRuntimeStatusProbe, recordRuntimeStatusProbe } from './runtime-status-probe'
 import { hostConnectionEpoch } from '../query/host-status-query'
+import { readViewBase } from '../query/host-read-client'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 type Status = Awaited<ReturnType<ReturnType<typeof captureGitHubInvocation>['status']>>
@@ -26,7 +27,9 @@ const sourceSchema = z.object({
 const supporting = (status: Status | null | undefined) =>
   status?.capabilities?.includes(GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY) === true
 
-function knownStatus(client: RpcClient): Status | null | undefined {
+// A query's read view and the raw client are one connection, so they share what it learned about the host.
+function knownStatus(view: RpcClient): Status | null | undefined {
+  const client = readViewBase(view)
   const prior = discoveries.get(client)
   const proof = prior?.epoch === hostConnectionEpoch(client) ? prior.status : undefined
   const cached = readRuntimeStatusProbe(client)
@@ -54,10 +57,11 @@ function knownStatus(client: RpcClient): Status | null | undefined {
 function statusFor(client: RpcClient, refresh: boolean): Promise<Status | null | undefined> {
   const known = knownStatus(client)
   const epoch = hostConnectionEpoch(client)
-  let entry = discoveries.get(client)
+  const base = readViewBase(client)
+  let entry = discoveries.get(base)
   if (!entry || entry.epoch !== epoch) {
     entry = { epoch, attempted: known !== undefined, status: known ?? undefined }
-    discoveries.set(client, entry)
+    discoveries.set(base, entry)
   }
   if (!entry.pending && (!entry.attempted || refresh)) {
     entry.attempted = true
@@ -74,7 +78,7 @@ function statusFor(client: RpcClient, refresh: boolean): Promise<Status | null |
           if (supporting(accepted)) {
             captured.status = accepted
           }
-          recordRuntimeStatusProbe(client, accepted)
+          recordRuntimeStatusProbe(base, accepted)
           return accepted
         },
         () => known
