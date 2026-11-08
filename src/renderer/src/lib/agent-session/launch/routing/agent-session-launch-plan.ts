@@ -1,3 +1,4 @@
+import { notifyAgentLaunchFailure, agentLaunchRecoveryMessage } from '@/lib/agent-launch-failure'
 import type { StructuredLaunchSurfaceAddress } from '../structured-agent-session-launch-record'
 import type {
   StructuredAgentSessionForkSource,
@@ -10,8 +11,6 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { toast } from 'sonner'
-import { translate } from '../../../../i18n/i18n'
 import '../../../launch-structured-agent-session'
 import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'
 import {
@@ -152,12 +151,7 @@ function beginStructuredPlanLaunch(
       throw error
     }
     console.warn('[native-chat] structured launch refused', error)
-    toast.error(
-      translate(
-        'auto.store.slices.workspace.cleanup.hostUnresolved',
-        'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
-      )
-    )
+    notifyAgentLaunchFailure(verdict.agent, agentLaunchRecoveryMessage('refreshProjects'))
     return null
   }
 }

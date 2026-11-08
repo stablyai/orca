@@ -1,3 +1,4 @@
+import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,11 +45,13 @@ export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurfac
 export function AgentLaunchSurfaceButtons({
   entry,
   disabled,
+  terminalBlocked,
   primary,
   onSelect
 }: {
   entry: AgentPickerEntry
   disabled?: boolean
+  terminalBlocked?: boolean
   primary: AgentPickerSurface
   onSelect: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
@@ -71,7 +74,11 @@ export function AgentLaunchSurfaceButtons({
             aria-keyshortcuts={
               isPrimary ? 'Enter' : platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter'
             }
-            disabled={disabled}
+            disabled={disabled || (next === 'terminal' && terminalBlocked)}
+            aria-description={
+              next === 'terminal' && terminalBlocked ? terminalPendingLabel() : undefined
+            }
+            title={next === 'terminal' && terminalBlocked ? terminalPendingLabel() : undefined}
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >
@@ -97,17 +104,22 @@ export function AgentLaunchSetupFooter({
   entry,
   ref,
   disabled,
+  terminalBlocked,
   onLaunch
 }: {
   entry: AgentPickerEntry
   ref?: Ref<AgentLaunchSetupFooterHandle>
   disabled?: boolean
+  terminalBlocked?: boolean
   onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
   const launch = (next: AgentPickerSurface): void => {
+    if (disabled || (next === 'terminal' && terminalBlocked)) {
+      return
+    }
     // The composer resolves pastes and pending files, then hands the text to onLaunch.
     surface.current = next
     composer.current?.submit?.()
@@ -127,7 +139,11 @@ export function AgentLaunchSetupFooter({
           entry={entry}
           composerRef={composer}
           disabled={disabled}
-          onLaunch={(prompt) => onLaunch(surface.current, prompt)}
+          onLaunch={(prompt) =>
+            surface.current === 'terminal' && terminalBlocked
+              ? false
+              : onLaunch(surface.current, prompt)
+          }
         />
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
@@ -135,6 +151,7 @@ export function AgentLaunchSetupFooter({
           entry={entry}
           disabled={disabled}
           primary={entry.defaultSurface}
+          terminalBlocked={terminalBlocked}
           onSelect={launch}
         />
       </div>

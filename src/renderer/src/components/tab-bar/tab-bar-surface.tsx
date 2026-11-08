@@ -241,6 +241,7 @@ export function renderTabBarSurface({
             <>
               <TabBarAgentPickerEntry
                 inventory={agentPickerInventory}
+                terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}

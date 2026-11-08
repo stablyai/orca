@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import {
   useAgentPickerSetup,
   useAgentPickerDraftScope
@@ -308,7 +309,7 @@ describe('picker window launch contract', () => {
           })
         }
         const call = dispatch.mock.results.at(-1)
-        const result = call?.type === 'return' ? call.value : undefined
+        const result = nonRefusedAgentLaunch(call?.type === 'return' ? call.value : undefined)
         await result?.terminalCompletion
         cleanup()
         return {

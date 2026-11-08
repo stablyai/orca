@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { planQueuedPaneAgentLaunch } from '../../../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import {
@@ -148,11 +149,13 @@ describe('launchAgentInNewTab main-window surface', () => {
     const before = store.getState()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'opencode',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-1',
+        agent: 'opencode',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    )
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
