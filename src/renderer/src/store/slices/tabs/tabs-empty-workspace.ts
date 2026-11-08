@@ -1,5 +1,6 @@
 import type { AppState } from '../../types'
 import { workspaceEditorFiles } from '../editor/tabs/workspace-editor-files'
+import { hasSplitLandingGroup } from './split-landing-groups'
 
 // Last user-close lands on welcome; failed-create cleanup preserves selection.
 type LandingState = Pick<
@@ -13,6 +14,8 @@ type LandingState = Pick<
   | 'activeBrowserTabIdByWorktree'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
+  | 'groupsByWorktree'
+  | 'splitLandingGroupIds'
 >
 
 export function landsOnEmptiedWorktree(
@@ -25,7 +28,9 @@ export function landsOnEmptiedWorktree(
     remainingTabs === 0 &&
     (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
     (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
-    workspaceEditorFiles(current.openFiles, current.unifiedTabsByWorktree[worktreeId]).length === 0
+    workspaceEditorFiles(current.openFiles, current.unifiedTabsByWorktree[worktreeId]).length ===
+      0 &&
+    !hasSplitLandingGroup(current, worktreeId)
   )
 }
 

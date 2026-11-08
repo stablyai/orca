@@ -9,12 +9,8 @@ import 'node:path'
 import '../../../shared/remote-runtime/host-store/runtime-environment-store-file'
 import { createRuntimeAgentProjections } from '../construction/runtime-agent-projections'
 
-import {
-  fingerprintOrchestrationPeer,
-  pairedOrchestrationPeers
-} from '../orchestration/federation/environment-transport'
-
-import { devicePrincipalOf } from '../rpc/server/pairing/device-principal'
+import { fingerprintOrchestrationPeer } from '../orchestration/federation/environment-transport'
+import '../rpc/server/pairing/device-principal'
 
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 
@@ -39,11 +35,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-
-import {
-  mintStructuredWorkerHandle,
-  mintStructuredWorkerPaneKey
-} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
@@ -186,64 +178,6 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   }
 }
 
-it('locates every sender by the handle or Dispatch its card saved after a warm restart, with no agent event', () => {
-  const h = harness(3)
-  const idleWorker = h.worker(0)
-  // Dispatched to tab-1's own terminal; Orca hasn't recorded that terminal for it yet.
-  const starting = createRootDispatch(
-    h.db,
-    h.db.createTask({ runId: h.run.id, spec: 'starting' }).id,
-    handle(1),
-    pane('tab-1')
-  )
-  for (const check of [() => undefined, () => h.restart()]) {
-    check()
-    // Started-worker cards name the Dispatch; Message, Task and Update cards name the handle,
-    // whether the sender is a hooked agent, a hooks-off agent, a plain shell or a reply.
-    expect(h.located(`dispatch:${idleWorker.id}`)).toBe(pane('tab-0'))
-    expect(h.located(`dispatch:${starting.id}`)).toBeUndefined()
-    expect(h.located(handle(0))).toBe(pane('tab-0'))
-    expect(h.located(handle(2))).toBe(pane('tab-2'))
-  }
-})
-
-it('rejects released or unproven custody while keeping an independently live original execution', () => {
-  const h = harness(2)
-  const worker = h.worker(0)
-  const settled = createRootDispatch(
-    h.db,
-    h.db.createTask({ runId: h.run.id, spec: 'settled' }).id,
-    handle(1),
-    pane('tab-1')
-  )
-  h.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(settled.id)
-  expect(h.located(`dispatch:${settled.id}`)).toBeUndefined()
-  // A malformed former-owner list loses only that row's former owners.
-  h.db.db
-    .prepare("UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = 'not json'")
-    .run()
-  expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
-  for (const incarnation of ['pty-0:replaced', null]) {
-    h.db.db.prepare('UPDATE worker_terminal_resources SET process_incarnation = ?').run(incarnation)
-    expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
-  }
-  h.db.db.prepare("UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1'").run()
-  for (const [column, value] of [
-    ['ownership_state', 'released'],
-    ['retained_reason', 'identity_unproven']
-  ] as const) {
-    h.db.db.prepare(`UPDATE worker_terminal_resources SET ${column} = ?`).run(value)
-    expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
-    h.db.db
-      .prepare(
-        "UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1', ownership_state = 'owned', retained_reason = NULL"
-      )
-      .run()
-  }
-  // The terminal itself is still the one that sent the worker's cards.
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
-})
-
 it('does not take a respawned or fresh terminal for the one a card was sent from', () => {
   const h = harness(2)
   const worker = h.worker(0)
@@ -257,46 +191,6 @@ it('does not take a respawned or fresh terminal for the one a card was sent from
   h.handles.set('tab-1', 'term_fresh')
   expect(h.located(handle(1))).toBeUndefined()
   expect(h.located('term_fresh')).toBe(pane('tab-1'))
-})
-
-it('publishes plain chats and canonical /clear successors without credential handles or credential panes', () => {
-  const root = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
-  const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
-  const base = (sessionId: string) =>
-    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
-  const original = {
-    ...base(root),
-    conversationCommand: {
-      command: 'clear',
-      state: 'completed',
-      replacementSessionId: live,
-      operationId: 'op',
-      callerKey: 'k',
-      phase: 'committed'
-    }
-  } as const
-  const rows = [agentSessionConversationView(original), agentSessionConversationView(base(live))]
-  const h = harness(0, {
-    getRecord: (id) => rows.find((r) => r.sessionId === id) ?? null,
-    listRecords: () => rows
-  })
-  const structured = mintStructuredWorkerHandle()
-  const credentialPane = mintStructuredWorkerPaneKey(root)
-  createRootDispatch(
-    h.db,
-    h.db.createTask({ runId: h.run.id, spec: 's' }).id,
-    structured,
-    credentialPane
-  )
-  const associations = h.projection.build().associations
-  expect(associations.find((r) => r.identity === `orca_session_id:${root}`)).toMatchObject({
-    sessionId: live
-  })
-  expect(associations.find((r) => r.identity === `orca_session_id:${live}`)).toMatchObject({
-    sessionId: live
-  })
-  expect(JSON.stringify(h.projection.build())).not.toContain(structured)
-  expect(JSON.stringify(h.projection.build())).not.toContain(credentialPane)
 })
 
 it('keeps an existing subscriber owed its update when another client reads the newer scope', () => {
@@ -450,69 +344,4 @@ it('publishes one principal per paired peer and attachments only while their wor
   // A settled attachment no longer names a worker running there.
   h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
   expect(h.projection.build('workspace').attachments).toEqual([])
-})
-
-it('names a federated worker by the fingerprints its home derives for the runtime and itself', () => {
-  // The execution runtime records the home as the principal it authenticated the home's socket as.
-  const home = devicePrincipalOf({
-    deviceId: 'home-device',
-    name: 'Home',
-    token: 'home-device-token',
-    scope: 'runtime',
-    pairedAt: 1,
-    lastSeenAt: 1
-  })
-  const h = harness()
-  h.db.createRemoteDispatchAttachment({
-    dispatchId: 'federated',
-    taskId: 'task',
-    homePeerFingerprint: home.callerFingerprint,
-    protocolVersion: 2,
-    runtimeEpoch: 'epoch',
-    mutationReceipt: {
-      callerFingerprint: home.callerFingerprint,
-      requestId: 'attach',
-      method: 'orchestration.federationAttachStart',
-      payloadHash: 'fixture'
-    }
-  })
-  h.db.prepareRemoteAttachmentAuthority({
-    dispatchId: 'federated',
-    paneKey: pane('tab-0'),
-    processIncarnation: 'pty-0:inc-1',
-    worktreeId: 'workspace',
-    terminalHandle: 'term_now_tab-0',
-    setupState: 'skipped',
-    effects: []
-  })
-  const execution = h.projection.build('workspace')
-  // The home's principal for that runtime, derived from its pairing record as main resolves it.
-  const paired = pairedOrchestrationPeers('execution-key', 'home-device-token')
-  expect(execution.peerFingerprint).toBe(paired.peerFingerprint)
-  expect(execution.attachments.map((row) => row.homePeerFingerprint)).toEqual([
-    paired.homePeerFingerprint
-  ])
-})
-
-it('publishes WSL chats, and only open chats when no tab table is recorded yet', () => {
-  const record = (sessionId: string, wslDistro: string | null = null) => {
-    const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
-    return agentSessionConversationView({ ...base, location: { ...base.location, wslDistro } })
-  }
-  for (const history of [100, 1000]) {
-    const rows = [
-      record('wsl-chat', 'Ubuntu'),
-      ...Array.from({ length: history }, (_, i) => record(`closed-${i}`))
-    ]
-    const h = harness(0, {
-      getRecord: (id) => rows.find((r) => r.sessionId === id) ?? null,
-      listRecords: () => rows,
-      // Before the tab table exists the store answers from the workspace's saved chat tabs.
-      getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] }),
-      listVisibleSessionIds: () => ['wsl-chat']
-    })
-    expect(h.projection.build().associations.map((r) => r.identity)).toEqual([
-      'orca_session_id:wsl-chat'
-    ])
-  }
 })

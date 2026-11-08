@@ -127,7 +127,7 @@ export async function getFolderWorkspaceMissingRepoError(
     [
       'This folder workspace is not a Git repository. Add --repo to your command to choose which repository gets the worktree:',
       ...lines,
-      'The new worktree attaches to this folder workspace and is listed in its Attached worktrees panel.'
+      'The new worktree attaches to this folder workspace and is shown in its Source Control and Attached worktrees panels.'
     ].join('\n'),
     data
   )

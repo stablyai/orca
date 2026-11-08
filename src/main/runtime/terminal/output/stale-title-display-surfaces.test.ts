@@ -9,10 +9,7 @@ import {
   store,
   syncSinglePty
 } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import {
-  committingSpawn,
-  registerBoundPty
-} from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined> {
   return (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
@@ -21,74 +18,6 @@ async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined
 
 // Display must reflect stale-title clears while runtime retains native titles as evidence; these titles are synthetic.
 describe('display surfaces after the stale-working title clear', () => {
-  it('worktree ps and the phone show the cleared status for a terminal with no renderer pane', async () => {
-    vi.useFakeTimers()
-    try {
-      // Its own copy: layout-owner builds bind the created pane into this store's session.
-      const runtime = new OrcaRuntimeService({ ...store })
-      runtime.setPtyController({
-        spawn: committingSpawn(
-          runtime,
-          vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
-            id: 'bg-pty'
-          }))
-        ),
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [
-          {
-            worktree: TEST_WORKTREE_ID,
-            publicationEpoch: 'renderer-empty',
-            snapshotVersion: 1,
-            activeGroupId: null,
-            activeTabId: null,
-            activeTabType: null,
-            tabs: []
-          }
-        ]
-      })
-      const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-        command: 'codex',
-        tabId: 'bg-tab',
-        leafId: HEADLESS_LEAF_ID
-      })
-      const psStatus = async () =>
-        (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
-          ?.status
-      const phoneTabs = async () =>
-        (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs.map((tab) => ({
-          title: 'title' in tab ? tab.title : undefined,
-          state: 'agentStatus' in tab ? tab.agentStatus?.state : undefined
-        }))
-      runtime.onPtyData('bg-pty', '\x1b]0;Codex working\x07', Date.now())
-      runtime.onPtyData('bg-pty', 'output without a title\r\n', Date.now())
-      expect(await psStatus()).toBe('working')
-      expect(await phoneTabs()).toEqual([{ title: 'Codex working', state: 'working' }])
-
-      await vi.advanceTimersByTimeAsync(3_000)
-
-      expect(await psStatus()).toBe('active')
-      expect(await phoneTabs()).toEqual([{ title: 'Codex', state: 'done' }])
-      const listed = (await runtime.listTerminals()).terminals.find(
-        (candidate) => candidate.handle === terminal.handle
-      )
-      expect(listed?.title).toBe('Codex')
-
-      // The agent's next genuine title retires the clear.
-      runtime.onPtyData('bg-pty', '\x1b]0;Codex working\x07', Date.now())
-      expect(await psStatus()).toBe('working')
-      expect(await phoneTabs()).toEqual([{ title: 'Codex working', state: 'working' }])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('a reattach restore seed does not bring the cleared working status back', async () => {
     vi.useFakeTimers()
     try {

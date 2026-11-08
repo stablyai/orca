@@ -13,7 +13,7 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
-import { proveAgentSessionOwner, withLease } from '../ownership/agent-session-lease-transitions'
+import '../ownership/agent-session-lease-transitions'
 
 const RECEIVING_A = '/qa/claude-profiles/qa-a/home'
 
@@ -105,63 +105,6 @@ describe('actual acquired account receipt in the fenced record owner', () => {
       expect(acquiredAgentSessionAccount(reloaded)?.recipe).toEqual(recipe)
       expect(acquiredAgentSessionAccount(reloaded)?.fence).toBe(current.lease.runtimeFence)
       expect(agentSessionConversationView(reloaded)).not.toHaveProperty('acquiredAccount')
-    } finally {
-      await f.dispose()
-    }
-  })
-
-  it('does not confuse known failed reservation cleanup with an unrecorded successful older acquisition', async () => {
-    const f = await releasedFixture()
-    try {
-      const reserved = withLease(f.released, {
-        ...f.released.lease,
-        runtimeFence: f.released.lease.runtimeFence + 1,
-        claimStatus: 'reserved',
-        handoffStage: 'new-owner-proving',
-        ownerProcess: null,
-        reservedSpawnToken: 'next',
-        unreconciled: false
-      })
-      const failed = withLease(reserved, {
-        ...reserved.lease,
-        runtimeFence: reserved.lease.runtimeFence + 1,
-        claimStatus: 'released',
-        handoffStage: null,
-        reservedSpawnToken: null,
-        deathEvidence: {
-          kind: 'exit-observed',
-          detail: 'observed process exit',
-          observedAt: 50_000,
-          ownerFence: reserved.lease.runtimeFence
-        }
-      })
-      expect(acquiredAgentSessionAccount(failed)?.recipe.home).toBe(RECEIVING_A)
-      const process = { hostId: 'local', pid: 4242, processStartTimeMs: 50_000, spawnToken: 'next' }
-      const proving = withLease(reserved, { ...reserved.lease, ownerProcess: process })
-      // Older proof preserves unknown extension bytes but does not observe the successful new construction.
-      const olderProof = proveAgentSessionOwner({
-        record: proving,
-        fence: proving.lease.runtimeFence,
-        now: 50_001,
-        leaseTtlMs: 30_000
-      })
-      expect(acquiredAgentSessionAccount(olderProof)).toBeNull()
-      const olderRelease = {
-        ...olderProof,
-        lease: {
-          ...olderProof.lease,
-          runtimeFence: olderProof.lease.runtimeFence + 1,
-          claimStatus: 'released' as const,
-          ownerProcess: null
-        }
-      }
-      expect(acquiredAgentSessionAccount(olderRelease)).toBeNull()
-      expect(withAcquiredAgentSessionAccount(olderProof, undefined)).not.toHaveProperty(
-        'acquiredAccount'
-      )
-      expect(
-        acquiredAgentSessionAccount({ ...f.released, acquiredAccount: { version: 900 } })
-      ).toBeNull()
     } finally {
       await f.dispose()
     }

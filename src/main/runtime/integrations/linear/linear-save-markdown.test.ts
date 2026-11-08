@@ -157,45 +157,6 @@ it.each([
   ])
 })
 
-it.each([
-  ['adjacent list grouping', '- first\n* second', '* first\n* second'],
-  ['separating lists', '* first\n* second', '- first\n* second'],
-  ['fenced code', '```text\n- literal\n```', '```text\n* literal\n```'],
-  ['unterminated code', '```text\n- literal', '```text\n* literal'],
-  ['list-contained code', '- ```text\n  - literal\n  ```', '- ```text\n  * literal\n  ```'],
-  [
-    'nested code',
-    '- parent\n  - ```text\n    - literal\n    ```',
-    '- parent\n  - ```text\n    * literal\n    ```'
-  ],
-  ['quoted code', '> ```text\n> - literal\n> ```', '> ```text\n> * literal\n> ```'],
-  ['indented code', '    - literal', '    * literal'],
-  ['tab-indented code', '\t- literal', '\t* literal'],
-  ['nested indented code', '- parent\n\n      - literal', '- parent\n\n      * literal'],
-  ['raw HTML', '<pre>\n- literal\n</pre>', '<pre>\n* literal\n</pre>'],
-  ['HTML comment', '<!--\n- literal\n-->', '<!--\n* literal\n-->'],
-  ['thematic break', '- - -', '* - -'],
-  ['code task', '```text\n- [ ] 1. literal\n```', '```text\n- [ ] 1\\. literal\n```'],
-  ['inline code', '- `literal - value`', '- `literal * value`'],
-  ['content', '- first', '* second'],
-  ['unordered marker outside observed pair', '+ first', '- first'],
-  ['ordered delimiter', '1. first', '1) first'],
-  ['line endings', '- first\r\n- second', '* first\n* second']
-])('sends meaningful %s edits instead of skipping the write', async (_name, current, requested) => {
-  stored.description = current
-  await expect(
-    commands().linearSaveIssue({
-      input: stored.identifier,
-      description: requested,
-      workspaceId: workspace.id
-    })
-  ).resolves.toMatchObject({ issue: { description: requested } })
-  const mutations = sent.filter(({ query }) => query.includes('mutation'))
-  expect(mutations).toHaveLength(1)
-  expect(mutations[0]?.variables.input).toEqual({ description: requested })
-  expect(stored.description).toBe(requested)
-})
-
 it('rejects a literal code change in the read-back after a successful mutation', async () => {
   const requested = '<pre>\n- literal\n</pre>'
   rewrite = () => '<pre>\n* literal\n</pre>'

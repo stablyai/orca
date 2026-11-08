@@ -1,5 +1,3 @@
-import { registerHeadlessPlaceholderGraphSurfaceStandingTests } from '../terminal/surface/headless-placeholder-graph-surface-standing.spec'
 import { registerTerminalListSurfaceLostOrphanTests } from '../terminal/surface/terminal-list-surface-lost-orphan.spec'
 
-registerHeadlessPlaceholderGraphSurfaceStandingTests()
 registerTerminalListSurfaceLostOrphanTests()

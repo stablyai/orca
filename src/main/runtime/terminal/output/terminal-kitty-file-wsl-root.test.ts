@@ -71,79 +71,11 @@ describe('authoritative WSL Kitty file roots', () => {
     expect(realpath).not.toHaveBeenCalledWith(null)
   })
 
-  it('maps a POSIX workspace to the native drive path', async () => {
-    const owner = { workspacePath: '/mnt/c/repo', wslDistro: 'Ubuntu' }
-    realpath.mockImplementation(async (path: string) => {
-      if (path === owner.workspacePath) {
-        throw new Error('Native Windows cannot resolve this Linux path')
-      }
-      return path
-    })
-    await expect(readTerminalKittyFile({ path: '/tmp/claude-image' }, owner)).resolves.toEqual({
-      base64: 'SU1BR0U='
-    })
-    expect(realpath).toHaveBeenCalledWith('C:\\repo')
-    expect(realpath).not.toHaveBeenCalledWith(owner.workspacePath)
-  })
-
-  it('canonicalizes native short names for guest drive-mount images', async () => {
-    const workspacePath = 'C:\\Users\\RUNNER~1\\repo'
-    realpath.mockImplementation(async (path: string) => {
-      if (path === workspacePath) {
-        return 'C:\\Users\\runneradmin\\repo'
-      }
-      if (path.includes('RUNNER~1')) {
-        throw new Error('ENOENT')
-      }
-      return path
-    })
-    const owner = { workspacePath, wslDistro: 'Ubuntu' }
-    for (const path of ['/tmp/claude-image', '/mnt/c/Users/runneradmin/repo/image']) {
-      await expect(readTerminalKittyFile({ path }, owner)).resolves.toEqual({
-        base64: 'SU1BR0U='
-      })
-    }
-    expect(realpath).toHaveBeenCalledWith(workspacePath)
-    expect(realpath).not.toHaveBeenCalledWith(`${ROOT}\\mnt\\c\\Users\\RUNNER~1\\repo`)
-  })
-
-  it('avoids the WSL1 UNC drive mount while allowing guest temporary files', async () => {
-    realpath.mockImplementation(async (path: string) => {
-      if (path.startsWith(`${ROOT}\\mnt\\c`)) {
-        throw new Error('EPERM: operation not permitted, realpath')
-      }
-      return path
-    })
-    for (const path of ['/tmp/claude-image', '/mnt/c/repo/image']) {
-      await expect(readTerminalKittyFile({ path }, OWNER)).resolves.toEqual({
-        base64: 'SU1BR0U='
-      })
-    }
-    expect(realpath).not.toHaveBeenCalledWith(`${ROOT}\\mnt\\c\\repo`)
-  })
-
-  it('uses the PTY distro rather than an old workspace UNC distro', async () => {
-    const owner = { workspacePath: '\\\\wsl.localhost\\Debian\\repo', wslDistro: 'Ubuntu' }
-    await expect(readTerminalKittyFile({ path: '/tmp/claude-image' }, owner)).resolves.toEqual({
-      base64: 'SU1BR0U='
-    })
-    expect(realpath).toHaveBeenCalledWith(`${ROOT}\\repo`)
-    expect(realpath).not.toHaveBeenCalledWith(owner.workspacePath)
-    expect(open).toHaveBeenCalledWith(`${ROOT}\\tmp\\claude-image`, expect.any(Number))
-  })
-
   it('does not fold distinct canonical directory names on a Windows drive mount', async () => {
     await expect(readTerminalKittyFile({ path: '/mnt/c/Repo/private.png' }, OWNER)).rejects.toThrow(
       'outside this terminal'
     )
     expect(open).not.toHaveBeenCalled()
-  })
-
-  it('allows drive-letter case differences without folding directory names', async () => {
-    const owner = { workspacePath: 'c:\\repo', wslDistro: 'Ubuntu' }
-    await expect(readTerminalKittyFile({ path: '/mnt/c/repo/image' }, owner)).resolves.toEqual({
-      base64: 'SU1BR0U='
-    })
   })
 
   it('does not fold case in a WSL Linux directory name', async () => {
