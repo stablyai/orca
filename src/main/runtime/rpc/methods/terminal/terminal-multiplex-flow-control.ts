@@ -6,10 +6,15 @@ import {
 } from './terminal-snapshot-publication'
 import {
   isMultiplexStreamAttached,
+  type TerminalAckRecoveryCause,
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-import { ackLinkHasRoomForHistory, creditAckWindow } from './terminal-multiplex-ack-window'
+import {
+  ackLinkHasRoomForHistory,
+  creditAckWindow,
+  pacedAckWindowBytes
+} from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import {
   markYieldedQueriesDiscardedInFrames,
@@ -18,9 +23,22 @@ import {
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
+  const { linkEstimate } = state
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
     ackLinkHasRoomForHistory(state, stream)
-  state.sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
+  // Draining alt-screen frames a newer screen supersedes only delays echo; a viewport snapshot is cheaper.
+  const snapshotSupersedesBacklog = (stream: TerminalMultiplexStream): boolean => {
+    const paced = pacedAckWindowBytes(state, stream)
+    return (
+      paced !== null &&
+      stream.ackPendingOutputBytes > paced &&
+      linkEstimate.now() >= stream.ackSupersedeSnapshotNotBefore
+    )
+  }
+  state.sendAckRecoverySnapshot = async (
+    stream: TerminalMultiplexStream,
+    cause: TerminalAckRecoveryCause = 'overflow'
+  ): Promise<void> => {
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
@@ -38,6 +56,11 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0
       )
       if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
+        return
+      }
+      if (!serialized && cause === 'superseded') {
+        // Nothing was dropped, so the backlog still drains; stop retrying an unavailable snapshot.
+        stream.ackSupersedeSnapshotNotBefore = Number.POSITIVE_INFINITY
         return
       }
       if (!serialized) {
@@ -73,6 +96,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
+      const rate = linkEstimate.deliveryBytesPerMs()
+      // Snapshots bypass the ACK window, so cap superseding ones at half the measured link rate.
+      stream.ackSupersedeSnapshotNotBefore =
+        rate === null ? 0 : linkEstimate.now() + (2 * publication.bytes) / rate
       if (typeof serialized.seq === 'number') {
         const snapshotSeq = serialized.seq
         const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
@@ -115,13 +142,21 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       void state.sendAckRecoverySnapshot(stream)
       return 0
     }
+    if (stream.ackRecoverySnapshotInFlight) {
+      // A superseding snapshot is serializing; its cutoff will drop the covered backlog.
+      return 0
+    }
+    if (snapshotSupersedesBacklog(stream)) {
+      void state.sendAckRecoverySnapshot(stream, 'superseded')
+      return 0
+    }
     let flushed = 0
     while (
       flushed < stream.ackPendingOutput.length &&
       flushed < maxChunks &&
       state.canSendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!.bytes.byteLength)
     ) {
-      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!)) {
+      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!, true)) {
         return flushed
       }
       flushed += 1
@@ -165,7 +200,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (!stream.ackOutput || bytes <= 0) {
       return
     }
-    creditAckWindow(state, stream, bytes)
+    linkEstimate.noteAcknowledged(stream, creditAckWindow(state, stream, bytes))
     state.flushAllAckPendingOutput()
   }
 }

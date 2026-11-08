@@ -8,18 +8,32 @@ import type { TerminalMultiplexStream } from './terminal-stream-types'
 
 type AckWindowConnection = Pick<
   TerminalMultiplexConnectionBase,
-  'ackTotalInFlightBytes' | 'ackTotalWindowBytes'
+  'ackTotalInFlightBytes' | 'ackTotalWindowBytes' | 'runtime' | 'linkEstimate'
 >
+
+/** Only alternate-screen output is paced: a newer frame supersedes it, so a snapshot can replace backlog. */
+export function pacedAckWindowBytes(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream
+): number | null {
+  const paced = connection.linkEstimate.pacedWindowBytes()
+  return paced !== null && connection.runtime.isTerminalAlternateScreen(stream.ptyId) ? paced : null
+}
 
 export function ackWindowAdmits(
   connection: AckWindowConnection,
   stream: TerminalMultiplexStream,
   bytes: number
 ): boolean {
-  return (
-    stream.ackInFlightBytes + bytes <= stream.ackWindowBytes &&
-    connection.ackTotalInFlightBytes + bytes <= connection.ackTotalWindowBytes
-  )
+  if (
+    stream.ackInFlightBytes + bytes > stream.ackWindowBytes ||
+    connection.ackTotalInFlightBytes + bytes > connection.ackTotalWindowBytes
+  ) {
+    return false
+  }
+  const paced = pacedAckWindowBytes(connection, stream)
+  // An idle stream may always send one chunk, so a paced window under a chunk's size cannot stall.
+  return paced === null || stream.ackInFlightBytes === 0 || stream.ackInFlightBytes + bytes <= paced
 }
 
 export function chargeAckWindow(
@@ -69,6 +83,8 @@ export function ackLinkHasRoomForHistory(
 ): boolean {
   return (
     stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
-    connection.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES
+    connection.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
+    // Paced in-flight always sits under the batch size, so only a fully drained paced stream proves room.
+    (stream.ackInFlightBytes === 0 || pacedAckWindowBytes(connection, stream) === null)
   )
 }

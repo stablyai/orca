@@ -89,6 +89,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  // Paces backlog-replacing snapshots, which bypass the ACK window, to a share of the measured link rate.
+  ackSupersedeSnapshotNotBefore: number
   yieldedQueries: YieldedTerminalQuery[]
   yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */

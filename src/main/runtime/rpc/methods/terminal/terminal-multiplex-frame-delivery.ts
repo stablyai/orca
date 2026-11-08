@@ -109,7 +109,8 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
   }
   state.sendAckGatedOutput = (
     stream: TerminalMultiplexStream,
-    chunk: TerminalOutputFrameChunk
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog = false
   ): boolean => {
     const sent = state.sendFrame(
       stream.streamId,
@@ -126,6 +127,10 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       settleDeliveredYieldedQueries(stream, chunk.seq)
     }
     if (stream.ackOutput) {
+      state.linkEstimate.noteSent(stream, chunk.bytes.byteLength, {
+        backlogged: fromBacklog,
+        linkIdle: state.ackTotalInFlightBytes === 0
+      })
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
     }
     return true

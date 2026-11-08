@@ -12,11 +12,14 @@ import type {
 } from './stream-schemas'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import type { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/stream/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
 export type MultiplexEmit = (result: unknown) => void
+/** `superseded` is optional: when no snapshot can be serialized the backlog drains instead. */
+export type TerminalAckRecoveryCause = 'overflow' | 'superseded'
 
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
@@ -34,6 +37,7 @@ export type TerminalMultiplexConnectionBase = {
   ptyWaitAdmission: MultiplexPtyWaitAdmission
   ackTotalInFlightBytes: number
   ackTotalWindowBytes: number
+  linkEstimate: TerminalMultiplexLinkEstimate
   ackFlushCursorStreamId: number | null
   resolveMultiplex: () => void
   multiplexClosed: Promise<void>
@@ -63,12 +67,19 @@ export type TerminalMultiplexFrameDelivery = {
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
   ) => void
   canSendAckGatedOutput: (stream: TerminalMultiplexStream, bytes: number) => boolean
-  sendAckGatedOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => boolean
+  sendAckGatedOutput: (
+    stream: TerminalMultiplexStream,
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog?: boolean
+  ) => boolean
   queueOrSendOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => void
 }
 
 export type TerminalMultiplexFlowControl = {
-  sendAckRecoverySnapshot: (stream: TerminalMultiplexStream) => Promise<void>
+  sendAckRecoverySnapshot: (
+    stream: TerminalMultiplexStream,
+    cause?: TerminalAckRecoveryCause
+  ) => Promise<void>
   flushAckPendingOutput: (stream: TerminalMultiplexStream, maxChunks?: number) => number
   flushAllAckPendingOutput: () => void
   acknowledgeOutput: (stream: TerminalMultiplexStream, bytes: number) => void
