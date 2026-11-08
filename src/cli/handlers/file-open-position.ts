@@ -1,4 +1,4 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
 import { getOptionalPositiveIntegerFlag } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 

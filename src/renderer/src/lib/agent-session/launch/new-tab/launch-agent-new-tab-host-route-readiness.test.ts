@@ -237,4 +237,25 @@ describe('an AI button whose agent is ready before the host answers', () => {
     expect(new Set(testState.writes.map(({ ptyId }) => ptyId))).toEqual(new Set(['launch-agent']))
     expect(testState.writes.filter(({ data }) => data.includes('task'))).toHaveLength(1)
   })
+  it('does not paste into a cancelled hosted launch after its composer becomes ready', async () => {
+    const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
+    let cancelled = false
+    const delivery = pasteDraftWhenAgentReady({
+      tabId: TAB,
+      agent: 'codex',
+      content: 'cancelled task',
+      submit: true,
+      forcePaste: true,
+      launchPty: Promise.resolve('launch-agent'),
+      beforePaste: () => !cancelled
+    })
+    await vi.advanceTimersByTimeAsync(10)
+    cancelled = true
+    testState.ptyWatchers.get('launch-agent')?.(
+      '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}\x1b[?2004h'
+    )
+    await vi.advanceTimersByTimeAsync(25_000)
+    await expect(delivery).resolves.toBe(false)
+    expect(testState.writes).toEqual([])
+  })
 })

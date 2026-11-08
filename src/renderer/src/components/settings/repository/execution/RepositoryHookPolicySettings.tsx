@@ -7,6 +7,7 @@ import type {
 } from '../../../../../../shared/orca-yaml-hook-types'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { matchesSettingsSearch } from '../../search/settings-search'
 import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
 import { RepositoryHooksYamlStatus } from './RepositoryHooksYamlStatus'
@@ -39,37 +40,28 @@ function SegmentedPolicyToggle<Policy extends string>({
   )
 }
 
-function getSetupRunPolicyOptions(): PolicyOption<SetupRunPolicy>[] {
+function getSetupRunPolicyOptions(t: Translate = translate): PolicyOption<SetupRunPolicy>[] {
   return [
     {
       policy: 'ask',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.e03d9a8f38',
-        'Ask every time'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.e03d9a8f38', 'Ask every time'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.90b1f50137',
         'Prompt before running setup.'
       )
     },
     {
       policy: 'run-by-default',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.d3ef1ab247',
-        'Run by default'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.d3ef1ab247', 'Run by default'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.022ba10cf2',
         'Run setup automatically.'
       )
     },
     {
       policy: 'skip-by-default',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.15debc1fd9',
-        'Skip by default'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.15debc1fd9', 'Skip by default'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.99e3264a49',
         'Only run setup when chosen.'
       )
@@ -77,31 +69,30 @@ function getSetupRunPolicyOptions(): PolicyOption<SetupRunPolicy>[] {
   ]
 }
 
-function getCommandSourcePolicyOptions(): PolicyOption<HookCommandSourcePolicy>[] {
+function getCommandSourcePolicyOptions(
+  t: Translate = translate
+): PolicyOption<HookCommandSourcePolicy>[] {
   return [
     {
       policy: 'shared-only',
-      label: translate(
-        'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
-        'orca.yaml only'
-      ),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.d88b6ff88f', 'orca.yaml only'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.29397e8bbc',
         'Run only committed repo commands; ignore local commands.'
       )
     },
     {
       policy: 'local-only',
-      label: translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only'),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.0e8b2a520d',
         'Ignore orca.yaml; run only your local commands.'
       )
     },
     {
       policy: 'run-both',
-      label: translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both'),
-      description: translate(
+      label: t('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.8561b0665f',
         'orca.yaml first, then your local commands.'
       )
@@ -120,16 +111,17 @@ export function RepositorySetupPolicySetting({
   onRunPolicyChange: (policy: SetupRunPolicy) => void
   onStartupPolicyChange: (policy: SetupAgentStartupPolicy) => void
 }): React.JSX.Element {
-  const options = getSetupRunPolicyOptions()
+  const t = useTranslate()
+  const options = getSetupRunPolicyOptions(t)
   return (
     <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h5 className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
+            {t('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
           </h5>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryHooksSection.21fb607a87',
               'Default behavior when a new worktree is created.'
             )}
@@ -144,7 +136,7 @@ export function RepositorySetupPolicySetting({
       <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-4">
         <div className="min-w-0">
           <h5 className="text-sm font-semibold">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
               'Wait for setup to complete before starting agent'
             )}
@@ -157,7 +149,7 @@ export function RepositorySetupPolicySetting({
               setupAgentStartupPolicy === 'wait-for-setup' ? 'start-immediately' : 'wait-for-setup'
             )
           }
-          ariaLabel={translate(
+          ariaLabel={t(
             'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
             'Wait for setup to complete before starting agent'
           )}
@@ -167,14 +159,14 @@ export function RepositorySetupPolicySetting({
   )
 }
 
-function getCommandSourceLabel(policy: HookCommandSourcePolicy): string {
+function getCommandSourceLabel(policy: HookCommandSourcePolicy, t: Translate = translate): string {
   if (policy === 'shared-only') {
-    return translate('auto.components.settings.RepositoryHooksSection.d88b6ff88f', 'orca.yaml only')
+    return t('auto.components.settings.RepositoryHooksSection.d88b6ff88f', 'orca.yaml only')
   }
   if (policy === 'local-only') {
-    return translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only')
+    return t('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only')
   }
-  return translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
+  return t('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
 }
 
 export function RepositoryHookCommandSourceSetting({
@@ -198,25 +190,26 @@ export function RepositoryHookCommandSourceSetting({
   onCopyTemplate: () => void
   onAdvancedOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const advancedMatchesSearch =
     searchQuery.trim() !== '' &&
     matchesSettingsSearch(searchQuery, {
-      title: translate('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced'),
-      description: translate(
+      title: t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced'),
+      description: t(
         'auto.components.settings.RepositoryHooksSection.610d90fdbd',
         'Command source and orca.yaml details.'
       ),
       keywords: [
-        translate('auto.components.settings.RepositoryHooksSection.c5a55a2d2e', 'advanced'),
-        translate('auto.components.settings.RepositoryHooksSection.4611b78617', 'command source'),
-        translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml'),
-        translate('auto.components.settings.RepositoryHooksSection.d2b3016c20', 'shared'),
-        translate('auto.components.settings.RepositoryHooksSection.2d03a514db', 'local'),
-        translate('auto.components.settings.RepositoryHooksSection.0518758f38', 'both'),
-        translate('auto.components.settings.RepositoryHooksSection.fac13f8c1e', 'authoritative')
+        t('auto.components.settings.RepositoryHooksSection.c5a55a2d2e', 'advanced'),
+        t('auto.components.settings.RepositoryHooksSection.4611b78617', 'command source'),
+        t('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml'),
+        t('auto.components.settings.RepositoryHooksSection.d2b3016c20', 'shared'),
+        t('auto.components.settings.RepositoryHooksSection.2d03a514db', 'local'),
+        t('auto.components.settings.RepositoryHooksSection.0518758f38', 'both'),
+        t('auto.components.settings.RepositoryHooksSection.fac13f8c1e', 'authoritative')
       ]
     })
-  const options = getCommandSourcePolicyOptions()
+  const options = getCommandSourcePolicyOptions(t)
   return (
     <details
       className="group rounded-2xl border border-border/50 bg-background/80 shadow-sm"
@@ -240,32 +233,29 @@ export function RepositoryHookCommandSourceSetting({
         <div className="flex items-center gap-2">
           <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
           <h5 className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
+            {t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
           </h5>
           <span className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryHooksSection.bbbd6e0bc4',
               'Command source & orca.yaml'
             )}
           </span>
         </div>
         <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
-          {getCommandSourceLabel(selectedPolicy)}
+          {getCommandSourceLabel(selectedPolicy, t)}
         </span>
       </summary>
       <div className="space-y-5 border-t border-border/50 px-4 py-4">
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.32fec28f5b',
-                'Command Source'
-              )}
+              {t('auto.components.settings.RepositoryHooksSection.32fec28f5b', 'Command Source')}
             </p>
             <p className="text-[11px] text-muted-foreground">
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'auto.components.settings.RepositoryHooksSection.commandSourceDescription',
                   'When both <yaml>orca.yaml</yaml> and local commands exist, choose which run.'
                 )}

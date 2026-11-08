@@ -31,7 +31,7 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
-import { onPluginFontLoadsChanged } from '@/store/plugin-fonts'
+import { onPluginFontLoadsChanged } from '@/store/plugins/appearance/plugin-fonts'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {

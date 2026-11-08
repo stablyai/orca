@@ -1,5 +1,6 @@
-import { joinPath, dirname, normalizeRelativePath } from '@/lib/path'
+import { joinPath, dirname } from '@/lib/path'
 import {
+  normalizeRelativePath,
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot

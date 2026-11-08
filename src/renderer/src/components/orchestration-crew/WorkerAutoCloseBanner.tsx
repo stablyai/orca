@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkerAutoClose, workerKeepOpenLabel } from '@/lib/worker-auto-close'
-import { translate } from '@/i18n/i18n'
-import { formatWorkerAutoCloseCountdown } from '../../../../shared/worker-auto-close'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatWorkerAutoCloseCountdown } from '../../../../shared/orchestration/workers/worker-auto-close'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 
@@ -21,6 +21,7 @@ export function WorkerAutoCloseBanner({
   worktreeId: string
   isVisible: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const environmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -39,11 +40,11 @@ export function WorkerAutoCloseBanner({
   }
   const title =
     state.closesAt === null
-      ? translate(
+      ? t(
           'components.orchestration.workerAutoClose.bannerRunning',
           'Orchestration worker · Closes 2 minutes after it finishes'
         )
-      : translate(
+      : t(
           'components.orchestration.workerAutoClose.bannerFinished',
           'Orchestration worker finished · Closes in {{countdown}}',
           { countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs) }
@@ -52,11 +53,11 @@ export function WorkerAutoCloseBanner({
     <PaneTopWarningBanner
       tone={state.closesAt === null ? 'accent' : 'warning'}
       icon={Timer}
-      badge={translate('components.orchestration.workerAutoClose.temporaryBadge', 'Temporary')}
+      badge={t('components.orchestration.workerAutoClose.temporaryBadge', 'Temporary')}
       title={title}
       primaryAction={
         <Button type="button" variant="default" size="xs" onClick={keepOpen}>
-          {workerKeepOpenLabel()}
+          {workerKeepOpenLabel(t)}
         </Button>
       }
     />

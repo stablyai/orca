@@ -32,7 +32,6 @@ export function registerPtyConnectionHiddenSnapshotLiveOverlapTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

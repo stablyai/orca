@@ -36,6 +36,7 @@ export type PopupCompatibilityStatus = {
       title: string
       fullscreen: boolean
       focused: boolean
+      size: number[]
       contentSize: number[]
     }[]
   }

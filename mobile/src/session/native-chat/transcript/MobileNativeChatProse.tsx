@@ -30,9 +30,9 @@ import { nativeChatHostStatusCopy } from './native-chat-notice-copy'
 import { pressedStyle } from '../../../theme/mobile-theme'
 import { routeNativeChatHref } from '../../../../../src/shared/native-chat/native-chat-href-routing'
 import { isRuntimePathAbsolute } from '../../../../../src/shared/cross-platform-path'
-import { isRasterImagePath } from '../../../../../src/shared/file-preview-kind'
-import { isKnownRasterImageMimeType } from '../../../../../src/shared/raster-image-preview-limits'
-import { isSvgFilePath } from '../../../../../src/shared/svg-document'
+import { isRasterImagePath } from '../../../../../src/shared/file-preview/file-preview-kind'
+import { isKnownRasterImageMimeType } from '../../../../../src/shared/file-preview/raster-image-preview-limits'
+import { isSvgFilePath } from '../../../../../src/shared/file-preview/svg-document'
 
 /** Raster https, data and absolute-path images draw on the phone (paths through the chat's host); anything else stays a link.
  *  The shell's CSP refuses plain http, and React Native's Image cannot draw SVG. */

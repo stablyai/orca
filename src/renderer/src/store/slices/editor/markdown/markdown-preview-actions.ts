@@ -11,7 +11,10 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
-import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  afterPendingEntityTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import {
   endsPreviewHere,
   promotePreviewTabsThroughLayoutOwner

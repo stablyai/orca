@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTabsSliceMockApi } from '../../../../store/slices/tabs-slice-test-harness'
-import { createTestStore } from '../../../../store/slices/store-test-helpers'
+import { createTabsSliceMockApi } from '../../../../store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '../../../../store/testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => ({

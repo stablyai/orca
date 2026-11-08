@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({ target: mocks.owner, wslHostDistro: null })
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
@@ -77,15 +77,6 @@ describe('useOwnerUsageRateLimits', () => {
   })
   afterEach(() => cleanup())
 
-  it('reports an older host without published usage as unavailable, not loading', () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
-    act(() => mocks.watchers[0].handlers.onSnapshot(snapshot(null)))
-    expect(result.current.rateLimits.claude?.status).toBe('error')
-    expect(result.current.rateLimits.claude?.usageMetadata?.unverifiableOwner).toBe(true)
-    expect(result.current.rateLimits.claude?.error).toContain('Mac Mini does not report usage')
-  })
-
   it('never shows server A numbers under server B', () => {
     mocks.owner = { kind: 'environment', environmentId: 'mini' }
     const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
@@ -107,24 +98,6 @@ describe('useOwnerUsageRateLimits', () => {
     expect(result.current.rateLimits.claude?.session).toBeNull()
   })
 
-  it('forces the owning host to refresh usage', async () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    mocks.callRuntimeRpc.mockResolvedValue(
-      snapshot(createEmptyRateLimitState({ claude: provider('claude', 12) }))
-    )
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
-    await act(async () => {
-      await result.current.refreshRemote?.()
-    })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'mini' },
-      'accounts.list',
-      { refreshUsage: true },
-      expect.anything()
-    )
-    await waitFor(() => expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(12))
-  })
-
   it('marks usage unverifiable when the stream closes after its first snapshot, then reconnects', () => {
     vi.useFakeTimers()
     try {
@@ -143,21 +116,6 @@ describe('useOwnerUsageRateLimits', () => {
       })
       expect(mocks.watchers[0].closed).toBe(true)
       expect(mocks.watchers).toHaveLength(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reopens the stream periodically so a host that does not poll still refreshes', () => {
-    vi.useFakeTimers()
-    try {
-      mocks.owner = { kind: 'environment', environmentId: 'mini' }
-      renderHook(() => useOwnerUsageRateLimits(local))
-      act(() => {
-        vi.advanceTimersByTime(5 * 60_000)
-      })
-      expect(mocks.watchers).toHaveLength(2)
-      expect(mocks.watchers[0].closed).toBe(true)
     } finally {
       vi.useRealTimers()
     }

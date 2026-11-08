@@ -14,16 +14,19 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/rpc/subscriptions/runtime-client-events'
-import { hostsBrowserPagesFor } from '@/runtime/browser-client-host-request-answer'
+import { hostsBrowserPagesFor } from '@/runtime/browser/client-hosting/browser-client-host-request-answer'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import { useAppStore } from '../../store'
 import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
-import { adoptFromEndpoint, type OwnedWorktreeEvent } from '../../store/adopt-from-endpoint'
+import {
+  adoptFromEndpoint,
+  type OwnedWorktreeEvent
+} from '../../store/host-catalog/endpoint-catalog-adoption'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
   createRuntimeProjectRefreshScheduler,

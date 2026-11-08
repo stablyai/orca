@@ -8,7 +8,10 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../shared/secure-storage/secure-file'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,

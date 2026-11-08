@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
 } from '../agent-session/agent-session-runtime-capabilities'
-import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../automation-runtime-capabilities'
+import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../automations/automation-runtime-capabilities'
 import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
@@ -25,6 +25,10 @@ import { AGENT_SESSION_FOREGROUND_TASK_CAPABILITY } from '../agent-session/agent
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../skill-install-capability'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-inputs-switch'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../workspace-unread-raise-capability'
+import {
+  COMPRESSED_FRAMES_CLIENT_CAPABILITY,
+  compressedFramesDisabled
+} from './e2ee/paired-e2ee-compressed-frame'
 
 // Keep every remote request transport on the same mixed-version capability contract.
 export function remoteRuntimeClientCapabilities(
@@ -51,6 +55,8 @@ export function remoteRuntimeClientCapabilities(
       // Switch point: every desktop socket, browser hosting's included, leaves the unread flag to
       // a host that raises it.
       ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY] : []),
+      // Every client sending this list inflates (desktop/CLI: remote-runtime-sealed-frame; mobile: its channel).
+      ...(compressedFramesDisabled() ? [] : [COMPRESSED_FRAMES_CLIENT_CAPABILITY]),
       ...additionalCapabilities
     ])
   )

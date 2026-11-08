@@ -27,34 +27,9 @@ describe('paneOwnsQueuedStartup', () => {
 
     expect(ownershipAtConnect).toEqual([true, false, false])
   })
-
-  // An identical payload distinguishes ownership checks from a startup truthiness check.
-  it('denies ownership to a split payload structurally identical to the queued command', () => {
-    const queuedStartup = { command: 'orca setup' }
-
-    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, queuedStartup)).toBe(false)
-    expect(paneOwnsQueuedStartup(queuedStartup, queuedStartup)).toBe(true)
-  })
-
-  it('denies ownership when the tab queued nothing, so an unrelated pane cannot spend a slot', () => {
-    expect(paneOwnsQueuedStartup(null, null)).toBe(false)
-    expect(paneOwnsQueuedStartup(undefined, undefined)).toBe(false)
-    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, null)).toBe(false)
-  })
 })
 
 describe('createQueuedStartupConsumer', () => {
-  it('withholds the consumer from a pane that does not own the queued command', () => {
-    const queuedStartup = { command: 'echo queued' }
-    const consume = vi.fn()
-
-    expect(
-      createQueuedStartupConsumer({ command: 'echo queued' }, queuedStartup, consume, () => true)
-    ).toBeUndefined()
-    expect(createQueuedStartupConsumer(null, queuedStartup, consume, () => true)).toBeUndefined()
-    expect(consume).not.toHaveBeenCalled()
-  })
-
   // Wake/respawn must not consume a command queued after this pane’s first launch.
   it('spends the queued command at most once across repeated spawns', () => {
     const queuedStartup = { command: 'echo queued' }

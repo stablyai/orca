@@ -4,11 +4,14 @@ import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -27,12 +30,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 // Main answers the window's layout commands; its frames draw the browser tabs.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

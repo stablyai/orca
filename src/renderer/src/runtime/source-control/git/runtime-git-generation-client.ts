@@ -14,7 +14,7 @@ import {
   type RuntimePullRequestGenerationInput
 } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function generateRuntimeCommitMessage(
   context: RuntimeGitContext,

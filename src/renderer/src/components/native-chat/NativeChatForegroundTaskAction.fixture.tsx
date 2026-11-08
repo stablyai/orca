@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatForegroundTasksProvider } from './NativeChatForegroundTaskAction'
-import { NativeChatToolLine } from './NativeChatToolLine'
+import { NativeChatToolLine } from './tools/lines/NativeChatToolLine'
 
 const task = {
   toolUseId: 'toolu_build',

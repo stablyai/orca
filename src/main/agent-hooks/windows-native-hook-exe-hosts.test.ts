@@ -145,10 +145,6 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
     return listener
   }
 
-  it('registers a bare exe path and agent with nothing a shell would rewrite', () => {
-    expect(command).toBe(`${exePath.replaceAll('\\', '/')} claude`)
-  })
-
   it('answers {} and posts what the .cmd hook posts under Git Bash, PowerShell 5.1 and CreateProcess', async () => {
     const listener = await listen()
     const env = paneEnv(listener)

@@ -34,7 +34,8 @@ import {
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
@@ -82,6 +83,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   worktreeMatches,
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const chatNames = useStructuredChatTabNames()
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -157,11 +159,16 @@ export function useWorktreeJumpPaletteOpenTabs({
   ])
   const simulatorMatches = useMemo(
     () =>
-      searchSimulatorTabs(simulatorTabEntries, deferredQuery.trim(), {
-        context: paletteSearchContext
-      }),
+      searchSimulatorTabs(
+        simulatorTabEntries,
+        deferredQuery.trim(),
+        {
+          context: paletteSearchContext
+        },
+        t
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
-    [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision]
+    [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision, t]
   )
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
     if (!paletteStatusInputsActive) {

@@ -1,6 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { CommentCard } from '../gitlab-item-dialog-parts'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
@@ -13,6 +13,7 @@ type Props = {
 }
 
 export function GitLabConversationTab({ item, state, reviewActions }: Props) {
+  const t = useTranslate()
   const { details, loading, resolvingThreadId } = state
   const isMR = item.type === 'mr'
   return (
@@ -35,7 +36,7 @@ export function GitLabConversationTab({ item, state, reviewActions }: Props) {
         ))
       ) : (
         <p className="text-sm text-muted-foreground">
-          {translate('auto.components.GitLabItemDialog.85a8170279', 'No comments yet.')}
+          {t('auto.components.GitLabItemDialog.85a8170279', 'No comments yet.')}
         </p>
       )}
     </TabsContent>

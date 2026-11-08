@@ -20,7 +20,7 @@ import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ss
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 

@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import React, { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ExternalLink, FolderOpen } from 'lucide-react'
@@ -15,7 +15,7 @@ import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getOpenInEntryAvailability,
   openOpenInAppsSettings,
@@ -33,6 +33,7 @@ export function OpenInContextSubmenu({
   workspaceId,
   owner
 }: OpenInContextSubmenuProps): React.JSX.Element {
+  const t = useTranslate()
   const openInApplications = useAppStateValue(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -64,7 +65,7 @@ export function OpenInContextSubmenu({
     <ContextMenuSub>
       <ContextMenuSubTrigger disabled={!path}>
         <FolderOpen className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+        {t('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
         {openInApplications.map((application) => {
@@ -73,7 +74,8 @@ export function OpenInContextSubmenu({
             openInRoute.connectionId,
             openInRoute.runtimeEnvironmentId,
             openInRoute.ownerUnresolved,
-            runtimeSshHost
+            runtimeSshHost,
+            t
           )
           return (
             <ContextMenuItem
@@ -97,7 +99,7 @@ export function OpenInContextSubmenu({
         })}
         {openInApplications.length > 0 ? <ContextMenuSeparator /> : null}
         <ContextMenuItem onSelect={openOpenInAppsSettings}>
-          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+          {t('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
         </ContextMenuItem>
       </ContextMenuSubContent>
     </ContextMenuSub>

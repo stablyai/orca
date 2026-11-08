@@ -1,3 +1,4 @@
+import type * as WorktreeRuntimeOwnerIndex from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 // @vitest-environment happy-dom
 //
 // Exercise real MarkdownPreview links, modifier detection and openHttpLink; control only store data and IPC.
@@ -53,8 +54,9 @@ vi.mock('@/store/index', () => {
   )
   return { useAppStore }
 })
-vi.mock('@/store/slices/worktree-helpers', () => ({
-  findWorktreeById: (_worktrees: unknown, id: string) =>
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner-index', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerIndex>()),
+  findFirstIndexedWorktree: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
 vi.mock('@/lib/file-owner-runtime-target', () => {
@@ -71,7 +73,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../../runtime/rpc/targets/use-worktree-runtime-target', () => ({
   useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
     runtimeEnvironmentId
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }

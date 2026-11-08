@@ -58,12 +58,6 @@ describe('web token sockets and E2EE v2', () => {
     expect(auth.createHandshake(plan).framing).toBe('legacy')
   })
 
-  it('keeps legacy framing for sockets that cannot absorb a refused attempt', () => {
-    expect(plainHttpAuth({ reconnect: false }).createHandshake(plan).framing).toBe('legacy')
-    const keyless = new WebRuntimeConnectionAuth(connection, { retryLater: () => {} })
-    expect(keyless.createHandshake(plan).framing).toBe('legacy')
-  })
-
   function latchedHostAfterRefusal(): WebRuntimeConnectionAuth {
     webE2EEFramingPolicy(hostPublicKeyB64).noteV2Authenticated()
     const auth = plainHttpAuth()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ExternalAutomationAction } from '../../../../shared/automations-types'
+import type { ExternalAutomationAction } from '../../../../shared/automations/external/external-automation'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import {
   externalAutomationScopes,

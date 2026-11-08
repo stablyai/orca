@@ -1,5 +1,10 @@
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
-import * as Lineage from '../lineage/runtime-worktree-lineage-resolution'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
+import {
+  formatAmbiguousCwdParentMessage,
+  type WorktreeLineageInput,
+  type WorktreeLineageResolution
+} from '../lineage/runtime-worktree-lineage-resolution'
+import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
 import type { Repo } from '../../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -19,7 +24,6 @@ import {
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 import {
   createdWorkspaceActivationCallbacks,
@@ -35,9 +39,9 @@ import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   abstract resolveLineageForWorktreeCreate(
-    input?: Lineage.WorktreeLineageInput,
+    input?: WorktreeLineageInput,
     childRepo?: Repo
-  ): Promise<Lineage.WorktreeLineageResolution>
+  ): Promise<WorktreeLineageResolution>
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -61,10 +65,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     this.requireStore()
 
     assertOpenCodeModelLaunchPreferencesAbsent(
-      args.startupAgent ?? args.createdWithAgent,
-      args.startupSessionOptions && args.startupAgent
-        ? toAgentLaunchPreferences(args.startupSessionOptions, args.startupAgent)
-        : args.startupLaunchPreferences
+      args.startup ? (args.startupAgent ?? args.createdWithAgent) : undefined,
+      args.startupSessionOptions ?? args.startupLaunchPreferences
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
@@ -144,13 +146,10 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
       (error: unknown) => {
-        if (
-          error instanceof Lineage.RuntimeLineageError &&
-          error.code === Lineage.LINEAGE_PARENT_AMBIGUOUS
-        ) {
-          throw new Lineage.RuntimeLineageError(
+        if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+          throw new RuntimeLineageError(
             error.code,
-            Lineage.formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+            formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
           )
         }
         throw error

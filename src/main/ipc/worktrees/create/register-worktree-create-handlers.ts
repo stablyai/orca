@@ -7,7 +7,7 @@ import type {
   RunApprovedWorktreeSetupArgs,
   RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
-import { runApprovedCreatedWorktreeSetup } from '../../../runtime/created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../runtime/workspaces/creation/created-worktree-approved-setup'
 import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan

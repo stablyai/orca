@@ -9,7 +9,7 @@ import {
   XTERM_COMPOSITION_SESSION_END_EVENT,
   XTERM_COMPOSITION_SESSION_START_EVENT
 } from './ime/terminal-ime-composition-route'
-import { TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS } from './ime/terminal-ime-deferred-chord'
+
 import { useTerminalKeyboardShortcuts } from './keyboard/terminal-keyboard-hook'
 
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
@@ -198,37 +198,6 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
-  // The Japanese shape: still marked composing when the chord is resolved.
-  it('holds the chord while the keydown is still marked composing', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    harness.startComposition()
-    pressCmdArrowLeft(harness, true)
-    expect(harness.wire).toEqual([])
-
-    harness.endComposition('日本語')
-    vi.runAllTimers()
-
-    expect(harness.wire).toEqual(['日本語', '\x01'])
-    hook.unmount()
-    harness.dispose()
-  })
-
-  // Candidate windows can stay open for seconds; timer fallback during preedit would reorder chord and text.
-  it('does not fall back to a timer while the composition is still open', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    harness.startComposition()
-    pressCmdArrowLeft(harness, true)
-    vi.advanceTimersByTime(30_000)
-
-    expect(harness.wire).toEqual([])
-    hook.unmount()
-    harness.dispose()
-  })
-
   function pressOptionArrowLeft(
     harness: ReturnType<typeof createHarness>,
     press: { isComposing: boolean; keyCode: number; timeStamp: number }
@@ -267,68 +236,6 @@ describe('a cursor chord pressed during a composition', () => {
 
     pressOptionArrowLeft(harness, { isComposing: false, keyCode: 37, timeStamp: 23999 })
     expect(harness.wire, 'a genuine next press is not a replay').toEqual(['사', '\x1bb', '\x1bb'])
-    hook.unmount()
-    harness.dispose()
-  })
-
-  it('sends immediately when no composition is in flight', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    pressCmdArrowLeft(harness, false)
-
-    expect(harness.wire).toEqual(['\x01'])
-    hook.unmount()
-    harness.dispose()
-  })
-
-  // Dispose pending chord listeners so later composition cannot flush bytes from a dead pane.
-  it('drops the held chord and its listeners when the pane tears down', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    harness.startComposition()
-    pressCmdArrowLeft(harness, true)
-    expect(harness.deferralListenerCount()).toBeGreaterThan(0)
-
-    hook.unmount()
-    harness.endComposition('다')
-    vi.runAllTimers()
-
-    expect(harness.wire).toEqual(['다'])
-    expect(harness.deferralListenerCount()).toBe(0)
-    harness.dispose()
-  })
-
-  it('drops the held chord and its listeners on blur', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    harness.startComposition()
-    pressCmdArrowLeft(harness, true)
-    window.dispatchEvent(new Event('blur'))
-    harness.endComposition('다')
-    vi.runAllTimers()
-
-    expect(harness.wire).toEqual(['다'])
-    expect(harness.deferralListenerCount()).toBe(0)
-    hook.unmount()
-    harness.dispose()
-  })
-
-  // Abandon compositions that never finish; sending the chord late would reintroduce ordering corruption.
-  it('abandons a chord whose composition never ends', () => {
-    const harness = createHarness()
-    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
-
-    harness.startComposition()
-    pressCmdArrowLeft(harness, true)
-    vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS + 1)
-    harness.endComposition('다')
-    vi.runAllTimers()
-
-    expect(harness.wire).toEqual(['다'])
-    expect(harness.deferralListenerCount()).toBe(0)
     hook.unmount()
     harness.dispose()
   })

@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "連線至此工作區的 SSH 主機，然後再試一次。",
+    "sshUnavailable": "此 SSH 主機無法啟動終端工作階段。請在工作區中開啟終端，並在該處啟動代理程式。",
+    "reconnectServer": "重新連線至此工作區的 Orca 伺服器，然後再試一次。",
+    "updateServer": "更新此工作區伺服器上的 Orca，然後再試一次。",
+    "checkSettings": "檢查代理程式的啟動設定，然後再試一次。",
+    "invalidArgs": "{{value0}} 的 CLI 引數中有未閉合的引號。請修正後再試一次。",
     "opencode": {
       "updateRequired": "此版本的 OpenCode 無法使用所選模型安全啟動。請將 OpenCode 更新至受支援的版本，或不要指定模型。",
       "invalidConfig": "OpenCode 無法將所選模型套用至啟動設定。請檢查 OpenCode 的啟動設定後重試，或不要指定模型。",
@@ -483,10 +489,7 @@
         "searchAgents": "代理程式",
         "searchCli": "CLI",
         "searchTerminal": "終端機",
-        "antigravityDescription": "Antigravity 聊天會執行由 Orca 下載至此主機的伺服器，與 agy CLI 各自獨立。",
-        "antigravityNotSignedIn": "尚未登入。聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。",
-        "antigravityAccount": "帳戶",
-        "antigravitySignInNeeded": "聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。"
+        "antigravityAccount": "帳戶"
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
@@ -831,7 +834,6 @@
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
-        "invalidArgs": "{{value0}} 的 CLI 參數無效。請在「設定」→「原始碼控制 AI」中修正。",
         "model": "模型",
         "agentDefault": "代理程式預設值",
         "effortDefault": "預設",
@@ -1436,9 +1438,7 @@
           "agent": {
             "launch": {
               "027228a06b": "無法找到用於這些檢查的工作區。",
-              "fb6c294e85": "無法建置代理程式啟動命令。",
               "03c1d61f83": "無法開啟附加到這些檢查的工作區。",
-              "822bf52295": "無法解析工作區啟動平台。",
               "dfb4dd7c00": "無法找到附加到這些檢查的工作區。",
               "9f00d7df0c": "修正檢查的提示詞為空。請更新原始碼控制 AI 設定。",
               "2ebf794906": "此工作區主機上未偵測到已啟用的 AI 代理程式。",
@@ -1477,8 +1477,8 @@
             "direct": {
               "3de6371df3": "無法建置代理程式啟動命令。",
               "67e103dd60": "工作區已建立但無法啟用。",
-              "19c7683acf": "所選代理程式在建立的工作區中不可用。",
-              "8bc45efdbc": "無法解析 PR 的來源分支參照。",
+              "19c7683acf": "所選代理程式無法使用。請檢查工作區的代理程式設定，然後再試一次。",
+              "8bc45efdbc": "無法讀取提取要求。請確認你可以開啟它，然後再試一次。",
               "agent": {
                 "ceeeb509b5": "代理程式啟動時間太長。工作區已準備就緒 — 當代理程式閒置時貼上 {{value0}}。"
               }
@@ -3100,7 +3100,6 @@
         "a2a279b32a": "儲存逾時或失敗。關閉前修復錯誤。",
         "46e08bc5c8": "該檔案有未儲存的變更。",
         "61ed600d29": "「{{value0}}」有未儲存的變更。您想在關閉前儲存嗎？",
-        "e57db40c11": "無法為 {{value0}} 建置啟動命令。",
         "5b2c1a9e44": "未偵測到代理程式 CLI，請安裝一個，或在設定中選擇預設代理程式。",
         "quitSnapshotSaveFailed": "已取消結束：無法儲存工作階段快照 ({{value0}})。",
         "reloadSnapshotSaveFailed": "已取消重新載入：無法儲存工作階段快照（{{value0}}）。"
@@ -4174,7 +4173,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "代理程式設定…",
             "ec2adf093e": "在新終端機中啟動 {{value0}}",
-            "465e432ef1": "無法為 {{value0}} 建置啟動命令。",
             "e518f544b1": "未偵測到代理程式",
             "8dea9b5cdf": "沒有啟用代理程式",
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",
@@ -5857,29 +5855,26 @@
           "removeBatchFolder_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。磁碟上的專案資料夾不會被刪除。",
           "removeBatchMixed_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
           "removeBatchGit_other": "從 git 移除 <target>{{count}} 個工作區</target>，並刪除其工作區資料夾。",
-          "removeSingleFolder": "從 Orca 移除 <target/>。磁碟上的專案資料夾不會被刪除。",
-          "removeSingleGit": "從 git 移除 <target/>，並刪除其工作區資料夾。",
           "removeWithChildrenFolder_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。磁碟上的專案資料夾不會被刪除。",
           "removeWithChildrenMixed_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
-          "removeWithChildrenGit_other": "從 git 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>，並刪除其工作區資料夾。"
+          "removeWithChildrenGit_other": "從 git 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>，並刪除其工作區資料夾。",
+          "removeSingleFolderFromOrca": "將其從 Orca 中移除。磁碟上的資料夾會保留。",
+          "deleteSingleWorktreeAndBranch": "刪除工作樹及其分支（未合併的分支會保留）。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "顯示已載入的路徑",
           "loadedPathsNotice": "已載入的路徑可能不完整或已過時。",
           "loadedChangedPaths": "已載入且有變更的路徑",
           "unresolvedConflict": "未解決的衝突",
-          "changeCount_one": "{{count}} 項未提交或未追蹤的變更",
-          "changeCount_other": "{{count}} 項未提交或未追蹤的變更",
-          "changes": "未提交或未追蹤的變更",
-          "moreLoadedPaths_other": "以及另外 {{count}} 個已載入的路徑"
+          "moreLoadedPaths_other": "以及另外 {{count}} 個已載入的路徑",
+          "changesLost_one": "{{count}} 項未提交的變更將遺失",
+          "changesLost_other": "{{count}} 項未提交的變更將遺失",
+          "uncountedChangesLost": "未提交的變更將遺失"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "子工作區將被刪除",
           "alsoDeletesChildren_other": "刪除此工作區也會刪除 {{count}} 個子工作區。",
           "moreChildren_other": "另有 {{count}} 個"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "不要再問"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "這是<strong>主工作樹</strong>（原始複製目錄）。"
@@ -6334,14 +6329,11 @@
           "c39c37676a": "建立一個群組並將該專案移入其中。",
           "6664418e98": "新專案群組",
           "e091caab15": "找不到該專案",
-          "439fa94d53": "更新",
           "579b1a8e61": "從父工作樹移除",
           "8d9cd19d09": "開啟父工作樹",
           "d35dfeae58": "從群組中移除",
           "76865d827f": "移至群組",
           "503ec0f8e6": "從專案建立新群組",
-          "3350101edb": "複製路徑",
-          "copyWorktreeName": "複製工作樹名稱",
           "f4475537d8": "刪除",
           "f5ac91531d": "從 Orca 中移除專案",
           "b42391d8bf": "正在刪除...",
@@ -6359,9 +6351,16 @@
           "workspaceSection": "工作區",
           "primaryDeleteDisabled": "主工作樹不能刪除。請改為移除專案。",
           "deleteWorktree": "刪除工作樹",
-          "sleepWithDescendants": "連同所有下層工作區一起進入睡眠 ({{value0}})",
           "sleepWithDescendantsDescription": "關閉此工作區及其所有下層工作區中使用中的面板以釋放記憶體和 CPU。",
-          "deleteWithDescendants": "連同所有下層工作區一起刪除…"
+          "sleepThisWorkspace": "此工作區",
+          "sleepDescendantsOption": "連同下層工作區 ({{value0}})",
+          "deleteWithDescendants": "連同所有下層工作區一起刪除…",
+          "editDetails": "編輯詳細資料…",
+          "copySubmenu": "複製",
+          "copyPathOption": "路徑",
+          "copyNameOption": "工作樹名稱",
+          "lineageSubmenu": "父層與子層",
+          "projectGroupSubmenu": "專案群組"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "需要更新",
@@ -8787,16 +8786,9 @@
           "b661b034ec": "· 預設：",
           "builtin_themes": "內建",
           "ceefb9d7f1": "未找到主題。",
-          "imported_from": "從 {{value0}} 匯入",
           "imported_themes": "已匯入",
-          "9119fb2268": "目前",
-          "4e11f87ca6": "顯示中",
-          "fbb428db98": "已選擇：",
           "search_terminal_themes": "搜尋終端機主題",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 符合「{{value0}}」",
-          "plugin_themes": "外掛",
-          "from_plugin": "來自 {{value0}}"
+          "plugin_themes": "外掛"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -12268,6 +12260,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "存放庫、專案與工作區的存取權杖須在對應的 Bitbucket 設定頁面建立，並具備 PR 讀取權限。",
               "basicHint": "為您的帳戶建立 Atlassian API 權杖，再搭配該帳戶的電子郵件地址使用。",
+              "scopesTitle": "請選擇下列 Bitbucket API 權杖範圍：",
+              "scopeUser": "驗證您的帳戶",
+              "scopeRepository": "讀取建置狀態",
+              "scopeReadPullRequest": "讀取 PR",
+              "scopeWritePullRequest": "建立 PR",
+              "scopesWriteNote": "若僅需唯讀存取，請省略寫入範圍。寫入不包含讀取；請分別選擇每個範圍。",
               "docsLink": "Bitbucket API 權杖文件",
               "storageNote": "當作業系統鑰匙圈可用時，會以加密方式儲存在本電腦上。 ORCA_BITBUCKET_* 環境變數始終優先於您在此處儲存的內容。",
               "cancel": "取消",
@@ -14132,7 +14130,6 @@
                     },
                     "d481ab22f9": "已儲存的 AI 代理程式不可用。請使用「自訂啟動」選擇其他代理程式。",
                     "9bbd9077a2": "沒有已啟用的 AI 代理程式。請在設定中設定代理程式。",
-                    "5540ff50cc": "無法建置代理程式啟動命令。",
                     "216f762bd7": "無法解析工作區連線。",
                     "success": "已為 {{value0}} 失敗啟動 AI 代理程式。"
                   }
@@ -15328,7 +15325,6 @@
             "3f4ca29961": "最大化浮動工作區",
             "1c79cba25d": "恢復浮動工作區",
             "648352c51f": "在浮動工作區中開啟 {{value0}}",
-            "82da3701e7": "無法為 {{value0}} 建置啟動命令。",
             "109870e023": "最大化",
             "b5686fee1e": "恢復"
           }
@@ -19650,7 +19646,6 @@
       "visualLoading": "正在載入視覺化",
       "visualOpenInNewTab": "在新分頁中開啟",
       "queuedMessages": {
-        "behindReturnedHold": "等待中 — 前面有一則訊息需要處理",
         "steer": "引導",
         "send": "傳送",
         "steerHint": "提交且不中斷模型",
@@ -19912,7 +19907,9 @@
         "hidden": "Orca 將不再顯示已建立的 PR",
         "many_one": "已建立 {{count}} 個 PR",
         "many_other": "已建立 {{count}} 個 PR"
-      }
+      },
+      "splitRight": "向右分割",
+      "splitDown": "向下分割"
     },
     "tab": {
       "bar": {
@@ -20187,11 +20184,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git 工作區中任何未提交或未追蹤的變更都將被永久刪除。",
-          "clean": "沒有未提交或未追蹤的變更",
           "unavailable": "無法檢查變更",
           "checking": "正在檢查變更…",
           "checkingDetails": "檢查…",
-          "unavailableDetails": "詳細資訊不可用"
+          "unavailableDetails": "詳細資訊不可用",
+          "none": "沒有未提交的變更"
         },
         "unsavedEdits": {
           "discarded_one": "將捨棄 {{count}} 個檔案中未儲存的變更：",
@@ -20490,6 +20487,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "無法格式化 {{file}}。將不經格式化直接儲存：{{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "新增代理程式"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "在聊天旁開啟窗格",
+          "action": "分割窗格"
+        }
       }
     }
   },
@@ -20966,6 +20976,29 @@
       "loading": "正在載入子模組變更…",
       "empty": "子模組中沒有變更",
       "loadFailed": "無法載入子模組變更"
+    },
+    "branchPicker": {
+      "switch": "切換分支：{{branch}}",
+      "search": "搜尋分支",
+      "recover": "切換到 {{branch}}",
+      "create": "從 {{branch}} 建立分支 {{name}}",
+      "open": "開啟工作區",
+      "occupied": "已在 {{path}} 中簽出",
+      "remote": "遠端",
+      "statusFailed": "Orca 無法讀取此簽出的變更。請先重新整理原始碼控制再切換。",
+      "statusUnknown": "切換前請先讀取此簽出的變更。",
+      "conflict": "切換分支前，請完成或中止 {{operation}}。",
+      "dirty_one": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "dirty_other": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "agentWorking": "有代理正在此工作區中工作。請在其完成後再切換分支；如果它已停止，請關閉其分頁。",
+      "listFailed": "Orca 無法列出本機分支。請嘗試重新開啟選擇器。",
+      "discoveryFailed": "Orca 找不到遠端分支。你仍然可以切換本機分支或建立分支。",
+      "switchFailed": "Orca 無法切換分支。請再試一次。",
+      "switchFailedTitle": "無法切換分支",
+      "switchFailedIn": "無法在 {{workspace}} 中切換分支",
+      "switchedIn": "在 {{workspace}} 中",
+      "thisComputer": "這台電腦",
+      "updateHost": "請在 {{host}} 上更新 Orca，以便從這裡切換分支。"
     }
   },
   "agentsSidebarIntro": {
@@ -21332,7 +21365,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "聊天功能需另行登入 Antigravity，與上方的 agy 帳戶分開。只需在此裝置上登入一次。",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21345,14 +21377,11 @@
       "chatVerifying": "正在完成登入…",
       "chatPasteHelp": "若登入後的最後一個頁面無法載入，請從瀏覽器複製其完整網址，並在此貼上。",
       "chatContinue": "繼續",
-      "chatSignedInOn": "已在 {{host}} 上登入。",
       "chatCancelled": "已取消登入。",
       "chatExpired": "登入逾時。請再試一次。",
       "chatFailed": "登入失敗。請再試一次。",
-      "chatNotSignedIn": "尚未在 {{host}} 上登入。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "scope": "管理 {{host}} 上的 agy 原生帳戶。",
       "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
       "docs": "登入說明",
       "retry": "重試",
@@ -21383,11 +21412,9 @@
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "請重新登入以使用 {{method}}。",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登入。",
       "lastReading": "{{reading}} · 讀取於 {{time}}",
       "noReading": "用量未知：尚未讀取"
     },
@@ -21502,7 +21529,10 @@
     "alwaysForceDeleteTooltip": "適用於今後所有工作區刪除操作。",
     "moreBranchActions": "更多分支刪除選項",
     "alwaysForceDeleteBranches": "始終刪除保留的分支",
-    "alwaysForceDeleteBranchesTooltip": "適用於日後刪除工作區後保留的分支。"
+    "alwaysForceDeleteBranchesTooltip": "適用於日後刪除工作區後保留的分支。",
+    "moreDeleteOptions": "更多刪除選項",
+    "alwaysDelete": "始終刪除",
+    "alwaysDeleteTooltip": "日後刪除時略過此確認。"
   },
   "worktree": {
     "setupTrust": {
@@ -23077,6 +23107,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
+    "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
     "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
@@ -23159,6 +23190,41 @@
     "historyChanged": "歷史記錄再次變更。請重新整理 Git 圖後重試。",
     "loadFailed": "無法載入 Git 歷史記錄",
     "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
-    "title": "Git 圖"
+    "title": "Git 圖",
+    "revertConflicts": "還原提交衝突",
+    "revertInProgress": "正在還原提交",
+    "abortOperationTitle": "中止{{operation}}？",
+    "abortOperationDescription": "這會取消進行中的操作，並可能捨棄在此期間完成的衝突解決。",
+    "abortOperation": "中止{{operation}}",
+    "recoveryFailed": "無法完成操作。請重新整理原始碼管理後再試。",
+    "continueOperation": "繼續{{operation}}",
+    "reverting": "正在還原提交",
+    "updateActionsHost": "請更新{{host}}上的 Orca 以操作提交",
+    "thisHost": "此主機",
+    "cannotApplyMerge": "無法在此處揀選或還原合併提交",
+    "confirmCommitAction": "對{{commit}}執行{{action}}？",
+    "cancelAction": "取消",
+    "checkoutCommit": "簽出提交",
+    "cherryPick": "揀選",
+    "revert": "還原提交",
+    "actionLanded": "目前位於{{branch}}上的{{commit}}",
+    "detachedHead": "分離的 HEAD",
+    "actionWarning": "操作已完成，但 Git 回報了問題。",
+    "actionConflicted": "請在原始碼管理中解決衝突，然後繼續或中止操作。",
+    "alreadyApplied": "已套用，沒有可揀選的變更",
+    "nothingToRevert": "無需還原；變更已撤銷。",
+    "actionRefused": "操作未完成。",
+    "actionUnavailable": "此工作區已無法執行該操作。請重新開啟 Git 圖後再試。",
+    "ownerChanged": "工作區主機已變更。請重新開啟 Git 圖後再試。",
+    "showAllBranches": "顯示所有分支",
+    "actionDirty": "請先提交或暫存變更，然後再試一次。",
+    "actionFailed": "Git 未建立提交。請檢查工作目錄，然後再試一次。",
+    "operationInProgress": "請先完成或中止進行中的 {{operation}}，然後再試一次。",
+    "checkoutBranch": "切換分支",
+    "createBranch": "在此建立分支",
+    "branchCreated": "已在 {{commit}} 建立 {{branch}}",
+    "branchName": "分支名稱",
+    "invalidBranchName": "此分支名稱無效。請選擇其他名稱。",
+    "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
   }
 }

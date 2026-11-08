@@ -6,7 +6,7 @@ import {
 } from '../../speech/speech-runtime-service'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 type Sink = (event: { type: string; text?: string }) => void
 

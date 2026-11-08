@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
 import { getExperimentalSearchEntry } from '../../advanced/experimental-search'
@@ -15,7 +15,8 @@ export function EphemeralVmsExperimentalSetting({
   settings,
   updateSettings
 }: EphemeralVmsExperimentalSettingProps): React.JSX.Element {
-  const entry = getExperimentalSearchEntry().ephemeralVms
+  const t = useTranslate()
+  const entry = getExperimentalSearchEntry(t).ephemeralVms
   const enabled = settings.experimentalEphemeralVms === true
 
   return (
@@ -23,16 +24,16 @@ export function EphemeralVmsExperimentalSetting({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="max-w-none space-y-4 py-2"
+      className="max-w-none space-y-4 py-3"
       id="ephemeral-vms"
     >
       <div className="flex max-w-3xl items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
           <Label>
-            {translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')}
+            {t('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ephemeralVmsExperimentalSetting.description',
               'Shows setup controls and workspace run targets for repo-owned, on-demand environments.'
             )}
@@ -40,7 +41,7 @@ export function EphemeralVmsExperimentalSetting({
         </div>
         <SettingsSwitch
           checked={enabled}
-          ariaLabel={translate(
+          ariaLabel={t(
             'auto.components.settings.ephemeralVmsExperimentalSetting.cloudVmToggleLabel',
             'Toggle Cloud VM'
           )}

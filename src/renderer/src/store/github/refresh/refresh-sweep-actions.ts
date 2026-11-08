@@ -9,7 +9,7 @@ import { CACHE_TTL, evictStaleEntries } from '../cache/cache-policy'
 import { pruneExpiredPRRefreshStates } from './pr-refresh-state'
 import { pruneExpiredPRRefreshStartedEntries } from '../pull-requests/pr-result-cache'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
-import { selectWorktreesByRepo } from '../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export const createRefreshSweepActions = (
   set: Parameters<StateCreator<AppState>>[0],

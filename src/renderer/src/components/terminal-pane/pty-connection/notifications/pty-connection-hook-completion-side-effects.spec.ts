@@ -31,6 +31,7 @@ import type { StoreState } from '../test-fixtures/pty-connection-test-store-stat
 
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -57,7 +58,6 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -140,6 +140,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
     })
 
     it('preserves a genuine hook completion after suppressing an earlier idle title', async () => {
+      // The completion settings subscription is shared per module load.
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks2 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
@@ -339,6 +341,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks4 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')

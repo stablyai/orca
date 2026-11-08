@@ -2,7 +2,7 @@ import { Play } from 'lucide-react'
 import type React from 'react'
 import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
 import { Button } from '../../../ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -18,14 +18,12 @@ export function EphemeralVmRecipeRow({
   recipe: Recipe
   onUse: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const destroyLabel = recipe.destroyDisabled
-    ? translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
+    ? t('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
     : recipe.destroy
-      ? translate(
-          'auto.components.NewWorkspaceComposerCard.destroyConfigured',
-          'destroy configured'
-        )
-      : translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
+      ? t('auto.components.NewWorkspaceComposerCard.destroyConfigured', 'destroy configured')
+      : t('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -40,10 +38,7 @@ export function EphemeralVmRecipeRow({
       <div className="flex shrink-0 items-center gap-1">
         <Button type="button" variant="outline" size="xs" className="gap-1.5" onClick={onUse}>
           <Play className="size-3" />
-          {translate(
-            'auto.components.settings.EphemeralVmRecipeRow.useInWorkspace',
-            'Use in workspace'
-          )}
+          {t('auto.components.settings.EphemeralVmRecipeRow.useInWorkspace', 'Use in workspace')}
         </Button>
       </div>
     </div>

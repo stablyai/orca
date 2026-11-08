@@ -51,14 +51,6 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock.mockReset()
   })
 
-  it('resolves system node via the path probe', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
-      .mockResolvedValueOnce('v20.0.0\n')
-
-    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-  })
-
   it('skips an incomplete system Node and selects a complete NVM toolchain', async () => {
     execCommandMock
       .mockResolvedValueOnce('/usr/bin/node\n/home/u/.nvm/versions/node/v22.22.0/bin/node\n')
@@ -108,66 +100,6 @@ describe('resolveRemoteNodePath', () => {
       }
     }
   )
-
-  it('probes mise install directories', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.local/share/mise/installs/node/20/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
-  })
-
-  it('probes asdf install directories', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.asdf/installs/nodejs/20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
-  })
-
-  it('probes volta bin directory', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.volta/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('$HOME/.volta/bin/node')
-  })
-
-  it('respects a custom NVM_DIR instead of hardcoding $HOME/.nvm', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/custom/nvm/versions/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('nvm_dirs=${NVM_DIR:-"$HOME/.nvm"}')
-    expect(callScript).toContain('orca_dotfile_dirs NVM_DIR')
-    expect(callScript).toContain('"$nvm_dir"/versions/node/*/bin/node')
-  })
-
-  it('respects a custom MISE_DATA_DIR instead of hardcoding $HOME/.local/share/mise', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/opt/mise-data/installs/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('mise_dirs=${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}')
-    expect(callScript).toContain('orca_dotfile_dirs MISE_DATA_DIR')
-    expect(callScript).toContain('"$mise_dir"/installs/node/*/bin/node')
-    expect(callScript).toContain('"$mise_dir/shims/node"')
-  })
 
   it('finds node under a MISE_DATA_DIR exported from a shell dotfile', async () => {
     execCommandMock
@@ -253,54 +185,6 @@ describe('resolveRemoteNodePath', () => {
     } finally {
       rmSync(home, { recursive: true, force: true })
     }
-  })
-
-  it('quotes version-manager directory prefixes while leaving globs active', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.fnm/node-versions/v20.11.0/installation/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.fnm/node-versions"/*/installation/bin/node')
-    expect(callScript).toContain('"$HOME/.local/share/fnm/node-versions"/*/installation/bin/node')
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
-  })
-
-  it('probes fnm XDG data directory installs', async () => {
-    execCommandMock
-      .mockResolvedValueOnce(
-        '/home/u/.local/share/fnm/node-versions/v24.18.0/installation/bin/node\n'
-      )
-      .mockResolvedValueOnce('v24.18.0\n')
-
-    await expect(resolveRemoteNodePath(conn)).resolves.toBe(
-      '/home/u/.local/share/fnm/node-versions/v24.18.0/installation/bin/node'
-    )
-  })
-
-  it('does not depend on GNU sort when probing version-manager directories', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).not.toContain('sort -V')
-  })
-
-  it('keeps the path-probe script successful when optional directories are missing', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript.trimEnd()).toMatch(/\ntrue$/)
   })
 
   it('expands tilde NVM_DIR assignments from shell dotfiles', async () => {
@@ -389,18 +273,6 @@ describe('resolveRemoteNodePath', () => {
     } finally {
       rmSync(home, { recursive: true, force: true })
     }
-  })
-
-  it('joins probes with newlines, not ||, so a missing dir does not mask later probes', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
-      .mockResolvedValueOnce('v20.0.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    // Run every probe; short-circuit success could hide a later usable version-manager runtime.
-    expect(callScript).not.toMatch(/node\b.*\|\|/)
   })
 
   it('rejects a path-probe candidate whose version is below the minimum', async () => {

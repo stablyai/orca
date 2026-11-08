@@ -1,5 +1,5 @@
-import type { ArtifactWriteRequest } from '../../../../../shared/artifacts'
-import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
+import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts/artifacts'
 import { getRuntimePathBasename } from '../../../../../shared/cross-platform-path'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import {

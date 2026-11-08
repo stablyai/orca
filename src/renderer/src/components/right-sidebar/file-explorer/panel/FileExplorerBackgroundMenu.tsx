@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Targets creation and paste at the displayed directory while keeping workspace operations rooted at the worktree. */
 export function FileExplorerBackgroundMenu({
@@ -26,6 +26,7 @@ export function FileExplorerBackgroundMenu({
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   useEffect(() => {
     const close = (): void => onOpenChange(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
@@ -51,17 +52,11 @@ export function FileExplorerBackgroundMenu({
       >
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, displayDepth)}>
           <FilePlus />
-          {translate(
-            'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
-            'New File'
-          )}
+          {t('auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36', 'New File')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, displayDepth)}>
           <FolderPlus />
-          {translate(
-            'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',
-            'New Folder'
-          )}
+          {t('auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d', 'New Folder')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
