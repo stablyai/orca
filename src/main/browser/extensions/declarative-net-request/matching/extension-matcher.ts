@@ -1,4 +1,4 @@
-import type { DnrRequestContext } from './request-context'
+import type { DnrRequestContext } from '../request-context'
 import {
   compareActions,
   isAllowAction,

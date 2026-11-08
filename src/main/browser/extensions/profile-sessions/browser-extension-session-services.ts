@@ -22,7 +22,7 @@ import {
   installBrowserExtensionWebRequestForwarding,
   observeBrowserExtensionWebRequests,
   stopObservingBrowserExtensionWebRequests
-} from '../browser-extension-web-request'
+} from '../requests/browser-extension-web-request-observer'
 
 // Why once: a session outlives the experimental setting being switched off and on again.
 const servedSessions = new WeakSet<Electron.Session>()

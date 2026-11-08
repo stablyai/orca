@@ -28,7 +28,7 @@ vi.mock('../tabs-and-windows/browser-extension-window-model', () => ({
   WINDOW_ID_CURRENT: -2,
   getBrowserExtensionWindow: (id: number) => (mocks.windows.has(id) ? {} : null)
 }))
-vi.mock('./permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: () => mocks.hostPatterns
 }))
 vi.mock('../permissions/browser-extension-active-tab', () => ({

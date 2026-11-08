@@ -1,13 +1,17 @@
-import type { DnrHeaderModification } from './header-rules'
-import type { DnrIndexedRule } from './indexed-rule'
-import { transformDnrUrl, upgradeDnrUrl } from './redirect-url'
-import { applyRegexSubstitution } from './regex-filter'
-import { isCollapsibleType, type DnrRequestContext } from './request-context'
-import { ELEMENT_TYPE } from './rule-flags'
+import type { DnrHeaderModification } from '../header-actions/header-rules'
+import type { DnrIndexedRule } from '../rule-compilation/indexed-rule'
+import { transformDnrUrl, upgradeDnrUrl } from '../redirect-actions/redirect-url'
+import { applyRegexSubstitution } from '../regex/regex-filter'
+import { isCollapsibleType, type DnrRequestContext } from '../request-context'
+import { ELEMENT_TYPE } from '../rule-compilation/rule-flags'
 import { regexRuleMetadataMatches, urlRuleMatches } from './rule-matching'
-import { compareRulePriority, type DnrRulePartition, type DnrRulesetIndex } from './ruleset-index'
-import type { DnrRulesetSource } from './rule-types'
-import { dnrPublicRulesetId, dnrRulesetOrdinal } from './rule-types'
+import {
+  compareRulePriority,
+  type DnrRulePartition,
+  type DnrRulesetIndex
+} from '../indexing/ruleset-index'
+import type { DnrRulesetSource } from '../rule-compilation/rule-types'
+import { dnrPublicRulesetId, dnrRulesetOrdinal } from '../rule-compilation/rule-types'
 
 // One ruleset's matcher: ruleset_matcher.cc, extension_url_pattern_index_matcher.cc,
 // regex_rules_matcher.cc and ruleset_matcher_base.cc.

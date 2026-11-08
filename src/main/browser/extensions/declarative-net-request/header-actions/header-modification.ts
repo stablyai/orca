@@ -1,5 +1,5 @@
 import { REQUEST_HEADER_APPEND_DELIMITERS, type DnrHeaderModification } from './header-rules'
-import type { DnrRequestAction } from './ruleset-matcher'
+import type { DnrRequestAction } from '../matching/ruleset-matcher'
 
 // Applies modifyHeaders actions the way web_request_api_helpers.cc does
 // (ModifyRequestHeadersForAction, ModifyResponseHeadersForAction, DNRHeaderAction).
