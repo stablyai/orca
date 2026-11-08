@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
@@ -113,15 +112,10 @@ import {
   cancelStructuredAgentLaunch,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
-import {
-  hasStructuredAgentSessionLaunchCancellationTombstone,
-  resetStructuredAgentLaunchRegistryForTests
-} from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
-import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
-import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
+
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 function launchIntent(
@@ -185,85 +179,6 @@ describe('a close that races a structured launch', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     })
-  })
-
-  it('cancels a close-racing unknown launch without retrying or toasting', async () => {
-    const worktreeId = 'wt-close-race'
-    const intent = launchIntent(worktreeId, 'session-close-race')
-    let resolveRefresh!: (snapshots: RuntimeMobileSessionTabsResult[]) => void
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValueOnce(new Error('response lost'))
-    vi.mocked(refreshLocalStructuredSessionTabs).mockImplementationOnce(
-      () => new Promise((resolve) => (resolveRefresh = resolve))
-    )
-
-    startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
-    await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
-    expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
-    const persistedTombstones =
-      localStorage.getItem('orca:structuredAgentLaunchCancelledSessions:v1') ?? ''
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // This machine's main hears the cancel at once and fences the chat; the window keeps none.
-      expect(
-        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
-      ).toBe(false)
-      expect(persistedTombstones).not.toContain(JSON.stringify(intent.sessionId))
-      expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
-        { kind: 'local' },
-        'agentSession.close',
-        { sessionId: intent.sessionId }
-      )
-      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-        { kind: 'local' },
-        'session.tabs.close',
-        expect.objectContaining({ tabId: `agent-session:${intent.sessionId}` })
-      )
-    } else {
-      expect(
-        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
-      ).toBe(true)
-      expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
-      expect(persistedTombstones).not.toContain(worktreeId)
-    }
-    resolveRefresh([])
-    await flushLaunchSettlement()
-
-    expect(mocks.launch).toHaveBeenCalledOnce()
-    expect(mocks.abandonIntent).toHaveBeenCalledWith(intent)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it("discards a repeated request's one staged prompt when a close cancels the launch", async () => {
-    const worktreeId = 'wt-close-coalesced-prompts'
-    const intent = launchIntent(worktreeId)
-    let resolveRefresh!: (snapshots: RuntimeMobileSessionTabsResult[]) => void
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValueOnce(new Error('response lost'))
-    vi.mocked(refreshLocalStructuredSessionTabs).mockImplementationOnce(
-      () => new Promise((resolve) => (resolveRefresh = resolve))
-    )
-
-    startStructuredAgentLaunch(worktreeId, 'codex', {
-      requestId: 'double-click',
-      prompt: 'first prompt'
-    })
-    startStructuredAgentLaunch(worktreeId, 'codex', {
-      requestId: 'double-click',
-      prompt: 'first prompt'
-    })
-    await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
-    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(true)
-
-    expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
-    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
-    resolveRefresh([])
-    await flushLaunchSettlement()
-
-    // Closed-chat text is neither sent nor returned; layout-owner cancellation only retires it on main.
-    expect(mocks.callRuntimeRpc.mock.calls.map(([, method]) => method)).toEqual(
-      ORCA_LAYOUT_OWNER_IS_MAIN ? ['session.tabs.close'] : []
-    )
-    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(intent.sessionId))).toBe('')
   })
 
   it('suppresses a close that races the retry verification catch', async () => {

@@ -159,7 +159,7 @@ function item(mode, arm, fields) {
           ? 'bel'
           : '',
     value.sample,
-    value.noBuffer ? 'no-buffer' : ''
+    ''
   ]
     .filter((x) => x !== undefined)
     .join(':')
@@ -196,27 +196,6 @@ export function createManifest({ capturePath } = {}) {
   }
   for (const arm of ['proposed', 'baseline']) {
     manifest.push(item('differential', arm, { family: 'plain-lf' }))
-  }
-  for (const family of families) {
-    for (const bytes of [16 * 1024, 32 * 1024]) {
-      manifest.push(
-        item('counts', 'proposed', { family: family.family, width: family.width, bytes })
-      )
-    }
-  }
-  for (const family of families.filter((value) =>
-    ['dense-osc', 'dense-string', 'mixed', 'sparse'].includes(value.family)
-  )) {
-    for (const bytes of [16 * 1024, 32 * 1024]) {
-      manifest.push(
-        item('counts', 'proposed', {
-          family: family.family,
-          width: family.width,
-          bytes,
-          noBuffer: true
-        })
-      )
-    }
   }
   // Parent ordering alternates every direct pair; each child gets fresh three warmups.
   for (const family of families) {

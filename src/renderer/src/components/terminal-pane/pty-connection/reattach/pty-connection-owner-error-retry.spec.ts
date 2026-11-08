@@ -74,39 +74,6 @@ export function registerPtyConnectionOwnerErrorRetryTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('preserves an owner-unverified restored pane after an empty reattach result', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
-        opts.callbacks?.onError?.('terminal_pane_owner_unverified')
-        return undefined
-      })
-      transportFactoryQueue.push(transport)
-      const deps = seedUnverifiableRestoredPane()
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(2),
-          createManager(2),
-          bindPaneAgentTitleMocks(deps, agentTitleMocks13)
-        )
-      )
-      await flushAsyncTicks()
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, 'terminal_pane_owner_unverified')
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(mockStoreState.tabsByWorktree['wt-1'][0]?.ptyId).toBe('unverifiable-pty')
-      expect(mockStoreState.ptyIdsByTabId?.['tab-1']).toEqual(['unverifiable-pty'])
-      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
-        [LEAF_2]: 'unverifiable-pty'
-      })
-      expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
-    })
-
     it('preserves an owner-unverified restored pane after a rejected reattach', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks14 =

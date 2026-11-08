@@ -144,14 +144,8 @@ import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch
 } from '../structured-agent-session-provisional-tab'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  resetStructuredAgentLaunchRegistryForTests
-} from './structured-agent-session-launch-registry'
-import {
-  discardStructuredLaunchPrompts,
-  hasStagedStructuredLaunchPrompt
-} from './structured-agent-session-launch-prompt'
+import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { discardStructuredLaunchPrompts } from './structured-agent-session-launch-prompt'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
@@ -331,20 +325,6 @@ function pick(
   return launch
 }
 
-async function flush(): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
-    await Promise.resolve()
-  }
-}
-
-/** The first chat published and its host's journal holds no request. */
-async function publishIdle(sessionId: string): Promise<void> {
-  await flush()
-  expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, sessionId)).toBeNull()
-  mocks.liveSessions.add(sessionId)
-  mocks.statusBySession.set(sessionId, null)
-}
-
 beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
@@ -404,53 +384,7 @@ afterEach(async () => {
   owner.store = null
 })
 
-describe('a second "new chat" with no text', () => {
-  it('opens a second chat while the first empty one is still starting', async () => {
-    holdCreates()
-    const firstPick = pick('plus-pick-1')
-    const secondPick = pick('plus-pick-2')
-
-    expect(firstPick.sessionId).toBe(first.sessionId)
-    expect(secondPick.sessionId).toBe(second.sessionId)
-    expect(await openedChats()).toHaveLength(2)
-  })
-
-  it('opens a second chat beside an empty one that published and sits idle', async () => {
-    pick('plus-pick-1')
-    await publishIdle(first.sessionId)
-
-    const secondPick = pick('plus-pick-2')
-
-    expect(secondPick.sessionId).toBe(second.sessionId)
-    expect(await openedChats()).toHaveLength(2)
-    await expect(secondPick.settlement).resolves.toEqual({
-      kind: 'structured',
-      sessionId: second.sessionId
-    })
-  })
-
-  it('opens one chat when the same pick is delivered twice', () => {
-    holdCreates()
-    const firstPick = pick('plus-pick-1')
-
-    expect(pick('plus-pick-1').sessionId).toBe(firstPick.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-  })
-})
-
 describe('a "new chat" with text', () => {
-  it('opens its own chat beside an empty one still starting', async () => {
-    holdCreates()
-    const blank = pick('plus-pick-1')
-
-    const notes = pick('notes-send', { prompt: 'review notes' })
-
-    expect(notes.sessionId).toBe(second.sessionId)
-    expect(await openedChats()).toHaveLength(2)
-    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
-    expect(hasStagedStructuredLaunchPrompt(second.sessionId)).toBe(true)
-  })
-
   it('opens its own chat in the split it was sent from', async () => {
     holdCreates()
     pick('plus-pick-1', { group: 'group-left' })

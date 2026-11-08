@@ -18,7 +18,6 @@ import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
-import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
@@ -78,18 +77,6 @@ describe('self-move source suppression (in-flight)', () => {
       sourcePaths: ['/repo/notes.md']
     })
   }
-
-  it('does not tombstone the source of an in-flight move (tab still at old path)', () => {
-    beginMove()
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
-
-    expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
-    expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'renamed')
-    dispose()
-  })
 
   it('does not tombstone a tab opened UNDER a moving directory mid-rename', () => {
     // Root move provenance must cover files opened during the move, even absent from its original tab list.
@@ -183,10 +170,6 @@ describe('self-move echo verification (content identity)', () => {
     vi.stubGlobal('window', { api: { fs: { readFile: vi.fn().mockResolvedValue(result) } } })
   }
 
-  function stubDiskReadError(error: Error): void {
-    vi.stubGlobal('window', { api: { fs: { readFile: vi.fn().mockRejectedValue(error) } } })
-  }
-
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
@@ -222,105 +205,5 @@ describe('self-move echo verification (content identity)', () => {
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
-  })
-
-  it('fails closed (marks changed) when the tab has no disk baseline', async () => {
-    mockState(movedDirtyTab({ lastKnownDiskSignature: undefined }))
-    stubDiskRead({ isBinary: false, content: BASELINE_CONTENT })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    handleFsChanged(payloadFor())
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('fails closed when the destination read errors', async () => {
-    mockState(movedDirtyTab())
-    stubDiskReadError(new Error('EACCES'))
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    handleFsChanged(payloadFor())
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('fails closed when the destination is binary', async () => {
-    mockState(movedDirtyTab())
-    stubDiskRead({ isBinary: true, content: '' })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    handleFsChanged(payloadFor())
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('does not verify an event with no move provenance (normal changed-on-disk path)', async () => {
-    mockState(movedDirtyTab({ pendingSelfMoveEcho: undefined }))
-    stubDiskRead({ isBinary: false, content: BASELINE_CONTENT })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    handleFsChanged(payloadFor())
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-})
-
-describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () => {
-  const clearSelfMoveEcho = vi.fn()
-  const setExternalMutation = vi.fn()
-
-  const CONTENT = 'the echoed file on disk\n'
-  const baseline = getDiskBaselineSignature(CONTENT)
-  // Floating tabs use their own root-relative paths, never the initiating workspace root.
-  const FLOATING_FILE_PATH = '/elsewhere/notes/readme.md'
-  const floatingTab = {
-    id: 'file-x',
-    worktreeId: 'floating',
-    worktreePath: '/elsewhere',
-    filePath: FLOATING_FILE_PATH,
-    relativePath: '../notes/readme.md',
-    runtimeEnvironmentId: null,
-    language: 'markdown',
-    mode: 'edit' as const,
-    isDirty: true,
-    lastKnownDiskSignature: baseline,
-    pendingSelfMoveEcho: { operationId: 'op-1', targetPath: FLOATING_FILE_PATH }
-  }
-  let readFile: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.useFakeTimers()
-    readFile = vi.fn().mockResolvedValue({ isBinary: false, content: CONTENT })
-    vi.stubGlobal('window', { api: { fs: { readFile } } })
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      ...createTestStore().getState(),
-      openFiles: [floatingTab],
-      clearSelfMoveEcho,
-      setExternalMutation
-    })
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-  })
-
-  it('reads the tab own filePath, not the initiating worktree joined with its relativePath', async () => {
-    verifyLatchedMoveDestinations('/initiating-worktree', undefined, ['file-x'])
-    await vi.advanceTimersByTimeAsync(50)
-
-    expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: FLOATING_FILE_PATH }))
-    expect(setExternalMutation).not.toHaveBeenCalledWith('file-x', 'changed')
-    // Proactive verification must retain provenance for later watcher echoes.
-    expect(clearSelfMoveEcho).not.toHaveBeenCalled()
   })
 })

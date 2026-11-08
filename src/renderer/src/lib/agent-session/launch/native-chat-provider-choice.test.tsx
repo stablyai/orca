@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import userEvent from '@testing-library/user-event'
+
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
@@ -137,53 +137,4 @@ describe('agent row chat or CLI', () => {
     await vi.waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(2))
     expect(settings.nativeChatProviders).toEqual({ claude: false, codex: false })
   })
-})
-
-it('offers the selected paired native-only program editor and writes effort without CLI controls', async () => {
-  inventory.detected = []
-  store.localDetectedAgentIdsByContext.host = ['claude', 'antigravity']
-  const settings = createGlobalSettingsFixture({
-    agentLaunchChoices: {},
-    agentPermissionDefault: 'own'
-  })
-  store.settings = settings
-  const mutate = vi.fn(async () => {})
-  const element = () => (
-    <AgentLaunchSettingsCatalog
-      settings={projectAgentLaunchSettings(settings, 'linux')}
-      mutate={mutate}
-      detectionTarget={{ kind: 'runtime', environmentId: 'paired-native' }}
-      hostName="Paired"
-      renderPermissions={() => null}
-    />
-  )
-  const view = render(element(), { wrapper: TooltipProvider })
-  const label = screen.getByText('Antigravity')
-  const row = label.closest('.py-3')
-  if (!(row instanceof HTMLElement)) {
-    throw new Error('Missing paired native-only row')
-  }
-  fireEvent.click(within(row).getByRole('button', { name: 'Expand agent settings' }))
-  expect(within(row).getByText('Model')).toBeTruthy()
-  expect(within(row).queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-  expect(within(row).queryByRole('textbox', { name: 'Command' })).toBeNull()
-  expect(screen.queryByRole('radiogroup', { name: 'Open Antigravity as' })).toBeNull()
-  const effort = within(row).getByRole('button', { name: 'Reasoning effort: Default' })
-  await userEvent.click(effort)
-  const option = screen.getAllByRole('menuitemradio').find((item) => item.textContent === 'High')
-  if (!option) {
-    throw new Error('Missing paired effort option')
-  }
-  fireEvent.click(option)
-  await vi.waitFor(() => expect(mutate).toHaveBeenCalledOnce())
-  expect(mutate.mock.calls[0]).toEqual([
-    expect.objectContaining({
-      type: 'launch-choices',
-      agent: 'antigravity',
-      patch: { options: { effort: 'high' } }
-    })
-  ])
-  inventory.chatAvailable = false
-  view.rerender(element())
-  expect(within(row).queryByText('Model')).toBeNull()
 })

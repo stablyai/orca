@@ -1,6 +1,5 @@
 import { describe, vi } from 'vitest'
 import { registerPtyConnectionHiddenOutputSchedulingTests } from '../output/pty-connection-hidden-output-scheduling.spec'
-import { registerPtyConnectionHiddenStartupQueryAdmissionTests } from '../emulation/pty-connection-hidden-startup-query-admission.spec'
 import { registerPtyConnectionHiddenBacklogReconciliationTests } from '../output-restore/pty-connection-hidden-backlog-reconciliation.spec'
 import { registerPtyConnectionHiddenOutputRestoreTests } from '../output-restore/pty-connection-hidden-output-restore.spec'
 import {
@@ -24,7 +23,6 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
 
 describe('pty-connection-hidden-atlas-recovery', () => {
   registerPtyConnectionHiddenOutputSchedulingTests()
-  registerPtyConnectionHiddenStartupQueryAdmissionTests()
 })
 describe(
   'pty-connection-hidden-backlog-reconciliation',

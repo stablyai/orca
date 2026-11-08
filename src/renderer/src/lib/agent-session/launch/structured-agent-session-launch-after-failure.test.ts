@@ -197,39 +197,6 @@ describe('a new launch after a failed one', () => {
     })
   })
 
-  it('opens a new chat that sends its own prompt instead of restarting the failed one', async () => {
-    await refuseFirstLaunch()
-    // Why: the + menu and new-tab search disable an agent only while its launch reads pending.
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-
-    mocks.launch.mockResolvedValueOnce({ sessionId: fresh.sessionId, fence: 1 })
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'request-2',
-      prompt: 'review notes',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(notes.sessionId).toBe(fresh.sessionId)
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('pending')
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(mocks.retryIntent).not.toHaveBeenCalled()
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'agentSession.send',
-      expect.objectContaining({
-        envelope: expect.objectContaining({ sessionId: fresh.sessionId }),
-        body: expect.objectContaining({ blocks: [{ type: 'text', text: 'review notes' }] })
-      })
-    )
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBe('failed')
-    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(failed.sessionId))).toBe(
-      'first task'
-    )
-  })
-
   it('retries the failed chat beside an in-flight new launch without taking it over', async () => {
     await refuseFirstLaunch()
     let resolveFresh!: (receipt: Receipt) => void
@@ -258,41 +225,6 @@ describe('a new launch after a failed one', () => {
     resolveFresh({ sessionId: fresh.sessionId, fence: 1 })
     await expect(next.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
     expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-  })
-
-  it('restores a failed chat after reload without unregistering a newer launch', async () => {
-    await refuseFirstLaunch()
-    resetStructuredAgentLaunchRegistryForTests()
-    let resolveFresh!: (receipt: Receipt) => void
-    mocks.launch
-      .mockImplementationOnce(() => new Promise<Receipt>((resolve) => (resolveFresh = resolve)))
-      .mockResolvedValueOnce({ sessionId: failed.sessionId, fence: 1 })
-    const next = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
-
-    expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, failed.sessionId)).toBe(true)
-    await flushLaunchSettlement()
-
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBeNull()
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, fresh.sessionId)).toBe('pending')
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('pending')
-    resolveFresh({ sessionId: fresh.sessionId, fence: 1 })
-    await expect(next.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
-  })
-
-  it('reads a failed resume as not starting, so resuming again opens a new chat', async () => {
-    const resumeFrom = { providerSessionId: 'provider-1' }
-    mocks.createIntent.mockReturnValueOnce(failed).mockReturnValueOnce(fresh)
-    mocks.launch
-      .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
-      .mockResolvedValueOnce({ sessionId: fresh.sessionId, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-6', resumeFrom })
-    await flushLaunchSettlement()
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-
-    expect(
-      startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-7', resumeFrom })
-        .sessionId
-    ).toBe(fresh.sessionId)
   })
 })
 

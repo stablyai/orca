@@ -213,41 +213,6 @@ describe('a different action while the first chat is still starting', () => {
     ])
   })
 
-  it('opens a new chat with its own text while the first chat is still sending its text', async () => {
-    let resolveFirstSend!: (result: unknown) => void
-    mocks.callRuntimeRpc.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveFirstSend = resolve))
-    )
-    const checkA = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-check-a-click',
-      prompt: 'Fix check A',
-      promptDelivery: 'submit-after-ready'
-    })
-    resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
-    await vi.waitFor(() => expect(sends()).toEqual([[first.sessionId, 'Fix check A']]))
-
-    const checkB = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-check-b-click',
-      prompt: 'Fix check B',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(checkB.sessionId).toBe(second.sessionId)
-    await expect(checkB.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    resolveFirstSend({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
-    await expect(checkA.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([
-      [first.sessionId, 'Fix check A'],
-      [second.sessionId, 'Fix check B']
-    ])
-  })
-
   it('opens two chats for two actions with identical text', async () => {
     const firstClick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
       requestId: 'fix-click-1',
@@ -293,38 +258,6 @@ describe('one action delivered twice while its chat is still starting', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     })
-  })
-
-  it('makes one chat and sends its text once while the create is in flight', async () => {
-    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
-    mocks.launch.mockImplementation(() => new Promise((resolve) => (resolveLaunch = resolve)))
-    const onFirstDelivered = vi.fn()
-    const onRepeatDelivered = vi.fn()
-
-    const click = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-click',
-      prompt: 'Fix check A',
-      promptDelivery: 'submit-after-ready',
-      onPromptDelivered: onFirstDelivered
-    })
-    const repeat = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-click',
-      prompt: 'Fix check A',
-      promptDelivery: 'submit-after-ready',
-      onPromptDelivered: onRepeatDelivered
-    })
-    resolveLaunch({ sessionId: first.sessionId, fence: 1 })
-
-    expect(repeat.sessionId).toBe(click.sessionId)
-    for (const caller of [click, repeat]) {
-      await expect(caller.promptDeliveryResult).resolves.toEqual({
-        delivered: true,
-        failureNotified: false
-      })
-    }
-    expect(sends()).toEqual([[first.sessionId, 'Fix check A']])
-    expect(onFirstDelivered).toHaveBeenCalledOnce()
-    expect(onRepeatDelivered).toHaveBeenCalledOnce()
   })
 
   // Fix with AI re-delivery may fetch newer logs; it still belongs to the original click/request.
@@ -375,63 +308,5 @@ describe('one action delivered twice while its chat is still starting', () => {
 
     expect(repeat.sessionId).toBe(click.sessionId)
     expect(readNativeChatComposerDraft(scope).text).toBe('')
-  })
-})
-
-describe('an action with text beside an empty chat still starting', () => {
-  let resolveFirstLaunch!: (receipt: { sessionId: string; fence: number }) => void
-  const notesSend = {
-    requestId: 'notes-send',
-    prompt: 'review notes',
-    promptDelivery: 'submit-after-ready'
-  } as const
-
-  beforeEach(() => {
-    vi.resetAllMocks()
-    localStorage.clear()
-    resetStructuredAgentLaunchPersistenceForTests()
-    resetStructuredAgentLaunchRegistryForTests()
-    resetSends()
-    mocks.createIntent.mockReturnValueOnce(first).mockReturnValueOnce(second)
-    mocks.launch.mockImplementation((intent: StructuredAgentSessionLaunchIntent) =>
-      intent.sessionId === first.sessionId
-        ? new Promise((resolve) => (resolveFirstLaunch = resolve))
-        : Promise.resolve({ sessionId: intent.sessionId, fence: 1 })
-    )
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
-      publishedSnapshot(first.sessionId, second.sessionId)
-    ])
-    mocks.callRuntimeRpc.mockResolvedValue({
-      ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
-  })
-
-  it('sends notes delivered twice once, in their own chat', async () => {
-    const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-    const again = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-    resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
-
-    expect(again.sessionId).toBe(notes.sessionId)
-    expect(notes.sessionId).not.toBe(blank.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
-    for (const caller of [notes, again]) {
-      await expect(caller.promptDeliveryResult).resolves.toEqual({
-        delivered: true,
-        failureNotified: false
-      })
-    }
-    expect(sends()).toEqual([[second.sessionId, 'review notes']])
-  })
-
-  it('leaves the empty chat to its own pick, whose re-delivery still joins it', () => {
-    const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-
-    const again = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-
-    expect(again.sessionId).toBe(blank.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
   })
 })

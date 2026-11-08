@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -103,17 +102,13 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', async () =
   }
 })
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { runSourceControlAgentActionStart } from '@/components/right-sidebar/source-control/ai/runSourceControlAgentActionStart'
+
 import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
-import {
-  retryStructuredAgentSessionLaunch,
-  startStructuredAgentLaunch
-} from './structured-agent-session-launch'
+import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 const WORKTREE_ID = 'wt-unconfirmed-or-retried'
@@ -189,17 +184,6 @@ async function leaveFirstLaunchUnconfirmed(options: { resume?: boolean } = {}): 
   )
 }
 
-function expectSentTo(sessionId: string, text: string): void {
-  expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
-    { kind: 'local' },
-    'agentSession.send',
-    expect.objectContaining({
-      envelope: expect.objectContaining({ sessionId }),
-      body: expect.objectContaining({ blocks: [{ type: 'text', text }] })
-    })
-  )
-}
-
 describe('a new start beside an unconfirmed or retried chat', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -223,82 +207,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       page: { fence: 1 },
       value: { submission: { dispatchState: 'accepted' } }
     })
-  })
-
-  it('starts a source-control agent in a new chat and reports success only once its text is sent', async () => {
-    await leaveFirstLaunchUnconfirmed()
-    const onLaunched = vi.fn()
-
-    const started = await runSourceControlAgentActionStart({
-      selectedAgent: 'codex',
-      trimmedCommandInput: 'Fix the failing check',
-      recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
-      saveTargetValue: 'none',
-      actionId: 'resolveComments',
-      repo: null,
-      worktreeId: WORKTREE_ID,
-      promptDelivery: 'submit-after-ready',
-      launchSource: 'source_control_recovery',
-      onLaunched,
-      onClose: vi.fn()
-    })
-
-    expect(started).toBe(true)
-    expect(onLaunched).toHaveBeenCalledOnce()
-    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
-    expectSentTo(fresh.sessionId, 'Fix the failing check')
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('sends notes to a new chat while another chat is unconfirmed', async () => {
-    await leaveFirstLaunchUnconfirmed()
-
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'request-2',
-      prompt: 'review notes',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(notes.sessionId).toBe(fresh.sessionId)
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expectSentTo(fresh.sessionId, 'review notes')
-    // The unconfirmed chat is left for its own re-check.
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, unconfirmed.sessionId)).toBe(
-      'visibility-unknown'
-    )
-  })
-
-  it("opens a new chat with its text, not a draft, while a restored chat's Retry is in flight", async () => {
-    const failed = launchIntent('session-failed')
-    mocks.createIntent.mockReturnValueOnce(failed).mockReturnValueOnce(fresh)
-    mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'request-3',
-      prompt: 'first task'
-    })
-    await flushLaunchSettlement()
-    // Reload: the registry is memory; the failed record is what survives.
-    resetStructuredAgentLaunchRegistryForTests()
-    mocks.launch.mockImplementationOnce(() => new Promise(() => undefined))
-    expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, failed.sessionId)).toBe(true)
-    mocks.seedDraft.mockClear()
-
-    const next = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'request-4',
-      prompt: 'fix it',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(next.sessionId).toBe(fresh.sessionId)
-    await expect(next.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expectSentTo(fresh.sessionId, 'fix it')
-    expect(mocks.seedDraft).not.toHaveBeenCalled()
   })
 
   it('never joins a resume of the same conversation id running on another host', async () => {

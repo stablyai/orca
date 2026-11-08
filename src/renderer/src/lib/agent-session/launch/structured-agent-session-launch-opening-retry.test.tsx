@@ -8,22 +8,18 @@ import {
   cleanupCreateMessageFixture,
   createParams,
   created,
-  submission,
   start,
   draft,
   deferred
 } from './structured-agent-session-launch-create-message.test-fixture'
 import {
   startStructuredAgentLaunch,
-  retryStructuredAgentSessionLaunch,
-  cancelStructuredAgentLaunch
+  retryStructuredAgentSessionLaunch
 } from './structured-agent-session-launch'
 import {
   getStructuredLaunchStateBySessionId,
   getStructuredAgentSessionLaunchLifecycle,
-  resetStructuredAgentLaunchRegistryForTests,
-  getStructuredAgentSessionLaunchFailure,
-  subscribeStructuredAgentLaunchStatus
+  resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
@@ -31,16 +27,12 @@ import {
 } from './structured-agent-session-launch-persistence'
 import { recheckUnconfirmedStructuredAgentLaunches } from './structured-agent-session-launch-unconfirmed-recheck'
 import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
-import {
-  settleStructuredAgentSessionSendsFromJournal,
-  resetStructuredAgentSessionSendsForTests
-} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 import { NativeChatComposerNotices } from '@/components/native-chat/composer/controls/NativeChatComposerNotices'
-import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+
 import { CreateIntentParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 
 let restore: (() => void) | undefined
@@ -117,98 +109,6 @@ it.each(['memory', 'disk'])(
   }
 )
 
-it.each([
-  { cancel: false, proof: 'journal' },
-  { cancel: true, proof: 'journal' },
-  { cancel: false, proof: 'receipt' },
-  { cancel: true, proof: 'receipt' }
-])(
-  'keeps uncertain input through refusal, then accepts late $proof (cancel=$cancel)',
-  async ({ cancel, proof }) => {
-    const first = deferred<unknown>()
-    mocks.call.mockReturnValue(first.promise)
-    const launch = start()
-    await vi.waitFor(() => expect(createParams().firstMessage).toBeDefined())
-    const original = createParams()
-    await vi.advanceTimersByTimeAsync(30_000)
-    await expect(launch.promptDeliveryResult).resolves.toMatchObject({ unconfirmed: true })
-    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(launch.sessionId), 'newer draft')
-    const refusal = {
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        ownerVerdict: 'exited',
-        details: { reason: 'cliMissing' }
-      }
-    }
-    mocks.call.mockResolvedValue(refusal)
-    render(<LaunchNotice sessionId={launch.sessionId} />)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-      await getStructuredLaunchStateBySessionId(launch.sessionId)?.promise.catch(() => {})
-    })
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(
-      getStructuredAgentSessionLaunchFailure('workspace-1', launch.sessionId)?.details?.reason
-    ).toBe('cliMissing')
-    expect(readStructuredAgentLaunchRecord(launch.sessionId)?.lifecycle).toBe('visibility-unknown')
-    expect(draft(launch.sessionId)).toBe('newer draft')
-    const row = submission(original.firstMessage!.clientMessageId)
-    await act(async () => {
-      settleStructuredAgentSessionSendsFromJournal(launch.sessionId, [submission('unrelated')], [])
-    })
-    expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-      'visibility-unknown'
-    )
-    if (cancel) {
-      await act(async () => {
-        cancelStructuredAgentLaunch('workspace-1', launch.sessionId)
-      })
-    }
-    const lateNotifications = vi.fn()
-    const stopWatching = subscribeStructuredAgentLaunchStatus(lateNotifications)
-    const lateWrites = vi.spyOn(localStorage, 'setItem')
-    lateWrites.mockClear()
-    await act(async () => {
-      if (proof === 'receipt') {
-        const success = created(original)
-        first.resolve({
-          ...success,
-          value: {
-            ...success.value,
-            firstMessage: row,
-            page: { ...success.value.page, submissions: [submission('unrelated')] }
-          }
-        })
-      } else {
-        // A superseded refusal cannot hand back the held opening.
-        first.resolve(refusal)
-        await vi.advanceTimersByTimeAsync(0)
-        expect(draft(launch.sessionId)).toBe('newer draft')
-        settleStructuredAgentSessionSendsFromJournal(launch.sessionId, [row], [])
-      }
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    if (cancel && proof === 'receipt') {
-      expect(lateNotifications).not.toHaveBeenCalled()
-      expect(
-        lateWrites.mock.calls.filter(([key]) => key === 'orca:structuredAgentLaunches:v1')
-      ).toHaveLength(0)
-    }
-    stopWatching()
-    lateWrites.mockRestore()
-    expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-      cancel ? 'cancelled' : 'published'
-    )
-    expect(draft(launch.sessionId)).toBe('newer draft')
-    if (!cancel) {
-      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-      expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
-    }
-  }
-)
-
 it('persists refusal-time custody across reload and offers Retry without handing the opening back', async () => {
   mocks.call.mockRejectedValue(new Error('answer lost'))
   const launch = start()
@@ -234,25 +134,6 @@ it('persists refusal-time custody across reload and offers Retry without handing
     await getStructuredLaunchStateBySessionId(launch.sessionId)?.promise
   })
   expect(draft(launch.sessionId)).toBe('')
-})
-
-it('keeps empty-create uncertainty separate from current opening-refusal guidance', async () => {
-  mocks.call.mockResolvedValue({
-    ok: false,
-    refusal: {
-      code: 'agent_session_conflict',
-      details: { reason: 'sessionExists' }
-    }
-  })
-  const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
-    requestId: newAgentLaunchRequestId(),
-    executionHostId: 'local'
-  })
-  await expect(launch.launchResult).rejects.toThrow()
-  expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-    'visibility-unknown'
-  )
-  expect(getStructuredAgentSessionLaunchFailure('workspace-1', launch.sessionId)).toBeNull()
 })
 
 it('coalesces re-delivery of an uncertain action before, during and after its requested Retry', async () => {

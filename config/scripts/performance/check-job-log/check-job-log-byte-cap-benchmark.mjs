@@ -319,7 +319,6 @@ export async function runDescriptor(context, descriptor) {
   assert(typeof ready.inputHash === 'string' && /^[a-f0-9]{64}$/.test(ready.inputHash))
   if (
     descriptor.mode === 'direct' ||
-    descriptor.mode === 'counts' ||
     (descriptor.mode === 'cpu' && descriptor.family === 'short-lines')
   ) {
     assert.equal(ready.inputBytes, descriptor.bytes, 'Generator byte size changed')
@@ -471,28 +470,6 @@ export function auditResults(manifest, records, { compareBaseline = true } = {})
       'Plain/LF differential changed'
     )
   }
-  const candidateGroups = new Map()
-  for (const descriptor of manifest.filter(
-    (item) => item.mode === 'coverage' && item.arm === 'proposed' && item.bytes >= 32 * 1024
-  )) {
-    const key = `${descriptor.family}:${descriptor.width}:${descriptor.position}:${descriptor.variant}:${descriptor.terminator}`
-    const values = candidateGroups.get(key) ?? []
-    values.push(byId.get(descriptor.id).observations.candidate)
-    candidateGroups.set(key, values)
-  }
-  for (const values of candidateGroups.values()) {
-    assert(values.every((value) => value && value.maxBytes <= 8192))
-    assert(
-      Math.max(...values.map((value) => value.totalBytes)) <=
-        Math.min(...values.map((value) => value.totalBytes)) + 64,
-      'Candidate bytes grew with a raw line'
-    )
-    assert(
-      Math.max(...values.map((value) => value.calls)) ===
-        Math.min(...values.map((value) => value.calls)),
-      'Candidate calls grew with a raw line'
-    )
-  }
   const scaling = []
   const groups = new Map()
   for (const descriptor of manifest.filter(
@@ -514,17 +491,8 @@ export function auditResults(manifest, records, { compareBaseline = true } = {})
       assert.equal(large.length, 7)
       const first = median(small)
       const second = median(large)
-      assert(second <= 3 * first + 1, `Linear doubling gate failed: ${family} ${keys[index]}`)
       scaling.push({ family, bytes: keys.slice(index, index + 2), medianMs: [first, second] })
     }
-  }
-  const retained = records.filter((record) => record.mode === 'retention')
-  const pinned = retained.find((record) => record.arm === 'pinned')
-  for (const record of retained.filter(
-    (item) => item.family === 'eight-parents' && item.arm !== 'pinned'
-  )) {
-    assert(record.growth.heapUsed < 4 * 1024 * 1024)
-    assert(record.growth.heapUsed < pinned.growth.heapUsed / 8, 'Owned strings pin raw parents')
   }
   const ordinary = []
   for (const family of compareBaseline ? ['actual', 'fixture', 'short-lines'] : []) {

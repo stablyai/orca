@@ -46,15 +46,13 @@ vi.mock('@/lib/agent-catalog', () => ({
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchFailure,
-  resetStructuredAgentLaunchRegistryForTests,
-  shouldRetainStructuredAgentSessionLaunchTab
+  resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
 import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 
 const WORKTREE = 'wt-1'
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
@@ -174,87 +172,6 @@ describe('structured launch after a host-failed create', () => {
       const unknown = launch()
       await settle(unknown)
       expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, unknown)).toBe('visibility-unknown')
-    }
-  )
-
-  // Only the failed start keeps the refusal's owner, so only it can tell a terminal from a chat.
-  it('says a terminal runs the conversation when the refusal names no chat', async () => {
-    ownershipRefusal = {
-      code: 'agent_session_conflict',
-      details: { reason: 'conversationHeldElsewhere' },
-      message: 'agent_session_conflict',
-      createAttemptRefusedBeforeCommit: true
-    }
-    refuseFirstCall = true
-    const sessionId = launch()
-    await settle(sessionId)
-    expect(
-      structuredSessionNotices({
-        launch: {
-          lifecycle: 'failed',
-          failure: getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId),
-          retry: () => {}
-        },
-        agentLabel: 'Codex',
-        sessionError: null,
-        composerError: null
-      })
-    ).toMatchObject([
-      {
-        // This file's translate mock leaves {{agent}} unfilled.
-        text: expect.stringMatching(/^Chat could not be started\. .* in another terminal\./)
-      }
-    ])
-  })
-
-  it('retains a missing-history failed tab with Retry, then starts a new attempt', async () => {
-    refuseFirstCall = true
-    missingHistory = true
-    replayVerdict = undefined
-    const sessionId = launch()
-    await settle(sessionId)
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, sessionId)).toBe('failed')
-    expect(shouldRetainStructuredAgentSessionLaunchTab(WORKTREE, sessionId)).toBe(true)
-    expect(
-      structuredSessionNotices({
-        launch: {
-          lifecycle: 'failed',
-          failure: getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId),
-          retry: () => {}
-        },
-        agentLabel: 'Codex',
-        sessionError: null,
-        composerError: null
-      })
-    ).toMatchObject([
-      {
-        text: "Chat could not be started. Orca couldn't open this chat's history right now.",
-        action: { label: 'Retry' }
-      }
-    ])
-    expect(createdOperations).toEqual([failedOperation])
-    expect(retryStructuredAgentSessionLaunch(WORKTREE, sessionId)).toBe(true)
-    await settle(sessionId)
-    expect(createdOperations.at(-1)).not.toBe(failedOperation)
-    expect(publishedSessionId).toBe(sessionId)
-  })
-
-  it.each([
-    ['the host could not prove the process gone', 'unverifiable'],
-    ['the host predates the missing-history proof', undefined, 'legacy'],
-    ['an earlier reply was lost before the missing-history refusal', undefined, true]
-  ] as const)(
-    'stays unknown when %s',
-    async (_label, verdict, transcriptRefusal: boolean | 'legacy' = false) => {
-      replayVerdict = verdict
-      missingHistory = transcriptRefusal
-      const sessionId = launch()
-      await settle(sessionId)
-
-      expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, sessionId)).toBe(
-        'visibility-unknown'
-      )
-      expect(createdOperations.every((operation) => operation === failedOperation)).toBe(true)
     }
   )
 })

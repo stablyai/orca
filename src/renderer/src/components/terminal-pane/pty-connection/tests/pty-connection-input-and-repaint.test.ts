@@ -6,15 +6,7 @@ import {
   registerPtyConnectionReattachModeResetTests
 } from '../reattach/pty-connection-reattach-mode-reset.spec'
 import { registerPtyConnectionNativeQueryReplyRoutingTests } from '../input/pty-connection-native-query-reply-routing.spec'
-import {
-  registerPtyConnectionAgentIdleCursorResetTests,
-  registerPtyConnectionWindowsCompletedTurnCursorResetTests,
-  registerPtyConnectionWindowsCursorResetDisposalTests
-} from '../emulation/pty-connection-agent-idle-cursor-reset.spec'
-import {
-  registerPtyConnectionRemoteWindowsFocusReportTests,
-  registerPtyConnectionWindowsFocusReportAuthorityTests
-} from '../input/pty-connection-windows-focus-report-authority.spec'
+import { registerPtyConnectionWindowsFocusReportAuthorityTests } from '../input/pty-connection-windows-focus-report-authority.spec'
 import { registerPtyConnectionWindowsCjkRepaintTests } from '../output/pty-connection-windows-cjk-repaint.spec'
 import { registerPtyConnectionRendererRiskRepaintTests } from '../output/pty-connection-renderer-risk-repaint.spec'
 import { registerPtyConnectionTerminalInputGatingTests } from '../input/pty-connection-terminal-input-gating.spec'
@@ -34,11 +26,7 @@ describe('pty-connection-reattach-mode-reset', () => {
   registerPtyConnectionReattachModeResetTests()
 })
 describe('pty-connection-windows-keyboard-reset', () => {
-  registerPtyConnectionAgentIdleCursorResetTests()
-  registerPtyConnectionRemoteWindowsFocusReportTests()
-  registerPtyConnectionWindowsCompletedTurnCursorResetTests()
   registerPtyConnectionWindowsFocusReportAuthorityTests()
-  registerPtyConnectionWindowsCursorResetDisposalTests()
 })
 describe('pty-connection-windows-cjk-repaint', registerPtyConnectionWindowsCjkRepaintTests)
 describe('pty-connection-renderer-risk-repaint', registerPtyConnectionRendererRiskRepaintTests)

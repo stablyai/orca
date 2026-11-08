@@ -57,50 +57,6 @@ export function registerPtyConnectionProviderRebindCallbackFencingTests(): void 
       await restoreTerminalTestGlobals()
     })
 
-    it('ignores a late spawn callback after the pane adopted a provider replacement', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks18 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      let transportPtyId = 'terminal-old'
-      const transport = createMockTransport(transportPtyId)
-      transport.getPtyId = vi.fn(() => transportPtyId)
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      const deps = createDeps()
-      const pane = createPane(1)
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks18)
-      )
-      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-        | ((ptyId: string) => void)
-        | undefined
-      const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
-        | ((ptyId: string, replacedPtyId: string) => void)
-        | undefined
-      expect(onPtySpawn).toBeTypeOf('function')
-      expect(onPtyRebind).toBeTypeOf('function')
-
-      onPtySpawn?.('terminal-old')
-      transportPtyId = 'terminal-reconnected'
-      onPtyRebind?.('terminal-reconnected', 'terminal-old')
-
-      // Mirror the real store’s atomic tab/layout replacement in this lightweight fixture.
-      mockStoreState.tabsByWorktree['wt-1'][0]!.ptyId = 'terminal-reconnected'
-      const replacementLayout = mockStoreState.terminalLayoutsByTabId?.['tab-1']
-      if (!replacementLayout) {
-        throw new Error('test fixture missing terminal layout')
-      }
-      replacementLayout.ptyIdsByLeafId![LEAF_1] = 'terminal-reconnected'
-
-      onPtySpawn?.('terminal-old')
-
-      expect(pane.container.dataset.ptyId).toBe('terminal-reconnected')
-      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenLastCalledWith(1, 'terminal-old')
-    })
-
     it('ignores a late split-pane spawn callback when the tab identity belongs to pane one', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks19 =

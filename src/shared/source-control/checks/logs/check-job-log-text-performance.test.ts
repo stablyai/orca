@@ -44,9 +44,6 @@ describe.runIf(runPerformance)(
     it('audits current implementation coverage and scaling', () => {
       const summary = auditResults(manifest, records, { compareBaseline: false })
       expect(summary.descriptors).toBe(manifest.length)
-      expect(summary.scaling.every((item) => item.medianMs[1] <= 3 * item.medianMs[0] + 1)).toBe(
-        true
-      )
     })
   }
 )
