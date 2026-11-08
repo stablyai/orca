@@ -34,7 +34,7 @@ export async function removeFolderSetupRunnerFiles(
 ): Promise<void> {
   const dir = join(folderPath, FOLDER_RUNNER_DIR)
   const prefix = runnerPrefix(worktreeId)
-  const names = await readdir(dir).catch(() => [] as string[])
+  const names: string[] = await readdir(dir).catch((): string[] => [])
   await Promise.all(
     names
       .filter((name) => name.startsWith(prefix))
