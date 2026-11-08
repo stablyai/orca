@@ -13,7 +13,6 @@ import {
 } from './rpc-history-import'
 import {
   readPiHistoryJournalView,
-  samePiHistoryJournalView,
   usablePiHistoryClaim,
   type PiHistoryClaim
 } from './rpc-history-journal-view'
@@ -70,9 +69,8 @@ export async function catchUpPiSession(input: {
     timeoutMs: input.timeoutMs ?? PI_HISTORY_CATCH_UP_TIMEOUT_MS,
     logger: input.logger,
     readView: (history) => readPiHistoryJournalView(history, input.lineage),
-    sameView: samePiHistoryJournalView,
     prepare: async ({ view: readView, journal, signal, deadline, check, warn }) => {
-      const view = readView()
+      const view = await readView()
       const read = async (since: string | null) => {
         check()
         const answer = await waitForPromiseWithSignal(
@@ -120,7 +118,7 @@ export async function catchUpPiSession(input: {
   if (outcome === 'skipped' || !leaf || !history) {
     return carried
   }
-  const cursor = history.cursor()
+  const cursor = await history.reads.cursor()
   return {
     claim:
       leaf.entry === null

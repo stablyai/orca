@@ -276,7 +276,7 @@ export function visitJournalInputItems(
 ): void {
   for (const item of memoryJournalMap(state.items).values()) {
     if (journalInputPresentationMember(state, item.itemId)) {
-      visit(item.itemId, item.sequence, item.body, item)
+      visit(item.itemId, item.sequence, item.body, item, item)
     }
   }
 }

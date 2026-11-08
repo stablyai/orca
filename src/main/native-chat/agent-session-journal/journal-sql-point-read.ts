@@ -67,8 +67,10 @@ export type JournalSqlPointRead = {
     | { kind: 'acceptance'; clientMessageId: string }
     | { kind: 'item-provenance'; itemId: string }
     | { kind: 'has-recorded-item'; itemId: string }
+    | { kind: 'has-items' }
     | { kind: 'presentation-removed'; itemId: string }
     | { kind: 'canonical-item-id'; itemId: string }
+    | { kind: 'canonical-item-ids'; itemIds: readonly string[] }
     | { kind: 'provider-activity'; fence: number }
     | { kind: 'latest-stop' }
     | { kind: 'accepted-send-unopened' }
@@ -103,8 +105,10 @@ export type JournalSqlPointReadResult =
       provenance: JournalItemEcho & { ownerFence?: number; executionOwner?: number }
     }
   | { kind: 'has-recorded-item'; recorded: boolean }
+  | { kind: 'has-items'; hasItems: boolean }
   | { kind: 'presentation-removed'; removed: boolean }
   | { kind: 'canonical-item-id'; itemId: string }
+  | { kind: 'canonical-item-ids'; items: { itemId: string; canonicalItemId: string }[] }
   | { kind: 'provider-activity'; at: number | undefined }
   | { kind: 'latest-stop'; stop: JournalLatestStop | null }
   | { kind: 'accepted-send-unopened'; unopened: boolean }
@@ -251,6 +255,21 @@ function read(
     }
     case 'canonical-item-id':
       return { kind: 'canonical-item-id', itemId: canonical(operation.itemId) }
+    case 'canonical-item-ids':
+      return {
+        kind: 'canonical-item-ids',
+        items: operation.itemIds.map((itemId) => ({ itemId, canonicalItemId: canonical(itemId) }))
+      }
+    case 'has-items':
+      for (const row of scope.db
+        .prepare('SELECT entry_key FROM journal_proj_items WHERE session_id=? AND epoch=?')
+        .iterate(...scope.prefix)) {
+        scope.examined(row)
+        if (visible(String(JSON.parse(String(row.entry_key))))) {
+          return { kind: 'has-items', hasItems: true }
+        }
+      }
+      return { kind: 'has-items', hasItems: false }
     case 'provider-activity':
       return {
         kind: 'provider-activity',

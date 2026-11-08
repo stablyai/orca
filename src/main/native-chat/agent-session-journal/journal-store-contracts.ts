@@ -4,6 +4,7 @@ import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemBody,
   AgentJournalResolution,
+  AgentJournalRenderItem,
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalResetReason,
@@ -115,7 +116,8 @@ export type JournalItemLinkageVisitor = (
   itemId: string,
   sequence: number,
   body: AgentJournalItemBody,
-  attribution: AgentJournalProducerLinkage & { turnScope?: AgentJournalTurnScope }
+  attribution: AgentJournalProducerLinkage & { turnScope?: AgentJournalTurnScope },
+  item: AgentJournalRenderItem
 ) => void
 
 export type JournalLifecycleBatchInput = {

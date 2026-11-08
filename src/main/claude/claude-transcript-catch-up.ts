@@ -1,7 +1,11 @@
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { runHistoryCatchUp } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import {
+  captureHistoryCatchUpView,
+  runHistoryCatchUp
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
@@ -9,6 +13,7 @@ import { readClaudeTranscriptTail } from './claude-transcript-tail'
 
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 type ClaudeHistoryView = {
+  physicalCursor: AgentJournalCursor
   hasRows: boolean
   newest: { key: string; sequence: number; index: number } | null
 }
@@ -38,29 +43,28 @@ export async function catchUpClaudeTranscript(input: {
     ...(input.assertCurrent ? { assertCurrent: input.assertCurrent } : {}),
     timeoutMs: input.timeoutMs ?? DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS,
     ...(input.logger ? { logger: input.logger } : {}),
-    readView: (history): ClaudeHistoryView => {
-      let hasRows = false
-      let newest: { key: string; sequence: number; index: number } | null = null
-      history.visitItemsWithLinkage((key, sequence, body, linkage) => {
-        hasRows = true
-        if (body.kind !== 'turn' || !isRootAgentJournalItem(linkage)) {
-          return
-        }
-        const index = history.item(key)?.sequenceIndex ?? 0
-        if (
-          !newest ||
-          sequence > newest.sequence ||
-          (sequence === newest.sequence && index > newest.index)
-        ) {
-          newest = { key, sequence, index }
-        }
-      })
-      return { hasRows, newest }
-    },
-    sameView: (planned, current) =>
-      planned.newest?.key === current.newest?.key &&
-      planned.newest?.sequence === current.newest?.sequence &&
-      planned.newest?.index === current.newest?.index,
+    readView: (history): Promise<ClaudeHistoryView> =>
+      captureHistoryCatchUpView(history, async () => {
+        const hasRows = await history.reads.hasItems()
+        let newest: { key: string; sequence: number; index: number } | null = null
+        await history.reads.visitItems(
+          { kinds: ['turn'] },
+          (key, sequence, _body, linkage, item) => {
+            if (!isRootAgentJournalItem(linkage)) {
+              return
+            }
+            const index = item.sequenceIndex ?? 0
+            if (
+              !newest ||
+              sequence > newest.sequence ||
+              (sequence === newest.sequence && index > newest.index)
+            ) {
+              newest = { key, sequence, index }
+            }
+          }
+        )
+        return { hasRows, newest }
+      }),
     prepare: async ({ view, journal, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
       // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
@@ -74,7 +78,7 @@ export async function catchUpClaudeTranscript(input: {
       if (!filePath) {
         return null
       }
-      const planned = view()
+      const planned = await view()
       const tail = await readClaudeTranscriptTail({ filePath, leafUuid: input.leafUuid, check })
       check()
       if (!tail) {

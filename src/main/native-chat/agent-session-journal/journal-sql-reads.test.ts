@@ -13,6 +13,7 @@ import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 import { journalSqlReads } from './journal-sql-reads'
 import type { AgentSessionJournalReads } from './journal-reads'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 it('answers every database-shaped read exactly as the in-memory chat does', async () => {
@@ -33,6 +34,28 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
   try {
     const sql = journalSqlReads(pool, 'session-1')
     const memory = fixture.journal.reads
+    expect(await sql.hasItems()).toBe(true)
+    expect(await sql.canonicalItemIds(['orca:turn-1', 'orca:missing'])).toEqual([
+      { itemId: 'orca:turn-1', canonicalItemId: 'orca:turn-1' },
+      { itemId: 'orca:missing', canonicalItemId: 'orca:missing' }
+    ])
+    const turns: AgentJournalRenderItem[] = []
+    await sql.visitItems({ kinds: ['turn'] }, (_id, _sequence, _body, _linkage, item) => {
+      turns.push(item)
+    })
+    expect(turns).toMatchObject([
+      {
+        itemId: 'orca:turn-1',
+        revision: 1,
+        sequence: 302,
+        body: { kind: 'turn', turnId: 'turn-1', state: 'running' }
+      }
+    ])
+    const memoryTurns: AgentJournalRenderItem[] = []
+    await memory.visitItems({ kinds: ['turn'] }, (_id, _sequence, _body, _linkage, item) => {
+      memoryTurns.push(item)
+    })
+    expect(memoryTurns).toEqual(turns)
     const visited = async (reads: Pick<AgentSessionJournalReads, 'visitItems'>) => {
       const ids: [string, number][] = []
       await reads.visitItems({ kinds: ['turn', 'message'] }, (itemId, sequence) => {

@@ -90,9 +90,12 @@ export function journalSqlReads(
     },
     itemProvenance: provenance,
     hasRecordedItem: async (itemId) => (await read({ kind: 'has-recorded-item', itemId })).recorded,
+    hasItems: async () => (await read({ kind: 'has-items' })).hasItems,
     presentationRemoved: async (itemId) =>
       (await read({ kind: 'presentation-removed', itemId })).removed,
     canonicalItemId: async (itemId) => (await read({ kind: 'canonical-item-id', itemId })).itemId,
+    canonicalItemIds: async (itemIds) =>
+      (await read({ kind: 'canonical-item-ids', itemIds })).items,
     submission: async (clientMessageId) =>
       (await read({ kind: 'submission', clientMessageId })).submission,
     submissionBody: async (clientMessageId) =>
@@ -113,7 +116,7 @@ export function journalSqlReads(
           limit: VISIT_PAGE
         })
         for (const entry of page.items) {
-          visit(entry.itemId, entry.sequence, entry.body, entry)
+          visit(entry.itemId, entry.sequence, entry.body, entry, entry)
         }
         if (page.nextOrdinal === null) {
           return

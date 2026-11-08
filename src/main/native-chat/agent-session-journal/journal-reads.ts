@@ -17,6 +17,8 @@ import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-stat
 import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { readJournalStatusState, type JournalStatusState } from './journal-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import { memoryJournalMap } from './journal-memory-collections'
+import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import {
   readJournalStatusIndicators,
   type JournalStatusIndicatorRead,
@@ -48,8 +50,12 @@ export type AgentSessionJournalReads = {
     itemId: string
   ): Promise<JournalItemEcho & { ownerFence?: number; executionOwner?: number }>
   hasRecordedItem(itemId: string): Promise<boolean>
+  hasItems(): Promise<boolean>
   presentationRemoved(itemId: string): Promise<boolean>
   canonicalItemId(itemId: string): Promise<string>
+  canonicalItemIds(
+    itemIds: readonly string[]
+  ): Promise<readonly { itemId: string; canonicalItemId: string }[]>
   submission(clientMessageId: string): Promise<AgentJournalSubmission | undefined>
   submissionBody(clientMessageId: string): Promise<AgentJournalMessageItem | null>
   receiptFor(clientMessageId: string): Promise<AgentJournalAcceptanceReceipt | null>
@@ -68,6 +74,8 @@ type FoldedJournalReads = {
     K in Exclude<
       keyof AgentSessionJournalReads,
       | 'visitItems'
+      | 'hasItems'
+      | 'canonicalItemIds'
       | 'contextFloor'
       | 'input'
       | 'usageLimitCut'
@@ -117,8 +125,20 @@ export function foldedJournalReads(
     itemFence: now(journal.itemFence),
     itemProvenance: now(journal.itemProvenance),
     hasRecordedItem: now(journal.hasRecordedItem),
+    hasItems: now(() => {
+      const current = state()
+      for (const item of memoryJournalMap(current.items).values()) {
+        if (journalInputPresentationMember(current, item.itemId)) {
+          return true
+        }
+      }
+      return false
+    }),
     presentationRemoved: now(journal.presentationRemoved),
     canonicalItemId: now(journal.canonicalItemId),
+    canonicalItemIds: now((itemIds: readonly string[]) =>
+      itemIds.map((itemId) => ({ itemId, canonicalItemId: journal.canonicalItemId(itemId) }))
+    ),
     submission: now(journal.submission),
     submissionBody: now(journal.submissionBody),
     receiptFor: now(journal.receiptFor),
@@ -130,9 +150,9 @@ export function foldedJournalReads(
     contextUsage: now(journal.contextUsage),
     visitItems: now((filter: JournalItemFilter, visit: JournalItemLinkageVisitor) => {
       const kinds = new Set(filter.kinds)
-      journal.visitItemsWithLinkage((itemId, sequence, body, attribution) => {
+      journal.visitItemsWithLinkage((itemId, sequence, body, attribution, item) => {
         if (kinds.has(body.kind)) {
-          visit(itemId, sequence, body, attribution)
+          visit(itemId, sequence, body, attribution, item)
         }
       })
     })

@@ -27,7 +27,7 @@ export class AcpHistoryJournalOverlay {
     const item = (key: string) => this.staged.get(key)?.item ?? null
     const visitItemsWithLinkage: StructuredAgentSessionTransitionJournal['visitItemsWithLinkage'] =
       (visit) =>
-        this.staged.forEach(({ item }) => visit(item.itemId, item.sequence, item.body, item))
+        this.staged.forEach(({ item }) => visit(item.itemId, item.sequence, item.body, item, item))
     this.journal = {
       epoch,
       item,
