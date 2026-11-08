@@ -82,7 +82,7 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   // Projects do not extend the root config; each must share the local agent budget.
-  maxWorkers: process.env.CI ? (process.platform === 'win32' ? 4 : undefined) : 2,
+  ...(!process.env.CI ? { maxWorkers: 2 } : {}),
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
   // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
@@ -143,6 +143,7 @@ export default defineConfig({
           reporters: ['default', resolve('config/scripts/ci/sharding/ci-unit-timing-reporter.mjs')]
         }
       : {}),
-    projects
+    projects,
+    ...(process.env.CI && process.platform === 'win32' ? { maxWorkers: 4 } : {})
   }
 })
