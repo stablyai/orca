@@ -6,14 +6,12 @@ import { openJournalDatabase } from './database/journal-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
+import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
 import { applyJournalWriterEffect } from './journal-writer-effects'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
-import {
-  applyJournalSqlMaintenance,
-  journalSqlMaintenanceIsNormal
-} from './journal-sql-maintenance'
+import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
 
 if (
@@ -87,13 +85,14 @@ type WriteRequest = {
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
 
-/** Capture once, then yield: a continuing stream cannot extend this transaction past its drain. */
+/** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
-  const pending = queue.splice(0)
+  const pending = takeJournalSqlReadyBatch(queue, (command) => commands?.streamed(command) === true)
   const writes = pending.filter(
-    (request): request is WriteRequest => request.command.type !== 'close'
+    (entry): entry is { request: WriteRequest; normal: boolean } =>
+      entry.request.command.type !== 'close'
   )
-  const close = pending.find((request) => request.command.type === 'close')
+  const close = pending.find(({ request }) => request.command.type === 'close')?.request
   const database = db
   if (writes.length > 0 && database && batch && commands) {
     const executor = commands
@@ -105,12 +104,9 @@ async function drain(): Promise<void> {
       }
       assertJournalWritable(readOnly, 'database')
       const result = await batch.run<WriteRequest, CommitResponse>(
-        writes.map((request) => ({
+        writes.map(({ request, normal }) => ({
           command: request,
-          normal:
-            request.command.type === 'maintenance'
-              ? journalSqlMaintenanceIsNormal(request.command.operation)
-              : request.command.type === 'write' && executor.streamed(request.command.command)
+          normal
         })),
         async (request) => {
           const { command, id } = request
@@ -144,7 +140,7 @@ async function drain(): Promise<void> {
           ? outcome.value
           : {
               type: 'failed',
-              id: writes[index]!.id,
+              id: writes[index]!.request.id,
               outcome: 'rolled-back',
               error: journalSqlFailure(outcome.error)
             }
@@ -155,7 +151,7 @@ async function drain(): Promise<void> {
     } catch (error) {
       const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
       fault ??= batch.fault
-      responses = writes.map((request) => ({
+      responses = writes.map(({ request }) => ({
         type: 'failed',
         id: request.id,
         outcome,

@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
+import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
+import type { JournalSqlRequest } from './journal-sql-protocol'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -87,6 +89,45 @@ it('leaves newly admitted work for a new drain with its own durability', async (
     { id: 1, value: 'stream' },
     { id: 2, value: 'send' }
   ])
+})
+
+it('commits a control receipt before later streamed work with its own durability', async () => {
+  const { db, batch } = fixture()
+  const stream = (id: number): JournalSqlRequest => ({
+    id,
+    command: {
+      type: 'write',
+      command: {
+        target: { sessionId: 'session', epoch: 'epoch', ownerToken: 'owner' },
+        operation: {
+          kind: 'item',
+          identity: { provider: 'orca', clientMessageId: 'output' },
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'output' }] },
+          options: { fence: 1, turnScope: { kind: 'thread' } }
+        }
+      }
+    }
+  })
+  const queue: JournalSqlRequest[] = [
+    stream(1),
+    { id: 2, command: { type: 'effects', effects: [] } },
+    stream(3)
+  ]
+  const commit = async () =>
+    batch.run(
+      takeJournalSqlReadyBatch(queue, () => true).map(({ request, normal }) => ({
+        command: request,
+        normal
+      })),
+      (request) => {
+        db.prepare('INSERT INTO writes VALUES (?, ?)').run(request.id, 'written')
+        return { id: request.id, durability: db.pragma('synchronous', { simple: true }) }
+      }
+    )
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 1, durability: 1 } }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 2, durability: 2 } }])
+  expect(db.prepare('SELECT id FROM writes ORDER BY id').all()).toEqual([{ id: 1 }, { id: 2 }])
+  expect((await commit()).outcomes).toEqual([{ committed: true, value: { id: 3, durability: 1 } }])
 })
 
 it.each([false, true])(

@@ -272,9 +272,29 @@ it('chooses NORMAL only for proven text revisions and retains FULL for settlemen
     engine.apply(entry, 100)
   )
   const revision = command(item('next'))
+  const textStep: JournalWriterStep = {
+    kind: 'resolved-item',
+    reservedBytes: 4096,
+    resolution: {
+      kind: 'text-snapshot',
+      identity,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'streamed' }] }
+    },
+    options: { fence: 1, turnScope: { kind: 'thread' } }
+  }
+  const steps = command({ kind: 'steps', steps: [textStep] })
   db.pragma('query_only = ON')
   try {
     expect(engine.streamed(revision)).toBe(true)
+    expect(engine.streamed(steps)).toBe(true)
+    expect(
+      engine.streamed(
+        command({
+          kind: 'steps',
+          steps: [{ ...textStep, options: { ...textStep.options, executionOwner: 2 } }]
+        })
+      )
+    ).toBe(false)
   } finally {
     db.pragma('query_only = OFF')
   }
@@ -286,7 +306,7 @@ it('chooses NORMAL only for proven text revisions and retains FULL for settlemen
   ).toBe(false)
   expect(engine.streamed(command({ kind: 'queue-resume', fence: 1 }))).toBe(false)
   let synchronous = -1
-  await batch.run([{ command: revision, normal: engine.streamed(revision) }], (entry) => {
+  await batch.run([{ command: steps, normal: engine.streamed(steps) }], (entry) => {
     synchronous = Number(db.pragma('synchronous', { simple: true }))
     return engine.apply(entry, 100)
   })
