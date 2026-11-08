@@ -30,7 +30,8 @@ export function ThemePicker({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [handledImportSignal, setHandledImportSignal] = useState(0)
+  // Settings search unmounts this row; seed from the prop so a remount doesn't replay an old import.
+  const [handledImportSignal, setHandledImportSignal] = useState(importedHighlightSignal ?? 0)
   const importedLabel = t(
     'auto.components.settings.SettingsFormControls.imported_themes',
     'Imported'
