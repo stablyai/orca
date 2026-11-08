@@ -8,7 +8,8 @@
 11 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
 6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
 9 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
-1 src/main/agent-hooks/server/server-hydration.ts
+2 src/main/agent-hooks/server/last-status-legacy-file.ts
+1 src/main/agent-hooks/server/last-status-saved-rows.ts
 1 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
@@ -501,7 +502,7 @@
 2 src/main/speech/stt-worker-paths.ts
 2 src/main/sqlite/harden-database-files.ts
 1 src/main/sqlite/sync-database.ts
-1 src/main/sqlite/versioned-cache-database.ts
+2 src/main/sqlite/versioned-cache-database.ts
 1 src/main/ssh/authentication/ssh-auth-resolution.ts
 2 src/main/ssh/config/ssh-config-alias-claim.ts
 5 src/main/ssh/config/ssh-config-include-expander.ts

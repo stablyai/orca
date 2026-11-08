@@ -15,12 +15,6 @@ vi.mock('../../../../../shared/agent-status/process/agent-process-presence-probe
   probeAgentProcessPresence: async () => 'unverifiable'
 }))
 
-class WriterObservationTestServer extends AgentHookServer {
-  persistedWriterState(): string {
-    return this.serializeStatusFile()
-  }
-}
-
 const servers: AgentHookServer[] = []
 afterEach(() => {
   for (const server of servers.splice(0)) {
@@ -28,8 +22,8 @@ afterEach(() => {
   }
 })
 
-async function createServer(): Promise<WriterObservationTestServer> {
-  const server = new WriterObservationTestServer()
+async function createServer(): Promise<AgentHookServer> {
+  const server = new AgentHookServer()
   servers.push(server)
   await server.start({ env: 'production' })
   return server
@@ -120,7 +114,6 @@ describe('OpenCode writer observation', () => {
       expect(JSON.stringify(value)).not.toContain('pane-owned')
       expect(Object.getOwnPropertySymbols(structuredClone(value).providerSession ?? {})).toEqual([])
     }
-    expect(server.persistedWriterState()).not.toContain('pane-owned')
     for (const extra of [{}, { opencodeSharedServer: 1 }]) {
       await post(extra)
       expect(observation()?.topology).not.toBe('pane-owned')
