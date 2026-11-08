@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { SessionLinkPolicy, type SessionLink } from '../../../../shared/session-link'
+import {
+  SESSION_LINK_TURN_LIMIT,
+  SessionLinkPolicy,
+  type SessionLink
+} from '../../../../shared/session-link'
 import { translate as t } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { SessionLinkPolicyField } from './SessionLinkPolicyField'
@@ -13,16 +17,19 @@ export function SessionLinkPolicySettings({
   disabled: boolean
   onSave: (policy: SessionLinkPolicy, resume: boolean) => void
 }): React.JSX.Element {
-  const [policy, setPolicy] = useState<SessionLinkPolicy>(link.policy ?? { turnLimit: 6 })
+  const [policy, setPolicy] = useState<SessionLinkPolicy>(
+    link.policy ?? { turnLimit: SESSION_LINK_TURN_LIMIT }
+  )
   const resume = link.state === 'paused' && ['turn-limit', 'message-limit'].includes(link.reason)
   return (
-    <details className="space-y-3 rounded-md border p-3">
+    <details open={resume} className="space-y-3 rounded-md border p-3">
       <summary className="cursor-pointer text-sm">
         {t('components.sessionLink.policySettings', 'Collaboration limits')}
       </summary>
       <SessionLinkPolicyField value={policy} onChange={setPolicy} disabled={disabled} />
       <Button
-        variant="outline"
+        variant={resume ? 'default' : 'outline'}
+        autoFocus={resume}
         size="sm"
         disabled={disabled || !SessionLinkPolicy.safeParse(policy).success}
         onClick={() => onSave(policy, resume)}

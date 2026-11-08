@@ -1,7 +1,11 @@
 import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { Check } from 'lucide-react'
 import { useState } from 'react'
-import { SessionLinkPolicy, type SessionLinkParticipant } from '../../../../shared/session-link'
+import {
+  SESSION_LINK_DEFAULT_TURN_LIMIT,
+  SessionLinkPolicy,
+  type SessionLinkParticipant
+} from '../../../../shared/session-link'
 import { translate as t } from '@/i18n/i18n'
 import { SessionLinkPolicyField } from './SessionLinkPolicyField'
 import { SessionLinkParticipantCard } from './SessionLinkParticipantCard'
@@ -39,7 +43,9 @@ export function SessionLinkCreate({
   const [partner, setPartner] = useState(initialPartnerSessionId ?? '')
   const [choosingPartner, setChoosingPartner] = useState(!initialPartnerSessionId)
   const [story, setStory] = useState('')
-  const [policy, setPolicy] = useState<SessionLinkPolicy>({ turnLimit: null })
+  const [policy, setPolicy] = useState<SessionLinkPolicy>({
+    turnLimit: SESSION_LINK_DEFAULT_TURN_LIMIT
+  })
   const [role, setRole] = useState<'reviewer' | 'implementer'>(
     source.agent === 'claude' ? 'reviewer' : 'implementer'
   )

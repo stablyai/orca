@@ -42,9 +42,9 @@ describe('SessionLinkCreate from two tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Swap roles' }))
     expect(within(sourceCard).getByText('Leads and reviews')).toBeTruthy()
     expect(within(partnerCard).getByText('Implements')).toBeTruthy()
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Slice 1b' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Checkout slice 2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create link and introduce agents' }))
-    expect(create).toHaveBeenCalledExactlyOnceWith('codex-partner', 'Slice 1b', 'reviewer')
+    expect(create).toHaveBeenCalledExactlyOnceWith('codex-partner', 'Checkout slice 2', 'reviewer')
   })
   it('refuses a disappeared partner without falling back to a different chat', () => {
     const create = vi.fn()
@@ -58,7 +58,7 @@ describe('SessionLinkCreate from two tabs', () => {
       />
     )
     expect(screen.getByRole('alert').textContent).toContain('no longer available')
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Slice 1b' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Checkout slice 2' } })
     expect(
       screen
         .getByRole('button', { name: 'Create link and introduce agents' })

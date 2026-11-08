@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link2 } from 'lucide-react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate as t } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -16,10 +15,8 @@ import { SessionLinkJournal } from './SessionLinkJournal'
 import { sessionLinkStatus } from './session-link-presentation'
 import { SessionLinkOwnerDecision } from './SessionLinkOwnerDecision'
 import { SessionLinkPolicySettings } from './SessionLinkPolicySettings'
-import {
-  sessionLinkWaitingFor,
-  sessionLinkOwnerRequest
-} from '../../../../shared/session-link-wait'
+import { SessionLinkTrigger } from './SessionLinkTrigger'
+import { sessionLinkOwnerRequest } from '../../../../shared/session-link-wait'
 import { useSessionLink } from './use-session-link'
 
 export function SessionLinkControl({
@@ -48,24 +45,11 @@ export function SessionLinkControl({
   const snapshot = state.snapshot
   const link = snapshot?.link
   const ownerRequest = snapshot && sessionLinkOwnerRequest(snapshot.events)
-  const partner = link?.participants.find((p) => p.sessionId !== sessionId)
-  const waiting =
-    link?.state === 'active' &&
-    snapshot &&
-    link.participants.some((p) => sessionLinkWaitingFor(snapshot.events, p.sessionId))
   const unresolvedDelivery =
     snapshot?.events.some((event) => event.state === 'blocked' && event.retryable === false) ??
     false
-  const status =
-    link?.state === 'paused'
-      ? ownerRequest
-        ? t('components.sessionLink.ownerQuestion', 'Question for you')
-        : t('components.sessionLink.paused', 'Paused')
-      : link?.state === 'ended'
-        ? t('components.sessionLink.endedShort', 'Ended')
-        : waiting
-          ? t('components.sessionLink.waitingShort', 'Waiting')
-          : null
+  const limitPause =
+    link?.state === 'paused' && ['turn-limit', 'message-limit'].includes(link.reason)
   const control = (action: 'pause' | 'resume' | 'stop' | 'end') => {
     if (link) {
       void state.mutate('orchestration.linkControl', { id: link.id, action, version: link.version })
@@ -74,20 +58,11 @@ export function SessionLinkControl({
   return (
     <>
       {!dialogOnly ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="min-w-0 max-w-64"
-          onClick={() => setOpen(true)}
-        >
-          <Link2 className="size-3" />
-          <span className="truncate">
-            {link
-              ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}`
-              : t('components.sessionLink.workTogether', 'Work together…')}
-          </span>
-          {status ? <span className="shrink-0">· {status}</span> : null}
-        </Button>
+        <SessionLinkTrigger
+          snapshot={snapshot}
+          sessionId={sessionId}
+          onOpen={() => setOpen(true)}
+        />
       ) : null}
       <Dialog
         open={open}
@@ -173,29 +148,31 @@ export function SessionLinkControl({
                 />
               ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={
-                    state.busy ||
-                    state.uncertain ||
-                    link?.state === 'ended' ||
-                    (link?.state === 'paused' && (unresolvedDelivery || Boolean(ownerRequest)))
-                  }
-                  title={
-                    link?.state === 'paused' && unresolvedDelivery
-                      ? t(
-                          'components.sessionLink.reviewBeforeContinue',
-                          'Review the unconfirmed delivery before continuing'
-                        )
-                      : undefined
-                  }
-                  onClick={() => control(link?.state === 'paused' ? 'resume' : 'pause')}
-                >
-                  {link?.state === 'paused'
-                    ? t('components.sessionLink.continue', 'Continue link')
-                    : t('components.sessionLink.pause', 'Pause')}
-                </Button>
+                {!state.policySupported || !limitPause ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      state.busy ||
+                      state.uncertain ||
+                      link?.state === 'ended' ||
+                      (link?.state === 'paused' && (unresolvedDelivery || Boolean(ownerRequest)))
+                    }
+                    title={
+                      link?.state === 'paused' && unresolvedDelivery
+                        ? t(
+                            'components.sessionLink.reviewBeforeContinue',
+                            'Review the unconfirmed delivery before continuing'
+                          )
+                        : undefined
+                    }
+                    onClick={() => control(link?.state === 'paused' ? 'resume' : 'pause')}
+                  >
+                    {link?.state === 'paused'
+                      ? t('components.sessionLink.continue', 'Continue link')
+                      : t('components.sessionLink.pause', 'Pause')}
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
                   size="sm"
@@ -217,7 +194,9 @@ export function SessionLinkControl({
                 <SessionLinkPolicySettings
                   key={`${snapshot.link.id}:${snapshot.link.version}`}
                   link={snapshot.link}
-                  disabled={state.busy || state.uncertain}
+                  disabled={
+                    state.busy || state.uncertain || Boolean(limitPause && unresolvedDelivery)
+                  }
                   onSave={(policy, resume) =>
                     void state.mutate('orchestration.linkSetPolicy', {
                       id: snapshot.link.id,

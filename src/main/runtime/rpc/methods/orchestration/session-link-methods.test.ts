@@ -30,7 +30,7 @@ describe('session link caller authority', () => {
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     store = new SessionLinkStore(db)
-    store.create('link-1', 'Slice 1b', [participants[0], participants[1]])
+    store.create('link-1', 'Checkout slice 2', [participants[0], participants[1]])
   })
   afterEach(() => db.close())
   const method = (name: string) => {
@@ -66,7 +66,8 @@ describe('session link caller authority', () => {
           sessionId: 'codex_implement',
           partnerSessionId: 'claude_review',
           role: 'implementer',
-          story: 'Approve spending'
+          story: 'Approve spending',
+          policy: { turnLimit: null }
         },
         agent()
       )

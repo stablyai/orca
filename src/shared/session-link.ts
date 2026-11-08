@@ -7,6 +7,7 @@ export {
   SESSION_LINK_POLICY_CAPABILITY
 } from './orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
+export const SESSION_LINK_DEFAULT_TURN_LIMIT = 20
 export const SessionLinkPolicy = z
   .object({ turnLimit: z.number().int().min(1).max(10000).nullable() })
   .strict()

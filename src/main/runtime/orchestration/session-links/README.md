@@ -11,8 +11,8 @@ The durable link and chronological journal live in the host orchestration SQLite
 - Questions/checkpoints have message IDs. The sender waits for an accepted reply naming that exact ID. Clarifying questions may still arrive; unrelated status does not release the checkpoint.
 - Pause retains mail and allows an already running turn to finish. Stop pauses immediately and requests cancellation only for a turn whose accepted submission is proved to belong to this link. An unrelated human turn keeps running. Cancellation identity is saved before the effect. Stop receipts are durable: retries cannot retarget work admitted after an owner continuation. An initially unprovable stop stays unconfirmed until a new explicit Stop action. An unconfirmed stop is shown in the journal; use the chat's normal Stop control if a provider has not yet published a provable turn.
 - Either participant may request urgent Stop or end the link. Controls echo the originating delivery operation from the message. Only that operation's proved current turn is allowed to finish its control reply; an older background command cannot exempt a later turn. Missing/foreign origins are refused before effects. Ending cancels queued mail, releases both conversation memberships and retains the journal. Reconnecting requires another human-created link.
-- A human continuation grants six automatic delivery attempts, including introductions, and twelve agent messages. Three repeated messages pause the link. These are work limits, not a dollar-spend guarantee.
-- An agent cannot create/resume a link or send an owner note. Owner decisions pause the link until a later genuine desktop owner note and explicit continuation. Peer messages never confer spending, privacy or irreversible-action approval.
+- New links default to 20 automatic agent wake-ups per owner continuation, including introductions. The owner can change this limit or explicitly select continuation until reviewer acceptance. Exhaustion pauses the link with its reason; the owner can adjust the limit and resume in one action. Three repeated messages still pause the link. Legacy links without a stored policy retain their six-turn/twelve-message limits. These are work limits, not a dollar-spend guarantee.
+- An agent cannot create/resume a link or send an owner note. Owner decisions pause the link until a genuine desktop owner answer resumes it atomically. Peer messages never confer spending, privacy or irreversible-action approval.
 
 ## Recovery
 
@@ -30,6 +30,6 @@ The acceptance scenario pairs an implementer with a reviewer: the implementer se
 
 ## Deferred
 
-Dedicated mobile link controls, remote links, multiple peers, file-write collision detection, editable live roles and configurable budgets are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
+Dedicated mobile link controls, remote links, multiple peers, file-write collision detection, editable live roles are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
 
 An unconfirmed delivery can be marked reviewed only by the desktop owner after checking the recipient chat. This cancels that outbox event without changing its original operation, reserves no send, and leaves the link paused. Resume admits later messages only. A late receipt for the reviewed event cannot resend it.

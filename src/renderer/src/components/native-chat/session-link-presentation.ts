@@ -1,4 +1,9 @@
-import type { SessionLinkEvent, SessionLinkSnapshot } from '../../../../shared/session-link'
+import {
+  SESSION_LINK_TURN_LIMIT,
+  type SessionLink,
+  type SessionLinkEvent,
+  type SessionLinkSnapshot
+} from '../../../../shared/session-link'
 import { sessionLinkWaitingFor } from '../../../../shared/session-link-wait'
 import { translate as t } from '@/i18n/i18n'
 
@@ -59,6 +64,14 @@ export function sessionLinkReason(reason: string): string {
   return labels[reason] ?? reason
 }
 
+export function sessionLinkPauseReason(link: SessionLink): string {
+  return link.reason === 'turn-limit'
+    ? t('components.sessionLink.turnLimitReached', 'Turn limit reached ({{count}})', {
+        count: link.policy?.turnLimit ?? SESSION_LINK_TURN_LIMIT
+      })
+    : sessionLinkReason(link.reason)
+}
+
 export function sessionLinkEventKind(kind: SessionLinkEvent['kind']): string {
   return {
     control: t('components.sessionLink.control', 'Link control'),
@@ -88,7 +101,7 @@ export function sessionLinkStatus(snapshot: SessionLinkSnapshot): string {
     return t('components.sessionLink.ended', 'Link ended. The journal is retained.')
   }
   if (snapshot.link.state === 'paused') {
-    return `${t('components.sessionLink.paused', 'Paused')} · ${sessionLinkReason(snapshot.link.reason)}`
+    return `${t('components.sessionLink.paused', 'Paused')} · ${sessionLinkPauseReason(snapshot.link)}`
   }
   const waiting = snapshot.link.participants
     .filter((p) => sessionLinkWaitingFor(snapshot.events, p.sessionId))

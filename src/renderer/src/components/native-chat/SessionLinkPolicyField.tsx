@@ -1,5 +1,8 @@
 import { useId } from 'react'
-import type { SessionLinkPolicy } from '../../../../shared/session-link'
+import {
+  SESSION_LINK_DEFAULT_TURN_LIMIT,
+  type SessionLinkPolicy
+} from '../../../../shared/session-link'
 import { translate as t } from '@/i18n/i18n'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { Input } from '@/components/ui/input'
@@ -31,7 +34,9 @@ export function SessionLinkPolicyField({
         <Select
           disabled={disabled}
           value={value.turnLimit === null ? 'continuous' : 'limited'}
-          onValueChange={(mode) => onChange({ turnLimit: mode === 'continuous' ? null : 100 })}
+          onValueChange={(mode) =>
+            onChange({ turnLimit: mode === 'continuous' ? null : SESSION_LINK_DEFAULT_TURN_LIMIT })
+          }
         >
           <SelectTrigger id={id} className="w-full">
             <SelectValue />

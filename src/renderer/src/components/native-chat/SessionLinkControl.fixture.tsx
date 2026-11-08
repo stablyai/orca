@@ -2,69 +2,15 @@ import { useAppStore } from '@/store'
 import { loadRendererUiLanguage, i18n } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
-  SessionLink,
-  SessionLinkEvent,
-  SessionLinkParticipant,
   SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_CAPABILITY
 } from '../../../../shared/session-link'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { SessionLinkOwnerQuestion } from './SessionLinkOwnerQuestion'
 import { SessionLinkControl } from './SessionLinkControl'
+import { source, partner, link, report } from './session-link-ui.test-fixture'
 
-const source = SessionLinkParticipant.parse({
-  sessionId: 'codex-checkout',
-  conversationId: 'codex-checkout',
-  name: 'Checkout implementation',
-  agent: 'codex',
-  role: 'implementer',
-  workspaceId: 'app',
-  directory: '/projects/acme/app',
-  branch: 'feature/checkout',
-  task: 'Implement checkout slice 2; stop before paid verification.',
-  context: ''
-})
-const partner = SessionLinkParticipant.parse({
-  sessionId: 'claude-review',
-  conversationId: 'claude-review',
-  name: 'Checkout architecture and review',
-  agent: 'claude',
-  role: 'reviewer',
-  workspaceId: 'review',
-  directory: '/projects/acme/review',
-  branch: 'main',
-  task: 'Review the checkout flow and tasks 1–5.',
-  context: ''
-})
-const link = SessionLink.parse({
-  id: 'demo-link',
-  story: 'Checkout flow · slice 2',
-  policy: { turnLimit: null },
-  participants: [source, partner],
-  state: 'active',
-  reason: '',
-  version: 1,
-  turns: 3,
-  messages: 1,
-  createdAt: 1_800_000_000_000,
-  updatedAt: 1_800_000_001_000
-})
-const report = SessionLinkEvent.parse({
-  id: 'checkpoint',
-  linkId: link.id,
-  actor: source.sessionId,
-  recipient: partner.sessionId,
-  kind: 'checkpoint',
-  messageId: 'mail-report',
-  replyTo: null,
-  state: 'accepted',
-  operationId: 'report-operation',
-  createdAt: 1_800_000_001_000,
-  detail: '',
-  body: 'Tasks 1–5 are ready. Local checks pass. Please review before paid verification; no spending has been authorized.'
-})
-
-function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
+function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown' | 'limit') {
   setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY, SESSION_LINK_POLICY_CAPABILITY])
   const snapshot =
     state === 'create'
@@ -72,15 +18,23 @@ function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
       : {
           link: {
             ...link,
-            state: state === 'waiting' ? 'active' : state === 'unknown' ? 'paused' : state,
+            state:
+              state === 'waiting'
+                ? 'active'
+                : state === 'unknown' || state === 'limit'
+                  ? 'paused'
+                  : state,
+            ...(state === 'limit' ? { policy: { turnLimit: 20 }, turns: 20 } : {}),
             reason:
-              state === 'unknown'
-                ? 'delivery-unknown'
-                : state === 'paused'
-                  ? 'owner-decision'
-                  : state === 'ended'
-                    ? 'end'
-                    : ''
+              state === 'limit'
+                ? 'turn-limit'
+                : state === 'unknown'
+                  ? 'delivery-unknown'
+                  : state === 'paused'
+                    ? 'owner-decision'
+                    : state === 'ended'
+                      ? 'end'
+                      : ''
           },
           events: [
             ...(state === 'paused'
@@ -122,7 +76,7 @@ async function openDialog(frame: HTMLElement) {
 const render = () => (
   <div className="p-4">
     <div className="relative h-6">
-      <div className="pane-title-bar" data-chromeless="">
+      <div className="pane-title-bar" data-chromeless="" data-active-pane="">
         <div className="pane-title-actions ml-auto flex items-center">
           <SessionLinkControl sessionId={source.sessionId} target={{ kind: 'local' }} />
         </div>
@@ -312,4 +266,11 @@ export const ownerQuestion800 = defineFixture({
   width: 800,
   setup: setupLongOwnerQuestion,
   render: renderOwnerQuestion
+})
+
+export const turnLimitReached = defineFixture({
+  width: 720,
+  setup: () => setup('limit'),
+  render,
+  interact: openDialog
 })
