@@ -1,3 +1,4 @@
+import type { ClaudeTaskInvocations } from './claude-task-invocations'
 import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
@@ -29,6 +30,7 @@ export type ClaudeJournalTranslatorDeps = {
 }
 
 export type ClaudeJournalTranslator = {
+  readonly taskInvocations: ClaudeTaskInvocations
   handle: (event: ClaudeStructuredSessionEvent) => void
   journalPrompts: Pick<
     ClaudeJournalPrompts,
@@ -45,7 +47,7 @@ export type ClaudeJournalTranslator = {
   readonly openTurnInLiveProviderCycle: boolean
   readonly openTurnHasInputWork: boolean
   flush: () => void
-  childTaskParent?: (taskId: string) => string | undefined
+  childTaskParent?: (taskId: string, run?: string) => string | undefined
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission

@@ -1,3 +1,10 @@
+import {
+  indexClaudeBackgroundTask,
+  selectClaudeBackgroundTask,
+  type ClaudeBackgroundTaskIndex,
+  type ClaudeBackgroundTaskDescriptor
+} from './claude-background-task-identity'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
@@ -6,8 +13,8 @@ import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 type Reading = {
   canonicalByToolUse: Map<string, string>
   attemptByAgent: Map<string, number>
-  parents: Map<string, string>
-  backgrounds: Map<string, AgentJournalProducerLinkage>
+  parents: Map<string, Map<string | undefined, AgentJournalProducerLinkage>>
+  backgrounds: Map<string, ClaudeBackgroundTaskIndex>
   subagents: Set<string>
 }
 
@@ -25,10 +32,14 @@ export class ClaudeJournaledSubagents {
   /** Zero means no journaled attempt. */
   attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 0
 
-  parent = (taskId: string): string | undefined => this.current()?.parents.get(taskId)
+  parent = (taskId: string, run?: string): string | undefined =>
+    (run === undefined
+      ? [...(this.current()?.parents.get(taskId)?.values() ?? [])].at(-1)
+      : this.current()?.parents.get(taskId)?.get(run)
+    )?.parentAgentId
 
-  background = (taskId: string): AgentJournalProducerLinkage | undefined =>
-    this.current()?.backgrounds.get(taskId)
+  background = (taskId: string, run?: string): ClaudeBackgroundTaskDescriptor | undefined =>
+    selectClaudeBackgroundTask(this.current()?.backgrounds.get(taskId), run)
 
   isSubagent = (taskId: string): boolean => this.current()?.subagents.has(taskId) === true
 
@@ -54,13 +65,18 @@ function read(journal: StructuredAgentSessionLinkageJournal): Reading {
     backgrounds: new Map(),
     subagents: new Set()
   }
-  journal.visitItemsWithLinkage((_itemId, _sequence, body, linkage) => {
-    if (linkage.agentId !== undefined) {
-      if (linkage.parentAgentId !== undefined) {
-        reading.parents.set(linkage.agentId, linkage.parentAgentId)
-      }
-      if (linkage.producerKind === 'background') {
-        reading.backgrounds.set(linkage.agentId, linkage)
+  journal.visitItemsWithLinkage((itemId, _sequence, body, linkage) => {
+    if (linkage.agentId !== undefined && linkage.producerKind === 'agent') {
+      const parents = reading.parents.get(linkage.agentId) ?? new Map()
+      parents.delete(linkage.providerParentRef)
+      parents.set(linkage.providerParentRef, linkage)
+      reading.parents.set(linkage.agentId, parents)
+    }
+    if (body.kind === 'message') {
+      for (const block of body.blocks.filter(isBackgroundTaskBlock)) {
+        const index = reading.backgrounds.get(block.taskId) ?? { aliases: new Map() }
+        indexClaudeBackgroundTask(index, itemId, block.taskId, block.parentToolUseId, linkage)
+        reading.backgrounds.set(block.taskId, index)
       }
     }
     readAgentRow(reading, linkage)

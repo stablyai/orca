@@ -1,3 +1,4 @@
+import { ClaudeTaskInvocations } from '../../claude-task-invocations'
 import type {
   ClaudeJournalTranslator,
   ClaudeJournalTranslatorDeps
@@ -70,7 +71,9 @@ export function createClaudeJournalTranslator(
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
   const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalLinkage?.() ?? null)
+  const taskInvocations = new ClaudeTaskInvocations(journaled)
   const subagents = new ClaudeSubagentIdentities({
+    taskInvocations,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
     journaled
@@ -94,8 +97,7 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     rosteredByEarlierRun: journaled.isSubagent,
-    parentOf: subagents.parentOf,
-    journaledBackground: journaled.background,
+    taskInvocations,
     // Task output must open a resumed turn so the session does not appear idle while producing rows.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
@@ -271,6 +273,7 @@ export function createClaudeJournalTranslator(
       return turn.isOpen && turn.inputChoiceWorkObserved
     },
     flush,
+    taskInvocations,
     childTaskParent: subagents.parentOf,
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,

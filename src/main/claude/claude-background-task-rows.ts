@@ -1,9 +1,13 @@
-import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { ClaudeTaskInvocations } from './claude-task-invocations'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { BoundedMap } from '../../shared/bounded-map'
-import { record, taskAliasId } from './claude-background-task-frames'
+import {
+  record,
+  taskAliasId,
+  CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES
+} from './claude-background-task-frames'
 import {
   attributeClaudeBackgroundTaskRow,
   claudeBackgroundTaskPatchChange,
@@ -21,33 +25,23 @@ import {
   ensureClaudeBackgroundTaskRowSlot,
   type ClaudeBackgroundTaskLedgerSizes
 } from './claude-background-task-memory'
-import { ClaudeBackgroundTaskRowWriter } from './claude-background-task-row-writer'
+import {
+  ClaudeBackgroundTaskRowWriter,
+  claudeBackgroundTaskTurnOpener
+} from './claude-background-task-row-writer'
 import { observeClaudeBackgroundTaskStart } from './claude-background-task-start'
-import { observeClaudeBackgroundTaskRoster } from './claude-background-task-roster'
+import { observeOwnedClaudeBackgroundTaskRoster } from './claude-background-task-roster'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import { ClaudeOverflowTerminalRows } from './claude-overflow-terminal-rows'
 
 const MAX_TASK_ROWS = 64
-
-const TASK_SUBTYPES: ReadonlySet<string> = new Set([
-  'task_started',
-  'task_updated',
-  'task_progress',
-  'task_notification'
-])
-
-const SILENT_ROW_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
-  'task_progress',
-  'background_tasks_changed'
-])
 
 export type ClaudeBackgroundTaskRowsDeps = {
   sink: StructuredAgentSessionEventSink
   /** Require a forwarded top-level invocation on first admission to exclude nested children. */
   isForwardedParentTool: (toolUseId: string) => boolean
   /** Recover earlier-run subagent ownership when Claude does not repeat its announcement. */
-  parentOf?: (taskId: string) => string | undefined
-  journaledBackground?: (taskId: string) => AgentJournalProducerLinkage | undefined
+  taskInvocations?: ClaudeTaskInvocations
   rosteredByEarlierRun?: (taskId: string) => boolean
   /** Reopen provider-resumed turns before journaling output so the session reports working. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
@@ -64,8 +58,10 @@ export class ClaudeBackgroundTaskRows {
   private readonly ledgers = new ClaudeBackgroundTaskLedgers()
   private readonly ids = new ClaudeSubagentIds()
   private readonly now: () => number
+  private readonly taskInvocations: ClaudeTaskInvocations
 
   constructor(private readonly deps: ClaudeBackgroundTaskRowsDeps) {
+    this.taskInvocations = deps.taskInvocations ?? new ClaudeTaskInvocations()
     this.now = deps.now ?? (() => Date.now())
     this.writer = new ClaudeBackgroundTaskRowWriter(
       deps.sink,
@@ -91,6 +87,7 @@ export class ClaudeBackgroundTaskRows {
   private journaling: { frame: Record<string, unknown>; observedAt: number } | null = null
 
   observe(message: Record<string, unknown>, observedAt: number = this.now()): boolean {
+    this.taskInvocations.observe(message)
     this.journaling = { frame: message, observedAt }
     // Claude wakes the lead for any task the lead launched, rowless subagents included; open that turn at the notification, once per frame.
     const toolUseId =
@@ -118,7 +115,7 @@ export class ClaudeBackgroundTaskRows {
   observeMonitorToolResult(taskId: unknown): void {
     const id = taskAliasId(taskId)
     if (id !== undefined) {
-      this.ledgers.rememberForeign(id, 'ambient')
+      this.taskInvocations.excludeMonitor(id)
     }
   }
 
@@ -130,28 +127,44 @@ export class ClaudeBackgroundTaskRows {
       if (!Array.isArray(message.tasks)) {
         return false
       }
-      observeClaudeBackgroundTaskRoster(
-        message.tasks,
-        this.rows,
-        (id, change) => this.revise(id, change),
-        (id, task) => {
-          const row = this.rows.get(id)
-          if (row) {
-            this.attribute(id, row, task)
-            this.write(id)
-          } else if (!this.ledgers.terminalTaskIds.has(id)) {
-            this.observeStart(id, { ...task, is_backgrounded: true })
+      observeOwnedClaudeBackgroundTaskRoster({
+        tasks: message.tasks,
+        rows: this.rows,
+        invocations: this.taskInvocations,
+        revise: (id, change) => this.revise(id, change),
+        attribute: attributeClaudeBackgroundTaskRow,
+        admit: (id, task) => {
+          if (!this.ledgers.terminalTaskIds.has(id)) {
+            this.observeStart(id, task, true)
           }
         }
-      )
+      })
       return true
     }
-    if (typeof message.subtype !== 'string' || !TASK_SUBTYPES.has(message.subtype)) {
+    if (
+      typeof message.subtype !== 'string' ||
+      !CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES.has(message.subtype)
+    ) {
       return false
     }
     const id = canonicalClaudeBackgroundTaskId(message, this.ids)
     if (id === null) {
       return false
+    }
+    const selected = this.taskInvocations.selection(message, id)
+    if (selected?.invocation.excluded || selected?.invocation.monitor) {
+      return true
+    }
+    if (message.subtype === 'task_notification' && selected?.current === false) {
+      const row = newClaudeBackgroundTaskRowFromNotification(
+        id,
+        message,
+        this.now(),
+        this.ledgers.generations.next(id)
+      )
+      row.invocation = selected.invocation
+      this.writeRow(id, row)
+      return true
     }
     if (message.subtype === 'task_started') {
       return this.observeStart(id, message)
@@ -169,17 +182,24 @@ export class ClaudeBackgroundTaskRows {
     return this.observePatch(id, message)
   }
 
-  private observeStart(id: string, message: Record<string, unknown>): boolean {
+  private observeStart(id: string, message: Record<string, unknown>, roster = false): boolean {
+    const selected = this.taskInvocations.selection(message, id)
+    if (!selected?.acceptsStart || selected.invocation.excluded || selected.invocation.monitor) {
+      return true
+    }
     return observeClaudeBackgroundTaskStart({
       id,
-      message,
+      message: {
+        ...message,
+        ...(roster ? { is_backgrounded: true } : {}),
+        tool_use_id: selected.invocation.toolUseId
+      },
+      owned: selected.invocation.parentTaskId !== undefined,
       rows: this.rows,
       ledgers: this.ledgers,
-      parentOf: this.deps.parentOf,
       isForwardedParentTool: this.deps.isForwardedParentTool,
       openRow: (taskId, frame) => this.openRow(taskId, frame),
-      attribute: (id, row, frame) => this.attribute(id, row, frame),
-      write: (id) => this.write(id),
+      refresh: (id) => this.write(id),
       maxRows: MAX_TASK_ROWS
     })
   }
@@ -202,15 +222,13 @@ export class ClaudeBackgroundTaskRows {
     this.ids.clear()
   }
 
-  retryPendingWrites() {
-    return this.writer.retryPendingWrites()
-  }
+  retryPendingWrites = () => this.writer.retryPendingWrites()
 
   private openRow(id: string, message: Record<string, unknown>): void {
     const generation = this.ledgers.generations.next(id)
     const row = newClaudeBackgroundTaskRow(id, message, this.now(), generation)
+    row.invocation = this.taskInvocations.get(id, claudeBackgroundTaskToolUseId(message))
     this.rows.set(id, row)
-    this.attribute(id, row, message)
     this.write(id)
   }
 
@@ -242,10 +260,9 @@ export class ClaudeBackgroundTaskRows {
       return true
     }
     const generation = this.ledgers.generations.next(id)
-    this.rows.set(
-      id,
-      newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
-    )
+    const row = newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
+    row.invocation = this.taskInvocations.get(id, claudeBackgroundTaskToolUseId(message))
+    this.rows.set(id, row)
     this.write(id)
     return true
   }
@@ -298,37 +315,17 @@ export class ClaudeBackgroundTaskRows {
     this.writeRow(id, row, openOutputTurn, lifecycle)
   }
 
-  private attribute(
-    id: string,
-    row: ClaudeBackgroundTaskRow,
-    message?: Record<string, unknown>
-  ): void {
-    attributeClaudeBackgroundTaskRow(id, row, this.deps, message)
-  }
-
   private writeRow(
     id: string,
     row: ClaudeBackgroundTaskRow,
     openOutputTurn = true,
     lifecycle = false
   ): void {
-    const journaling = this.journaling
-    this.attribute(id, row)
+    attributeClaudeBackgroundTaskRow(id, row)
     this.writer.write(
       id,
       row,
-      () => {
-        // Why: progress and roster ticks refresh the row only. Opening a turn
-        // here flips an idle chat back to working.
-        const subtype = journaling?.frame.subtype
-        if (
-          journaling &&
-          openOutputTurn &&
-          (typeof subtype !== 'string' || !SILENT_ROW_REFRESH_SUBTYPES.has(subtype))
-        ) {
-          this.deps.openOutputTurn?.(journaling.frame, journaling.observedAt)
-        }
-      },
+      claudeBackgroundTaskTurnOpener(this.journaling, openOutputTurn, this.deps.openOutputTurn),
       lifecycle
     )
   }

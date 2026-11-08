@@ -1,3 +1,4 @@
+import { CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES } from './claude-background-task-frames'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
@@ -92,5 +93,23 @@ export class ClaudeBackgroundTaskRowWriter {
   dispose(): void {
     this.pending.clear()
     this.identities.clear()
+  }
+}
+
+export function claudeBackgroundTaskTurnOpener(
+  journaling: { frame: Record<string, unknown>; observedAt: number } | null,
+  open: boolean,
+  openOutputTurn: ((frame: Record<string, unknown>, observedAt: number) => void) | undefined
+): () => void {
+  return () => {
+    // Progress and roster ticks refresh a row without flipping an idle chat to working.
+    const subtype = journaling?.frame.subtype
+    if (
+      journaling &&
+      open &&
+      (typeof subtype !== 'string' || !CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES.has(subtype))
+    ) {
+      openOutputTurn?.(journaling.frame, journaling.observedAt)
+    }
   }
 }

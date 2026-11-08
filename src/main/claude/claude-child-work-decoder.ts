@@ -1,5 +1,6 @@
 // Roster changes, turn endings and spawn results cannot settle a child.
 
+import { ClaudeTaskInvocations } from './claude-task-invocations'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   classifyClaudeBackgroundTaskKind,
@@ -37,11 +38,10 @@ export class ClaudeChildWorkDecoder {
   private pending: PendingEdge[] = []
   private readonly agentWaits = new ClaudeAgentWaitCalls()
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
-  observe(
-    message: Record<string, unknown>,
-    ownerOf?: ClaudeToolOwner,
-    parentOf?: (taskId: string) => string | undefined
-  ): void {
+  constructor(readonly taskInvocations = new ClaudeTaskInvocations()) {}
+
+  observe(message: Record<string, unknown>, ownerOf?: ClaudeToolOwner): void {
+    this.taskInvocations.observe(message)
     if (message.type === 'assistant') {
       this.agentWaits.observe(message)
       return
@@ -58,9 +58,9 @@ export class ClaudeChildWorkDecoder {
             task &&
             id &&
             !this.ended.has(id) &&
-            (taskAliasId(task.parent_task_id) || this.live.get(id)?.parentTaskId || parentOf?.(id))
+            this.taskInvocations.parentOf(id, taskAliasId(task.tool_use_id))
           ) {
-            this.started(id, { ...task, is_backgrounded: true }, parentOf)
+            this.started(id, task, true)
           }
         }
       }
@@ -72,7 +72,7 @@ export class ClaudeChildWorkDecoder {
     }
     switch (message.subtype) {
       case 'task_started':
-        this.started(id, message, parentOf)
+        this.started(id, message)
         return
       case 'task_progress':
         this.progressed(id, message)
@@ -81,6 +81,9 @@ export class ClaudeChildWorkDecoder {
         this.updated(id, record(message.patch), ownerOf)
         return
       case 'task_notification':
+        if (this.taskInvocations.selection(message, id)?.current === false) {
+          return
+        }
         this.end(
           id,
           message.status,
@@ -106,6 +109,7 @@ export class ClaudeChildWorkDecoder {
   }
 
   clear(): void {
+    this.taskInvocations.clear()
     this.live.clear()
     this.ended.clear()
     this.childrenByOwner.clear()
@@ -120,16 +124,14 @@ export class ClaudeChildWorkDecoder {
     return pending.map((edge) => edge(observedAt))
   }
 
-  private started(
-    id: string,
-    message: Record<string, unknown>,
-    parentOf?: (id: string) => string | undefined
-  ): void {
-    const toolUseId = taskAliasId(message.tool_use_id)
-    const awaitsAgents = this.agentWaits.take(toolUseId)
-    if (message.ambient === true || message.skip_transcript === true) {
+  private started(id: string, message: Record<string, unknown>, roster = false): void {
+    const selection = this.taskInvocations.selection(message, id)
+    if (!selection?.acceptsStart || selection.invocation.excluded) {
       return
     }
+    const invocation = selection.invocation
+    const toolUseId = invocation.toolUseId
+    const awaitsAgents = this.agentWaits.take(toolUseId)
     const existing = this.live.get(id)
     const ended = existing ? undefined : this.ended.get(id)
     const restart = ended !== undefined
@@ -143,6 +145,7 @@ export class ClaudeChildWorkDecoder {
       {
         kind: kind !== 'unknown' ? kind : (existing?.kind ?? 'unknown'),
         backgrounded:
+          roster ||
           message.is_backgrounded === true ||
           kind === 'workflow' ||
           kind === 'monitor' ||
@@ -151,12 +154,12 @@ export class ClaudeChildWorkDecoder {
         name: taskName(message) ?? existing?.name,
         description: taskDescription(message.description) ?? existing?.description,
         toolUseId: toolUseId ?? existing?.toolUseId,
-        parentTaskId:
-          taskAliasId(message.parent_task_id) ?? existing?.parentTaskId ?? parentOf?.(id),
+        parentTaskId: invocation.parentTaskId,
         ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
       },
       {},
-      restart
+      restart,
+      roster
     )
   }
 
@@ -234,8 +237,12 @@ export class ClaudeChildWorkDecoder {
     id: string,
     task: DecodedClaudeTask,
     facts: ClaudeTaskFacts,
-    restart = false
+    restart = false,
+    unchangedRoster = false
   ): void {
+    if (unchangedRoster && JSON.stringify(task) === JSON.stringify(this.live.get(id))) {
+      return
+    }
     const ownerBecameLive = !this.live.has(id) || restart
     this.ended.delete(id)
     this.removeOwnerIndex(id)

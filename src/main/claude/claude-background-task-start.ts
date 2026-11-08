@@ -1,5 +1,5 @@
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { classifyClaudeBackgroundTaskKind, taskAliasId } from './claude-background-task-frames'
+import { classifyClaudeBackgroundTaskKind } from './claude-background-task-frames'
 import {
   claudeBackgroundTaskToolUseId,
   isClaudeBackgroundTranscriptTask,
@@ -24,28 +24,10 @@ type ClaudeBackgroundTaskStartInput = {
 
 export function observeClaudeBackgroundTaskStart(
   input: ClaudeBackgroundTaskStartInput & {
-    parentOf?: (id: string) => string | undefined
-    attribute: (id: string, row: ClaudeBackgroundTaskRow, message: Record<string, unknown>) => void
-    write: (id: string) => void
+    owned: boolean
+    refresh: (id: string, row: ClaudeBackgroundTaskRow) => void
   }
 ): boolean {
-  const { id, message, rows } = input
-  const parent = taskAliasId(message.parent_task_id) ?? input.parentOf?.(id)
-  const owned = parent ? { ...message, parent_task_id: parent } : message
-  const accepted = admitClaudeBackgroundTaskStart({ ...input, message: owned })
-  const row = rows.get(id)
-  if (row && parent && message.ambient !== true && message.skip_transcript !== true) {
-    const toolUseId = claudeBackgroundTaskToolUseId(message)
-    input.attribute(id, row, owned)
-    if (toolUseId) {
-      row.block = { ...row.block, parentToolUseId: toolUseId }
-    }
-    input.write(id)
-  }
-  return accepted
-}
-
-function admitClaudeBackgroundTaskStart(input: ClaudeBackgroundTaskStartInput): boolean {
   const { id, message, rows, ledgers } = input
   if (ledgers.fallbackTaskIds.has(id)) {
     if (ledgers.terminalTaskIds.has(id)) {
@@ -64,10 +46,6 @@ function admitClaudeBackgroundTaskStart(input: ClaudeBackgroundTaskStartInput): 
       return false
     }
   }
-  if (message.ambient === true || message.skip_transcript === true) {
-    ledgers.rememberForeign(id, 'ambient')
-    return true
-  }
   if (isClaudeSubagentTask(message)) {
     ledgers.rememberForeign(id, 'roster')
     return true
@@ -82,6 +60,7 @@ function admitClaudeBackgroundTaskStart(input: ClaudeBackgroundTaskStartInput): 
     ledgers.foreign.delete(id)
     // A live task's duplicate announcement is redelivery, not a new run.
     if (!isSettledBackgroundTaskState(existing.block.state)) {
+      input.refresh(id, existing)
       return true
     }
     if (shouldRestartClaudeBackgroundTaskRow(existing, message)) {
@@ -106,11 +85,7 @@ function admitClaudeBackgroundTaskStart(input: ClaudeBackgroundTaskStartInput): 
   ledgers.foreign.delete(id)
   const toolUseId = claudeBackgroundTaskToolUseId(message)
   // Absence of a parent is not evidence of an unforwarded parent.
-  if (
-    toolUseId !== undefined &&
-    !taskAliasId(message.parent_task_id) &&
-    !input.isForwardedParentTool(toolUseId)
-  ) {
+  if (toolUseId !== undefined && !input.owned && !input.isForwardedParentTool(toolUseId)) {
     ledgers.rememberForeign(id, 'sidechain')
     return true
   }

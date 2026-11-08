@@ -104,10 +104,13 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-function acquire(journal: AgentSessionJournal) {
+function acquire(journal: AgentSessionJournal, delayed = false) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  const bind = () => deferred.bind({ journal, fence: 1, publish: () => {} })
+  if (!delayed) {
+    bind()
+  }
   const settle = async (): Promise<void> => {
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
   }
@@ -117,7 +120,7 @@ function acquire(journal: AgentSessionJournal) {
     translator.dispose()
     deferred.close()
   }
-  return { translator, settle, exit }
+  return { translator, settle, exit, bind }
 }
 
 const proseRow = (journal: AgentSessionJournal, text: string): AgentJournalRenderItem | undefined =>
@@ -130,60 +133,73 @@ const proseRow = (journal: AgentSessionJournal, text: string): AgentJournalRende
     )
 
 describe('a Claude subagent resumed after its provider restarted', () => {
-  it('retains shell ownership and the same journal row across close/reopen and a terminal-only revision', async () => {
-    let journal = await openJournal()
-    const first = acquire(journal)
-    first.translator.handle(userTurn('parent-task-turn'))
-    // Contract: a parentless admission can learn ownership from a later roster without a body change.
-    first.translator.handle(
-      frame({ ...PARENT_TASK_STOP[3]!.frame, parent_task_id: undefined, tool_use_id: undefined })
-    )
-    await first.settle()
-    const beforeOwnership = journal
-      .snapshot()
-      .items.find((item) => blockOf(item.body)?.taskId === 'shell-child')
-    expect(beforeOwnership?.agentId).toBeUndefined()
-    first.translator.handle(frame(PARENT_TASK_STOP[2]!.frame))
-    await first.settle()
-    expect(journal.item(beforeOwnership!.itemId)).toMatchObject({
-      agentId: 'shell-child',
-      parentAgentId: 'agent-parent'
-    })
-    first.translator.handle(frame(PARENT_TASK_STOP[3]!.frame))
-    await first.settle()
-    const shell = journal
-      .snapshot()
-      .items.find((item) => blockOf(item.body)?.taskId === 'shell-child')
-    expect(shell).toMatchObject({
-      agentId: 'shell-child',
-      parentAgentId: 'agent-parent',
-      producerKind: 'background',
-      providerParentRef: 'toolu_shell'
-    })
-    await first.exit()
-    expect(blockOf(journal.item(shell!.itemId)?.body)?.state).toBe('unverifiable')
-    await journals.closeAll()
+  it.each(['terminal-only', 'roster-first', 'unbound-roster-first'])(
+    'retains one owned shell across close/reopen: %s',
+    async (order) => {
+      let journal = await openJournal()
+      const first = acquire(journal)
+      first.translator.handle(userTurn('parent-task-turn'))
+      // Contract: a parentless admission can learn ownership from a later roster without a body change.
+      first.translator.handle(
+        frame({ ...PARENT_TASK_STOP[3]!.frame, parent_task_id: undefined, tool_use_id: undefined })
+      )
+      await first.settle()
+      const beforeOwnership = journal
+        .snapshot()
+        .items.find((item) => blockOf(item.body)?.taskId === 'shell-child')
+      expect(beforeOwnership?.agentId).toBeUndefined()
+      first.translator.handle(frame(PARENT_TASK_STOP[2]!.frame))
+      await first.settle()
+      expect(journal.item(beforeOwnership!.itemId)).toMatchObject({
+        agentId: 'shell-child',
+        parentAgentId: 'agent-parent'
+      })
+      first.translator.handle(frame(PARENT_TASK_STOP[3]!.frame))
+      await first.settle()
+      const shell = journal
+        .snapshot()
+        .items.find((item) => blockOf(item.body)?.taskId === 'shell-child')
+      expect(shell).toMatchObject({
+        agentId: 'shell-child',
+        parentAgentId: 'agent-parent',
+        producerKind: 'background',
+        providerParentRef: 'toolu_shell'
+      })
+      await first.exit()
+      expect(blockOf(journal.item(shell!.itemId)?.body)?.state).toBe('unverifiable')
+      await journals.closeAll()
 
-    journal = await openJournal()
-    const resumed = acquire(journal)
-    expect(resumed.translator.childTaskParent?.('shell-child')).toBe('agent-parent')
-    // Contract: a terminal revision must retain saved ownership even without a repeated start.
-    resumed.translator.handle(frame(PARENT_TASK_STOP[8]!.frame))
-    await resumed.settle()
-    const shells = journal
-      .snapshot()
-      .items.filter((item) => blockOf(item.body)?.taskId === 'shell-child')
-    expect(shells).toHaveLength(1)
-    expect(shells[0]).toMatchObject({
-      itemId: shell!.itemId,
-      agentId: 'shell-child',
-      parentAgentId: 'agent-parent',
-      producerKind: 'background',
-      providerParentRef: 'toolu_shell'
-    })
-    expect(blockOf(shells[0]?.body)?.state).toBe('idle')
-    await resumed.exit()
-  })
+      journal = await openJournal()
+      const delayed = order === 'unbound-roster-first'
+      const resumed = acquire(journal, delayed)
+      if (!delayed) {
+        expect(resumed.translator.childTaskParent?.('shell-child')).toBe('agent-parent')
+      }
+      if (order !== 'terminal-only') {
+        resumed.translator.handle(frame(PARENT_TASK_STOP[2]!.frame))
+        resumed.translator.handle(frame(PARENT_TASK_STOP[3]!.frame))
+      }
+      if (delayed) {
+        resumed.bind()
+      }
+      // Contract: a terminal revision must retain saved ownership even without a repeated start.
+      resumed.translator.handle(frame(PARENT_TASK_STOP[8]!.frame))
+      await resumed.settle()
+      const shells = journal
+        .snapshot()
+        .items.filter((item) => blockOf(item.body)?.taskId === 'shell-child')
+      expect(shells).toHaveLength(1)
+      expect(shells[0]).toMatchObject({
+        itemId: shell!.itemId,
+        agentId: 'shell-child',
+        parentAgentId: 'agent-parent',
+        producerKind: 'background',
+        providerParentRef: 'toolu_shell'
+      })
+      expect(blockOf(shells[0]?.body)?.state).toBe('idle')
+      await resumed.exit()
+    }
+  )
 
   it('keeps the canonical id its first run was given, so one child stays one child', async () => {
     const journal = await openJournal()

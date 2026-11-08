@@ -1,4 +1,4 @@
-import { record, taskAliasId, taskId } from './claude-background-task-frames'
+import { ClaudeTaskInvocations } from './claude-task-invocations'
 import { BoundedMap } from '../../shared/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
@@ -12,7 +12,7 @@ import { readClaudeSubagentTaskFrame } from './claude-subagent-task-frames'
 /** Bound live run attribution; older entries can fall back to journaled attempts. */
 const MAX_KNOWN_SUBAGENTS = 1024
 
-type KnownSubagent = { run: string | null; attempt: number; parentTaskId?: string }
+type KnownSubagent = { run: string | null; attempt: number }
 
 export type ClaudeSubagentIdentitiesDeps = {
   /** Top-level spawn calls can still receive an announcement; sidechain-only calls cannot. */
@@ -20,6 +20,7 @@ export type ClaudeSubagentIdentitiesDeps = {
   /** Resolve grandchildren through the child that journaled their spawn call. */
   childOwnerRefOf?: (toolUseId: string) => string | null
   journaled?: ClaudeJournaledSubagents
+  taskInvocations?: ClaudeTaskInvocations
 }
 
 export class ClaudeSubagentIdentities {
@@ -27,9 +28,11 @@ export class ClaudeSubagentIdentities {
   private readonly known = new BoundedMap<string, KnownSubagent>({
     maxEntries: MAX_KNOWN_SUBAGENTS
   })
+  readonly taskInvocations: ClaudeTaskInvocations
   readonly linkage: ClaudeSubagentLinkageSource & ClaudeAgentLinkageSource
 
   constructor(private readonly deps: ClaudeSubagentIdentitiesDeps) {
+    this.taskInvocations = deps.taskInvocations ?? new ClaudeTaskInvocations(deps.journaled)
     this.ids = new ClaudeSubagentIds(deps.journaled?.canonical)
     this.linkage = new ClaudeSubagentLinkage({
       ids: this.ids,
@@ -45,24 +48,11 @@ export class ClaudeSubagentIdentities {
     })
   }
 
-  parentOf = (taskId: string): string | undefined =>
-    this.known.get(taskId)?.parentTaskId ?? this.deps.journaled?.parent(taskId)
+  parentOf = (id: string, run?: string): string | undefined =>
+    this.taskInvocations.parentOf(id, run)
 
   observeSystemFrame(message: Record<string, unknown>): boolean {
-    if (message.type === 'system') {
-      const entries =
-        message.subtype === 'background_tasks_changed' && Array.isArray(message.tasks)
-          ? message.tasks
-          : [message]
-      for (const entry of entries) {
-        const task = record(entry)
-        const id = task && taskId(task)
-        const parent = task && taskAliasId(task.parent_task_id)
-        if (id && parent && task?.ambient !== true && task?.skip_transcript !== true) {
-          this.known.set(id, { run: null, attempt: 0, ...this.known.get(id), parentTaskId: parent })
-        }
-      }
-    }
+    this.taskInvocations.observe(message)
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
       return false
@@ -81,7 +71,10 @@ export class ClaudeSubagentIdentities {
     if (frame.toolUseId) {
       this.ids.alias(frame.toolUseId, frame.taskId)
     }
-    if (frame.announcesSubagent) {
+    if (
+      frame.announcesSubagent &&
+      this.taskInvocations.selection(message, frame.taskId)?.acceptsStart !== false
+    ) {
       this.announce(frame.taskId, frame.toolUseId)
     }
     return true
@@ -99,6 +92,6 @@ export class ClaudeSubagentIdentities {
       return
     }
     const previous = known?.attempt ?? this.deps.journaled?.attempt(taskId) ?? 0
-    this.known.set(taskId, { run, attempt: previous + 1, parentTaskId: known?.parentTaskId })
+    this.known.set(taskId, { run, attempt: previous + 1 })
   }
 }
