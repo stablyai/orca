@@ -41,6 +41,7 @@ type SettingsSearchableSelectProps = {
   searchPlaceholder: string
   emptyText?: string
   open?: boolean
+  disabled?: boolean
   onOpenChange?: (open: boolean) => void
   query?: string
   onQueryChange?: (query: string) => void
@@ -53,7 +54,13 @@ type SettingsSearchableSelectProps = {
 }
 
 /** A searchable settings dropdown that matches the New Worktree dialog pickers. */
-export function SettingsSearchableSelect({
+export function SettingsSearchableSelect(props: SettingsSearchableSelectProps): React.JSX.Element {
+  return (
+    <SettingsSearchableSelectControl key={props.disabled ? 'disabled' : 'enabled'} {...props} />
+  )
+}
+
+function SettingsSearchableSelectControl({
   ariaLabel,
   value,
   groups,
@@ -61,6 +68,7 @@ export function SettingsSearchableSelect({
   searchPlaceholder,
   emptyText,
   open: controlledOpen,
+  disabled = false,
   onOpenChange,
   query: controlledQuery,
   onQueryChange,
@@ -108,12 +116,13 @@ export function SettingsSearchableSelect({
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      setOpen(next)
+      const nextOpen = next && !disabled
+      setOpen(nextOpen)
       setQuery('')
       setCommandSelection({ value, selectedValue: value, query: '' })
-      onOpenChange?.(next)
+      onOpenChange?.(nextOpen)
     },
-    [onOpenChange, setQuery, value]
+    [disabled, onOpenChange, setQuery, value]
   )
 
   const close = (): void => handleOpenChange(false)
@@ -140,15 +149,16 @@ export function SettingsSearchableSelect({
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
           size="sm"
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={open && !disabled}
           aria-label={ariaLabel}
+          disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
           className="min-w-[220px] justify-between"
         >
@@ -180,7 +190,7 @@ export function SettingsSearchableSelect({
             setCommandSelection({ value: next, selectedValue: value, query })
           }
           className="min-h-0 flex-1"
-          label={ariaLabel}
+          label={searchPlaceholder}
         >
           <CommandInput
             ref={inputRef}

@@ -13108,6 +13108,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
+          "loading": "Loading hosts…",
           "description": "Accounts, detected agents and terminal options below are for this host.",
           "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         },
@@ -13387,6 +13388,7 @@
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
+          "languageUnavailable": "{{value0}} (unavailable)",
           "themeSlot": {
             "description": "App colors for this mode."
           }
@@ -13811,7 +13813,9 @@
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         },
         "SettingsSearchableSelect": {
-          "noMatches": "No matches."
+          "noMatches": "No matches.",
+          "searchHosts": "Search hosts…",
+          "searchLanguages": "Search languages…"
         }
       },
       "right": {
