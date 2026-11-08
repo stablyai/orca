@@ -18,6 +18,11 @@ export const AGENT_SESSION_SIGN_IN = [
   { agent: 'opencode2', loginCommand: ['opencode2', 'auth', 'login'] },
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
+  {
+    agent: 'kiro',
+    loginCommand: ['kiro-cli', 'login'],
+    remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow']
+  },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
 ] as const

@@ -92,7 +92,13 @@ function useManagedClaudeSignIn(input: {
   )
 }
 
-const TERMINAL_SIGN_IN_AGENTS: ReadonlySet<string> = new Set(['opencode', 'opencode2', 'pi', 'omp'])
+const TERMINAL_SIGN_IN_AGENTS: ReadonlySet<string> = new Set([
+  'opencode',
+  'opencode2',
+  'pi',
+  'omp',
+  'kiro'
+])
 
 export function useNativeChatSignIn(input: {
   agent: string
