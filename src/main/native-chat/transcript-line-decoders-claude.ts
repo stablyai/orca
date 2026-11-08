@@ -12,7 +12,8 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { claudeContentBlocks } from './transcript-record-blocks'
+import { claudeContentBlocksWork } from './transcript-record-blocks'
+import { finishTranscriptWork, type TranscriptWork } from './transcript-work-scheduler'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
@@ -61,22 +62,42 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
   return { ...(filePath ? { filePath } : {}), hunks }
 }
 
-function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
+function* withEditPatch(
+  blocks: NativeChatBlock[],
+  patch: NativeChatEditPatch
+): TranscriptWork<NativeChatBlock[]> {
   let attached = false
-  return blocks.map((block) => {
+  const patched: NativeChatBlock[] = []
+  for (const block of blocks) {
+    yield 1
     if (attached || block.type !== 'tool-result') {
-      return block
+      patched.push(block)
+      continue
     }
     attached = true
-    return { ...block, editPatch: patch }
-  })
+    patched.push({ ...block, editPatch: patch })
+  }
+  return patched
 }
 
 export function decodeClaudeTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const parsed = parseJsonObject(line)
+  return decodeClaudeTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeClaudeTranscriptRecord(
+  parsed: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
+  return finishTranscriptWork(decodeClaudeTranscriptRecordWork(parsed, fallbackId))
+}
+
+export function* decodeClaudeTranscriptRecordWork(
+  parsed: Record<string, unknown> | null,
+  fallbackId: string
+): TranscriptWork<NativeChatMessage | null> {
   if (!parsed) {
     return null
   }
@@ -106,8 +127,8 @@ export function decodeClaudeTranscriptLine(
   }
   const message = asRecord(record.message)
   const editPatch = claudeEditPatch(record)
-  const contentBlocks = claudeContentBlocks(message?.content)
-  const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
+  const contentBlocks = yield* claudeContentBlocksWork(message?.content)
+  const decodedBlocks = editPatch ? yield* withEditPatch(contentBlocks, editPatch) : contentBlocks
   if (decodedBlocks.length === 0) {
     return null
   }
@@ -118,23 +139,34 @@ export function decodeClaudeTranscriptLine(
     return { id: recordMessageId, timestamp, source: 'transcript', ...stopHookFeedback, ...parent }
   }
   // Keep image-source companions despite isMeta: prompt base64 has no path and cannot render attachments.
-  const blocks = isInjectedUserTurn
-    ? isImageSourceRecord(decodedBlocks)
-      ? decodedBlocks
-      : decodedBlocks.filter((block) => block.type === 'tool-result')
-    : decodedBlocks
+  let blocks = decodedBlocks
+  if (isInjectedUserTurn && !(yield* isImageSourceRecord(decodedBlocks))) {
+    blocks = []
+    for (const block of decodedBlocks) {
+      yield 1
+      if (block.type === 'tool-result') {
+        blocks.push(block)
+      }
+    }
+  }
   if (blocks.length === 0) {
     return null
   }
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
+  const messageRole = yield* claudeMessageRole(role, blocks, message?.content)
+  let unwrapped = blocks
+  if (role === 'user') {
+    unwrapped = []
+    for (const block of blocks) {
+      yield 1
+      unwrapped.push(unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
+    }
+  }
   return {
     id: messageId ?? fallbackId,
-    role: claudeMessageRole(role, blocks, message?.content),
+    role: messageRole,
     // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
-    blocks:
-      role === 'user'
-        ? blocks.map((block) => unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
-        : blocks,
+    blocks: unwrapped,
     timestamp,
     source: 'transcript',
     ...parent
@@ -174,35 +206,49 @@ function claudeStopHookFeedbackMessage(
 }
 
 // Mixed prose/markers are injected turns, never image-source companions.
-function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
-  return (
-    blocks.length > 0 &&
-    blocks.every((block) => block.type === 'text' && imageSourcePathFromText(block.text) !== null)
-  )
+function* isImageSourceRecord(blocks: NativeChatBlock[]): TranscriptWork<boolean> {
+  if (blocks.length === 0) {
+    return false
+  }
+  for (const block of blocks) {
+    yield 1
+    if (block.type !== 'text' || imageSourcePathFromText(block.text) === null) {
+      return false
+    }
+  }
+  return true
 }
 
-function claudeMessageRole(
+function* claudeMessageRole(
   role: 'user' | 'assistant',
   blocks: NativeChatBlock[],
   content: unknown
-): NativeChatMessage['role'] {
+): TranscriptWork<NativeChatMessage['role']> {
   if (role === 'user') {
-    const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
-    return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
+    for (const block of blocks) {
+      yield 1
+      if (block.type !== 'tool-result') {
+        return 'user'
+      }
+    }
+    return blocks.length > 0 ? 'tool' : 'user'
   }
-  return isThinkingOnlyContent(content) ? 'reasoning' : role
+  return (yield* isThinkingOnlyContent(content)) ? 'reasoning' : role
 }
 
 // Decoded thinking becomes a text block, so classify from the raw content parts.
-function isThinkingOnlyContent(content: unknown): boolean {
-  return (
-    Array.isArray(content) &&
-    content.length > 0 &&
-    content.every((part) => {
-      const type = asRecord(part)?.type
-      return type === 'thinking' || type === 'redacted_thinking'
-    })
-  )
+function* isThinkingOnlyContent(content: unknown): TranscriptWork<boolean> {
+  if (!Array.isArray(content) || content.length === 0) {
+    return false
+  }
+  for (const part of content) {
+    yield 1
+    const type = asRecord(part)?.type
+    if (type !== 'thinking' && type !== 'redacted_thinking') {
+      return false
+    }
+  }
+  return true
 }
 
 function parseTimestamp(value: unknown): number | null {

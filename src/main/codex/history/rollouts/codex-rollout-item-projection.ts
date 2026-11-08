@@ -1,3 +1,8 @@
+import {
+  finishTranscriptWork,
+  type TranscriptWork
+} from '../../../native-chat/transcript-work-scheduler'
+import { sortTranscriptWork } from '../../../native-chat/transcript-sort-work'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -70,32 +75,45 @@ function readPath(path: string, cwd: unknown): string | null {
   }
 }
 
-function commandActions(value: unknown, cwd: unknown): Record<string, unknown>[] {
-  return (Array.isArray(value) ? value : []).flatMap((raw) => {
+function* commandActionsWork(
+  value: unknown,
+  cwd: unknown
+): TranscriptWork<Record<string, unknown>[]> {
+  const actions: Record<string, unknown>[] = []
+  for (const raw of Array.isArray(value) ? value : []) {
+    yield 1
     const action = readRecord(raw)
     const command = typeof action.cmd === 'string' ? redactCodexCommand(action.cmd) : ''
     if (action.type === 'read') {
       const path = typeof action.path === 'string' ? readPath(action.path, cwd) : null
-      return path === null ? [] : [{ type: 'read', command, name: action.name, path }]
+      if (path !== null) {
+        actions.push({ type: 'read', command, name: action.name, path })
+      }
+      continue
     }
     if (action.type === 'search') {
-      return [
-        {
-          type: 'search',
-          command,
-          query: typeof action.query === 'string' ? redactCodexCommand(action.query) : null,
-          path: action.path
-        }
-      ]
+      actions.push({
+        type: 'search',
+        command,
+        query: typeof action.query === 'string' ? redactCodexCommand(action.query) : null,
+        path: action.path
+      })
+      continue
     }
     if (action.type === 'list_files') {
-      return [{ type: 'listFiles', command, path: action.path }]
+      actions.push({ type: 'listFiles', command, path: action.path })
+      continue
     }
-    return [{ type: 'unknown', command }]
-  })
+    actions.push({ type: 'unknown', command })
+  }
+  return actions
 }
 
 export function codexRolloutItem(value: unknown): CodexThreadItem | null {
+  return finishTranscriptWork(codexRolloutItemWork(value))
+}
+
+export function* codexRolloutItemWork(value: unknown): TranscriptWork<CodexThreadItem | null> {
   const raw = readRecord(value)
   const id = readString(raw, 'id') ?? ''
   const tag = readString(raw, 'type')
@@ -119,11 +137,16 @@ export function codexRolloutItem(value: unknown): CodexThreadItem | null {
     item.persistedType = tag
   }
   if (type === 'commandExecution' && Array.isArray(raw.command)) {
-    item.command = codexCommandPresentation(
-      raw.command.filter((part): part is string => typeof part === 'string')
-    )
+    const command: string[] = []
+    for (const part of raw.command) {
+      yield 1
+      if (typeof part === 'string') {
+        command.push(part)
+      }
+    }
+    item.command = codexCommandPresentation(command)
     item.cwd = filesystemPath(raw.cwd)
-    item.commandActions = commandActions(raw.parsed_cmd, raw.cwd)
+    item.commandActions = yield* commandActionsWork(raw.parsed_cmd, raw.cwd)
     item.processId = raw.process_id
     item.source = raw.source === 'unified_exec_startup' ? 'unifiedExecStartup' : raw.source
     item.exitCode = raw.exit_code
@@ -143,33 +166,49 @@ export function codexRolloutItem(value: unknown): CodexThreadItem | null {
     item.aggregatedOutput = raw.aggregated_output || undefined
     delete item.parsed_cmd
   } else if (type === 'fileChange' && !Array.isArray(raw.changes)) {
-    item.changes = Object.entries(readRecord(raw.changes))
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([path, value]) => {
-        const change = readRecord(value)
-        const diff = change.unified_diff ?? change.content ?? ''
-        return {
-          path,
-          kind: {
-            type: change.type,
-            ...(change.move_path == null ? {} : { movePath: change.move_path })
-          },
-          diff: change.move_path ? `${String(diff)}\n\nMoved to: ${String(change.move_path)}` : diff
-        }
+    const changes = readRecord(raw.changes)
+    const paths = yield* sortTranscriptWork(Object.keys(changes), (a, b) =>
+      a < b ? -1 : a > b ? 1 : 0
+    )
+    const projected: Record<string, unknown>[] = []
+    for (const path of paths) {
+      yield 1
+      const change = readRecord(changes[path])
+      const diff = change.unified_diff ?? change.content ?? ''
+      projected.push({
+        path,
+        kind: {
+          type: change.type,
+          ...(change.move_path == null ? {} : { movePath: change.move_path })
+        },
+        diff: change.move_path ? `${String(diff)}\n\nMoved to: ${String(change.move_path)}` : diff
       })
+    }
+    item.changes = projected
     item.status = item.status ?? 'inProgress'
   } else if (type === 'userMessage' && Array.isArray(raw.content)) {
-    item.content = raw.content.map((value) => {
+    const content: unknown[] = []
+    for (const value of raw.content) {
+      yield 1
       const part = readRecord(value)
       if (['image', 'Image', 'input_image'].includes(String(part.type))) {
-        return { ...part, type: 'image', url: part.image_url ?? part.url }
+        content.push({ ...part, type: 'image', url: part.image_url ?? part.url })
+        continue
       }
-      return ['local_image', 'LocalImage'].includes(String(part.type))
-        ? { ...part, type: 'localImage' }
-        : value
-    })
+      content.push(
+        ['local_image', 'LocalImage'].includes(String(part.type))
+          ? { ...part, type: 'localImage' }
+          : value
+      )
+    }
+    item.content = content
   } else if (type === 'agentMessage' && Array.isArray(raw.content) && raw.text === undefined) {
-    item.text = raw.content.map((part) => readString(readRecord(part), 'text') ?? '').join('')
+    const parts: string[] = []
+    for (const part of raw.content) {
+      yield 1
+      parts.push(readString(readRecord(part), 'text') ?? '')
+    }
+    item.text = parts.join('')
   } else if (type === 'reasoning') {
     item.summary = raw.summary_text ?? raw.summary
     item.content = raw.raw_content ?? raw.content

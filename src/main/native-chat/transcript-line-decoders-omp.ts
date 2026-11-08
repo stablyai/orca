@@ -14,13 +14,27 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { toolResultOutput } from './transcript-record-blocks'
+import { toolResultOutputWork } from './transcript-record-blocks'
+import { finishTranscriptWork, type TranscriptWork } from './transcript-work-scheduler'
 
 export function decodeOmpTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodeOmpTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeOmpTranscriptRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
+  return finishTranscriptWork(decodeOmpTranscriptRecordWork(record, fallbackId))
+}
+
+export function* decodeOmpTranscriptRecordWork(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): TranscriptWork<NativeChatMessage | null> {
   if (
     !record ||
     (record.type !== 'message' && record.type !== 'custom_message' && record.type !== 'compaction')
@@ -43,7 +57,7 @@ export function decodeOmpTranscriptLine(
 
   if (record.type === 'custom_message') {
     // Match OMP visibility: undisplayed custom messages are hidden extension state.
-    const customBlocks = record.display === true ? ompContentBlocks(record.content) : []
+    const customBlocks = record.display === true ? yield* ompContentBlocks(record.content) : []
     return customBlocks.length === 0
       ? null
       : { id, role: 'system', blocks: customBlocks, timestamp, source: 'transcript' }
@@ -62,7 +76,7 @@ export function decodeOmpTranscriptLine(
       blocks: [
         {
           type: 'tool-result',
-          output: toolResultOutput(message.content),
+          output: yield* toolResultOutputWork(message.content),
           ...(message.isError === true ? { isError: true } : {})
         }
       ],
@@ -84,13 +98,13 @@ export function decodeOmpTranscriptLine(
 
   if (role === 'fileMention') {
     // Render mentioned paths only; embedded auto-read file contents would bury the conversation.
-    const paths = ompFileMentionPaths(message.files)
+    const paths = yield* ompFileMentionLines(message.files)
     return paths.length === 0
       ? null
       : {
           id,
           role: 'system',
-          blocks: [{ type: 'text', text: paths.map((path) => `@${path}`).join('\n') }],
+          blocks: [{ type: 'text', text: paths.join('\n') }],
           timestamp,
           source: 'transcript'
         }
@@ -100,7 +114,7 @@ export function decodeOmpTranscriptLine(
   if ((role === 'custom' || role === 'hookMessage') && message.display !== true) {
     return null
   }
-  const blocks = ompContentBlocks(message.content)
+  const blocks = yield* ompContentBlocks(message.content)
   if (blocks.length === 0) {
     // Empty aborted messages still need interruption status; preserve any partial content otherwise.
     return role === 'assistant' && message.stopReason === 'aborted'
@@ -185,21 +199,22 @@ function ompExecutionBlocks(
   ]
 }
 
-function ompFileMentionPaths(files: unknown): string[] {
+function* ompFileMentionLines(files: unknown): TranscriptWork<string[]> {
   if (!Array.isArray(files)) {
     return []
   }
   const paths: string[] = []
   for (const file of files) {
+    yield 1
     const path = extractString(asRecord(file)?.path)
     if (path) {
-      paths.push(path)
+      paths.push(`@${path}`)
     }
   }
   return paths
 }
 
-function ompContentBlocks(content: unknown): NativeChatBlock[] {
+function* ompContentBlocks(content: unknown): TranscriptWork<NativeChatBlock[]> {
   if (typeof content === 'string') {
     return content.trim() ? [{ type: 'text', text: content }] : []
   }
@@ -208,6 +223,7 @@ function ompContentBlocks(content: unknown): NativeChatBlock[] {
   }
   const blocks: NativeChatBlock[] = []
   for (const item of content) {
+    yield 1
     const block = ompContentBlock(asRecord(item))
     if (block) {
       blocks.push(block)

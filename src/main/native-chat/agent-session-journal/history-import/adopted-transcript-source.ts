@@ -3,13 +3,13 @@ import { sessionIdFromFileName } from '../../../ai-vault/session-scanner-accumul
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../../shared/node-bounded-file-reader'
-import { extractString, parseJsonObject } from '../../../ai-vault/session-scanner-values'
+import { extractString } from '../../../ai-vault/session-scanner-values'
 import { asRecord } from '../../../ai-vault/session-scanner-record-value'
-
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../../pi/rpc-launch-resolution'
 import { admitTranscriptPath } from '../../transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
+import type { AdoptedTranscriptObservation } from './adopted-transcript-observation'
 
 export type AdoptedTranscriptSource = {
   providerSessionId: string
@@ -49,63 +49,39 @@ export async function assertAdoptedSourceIdentity(
   }
 }
 
-// Observe metadata from the same lines imported into the journal.
-export function adoptedTranscriptSourceObserver(input: {
+// Run on the owning host so directory probes retain their cancellation and child ownership.
+export async function validateAdoptedTranscriptSource(input: {
   agent: AgentType
   filePath: string
   source: AdoptedTranscriptSource
   maxSourceBytes: number
   signal?: AbortSignal
-}) {
-  let sessionId: string | null =
-    input.agent === 'claude' || input.agent === 'codex'
-      ? sessionIdFromFileName(input.filePath)
-      : null
-  let cwd: string | null = null
-  let sawCodexMetadata = false
-  return {
-    observe(line: string) {
-      const record = parseJsonObject(line)
-      if (!record) {
-        return
-      }
-      if (input.agent === 'claude') {
-        sessionId = extractString(record.sessionId) ?? sessionId
-        cwd ??= extractString(record.cwd)
-      } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
-        sawCodexMetadata = true
-        const payload = asRecord(record.payload)
-        sessionId = extractString(payload?.id) ?? sessionId
-      } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
-        sessionId = extractString(record.id)
-        cwd = extractString(record.cwd)
-      }
-    },
-    async validate() {
-      if (input.agent === 'grok') {
-        const summaryPath = join(dirname(input.filePath), 'summary.json')
-        if (!(await admitTranscriptPath(dirname(input.filePath), summaryPath))) {
-          throw new Error('The conversation summary is outside its storage directory.')
-        }
-        const { buffer } = await readNodeFileWithinLimit(summaryPath, input.maxSourceBytes, {
-          regularFileOnly: true
-        })
-        const summary = asRecord(asRecord(JSON.parse(buffer.toString('utf8')))?.info)
-        sessionId = extractString(summary?.id) ?? sessionIdFromFileName(dirname(input.filePath))
-        cwd = extractString(summary?.cwd)
-      }
-      if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
-        throw new Error('The saved conversation header does not match its file identity.')
-      }
-      await assertAdoptedSourceIdentity(
-        input.source,
-        { sessionId, cwd },
-        input.agent !== 'codex',
-        input.signal,
-        input.agent
-      )
+  observed: AdoptedTranscriptObservation
+}): Promise<void> {
+  const observed = { ...input.observed }
+  if (input.agent === 'grok') {
+    const summaryPath = join(dirname(input.filePath), 'summary.json')
+    if (!(await admitTranscriptPath(dirname(input.filePath), summaryPath))) {
+      throw new Error('The conversation summary is outside its storage directory.')
     }
+    const { buffer } = await readNodeFileWithinLimit(summaryPath, input.maxSourceBytes, {
+      regularFileOnly: true
+    })
+    const summary = asRecord(asRecord(JSON.parse(buffer.toString('utf8')))?.info)
+    observed.sessionId =
+      extractString(summary?.id) ?? sessionIdFromFileName(dirname(input.filePath))
+    observed.cwd = extractString(summary?.cwd)
   }
+  if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== observed.sessionId) {
+    throw new Error('The saved conversation header does not match its file identity.')
+  }
+  await assertAdoptedSourceIdentity(
+    input.source,
+    observed,
+    input.agent !== 'codex',
+    input.signal,
+    input.agent
+  )
 }
 
 export async function validateAdoptedOpenCodeSource(

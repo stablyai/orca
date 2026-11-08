@@ -7,11 +7,16 @@ import { asRecord, extractString } from '../ai-vault/session-scanner-values'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,
-  claudeToolResultText,
+  claudeToolResultTextParts,
   claudeToolResultFailed
 } from '../../shared/claude-tool-content'
+import { finishTranscriptWork, type TranscriptWork } from './transcript-work-scheduler'
 
 export function toolResultOutput(value: unknown): string {
+  return finishTranscriptWork(toolResultOutputWork(value))
+}
+
+export function* toolResultOutputWork(value: unknown): TranscriptWork<string> {
   if (typeof value === 'string') {
     return value
   }
@@ -27,6 +32,7 @@ export function toolResultOutput(value: unknown): string {
   }
   const parts: string[] = []
   for (const item of value) {
+    yield 1
     if (typeof item === 'string') {
       parts.push(item)
       continue
@@ -41,6 +47,10 @@ export function toolResultOutput(value: unknown): string {
 }
 
 export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
+  return finishTranscriptWork(claudeContentBlocksWork(content))
+}
+
+export function* claudeContentBlocksWork(content: unknown): TranscriptWork<NativeChatBlock[]> {
   if (typeof content === 'string') {
     const text = content.trim()
     return text ? [{ type: 'text', text: content }] : []
@@ -50,6 +60,7 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
   }
   const blocks: NativeChatBlock[] = []
   for (const item of content) {
+    yield 1
     if (typeof item === 'string') {
       if (item.trim()) {
         blocks.push({ type: 'text', text: item })
@@ -60,7 +71,45 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
     if (!record) {
       continue
     }
-    const block = claudeContentBlock(record)
+    let block: NativeChatBlock | null
+    switch (record.type) {
+      case 'text': {
+        const text = extractString(record.text)
+        block = text ? { type: 'text', text } : null
+        break
+      }
+      case 'thinking': {
+        // Reasoning uses text blocks; message role carries its classification.
+        const text = extractString(record.thinking) ?? extractString(record.text)
+        block = text ? { type: 'text', text } : null
+        break
+      }
+      case 'tool_use': {
+        const name = extractString(record.name) ?? 'tool'
+        const callId = extractString(record.id)
+        block = { type: 'tool-call', name, input: record.input, ...(callId ? { callId } : {}) }
+        break
+      }
+      case 'tool_result':
+        block = yield* toolResultBlockWork(record)
+        break
+      case 'image':
+        block = imageRefBlock(record)
+        break
+      default:
+        if (isClaudeToolUseContent(record)) {
+          block = {
+            type: 'tool-call',
+            name: String(record.name),
+            input: record.input,
+            callId: String(record.id)
+          }
+        } else if (isClaudeToolResultContent(record)) {
+          block = yield* legacyToolResultBlockWork(record)
+        } else {
+          block = null
+        }
+    }
     if (block) {
       blocks.push(block)
     }
@@ -68,53 +117,32 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
-function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
-  switch (record.type) {
-    case 'text': {
-      const text = extractString(record.text)
-      return text ? { type: 'text', text } : null
+function* legacyToolResultBlockWork(
+  record: Record<string, unknown>
+): TranscriptWork<NativeChatToolResultBlock> {
+  const parts: string[] = []
+  const content = Array.isArray(record.content) ? record.content : [record.content]
+  for (const part of content) {
+    yield 1
+    for (const text of claudeToolResultTextParts([part])) {
+      parts.push(text)
     }
-    case 'thinking': {
-      // Reasoning uses text blocks; message role carries its classification.
-      const text = extractString(record.thinking) ?? extractString(record.text)
-      return text ? { type: 'text', text } : null
-    }
-    case 'tool_use': {
-      const name = extractString(record.name) ?? 'tool'
-      const callId = extractString(record.id)
-      return { type: 'tool-call', name, input: record.input, ...(callId ? { callId } : {}) }
-    }
-    case 'tool_result':
-      return toolResultBlock(record)
-    case 'image':
-      return imageRefBlock(record)
-    default: {
-      if (isClaudeToolUseContent(record)) {
-        return {
-          type: 'tool-call',
-          name: String(record.name),
-          input: record.input,
-          callId: String(record.id)
-        }
-      }
-      if (isClaudeToolResultContent(record)) {
-        return {
-          type: 'tool-result',
-          callId: String(record.tool_use_id),
-          output: claudeToolResultText(record.content),
-          ...(claudeToolResultFailed(record) ? { isError: true } : {})
-        }
-      }
-      return null
-    }
+  }
+  return {
+    type: 'tool-result',
+    callId: String(record.tool_use_id),
+    output: parts.join('\n'),
+    ...(claudeToolResultFailed(record) ? { isError: true } : {})
   }
 }
 
-function toolResultBlock(record: Record<string, unknown>): NativeChatToolResultBlock {
+function* toolResultBlockWork(
+  record: Record<string, unknown>
+): TranscriptWork<NativeChatToolResultBlock> {
   const callId = extractString(record.tool_use_id)
   return {
     type: 'tool-result',
-    output: toolResultOutput(record.content),
+    output: yield* toolResultOutputWork(record.content),
     ...(callId ? { callId } : {}),
     ...(record.is_error === true ? { isError: true } : {})
   }

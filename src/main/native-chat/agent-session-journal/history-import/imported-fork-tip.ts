@@ -25,9 +25,10 @@ export function createImportedForkTip() {
 export function observeOmpForkTip(
   tip: ReturnType<typeof createImportedForkTip>,
   line: string,
-  identity: AgentJournalItemIdentity
+  identity: AgentJournalItemIdentity,
+  record?: Record<string, unknown> | null
 ): void {
-  const raw = parseJsonObject(line)
+  const raw = record === undefined ? parseJsonObject(line) : record
   const native = asRecord(raw?.message)
   const role = native?.role
   if (
