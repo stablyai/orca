@@ -135,7 +135,7 @@ export const DEFAULT_SPAWN_ADMISSION_LIMITS: SpawnAdmissionLimits = {
   userResumeBucketWindowMs: 10_000
 }
 
-type TokenBucket = { tokens: number; updatedAt: number }
+export type TokenBucket = { tokens: number; updatedAt: number }
 
 export type SpawnAdmissionState = {
   inFlight: Record<SpawnCharge, number>
@@ -156,7 +156,7 @@ export function createSpawnAdmissionState(
   }
 }
 
-function refill(
+export function refill(
   bucket: TokenBucket,
   capacity: number,
   tokensPerMs: number,
@@ -170,7 +170,7 @@ function automaticTokensPerMs(limits: SpawnAdmissionLimits): number {
   return limits.automaticTokensPerSecond / 1000
 }
 
-function userResumeTokensPerMs(limits: SpawnAdmissionLimits): number {
+export function userResumeTokensPerMs(limits: SpawnAdmissionLimits): number {
   return limits.userResumeBucketCapacity / limits.userResumeBucketWindowMs
 }
 
