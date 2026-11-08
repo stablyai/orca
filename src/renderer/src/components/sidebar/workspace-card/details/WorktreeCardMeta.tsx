@@ -70,6 +70,7 @@ export function WorktreeCardDetailsHover({
   const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
+    contextMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
     handleIssueMenuOpenChange,
@@ -141,7 +142,7 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={hoverOpen || workspaceTitleEditing}
+      open={workspaceTitleEditing || (!contextMenuOpen && hoverOpen)}
       onOpenChange={handleEffectiveHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}

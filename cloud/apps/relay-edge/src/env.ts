@@ -11,7 +11,8 @@ export type Env = {
   // The cell id directors write into relay_assignments for hosts placed on the edge.
   EDGE_CELL_ID?: string
   // Relay JWTs: verified against the auth service's JWKS (fetched, cached per isolate, served
-  // stale for up to 30 min if auth is unreachable). RELAY_JWKS (inline set) is for local tests and
+  // stale for up to 30 min if auth is unreachable; a cold isolate falls back to the colo's last
+  // good set in the Cache API for up to 24 h, jwks-persist.ts). RELAY_JWKS (inline set) is for local tests and
   // the spike only.
   RELAY_JWKS_URL?: string
   RELAY_JWKS?: string

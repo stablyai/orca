@@ -11,7 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { attemptEditorFileSave } from '../save/commands/editor-file-save-attempt'
 import {

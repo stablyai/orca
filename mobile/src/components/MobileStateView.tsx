@@ -119,13 +119,16 @@ export function MobileLoadErrorState({
   )
 }
 
-/** The host is unreachable and nothing is cached: say so and offer a reconnect. */
+/** The host is unreachable and the screen has nothing to show: say so and offer a reconnect. */
 export function MobileOfflineState({
   hostName,
+  message,
   onReconnect,
   bottomInset
 }: {
   hostName?: string | null
+  /** Replaces the default advice, e.g. with when the stored data around this state was read. */
+  message?: string
   onReconnect?: (() => void) | null
   bottomInset?: number
 }) {
@@ -138,10 +141,10 @@ export function MobileOfflineState({
           ? t('common.offline.waitingFor', 'Waiting for {{host}}', { host: hostName })
           : t('common.offline.waiting', 'Waiting for desktop')
       }
-      message={t(
-        'common.offline.message',
-        'Check that your computer is awake and Orca is running.'
-      )}
+      message={
+        message ??
+        t('common.offline.message', 'Check that your computer is awake and Orca is running.')
+      }
       action={
         onReconnect
           ? { label: t('common.offline.reconnect', 'Reconnect'), onPress: onReconnect }

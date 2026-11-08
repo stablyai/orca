@@ -4,14 +4,21 @@ import {
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
 } from '../../../../../shared/workspace-layout/layout-intents-capability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
+
 import type { LayoutApplyOutcome } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
+
 import type { Tab } from '../../../../../shared/tab-types'
-import type { RuntimeStore } from '../../../runtime-store-contract'
+
+import type { RuntimeStore } from '../../../construction/runtime-store-contract'
+
 import '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
 import '../../server/runtime-rpc-mobile-method-allowlist'
 import { OrcaRuntimeService } from '../../../orca-runtime'
+
 import '../../core'
 import './workspace-layout'
 import '../rpc-method-registry'

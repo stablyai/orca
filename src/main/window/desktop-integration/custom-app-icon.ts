@@ -9,7 +9,7 @@ import {
   type CustomAppIconImportFailureCode,
   type CustomAppIconImportResult
 } from '../../../shared/app-icon'
-import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 
 // Why: 1024px covers the largest Dock and taskbar tiles; larger images only cost memory on every apply.

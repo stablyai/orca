@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { SqliteBindings, SqliteRow } from '../../../../../sqlite/sqlite-statement'
-import { installSqlVisitCounters } from '../../../../dispatch-predicate-visits.test-fixture'
+import { installSqlVisitCounters } from '../../../../orchestration/db/dispatch-predicate-visits.test-fixture'
 
 const CALLER_READ_NAMES = ['identity', 'formerOwner'] as const
 type CallerRead = (typeof CALLER_READ_NAMES)[number]

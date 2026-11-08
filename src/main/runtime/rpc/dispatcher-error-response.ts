@@ -1,6 +1,7 @@
 import { BranchSwitchLandedWithWarningError } from '../../git/branch-switch'
 import { mapBrowserError } from './browser-error-response'
-import { InvalidArgumentError, ZodError, formatZodError } from './core'
+import { ZodError } from 'zod'
+import { InvalidArgumentError, formatZodError } from './core'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { errorResponse, mapEmulatorError, mapRuntimeError } from './errors'

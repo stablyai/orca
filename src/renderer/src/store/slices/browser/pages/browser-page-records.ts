@@ -6,7 +6,7 @@ import type {
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
-import { isDocPreviewUrl } from '../../../../../../shared/doc-preview-scheme'
+import { isDocPreviewUrl } from '../../../../../../shared/document-preview/doc-preview-scheme'
 import { basename } from '@/lib/path'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'

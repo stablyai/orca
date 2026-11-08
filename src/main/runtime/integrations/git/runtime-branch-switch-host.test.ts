@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createBranchSwitchHost } from './runtime-branch-switch-host'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 vi.mock('../../../persistence/host-qualified-worktree-meta', () => ({

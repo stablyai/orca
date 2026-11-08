@@ -39,7 +39,7 @@ import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Repo } from '../../src/shared/repo-types'
 import type { WorktreeMeta } from '../../src/shared/worktree/meta-types'
-import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../src/main/runtime/construction/runtime-store-contract'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { HostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 

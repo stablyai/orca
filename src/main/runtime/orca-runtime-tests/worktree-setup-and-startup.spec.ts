@@ -15,7 +15,7 @@ import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { shouldRunSetupForCreate } from '../../workspace-hooks/effective-hook-config'
 import { UUID_RE, expectStablePaneKeyEnv, store } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('returns a setup launch payload for CLI-created worktrees when hooks are explicitly enabled', async () => {

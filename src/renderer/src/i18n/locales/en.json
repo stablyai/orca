@@ -6773,14 +6773,11 @@
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
           "e091caab15": "The project could not be found",
-          "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
           "8d9cd19d09": "Open Parent Worktree",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
-          "3350101edb": "Copy Path",
-          "copyWorktreeName": "Copy Worktree Name",
           "f4475537d8": "Delete",
           "f5ac91531d": "Remove Project from Orca",
           "b42391d8bf": "Deleting…",
@@ -6799,9 +6796,16 @@
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
           "deleteWorktree": "Delete Worktree",
-          "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "sleepThisWorkspace": "This Workspace",
+          "sleepDescendantsOption": "With Descendants ({{value0}})",
+          "deleteWithDescendants": "Delete with Descendants…",
+          "editDetails": "Edit Details…",
+          "copySubmenu": "Copy",
+          "copyPathOption": "Path",
+          "copyNameOption": "Worktree Name",
+          "lineageSubmenu": "Parent & Children",
+          "projectGroupSubmenu": "Project Group"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -20803,7 +20807,19 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "sideChat": {
+        "description": "Ask a side question in a fork beside this chat",
+        "argumentHint": "<question>",
+        "notReady": "Side chats are not ready yet. Try again in a moment.",
+        "replyRunning": "Available when this reply finishes.",
+        "noReply": "Available after the first reply.",
+        "textOnly": "Side chats take text only. Remove attachments, then send it again.",
+        "questionNotSent": "{{agent}} didn't get your question",
+        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
+        "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
+        "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      }
     },
     "tab": {
       "bar": {
@@ -23823,6 +23839,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
+    "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
     "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
     "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",

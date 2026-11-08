@@ -2,7 +2,7 @@ import { getAppEnvironment } from '../../../shared/app-environment'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { hardenExistingSecureFile } from '../../../shared/secure-file'
+import { hardenExistingSecureFile } from '../../../shared/secure-storage/secure-file'
 import { MOBILE_PAIRING_USERDATA_FILES } from '../../runtime/rpc/server/pairing/mobile-pairing-files'
 
 // Capture after dev redirection but before app.setName changes path casing and loses case-sensitive data.

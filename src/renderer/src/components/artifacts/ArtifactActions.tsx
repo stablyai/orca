@@ -1,5 +1,5 @@
 import { Copy, ExternalLink, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

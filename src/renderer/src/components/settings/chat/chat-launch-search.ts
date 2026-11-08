@@ -43,6 +43,6 @@ export function getChatLaunchEntriesByKey(t: Translate = translate) {
   } satisfies Record<string, SettingsSearchEntry>
 }
 
-export function getChatLaunchSearchEntries(): SettingsSearchEntry[] {
-  return Object.values(getChatLaunchEntriesByKey())
+export function getChatLaunchSearchEntries(t?: Translate): SettingsSearchEntry[] {
+  return Object.values(getChatLaunchEntriesByKey(t))
 }

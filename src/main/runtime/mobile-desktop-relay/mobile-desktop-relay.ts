@@ -16,7 +16,6 @@ import {
   type OpenedRelayLink,
   type RelayedPhone
 } from './mobile-desktop-relay-link'
-export type { RelayedPhone } from './mobile-desktop-relay-link'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'

@@ -34,7 +34,7 @@ import {
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
 import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
 import type { WorktreeCreatePathClaim } from '../../../workspaces/creation/worktree-create-in-flight'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import type { RemoteTrackingBase } from '../../repositories/runtime-remote-fetch-controller'
 import { resolveLegacyRemoteBranch } from './runtime-local-worktree-create-legacy-branch'

@@ -14,7 +14,7 @@ import {
 import { applyFreshWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
-import { makeAgentStatusStoreWiring } from '../../src/main/runtime/agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../../src/main/runtime/terminal/identity/agent-status-store-wiring.test-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: {

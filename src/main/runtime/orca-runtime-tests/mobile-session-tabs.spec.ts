@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerLivePty } from './bind-first-pane.test-fixture'
-import { boundSessionOf } from '../profile-session-store.test-fixture'
+import { boundSessionOf } from '../terminal/layout/profile-session-store.test-fixture'
 import { expectDesktopDropsPane } from '../__fixtures__/main-layout-close-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'

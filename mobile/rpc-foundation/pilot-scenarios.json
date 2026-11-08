@@ -8404,12 +8404,29 @@
       "id": "pr-sidebar-load",
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
-      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "sites": [
+        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/session/mobile-pr-queries.ts",
+        "mobile/src/session/mobile-pr-sidebar-state.ts"
+      ],
       "schedules": [],
       "steps": [
         {
-          "action": "load",
-          "id": "load"
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
         },
         {
           "complete": "hostedReview.forBranch#1",
@@ -8426,8 +8443,8 @@
               "number": 12,
               "title": "Recorded",
               "state": "open",
-              "url": "https://x/12",
-              "updatedAt": "2026-01-01",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
               "mergeable": "MERGEABLE"
             }
           }
@@ -8467,8 +8484,9 @@
                 "number": 12,
                 "state": "open",
                 "title": "Recorded",
-                "url": "https://x/12",
+                "url": "https://github.com/owner/repo/pull/12",
                 "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
                 "mergeable": "MERGEABLE"
               },
               "fetchedAt": 0
@@ -8498,6 +8516,58 @@
           }
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
           "checkpoint": "loaded"
         }
       ]
@@ -8506,12 +8576,29 @@
       "id": "pr-sidebar-checks-refused",
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
-      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "sites": [
+        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/session/mobile-pr-queries.ts",
+        "mobile/src/session/mobile-pr-sidebar-state.ts"
+      ],
       "schedules": [],
       "steps": [
         {
-          "action": "load",
-          "id": "load"
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
         },
         {
           "complete": "hostedReview.forBranch#1",
@@ -8528,8 +8615,8 @@
               "number": 12,
               "title": "Recorded",
               "state": "open",
-              "url": "https://x/12",
-              "updatedAt": "2026-01-01",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
               "mergeable": "MERGEABLE"
             }
           }
@@ -8569,8 +8656,9 @@
                 "number": 12,
                 "state": "open",
                 "title": "Recorded",
-                "url": "https://x/12",
+                "url": "https://github.com/owner/repo/pull/12",
                 "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
                 "mergeable": "MERGEABLE"
               },
               "fetchedAt": 0
@@ -8595,7 +8683,497 @@
           }
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
           "checkpoint": "checks-refused"
+        }
+      ]
+    },
+    {
+      "id": "pr-resolve-refused-rolls-back",
+      "operation": "session.pr-sidebar",
+      "family": "session.pr-sidebar",
+      "sites": [
+        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/session/mobile-pr-queries.ts",
+        "mobile/src/session/mobile-pr-sidebar-state.ts",
+        "mobile/src/session/pr-comment-writes.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        },
+        {
+          "action": "resolve-thread",
+          "id": "resolve-thread"
+        },
+        {
+          "checkpoint": "resolved-locally"
+        },
+        {
+          "complete": "github.resolveReviewThread#1",
+          "params": {
+            "repo": "id:repo-9",
+            "threadId": "thread-1",
+            "resolve": true
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "upstream_error",
+              "message": "Resource not accessible by integration"
+            }
+          }
+        },
+        {
+          "checkpoint": "rolled-back"
+        }
+      ]
+    },
+    {
+      "id": "pr-comment-posted-in-place",
+      "operation": "session.pr-sidebar",
+      "family": "session.pr-sidebar",
+      "sites": [
+        "mobile/src/session/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/session/mobile-pr-queries.ts",
+        "mobile/src/session/mobile-pr-sidebar-state.ts",
+        "mobile/src/session/pr-comment-writes.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        },
+        {
+          "action": "post-comment",
+          "id": "post-comment"
+        },
+        {
+          "complete": "github.addIssueComment#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "body": "recorded comment",
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "comment": {
+                "id": 57
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "comment-sent"
+        },
+        {
+          "complete": "github.prComments#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "noCache": true,
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": 55,
+                "author": "rev",
+                "body": "please fix",
+                "createdAt": "2026-01-01T00:00:00Z",
+                "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                "threadId": "thread-1",
+                "path": "src/app.ts",
+                "line": 3,
+                "isResolved": false
+              },
+              {
+                "id": 57,
+                "author": "me",
+                "body": "recorded comment",
+                "createdAt": "2026-01-01T00:01:00Z",
+                "url": "https://github.com/owner/repo/pull/12#issuecomment-57"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "comment-shown"
         }
       ]
     },
