@@ -22,11 +22,11 @@ const bounds = { min: 0.25, max: 5 }
 
 describe('zoomPdfViewerWithWheel', () => {
   it('stops on the fit-width scale when a step would pass it, then leaves it', () => {
-    const viewer = fakeViewer(1)
+    const below = fakeViewer(1)
+    expect(zoomPdfViewerWithWheel(below, zoomInEvent, bounds, () => 1.5)).toBe('page-width')
+    expect(below.currentScaleValue).toBe('page-width')
 
-    expect(zoomPdfViewerWithWheel(viewer, zoomInEvent, bounds, () => 1.5)).toBe('page-width')
-    expect(viewer.currentScale).toBe(1.5)
-
-    expect(zoomPdfViewerWithWheel(viewer, zoomInEvent, bounds, () => 1.5)).toBeGreaterThan(1.5)
+    const atFit = fakeViewer(1.5)
+    expect(zoomPdfViewerWithWheel(atFit, zoomInEvent, bounds, () => 1.5)).toBeGreaterThan(1.5)
   })
 })

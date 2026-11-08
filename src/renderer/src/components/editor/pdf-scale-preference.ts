@@ -87,12 +87,13 @@ export function zoomPdfViewerWithWheel(
   }
   const { container } = viewer
   const rect = container.getBoundingClientRect()
-  // Why: an absolute scale avoids updateScale's 0.01 rounding, which swallows slow pinches.
-  viewer.currentScale = next
   const fitted = next === fitScale
   if (fitted) {
-    // Why: same scale, so pdf.js only records the preset resizes refit to; update() below may change the page it fits.
+    // Why: the preset is what resizes refit to; a numeric set first could move pdf.js to a page of another width.
     viewer.currentScaleValue = 'page-width'
+  } else {
+    // Why: an absolute scale avoids updateScale's 0.01 rounding, which swallows slow pinches.
+    viewer.currentScale = next
   }
   // Why: pdf.js keeps the viewport's top-left fixed, so shift by the pointer's grown offset.
   const growth = next / previous - 1
