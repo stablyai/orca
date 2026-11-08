@@ -32,6 +32,7 @@ export function WorktreeForceDeleteButton({
   menuSide,
   moreActionsLabel,
   alwaysForceDeleteLabel,
+  alwaysForceDeleteDescription,
   children
 }: {
   toastId?: string
@@ -45,6 +46,7 @@ export function WorktreeForceDeleteButton({
   menuSide?: 'top' | 'bottom'
   moreActionsLabel?: string
   alwaysForceDeleteLabel?: string
+  alwaysForceDeleteDescription?: string
   children?: ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -164,12 +166,24 @@ export function WorktreeForceDeleteButton({
         >
           <DropdownMenuItem
             variant="destructive"
+            className="max-w-72 whitespace-normal"
             onSelect={() => {
               void alwaysForceDelete()
             }}
           >
-            {alwaysForceDeleteLabel ??
-              t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
+            <div className="flex min-w-0 flex-col gap-1">
+              <span>
+                {alwaysForceDeleteLabel ??
+                  t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {alwaysForceDeleteDescription ??
+                  t(
+                    'workspaceDeletion.alwaysForceDeleteDescription',
+                    'Applies to all future workspace deletions.'
+                  )}
+              </span>
+            </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
       ) : null}

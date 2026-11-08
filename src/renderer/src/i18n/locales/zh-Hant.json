@@ -4224,7 +4224,6 @@
             "4f327c8b3d": "開啟 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手機模擬器",
-            "aea43b5748": "開啟現有的模擬器分頁。",
             "b426bb2615": "轉到手機模擬器",
             "4833fb2cbe": "新瀏覽器分頁",
             "d364f3c8d4": "新終端機",
@@ -21509,11 +21508,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",
     "alwaysForceDelete": "始終強制刪除",
+    "alwaysForceDeleteDescription": "適用於今後所有工作區刪除操作。",
     "moreActions": "更多強制刪除選項",
-    "alwaysForceDeleteTooltip": "適用於今後所有工作區刪除操作。",
     "moreBranchActions": "更多分支刪除選項",
     "alwaysForceDeleteBranches": "始終刪除保留的分支",
-    "alwaysForceDeleteBranchesTooltip": "適用於日後刪除工作區後保留的分支。"
+    "alwaysForceDeleteBranchesDescription": "適用於日後刪除工作區後保留的分支。"
   },
   "worktree": {
     "setupTrust": {

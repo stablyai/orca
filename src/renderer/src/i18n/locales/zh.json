@@ -3769,7 +3769,6 @@
             "4f327c8b3d": "打开 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手机模拟器",
-            "aea43b5748": "打开现有的模拟器选项卡。",
             "b426bb2615": "转到手机模拟器",
             "4833fb2cbe": "新浏览器选项卡",
             "d364f3c8d4": "新终端",
@@ -21672,11 +21671,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "无法保存删除偏好设置",
     "alwaysForceDelete": "始终强制删除",
+    "alwaysForceDeleteDescription": "适用于今后所有工作区删除操作。",
     "moreActions": "更多强制删除选项",
-    "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
-    "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
-    "alwaysForceDeleteBranches": "始终删除保留的分支"
+    "alwaysForceDeleteBranches": "始终删除保留的分支",
+    "alwaysForceDeleteBranchesDescription": "适用于将来删除工作区后保留的分支。"
   },
   "workspace": {
     "branchChoice": {

@@ -68,11 +68,25 @@ const windowsSnapshot: MemorySnapshot = {
   collectedAt: 1
 }
 
+const crowdedSnapshot: MemorySnapshot = {
+  ...windowsSnapshot,
+  worktrees: Array.from({ length: 15 }, (_, index) => ({
+    worktreeId: `workspace-${index + 1}`,
+    worktreeName: `Workspace ${index + 1}`,
+    repoId: 'fixture-project',
+    repoName: 'Project',
+    cpu: 0,
+    memory: 0,
+    sessions: [],
+    history: []
+  }))
+}
+
 export const shortWindowMetricDetails = defineFixture({
   width: 440,
-  store: { memorySnapshot: windowsSnapshot, workspaceSessionReady: true },
+  store: { memorySnapshot: crowdedSnapshot, workspaceSessionReady: true },
   setup: () => {
-    window.api.memory.getSnapshot = async () => windowsSnapshot
+    window.api.memory.getSnapshot = async () => crowdedSnapshot
     window.api.pty.listSessions = async () => []
   },
   render: () => (
@@ -88,5 +102,23 @@ export const shortWindowMetricDetails = defineFixture({
       popover.style.maxHeight = '320px'
     }
     popover?.querySelector('summary')?.click()
+  }
+})
+
+export const shortWindowCollapsedDetails = defineFixture({
+  ...shortWindowMetricDetails,
+  interact: async (frame) => {
+    await shortWindowMetricDetails.interact?.(frame)
+    document.querySelector('[data-slot="popover-content"] details')?.removeAttribute('open')
+  }
+})
+
+export const shortWindowOrphanCleanup = defineFixture({
+  ...shortWindowMetricDetails,
+  setup: () => {
+    shortWindowMetricDetails.setup?.()
+    window.api.pty.listSessions = async () => [
+      { id: 'fixture-orphan', cwd: '/workspace', title: 'Terminal', agentOwnership: 'absent' }
+    ]
   }
 })

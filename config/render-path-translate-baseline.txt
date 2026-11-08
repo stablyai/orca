@@ -434,7 +434,7 @@
 1 src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx
 3 src/renderer/src/components/tab-bar/TerminalTabSplitMenuSection.tsx
 1 src/renderer/src/components/tab-bar/shell-icons.tsx
-8 src/renderer/src/components/tab-bar/tab-bar-static-create-menu.tsx
+7 src/renderer/src/components/tab-bar/tab-bar-static-create-menu.tsx
 1 src/renderer/src/components/tab-group/TabGroupDropOverlay.tsx
 3 src/renderer/src/components/tab-group/TabGroupPaneActionsMenu.tsx
 1 src/renderer/src/components/tab-group/TabGroupPanel.tsx

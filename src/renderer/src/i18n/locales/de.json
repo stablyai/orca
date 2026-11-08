@@ -4307,7 +4307,6 @@
             "4f327c8b3d": "Markdown öffnen…",
             "3d5d6c960d": "Neue Markdown-Datei erstellen",
             "fd2b42aaa3": "Neuen Mobilgeräte-Emulator erstellen",
-            "aea43b5748": "Den vorhandenen Emulator-Tab öffnen.",
             "b426bb2615": "Zum Mobilgeräte-Emulator wechseln",
             "4833fb2cbe": "Neuen Browser-Tab öffnen",
             "d364f3c8d4": "Neues Terminal öffnen",
@@ -21835,11 +21834,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Die Löscheinstellung konnte nicht gespeichert werden",
     "alwaysForceDelete": "Löschen immer erzwingen",
+    "alwaysForceDeleteDescription": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreActions": "Weitere Optionen zum erzwungenen Löschen",
-    "alwaysForceDeleteTooltip": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreBranchActions": "Weitere Optionen zum Löschen von Branches",
     "alwaysForceDeleteBranches": "Beibehaltene Branches immer löschen",
-    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden."
+    "alwaysForceDeleteBranchesDescription": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden."
   },
   "worktree": {
     "nestedRemoval": {

@@ -4280,7 +4280,6 @@
             "4f327c8b3d": "Markdown Aç...",
             "3d5d6c960d": "Yeni Markdown",
             "fd2b42aaa3": "Yeni Mobil Emülatör",
-            "aea43b5748": "Mevcut emülatör sekmesini açın.",
             "b426bb2615": "Mobil Emülatöre Git",
             "4833fb2cbe": "Yeni Tarayıcı Sekmesi",
             "d364f3c8d4": "Yeni Terminal",
@@ -21816,11 +21815,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",
     "alwaysForceDelete": "Her zaman zorla sil",
+    "alwaysForceDeleteDescription": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreActions": "Diğer zorla silme seçenekleri",
-    "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır."
+    "alwaysForceDeleteBranchesDescription": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır."
   },
   "worktree": {
     "nestedRemoval": {

@@ -78,6 +78,10 @@ function PreservedBranchToastBody({
               'workspaceDeletion.alwaysForceDeleteBranches',
               'Always delete preserved branches'
             )}
+            alwaysForceDeleteDescription={t(
+              'workspaceDeletion.alwaysForceDeleteBranchesDescription',
+              'Applies to branches kept after future workspace deletions.'
+            )}
           >
             <Trash2 className="size-3.5" />
             <span className="truncate">{forceDeleteLabel}</span>

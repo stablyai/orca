@@ -181,7 +181,6 @@ export function CommitArea({
           <div key={entry.kind}>
             <DropdownMenuItem
               aria-disabled={entry.disabled || undefined}
-              className="aria-disabled:opacity-40"
               variant={entry.variant}
               textValue={entry.label}
               aria-describedby={entry.disabled ? `${actionDescriptionId}-${entry.kind}` : undefined}

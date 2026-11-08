@@ -17164,7 +17164,6 @@
             "4f327c8b3d": "Abrir Markdown...",
             "3d5d6c960d": "Novo Markdown",
             "fd2b42aaa3": "Novo Emulador Móvel",
-            "aea43b5748": "Abra a aba do emulador existente.",
             "b426bb2615": "Ir para o Emulador Móvel",
             "4833fb2cbe": "Nova Aba do Navegador",
             "d364f3c8d4": "Novo Terminal",
@@ -22198,11 +22197,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Não foi possível salvar a preferência de exclusão",
     "alwaysForceDelete": "Sempre forçar exclusão",
+    "alwaysForceDeleteDescription": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreActions": "Mais opções de exclusão forçada",
-    "alwaysForceDeleteTooltip": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho."
+    "alwaysForceDeleteBranchesDescription": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho."
   },
   "worktree": {
     "nestedRemoval": {

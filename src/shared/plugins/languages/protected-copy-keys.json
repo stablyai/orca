@@ -1002,7 +1002,7 @@
     "updates.installBlock.unresponsiveTitle",
     "updates.installBlock.waitingLabel",
     "workspaceDeletion.alwaysForceDelete",
-    "workspaceDeletion.alwaysForceDeleteTooltip",
+    "workspaceDeletion.alwaysForceDeleteDescription",
     "workspaceDeletion.moreActions",
     "workspaceDeletion.preferenceSaveFailed",
     "worktree.nestedRemoval.cancel",

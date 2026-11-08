@@ -4557,7 +4557,6 @@
             "4f327c8b3d": "Open Markdown...",
             "3d5d6c960d": "New Markdown",
             "fd2b42aaa3": "New Mobile Emulator",
-            "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
             "d364f3c8d4": "New Terminal",
@@ -22545,11 +22544,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
     "alwaysForceDelete": "Always force delete",
+    "alwaysForceDeleteDescription": "Applies to all future workspace deletions.",
     "moreActions": "More force delete options",
-    "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions."
   },
   "worktree": {
     "setupTrust": {

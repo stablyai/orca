@@ -4062,7 +4062,6 @@
             "4f327c8b3d": "Ouvrir un Markdown...",
             "3d5d6c960d": "Nouveau Markdown",
             "fd2b42aaa3": "Nouvel émulateur mobile",
-            "aea43b5748": "Ouvrir l'onglet émulateur existant.",
             "b426bb2615": "Aller à l'émulateur mobile",
             "4833fb2cbe": "Nouvel onglet de navigateur",
             "d364f3c8d4": "Nouveau terminal",
@@ -22394,10 +22393,10 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Impossible d'enregistrer la préférence de suppression",
     "alwaysForceDelete": "Toujours forcer la suppression",
+    "alwaysForceDeleteDescription": "S'applique à toutes les futures suppressions d'espace de travail.",
     "moreActions": "Plus d'options de suppression forcée",
-    "alwaysForceDeleteTooltip": "S'applique à toutes les futures suppressions d'espace de travail.",
-    "alwaysForceDeleteBranchesTooltip": "S'applique aux branches conservées après les suppressions futures de l'espace de travail.",
     "alwaysForceDeleteBranches": "Toujours supprimer les branches conservées",
+    "alwaysForceDeleteBranchesDescription": "S'applique aux branches conservées après les suppressions futures de l'espace de travail.",
     "moreBranchActions": "Plus d'options de suppression de branche"
   },
   "workspace": {

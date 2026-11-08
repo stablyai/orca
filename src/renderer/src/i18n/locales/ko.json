@@ -3769,7 +3769,6 @@
             "4f327c8b3d": "Markdown 열기...",
             "3d5d6c960d": "새로운 Markdown",
             "fd2b42aaa3": "새로운 모바일 에뮬레이터",
-            "aea43b5748": "기존 에뮬레이터 탭을 엽니다.",
             "b426bb2615": "모바일 에뮬레이터로 이동",
             "4833fb2cbe": "새 브라우저 탭",
             "d364f3c8d4": "새로운 Terminal",
@@ -21672,11 +21671,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "삭제 환경설정을 저장하지 못했습니다",
     "alwaysForceDelete": "항상 강제 삭제",
+    "alwaysForceDeleteDescription": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "moreActions": "추가 강제 삭제 옵션",
-    "alwaysForceDeleteTooltip": "이후 모든 워크스페이스 삭제에 적용됩니다.",
-    "alwaysForceDeleteBranchesTooltip": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
-    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제"
+    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
+    "alwaysForceDeleteBranchesDescription": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다."
   },
   "workspace": {
     "branchChoice": {

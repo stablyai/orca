@@ -3769,7 +3769,6 @@
             "4f327c8b3d": "Markdown を開く…",
             "3d5d6c960d": "新規 Markdown",
             "fd2b42aaa3": "新規モバイルエミュレータ",
-            "aea43b5748": "既存のエミュレータタブを開きます。",
             "b426bb2615": "モバイルエミュレータに移動",
             "4833fb2cbe": "新規ブラウザタブ",
             "d364f3c8d4": "新規ターミナル",
@@ -21672,11 +21671,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "削除の設定を保存できませんでした",
     "alwaysForceDelete": "常に強制削除",
+    "alwaysForceDeleteDescription": "今後のすべてのワークスペース削除に適用されます。",
     "moreActions": "その他の強制削除オプション",
-    "alwaysForceDeleteTooltip": "今後のすべてのワークスペース削除に適用されます。",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
-    "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。"
+    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
+    "moreBranchActions": "その他のブランチ削除オプション"
   },
   "workspace": {
     "branchChoice": {
