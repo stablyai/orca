@@ -128,7 +128,6 @@ type WorkerListRow = {
   state: string
   outcome?: string
   liveness?: string
-  activity?: string
   agent?: string
   terminal?: string
   terminalState?: string
@@ -161,7 +160,6 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
             ? projection.outcome
             : undefined,
         liveness: projection?.liveness.verdict,
-        activity: knownActivity(projection),
         agent: projection?.provider
           ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
           : undefined,
