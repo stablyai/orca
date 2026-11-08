@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { HostStatusGatesContext } from '../components/host-protocol-gates-context'
@@ -215,7 +216,7 @@ async function mount(
   }
   await act(async () => {
     mounted.push(
-      create(
+      createWithQueryClient(
         createElement(
           HostStatusGatesContext.Provider,
           { value: gates },

@@ -29,6 +29,7 @@ import {
   linearAssignedIssueListRead,
   linearIssueSearchRead
 } from './mobile-task-source-search-operations'
+import { taskListKey, useTaskListCache, type TaskListSnapshot } from './task-list-cache'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
@@ -38,6 +39,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     connState,
     countGitHubItemPages,
     fetchGitHubItemsPage,
+    githubKind,
     githubMode,
     gitlabFilter,
     gitlabView,
@@ -46,12 +48,14 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     jiraFilter,
     linearFilter,
     linearOrderBy,
+    hostId,
     loadGenerationRef,
     provider,
     repoListEnsureLoaded,
     resetGitHubItemsState,
     selectedLinearTeamIds,
     selectedLinearWorkspaceId,
+    selectedRepoIds,
     effectiveRepoIds,
     serverRepoList,
     setError,
@@ -69,6 +73,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     tasksSupported
   } = model
   const unsettledLoadRef = useRef(0)
+  const { begin, remember, rememberPageCount, revalidating, setRevalidating } =
+    useTaskListCache(model)
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
       if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
@@ -80,11 +86,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       const requestClient = client
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === requestClient
+      // Reads only inputs in this callback's dependencies.
+      const listKey = taskListKey(hostId, model)
+      const rememberRows = (items: TaskListSnapshot['items']) =>
+        remember(listKey, provider, { items })
       setError('')
       if (options.silent) {
         setRefreshing(true)
       } else {
-        setLoading(true)
+        begin(listKey, provider)
       }
       try {
         if (provider !== 'github' || githubMode !== 'items') {
@@ -108,7 +118,9 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             siteId: jiraConnection.selection
           })
           if (isCurrent()) {
-            setItems(issues.map(createJiraTask))
+            const jiraItems = issues.map(createJiraTask)
+            setItems(jiraItems)
+            rememberRows(jiraItems)
           }
           return
         }
@@ -149,11 +161,20 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubPages([page.items])
             setGithubCurrentPage(0)
             setItems(page.items)
+            remember(listKey, provider, {
+              items: page.items,
+              github: {
+                sourceErrors: page.sourceErrors,
+                sourceFallbacks: page.sourceFallbacks,
+                countedTotalPages: null
+              }
+            })
             if (effectiveRepoIds.size > 0) {
               void countGitHubItemPages(requestClient, queriedRepos, isCurrent).then(
                 (totalPages) => {
                   if (isCurrent()) {
                     setGithubCountedTotalPages(totalPages)
+                    rememberPageCount(listKey, totalPages)
                   }
                 }
               )
@@ -176,11 +197,11 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             if (!isCurrent()) {
               return
             }
-            setItems(
-              (todos ?? [])
-                .map(createGitLabTodoTask)
-                .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
-            )
+            const todoItems = (todos ?? [])
+              .map(createGitLabTodoTask)
+              .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
+            setItems(todoItems)
+            rememberRows(todoItems)
             return
           }
           const results = await mapWithConcurrency(
@@ -225,11 +246,11 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
               results.find((result) => result.error)?.error ?? 'Failed to load GitLab tasks'
             )
           }
-          setItems(
-            results
-              .flatMap((result) => result.items)
-              .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
-          )
+          const gitlabItems = results
+            .flatMap((result) => result.items)
+            .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
+          setItems(gitlabItems)
+          rememberRows(gitlabItems)
           if (failedCount > 0) {
             setError(buildPartialRepositoryNotice(failedCount, queriedRepos.length))
           } else {
@@ -261,7 +282,9 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           if (!isCurrent()) {
             return
           }
-          setItems(sorted.map(createLinearTask))
+          const linearItems = sorted.map(createLinearTask)
+          setItems(linearItems)
+          rememberRows(linearItems)
         }
       } catch (err) {
         if (!isCurrent()) {
@@ -283,6 +306,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (isCurrent()) {
           setLoading(false)
           setRefreshing(false)
+          setRevalidating(false)
           setTaskListSettled(true)
         }
       }
@@ -295,16 +319,22 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       fetchGitHubItemsPage,
       gitlabFilter,
       gitlabView,
+      githubKind,
       githubMode,
+      hostId,
       jiraConnection,
       jiraFilter,
       linearConnected,
       linearFilter,
       linearOrderBy,
+      begin,
+      remember,
+      rememberPageCount,
       repoListEnsureLoaded,
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
+      selectedRepoIds,
       effectiveRepoIds,
       taskStateHydrated,
       tasksSupported
@@ -339,6 +369,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         unsettledLoadRef.current = 0
         setLoading(false)
         setRefreshing(false)
+        setRevalidating(false)
       }
     },
     [loadTasks, loadGenerationRef, setLoading, setRefreshing]
@@ -359,7 +390,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       void loadTasks({ silent: true })
     }
   }, [serverRepoList, loadTasks, effectiveRepoIds.size, provider, connState, taskStateHydrated])
-  return Object.assign(model, { loadTasks, captureTaskListRefresh })
+  return Object.assign(model, { loadTasks, captureTaskListRefresh, revalidating })
 }
 
 export type TaskListLoadingModel = ReturnType<typeof useMobileTasksTaskListLoading>

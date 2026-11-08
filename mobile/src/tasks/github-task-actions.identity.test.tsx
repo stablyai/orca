@@ -12,7 +12,8 @@ import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-cl
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import React, { useState, useRef } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { DetailPayload, GitHubDetailFile } from './mobile-tasks-provider-detail-types'
@@ -126,6 +127,7 @@ async function mount() {
       resetGitHubItemsState: noop,
       selectedLinearTeamIds: effectiveRepoIds,
       selectedLinearWorkspaceId: null,
+      selectedRepoIds: effectiveRepoIds,
       effectiveRepoIds,
       serverRepoList: repos,
       setError,
@@ -279,7 +281,7 @@ async function mount() {
     )
   }
   await act(async () => {
-    renderers.push(create(<Probe />))
+    renderers.push(createWithQueryClient(<Probe />))
   })
   await act(async () => select(a))
   return {

@@ -1,5 +1,6 @@
 import { createElement, useLayoutEffect, useState } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type SentRequest } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState, RpcResponse } from '../transport/types'
@@ -107,6 +108,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
     repoListEnsureLoaded: async () => repos,
     selectedLinearTeamIds: new Set<string>(),
     effectiveRepoIds: new Set(counted ? repos.map((repo) => repo.id) : []),
+    selectedRepoIds: new Set<string>(),
     serverRepoList: [],
     jiraConnection: { connected: false },
     resetGitHubItemsState: vi.fn()
@@ -163,7 +165,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
   }
   let renderer: ReactTestRenderer
   await act(async () => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
     mounted.add(renderer)
   })
   const answered = new Set<SentRequest>()
