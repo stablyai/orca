@@ -7,9 +7,9 @@ import {
   PER_REPO_FETCH_LIMIT,
   getTaskPagePerRepoLimit,
   getWorkItemCountedTotalPages,
-  isGitHubWorkItemsSshRemoteRequiredError,
   taskPageToGitHubApiPage
-} from '../../../src/shared/work-items/work-items'
+} from '../../../src/shared/work-items/work-item-pagination'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/github/work-item-ssh-error'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,

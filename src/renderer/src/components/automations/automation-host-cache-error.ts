@@ -3,13 +3,13 @@
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
+  matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode
 } from '../../../../shared/automations/ownership/automation-owner-conflict'
 import {
   AutomationHostScopeUnsupportedError,
   AutomationListResponseError
 } from './automation-scoped-list-client'
-import { matchAutomationOwnerConflict } from '../../../../shared/automations/ownership/automation-owner-conflict'
 import type {
   AutomationHostQueryError,
   AutomationHostQueryErrorCode

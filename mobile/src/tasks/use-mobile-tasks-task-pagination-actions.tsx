@@ -12,7 +12,7 @@ import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
   getTaskPagePerRepoLimit
-} from '../../../src/shared/work-items/work-items'
+} from '../../../src/shared/work-items/work-item-pagination'
 import { useCallback, useMemo, useState } from './mobile-tasks-dependencies'
 import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'

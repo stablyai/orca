@@ -54,7 +54,7 @@ function discoveryResult(
   return {
     skills,
     sources,
-    scannedAt: Date.now()
+    scannedAt: 1
   }
 }
 

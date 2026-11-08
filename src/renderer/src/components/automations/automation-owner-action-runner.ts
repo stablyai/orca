@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/automations/history/automation-run'
 import {
   automationOwnerConflictMessage,
+  matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode,
   type AutomationOwnerConflictCode
 } from '../../../../shared/automations/ownership/automation-owner-conflict'
@@ -40,7 +41,6 @@ import {
   updateAutomationForOwner,
   updateOrphanAutomation
 } from './automation-scoped-list-client'
-import { matchAutomationOwnerConflict } from '../../../../shared/automations/ownership/automation-owner-conflict'
 
 export type AutomationOwnerConflict = {
   code: AutomationOwnerConflictCode | 'unsupported_host_scope'

@@ -1,5 +1,8 @@
-import { isTaskProvider, type TaskProvider } from '../../../src/shared/work-items/task-providers'
-import { resolveVisibleTaskProvider } from '../../../src/shared/work-items/task-providers'
+import {
+  isTaskProvider,
+  resolveVisibleTaskProvider,
+  type TaskProvider
+} from '../../../src/shared/work-items/task-providers'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import {
   type RuntimeTaskSettings,

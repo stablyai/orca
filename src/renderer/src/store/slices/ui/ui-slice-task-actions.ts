@@ -6,7 +6,7 @@ import {
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
-import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-items'
+import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
 

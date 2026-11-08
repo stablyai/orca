@@ -1,7 +1,7 @@
 import type { TaskPageGitHubListProjectionModel } from './use-task-page-github-list-projection'
 import { useCallback, useEffect } from 'react'
 import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
-import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-items'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import {
   resolveEmptyPageOutcome,
   applyEmptyPageClamp,

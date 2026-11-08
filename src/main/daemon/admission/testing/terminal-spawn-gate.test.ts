@@ -62,7 +62,7 @@ describe('TerminalSpawnGate', () => {
       gate = new TerminalSpawnGate({
         log,
         mode,
-        now: () => Date.now(),
+        now: () => now,
         hostTerminals: new HostTerminalLedger({ dir: null, maxTerminals, log })
       })
       host = new TerminalHost({ spawnSubprocess, spawnGate: gate })

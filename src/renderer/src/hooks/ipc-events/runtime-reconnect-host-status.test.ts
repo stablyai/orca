@@ -115,7 +115,7 @@ describe('remote Orca server reconnect', () => {
       // Clear module-level removal tombstones or later test probes stay suppressed.
       removedRuntimeEnvironmentIds: new Set(),
       runtimeStatusByEnvironmentId: new Map([
-        [ENVIRONMENT_ID, { status: liveRuntimeStatus(), checkedAt: Date.now() }]
+        [ENVIRONMENT_ID, { status: liveRuntimeStatus(), checkedAt: 1 }]
       ]) as never
     })
   })

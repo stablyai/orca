@@ -7,10 +7,8 @@ import {
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
-import {
-  sortWorkItemsByNumber,
-  taskPageToGitHubApiPage
-} from '../../../../../shared/work-items/work-items'
+import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import {
   materializeTaskPageItemList,
   overlayPendingOnTaskPagePages,

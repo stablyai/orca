@@ -8,7 +8,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items/work-items'
+import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items/work-item-pagination'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
