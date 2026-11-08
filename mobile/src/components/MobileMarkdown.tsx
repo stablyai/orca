@@ -7,7 +7,10 @@ import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-block
 import { MarkdownText } from './mobile-markdown-text'
 import { MobileMarkdownRemoteImage } from './MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
-import { MarkdownLinkHandlerContext } from './markdown-link-handler'
+import {
+  MarkdownLinkHandlerContext,
+  MarkdownInferredFileLinkHandlerContext
+} from './markdown-link-handler'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
 import {
   MobileMarkdownLinksContext,
@@ -65,6 +68,7 @@ function MobileMarkdownContent({
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
+  const onOpenInferredFile = useContext(MarkdownInferredFileLinkHandlerContext)
   const links = useContext(MobileMarkdownLinksContext)
   const fileLinkExists = useNativeChatFileLinkExistsFrom(
     links?.fileLinks ?? null,
@@ -91,6 +95,7 @@ function MobileMarkdownContent({
     growing,
     chatMath,
     onOpenFile,
+    onOpenInferredFile,
     onOpenLink,
     filePathsLinkedInTree: fileLinkExists !== undefined,
     tone,

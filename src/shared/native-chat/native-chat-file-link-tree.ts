@@ -1,4 +1,8 @@
-import { createNativeChatFileHref, routeNativeChatHref } from './native-chat-href-routing'
+import {
+  createNativeChatFileHref,
+  routeNativeChatHref,
+  type NativeChatFileLinkProvenance
+} from './native-chat-href-routing'
 import { formatFileLinkLocation, parseFileLinkLocation } from '../file-links/file-link-location'
 import {
   extractTerminalFileLinkReadings,
@@ -96,10 +100,14 @@ function hasPartialPathBoundary(value: string, link: ParsedTerminalFileLink): bo
 }
 
 // Wrap parsed locations rather than raw file-URI display text so navigation receives the literal path.
-function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): MarkdownNode {
+function createFileLinkNode(
+  link: ParsedTerminalFileLink,
+  child: MarkdownNode,
+  provenance?: NativeChatFileLinkProvenance
+): MarkdownNode {
   return {
     type: 'link',
-    url: createNativeChatFileHref(formatFileLinkLocation(link)),
+    url: createNativeChatFileHref(formatFileLinkLocation(link), 'location', provenance),
     children: [child]
   }
 }
@@ -222,7 +230,7 @@ function inlineCodeFileLink(node: MarkdownNode, exists: FileLinkExists): Markdow
       (!candidate.pathText.includes('.') || looksLikeFilePath(candidate, false))
   )
   const link = bare ? (exists(bare) ? bare : null) : exactFileLink(value, exists)
-  return link ? createFileLinkNode(link, node) : null
+  return link ? createFileLinkNode(link, node, bare ? 'bare-filename' : undefined) : null
 }
 
 function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
@@ -230,7 +238,11 @@ function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
     const route = routeNativeChatHref(node.url)
     if (route.kind === 'file') {
       // Resolve URL syntax once before wrapping literal location text.
-      node.url = createNativeChatFileHref(formatFileLinkLocation(route))
+      node.url = createNativeChatFileHref(
+        formatFileLinkLocation(route),
+        'location',
+        route.provenance
+      )
     }
     return
   }

@@ -1,9 +1,17 @@
 import { isWindowsAbsolutePathLike } from '../cross-platform-path'
 import { fileUriToFilesystemPath } from '../file-links/file-uri-path'
 
+export type NativeChatFileLinkProvenance = 'bare-filename'
+
 export type NativeChatHrefRoute =
   | { kind: 'web'; url: string }
-  | { kind: 'file'; pathText: string; line: number | null; pathKind?: 'literal' }
+  | {
+      kind: 'file'
+      pathText: string
+      line: number | null
+      pathKind?: 'literal'
+      provenance?: NativeChatFileLinkProvenance
+    }
   | { kind: 'none' }
 
 const WEB_SCHEME_PATTERN = /^(?:https?|mailto):/i
@@ -11,16 +19,22 @@ const SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
 // Why: `README.md:5` is a file location; the scheme pattern alone reads `README.md:` as a scheme.
 const BARE_FILE_LOCATION_PATTERN = /^[^\s:/\\?#]+\.[\p{L}\p{N}_+-]+:\d+(?::\d+)?$/u
 export const NATIVE_CHAT_FILE_HREF_PREFIX = '#orca-native-chat-file='
+export const NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX = '#orca-native-chat-inferred-file='
 const NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX = '#orca-native-chat-file-path='
 const MAX_NATIVE_CHAT_FILE_HREF_DECODES = 4
 
 /** Location text keeps reply parsing; known tool paths retain every filename character. */
 export function createNativeChatFileHref(
   pathText: string,
-  pathKind: 'location' | 'literal' = 'location'
+  pathKind: 'location' | 'literal' = 'location',
+  provenance?: NativeChatFileLinkProvenance
 ): string {
   const prefix =
-    pathKind === 'literal' ? NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX : NATIVE_CHAT_FILE_HREF_PREFIX
+    pathKind === 'literal'
+      ? NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX
+      : provenance === 'bare-filename'
+        ? NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX
+        : NATIVE_CHAT_FILE_HREF_PREFIX
   return `${prefix}${encodeURIComponent(pathText)}`
 }
 
@@ -79,6 +93,12 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
   let trimmed = href?.trim()
   if (!trimmed) {
     return { kind: 'none' }
+  }
+  if (trimmed.startsWith(NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX)) {
+    const pathText = decodeNativeChatFileHref(trimmed, NATIVE_CHAT_INFERRED_FILE_HREF_PREFIX)
+    return pathText
+      ? { kind: 'file', pathText, line: null, provenance: 'bare-filename' }
+      : { kind: 'none' }
   }
   if (trimmed.startsWith(NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)) {
     const pathText = decodeNativeChatFileHref(trimmed, NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)

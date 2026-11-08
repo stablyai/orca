@@ -223,6 +223,9 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               </Tooltip>
             ) : null}
           </div>
+          {request.description ? (
+            <p className="px-1.5 py-1 text-xs text-muted-foreground">{request.description}</p>
+          ) : null}
           <ActionRow
             action={request.primary}
             shortcut="primary"
