@@ -16,6 +16,8 @@ export type EphemeralVmWorkspaceRuntime = Pick<
   workspaceId: string
   /** Why the VM is in resume_failed / failed, as persisted on the record. */
   failure?: EphemeralVmFailure
+  /** False when the recipe snapshot has no suspend step, so Suspend VM would do nothing. */
+  canSuspend: boolean
 }
 
 export type EphemeralVmLifecycleSlice = {
@@ -71,7 +73,9 @@ export function projectEphemeralVmWorkspaceRuntimes(
       workspaceId: record.workspaceId,
       status: record.status,
       ...(record.runtimeEnvironmentId ? { runtimeEnvironmentId: record.runtimeEnvironmentId } : {}),
-      ...(failure ? { failure } : {})
+      ...(failure ? { failure } : {}),
+      // Records without a snapshot resolve the recipe from the repo at suspend time.
+      canSuspend: !record.recipe || Boolean(record.recipe.suspend)
     }
   }
   return byWorkspaceId
@@ -93,6 +97,7 @@ function sameRuntimes(
       left.id === right.id &&
       left.status === right.status &&
       left.runtimeEnvironmentId === right.runtimeEnvironmentId &&
+      left.canSuspend === right.canSuspend &&
       left.failure?.error === right.failure?.error &&
       left.failure?.errorCode === right.failure?.errorCode &&
       JSON.stringify(left.failure?.errorParams) === JSON.stringify(right.failure?.errorParams)
@@ -101,6 +106,7 @@ function sameRuntimes(
 }
 
 let refreshSequence = 0
+let latestRefresh: Promise<void> = Promise.resolve()
 
 export const createEphemeralVmLifecycleSlice: StateCreator<
   AppState,
@@ -110,22 +116,27 @@ export const createEphemeralVmLifecycleSlice: StateCreator<
 > = (set) => ({
   ephemeralVmRuntimesByWorkspaceId: {},
   wakingEphemeralVmWorkspaceIds: {},
-  refreshEphemeralVmRuntimes: async () => {
+  refreshEphemeralVmRuntimes: () => {
     const listRuntimes = window.api?.ephemeralVm?.listRuntimes
     if (!listRuntimes) {
-      return
+      return Promise.resolve()
     }
     const sequence = ++refreshSequence
-    const next = projectEphemeralVmWorkspaceRuntimes(await listRuntimes())
-    // Out-of-order replies must not roll a newer lifecycle status back.
-    if (sequence !== refreshSequence) {
-      return
-    }
-    set((state) =>
-      sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
-        ? state
-        : { ephemeralVmRuntimesByWorkspaceId: next }
-    )
+    const refresh = (async (): Promise<void> => {
+      const next = projectEphemeralVmWorkspaceRuntimes(await listRuntimes())
+      // Out-of-order replies must not roll a newer lifecycle status back; a superseded caller
+      // settles with the newer read, so it never acts on a store that has not caught up.
+      if (sequence !== refreshSequence) {
+        return latestRefresh
+      }
+      set((state) =>
+        sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
+          ? state
+          : { ephemeralVmRuntimesByWorkspaceId: next }
+      )
+    })()
+    latestRefresh = refresh
+    return refresh
   },
   setEphemeralVmWorkspaceWaking: (workspaceId, waking) =>
     set((state) => {

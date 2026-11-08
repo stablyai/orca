@@ -206,13 +206,20 @@ export class WorkspaceSleepCoordinator {
   }
 
   /** The user's Suspend VM on a workspace with nothing open to sleep: queued like a sleep's
-   *  suspend, so it never runs beside a wake of the same VM. */
+   *  suspend, so it never runs beside a wake of the same VM, and skipped if the workspace is
+   *  opened before its turn. */
   suspendVm(worktreeId: string): Promise<void> {
     const platform = this.runtime.workspaceSleepPlatform
     if (!platform?.ownsVm(worktreeId)) {
       return Promise.resolve()
     }
-    return this.queueVmSuspend(platform, worktreeId, () => true)
+    // Opening the workspace while this waits its turn keeps the VM up, as it does for a Sleep.
+    const at = this.reopenings.get(worktreeId) ?? 0
+    return this.queueVmSuspend(
+      platform,
+      worktreeId,
+      () => (this.reopenings.get(worktreeId) ?? 0) === at
+    )
   }
 
   private queueVmSuspend(

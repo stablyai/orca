@@ -58,15 +58,20 @@ export async function resumeEphemeralVmWorkspace(
   const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
   // SSH servers use their target and have no pairing to refresh.
   if (!result.skipped && connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
-    const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
-    if (!pairingCode) {
-      throw new Error('Resume result did not include an Orca Server pairing code.')
-    }
-    const repaired = updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-      pairingCode
+    const environmentId = runtime.runtimeEnvironmentId
+    const recipeResult = result.runtime.recipeResult
+    // The recipe already marked the VM running; a server Orca cannot pair with is still a failed resume.
+    await recordResumeFailureOf(userDataPath, result.runtime.id, async () => {
+      const pairingCode = getEphemeralVmRecipeResultPairingCode(recipeResult)
+      if (!pairingCode) {
+        throw new Error('Resume result did not include an Orca Server pairing code.')
+      }
+      const repaired = updateEnvironmentFromPairingCode(userDataPath, environmentId, {
+        pairingCode
+      })
+      noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt)
+      invalidateRuntimeEnvironmentTransport(environmentId)
     })
-    noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt)
-    invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.
@@ -82,28 +87,36 @@ export async function resumeEphemeralVmWorkspace(
         sshTargetId: target.id
       })
     }
-    try {
-      const ssh = await connectRuntimeOwnedSshTarget({
-        runtimeId: result.runtime.id,
-        connection
-      })
-      // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
-      const reached = resolveEnvironment(userDataPath, ssh.environmentId)
-      noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
-      return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-        connectionMode: 'ssh',
-        sshTargetId: ssh.targetId,
-        runtimeEnvironmentId: ssh.environmentId
-      })
-    } catch (error) {
-      updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-        status: 'resume_failed',
-        lifecycleLastError: ephemeralVmFailureFromError(error)
-      })
-      throw error
-    }
+    const ssh = await recordResumeFailureOf(userDataPath, result.runtime.id, () =>
+      connectRuntimeOwnedSshTarget({ runtimeId: result.runtime.id, connection })
+    )
+    // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
+    const reached = resolveEnvironment(userDataPath, ssh.environmentId)
+    noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
+    return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+      connectionMode: 'ssh',
+      sshTargetId: ssh.targetId,
+      runtimeEnvironmentId: ssh.environmentId
+    })
   }
   return result.runtime
+}
+
+/** Runs a post-resume reconnect step; a failure marks the VM resume_failed with its reason. */
+async function recordResumeFailureOf<T>(
+  userDataPath: string,
+  runtimeId: string,
+  step: () => Promise<T> | T
+): Promise<T> {
+  try {
+    return await step()
+  } catch (error) {
+    updateEphemeralVmRuntimeStatus(userDataPath, runtimeId, {
+      status: 'resume_failed',
+      lifecycleLastError: ephemeralVmFailureFromError(error)
+    })
+    throw error
+  }
 }
 
 /** The wake request for a workspace's VM, taken when the wake is accepted. */

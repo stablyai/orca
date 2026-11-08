@@ -3,6 +3,7 @@ import { Loader2, Moon, Play } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm-lifecycle'
 import {
@@ -16,7 +17,8 @@ export type WorkspaceVmLifecycleAction = 'suspend' | 'resume' | 'waking' | null
 /** Which lifecycle entry a VM-backed workspace's menu offers; null hides the entry. */
 export function getWorkspaceVmLifecycleAction(
   status: EphemeralVmRuntimeStatus | undefined,
-  waking: boolean
+  waking: boolean,
+  canSuspend = true
 ): WorkspaceVmLifecycleAction {
   if (!status) {
     return null
@@ -27,7 +29,7 @@ export function getWorkspaceVmLifecycleAction(
   switch (status) {
     case 'running':
     case 'suspend_failed':
-      return 'suspend'
+      return canSuspend ? 'suspend' : null
     case 'suspended':
     case 'resume_failed':
       return 'resume'
@@ -56,11 +58,17 @@ export function WorkspaceVmLifecycleMenuItems({
   disabled: boolean
   onSleep: () => void
 }): React.JSX.Element | null {
-  const status = useAppStore(
-    (state) => selectEphemeralVmWorkspaceRuntime(state, worktreeId)?.status
+  const { status, canSuspend, waking } = useAppStore(
+    useShallow((state) => {
+      const runtime = selectEphemeralVmWorkspaceRuntime(state, worktreeId)
+      return {
+        status: runtime?.status,
+        canSuspend: runtime?.canSuspend ?? true,
+        waking: Boolean(state.wakingEphemeralVmWorkspaceIds[worktreeId])
+      }
+    })
   )
-  const waking = useAppStore((state) => Boolean(state.wakingEphemeralVmWorkspaceIds[worktreeId]))
-  const action = getWorkspaceVmLifecycleAction(status, waking)
+  const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
   if (action === 'waking') {
     return (
       <DropdownMenuItem disabled>

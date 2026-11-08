@@ -79,7 +79,13 @@ function vmMenuFixture(status: 'running' | 'suspended' | 'resume_failed', waking
     store: {
       ...fixture.store,
       ephemeralVmRuntimesByWorkspaceId: {
-        [worktree.id]: { id: 'vm-1', workspaceId: worktree.id, status, runtimeEnvironmentId: 'vm' }
+        [worktree.id]: {
+          id: 'vm-1',
+          workspaceId: worktree.id,
+          status,
+          runtimeEnvironmentId: 'vm',
+          canSuspend: true
+        }
       },
       wakingEphemeralVmWorkspaceIds: waking ? { [worktree.id]: true } : {}
     }

@@ -8,7 +8,8 @@ import type { ExecutionHostRegistryEntry } from './execution-host-registry'
 
 /**
  * A suspended VM's server is unreachable by design, so its transport reads disconnected or
- * error; the VM record says why. Only hosts already in the registry are annotated.
+ * error; the VM record says why. Only hosts already in the registry, and not answering, are
+ * annotated.
  */
 export function applyEphemeralVmHostLifecycles(
   hosts: Map<ExecutionHostId, ExecutionHostRegistryEntry>,
@@ -22,7 +23,9 @@ export function applyEphemeralVmHostLifecycles(
     const hostId = toRuntimeExecutionHostId(environmentId)
     const host = hosts.get(hostId)
     const vmState = getEphemeralVmHostState(lifecycle.status, lifecycle.waking)
-    if (!host || !vmState) {
+    // A server that answers is up whatever the record says (resumed outside Orca, or a suspend
+    // step that exited 0 without suspending); only an unreachable server takes the VM's state.
+    if (!host || !vmState || host.health === 'available') {
       continue
     }
     // Blocked reasons describe a live server; a VM that is not running has none to report.

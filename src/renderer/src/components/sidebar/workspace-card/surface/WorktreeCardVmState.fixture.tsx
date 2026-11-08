@@ -56,6 +56,7 @@ export const cards = defineFixture({
           workspaceId: entry.id,
           status: entry.status,
           runtimeEnvironmentId: `env-${entry.id}`,
+          canSuspend: true,
           ...(entry.failure ? { failure: entry.failure } : {})
         }
       ])

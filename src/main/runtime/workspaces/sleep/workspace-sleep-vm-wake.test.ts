@@ -133,6 +133,29 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(workspaceSleep.vmState(WORKTREE_ID, true)).toBe('asleep')
   })
 
+  it('drops a queued Suspend VM when the workspace is opened before its turn', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        await resuming.opened
+        order.push('resume')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const suspended = workspaceSleep.suspendVm(WORKTREE_ID)
+    workspaceSleep.noteReopened(WORKTREE_ID)
+    resuming.open()
+    await Promise.all([woke, suspended])
+
+    expect(order).toEqual(['resume'])
+  })
+
   it('skips Suspend VM for a workspace without a VM', async () => {
     const suspendVm = vi.fn(async () => {})
     const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })

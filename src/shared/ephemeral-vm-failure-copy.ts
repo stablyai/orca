@@ -148,7 +148,8 @@ export function toLifecycleLastErrorFields(failure: EphemeralVmFailure | null | 
     return {}
   }
   return {
-    lifecycleLastError: failure?.error,
+    // The record rejects an empty string; a bare `new Error()` must still record the failure.
+    lifecycleLastError: failure ? failure.error || 'Unknown error.' : undefined,
     lifecycleLastErrorCode: failure?.errorCode,
     lifecycleLastErrorParams: failure?.errorParams
   }

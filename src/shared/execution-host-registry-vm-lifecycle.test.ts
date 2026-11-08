@@ -84,6 +84,17 @@ describe('VM lifecycle host health', () => {
     expect(host?.blockedReason).toBeUndefined()
   })
 
+  it('lets a server that answers outrank a stale suspended record', () => {
+    const host = registryFor('suspended', {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry reads only snapshot transport/verification.
+      runtimeStatus: {
+        snapshot: { transport: 'ready', verification: 'verified' }
+      } as unknown as RuntimeEnvironmentStatus
+    })
+    expect(host).toMatchObject({ health: 'available' })
+    expect(host?.vmState).toBeUndefined()
+  })
+
   it('ignores VM records whose server is not a registry host', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [],
