@@ -8,8 +8,11 @@ import { runtimeLacks } from './older-runtime-run-binding'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 const WATCH_POLL_TIMEOUT_MS = 60_000
+const WATCH_RETRY_MAX_MS = 30_000
+// Long-poll admission was full or a poll outlived the transport timeout; the cursor stays valid.
+const RETRIABLE_CODES = new Set(['runtime_busy', 'runtime_timeout'])
 
-type EventsResult = { cursor: string; events: { type: string }[] }
+type EventsResult = { cursor: string; events: { type: string; reason?: string }[] }
 
 export const ORCHESTRATION_WATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration watch': async ({ flags, client, cwd }) => {
@@ -26,21 +29,60 @@ export const ORCHESTRATION_WATCH_HANDLER: Record<string, CommandHandler> = {
     }
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     let cursor = getOptionalStringFlag(flags, 'since')
+    // A closed reader (watch | head) ends the watch quietly.
+    process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EPIPE') {
+        throw error
+      }
+      process.exit(0)
+    })
+    let retryMs = 0
     for (;;) {
-      const response = await client.call<EventsResult>('orchestration.events', {
-        runId,
-        terminal,
-        terminalPaneKey:
-          terminal === undefined ? undefined : process.env.ORCA_PANE_KEY || undefined,
-        types,
-        sinceCursor: cursor,
-        timeoutMs: WATCH_POLL_TIMEOUT_MS
-      })
-      for (const event of response.result.events) {
+      let result: EventsResult
+      try {
+        result = (
+          await client.call<EventsResult>('orchestration.events', {
+            runId,
+            terminal,
+            terminalPaneKey:
+              terminal === undefined ? undefined : process.env.ORCA_PANE_KEY || undefined,
+            types,
+            sinceCursor: cursor,
+            timeoutMs: WATCH_POLL_TIMEOUT_MS
+          })
+        ).result
+      } catch (error) {
+        if (!(error instanceof RuntimeClientError)) {
+          throw error
+        }
+        if (error.code === 'consumer_fenced') {
+          writeStdoutLine(JSON.stringify({ type: 'end', reason: 'consumer_fenced' }))
+          process.exitCode = 1
+          return
+        }
+        if (!RETRIABLE_CODES.has(error.code)) {
+          throw cursor
+            ? new RuntimeClientError(
+                error.code,
+                `${error.message} Resume with --since ${cursor}.`,
+                error.data
+              )
+            : error
+        }
+        retryMs = Math.min(retryMs * 2 || 1_000, WATCH_RETRY_MAX_MS)
+        await new Promise((resolve) => setTimeout(resolve, retryMs))
+        continue
+      }
+      retryMs = 0
+      for (const event of result.events) {
         writeStdoutLine(JSON.stringify(event))
       }
-      cursor = response.result.cursor
-      if (response.result.events.some((event) => event.type === 'end')) {
+      cursor = result.cursor
+      const end = result.events.find((event) => event.type === 'end')
+      if (end) {
+        if (end.reason === 'consumer_fenced') {
+          process.exitCode = 1
+        }
         return
       }
     }

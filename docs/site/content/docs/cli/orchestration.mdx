@@ -138,14 +138,14 @@ While a wait is active, the CLI emits small JSON heartbeat lines to stderr every
 - `message`: a new Run message with `id`, `type`, `from`, `subject` and `createdAt`; the body stays in `check` / `inbox`.
 - `worker_state`: a live worker moved between `working`, `blocked`, `waiting` and `done`, with `since`, `lastTool` and, when the agent shows a question, `blockedOn`. The first lines are a `snapshot: true` of every live worker.
 - `lost`: the `--since` cursor is unknown to this Orca (another database or a reset); watching restarts from now.
-- `end`: the watcher was fenced or the Run is gone.
+- `end`: the watcher was fenced (exit code 1), or the Run or the worker's Dispatch is gone.
 
 ```bash
 orca orchestration watch --run <runId> --types worker_state
 orca orchestration watch --run <runId> --since <cursor>
 ```
 
-Watching marks nothing read and takes no Delivery, so the coordinator's own `check` and its mail notice are unaffected. Resume with the `cursor` of the last `message` event; worker states are re-sent as a snapshot, not replayed. Unread worker mail that `check` reroutes to the Run after a worker settles keeps its original position and may not be announced, so `check` remains the source of truth. Worker states come from agent hooks in terminal workers; chat workers are not covered yet. The RPC behind it is `orchestration.events` (capability `orchestration.events.v1`), a long poll that returns `{cursor, events}`.
+Watching marks nothing read and takes no Delivery, so the coordinator's own `check` and its mail notice are unaffected. Every `message` and `worker_state` line carries a `cursor`; pass the last one to `--since` to resume. Worker state changes after it are replayed; after an Orca restart, or when the watcher fell more than 512 changes behind, they come back as a fresh `snapshot` instead. A busy or timed-out poll is retried with backoff. Unread worker mail that `check` reroutes to the Run after a worker settles keeps its original position and may not be announced, so `check` remains the source of truth. Worker states come from agent hooks in terminal workers; chat workers are not covered yet. The RPC behind it is `orchestration.events` (capability `orchestration.events.v1`), a long poll that returns `{cursor, events}`.
 
 ## Worker contract
 
