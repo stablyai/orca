@@ -8,14 +8,18 @@ import type {
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
-import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
 import {
-  journalDomainCurrentCard,
-  readJournalDomainCard,
-  SELECT_JOURNAL_DOMAIN_CARD,
-  writeJournalDomainCardVersion,
-  type JournalDomainCard
-} from './journal-domain-card-versions'
+  journalDomainEditLeaseDeadline,
+  retireJournalDomainEditHolds
+} from './journal-domain-edit-leases'
+import {
+  holdJournalDomainQueueRow,
+  insertJournalDomainQueueRow,
+  journalDomainQueueRow,
+  placeJournalDomainQueueRow,
+  replaceJournalDomainQueueRow,
+  type JournalDomainQueueRow
+} from './journal-domain-queue-rows'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import type { JournalSqlQueueWrite } from './journal-sql-queued-messages'
 import { queuedMessageMovePlan } from './queued-messages/queued-message-move'
@@ -36,10 +40,14 @@ export type JournalDomainQueueResult =
   | { kind: 'queue-withdraw'; cards: QueuedMessageRow[] }
   | { kind: 'queue-move'; move: AgentSessionQueuedMessageMoveResult }
 
+export type JournalDomainQueuePlacement = { messageId: string; position: number }
+
 export type JournalDomainQueueCommit = {
   cursor: AgentJournalCursor
   result: JournalDomainQueueResult
   cards: QueuedMessageRow[]
+  /** A move changes only these positions; card content stays as last published. */
+  placements: JournalDomainQueuePlacement[]
   inputChanged: boolean
   /** Present only when this command retired edit leases. */
   editDeadline?: number | null
@@ -47,7 +55,12 @@ export type JournalDomainQueueCommit = {
   referencedUploads?: string[]
 }
 
-type Change = { prior: JournalDomainCard | null; card: QueuedMessageRow }
+type Change = {
+  prior: JournalDomainQueueRow | null
+  card: QueuedMessageRow
+  /** Hold reasons are neither content nor state, so they keep edit holds. */
+  holdOnly?: boolean
+}
 
 /** Runs only on the owning writer connection, inside its command transaction or SAVEPOINT. */
 export function applyJournalDomainQueueCommand(
@@ -67,7 +80,7 @@ export function applyJournalDomainQueueCommand(
     throw new Error('journal queue command targets a retired chat epoch')
   }
   const cursor = { epoch: target.epoch, sequence: Number(head.last_sequence) }
-  const current = (messageId: string) => journalDomainCurrentCard(db, target, messageId)
+  const current = (messageId: string) => journalDomainQueueRow(db, target, messageId)
   const claim = (
     body: AgentJournalMessageItem,
     required: boolean,
@@ -84,6 +97,7 @@ export function applyJournalDomainQueueCommand(
   ]
   let result: JournalDomainQueueResult
   let changes: Change[] = []
+  let placements: JournalDomainQueuePlacement[] = []
   let retire: string[] = []
   let referencedUploads: string[] | undefined
   switch (operation.kind) {
@@ -97,8 +111,8 @@ export function applyJournalDomainQueueCommand(
       }
       referencedUploads = claim(input.body, input.requireAttachments === true)
       const last = db
-        .prepare(`SELECT MAX(position) AS position FROM journal_card_versions
-          WHERE session_id=? AND epoch=? AND current=1`)
+        .prepare(`SELECT MAX(position) AS position FROM journal_queue_cards
+          WHERE session_id=? AND epoch=?`)
         .get(target.sessionId, target.epoch)
       const options = readAgentSessionExecutionOptions(input.options)
       const card: QueuedMessageRow = {
@@ -147,7 +161,7 @@ export function applyJournalDomainQueueCommand(
     case 'queue-hold':
       changes = addressed(operation.messageIds, current).flatMap((prior) =>
         prior.card.state === 'waiting' && prior.card.holdReason !== operation.reason
-          ? [{ prior, card: { ...prior.card, holdReason: operation.reason } }]
+          ? [{ prior, card: { ...prior.card, holdReason: operation.reason }, holdOnly: true }]
           : []
       )
       result = { kind: 'queue-hold' }
@@ -162,22 +176,21 @@ export function applyJournalDomainQueueCommand(
       result = { kind: 'queue-withdraw', cards: changes.map(({ card }) => card) }
       break
     case 'queue-move': {
-      // Only a move reads the ordered unsettled set; dispatched cards keep their reserved slots.
+      // Only a move reads the ordered unsettled headers; dispatched cards keep their reserved slots.
       const unsettled = db
-        .prepare(`${SELECT_JOURNAL_DOMAIN_CARD} WHERE session_id=? AND epoch=? AND current=1
-          AND state IN ('waiting','returned') ORDER BY position, message_id`)
+        .prepare(`SELECT message_id, state, position FROM journal_queue_cards
+          WHERE session_id=? AND epoch=? AND state IN ('waiting','returned')
+          ORDER BY position, message_id`)
         .all(target.sessionId, target.epoch)
-        .map((row) => readJournalDomainCard(target.sessionId, row))
-      const plan = queuedMessageMovePlan(
-        unsettled.map(({ card }) => card),
-        operation.input
+        .map((row) => ({
+          messageId: String(row.message_id),
+          state: row.state === 'returned' ? ('returned' as const) : ('waiting' as const),
+          position: Number(row.position)
+        }))
+      const plan = queuedMessageMovePlan(unsettled, operation.input)
+      placements = plan.changes.flatMap(({ messageId, change }) =>
+        change?.op === 'moved' ? [{ messageId, position: change.position }] : []
       )
-      changes = plan.changes.flatMap(({ messageId, change }) => {
-        const prior = unsettled.find(({ card }) => card.messageId === messageId)
-        return prior && change?.op === 'moved'
-          ? [{ prior, card: { ...prior.card, position: change.position } }]
-          : []
-      })
       result = { kind: 'queue-move', move: plan.result }
       break
     }
@@ -186,32 +199,28 @@ export function applyJournalDomainQueueCommand(
     cursor,
     result,
     cards: changes.map(({ card }) => card),
-    inputChanged: changes.length > 0,
+    placements,
+    inputChanged: changes.length > 0 || placements.length > 0,
     ...(referencedUploads?.length ? { referencedUploads } : {})
   }
-  let leasesChanged = false
-  let editDeadline: number | null = null
-  for (const messageId of retire) {
-    const retired = applyJournalDomainEditLease(
-      db,
-      target,
-      '',
-      { kind: 'retire-card', messageId },
-      savedAt
-    )
-    leasesChanged ||= retired.changed
-    editDeadline = retired.nextDeadline
-  }
-  if (leasesChanged) {
-    commit.editDeadline = editDeadline
-  }
-  if (changes.length === 0) {
+  if (!commit.inputChanged) {
+    retireHolds(db, target, retire, commit, savedAt)
     return commit
   }
   const sequence = cursor.sequence + 1
-  for (const { prior, card } of changes) {
-    writeJournalDomainCardVersion(db, target, prior, card, sequence)
+  for (const { prior, card, holdOnly } of changes) {
+    if (!prior) {
+      insertJournalDomainQueueRow(db, target, card)
+    } else if (holdOnly) {
+      holdJournalDomainQueueRow(db, target, prior, card.holdReason)
+    } else {
+      replaceJournalDomainQueueRow(db, target, prior, card)
+    }
   }
+  for (const { messageId, position } of placements) {
+    placeJournalDomainQueueRow(db, target, messageId, position)
+  }
+  retireHolds(db, target, retire, commit, savedAt)
   db.prepare('UPDATE journal_chat_state SET last_sequence=? WHERE session_id=? AND epoch=?').run(
     sequence,
     target.sessionId,
@@ -220,17 +229,29 @@ export function applyJournalDomainQueueCommand(
   appendJournalSqlEvent(db, target, sequence, savedAt, {
     items: [],
     submissions: [],
-    cards: commit.cards.map((card) => card.messageId)
+    cards: [...commit.cards, ...placements].map((card) => card.messageId)
   })
   commit.cursor = { epoch: target.epoch, sequence }
   return commit
 }
 
+function retireHolds(
+  db: Database.Database,
+  target: Target,
+  messageIds: readonly string[],
+  commit: JournalDomainQueueCommit,
+  now: number
+): void {
+  if (retireJournalDomainEditHolds(db, target, messageIds)) {
+    commit.editDeadline = journalDomainEditLeaseDeadline(db, target, now)
+  }
+}
+
 /** Each addressed card at most once, in the caller's order. */
 function addressed(
   messageIds: readonly string[],
-  current: (messageId: string) => JournalDomainCard | null
-): JournalDomainCard[] {
+  current: (messageId: string) => JournalDomainQueueRow | null
+): JournalDomainQueueRow[] {
   return [...new Set(messageIds)].flatMap((messageId) => {
     const card = current(messageId)
     return card ? [card] : []

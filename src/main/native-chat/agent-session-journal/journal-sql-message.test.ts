@@ -96,7 +96,7 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
   const { db, commit, item, seedSend, seedItem } = fixture()
   seedSend()
   db.exec(`INSERT INTO journal_submission_attempts
-    SELECT session_id,epoch,message_id,0,0,0,item_id,0,0,NULL,fingerprint,'unknown',0,NULL,NULL,payload_json
+    SELECT session_id,epoch,message_id,0,0,0,item_id,0,0,NULL,fingerprint,'unknown',0,payload_json,0
     FROM journal_submission_attempts WHERE current=1`)
   const historical = db
     .prepare('SELECT payload_json FROM journal_submission_attempts WHERE current=0')
@@ -110,11 +110,7 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     turnScope: { kind: 'thread' }
   })
   const card = {
-    messageId: 'card',
-    position: 1,
     body: { kind: 'message', role: 'user', blocks: [], command: { name: 'compact' } },
-    fingerprint: 'card',
-    state: 'returned',
     holdReason: null,
     returnedReason: 'refused',
     returnedRejection: null,
@@ -122,8 +118,8 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     queuedAt: null
   }
   db.prepare(
-    `INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
-      VALUES('chat','epoch','card',1,0,1,'returned','orca:reported-command',?)`
+    `INSERT INTO journal_queue_cards(session_id,epoch,message_id,revision,state,position,command_turn_item_id,payload_json)
+      VALUES('chat','epoch','card',1,'returned',1,'orca:reported-command',?)`
   ).run(JSON.stringify(card))
   const input = message('original', 'unused', 'item')
   input.identity = { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }
@@ -158,9 +154,6 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     db.prepare('SELECT payload_json FROM journal_submission_attempts WHERE current=0').get()!
       .payload_json
   ).toBe(historical)
-  expect(
-    db.prepare('SELECT payload_json FROM journal_card_versions WHERE current=0').get()
-  ).toBeUndefined()
   expect(
     db.prepare('SELECT candidate FROM journal_submission_attempts WHERE current=1').get()!.candidate
   ).toBe(0)

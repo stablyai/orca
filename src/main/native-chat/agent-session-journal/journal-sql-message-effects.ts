@@ -1,5 +1,4 @@
 import type Database from '../../sqlite/sync-database'
-import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type {
   AgentJournalSubmission,
   AgentJournalAcceptanceReceipt
@@ -7,11 +6,11 @@ import type {
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDispatchRowApplies } from './projection/journal-dispatch-settlement'
+import { readJournalDomainQueueRow } from './journal-domain-queue-rows'
 import {
-  readJournalDomainCard,
-  writeJournalDomainCardVersion
-} from './journal-domain-card-versions'
-import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
+  journalDomainEditLeaseDeadline,
+  retireJournalDomainEditHolds
+} from './journal-domain-edit-leases'
 
 export function acceptJournalSqlMessageEcho(
   db: Database.Database,
@@ -61,31 +60,26 @@ export function acceptJournalSqlMessageEcho(
   return receipt
 }
 
+/** Spends returned commands whose reported turn is saved, in place on their current rows. */
 export function spendJournalSqlCommandCards(
   db: Database.Database,
   prefix: readonly [string, string],
-  sequence: number,
-  returned: readonly SqliteRow[],
   savedAt: number
 ): { cards: QueuedMessageRow[]; editDeadline?: number | null } {
-  const cards: QueuedMessageRow[] = []
   const target = { sessionId: prefix[0], epoch: prefix[1] }
-  let leasesChanged = false
-  let editDeadline: number | null = null
-  for (const row of returned) {
-    const prior = readJournalDomainCard(target.sessionId, row)
-    const card: QueuedMessageRow = { ...prior.card, state: 'withdrawn' }
-    writeJournalDomainCardVersion(db, target, prior, card, sequence)
-    const retired = applyJournalDomainEditLease(
-      db,
-      target,
-      '',
-      { kind: 'retire-card', messageId: card.messageId },
-      savedAt
-    )
-    leasesChanged ||= retired.changed
-    editDeadline = retired.nextDeadline
-    cards.push(card)
-  }
-  return { cards, ...(leasesChanged ? { editDeadline } : {}) }
+  const cards = db
+    .prepare(`UPDATE journal_queue_cards AS card SET state='withdrawn', revision=revision+1,
+      command_turn_item_id=NULL
+    WHERE session_id=? AND epoch=? AND state='returned' AND EXISTS(SELECT 1 FROM journal_items AS item
+      WHERE item.session_id=card.session_id AND item.epoch=card.epoch AND item.item_id=card.command_turn_item_id)
+    RETURNING message_id, revision, state, position, payload_json`)
+    .all(...prefix)
+    .map((row) => readJournalDomainQueueRow(target.sessionId, row).card)
+  return retireJournalDomainEditHolds(
+    db,
+    target,
+    cards.map((card) => card.messageId)
+  )
+    ? { cards, editDeadline: journalDomainEditLeaseDeadline(db, target, savedAt) }
+    : { cards }
 }
