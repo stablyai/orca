@@ -102,10 +102,11 @@ export function useStaleConflictOperationPolling(args: {
     const pollRunner = createCoalescedPollRunner(pollStale, {
       slowTaskBackoff
     })
-    // Refresh visible unfocused badges; visibility recovery uses the short-backoff lane.
+    // Keep visible unfocused badges fresh (slowed); visibility recovery uses the short-backoff lane.
     const stopVisiblePoll = installWindowVisibilityInterval({
       run: () => pollRunner.run(),
       runOnVisible: () => pollRunner.run({ changeSignal: true }),
+      slowWhileUnfocused: true,
       intervalMs: CONFLICT_POLL_INTERVAL_MS
     })
     return () => {

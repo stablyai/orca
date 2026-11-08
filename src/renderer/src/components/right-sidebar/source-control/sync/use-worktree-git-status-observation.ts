@@ -8,7 +8,7 @@ import { useWorktreeById } from '@/store/workspaces/selection/use-selected-workt
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible, windowPollSlowdown } from '@/lib/window-visibility-interval'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
 import { useGitStatusWindowPresence } from './use-git-status-window-presence'
@@ -223,7 +223,9 @@ export function useWorktreeGitStatusObservation(
         activityDebounceMs: STATUS_ACTIVITY_DEBOUNCE_MS,
         activityMinGapMs: STATUS_ACTIVITY_MIN_GAP_MS,
         slowTaskBackoff: SLOW_GIT_POLL_BACKOFF,
-        pacing
+        pacing,
+        // Agents editing files behind another app must not drive (remote) git status every 3s.
+        cadenceScale: windowPollSlowdown
       }
     )
     statusSchedulerRef.current = scheduler
