@@ -230,7 +230,7 @@ export function getExperimentalSearchEntry(t: Translate = translate) {
       t('auto.components.settings.experimental.search.agentDashboard.title', 'Agent Dashboard')
     ),
     floatingWorkspacePopout: findEntry(
-      translate(
+      t(
         'auto.components.settings.experimental.search.floatingWorkspacePopout.title',
         'Floating Workspace pop-out'
       )

@@ -42,7 +42,7 @@ export function ExperimentalPane({
     getExperimentalSearchEntry(t).agentDashboard
   ])
   const showFloatingWorkspacePopout = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().floatingWorkspacePopout
+    getExperimentalSearchEntry(t).floatingWorkspacePopout
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry(t).terminalAttention
