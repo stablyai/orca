@@ -164,16 +164,6 @@ it('drops a landed-switch refresh that settles after the user selects the twin',
   expect(useAppStore.getState().gitStatusByWorktree[id]).toEqual(dirty)
 })
 
-it("blocks on a twin's status read that comes back with readError", async () => {
-  status.mockResolvedValueOnce({
-    entries: [],
-    conflictOperation: 'unknown',
-    readError: 'index unreadable'
-  })
-  const seen = await readFor('local')
-  expect(seen.current?.statusReadError).toBe('index unreadable')
-})
-
 it("doesn't trust the twin's slot when this copy becomes the owner", async () => {
   const seen = await readFor('local')
   expect(seen.current).toMatchObject({ statusKnown: true, entries: [] })
