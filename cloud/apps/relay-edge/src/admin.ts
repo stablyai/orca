@@ -4,13 +4,14 @@
 //   POST /__admin/assign  { userId, relayHostId, cellId, assignmentEpoch, devices? }
 //   POST /__admin/export  { relayHostId }  freezes the host for the move away (409 while connected)
 //   POST /__admin/erase   { userId, relayHostId }
+//   POST /__admin/drain   { relayHostId }  sends the host's live control back to the director
 import { jwtVerify } from 'jose'
 import { z } from 'zod'
 import type { Env } from './env'
 
 export const ADMIN_AUDIENCE = 'orca-relay-edge-admin'
 export const ADMIN_PURPOSE = 'edge-admin'
-export type AdminOp = 'assign' | 'export' | 'erase'
+export type AdminOp = 'assign' | 'export' | 'erase' | 'drain'
 
 const HOST_ID = /^[A-Za-z0-9_-]{16}$/
 const ADMIN_BODY_MAX = 256 * 1024
@@ -52,6 +53,7 @@ export const AssignBodySchema = z
 export type AssignBody = z.infer<typeof AssignBodySchema>
 
 export const ExportBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
+export const DrainBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
 export const EraseBodySchema = z.object({ userId: z.string().min(1), relayHostId: z.string().regex(HOST_ID) }).strict()
 
 async function sha256B64url(bytes: ArrayBuffer): Promise<string> {

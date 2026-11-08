@@ -7,7 +7,7 @@ import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
-import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
@@ -72,6 +72,11 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
     const result = await host(body.data.relayHostId).adminExport()
     return Response.json(result, { status: result.outcome === 'exported' ? 200 : 409 })
   }
+  if (op === 'drain') {
+    const body = DrainBodySchema.safeParse(verified.body)
+    if (!body.success) { return reject(400) }
+    return Response.json(await host(body.data.relayHostId).adminDrain())
+  }
   const body = EraseBodySchema.safeParse(verified.body)
   if (!body.success) { return reject(400) }
   const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId)
@@ -87,7 +92,7 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) { return reject(400) }
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain)$/)
     if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)

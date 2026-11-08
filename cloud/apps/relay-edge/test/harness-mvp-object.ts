@@ -58,8 +58,9 @@ export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): 
     .sign(key)
 }
 
-export function control(host: Host, jwt: string, epoch = EPOCH) {
-  const events = { closes: [] as number[], opens: [] as { connId: string }[] }
+// `drop` returns true for an outbound frame the test wants lost (a host that stops answering pings).
+export function control(host: Host, jwt: string, epoch = EPOCH, opts: { drop?: (frame: string) => boolean } = {}) {
+  const events = { closes: [] as number[], opens: [] as { connId: string }[], drains: [] as Record<string, unknown>[], dropped: 0 }
   let transport: CloudRelayTransport | null = null
   const client = new RelayControlClient({
     cellUrl: ORIGIN,
@@ -73,14 +74,24 @@ export function control(host: Host, jwt: string, epoch = EPOCH) {
       events.opens.push(m)
       void transport?.openConnection(m)
     },
-    onDrain: () => {},
+    onDrain: (m) => events.drains.push(m as Record<string, unknown>),
     onClose: (code) => events.closes.push(code),
-    createSocket: (url, token) =>
-      new WebSocket(url, {
+    createSocket: (url, token) => {
+      const ws = new WebSocket(url, {
         headers: { authorization: `Bearer ${token}`, 'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1' },
         perMessageDeflate: false,
         maxPayload: 64 * 1024
       })
+      const send = ws.send.bind(ws)
+      ws.send = ((data: string, ...rest: never[]) => {
+        if (opts.drop?.(String(data))) {
+          events.dropped++
+          return
+        }
+        send(data, ...rest)
+      }) as typeof ws.send
+      return ws
+    }
   })
   return {
     client,
