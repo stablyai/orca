@@ -1,9 +1,10 @@
 import { join } from 'node:path'
 import {
-  readLegacyJsonSource,
-  removeImportedLegacyJsonSource
-} from '../../sqlite/legacy-json-source'
-import { KeyedJsonRowCache, type KeyedJsonRow } from '../../sqlite/keyed-json-row-cache'
+  KeyedJsonRowCache,
+  parseKeyedJsonRows,
+  type KeyedJsonRow
+} from '../../sqlite/row-cache/keyed-json-row-cache'
+import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
@@ -182,33 +183,27 @@ function catalogRow(entry: AgentModelCatalogEntry): KeyedJsonRow {
   }
 }
 
-/** Rows of an older build's file; bytes it cannot use (corrupt, other version) yield none. */
-function legacyRows(text: string): KeyedJsonRow[] {
-  let root: Record<string, unknown> | null
-  try {
-    root = asRecord(JSON.parse(text))
-  } catch {
-    return []
-  }
+/** Entries of an older build's file; bytes it cannot use (corrupt, other version) reject it. */
+function legacyEntries(text: string): AgentModelCatalogEntry[] | null {
+  const root = asRecord(JSON.parse(text))
   if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
-    return []
+    return null
   }
-  return root.entries
-    .map(parseEntry)
-    .filter((entry): entry is AgentModelCatalogEntry => entry !== null)
-    .map(catalogRow)
+  return parseEntries(root.entries)
 }
 
 /** One row per catalog entry, so a save writes only the entries whose listing changed. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
-  // Earlier builds rewrote this whole file (megabytes) per change; it is imported once, then removed.
-  const legacyPath = join(directory, 'agent-model-catalog.json')
-  // Stored state could not be read: this session makes no legacy-vs-stored decision and
-  // saves nothing, leaving both for the next start. Rediscovery refills memory meanwhile.
+  // Stored state or an older build's file could not be read: this session saves nothing,
+  // leaving both for the next start. Rediscovery refills memory meanwhile.
   let cold = false
-  const cache = new KeyedJsonRowCache(join(directory, 'agent-model-catalog.db'), SCHEMA_VERSION)
+  const cache = new KeyedJsonRowCache(join(directory, 'agent-model-catalog.db'), {
+    schemaVersion: SCHEMA_VERSION,
+    // Earlier builds rewrote this whole file (megabytes) per change; it is imported once, then removed.
+    legacyPath: join(directory, 'agent-model-catalog.json')
+  })
   let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let retryDelayMs = SAVE_COALESCE_MS
@@ -233,7 +228,10 @@ export function createAgentModelCatalogFilePersistence(
         // Optional bookkeeping (a lock elsewhere, a full disk): memory stays authoritative and
         // the latest snapshot is retried later unless a newer save replaces it.
         pending ??= snapshot
-        retryDelayMs = Math.min(retryDelayMs * 2, MAX_RETRY_DELAY_MS)
+        retryDelayMs = nextRetryDelayMs(retryDelayMs, {
+          minMs: SAVE_COALESCE_MS,
+          maxMs: MAX_RETRY_DELAY_MS
+        })
         schedule(retryDelayMs)
       }
     }
@@ -242,22 +240,21 @@ export function createAgentModelCatalogFilePersistence(
 
   return {
     async load() {
-      const source = readLegacyJsonSource(legacyPath)
-      // An unreadable file stays, as does the stored catalog; the next start tries again.
-      const legacy =
-        source.kind === 'read'
-          ? { rows: legacyRows(source.text), receipt: source.receipt }
-          : undefined
-      // A file still present came from an older build unless its receipt shows it was imported.
-      const loaded = cache.load(legacy)
-      if (loaded.kind === 'unreadable') {
+      const loaded = cache.load(legacyEntries)
+      if (loaded.kind === 'unavailable') {
         cold = true
-        return []
+        return loaded.legacy ?? []
       }
-      if (legacy) {
-        removeImportedLegacyJsonSource(legacyPath, legacy.receipt)
+      if (loaded.kind === 'rows') {
+        return parseEntries(parseKeyedJsonRows(loaded.rows).map(({ value }) => value))
       }
-      return parseEntries(loaded.values)
+      try {
+        // An older build's file is newer than the rows: save it now, which removes the file.
+        cache.write(loaded.value.map(catalogRow), { importReceipt: loaded.receipt })
+      } catch {
+        cold = true
+      }
+      return loaded.value
     },
     save(snapshot) {
       pending = snapshot

@@ -1,9 +1,9 @@
 import { join } from 'node:path'
-import { KeyedJsonRowCache, type KeyedJsonRowImport } from '../../../sqlite/keyed-json-row-cache'
 import {
-  readLegacyJsonSource,
-  removeImportedLegacyJsonSource
-} from '../../../sqlite/legacy-json-source'
+  KeyedJsonRowCache,
+  parseKeyedJsonRows
+} from '../../../sqlite/row-cache/keyed-json-row-cache'
+import { nextRetryDelayMs } from '../../../sqlite/row-cache/row-cache-failure'
 import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'
 import {
   applyDismissalEvent,
@@ -21,14 +21,13 @@ export type { DeliveredNotificationRecord } from './mobile-notification-dismissa
 const DATABASE_FILE = 'mobile-notification-dismissals.db'
 // Earlier builds rewrote this whole file per alert; it is imported once, then removed.
 const LEGACY_FILE = 'mobile-notification-dismissals.json'
-const RETRY_DELAYS_MS = [100, 1_000, 5_000, 30_000, 60_000] as const
+const RETRY_BACKOFF = { minMs: 100, maxMs: 60_000 }
 
 function warnPersistFailed(error: unknown): void {
   console.warn('[notifications] Could not persist dismissal recovery state', error)
 }
 
 type PendingEvent = { event: DismissalEvent & { notificationId: string }; at: number }
-type LegacyHistory = KeyedJsonRowImport & { entries: DismissalRecordEntry[] }
 
 /**
  * One SQLite row per delivery, so each alert or dismissal saves only the rows it changed.
@@ -41,19 +40,20 @@ export class MobileNotificationDismissalStore {
   private readonly pending: PendingEvent[] = []
   private dirty = false
   private retryTimer: ReturnType<typeof setTimeout> | undefined
-  private retryAttempt = 0
+  private retryDelayMs = 0
   private closed = false
   // Notification ids need no secure writer; its synchronous Windows icacls froze windows per alert (STA-9692).
   private readonly cache: KeyedJsonRowCache
-  private readonly legacyPath: string
 
   constructor(userDataPath: string) {
-    this.cache = new KeyedJsonRowCache(join(userDataPath, DATABASE_FILE), 1)
-    this.legacyPath = join(userDataPath, LEGACY_FILE)
+    this.cache = new KeyedJsonRowCache(join(userDataPath, DATABASE_FILE), {
+      schemaVersion: 1,
+      legacyPath: join(userDataPath, LEGACY_FILE)
+    })
     const unread = this.hydrate()
     if (unread) {
       // Show what an older build's file says while the stored history stays unread.
-      this.entries = unread.legacy?.entries ?? []
+      this.entries = unread.legacy ?? []
       this.scheduleRetry()
     }
   }
@@ -149,21 +149,25 @@ export class MobileNotificationDismissalStore {
   }
 
   /** Returns why history stays unread, or undefined once it is read and merged. */
-  private hydrate(): { legacy?: LegacyHistory } | undefined {
-    const source = readLegacyJsonSource(this.legacyPath)
-    if (source.kind === 'unreadable') {
-      console.warn('[notifications] Could not read dismissal recovery state', source.error)
-      return {}
-    }
-    const legacy =
-      source.kind === 'read' ? readLegacyHistory(source.text, source.receipt) : undefined
+  private hydrate(): { legacy?: DismissalRecordEntry[] } | undefined {
     // A file still present came from an older build unless its receipt shows it was imported.
-    const loaded = this.cache.load(legacy)
-    if (loaded.kind === 'unreadable') {
+    const loaded = this.cache.load(readLegacyHistory)
+    if (loaded.kind === 'unavailable') {
       console.warn('[notifications] Could not read dismissal recovery state', loaded.error)
-      return { legacy }
+      return { legacy: loaded.legacy }
     }
-    let entries = readDismissalEntries(loaded.values)
+    let entries: DismissalRecordEntry[]
+    if (loaded.kind === 'import') {
+      try {
+        this.cache.write(dismissalRows(loaded.value), { importReceipt: loaded.receipt })
+      } catch (error) {
+        console.warn('[notifications] Could not read dismissal recovery state', error)
+        return { legacy: loaded.value }
+      }
+      entries = loaded.value
+    } else {
+      entries = readDismissalEntries(parseKeyedJsonRows(loaded.rows).map(({ value }) => value))
+    }
     for (const { event, at } of this.pending) {
       entries = applyDismissalEvent(entries, event, at)
     }
@@ -171,9 +175,6 @@ export class MobileNotificationDismissalStore {
     this.pending.length = 0
     this.entries = entries
     this.historyKnown = true
-    if (legacy) {
-      removeImportedLegacyJsonSource(this.legacyPath, legacy.receipt)
-    }
     return undefined
   }
 
@@ -184,7 +185,7 @@ export class MobileNotificationDismissalStore {
     try {
       this.cache.write(dismissalRows(this.entries))
       this.dirty = false
-      this.retryAttempt = 0
+      this.retryDelayMs = 0
       return true
     } catch (error) {
       warnPersistFailed(error)
@@ -203,8 +204,8 @@ export class MobileNotificationDismissalStore {
     if (this.retryTimer || this.closed) {
       return
     }
-    const delay = RETRY_DELAYS_MS[Math.min(this.retryAttempt, RETRY_DELAYS_MS.length - 1)]
-    this.retryAttempt += 1
+    this.retryDelayMs = nextRetryDelayMs(this.retryDelayMs, RETRY_BACKOFF)
+    const delay = this.retryDelayMs
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined
       if (!this.attempt()) {
@@ -215,14 +216,8 @@ export class MobileNotificationDismissalStore {
   }
 }
 
-function readLegacyHistory(text: string, receipt: string): LegacyHistory {
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch {
-    // Corrupt history establishes nothing, like missing history.
-    value = []
-  }
-  const entries = readDismissalEntries(Array.isArray(value) ? value : [])
-  return { entries, rows: dismissalRows(entries), receipt }
+/** History an older build wrote; corrupt bytes are rejected and never replace stored rows. */
+function readLegacyHistory(text: string): DismissalRecordEntry[] | null {
+  const value: unknown = JSON.parse(text)
+  return Array.isArray(value) ? readDismissalEntries(value) : null
 }

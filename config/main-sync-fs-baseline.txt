@@ -8,8 +8,6 @@
 11 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
 6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
 9 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
-2 src/main/agent-hooks/server/last-status-legacy-file.ts
-1 src/main/agent-hooks/server/last-status-saved-rows.ts
 1 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
@@ -373,8 +371,6 @@
 2 src/main/orcad/orcad-wsl-host-claude-profile-refresh.ts
 1 src/main/orcad/serve-profile-ssh-targets.ts
 6 src/main/persistence/atomic-snapshot-writer.ts
-1 src/main/persistence/loading-store/github-cache-sidecar.ts
-1 src/main/persistence/loading-store/github-cache-startup-read.ts
 5 src/main/persistence/loading-store/user-data-path.ts
 9 src/main/persistence/migrating-orcad-catalog/migration-journal-directory.ts
 4 src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-installers.ts
@@ -501,8 +497,8 @@
 1 src/main/speech/stt-worker-model-config.ts
 2 src/main/speech/stt-worker-paths.ts
 2 src/main/sqlite/harden-database-files.ts
-1 src/main/sqlite/keyed-json-row-cache.ts
-5 src/main/sqlite/legacy-json-source.ts
+1 src/main/sqlite/row-cache/keyed-json-row-cache.ts
+2 src/main/sqlite/row-cache/legacy-json-source.ts
 1 src/main/sqlite/sync-database.ts
 2 src/main/sqlite/versioned-cache-database.ts
 1 src/main/ssh/authentication/ssh-auth-resolution.ts
