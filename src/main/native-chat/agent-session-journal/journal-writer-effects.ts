@@ -1,10 +1,7 @@
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionStoreRowWrites } from '../../runtime/agent-session/records/agent-session-store-draft'
-import {
-  insertAgentSessionOperationRowsIfAbsent,
-  writeAgentSessionStoreRows
-} from '../../runtime/agent-session/records/agent-session-record-rows'
+import { applyJournalWriterStoreEffect } from './journal-writer-store-effect'
 import {
   claimAgentSessionAttachmentsInTransaction,
   finishUploadSweep,
@@ -63,6 +60,13 @@ export type JournalWriterEffectResult =
   | boolean
   | number
   | null
+  | JournalWriterStoreResult
+
+export type JournalWriterStoreResult = {
+  kind: 'store'
+  disposition: 'applied' | 'noop'
+  writes: AgentSessionStoreRowWrites
+}
 
 /** Host-computed values still recheck uniqueness and sweep authority on the sole connection. */
 export function applyJournalWriterEffect(
@@ -72,19 +76,8 @@ export function applyJournalWriterEffect(
   rows: readonly (JournalRow | JournalWriterCoordinate)[] = []
 ): JournalWriterEffectResult {
   switch (effect.kind) {
-    case 'store': {
-      const { writes } = effect
-      if (effect.insertOperationsIfAbsent) {
-        insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
-      }
-      writeAgentSessionStoreRows(
-        db,
-        effect.insertOperationsIfAbsent
-          ? { ...writes, operations: { ...writes.operations, upsert: [] } }
-          : writes
-      )
-      return null
-    }
+    case 'store':
+      return applyJournalWriterStoreEffect(db, effect)
     case 'receipt': {
       const row = effect.row && (effect.row.at === 'first' ? rows[0] : rows.at(-1))
       const receipt = effect.row ? boundReceipt(effect.receipt, effect.row, row) : effect.receipt

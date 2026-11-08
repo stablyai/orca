@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { composeJournalOperationReceipts } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
+import {
+  composeJournalOperationReceipts,
+  onJournalReceiptCommitted
+} from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   closeTestAgentSessionRecordStores,
@@ -196,7 +199,8 @@ describe('a receipt', () => {
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
 
     const committed = await store.operationOutcomeReceipt(args).stage!({ savedAt: NOW })
-    committed.settle([null])
+    const database = await openTestAgentSessionDatabase(root)
+    committed.settle(await database.effects(committed.effects))
     expect(store.getRecord('chat-a-0001')).toMatchObject({
       conversationName: 'after',
       usageLimitContinueCancel: cancel
@@ -228,5 +232,75 @@ describe('a receipt', () => {
       both
     )
     expect(await persistedStatus()).toBe('succeeded')
+  })
+  it('publishes actual writer rows before co-staged callbacks and the next store transaction', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
+    }
+    const actual = {
+      usageLimitContinueCancel: cancel,
+      forkedFrom,
+      options: { interactionMode: 'plan' }
+    }
+    const composed = composeJournalOperationReceipts(
+      onJournalReceiptCommitted(
+        store.operationOutcomeReceipt({
+          callerKey: 'client-1',
+          operationId,
+          outcome,
+          record: change
+        }),
+        () => {
+          expect(store.getRecord('chat-a-0001')).toMatchObject(actual)
+          expect(store.getRecord('chat-a-0001')?.lease.unreconciled).toBe(false)
+        }
+      ),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
+    )
+    const staged = await composed.stage!({ savedAt: NOW })
+    const later = store.setConversationName('chat-a-0001', 'after')
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(
+        "CREATE TRIGGER bind_record AFTER UPDATE ON agent_session_records BEGIN UPDATE agent_session_records SET record_json=json_set(NEW.record_json, '$.options.interactionMode', 'plan') WHERE session_id=NEW.session_id; END"
+      )
+    )
+    const database = await openTestAgentSessionDatabase(root)
+    const results = await database.effects(staged.effects)
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER bind_record'))
+    staged.settle(results)
+    await later
+    expect(store.getRecord('chat-a-0001')).toMatchObject({ ...actual, conversationName: 'after' })
+    expect((await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')).toMatchObject({
+      ...actual,
+      conversationName: 'after'
+    })
+  })
+  it('fences later writes when a committed store acknowledgement has no resolved rows', async () => {
+    const store = await pendingOperation()
+    const staged = await store.operationOutcomeReceipt({
+      callerKey: 'client-1',
+      operationId,
+      outcome,
+      record: change
+    }).stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    await database.effects(staged.effects)
+    expect(() => staged.settle([])).toThrow('missing store results')
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    await expect(store.setConversationName('chat-a-0001', 'stale')).rejects.toThrow(
+      'missing store results'
+    )
+    await withTestAgentSessionDatabase(root, (db) => {
+      const row = db
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+        .get('chat-a-0001')!
+      expect(JSON.parse(String(row.record_json))).toMatchObject({
+        usageLimitContinueCancel: cancel
+      })
+      expect(JSON.parse(String(row.record_json)).conversationName).not.toBe('stale')
+    })
   })
 })

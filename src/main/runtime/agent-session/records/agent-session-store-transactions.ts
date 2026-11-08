@@ -1,4 +1,5 @@
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
+import { isDeepStrictEqual } from 'node:util'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalWriterEffectResult } from '../../../native-chat/agent-session-journal/journal-writer-effects'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
@@ -166,7 +167,14 @@ export class AgentSessionStoreTransactions {
             refusal: () => (this.journalDatabase.readOnly ? readOnlyStoreRefusal() : undefined),
             lanes: this.writerLanes,
             stage: (run, base) => this.stage(run, base),
-            admit: (sessionId) => this.admitSend(sessionId)
+            admit: (sessionId) => this.admitSend(sessionId),
+            publish: (draft) =>
+              this.publish(
+                draft,
+                this.published,
+                agentSessionStoreDraftRowWrites(this.published, draft)
+              ),
+            fault: (error) => this.journalDatabase.fault(error)
           },
           { apply, ...options },
           context
@@ -226,52 +234,60 @@ export class AgentSessionStoreTransactions {
       result,
       draft,
       writes,
-      adopt: () => {
-        if (writes) {
-          freezeRows(draft, writes)
-          if (changesAgentSenderIdentity(published, draft, writes)) {
-            this.senderIdentityRevision++
-          }
-          this.published = draft
-          const lineageChanged =
-            writes.records.remove.length > 0 ||
-            writes.records.upsert.some(([id]) => {
-              const before = published.records.get(id)
-              return before?.conversationCommand !== draft.records.get(id)?.conversationCommand
-            })
-          if (lineageChanged) {
-            this.lineage = {}
-          }
-          const topologyChanged =
-            writes.sessionTabs !== null ||
-            writes.records.remove.length > 0 ||
-            writes.records.upsert.some(([id]) => {
-              const before = published.records.get(id)
-              const after = draft.records.get(id)
-              return (
-                !before ||
-                !after ||
-                before.lease.claimStatus !== after.lease.claimStatus ||
-                before.provider !== after.provider ||
-                before.location !== after.location ||
-                before.conversationCommand !== after.conversationCommand
-              )
-            })
-          const renamed = writes.records.upsert
-            .filter(
-              ([id]) =>
-                published.records.get(id)?.conversationName !==
-                draft.records.get(id)?.conversationName
-            )
-            .map(([id]) => id)
-          if (topologyChanged) {
-            sessionCrewChanges.notify(new Set(['records']))
-          } else if (renamed.length) {
-            sessionCrewChanges.notify(
-              Object.assign(new Set(['names'] as const), { recordIds: renamed })
-            )
-          }
-        }
+      adopt: () => this.publish(draft, published, writes)
+    }
+  }
+
+  private publish(
+    draft: AgentSessionStoreState,
+    published: AgentSessionStoreState,
+    writes: AgentSessionStoreRowWrites | null
+  ): void {
+    if (writes) {
+      freezeRows(draft, writes)
+      if (changesAgentSenderIdentity(published, draft, writes)) {
+        this.senderIdentityRevision++
+      }
+      this.published = draft
+      const lineageChanged =
+        writes.records.remove.length > 0 ||
+        writes.records.upsert.some(([id]) => {
+          const before = published.records.get(id)
+          return !isDeepStrictEqual(
+            before?.conversationCommand,
+            draft.records.get(id)?.conversationCommand
+          )
+        })
+      if (lineageChanged) {
+        this.lineage = {}
+      }
+      const topologyChanged =
+        writes.sessionTabs !== null ||
+        writes.records.remove.length > 0 ||
+        writes.records.upsert.some(([id]) => {
+          const before = published.records.get(id)
+          const after = draft.records.get(id)
+          return (
+            !before ||
+            !after ||
+            before.lease.claimStatus !== after.lease.claimStatus ||
+            before.provider !== after.provider ||
+            !isDeepStrictEqual(before.location, after.location) ||
+            !isDeepStrictEqual(before.conversationCommand, after.conversationCommand)
+          )
+        })
+      const renamed = writes.records.upsert
+        .filter(
+          ([id]) =>
+            published.records.get(id)?.conversationName !== draft.records.get(id)?.conversationName
+        )
+        .map(([id]) => id)
+      if (topologyChanged) {
+        sessionCrewChanges.notify(new Set(['records']))
+      } else if (renamed.length) {
+        sessionCrewChanges.notify(
+          Object.assign(new Set(['names'] as const), { recordIds: renamed })
+        )
       }
     }
   }

@@ -36,6 +36,10 @@ export class JournalSqlOwner {
   private closed: Promise<void> | undefined
   onFault: (error: Error) => void = () => {}
 
+  fault(error: Error): void {
+    this.fail(error)
+  }
+
   constructor(
     filename: string,
     stateDirectory: string,

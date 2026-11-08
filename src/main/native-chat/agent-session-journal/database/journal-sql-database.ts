@@ -78,6 +78,11 @@ export class JournalSqlDatabase {
     this.writer.onFault = listener
   }
 
+  /** An invalid acknowledged result cannot become a stale base for another write. */
+  fault(error: Error): void {
+    this.writer.fault(error)
+  }
+
   /** Start after runtime activity has been installed, so startup work never outruns live chats. */
   startMaintenance(): Promise<void> {
     this.assertOpen()

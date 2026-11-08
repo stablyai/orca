@@ -54,6 +54,7 @@ export function createAgentSessionFoundingStore(
           const staged = await receipt.stage(context)
           return {
             effects: staged.effects,
+            adopt: staged.adopt,
             settle: (results) => {
               staged.settle(results)
               if (results) {

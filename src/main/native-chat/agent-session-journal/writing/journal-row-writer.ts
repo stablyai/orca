@@ -24,6 +24,8 @@ export type JournalReceiptStage = { savedAt: number; row?: JournalRow['kind'] }
  *  COMMIT with this receipt's results, or with undefined after a rollback or an unwritten receipt. */
 export type JournalStagedReceipt = {
   effects: readonly JournalWriterEffect[]
+  /** Resolve every co-staged store draft before any committed callback runs. */
+  adopt?: (results: readonly JournalWriterEffectResult[] | undefined) => void
   settle: (results: readonly JournalWriterEffectResult[] | undefined) => void
 }
 
@@ -59,14 +61,38 @@ async function stageJournalOperationReceipts(
     staged.forEach((entry) => entry.settle(undefined))
     throw error
   }
+  const adopt: NonNullable<JournalStagedReceipt['adopt']> = (results) => {
+    let offset = 0
+    for (const entry of staged) {
+      const count = entry.effects.length
+      entry.adopt?.(results?.slice(offset, offset + count))
+      offset += count
+    }
+  }
   return {
     effects: staged.flatMap((entry) => entry.effects),
+    adopt,
     settle: (results) => {
+      let failure: unknown
+      let adoptionFailed = false
+      try {
+        adopt(results)
+      } catch (error) {
+        failure = error
+        adoptionFailed = true
+      }
       let offset = 0
       for (const entry of staged) {
         const count = entry.effects.length
-        entry.settle(results?.slice(offset, offset + count))
+        try {
+          entry.settle(adoptionFailed ? undefined : results?.slice(offset, offset + count))
+        } catch (error) {
+          failure ??= error
+        }
         offset += count
+      }
+      if (failure !== undefined) {
+        throw failure
       }
     }
   }
@@ -94,6 +120,7 @@ export function onJournalReceiptCommitted(
             const staged = await stage(context)
             return {
               effects: staged.effects,
+              adopt: staged.adopt,
               settle: (results) => {
                 staged.settle(results)
                 if (results !== undefined) {
