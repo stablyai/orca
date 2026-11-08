@@ -30,6 +30,7 @@ export type WorkspaceBranchPickerProps = {
   agentNotice?: string
   trigger?: ReactNode
   onOpen?: () => void
+  onCopyBranch?: () => void
   /** Runs after every landed switch. */
   onLanded: () => void
 }
@@ -45,6 +46,7 @@ export function WorkspaceBranchPicker({
   agentNotice,
   trigger,
   onOpen,
+  onCopyBranch,
   onLanded
 }: WorkspaceBranchPickerProps) {
   const t = useTranslate()
@@ -144,6 +146,7 @@ export function WorkspaceBranchPicker({
       dirtyOnlyBlocker={showDirtyBlocker && !agentWorking}
       trigger={trigger}
       onOpen={onOpen}
+      onCopyBranch={onCopyBranch}
       context={{ target, worktreeId, worktreePath }}
       repoId={repoId}
       hostId={hostId}

@@ -21287,6 +21287,7 @@
       "switch": "Branch wechseln: {{branch}}",
       "search": "Branches suchen",
       "recover": "Zu {{branch}} wechseln",
+      "copy": "Branch-Namen kopieren",
       "create": "Branch {{name}} aus {{branch}} erstellen",
       "open": "Arbeitsbereich öffnen",
       "occupied": "Ausgecheckt in {{path}}",

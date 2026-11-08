@@ -17,7 +17,8 @@ export function NativeChatComposerBranchPicker({
   repoId,
   branch,
   turnActive,
-  textClassName
+  textClassName,
+  onCopyBranch
 }: {
   worktreeId: string
   worktreePath: string
@@ -27,6 +28,7 @@ export function NativeChatComposerBranchPicker({
   /** This chat's own turn; the picker names it instead of a generic agent. */
   turnActive: boolean
   textClassName: string
+  onCopyBranch: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
@@ -58,6 +60,7 @@ export function NativeChatComposerBranchPicker({
           : undefined
       }
       onOpen={onOpen}
+      onCopyBranch={onCopyBranch}
       onLanded={onLanded}
       trigger={
         <Button

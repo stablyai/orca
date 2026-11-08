@@ -1,5 +1,6 @@
 import { memo, type ReactNode } from 'react'
-import { Check, ChevronDown, GitBranch, Info } from 'lucide-react'
+import { Check, ChevronDown, Copy, GitBranch, Info } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -15,6 +16,8 @@ export type BranchPickerProps = BranchPickerOptions & {
   /** Replaces the header trigger; it must forward a ref and props to a button. */
   trigger?: ReactNode
   onOpen?: () => void
+  /** Adds a copy button to the current branch's row. */
+  onCopyBranch?: () => void
 }
 export function BranchPicker({
   branch,
@@ -22,6 +25,7 @@ export function BranchPicker({
   dirtyOnlyBlocker = false,
   trigger,
   onOpen,
+  onCopyBranch,
   ...options
 }: BranchPickerProps) {
   const t = useTranslate()
@@ -83,6 +87,7 @@ export function BranchPicker({
                 pending={picker.pending}
                 disabled={row.target.kind === 'new' && dirtyOnlyBlocker ? picker.pending : disabled}
                 onSelect={picker.select}
+                onCopy={row.current ? onCopyBranch : undefined}
               />
             ))}
           </CommandList>
@@ -98,7 +103,8 @@ const BranchRow = memo(function BranchRow({
   openedAt,
   pending,
   disabled,
-  onSelect
+  onSelect,
+  onCopy
 }: {
   row: BranchPickerRow
   branch: string
@@ -106,6 +112,7 @@ const BranchRow = memo(function BranchRow({
   pending: boolean
   disabled: boolean
   onSelect: (row: BranchPickerRow) => Promise<void>
+  onCopy?: () => void
 }) {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -127,7 +134,25 @@ const BranchRow = memo(function BranchRow({
           : row.label}
       </span>
       {row.current ? (
-        <Check className="size-3" />
+        <>
+          {onCopy && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-5 text-muted-foreground"
+              aria-label={t('sourceControl.branchPicker.copy', 'Copy branch name')}
+              onClick={(event) => {
+                // The row owns selection; copying must not reach it.
+                event.stopPropagation()
+                onCopy()
+              }}
+            >
+              <Copy className="size-3" />
+            </Button>
+          )}
+          <Check className="size-3" />
+        </>
       ) : row.workspace ? (
         <span className="text-xs text-muted-foreground">
           {t('sourceControl.branchPicker.open', 'Open workspace')}

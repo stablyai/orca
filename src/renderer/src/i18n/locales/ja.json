@@ -20999,6 +20999,7 @@
       "switch": "ブランチを切り替え: {{branch}}",
       "search": "ブランチを検索",
       "recover": "{{branch}} に切り替え",
+      "copy": "ブランチ名をコピー",
       "create": "{{branch}} からブランチ {{name}} を作成",
       "open": "ワークスペースを開く",
       "occupied": "{{path}} でチェックアウト済み",

@@ -22094,6 +22094,7 @@
       "switch": "Cambiar de rama: {{branch}}",
       "search": "Buscar ramas",
       "recover": "Cambiar a {{branch}}",
+      "copy": "Copiar nombre de la rama",
       "create": "Crear la rama {{name}} desde {{branch}}",
       "open": "Abrir espacio de trabajo",
       "occupied": "Activa en {{path}}",

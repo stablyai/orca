@@ -295,6 +295,7 @@
       "switch": "Trocar de branch: {{branch}}",
       "search": "Pesquisar branches",
       "recover": "Trocar para {{branch}}",
+      "copy": "Copiar nome do branch",
       "create": "Criar branch {{name}} a partir de {{branch}}",
       "open": "Abrir espaço de trabalho",
       "occupied": "Em uso em {{path}}",

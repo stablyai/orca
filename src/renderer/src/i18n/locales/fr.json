@@ -21638,6 +21638,7 @@
       "switch": "Changer de branche : {{branch}}",
       "search": "Rechercher des branches",
       "recover": "Passer à {{branch}}",
+      "copy": "Copier le nom de la branche",
       "create": "Créer la branche {{name}} à partir de {{branch}}",
       "open": "Ouvrir l’espace de travail",
       "occupied": "Extraite dans {{path}}",

@@ -20968,6 +20968,7 @@
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
       "recover": "切換到 {{branch}}",
+      "copy": "複製分支名稱",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",

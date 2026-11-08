@@ -133,6 +133,7 @@ export function NativeChatComposerWorkspace({
           branch={identity.branchName}
           turnActive={isWorking}
           textClassName={FOOTER_TEXT}
+          onCopyBranch={() => void copyValue(identity.branchName)}
         />
       ) : (
         identity &&

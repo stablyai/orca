@@ -21268,6 +21268,7 @@
       "switch": "Dal değiştir: {{branch}}",
       "search": "Dallarda ara",
       "recover": "{{branch}} dalına geç",
+      "copy": "Dal adını kopyala",
       "create": "{{branch}} dalından {{name}} dalını oluştur",
       "open": "Çalışma alanını aç",
       "occupied": "{{path}} konumunda kullanımda",
