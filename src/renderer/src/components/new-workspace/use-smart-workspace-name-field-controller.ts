@@ -9,15 +9,21 @@ import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
 import { useSmartWorkspaceNameFieldActions } from './use-smart-workspace-name-field-actions'
 import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-copy'
+import {
+  loadSmartWorkspaceSourceMode,
+  saveSmartWorkspaceSourceMode
+} from './smart-workspace-source-mode-storage'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
   const t = useTranslate()
+  const initialSourceMode = useMemo(() => loadSmartWorkspaceSourceMode(), [])
   const search = useWorkItemSourceSearch({
     ...props,
     defaultLinearWorkspaceId: 'all',
     typedTextEnabled: true,
+    initialMode: initialSourceMode,
     sourceSelected: props.selectedSource !== null,
     gitlabEnabled: Boolean(props.onGitLabItemSelect)
   })
@@ -63,6 +69,7 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
   }, [sourceMode, onActiveSourceModeChange])
   const handleModeChange = (mode: typeof search.mode): void => {
     search.setMode(mode)
+    saveSmartWorkspaceSourceMode(mode)
     if (!search.disabled && mode !== 'text' && selectedSource === null) {
       focus.markSourcePopoverUserEngaged()
       focus.setOpen(true)

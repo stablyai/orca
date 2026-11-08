@@ -9,8 +9,12 @@ import type { SmartNameMode } from '../../../../shared/new-workspace/smart-works
 import type { MrStateFilter } from './smart-workspace-localized-options'
 import type { CrossRepoPrompt } from './smart-workspace-name-field-model'
 
-export function useWorkItemSourceState(textOnly: boolean, value: string) {
-  const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : 'smart')
+export function useWorkItemSourceState(
+  textOnly: boolean,
+  value: string,
+  initialMode: SmartNameMode = 'smart'
+) {
+  const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : initialMode)
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [debouncedQuery, setDebouncedQuery] = useState(value)
   const [rawGithubItems, setGithubItems] = useState<GitHubWorkItem[]>([])
