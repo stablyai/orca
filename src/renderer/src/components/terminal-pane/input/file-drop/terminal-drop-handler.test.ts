@@ -137,6 +137,22 @@ function announceRowThenResolve(value: unknown) {
   }
 }
 
+/** Drops one client file onto the only pane, whose transport is connected. */
+async function dropLogoOnSinglePane(): Promise<void> {
+  const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+  const manager = { getActivePane: () => pane, getPanes: () => [pane] }
+  await handleTerminalFileDrop({
+    manager: manager as never,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements every transport member the drop path reads.
+    paneTransports: new Map([[1, createTerminalTransport(vi.fn(() => true))]]) as never,
+    worktreeId: 'wt-1',
+    tabId: 'tab-1',
+    cwd: undefined,
+    pane,
+    paths: ['/Users/me/logo.png']
+  })
+}
+
 describe('handleTerminalFileDrop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -265,18 +281,7 @@ describe('handleTerminalFileDrop', () => {
 
   it('publishes the upload panel without an explicit undefined id', async () => {
     mocks.importExternalPathsToRuntime.mockImplementation(announceRowThenResolve({ results: [] }))
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
-    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
-
-    await handleTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: new Map([[1, createTerminalTransport(vi.fn(() => true))]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      pane,
-      paths: ['/Users/me/logo.png']
-    })
+    await dropLogoOnSinglePane()
 
     // Why: sonner spreads these options over the id it just minted, so passing
     // `id: undefined` registers the toast under an id it never returns and every
@@ -294,18 +299,7 @@ describe('handleTerminalFileDrop', () => {
         throw new Error('runtime unreachable')
       }
     )
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
-    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
-
-    await handleTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: new Map([[1, createTerminalTransport(vi.fn(() => true))]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      pane,
-      paths: ['/Users/me/logo.png']
-    })
+    await dropLogoOnSinglePane()
 
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
     expect(mocks.toastError).toHaveBeenCalled()
