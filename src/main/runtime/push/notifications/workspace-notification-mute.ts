@@ -50,7 +50,10 @@ export function isWorkspaceHiddenBySidebarFilters(
     hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
     hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true
   }
-  if (!hideOtherClients && !Object.values(switches).some(Boolean)) {
+  const ownRepoHidesDefaultBranch =
+    deps.store.getRepo(getRepoIdFromWorktreeId(workspaceId))?.defaultBranchWorkspaceVisibility ===
+    'hide'
+  if (!hideOtherClients && !ownRepoHidesDefaultBranch && !Object.values(switches).some(Boolean)) {
     return false
   }
   const folderScope = parseWorkspaceKey(workspaceId)

@@ -11810,6 +11810,13 @@
           "hostCollectionProjectScopes": "Host collection + project scopes",
           "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
         },
+        "RepositoryDefaultBranchVisibilitySection": {
+          "description": "Show or hide this project’s default branch workspace in the sidebar, regardless of the “Hide default branch” filter.",
+          "follow": "Follow Sidebar Filter",
+          "hide": "Always Hide",
+          "show": "Always Show",
+          "title": "Default Branch Workspace"
+        },
         "RepositoryForkSyncSection": {
           "defaultBranch": "default branch",
           "synced": "Fork updated",

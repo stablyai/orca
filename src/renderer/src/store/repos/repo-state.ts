@@ -51,6 +51,7 @@ export type RepoUpdate = Partial<
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'forkSyncMode'
+    | 'defaultBranchWorkspaceVisibility'
     | 'agentWorkspaceTrust'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'

@@ -48,6 +48,8 @@ export function buildDesktopWorkspaceRowFactReader(
     isCliCreated: isCliCreatedWorkspace,
     isDetachedHead: isDetachedHeadWorkspace,
     isMainWorktree: (worktree) => worktree.isMainWorktree,
+    defaultBranchVisibility: (worktree) =>
+      inputs.repoMap.get(worktree.repoId)?.defaultBranchWorkspaceVisibility,
     isSleeping: (worktree) =>
       inputs.sleepingSweepExemptWorktreeIds?.has(worktree.id) !== true &&
       isInactiveWorkspace(

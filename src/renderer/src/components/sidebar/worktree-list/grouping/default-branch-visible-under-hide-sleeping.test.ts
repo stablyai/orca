@@ -96,3 +96,34 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
     ).toEqual([])
   })
 })
+
+describe('a project override of the "Hide default branch" filter', () => {
+  function visible(
+    defaultBranchWorkspaceVisibility: Repo['defaultBranchWorkspaceVisibility'],
+    overrides: Partial<VisibleOptions>
+  ): string[] {
+    const worktree = makeDefaultBranchWorktree()
+    return computeVisibleWorktreeIds(
+      { repo1: [worktree] },
+      [worktree.id],
+      visibleOptions({
+        repoMap: new Map([['repo1', { ...makeRepo('repo1'), defaultBranchWorkspaceVisibility }]]),
+        ...overrides
+      })
+    )
+  }
+
+  it('hides the default branch while the sidebar filter shows it', () => {
+    expect(visible('hide', { hideDefaultBranchWorkspace: false })).toEqual([])
+  })
+
+  it('shows the default branch while the sidebar filter hides it', () => {
+    expect(visible('show', { hideDefaultBranchWorkspace: true })).toEqual(['wt-main'])
+  })
+
+  it('keeps a shown default branch through the sleeping sweep', () => {
+    expect(
+      visible('show', { showSleepingWorkspaces: false, alwaysShowDefaultBranchWorkspace: false })
+    ).toEqual(['wt-main'])
+  })
+})
