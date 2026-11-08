@@ -180,6 +180,7 @@ function read(
     case 'context-usage':
     case 'thread-goal-source':
     case 'named-turn':
+    case 'message-options':
       return readJournalSqlItems(
         {
           scope,

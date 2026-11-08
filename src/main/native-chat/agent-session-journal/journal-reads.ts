@@ -20,6 +20,7 @@ import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-c
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readJournalStatusIndicators,
   type JournalStatusIndicatorRead,
@@ -35,6 +36,8 @@ export type JournalNamedTurn = {
   scope: Extract<AgentJournalTurnScope, { kind: 'turn' }> | null
   removed: boolean
 }
+
+export type JournalMessageOptions = { ordinaryMessage: boolean; runningTurn: boolean }
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
@@ -70,6 +73,7 @@ export type AgentSessionJournalReads = {
   runningTurn(): Promise<{ item: AgentJournalRenderItem; turnId: string } | null>
   newestTurn(): Promise<AgentJournalTurnLifecycle | null>
   namedTurn(turnId: string): Promise<JournalNamedTurn>
+  messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   threadGoalSource(): Promise<JournalThreadGoalSource>
   contextUsage(): Promise<AgentSessionContextUsage>
   visitItems(filter: JournalItemFilter, visit: JournalItemLinkageVisitor): Promise<void>
@@ -84,6 +88,7 @@ type FoldedJournalReads = {
       | 'hasItems'
       | 'canonicalItemIds'
       | 'namedTurn'
+      | 'messageOptions'
       | 'contextFloor'
       | 'input'
       | 'usageLimitCut'
@@ -160,6 +165,13 @@ export function foldedJournalReads(
       return {
         scope: item ? { kind: 'turn' as const, turnItemId: item.itemId } : null,
         removed: current.removedTurnIds.has(turnId)
+      }
+    }),
+    messageOptions: now((clientMessageId: string) => {
+      const body = journal.itemBody(agentJournalSubmissionKey(clientMessageId))
+      return {
+        ordinaryMessage: body?.kind === 'message' && !body.command,
+        runningTurn: journal.newestTurn()?.state === 'running'
       }
     }),
     threadGoalSource: now(journal.threadGoalSource),

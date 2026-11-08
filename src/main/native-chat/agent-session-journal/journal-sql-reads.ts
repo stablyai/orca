@@ -78,6 +78,8 @@ export function journalSqlReads(
     pendingSubmissions: async () => (await input({ kind: 'pending-submissions' })).submissions,
     newestTurn: async () => (await input({ kind: 'newest-turn' })).turn,
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,
+    messageOptions: async (clientMessageId) =>
+      (await read({ kind: 'message-options', clientMessageId })).options,
     contextFloor: async () => (await read({ kind: 'context-floor' })).floor,
     cursor: async () => (await metadata()).cursor,
     physicalCursor: async () => (await metadata()).physicalCursor,

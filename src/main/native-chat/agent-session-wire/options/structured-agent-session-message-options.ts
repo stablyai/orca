@@ -1,4 +1,3 @@
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -9,22 +8,18 @@ import type { AgentSessionExecutionOptions } from '../../../../shared/agent-sess
 const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality', 'interactionMode'] as const
 
 /** A different Codex control needs a new turn: steer has no choice parameters. */
-export function waitsForCodexTurnOptions(
+export async function waitsForCodexTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
-  journal: Pick<AgentSessionJournal, 'newestTurn' | 'itemBody'>,
+  journal: Pick<AgentSessionJournal, 'reads'>,
   next: AgentJournalSubmission,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'readAppliedInputOptions'>
-): boolean {
+): Promise<boolean> {
   if (record?.provider !== 'codex') {
     return false
   }
-  const body = journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
-  if (body?.kind !== 'message' || body.command) {
-    return false
-  }
-  const turn = journal.newestTurn()
-  if (turn?.state !== 'running') {
+  const options = await journal.reads.messageOptions(next.clientMessageId)
+  if (!options.ordinaryMessage || !options.runningTurn) {
     return false
   }
   return codexTurnOptionsDiffer(record, next.options, child, adapter)

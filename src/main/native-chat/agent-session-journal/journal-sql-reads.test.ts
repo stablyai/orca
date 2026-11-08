@@ -25,6 +25,11 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
     thread
   )
   await fixture.journal.appendItem(item(400), body('after the turn'), thread)
+  await fixture.journal.appendItem(
+    { provider: 'orca', clientMessageId: 'options-message' },
+    body('message with controls'),
+    thread
+  )
   const database = openTestJournalHostDatabase(fixture.root)
   database.transaction((db) => convertJournalSqlProjection(db, 'session-1'))
   const pool = new JournalSqlReaderPool(
@@ -40,6 +45,14 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
       removed: false
     })
     expect(await sql.namedTurn('missing-turn')).toEqual({ scope: null, removed: false })
+    expect(await sql.messageOptions('options-message')).toEqual({
+      ordinaryMessage: true,
+      runningTurn: true
+    })
+    expect(await sql.messageOptions('turn-1')).toEqual({
+      ordinaryMessage: false,
+      runningTurn: true
+    })
     expect(await sql.canonicalItemIds(['orca:turn-1', 'orca:missing'])).toEqual([
       { itemId: 'orca:turn-1', canonicalItemId: 'orca:turn-1' },
       { itemId: 'orca:missing', canonicalItemId: 'orca:missing' }
@@ -87,6 +100,7 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
         reads.input({ kind: 'batch', reads: [{ kind: 'input-count' }, { kind: 'newest-turn' }] }),
         reads.pendingSubmissions(),
         reads.newestTurn(),
+        reads.messageOptions('options-message'),
         reads.usageLimitCut(),
         reads.orcaStopCut(),
         reads.statusState(1),

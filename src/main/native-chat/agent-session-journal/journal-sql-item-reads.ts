@@ -11,8 +11,10 @@ import {
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalNamedTurn } from './journal-reads'
+import type { JournalMessageOptions, JournalNamedTurn } from './journal-reads'
 import { JournalSqlReadValues } from './journal-sql-read-values'
+import { readJournalSqlInput } from './journal-sql-input-reads'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 
 /** Item reads by type and position; each names the rows it decodes, as projection reads do. */
@@ -28,6 +30,7 @@ export type JournalSqlItemRead =
   | { kind: 'context-usage' }
   | { kind: 'thread-goal-source' }
   | { kind: 'named-turn'; turnId: string }
+  | { kind: 'message-options'; clientMessageId: string }
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
@@ -36,6 +39,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
+  | { kind: 'message-options'; options: JournalMessageOptions }
 
 export type JournalSqlItemReadContext = {
   scope: JournalSqlScope
@@ -54,6 +58,21 @@ export function readJournalSqlItems(
 ): JournalSqlItemReadResult {
   const { scope } = context
   switch (operation.kind) {
+    case 'message-options': {
+      const itemId = agentJournalSubmissionKey(operation.clientMessageId)
+      const body = context.visible(itemId) ? context.item(itemId)?.body : undefined
+      const newest = readJournalSqlInput(scope, { kind: 'newest-turn' })
+      if (newest.kind !== 'newest-turn') {
+        throw new Error('journal newest turn read returned a different answer')
+      }
+      return {
+        kind: 'message-options',
+        options: {
+          ordinaryMessage: body?.kind === 'message' && !body.command,
+          runningTurn: newest.turn?.state === 'running'
+        }
+      }
+    }
     case 'named-turn': {
       const row = scope.db
         .prepare(`SELECT entry_key FROM journal_proj_items

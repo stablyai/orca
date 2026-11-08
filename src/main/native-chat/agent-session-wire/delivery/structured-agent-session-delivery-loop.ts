@@ -259,7 +259,7 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      waitsForCodexTurnOptions(
+      await waitsForCodexTurnOptions(
         this.deps.record(sessionId),
         session.journal,
         next,
@@ -268,6 +268,9 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     ) {
       return this.stop(sessionId)
+    }
+    if (session.child !== awaitedChild) {
+      return 'continue'
     }
     const pending = await beginStructuredAgentSessionInputHandover(
       this.deps,
