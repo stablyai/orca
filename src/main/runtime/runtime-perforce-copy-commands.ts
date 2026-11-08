@@ -27,7 +27,7 @@ import {
   syncCopyWorktrees,
   type CopyWorktreeStore
 } from '../perforce/perforce-copy-worktrees'
-import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeStore } from './construction/runtime-store-contract'
 import {
   perforceBackendForHost,
   perforceConnectionIdForHost,

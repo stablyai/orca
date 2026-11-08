@@ -40,10 +40,7 @@ export function ActivityBarPositionMenu({
         <>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={onDetectPerforce}>
-            {translate(
-              'auto.components.right.sidebar.index.detectPerforce',
-              'Detect Perforce workspace'
-            )}
+            {t('auto.components.right.sidebar.index.detectPerforce', 'Detect Perforce workspace')}
           </ContextMenuItem>
         </>
       )}

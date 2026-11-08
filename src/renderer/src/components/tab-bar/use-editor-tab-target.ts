@@ -15,10 +15,7 @@ import { usePerforceEditedTab } from '../right-sidebar/perforce/use-perforce-edi
  */
 // Why one hook: EditorFileTab sits at the .tsx max-lines limit, so the Perforce label rides on
 // the worktree/repo lookups the tab already needs.
-export function useEditorTabTarget(
-  file: OpenFile & { tabId?: string },
-  t: Translate = translate
-) {
+export function useEditorTabTarget(file: OpenFile & { tabId?: string }, t: Translate = translate) {
   const placedElsewhere = useAppStore((state) =>
     file.tabId
       ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId

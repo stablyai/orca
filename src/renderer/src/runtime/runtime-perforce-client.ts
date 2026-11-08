@@ -30,7 +30,7 @@ import {
 } from './source-control/git/runtime-git-client-context'
 import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { assertRuntimeEnvironmentCapability } from './rpc/compatibility/runtime-capability-proof'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
