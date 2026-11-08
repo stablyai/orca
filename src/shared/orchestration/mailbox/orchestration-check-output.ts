@@ -1,3 +1,7 @@
+import {
+  formatReportFollowUpLine,
+  type ReportFollowUpAction
+} from './orchestration-report-follow-up'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../orchestration-rpc-contract'
 import { escapeTerminalControlCharacters } from '../../terminal/output/terminal-control-character-escape'
 
@@ -13,6 +17,7 @@ export type OrchestrationMessageSummary = {
   payload?: string | null
   priority?: string
   read?: number
+  follow_up?: ReportFollowUpAction
 }
 
 export type LegacyCompatibilityResult = {
@@ -172,7 +177,9 @@ function formatLegacyAwareCheckMessages(
       if (message.payload) {
         lines.push(formatQuotedMessageField('payload', message.payload))
       }
-      if (!legacyReadOnly) {
+      if (!legacyReadOnly && message.follow_up) {
+        lines.push(`[${formatReportFollowUpLine(message.follow_up)}]`)
+      } else if (!legacyReadOnly) {
         const replyTarget = message.to_handle ?? checkedTerminal
         const replyFrom =
           replyTarget.startsWith('run:') || replyTarget.startsWith('dispatch:')

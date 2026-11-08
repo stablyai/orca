@@ -303,7 +303,7 @@ export const WAIT = { timeout: 10_000, interval: 10 }
 
 /** A chat got the whole orchestration message: its subject and its reply command. */
 export function isWholeMail(text: string): boolean {
-  return text.includes('\nSubject: ') && /\[Reply: orca(-dev)? orchestration reply --id /.test(text)
+  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
 }
 
 export function turnText(turn: { text: string }): string {
