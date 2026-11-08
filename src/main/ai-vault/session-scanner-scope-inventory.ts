@@ -94,8 +94,7 @@ export async function inventoryCwdBucketFiles(
         let unverified = false
         if (layout.agent === 'claude') {
           const cwd = await cachedProjectDirCwd(directory, record, layout.agent, args.signal)
-          // Main's recency pass still shows recent sessions in a name-matched bucket whose newest transcripts
-          // name no cwd, or another folder sharing the lossy name; scope-only lets their parse decide.
+          // No cwd found, or a folder sharing the lossy name: without a recency pass, the parse decides.
           if (!inScope(cwd, directory)) {
             if (!args.scopeOnly) {
               continue

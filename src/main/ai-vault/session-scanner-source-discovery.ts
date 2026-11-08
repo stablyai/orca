@@ -51,8 +51,7 @@ function agentDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   const rootDirs = source.rootDirs(options, wslHomeDirs)
-  // Scope-only scans read cwd-bucket agents through their bucket inventory and can't place cwd-less ones.
-  // Pi stays listed: OMP shares its folder under PI_CODING_AGENT_DIR, and Pi's listing decides who parses a file.
+  // Scope-only reads cwd buckets through the scope pass; Pi stays listed because OMP's dedupe needs its listing.
   if (
     scopeOnlyScan(options) &&
     !scopeWalksAgentFiles(agent, options.scopePaths) &&

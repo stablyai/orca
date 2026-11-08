@@ -103,8 +103,8 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           (left, right) => sessionSortTime(right) - sessionSortTime(left)
         )
         // Scope-only keeps the recency pass for agents without cwd buckets, but returns only its in-scope rows.
-        const inScope = createAiVaultScopeCwdMatcher(options.scopePaths ?? [])
-        const cappedSessions = scopeOnly
+        const inScope = scopeOnly ? createAiVaultScopeCwdMatcher(options.scopePaths ?? []) : null
+        const cappedSessions = inScope
           ? recentSessions.filter((session) => aiVaultSessionInScope(inScope, session))
           : recentSessions.slice(0, limit)
 
