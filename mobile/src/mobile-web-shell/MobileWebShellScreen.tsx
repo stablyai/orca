@@ -30,6 +30,7 @@ import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
+import { usePageOpenTarget } from './page-open-target'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -64,6 +65,8 @@ export type MobileWebShellScreenProps = {
   appNamesRoute?: boolean
   // The caller compares the consumed one-shot value before clearing it; a newer tap may already have replaced it (ruling 34).
   onRouteParamClear?: (param: BridgeClearableRouteParam, value: string) => void
+  // Where the page has navigated inside its own document; without it the location is only held for a fold.
+  onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
 }
 
@@ -73,6 +76,7 @@ export function MobileWebShellScreen({
   route,
   appNamesRoute,
   onRouteParamClear,
+  onPageLocation,
   onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
@@ -185,6 +189,15 @@ export function MobileWebShellScreen({
     }
     return void (replace ? router.replace(href) : router.push(href))
   }
+  const openTarget = usePageOpenTarget({
+    route,
+    sessionId: readySessionId,
+    pageVersion: state.kind === 'ready' ? (state.compat.pageVersion ?? 0) : null,
+    isFocused: () => navigation.isFocused(),
+    openNatively: openPageRoute,
+    onRouteParamClear
+  })
+  const pageRoute = openTarget.pageRoute
   const holdPageLocation = usePageLocationOnFold(
     isWideLayout,
     () => navigation.isFocused(),
@@ -194,7 +207,7 @@ export function MobileWebShellScreen({
   const bridge = useMobileWebShellBridge({
     hostId,
     hostStatus,
-    route,
+    route: pageRoute,
     safeAreaInsets: pageInsets,
     keyboardInset,
     pageGeometry: pageFold.geometry,
@@ -226,11 +239,15 @@ export function MobileWebShellScreen({
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
-    onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
-    onTerminalKeyRailClaim: keyRail.reportClaim,
-    onRouteParamClear: (param, value) => {
-      onRouteParamClear?.(param, value)
+    // A caller that tracks the location takes it; pages from #34484 desktops report it only for a fold to reopen.
+    onPageLocation: (href) => {
+      openTarget.recordLocation(href)
+      return onPageLocation === undefined
+        ? holdPageLocation(href, ownsHostArea)
+        : onPageLocation(href)
     },
+    onTerminalKeyRailClaim: keyRail.reportClaim,
+    onRouteParamClear: openTarget.onRouteParamClear,
     // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
@@ -249,7 +266,7 @@ export function MobileWebShellScreen({
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
-  useEffect(() => bridge.publishRoute(route), [bridge.publishRoute, route])
+  useEffect(() => bridge.publishRoute(pageRoute), [bridge.publishRoute, pageRoute])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset
@@ -344,7 +361,7 @@ export function MobileWebShellScreen({
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {
-            reportShellFailure(parsed.reason)
+            reportShellFailure(parsed.reason, parsed.reclaimed === true)
             return
           }
           // Load completion proves only response commit; start waiting for the page’s own first paint here.

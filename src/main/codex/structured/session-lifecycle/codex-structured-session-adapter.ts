@@ -282,6 +282,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       ? { supported: false, reason: 'history-not-paginated' }
       : { supported: true }
 
+  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = (input) =>
+    codexRewind.prepareCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+
   rewind: NonNullable<SessionAdapter['rewind']> = (input) =>
     codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 

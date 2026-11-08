@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../../../../store/index'
 import type { MiniMaxCredentialsStatus } from '../../../../../../shared/minimax-credentials-status'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { callMiniMaxCredentials } from '@/runtime/runtime-usage-credentials-client'
+import { callMiniMaxCredentials } from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import {
   usageCredentialAccessAfterError,
   type UsageCredentialAccess
 } from './usage-credential-host'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type MiniMaxCredentialsModel = ReturnType<typeof useMiniMaxCredentials>
 
 /** Key by owner so switching credential hosts resets drafts. */
 export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<MiniMaxCredentialsStatus | null>(null)
   const [access, setAccess] = useState<UsageCredentialAccess>(
@@ -48,17 +50,20 @@ export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
     }
   }, [ownerEnvironmentId])
 
-  const actions = createMiniMaxCredentialActions({
-    owner,
-    miniMaxApiKeyDraft,
-    setMiniMaxApiKeyDraft,
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    setStatus,
-    setAccess,
-    setMiniMaxCredentialBusy,
-    recordFeatureInteraction
-  })
+  const actions = createMiniMaxCredentialActions(
+    {
+      owner,
+      miniMaxApiKeyDraft,
+      setMiniMaxApiKeyDraft,
+      miniMaxCookieDraft,
+      setMiniMaxCookieDraft,
+      setStatus,
+      setAccess,
+      setMiniMaxCredentialBusy,
+      recordFeatureInteraction
+    },
+    t
+  )
 
   return {
     access,

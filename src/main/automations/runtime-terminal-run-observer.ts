@@ -74,7 +74,9 @@ async function judgeIdleTail(
   judged: JudgedRun,
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
-  const verdict = judgeIdleRun(judged.evidence, judged.run, tail, runStartedAt, Date.now())
+  const verdict: IdleRunVerdict = judged.turn()?.interrupted
+    ? { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+    : judgeIdleRun(judged.evidence, judged.run, tail, runStartedAt, Date.now())
   return verdict.kind === 'wait' ? null : observationOf(verdict, tail, judged)
 }
 

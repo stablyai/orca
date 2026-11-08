@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { useAppStore } from '@/store/index'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { loadEmptyWorkspaceDefaultChatDetection } from './empty-workspace-default-agent-chat'
 
 const mocks = vi.hoisted(() => ({

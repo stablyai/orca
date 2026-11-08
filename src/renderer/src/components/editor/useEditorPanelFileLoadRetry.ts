@@ -3,7 +3,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
-import { isFileTooLargeMessage } from '../../../../shared/file-write-disk-precondition'
+import { isFileTooLargeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import {
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
   WORKTREE_HOST_UNRESOLVED_CODE,

@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Verbinde dich mit dem SSH-Host dieses Arbeitsbereichs und versuche es erneut.",
+    "sshUnavailable": "Der Terminalstart ist auf diesem SSH-Host nicht verfügbar. Öffne ein Terminal im Arbeitsbereich und starte den Agenten dort.",
+    "reconnectServer": "Verbinde dich erneut mit dem Orca-Server dieses Arbeitsbereichs und versuche es erneut.",
+    "updateServer": "Aktualisiere Orca auf dem Server dieses Arbeitsbereichs und versuche es erneut.",
+    "checkSettings": "Prüfe die Starteinstellungen des Agenten und versuche es erneut.",
+    "invalidArgs": "Die CLI-Argumente für {{value0}} enthalten ein nicht geschlossenes Anführungszeichen. Korrigiere sie und versuche es erneut.",
     "opencode": {
       "updateRequired": "OpenCode kann in dieser Version nicht sicher mit einem ausgewählten Modell starten. OpenCode auf eine unterstützte Version aktualisieren oder die Modellauswahl weglassen.",
       "invalidConfig": "Diese Modellauswahl konnte nicht auf die Startkonfiguration von OpenCode angewendet werden. Die OpenCode-Startkonfiguration prüfen und erneut versuchen oder die Modellauswahl weglassen.",
@@ -514,10 +520,7 @@
         "searchAgents": "Agenten",
         "searchCli": "CLI",
         "searchTerminal": "Terminal",
-        "antigravityDescription": "Antigravity-Chats nutzen einen Server, den Orca auf diesen Host herunterlädt, unabhängig von der agy-CLI.",
-        "antigravityNotSignedIn": "Nicht angemeldet. Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto.",
-        "antigravityAccount": "Konto",
-        "antigravitySignInNeeded": "Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto."
+        "antigravityAccount": "Konto"
       },
       "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
       "launch": {
@@ -866,7 +869,6 @@
       "actionModel": {
         "on": "Ein",
         "off": "Aus",
-        "invalidArgs": "Die CLI-Argumente für {{value0}} sind ungültig. Unter Einstellungen → KI für die Quellcodeverwaltung korrigieren.",
         "model": "Modell",
         "agentDefault": "Standard des Agenten",
         "effortDefault": "Standard",
@@ -1488,9 +1490,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Für diese Checks konnte kein Arbeitsbereich gefunden werden.",
-              "fb6c294e85": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
               "03c1d61f83": "Der mit diesen Checks verknüpfte Arbeitsbereich konnte nicht geöffnet werden.",
-              "822bf52295": "Die Startplattform des Arbeitsbereichs konnte nicht ermittelt werden.",
               "dfb4dd7c00": "Der mit diesen Checks verknüpfte Arbeitsbereich konnte nicht gefunden werden.",
               "9f00d7df0c": "Der Prompt zum Beheben von Check-Fehlern ist leer. Die KI-Einstellungen der Quellcodeverwaltung aktualisieren.",
               "2ebf794906": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -1529,8 +1529,8 @@
             "direct": {
               "3de6371df3": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
               "67e103dd60": "Der Arbeitsbereich wurde erstellt, konnte aber nicht aktiviert werden.",
-              "19c7683acf": "Der ausgewählte Agent ist im erstellten Arbeitsbereich nicht verfügbar.",
-              "8bc45efdbc": "Der PR-Head konnte nicht ermittelt werden.",
+              "19c7683acf": "Der ausgewählte Agent ist nicht verfügbar. Prüfe die Agenteneinstellungen des Arbeitsbereichs und versuche es erneut.",
+              "8bc45efdbc": "Der Pull Request konnte nicht gelesen werden. Prüfe, ob du ihn öffnen kannst, und versuche es erneut.",
               "agent": {
                 "ceeeb509b5": "Der Agent brauchte zu lange zum Starten. Der Arbeitsbereich ist bereit — {{value0}} einfügen, sobald der Agent im Leerlauf ist."
               }
@@ -3170,7 +3170,6 @@
         "a2a279b32a": "Zeitüberschreitung oder Fehler beim Speichern. Vor dem Schließen die Fehler beheben.",
         "46e08bc5c8": "Diese Datei enthält ungespeicherte Änderungen.",
         "61ed600d29": "„{{value0}}“ enthält ungespeicherte Änderungen. Vor dem Schließen speichern?",
-        "e57db40c11": "Startbefehl für {{value0}} konnte nicht erstellt werden.",
         "5b2c1a9e44": "Keine Agenten-CLI erkannt — eine installieren oder in den Einstellungen einen Standardagenten auswählen.",
         "quitSnapshotSaveFailed": "Beenden abgebrochen: Das Sitzungsabbild konnte nicht gespeichert werden ({{value0}}).",
         "reloadSnapshotSaveFailed": "Neuladen abgebrochen: Das Sitzungsabbild konnte nicht gespeichert werden ({{value0}})."
@@ -4257,7 +4256,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agenten-Einstellungen…",
             "ec2adf093e": "{{value0}} in einem neuen Terminal starten",
-            "465e432ef1": "Startbefehl für {{value0}} konnte nicht erstellt werden.",
             "e518f544b1": "Keine Agenten erkannt",
             "8dea9b5cdf": "Keine aktivierten Agenten",
             "terminalListNeedsServerUpdate": "Orca auf diesem Server aktualisieren, um Terminal-Agenten aufzulisten",
@@ -6499,14 +6497,11 @@
           "c39c37676a": "Eine Gruppe erstellen und dieses Projekt dorthin verschieben.",
           "6664418e98": "Projektgruppe erstellen",
           "e091caab15": "Das Projekt konnte nicht gefunden werden",
-          "439fa94d53": "Aktualisieren",
           "579b1a8e61": "Aus übergeordnetem Worktree entfernen",
           "8d9cd19d09": "Übergeordneten Worktree öffnen",
           "d35dfeae58": "Aus Gruppe entfernen",
           "76865d827f": "In Gruppe verschieben",
           "503ec0f8e6": "Neue Gruppe aus Projekt erstellen",
-          "3350101edb": "Pfad kopieren",
-          "copyWorktreeName": "Worktree-Namen kopieren",
           "f4475537d8": "Löschen",
           "f5ac91531d": "Projekt aus Orca entfernen",
           "b42391d8bf": "Wird gelöscht…",
@@ -6524,9 +6519,16 @@
           "workspaceSection": "Arbeitsbereich",
           "primaryDeleteDisabled": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
           "deleteWorktree": "Worktree löschen",
-          "sleepWithDescendants": "Mit untergeordneten Arbeitsbereichen in den Ruhezustand versetzen ({{value0}})",
           "sleepWithDescendantsDescription": "Aktive Panels in diesem Arbeitsbereich und allen untergeordneten Arbeitsbereichen schließen, um Arbeitsspeicher und CPU-Ressourcen freizugeben.",
-          "deleteWithDescendants": "Mit untergeordneten Arbeitsbereichen löschen…"
+          "sleepThisWorkspace": "Dieser Arbeitsbereich",
+          "sleepDescendantsOption": "Mit untergeordneten ({{value0}})",
+          "deleteWithDescendants": "Mit untergeordneten Arbeitsbereichen löschen…",
+          "editDetails": "Details bearbeiten…",
+          "copySubmenu": "Kopieren",
+          "copyPathOption": "Pfad",
+          "copyNameOption": "Worktree-Name",
+          "lineageSubmenu": "Über- und untergeordnet",
+          "projectGroupSubmenu": "Projektgruppe"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update erforderlich",
@@ -8361,7 +8363,8 @@
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
           "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
           "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten.",
-          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät."
+          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät.",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere die Orca-App auf diesem Telefon."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8768,6 +8771,7 @@
           "6f6d5188ed": "Zugriff für {{value0}} widerrufen",
           "434e4a6af6": "Aktueller Link",
           "df142657a5": "Noch nicht verwendet",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere Orca auf dem Gerät, das diesen Link verwendet.",
           "b18d1764ef": "Zuletzt verwendet: {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Aktive Links",
@@ -14324,7 +14328,6 @@
                     },
                     "d481ab22f9": "Der gespeicherte KI-Agent ist nicht verfügbar. Unter „Start anpassen“ einen anderen Agenten auswählen.",
                     "9bbd9077a2": "Keine aktivierten KI-Agenten. Agenten in den Einstellungen konfigurieren.",
-                    "5540ff50cc": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
                     "216f762bd7": "Die Verbindung zum Arbeitsbereich konnte nicht ermittelt werden.",
                     "success": "Ein KI-Agent wurde für den Fehler bei {{value0}} gestartet."
                   }
@@ -15540,7 +15543,6 @@
             "3f4ca29961": "Schwebenden Arbeitsbereich maximieren",
             "1c79cba25d": "Schwebenden Arbeitsbereich wiederherstellen",
             "648352c51f": "{{value0}} im schwebenden Arbeitsbereich öffnen",
-            "82da3701e7": "Startbefehl für {{value0}} konnte nicht erstellt werden.",
             "109870e023": "Maximieren",
             "b5686fee1e": "Wiederherstellen"
           }
@@ -19954,7 +19956,6 @@
       "visualLoading": "Visualisierung wird geladen",
       "visualOpenInNewTab": "In neuem Tab öffnen",
       "queuedMessages": {
-        "behindReturnedHold": "Warten — eine vorherige Nachricht erfordert Aufmerksamkeit",
         "steer": "Steuern",
         "send": "Senden",
         "steerHint": "Ohne Unterbrechung des Modells übermitteln",
@@ -21283,6 +21284,29 @@
       "loading": "Submodul-Änderungen werden geladen…",
       "empty": "Keine Änderungen im Submodul",
       "loadFailed": "Submodul-Änderungen konnten nicht geladen werden"
+    },
+    "branchPicker": {
+      "switch": "Branch wechseln: {{branch}}",
+      "search": "Branches suchen",
+      "recover": "Zu {{branch}} wechseln",
+      "create": "Branch {{name}} aus {{branch}} erstellen",
+      "open": "Arbeitsbereich öffnen",
+      "occupied": "Ausgecheckt in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca konnte die Änderungen in diesem Checkout nicht lesen. Aktualisiere die Quellcodeverwaltung, bevor du wechselst.",
+      "statusUnknown": "Lies die Änderungen in diesem Checkout, bevor du wechselst.",
+      "conflict": "Schließe den {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
+      "dirty_one": "Committe oder verwirf {{count}} geänderte Datei, bevor du den Branch wechselst.",
+      "dirty_other": "Committe oder verwirf {{count}} geänderte Dateien, bevor du den Branch wechselst.",
+      "agentWorking": "Ein Agent arbeitet in diesem Arbeitsbereich. Wechsle den Branch, wenn er fertig ist, oder schließe seinen Tab, falls er angehalten hat.",
+      "listFailed": "Orca konnte die lokalen Branches nicht auflisten. Öffne die Auswahl erneut.",
+      "discoveryFailed": "Orca konnte keine Remote-Branches finden. Du kannst trotzdem zu lokalen Branches wechseln oder einen Branch erstellen.",
+      "switchFailed": "Orca konnte den Branch nicht wechseln. Versuche es erneut.",
+      "switchFailedTitle": "Branch konnte nicht gewechselt werden",
+      "switchFailedIn": "Branch in {{workspace}} konnte nicht gewechselt werden",
+      "switchedIn": "In {{workspace}}",
+      "thisComputer": "diesem Computer",
+      "updateHost": "Aktualisiere Orca auf {{host}}, um von hier aus Branches zu wechseln."
     }
   },
   "agentsSidebarIntro": {
@@ -21653,7 +21677,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity-Chats",
-      "chatDescription": "Chats verwenden eine eigene Antigravity-Anmeldung, unabhängig vom obigen agy-Konto. Einmalig auf diesem Gerät anmelden.",
       "chatSignIn": "Anmelden",
       "chatChangeAccount": "Konto wechseln",
       "chatRetry": "Anmeldung erneut versuchen",
@@ -21666,14 +21689,11 @@
       "chatVerifying": "Anmeldung wird abgeschlossen…",
       "chatPasteHelp": "Falls die letzte Seite nach der Anmeldung nicht geladen wird, ihre vollständige Adresse aus dem Browser kopieren und hier einfügen.",
       "chatContinue": "Fortfahren",
-      "chatSignedInOn": "Auf {{host}} angemeldet.",
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
-      "chatNotSignedIn": "Auf {{host}} nicht angemeldet.",
       "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
-      "scope": "Das native agy-Konto auf {{host}} verwalten.",
       "signIn": "agy auf diesem Host starten und die Anmeldung im Browser abschließen, dann das aktuelle Konto speichern. Um ein anderes Konto hinzuzufügen, /logout in agy ausführen und erneut anmelden.",
       "docs": "Anmeldeanleitung",
       "retry": "Erneut versuchen",
@@ -21704,11 +21724,9 @@
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
       "gcpLocation": "Google-Cloud-Standort",
-      "signInAgainWith": "Melde dich erneut an, um {{method}} zu verwenden.",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
-      "signInWith": "Meldet sich mit {{method}} auf {{host}} an.",
       "lastReading": "{{reading}} · Ausgelesen {{time}}",
       "noReading": "Nutzung unbekannt: noch nicht ausgelesen"
     },
@@ -23409,6 +23427,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
     "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
     "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",

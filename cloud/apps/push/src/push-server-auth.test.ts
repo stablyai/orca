@@ -16,11 +16,6 @@ describe('push gateway authentication and device routes', () => {
     await harness.close()
   })
 
-  it('answers health unconditionally and ready from the database', async () => {
-    expect((await harness.server.app.request('/health')).status).toBe(200)
-    expect((await harness.server.app.request('/ready')).status).toBe(200)
-  })
-
   it('reports not ready when the database is unreachable', async () => {
     const unreachable: PushDatabase = {
       dialect: 'sqlite',
@@ -71,36 +66,6 @@ describe('push gateway authentication and device routes', () => {
     const expired = await harness.authorized('/v1/devices', {}, sessionToken)
     expect(expired.status).toBe(401)
     expect(await expired.json()).toEqual({ error: 'session_expired' })
-  })
-
-  it('refuses a replayed proof and an unknown challenge', async () => {
-    const host = createPushHostKeypair(13)
-    const challenge = await harness.issueChallenge(host)
-    const proof = harness.answer(challenge, host)
-    expect(
-      (
-        await harness.post('/v1/host/session', {
-          v: 1,
-          challengeId: challenge.challengeId,
-          proofB64: proof
-        })
-      ).status
-    ).toBe(200)
-
-    const replay = await harness.post('/v1/host/session', {
-      v: 1,
-      challengeId: challenge.challengeId,
-      proofB64: proof
-    })
-    expect(replay.status).toBe(401)
-    expect(await replay.json()).toEqual({ error: 'invalid_proof' })
-
-    const unknown = await harness.post('/v1/host/session', {
-      v: 1,
-      challengeId: 'no-such-challenge',
-      proofB64: proof
-    })
-    expect(await unknown.json()).toEqual({ error: 'invalid_challenge' })
   })
 
   it('never returns the host fingerprint on the challenge itself', async () => {

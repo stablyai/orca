@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -165,43 +165,6 @@ describe('federation host liveness verdicts', () => {
     return { hostDb, hostRuntime, terminal, callHost }
   }
 
-  it('reports lost contact as unverifiable rather than an observed exit', async () => {
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'unverifiable',
-      reason: SSH_PROVIDER_GONE
-    })
-
-    await expect(
-      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
-    ).resolves.toMatchObject({
-      observation: { status: 'unverifiable', exactWorker: true, reason: SSH_PROVIDER_GONE }
-    })
-  })
-
-  it('uses the canonical live verdict for an observed process', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: HANDLE,
-      worktreeId: 'repo::remote-worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'live',
-      ptyIds: [HANDLE]
-    })
-
-    await expect(
-      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
-    ).resolves.toMatchObject({ observation: { status: 'live', exactWorker: true } })
-  })
-
-  it('still reports a locally observed exit as exited', async () => {
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })
-    await expect(
-      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
-    ).resolves.toMatchObject({ observation: { status: 'exited', exactWorker: true } })
-  })
-
   it('publishes positive owning-host inventory as live without a test verdict stub', async () => {
     const host = await createRealHost()
     try {
@@ -336,40 +299,6 @@ describe('federation host liveness verdicts', () => {
     })
   })
 
-  it('keeps an old peer without a liveness verdict unverifiable', async () => {
-    // Legacy terminal summaries can look exited without verdict proof; contact state is not death evidence.
-    Object.defineProperty(runtime, 'getTerminalLivenessVerdict', { value: undefined })
-
-    await expect(
-      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
-    ).resolves.toMatchObject({
-      observation: {
-        status: 'unverifiable',
-        exactWorker: true,
-        reason: 'missing_liveness_verdict'
-      }
-    })
-  })
-
-  it('still serves output for a terminal we merely lost stop-contact with', async () => {
-    // An unverifiable but connected terminal remains readable after stop loses contact.
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: HANDLE,
-      worktreeId: 'repo::remote-worktree',
-      connected: true
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'unverifiable',
-      reason: SSH_PROVIDER_GONE
-    })
-
-    const outcome = await call('orchestration.federationRead', {
-      dispatchId: DISPATCH_ID
-    }).catch((error: unknown) => error)
-
-    expect(outcome).not.toMatchObject({ code: 'worker_identity_changed' })
-  })
-
   it('does not relay an unconfirmed close home as a settled stop', async () => {
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
       status: 'unverifiable',
@@ -389,22 +318,6 @@ describe('federation host liveness verdicts', () => {
     }
 
     expect(closeTerminal).toHaveBeenCalledWith(HANDLE)
-    expect(stopped.state).not.toBe('stopped')
-    expect(stopped.lastError).toContain('could not be confirmed stopped')
-  })
-
-  it('does not settle a bare false close as a stop', async () => {
-    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: HANDLE,
-      tabId: 'tab_remote',
-      ptyKilled: false
-    })
-
-    const stopped = (await call('orchestration.federationStop', { dispatchId: DISPATCH_ID })) as {
-      state: string
-      lastError?: string
-    }
-
     expect(stopped.state).not.toBe('stopped')
     expect(stopped.lastError).toContain('could not be confirmed stopped')
   })

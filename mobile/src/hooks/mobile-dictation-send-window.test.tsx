@@ -59,44 +59,53 @@ async function answer(rpc: FakeRpcClient, requests: SentRequest[], text: string)
   }
 }
 
+async function startDictation(rpc: FakeRpcClient, transcripts: string[] = []) {
+  const held: { dictation: UseMobileDictationResult | null } = { dictation: null }
+  function Probe(): null {
+    held.dictation = useMobileDictation({
+      client: rpc,
+      enabled: true,
+      onTranscript: (text) => transcripts.push(text),
+      onError: () => {}
+    })
+    return null
+  }
+  act(() => {
+    create(createElement(Probe))
+  })
+  await act(async () => {
+    const started = held.dictation!.start()
+    for (let round = 0; round < 4; round += 1) {
+      await answer(rpc, [...rpc.requests], '')
+    }
+    await started
+  })
+  return () => held.dictation!
+}
+
+function speak(count: number): void {
+  act(() => {
+    for (let index = 0; index < count; index += 1) {
+      for (const handler of chunkHandlers) {
+        handler({ data: Uint8Array.from([index, index]), droppedBytes: 0 })
+      }
+    }
+  })
+}
+
 describe('phone dictation chunks on a link that stops answering', () => {
   it('keep four requests waiting, then send the audio captured meanwhile as one, before the finish', async () => {
     const rpc = createFakeRpcClient()
     const transcripts: string[] = []
-    let dictation: UseMobileDictationResult | null = null
-    function Probe(): null {
-      dictation = useMobileDictation({
-        client: rpc,
-        enabled: true,
-        onTranscript: (text) => transcripts.push(text),
-        onError: () => {}
-      })
-      return null
-    }
-    act(() => {
-      create(createElement(Probe))
-    })
-    await act(async () => {
-      const started = dictation!.start()
-      for (let round = 0; round < 4; round += 1) {
-        await answer(rpc, [...rpc.requests], '')
-      }
-      await started
-    })
+    const dictation = await startDictation(rpc, transcripts)
 
-    act(() => {
-      for (let index = 0; index < 10; index += 1) {
-        for (const handler of chunkHandlers) {
-          handler({ data: Uint8Array.from([index, index]), droppedBytes: 0 })
-        }
-      }
-    })
+    speak(10)
     const waiting = chunkRequests(rpc)
     expect(waiting.map((request) => paramsOf(request).seq)).toEqual([0, 1, 2, 3])
 
     let stopped: Promise<void> = Promise.resolve()
     await act(async () => {
-      stopped = dictation!.stop()
+      stopped = dictation().stop()
       await answer(rpc, waiting, '')
     })
     // Six held two-byte captures, merged into one request after the first that came free.
@@ -112,5 +121,24 @@ describe('phone dictation chunks on a link that stops answering', () => {
       await stopped
     })
     expect(transcripts).toEqual(['all ten'])
+  })
+
+  it('keep the newest text so far when an older reply arrives last', async () => {
+    const rpc = createFakeRpcClient()
+    const dictation = await startDictation(rpc)
+    speak(2)
+    const [older, newer] = chunkRequests(rpc)
+    const reply = (request: SentRequest, result: { text: string; revision: number }) => {
+      rpc.requests.splice(rpc.requests.indexOf(request), 1)
+      request.resolve({ id: 'desktop', ok: true, result })
+    }
+    await act(async () => {
+      reply(newer, { text: 'open the file', revision: 2 })
+      reply(older, { text: 'open', revision: 1 })
+      for (let round = 0; round < 8; round += 1) {
+        await Promise.resolve()
+      }
+    })
+    expect(dictation().transcriptSoFar).toBe('open the file')
   })
 })

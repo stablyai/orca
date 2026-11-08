@@ -19,6 +19,7 @@ import {
 } from './pull-request-lookup-data'
 import { getPRByNumber } from './pr-number-lookup'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
+import type { PRProviderReadOptions } from './shared-pr-provider-reads'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
@@ -81,16 +82,22 @@ export async function hydrateBranchLookupWithExactPR(
   ownerRepo: OwnerRepo,
   branchData: PullRequestLookupData | null,
   ghOptions: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  reads: PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
   if (!branchData) {
     return null
   }
   try {
-    return (
-      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData)) ??
-      branchData
+    const exact = await getPRByNumber(
+      ownerRepo,
+      branchData.number,
+      ghOptions,
+      executionScope,
+      branchData,
+      reads
     )
+    return exact ?? branchData
   } catch {
     return branchData
   }
@@ -103,6 +110,7 @@ export async function lookupPRByBranchName(args: {
   ghOptions: GhExecOptions
   executionScope: string
   policy?: PullRequestLookupPolicy
+  reads?: PRProviderReadOptions
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
@@ -133,7 +141,8 @@ export async function lookupPRByBranchName(args: {
           candidate,
           branchData,
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.reads
         )
         if (
           data &&
@@ -161,7 +170,8 @@ export async function lookupPRByBranchName(args: {
             candidate,
             branchData,
             args.ghOptions,
-            args.executionScope
+            args.executionScope,
+            args.reads
           )
           if (
             data &&
@@ -197,7 +207,8 @@ export async function lookupPRByBranchName(args: {
           repository,
           { ...parsedData, checksUnavailable: true },
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.reads
         )
       : {
           ...normalizePullRequestLookupData(parsedData),

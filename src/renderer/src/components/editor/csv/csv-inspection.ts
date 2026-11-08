@@ -6,7 +6,8 @@ export type CsvInspectionSort = { column: number; direction: 'ascending' | 'desc
 export function csvInspectionRows(
   rows: readonly string[][],
   filter: string,
-  sort: CsvInspectionSort | null
+  sort: CsvInspectionSort | null,
+  intlLocale?: string
 ): number[] | null {
   if (!filter && !sort) {
     return null
@@ -19,7 +20,7 @@ export function csvInspectionRows(
     }
   }
   if (sort) {
-    const collator = uiCollator(NUMERIC_COLLATION)
+    const collator = uiCollator(NUMERIC_COLLATION, intlLocale)
     const direction = sort.direction === 'ascending' ? 1 : -1
     result.sort(
       (a, b) =>

@@ -10,7 +10,7 @@ import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compa
 import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/input/terminal-input-host-platform'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/input/keyboard/terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/input/keyboard/terminal-ctrl-enter'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/input/paste/terminal-agent-paste-bracketing'
 
 export type DashboardCardTerminalInputState = Pick<

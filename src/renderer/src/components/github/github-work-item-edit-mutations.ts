@@ -2,7 +2,7 @@ import { getGitHubMutationTarget } from './github-work-item-mutation-target'
 export { getGitHubMutationTarget } from './github-work-item-mutation-target'
 import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getGitHubRepoRoutingTarget,

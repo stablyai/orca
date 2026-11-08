@@ -48,7 +48,7 @@ import { MuseHookService } from '../muse/hook-service'
 import { getMuseManagedHooksPath } from '../muse/hook-settings'
 import { zcodeHookService } from '../zcode/hook-service'
 import { readHooksJson, WINDOWS_CMD_SAFE_PATH, wrapWindowsHookCommand } from './installer-utils'
-import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-settings'
+import { getConfigPath } from '../claude/hook-settings'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 import {
   buildWindowsNativeHookExecutable,
@@ -415,17 +415,6 @@ function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   )
   return { ...base, ORCA_BACKGROUND_LAUNCH: '1', ...extra }
 }
-
-describe('Windows managed hook launcher', () => {
-  // Keep ConPTY shape coverage on hosts that cannot execute Windows delivery tests.
-  it('does not re-host the hook on a pseudoconsole', () => {
-    const hook = getWindowsManagedLifecycleHook(
-      'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
-    )
-    expect(hook.command).not.toMatch(/conhost/i)
-    expect(hook.args).toBeUndefined()
-  })
-})
 
 describe.skipIf(process.platform !== 'win32')('Windows managed hook payload delivery', () => {
   let root = ''

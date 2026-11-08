@@ -8,7 +8,7 @@ import { Switch } from '../../ui/switch'
 import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SettingsSwitchProps = {
   checked: boolean
@@ -55,6 +55,7 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
+      data-settings-row=""
       className={cn(
         'flex gap-4',
         description ? 'py-3' : 'py-2',
@@ -331,6 +332,7 @@ export function NumberField({
   disabled = false,
   disabledReason
 }: NumberFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
 
@@ -379,7 +381,7 @@ export function NumberField({
           {description}
           {defaultValue !== undefined ? (
             <span className="ml-1 text-muted-foreground/70">
-              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {t('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
               {defaultValue}
             </span>
           ) : null}

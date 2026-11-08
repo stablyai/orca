@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -30,7 +30,7 @@ import {
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
 } from '@/components/tab-bar/terminal-tab-activity-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -237,6 +237,7 @@ export function PaletteRecentTabStatusDot({
   row: RecentWorkspaceTabRow | null
   fallback: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const live = useLiveStatus()
   const terminalTabId = row?.terminalTab?.id
   const status: WorktreeStatus | null =
@@ -258,10 +259,7 @@ export function PaletteRecentTabStatusDot({
   const statusLabel =
     badge === 'unread'
       ? // Reuse the translated tab-bar label for the same unread signal.
-        translate(
-          'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
-          'Unread agent completion'
-        )
+        t('auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea', 'Unread agent completion')
       : getWorktreeStatusLabel(badge)
   // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (

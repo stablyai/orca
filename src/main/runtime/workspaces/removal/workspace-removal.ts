@@ -1,6 +1,6 @@
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isStaleLocalWorktreeRegistration } from '../catalog/stale-worktree-registration-preflight'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { RuntimeWorkspaceMetadata } from '../workspace-metadata'
 import {

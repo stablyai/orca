@@ -1,10 +1,12 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 
-import { type AppState, useAppStore } from '@/store'
+/** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 import {
   isAgentForegroundWrapperProcess,

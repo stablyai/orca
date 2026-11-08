@@ -201,11 +201,12 @@ it.each([8, 80])(
     await act(async () => {
       tree?.update(createElement(Probe))
     })
-    expect(latest).toMatchObject({ kind: 'ready', buildId: host.live.manifest.buildId })
-    expect(host.liveReads).toHaveLength(windows)
+    // The superseded reads still hold the connection's read slots until their replies land.
     await act(async () => {
       host.release()
     })
+    expect(latest).toMatchObject({ kind: 'ready', buildId: host.live.manifest.buildId })
+    expect(host.liveReads).toHaveLength(windows)
     const active = await store.readActiveGeneration(deriveHostCacheKey('host-1'))
     expect({
       oldReads: host.oldReads.length,

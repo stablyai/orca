@@ -11,7 +11,7 @@ import type {
 import { hostFolderAccountBinding } from '../acp/acp-account-binding'
 import type { AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
-import { RevisionedState } from '../runtime/revisioned-state'
+import { RevisionedState } from '../runtime/events/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'

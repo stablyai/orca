@@ -20,9 +20,9 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   selectDetectedWorktreesByRepo,
-  selectFolderWorkspaceCopies,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaceCopies } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { focusFreeRouteStateOf } from './editor-file-operation-provenance'
 import { namedHostForOwnerRef, resolveOwner, resolveOwnerOfRoute } from './resolve-owner'

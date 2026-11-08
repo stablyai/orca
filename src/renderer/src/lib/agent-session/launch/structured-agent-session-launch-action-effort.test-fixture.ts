@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import './structured-agent-session-create-selection.test-fixture'
 
@@ -33,7 +33,7 @@ export function registerActionEffortCreateTests(
       const { planAgentSessionLaunch } = await import('./routing/agent-session-launch-plan')
       const { useAppStore } = await import('@/store/index')
       const { setLocalRuntimeCapabilitiesForTests } =
-        await import('@/runtime/local-runtime-capabilities')
+        await import('@/runtime/hosts/capabilities/local-runtime-capabilities')
       const {
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
         STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY

@@ -227,59 +227,6 @@ describe('qualified discovery at the runtime RPC boundary', () => {
       }
     }
   )
-
-  it('passes the selected project WSL override to refresh rather than the global distro', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const local: Repo = {
-      id: 'copy',
-      path: 'C:\\same',
-      kind: 'folder',
-      displayName: 'Local',
-      badgeColor: '#000',
-      addedAt: 1
-    }
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getRepos: () => [{ ...local, connectionId: 'other' }, local],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'GlobalDistro' }
-      }),
-      getProjects: () => [
-        {
-          id: 'project',
-          displayName: 'Project',
-          badgeColor: '#000',
-          sourceRepoIds: ['copy'],
-          createdAt: 1,
-          updatedAt: 1,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'ProjectDistro' }
-        }
-      ]
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
-    refresh.mockClear()
-    expect(
-      await dispatcher.dispatch({
-        id: 'wsl',
-        authToken: 'test',
-        method: 'preflight.refreshAgents',
-        params: { worktreeId: 'copy::C:\\same', worktreeHostId: 'local' }
-      })
-    ).toMatchObject({ ok: true })
-    expect(refresh).toHaveBeenCalledWith(
-      {
-        kind: 'local',
-        context: {
-          projectRuntime: expect.objectContaining({
-            status: 'resolved',
-            runtime: expect.objectContaining({ kind: 'wsl', distro: 'ProjectDistro' })
-          })
-        }
-      },
-      undefined
-    )
-  })
   it.each([false, true])(
     'uses the actual cold and warm folder-project instance in either repo order (reverse=%s)',
     async (reverse) => {

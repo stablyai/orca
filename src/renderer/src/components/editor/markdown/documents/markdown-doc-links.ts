@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { slug as slugMarkdownHeading } from 'github-slugger'
 
 export const MARKDOWN_DOC_LINK_PREFIX = '#orca-doc-link='

@@ -5,10 +5,7 @@ import {
 } from './gestures/terminal-link-activation'
 import type { TerminalLinkClickBehavior } from './gestures/terminal-link-click-behavior'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import {
-  closeLinkActionRequest,
-  type LinkActionRequest
-} from '@/components/link-actions/link-action-request'
+import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 
 export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
 
@@ -24,13 +21,6 @@ export type TerminalLinkActionContext = {
   middleClickBehavior?: TerminalLinkClickBehavior
   /** The host running the pane's shell; absent reads as not this machine. */
   sourceOwner?: HttpLinkSourceOwner
-}
-
-export function closeTerminalLinkActionRequest(
-  current: TerminalLinkActionRequest | null,
-  dismissed?: TerminalLinkActionRequest
-): TerminalLinkActionRequest | null {
-  return closeLinkActionRequest(current, dismissed)
 }
 
 type LinkActionDetails = Pick<

@@ -2,8 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
-import { connectRuntimeEnvironmentSshTarget } from '@/runtime/runtime-environment-ssh-state'
+import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   loadServerSshTargets,
   withServerSshStates,

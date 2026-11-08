@@ -1,3 +1,7 @@
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { buildAgentPickerLaunchOptions } from './tab-agent-launch-options'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -119,3 +123,44 @@ describe('TabBarCreateEntry search behavior', () => {
     )
   })
 })
+
+it.each([false, true])(
+  'configures a waiting terminal search result to chat while preserving independent disabled=%s',
+  async (independentlyDisabled) => {
+    const entry: AgentPickerEntry = {
+      agent: 'codex',
+      label: 'Codex',
+      defaultSurface: 'terminal',
+      surfaces: ['terminal', 'chat'],
+      terminal: {},
+      structured: {},
+      catalog: { origin: 'probe', fetchedAt: 1, models: [] },
+      rows: [{ kind: 'cli', agent: 'codex', chat: true }]
+    }
+    const onLaunchAgentOption = vi.fn(() => true)
+    renderEntry({
+      agentOptions: buildAgentPickerLaunchOptions([entry]).map((option) => ({
+        ...option,
+        disabled: independentlyDisabled
+      })),
+      terminalPending: true,
+      onLaunchAgentOption
+    })
+    setQuery('codex')
+    submit()
+    expect(onLaunchAgentOption).not.toHaveBeenCalled()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Configure Codex' }))
+    expect(screen.getByRole('button', { name: 'Launch terminal' }).hasAttribute('disabled')).toBe(
+      true
+    )
+    await user.click(screen.getByRole('button', { name: 'Launch chat' }))
+    expect(onLaunchAgentOption).toHaveBeenCalledTimes(independentlyDisabled ? 0 : 1)
+    if (!independentlyDisabled) {
+      expect(onLaunchAgentOption).toHaveBeenCalledWith(
+        expect.objectContaining({ row: expect.objectContaining({ kind: 'chat' }) })
+      )
+    }
+    expect(document.querySelector('[data-sonner-toast]')).toBeNull()
+  }
+)

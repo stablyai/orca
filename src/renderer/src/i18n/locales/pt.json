@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Conecte-se ao host SSH deste espaço de trabalho e tente novamente.",
+    "sshUnavailable": "A inicialização no terminal não está disponível neste host SSH. Abra um terminal no espaço de trabalho e inicie o agente nele.",
+    "reconnectServer": "Reconecte-se ao servidor Orca deste espaço de trabalho e tente novamente.",
+    "updateServer": "Atualize o Orca no servidor deste espaço de trabalho e tente novamente.",
+    "checkSettings": "Verifique as configurações de inicialização do agente e tente novamente.",
+    "invalidArgs": "Os argumentos da CLI de {{value0}} têm uma aspa não fechada. Corrija-os e tente novamente.",
     "opencode": {
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
@@ -290,6 +296,30 @@
       "loading": "Carregando alterações do submódulo…",
       "empty": "Nenhuma alteração no submódulo",
       "loadFailed": "Não foi possível carregar as alterações do submódulo"
+    },
+    "branchPicker": {
+      "switch": "Trocar de branch: {{branch}}",
+      "search": "Pesquisar branches",
+      "recover": "Trocar para {{branch}}",
+      "create": "Criar branch {{name}} a partir de {{branch}}",
+      "open": "Abrir espaço de trabalho",
+      "occupied": "Em uso em {{path}}",
+      "remote": "remoto",
+      "statusFailed": "O Orca não conseguiu ler as alterações desta cópia de trabalho. Atualize o Controle de código-fonte antes de trocar.",
+      "statusUnknown": "Leia as alterações desta cópia de trabalho antes de trocar.",
+      "conflict": "Conclua ou cancele o {{operation}} antes de trocar de branch.",
+      "dirty_one": "Faça commit ou descarte {{count}} arquivo alterado antes de trocar de branch.",
+      "dirty_other": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "dirty_many": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "agentWorking": "Um agente está trabalhando neste workspace. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
+      "listFailed": "O Orca não conseguiu listar os branches locais. Tente reabrir o seletor.",
+      "discoveryFailed": "O Orca não encontrou branches remotos. Você ainda pode trocar para branches locais ou criar um branch.",
+      "switchFailed": "O Orca não conseguiu trocar de branch. Tente novamente.",
+      "switchFailedTitle": "Não foi possível trocar de branch",
+      "switchFailedIn": "Não foi possível trocar de branch em {{workspace}}",
+      "switchedIn": "Em {{workspace}}",
+      "thisComputer": "este computador",
+      "updateHost": "Atualize o Orca em {{host}} para trocar de branch daqui."
     }
   },
   "githubChecks": {
@@ -1441,10 +1471,7 @@
         "searchAgents": "agentes",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Os chats do Antigravity executam um servidor que o Orca baixa neste host, separado da CLI agy.",
-        "antigravityNotSignedIn": "Sessão não iniciada. Os chats exigem login no Antigravity, separado da sua conta agy do terminal.",
-        "antigravityAccount": "Conta",
-        "antigravitySignInNeeded": "Os chats exigem login no Antigravity, separado da sua conta agy do terminal."
+        "antigravityAccount": "Conta"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -1621,7 +1648,6 @@
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
-        "invalidArgs": "Os argumentos de CLI de {{value0}} são inválidos. Corrija-os em Configurações → IA de Controle de Versão.",
         "model": "Modelo",
         "agentDefault": "Padrão do agente",
         "effortDefault": "Padrão",
@@ -2395,9 +2421,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Não foi possível encontrar um espaço de trabalho para estas verificações.",
-              "fb6c294e85": "Não foi possível montar o comando de inicialização do agente.",
               "03c1d61f83": "Não foi possível abrir o espaço de trabalho vinculado a estas verificações.",
-              "822bf52295": "Não foi possível determinar a plataforma de inicialização do espaço de trabalho.",
               "dfb4dd7c00": "Não foi possível encontrar o espaço de trabalho vinculado a estas verificações.",
               "9f00d7df0c": "O prompt de correção de verificações está vazio. Atualize as configurações de IA do Controle de Versão.",
               "2ebf794906": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -2436,8 +2460,8 @@
             "direct": {
               "3de6371df3": "Não foi possível montar o comando de inicialização do agente.",
               "67e103dd60": "Espaço de trabalho criado, mas não pôde ser ativado.",
-              "19c7683acf": "O agente selecionado não está disponível no espaço de trabalho criado.",
-              "8bc45efdbc": "Falha ao resolver o head do PR.",
+              "19c7683acf": "O agente selecionado está indisponível. Verifique as configurações do agente do espaço de trabalho e tente novamente.",
+              "8bc45efdbc": "Não foi possível ler o pull request. Verifique se você consegue abri-lo e tente novamente.",
               "agent": {
                 "ceeeb509b5": "O agente demorou muito para iniciar. O espaço de trabalho está pronto — cole o {{value0}} quando o agente estiver inativo."
               }
@@ -6982,7 +7006,8 @@
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
           "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
-          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo.",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o app Orca neste telefone."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -8102,6 +8127,7 @@
           "6f6d5188ed": "Revogar {{value0}}",
           "434e4a6af6": "Link atual",
           "df142657a5": "Ainda não usado",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o Orca no dispositivo que usa este link.",
           "b18d1764ef": "Usado por último em {{value0}}",
           "sshAccessCaveat": "Revogar aqui não impede que alguém com acesso SSH a este computador pareie novamente. Para impedir o acesso, remova o acesso SSH dessa pessoa.",
           "linkName": "Link · {{value0}}",
@@ -10228,7 +10254,6 @@
                     },
                     "d481ab22f9": "O agente de IA salvo não está disponível. Use Personalizar inicialização para escolher outro agente.",
                     "9bbd9077a2": "Nenhum agente de IA habilitado. Configure agentes em Configurações.",
-                    "5540ff50cc": "Não foi possível construir o comando de inicialização do agente.",
                     "216f762bd7": "Não foi possível resolver a conexão do espaço de trabalho.",
                     "success": "Foi iniciado um agente de IA para a falha de {{value0}}."
                   }
@@ -11538,13 +11563,11 @@
           "c39c37676a": "Crie um grupo e mova este projeto para dentro dele.",
           "6664418e98": "Novo Grupo de Projeto",
           "e091caab15": "O projeto não pôde ser encontrado",
-          "439fa94d53": "Atualizar",
           "579b1a8e61": "Remover do Pai",
           "8d9cd19d09": "Abrir Worktree Pai",
           "d35dfeae58": "Remover do grupo",
           "76865d827f": "Mover para o grupo",
           "503ec0f8e6": "Novo grupo a partir do projeto",
-          "3350101edb": "Copiar Caminho",
           "f4475537d8": "Excluir",
           "f5ac91531d": "Remover Projeto do Orca",
           "b42391d8bf": "Excluindo…",
@@ -11562,10 +11585,16 @@
           "workspaceSection": "Espaço de Trabalho",
           "primaryDeleteDisabled": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
           "deleteWorktree": "Excluir Worktree",
-          "sleepWithDescendants": "Suspender com Descendentes ({{value0}})",
           "sleepWithDescendantsDescription": "Fecha os painéis ativos neste espaço de trabalho e em todos os descendentes aninhados para liberar memória e CPU.",
+          "sleepThisWorkspace": "Este Espaço de Trabalho",
+          "sleepDescendantsOption": "Com Descendentes ({{value0}})",
           "deleteWithDescendants": "Excluir com Descendentes…",
-          "copyWorktreeName": "Copiar nome da worktree"
+          "editDetails": "Editar Detalhes…",
+          "copySubmenu": "Copiar",
+          "copyPathOption": "Caminho",
+          "copyNameOption": "Nome da worktree",
+          "lineageSubmenu": "Pai e Filhos",
+          "projectGroupSubmenu": "Grupo de Projeto"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} já existe.",
@@ -17177,7 +17206,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Configurações do agente…",
             "ec2adf093e": "Iniciar {{value0}} em um novo terminal",
-            "465e432ef1": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
@@ -18584,7 +18612,6 @@
             "3f4ca29961": "Maximizar espaço de trabalho flutuante",
             "1c79cba25d": "Restaurar espaço de trabalho flutuante",
             "648352c51f": "Abrir {{value0}} no espaço de trabalho flutuante",
-            "82da3701e7": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "109870e023": "Maximizar",
             "b5686fee1e": "Restaurar"
           }
@@ -19054,7 +19081,6 @@
         "a2a279b32a": "O salvamento expirou ou falhou. Corrija os erros antes de fechar.",
         "46e08bc5c8": "Este arquivo tem alterações não salvas.",
         "61ed600d29": "\"{{value0}}\" tem alterações não salvas. Você quer salvar antes de fechar?",
-        "e57db40c11": "Não foi possível construir o comando de inicialização para {{value0}}.",
         "5b2c1a9e44": "Nenhuma CLI de agente detectada — instale uma ou escolha um agente padrão em Configurações.",
         "quitSnapshotSaveFailed": "Saída cancelada: o snapshot da sessão não pôde ser salvo ({{value0}}).",
         "reloadSnapshotSaveFailed": "Recarregamento cancelado: não foi possível salvar o snapshot da sessão ({{value0}})."
@@ -20911,7 +20937,6 @@
       "visualLoading": "Carregando visualização",
       "visualOpenInNewTab": "Abrir em nova aba",
       "queuedMessages": {
-        "behindReturnedHold": "Aguardando — uma mensagem anterior precisa de atenção",
         "steer": "Orientar",
         "send": "Enviar",
         "steerHint": "Enviar sem interromper o modelo",
@@ -22012,7 +22037,6 @@
     },
     "antigravity": {
       "chatTitle": "Chats do Antigravity",
-      "chatDescription": "Os chats usam seu próprio login do Antigravity, separado da sua conta agy acima. Entre uma vez neste dispositivo.",
       "chatSignIn": "Entrar",
       "chatChangeAccount": "Trocar conta",
       "chatRetry": "Tentar entrar novamente",
@@ -22025,14 +22049,11 @@
       "chatVerifying": "Concluindo login…",
       "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
-      "chatSignedInOn": "Conectado em {{host}}.",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatNotSignedIn": "Não conectado em {{host}}.",
       "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
-      "scope": "Gerencie a conta nativa do agy em {{host}}.",
       "signIn": "Inicie o agy neste host e conclua o login no navegador. Depois, salve a conta atual. Para adicionar outra conta, use /logout no agy e entre novamente.",
       "docs": "Instruções de login",
       "retry": "Tentar novamente",
@@ -22063,11 +22084,9 @@
       "personal": "Conta Google",
       "gcpProject": "Projeto do Google Cloud",
       "gcpLocation": "Local do Google Cloud",
-      "signInAgainWith": "Entre novamente para usar {{method}}.",
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
-      "signInWith": "Entra com {{method}} em {{host}}.",
       "lastReading": "{{reading}} · Lido {{time}}",
       "noReading": "Uso desconhecido: ainda não consultado"
     },
@@ -23243,6 +23262,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
+    "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
     "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",

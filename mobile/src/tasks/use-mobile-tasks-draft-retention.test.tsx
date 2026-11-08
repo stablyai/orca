@@ -1,5 +1,6 @@
 import { createElement, useState } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState } from '../transport/types'
@@ -74,7 +75,7 @@ async function mountTasks() {
     return null
   }
   await act(async () => {
-    renderers.push(create(createElement(Probe)))
+    renderers.push(createWithQueryClient(createElement(Probe)))
   })
   const run = (command: () => void) => act(async () => command())
   return {

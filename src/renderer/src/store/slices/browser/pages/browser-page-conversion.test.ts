@@ -1,10 +1,14 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
-import { createTestStore } from '../../store-test-helpers'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn(), callRuntimeRpc: vi.fn() }))
 vi.mock('@/lib/doc-preview-grants', () => ({
@@ -13,18 +17,18 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: vi.fn()
 }))
 // Main answers the window's layout commands (switch-on); every other call reaches the mock.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   return runtimeRpcClientWithLayoutApply({
     ...actual,
     callRuntimeRpc: mocks.callRuntimeRpc.mockResolvedValue({})
   })
 })
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

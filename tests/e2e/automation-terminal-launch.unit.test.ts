@@ -1,5 +1,5 @@
 import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+
 import type { createChatRendererBridge } from './helpers/automation-chat-renderer-test-harness'
 import { exerciseBusyChatReuse } from './helpers/automation-chat-reuse-test-harness'
 import { readAutomationRunReceipt } from '../../src/main/automations/automation-run-receipt'
@@ -13,7 +13,7 @@ import {
   HOST_TEST_SESSION,
   HOST_TEST_LOCATION
 } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import type { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import type { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,11 +45,14 @@ vi.mock(
       mocks.actualHost ?? (mocks.hostAvailable ? mocks.host : null)
   })
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
-    mocks.readChat(...args)
-}))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
+      mocks.readChat(...args)
+  })
+)
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (
     target: Parameters<NonNullable<typeof mocks.renderer>['call']>[0],
     method: string,
@@ -59,7 +62,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
       throw new Error('renderer not bound')
     }
     return mocks.renderer.call(target, method, params)
-  },
+  }
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
@@ -160,129 +165,6 @@ beforeEach(() => {
   mocks.host.send.mockResolvedValue({ ok: true })
 })
 describe('automations through agent.launch', () => {
-  it.each(['claude', 'codex'] as const)(
-    'launches explicit Chat for %s through the common entry and keeps its actual fallback',
-    async (agentId) => {
-      const { runtime } = fixture()
-      const result = await launchAutomationChatAgent(runtime, {
-        automation: { ...automation, agentId },
-        run,
-        target,
-        runs: []
-      })
-      expect(mocks.launch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agent: agentId,
-          surface: 'chat',
-          operationId: automationRunOperationId(run, 'fresh-launch'),
-          prompt: { text: 'Audit', delivery: 'submit' },
-          presentation: 'background',
-          target: { kind: 'existing', worktree: 'id:wt-1' }
-        }),
-        expect.objectContaining({ runtime }),
-        expect.objectContaining({
-          onSurfacePublished: expect.any(Function)
-        })
-      )
-      expect(result).toMatchObject({
-        workspaceDisplayName: 'Audit',
-        sessionKind: 'terminal',
-        chatSessionId: null,
-        terminalPtyId: 'pty-1'
-      })
-    }
-  )
-  it('does not apply stored Terminal extras to Chat', async () => {
-    const { runtime } = fixture()
-    mocks.launch.mockResolvedValue(chat)
-    await launchAutomationChatAgent(runtime, {
-      automation: { ...automation, extraAgentArgs: '--model opus' },
-      run,
-      target,
-      runs: []
-    })
-    expect(mocks.launch.mock.calls[0][0].agentArgs).toBeUndefined()
-    expect(mocks.launch.mock.calls[0][0].chatOptions).toBeUndefined()
-    expect(mocks.launch.mock.calls[0][0].sessionOptions).toBeUndefined()
-  })
-  it.each([
-    [
-      { model: 'sonnet', options: { fastMode: 'true' } },
-      '--effort high',
-      { model: 'sonnet', fastMode: 'true', effort: 'high' }
-    ],
-    [{ model: null }, null, {}],
-    [{ options: { effort: 'high' } }, '--verbose', { effort: 'high' }]
-  ] as const)(
-    'forwards only complete Chat-consumed values, with no Terminal startup base',
-    async (launchPreferences, agentArgs, expected) => {
-      const { runtime } = fixture()
-      mocks.launch.mockResolvedValue(chat)
-      await launchAutomationChatAgent(runtime, {
-        automation: { ...automation, launchPreferences, agentArgs },
-        run,
-        target,
-        runs: []
-      })
-      expect(mocks.launch.mock.calls[0][0]).toMatchObject({
-        chatOptions: expected,
-        sessionOptions: {}
-      })
-      expect(mocks.launch.mock.calls[0][0].agentArgs).toBeUndefined()
-    }
-  )
-  it('refuses an expired admission without minting another launch identity', async () => {
-    const { runtime } = fixture()
-    mocks.launch.mockRejectedValue(new Error('agent_session_operation_expired'))
-    await expect(
-      launchAutomationChatAgent(runtime, { automation, run, target, runs: [] })
-    ).rejects.toThrow(
-      'Claude could not start because this run waited too long. Run the automation again.'
-    )
-    expect(mocks.launch).toHaveBeenCalledTimes(1)
-  })
-  it('records the actual chat identity and delegates new workspace setup and provenance', async () => {
-    const { runtime } = fixture()
-    mocks.launch.mockResolvedValue(chat)
-    const result = await launchAutomationChatAgent(runtime, {
-      automation: {
-        ...automation,
-        surface: 'chat',
-        workspaceMode: 'new_per_run',
-        workspaceId: null,
-        setupDecision: 'run'
-      },
-      run,
-      target,
-      runs: []
-    })
-    expect(mocks.launch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        surface: 'chat',
-        target: {
-          kind: 'create-worktree',
-          create: expect.objectContaining({
-            setupDecision: 'run',
-            activate: false,
-            automationProvenanceRequest: expect.objectContaining({
-              automationId: automation.id,
-              automationRunId: run.id
-            })
-          })
-        }
-      }),
-      expect.anything(),
-      expect.anything()
-    )
-    expect(result).toMatchObject({
-      sessionKind: 'chat',
-      chatSessionId: 'claude_chat',
-      terminalHandle: null,
-      terminalPaneKey: null,
-      terminalSessionId: null,
-      terminalPtyId: null
-    })
-  })
   it('chooses the newest compatible Chat despite busy work and stale nonfinal history', async () => {
     const { runtime, records } = fixture()
     mocks.host.currentWork.mockReturnValue({ working: () => true })

@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as I18n from '@/i18n/i18n'
 import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
@@ -24,7 +25,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children?: ReactNode }) => <span>{children}</span>
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replace(`{{${key}}}`, value),

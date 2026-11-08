@@ -28,7 +28,7 @@ function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: stri
 }
 
 describe('mobileQueuedMessageCards', () => {
-  it('finds something for Resume to send only in a waiting card with no hold, ahead of a returned one', () => {
+  it('finds waiting input for Resume past returned or failed cards', () => {
     const resumable = (drafts: AgentSessionQueuedMessage[]) =>
       queuedMessagesQueuePause(mobileQueuedMessageCards(drafts, []), { reason: 'stopped' }) !== null
     const returned = draft({
@@ -42,7 +42,7 @@ describe('mobileQueuedMessageCards', () => {
     })
     const waiting = draft({ messageId: 'w', position: 2 })
     expect(resumable([returned])).toBe(false)
-    expect(resumable([returned, waiting])).toBe(false)
+    expect(resumable([returned, waiting])).toBe(true)
     expect(resumable([failed])).toBe(false)
     expect(resumable([failed, waiting])).toBe(true)
     expect(resumable([waiting, { ...returned, position: 3 }])).toBe(true)
@@ -58,7 +58,6 @@ describe('mobileQueuedMessageCards', () => {
       [handOff('returned', 'rejected'), handOff('drained', 'pending')]
     )
     expect(cards.map((card) => card.messageId)).toEqual(['returned', 'waiting'])
-    expect(cards[1]?.caption).toBe('Waiting — a message ahead needs attention')
   })
 
   it('shows a draft a Stop requeued beside its rejected hand-off', () => {

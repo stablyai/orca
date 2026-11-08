@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { dispatch } from '../../src/cli/dispatch'
@@ -9,7 +8,7 @@ import {
   orchestrationRequest
 } from '../../src/main/runtime/rpc/orchestration-session-caller-test-fixture'
 import { configureFederationWorkerRuntime } from '../../src/main/runtime/rpc/methods/orchestration/federation/federation-runtime.test-support'
-import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
+import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-party-snapshot'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock(

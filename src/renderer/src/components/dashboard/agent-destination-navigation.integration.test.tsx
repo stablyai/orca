@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -11,8 +12,8 @@ import {
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import type * as WebRuntimeSessionEnvironment from '@/runtime/web-runtime-session-environment'
+
+import type * as WebRuntimeSessionEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import WorktreeCardAgents from '../sidebar/workspace-card/activity/WorktreeCardAgents'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -29,19 +30,22 @@ const effects = vi.hoisted(() => ({
     error: { code: 'unavailable', message: 'Unit-test transport boundary' }
   }))
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: effects.rpc
 }))
-vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   requestNativeChatComposerFocus: effects.composerFocus
 }))
 vi.mock('../dashboard-popout/AgentTerminalPreview', () => ({ AgentTerminalPreview: () => null }))
-vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
-  ...(await importOriginal<typeof WebRuntimeSessionEnvironment>()),
-  captureRuntimeEnvironmentCall: (environmentId: string) => (args: unknown) =>
-    effects.environmentCall(environmentId, args)
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WebRuntimeSessionEnvironment>()),
+    captureRuntimeEnvironmentCall: (environmentId: string) => (args: unknown) =>
+      effects.environmentCall(environmentId, args)
+  })
+)
 
 const initialState = useAppStore.getState()
 const LEAF = '11111111-1111-4111-8111-111111111111'

@@ -16,7 +16,7 @@ import {
 import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
 import { basename, joinPath } from './path'
 import type { EditorFileOperationProvenance } from './editor-file-operation-provenance'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 
 export type UntitledMarkdownFileInfo = {
   filePath: string

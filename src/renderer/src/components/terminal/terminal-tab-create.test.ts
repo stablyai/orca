@@ -22,10 +22,10 @@ vi.mock('../../../../shared/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: createBrowserUuidMock
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 

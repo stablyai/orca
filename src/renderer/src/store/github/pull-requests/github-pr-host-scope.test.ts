@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { forgeOwnerHostIdForWorkspace } from '../../../runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '../../../runtime/source-control/forge/forge-credential-target'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'

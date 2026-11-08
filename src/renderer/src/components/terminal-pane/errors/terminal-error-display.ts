@@ -1,5 +1,6 @@
 import { unwrapHostRefusalIpcLines } from './terminal-error-ipc-unwrap'
 import { translate } from '../../../i18n/i18n'
+import type { Translate } from '../../../i18n/use-translate'
 import {
   humanizeFolderWorkspacePathErrors,
   isFolderWorkspacePathError
@@ -127,8 +128,8 @@ export function isPaneOwnerRecoveryError(error: string): boolean {
   )
 }
 
-function humanizeUnreattachableSession(error: string): string {
-  const explanation = translate(
+function humanizeUnreattachableSession(error: string, t: Translate = translate): string {
+  const explanation = t(
     'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
     "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
   )
@@ -147,58 +148,62 @@ export function isFolderWorkspacePathOnlyError(error: string): boolean {
 }
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
-export function humanizeTerminalError(error: string, agentId?: string | null): string {
+export function humanizeTerminalError(
+  error: string,
+  agentId?: string | null,
+  t: Translate = translate
+): string {
   if (isSshSignInRequiredTerminalError(error)) {
-    return describeSshSignInRequiredTerminalError(error)
+    return describeSshSignInRequiredTerminalError(error, t)
   }
   // Hosts send a held start as its code (older) or English sentence (newer); either reads in the user's language.
-  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error))
+  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error, t), t)
   let humanized = humanizeFolderWorkspacePathErrors(
-    localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId) ?? unwrapped)
+    localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId, t) ?? unwrapped, t)
   )
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)
-      ? translate(
+      ? t(
           'auto.components.terminal.pane.TerminalErrorToast.42b283ecfc',
           "Orca couldn't safely reconnect this terminal because the host couldn't verify its saved session. Orca left the saved session unchanged. Click Retry to try reconnecting now. If it still cannot reconnect, open a new terminal."
         )
-      : translate(
+      : t(
           'auto.components.terminal.pane.TerminalErrorToast.ownerUnknown',
           "Orca couldn't verify this terminal's owner."
         )
     humanized = humanized.replaceAll(PANE_OWNER_UNVERIFIED_MARKER, () => explanation)
   }
   humanized = humanized.replaceAll(PANE_OWNER_CHANGED_MARKER, () =>
-    translate(
+    t(
       'auto.components.terminal.pane.TerminalErrorToast.ownerUnknown',
       "Orca couldn't verify this terminal's owner."
     )
   )
   humanized = humanized.replace(SOURCE_RESTORE_REQUIRED.replaceAll, () =>
-    translate(
+    t(
       'auto.components.terminal.pane.TerminalErrorToast.sourceRestoring',
       'Reconnecting this terminal — its output is being re-established. The session is still running.'
     )
   )
   humanized = humanized.replace(OWNER_HOST_MISMATCH.replaceAll, () =>
-    translate(
+    t(
       'auto.components.terminal.pane.TerminalErrorToast.ownerHostMismatch',
       "This terminal's saved session belongs to another host connection, so Orca can't reattach it here. Open a new terminal to continue."
     )
   )
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {
     humanized = humanized.replaceAll(REMOTE_TERMINAL_CLOSED_MARKER, () =>
-      translate(
+      t(
         'auto.components.terminal.pane.TerminalErrorToast.remoteTerminalClosed',
         'Remote terminal was closed.'
       )
     )
   }
-  humanized = humanizeUnreattachableSession(humanized)
+  humanized = humanizeUnreattachableSession(humanized, t)
   if (!isExplainedTerminalError(humanized)) {
     return humanized
   }
-  const explanation = translate(
+  const explanation = t(
     'auto.components.terminal.pane.TerminalErrorToast.e16012e31e',
     'The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.'
   )

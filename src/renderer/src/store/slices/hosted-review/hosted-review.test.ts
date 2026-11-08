@@ -10,7 +10,9 @@ const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeRpc.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtimeRpc.callRuntimeRpc
+}))
 
 const mockApi = {
   hostedReview: {

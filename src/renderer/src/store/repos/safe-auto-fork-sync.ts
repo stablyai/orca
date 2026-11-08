@@ -2,7 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/source-control/git/runtime-git-sync-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
 
 export const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 

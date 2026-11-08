@@ -7,13 +7,14 @@ import type {
   LinearWorkspace,
   LinearWorkspaceSelection
 } from '../../../../shared/linear/workspace-types'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '../rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   rowLessSourceTarget,
   type RowLessSource as RuntimeLinearSettings
 } from '@/lib/default-creation-host'
-import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
+import { isRuntimeProviderSearchQueryWithinLimit } from '../issue-search/runtime-provider-search-bounds'
 import type { LinearIssueAttributeFilter } from '../../../../shared/linear/issue-attribute-filter'
 import {
   canonicalizeLinearIssueAttributeFilter,

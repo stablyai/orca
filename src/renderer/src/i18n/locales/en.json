@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connect to this workspace’s SSH host, then try again.",
+    "sshUnavailable": "Terminal launch is unavailable on this SSH host. Open a terminal in the workspace and start the agent there.",
+    "reconnectServer": "Reconnect to this workspace’s Orca server, then try again.",
+    "updateServer": "Update Orca on this workspace’s server, then try again.",
+    "checkSettings": "Check the agent’s launch settings, then try again.",
+    "invalidArgs": "The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.",
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
     "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
@@ -566,10 +572,7 @@
         "searchAgents": "agents",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.",
-        "antigravityNotSignedIn": "Not signed in. Chats need an Antigravity sign-in, separate from your agy terminal account.",
-        "antigravityAccount": "Account",
-        "antigravitySignInNeeded": "Chats need an Antigravity sign-in, separate from your agy terminal account."
+        "antigravityAccount": "Account"
       },
       "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents."
     },
@@ -734,6 +737,23 @@
           "performance": "performance",
           "remote": "remote",
           "gpu": "gpu"
+        }
+      },
+      "appIcon": {
+        "importCustom": "Custom…",
+        "replaceCustom": "Replace custom icon…",
+        "removeCustom": "Remove custom icon",
+        "customKeyword": "custom",
+        "importKeyword": "import",
+        "importErrors": {
+          "unsupportedFormat": "Unsupported image. Pick a PNG or JPEG file.",
+          "unreadable": "Could not read the selected file.",
+          "tooLarge": "Image is larger than {{max}} MB.",
+          "notSquare": "App icons must be square.",
+          "tooSmall": "Image must be at least {{min}}×{{min}} pixels.",
+          "tooBig": "Image must be at most {{max}}×{{max}} pixels.",
+          "undecodable": "Could not decode the selected image.",
+          "saveFailed": "Could not save the custom icon."
         }
       }
     },
@@ -1038,7 +1058,6 @@
       "actionModel": {
         "on": "On",
         "off": "Off",
-        "invalidArgs": "The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.",
         "model": "Model",
         "effort": "Effort",
         "agentDefault": "Agent default",
@@ -1699,9 +1718,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Unable to find a workspace for these checks.",
-              "fb6c294e85": "Could not build the agent launch command.",
               "03c1d61f83": "Unable to open the workspace attached to these checks.",
-              "822bf52295": "Unable to resolve the workspace launch platform.",
               "dfb4dd7c00": "Unable to find the workspace attached to these checks.",
               "9f00d7df0c": "Fix checks prompt is empty. Update Source Control AI settings.",
               "2ebf794906": "No enabled AI agent was detected on this workspace host.",
@@ -1740,8 +1757,8 @@
             "direct": {
               "3de6371df3": "Could not build the agent launch command.",
               "67e103dd60": "Workspace created but could not be activated.",
-              "19c7683acf": "Selected agent is not available in the created workspace.",
-              "8bc45efdbc": "Failed to resolve PR head.",
+              "19c7683acf": "The selected agent is unavailable. Check the workspace’s agent settings, then try again.",
+              "8bc45efdbc": "Could not read the pull request. Check that you can open it, then try again.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
               }
@@ -3389,7 +3406,6 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "e57db40c11": "Could not build launch command for {{value0}}.",
         "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
         "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}}).",
         "reloadSnapshotSaveFailed": "Reload canceled: the session snapshot could not be saved ({{value0}})."
@@ -4490,7 +4506,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
             "ec2adf093e": "Launch {{value0}} in a new terminal",
-            "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
@@ -6758,14 +6773,11 @@
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
           "e091caab15": "The project could not be found",
-          "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
           "8d9cd19d09": "Open Parent Worktree",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
-          "3350101edb": "Copy Path",
-          "copyWorktreeName": "Copy Worktree Name",
           "f4475537d8": "Delete",
           "f5ac91531d": "Remove Project from Orca",
           "b42391d8bf": "Deleting…",
@@ -6784,9 +6796,16 @@
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
           "deleteWorktree": "Delete Worktree",
-          "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "sleepThisWorkspace": "This Workspace",
+          "sleepDescendantsOption": "With Descendants ({{value0}})",
+          "deleteWithDescendants": "Delete with Descendants…",
+          "editDetails": "Edit Details…",
+          "copySubmenu": "Copy",
+          "copyPathOption": "Path",
+          "copyNameOption": "Worktree Name",
+          "lineageSubmenu": "Parent & Children",
+          "projectGroupSubmenu": "Project Group"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -7567,7 +7586,8 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        }
+        },
+        "projectOrderSaveFailed": "Could not save the complete project order"
       },
       "shared": {
         "useDaemonActions": {
@@ -8638,7 +8658,8 @@
           "diagnosticsCopyFailed": "Failed to copy diagnostics",
           "5e2c7a1f84": "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore or Restore all on the banner to resize manually.",
           "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes.",
-          "legacyEncryption": "Uses older encryption. Update the Orca app on this device."
+          "legacyEncryption": "Uses older encryption. Update the Orca app on this device.",
+          "olderPairingMethod": "Uses an older pairing method. Update the Orca app on this phone."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -9047,6 +9068,7 @@
           "6f6d5188ed": "Revoke {{value0}}",
           "434e4a6af6": "Current link",
           "df142657a5": "Not used yet",
+          "olderPairingMethod": "Uses an older pairing method. Update Orca on the device that uses this link.",
           "b18d1764ef": "Last used {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Active links",
@@ -12413,7 +12435,8 @@
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
           "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
-          "installGitMoved": "The repository changed after Orca checked it. Try again."
+          "installGitMoved": "The repository changed after Orca checked it. Try again.",
+          "installReservedIdentity": "This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change \"id\" in orca-plugin.json so it doesn’t start with \"orca-\", and set \"publisher\" to your own name."
         },
         "plugins": {
           "search": {
@@ -13569,7 +13592,8 @@
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
           "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
-          "statusBar": "Status bar"
+          "statusBar": "Status bar",
+          "font": "Font for the terminal, editor or interface"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -14690,7 +14714,6 @@
                     },
                     "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
                     "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                    "5540ff50cc": "Could not build the agent launch command.",
                     "216f762bd7": "Unable to resolve the workspace connection.",
                     "success": "Started an AI agent for the {{value0}} failure."
                   }
@@ -15920,7 +15943,6 @@
             "3f4ca29961": "Maximize floating workspace",
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
-            "82da3701e7": "Could not build launch command for {{value0}}.",
             "109870e023": "Maximize",
             "b5686fee1e": "Restore"
           }
@@ -20481,7 +20503,6 @@
       "visualLoading": "Loading visualization",
       "visualOpenInNewTab": "Open in new tab",
       "queuedMessages": {
-        "behindReturnedHold": "Waiting — a message ahead needs attention",
         "steer": "Steer",
         "send": "Send",
         "steerHint": "Submit without interrupting the model",
@@ -20743,7 +20764,11 @@
         "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
         "failed": "{{agent}} couldn't fork this chat",
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
-        "failedDetail": "Your chat is unchanged. Try again."
+        "failedDetail": "Your chat is unchanged. Try again.",
+        "commandDescription": "Fork this chat from its latest response",
+        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandNothing": "There’s no response to fork yet.",
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -20769,6 +20794,13 @@
         "settingsLink": "Settings > Chat UI > Turn activity",
         "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hidden": "Orca won't show CI result lines anymore"
+      },
       "openedPullRequests": {
         "one": "Opened {{name}}",
         "hide": "Don't show opened pull requests",
@@ -20776,7 +20808,19 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "sideChat": {
+        "description": "Ask a side question in a fork beside this chat",
+        "argumentHint": "<question>",
+        "notReady": "Side chats are not ready yet. Try again in a moment.",
+        "replyRunning": "Available when this reply finishes.",
+        "noReply": "Available after the first reply.",
+        "textOnly": "Side chats take text only. Remove attachments, then send it again.",
+        "questionNotSent": "{{agent}} didn't get your question",
+        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
+        "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
+        "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      }
     },
     "tab": {
       "bar": {
@@ -21181,6 +21225,11 @@
           "scrollback": "scrollback",
           "snap": "snap",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "title": "Match Claude Code to Terminal Theme",
+          "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
+          "claude": "claude"
         }
       },
       "nativeChat": {
@@ -21220,6 +21269,10 @@
         "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "pull request card",
+        "ciResultLinesTitle": "CI result lines",
+        "ciResultLinesCopy": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Turn activity",
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
@@ -21935,6 +21988,29 @@
       "loading": "Loading submodule changes…",
       "empty": "No changes in submodule",
       "loadFailed": "Failed to load submodule changes"
+    },
+    "branchPicker": {
+      "switch": "Switch branch: {{branch}}",
+      "search": "Search branches",
+      "recover": "Switch to {{branch}}",
+      "create": "Create branch {{name}} from {{branch}}",
+      "open": "Open workspace",
+      "occupied": "Checked out in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca couldn't read this checkout's changes. Refresh Source Control before switching.",
+      "statusUnknown": "Read this checkout’s changes before switching.",
+      "conflict": "Finish or abort the {{operation}} before switching branches.",
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches.",
+      "agentWorking": "An agent is working in this workspace. Switch branches after it finishes, or close its tab if it has stopped.",
+      "listFailed": "Orca couldn't list local branches. Try reopening the picker.",
+      "discoveryFailed": "Orca couldn't find remote branches. You can still switch local branches or create a branch.",
+      "switchFailed": "Orca couldn't switch branches. Try again.",
+      "switchFailedTitle": "Couldn't switch branches",
+      "switchFailedIn": "Couldn't switch branches in {{workspace}}",
+      "switchedIn": "In {{workspace}}",
+      "thisComputer": "this computer",
+      "updateHost": "Update Orca on {{host}} to switch branches from here."
     }
   },
   "agentsSidebarIntro": {
@@ -22240,7 +22316,22 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "windowsFontWeight": {
+      "title": "Terminal text on Windows is now lighter",
+      "okay": "Okay",
+      "lighterText": "Lighter terminal text"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Match Claude Code to your Orca theme?",
+      "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "accept": "Match Theme",
+      "accepted": "Claude Code theme sync is on",
+      "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
+      "decline": "No Thanks",
+      "failed": "Could not turn on Claude Code theme sync",
+      "failedDescription": "Turn it on in Settings."
+    }
   },
   "fileExplorer": {
     "root": {
@@ -22306,7 +22397,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity chats",
-      "chatDescription": "Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.",
       "chatSignIn": "Sign in",
       "chatChangeAccount": "Change account",
       "chatRetry": "Retry sign-in",
@@ -22319,14 +22409,11 @@
       "chatVerifying": "Finishing sign-in…",
       "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
       "chatContinue": "Continue",
-      "chatSignedInOn": "Signed in on {{host}}.",
       "chatCancelled": "Sign-in cancelled.",
       "chatExpired": "Sign-in timed out. Try again.",
       "chatFailed": "Sign-in failed. Try again.",
-      "chatNotSignedIn": "Not signed in on {{host}}.",
       "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
-      "scope": "Manage the native agy account on {{host}}.",
       "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
       "docs": "Sign-in instructions",
       "retry": "Retry",
@@ -22362,13 +22449,21 @@
       "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "signInAgainWith": "Sign in again to use {{method}}.",
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "signInWith": "Signs in with {{method}} on {{host}}.",
       "lastReading": "{{reading}} · Read {{time}}",
-      "noReading": "Usage unknown: not read yet"
+      "noReading": "Usage unknown: not read yet",
+      "personalDescription": "Uses your personal Google AI plan.",
+      "enterpriseDescription": "Uses your organization's Gemini Enterprise license.",
+      "chatSeparate": "Separate from your agy terminal account.",
+      "chatBadgeSigningIn": "Signing in",
+      "chatBadgeSignedIn": "Signed in",
+      "chatBadgeSignedOut": "Not signed in",
+      "chatSignInWith": "Sign in with {{method}}",
+      "chatPasteOpen": "Browser page didn't load?",
+      "chatSwitchMethod": "Sign in again to switch to {{method}}.",
+      "enterpriseFieldsNeeded": "Enter a Google Cloud project and location."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -23610,7 +23705,9 @@
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
       "importGhosttyConfig": "Import Ghostty Config",
-      "importKittyConfig": "Import Kitty Config"
+      "importKittyConfig": "Import Kitty Config",
+      "pickAppIcon": "Choose app icon",
+      "appIconImage": "App icon image"
     }
   },
   "taskProviders": {
@@ -23743,6 +23840,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
+    "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
     "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
     "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",

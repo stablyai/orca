@@ -303,6 +303,26 @@ describe('a structured send in the open chat', () => {
     expect(onSendError).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Not confirmed. Restored to the box.')
   })
+
+  it('drops the bubble of a lost answer the journal never recorded, with a warning', async () => {
+    await mount()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    sendRequest.mockImplementation(async (method) => {
+      if (method !== 'agentSession.send') {
+        return ok({ models: [], current: {} })
+      }
+      throw markRpcDeliveryUnknown(new Error('connection lost'))
+    })
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('Option B')).toBe('unknown')
+    })
+    expect(shown().map(([, text]) => text)).toEqual(['Option B'])
+    act(() => {
+      vi.advanceTimersByTime(20_000)
+    })
+    expect(shown()).toEqual([])
+    expect(onSendError).toHaveBeenCalledWith('Delivery unconfirmed — check chat before retrying')
+  })
 })
 
 describe('a structured send whose answer was lost', () => {

@@ -21,8 +21,8 @@ import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
 } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {

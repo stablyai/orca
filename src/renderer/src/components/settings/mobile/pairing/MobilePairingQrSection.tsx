@@ -3,7 +3,7 @@ import { Check, CircleAlert, Copy, Maximize2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type MobilePairingQrSectionProps = {
   qrDataUrl: string | null
@@ -32,6 +32,7 @@ export function MobilePairingQrSection({
   onCodeCopiedChange,
   onClearCodeCopiedTimer
 }: MobilePairingQrSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const renderedQrSize = qrSize ?? 192
   const enlargedQrSize = qrSize == null ? 288 : qrSize * 2
   const pairingCodeButtonMountedRef = useRef(false)
@@ -84,7 +85,7 @@ export function MobilePairingQrSection({
       }, 2000)
     } catch {
       toast.error(
-        translate('auto.components.settings.MobilePane.711231348f', 'Failed to copy pairing code')
+        t('auto.components.settings.MobilePane.711231348f', 'Failed to copy pairing code')
       )
     }
   }
@@ -104,7 +105,7 @@ export function MobilePairingQrSection({
           >
             <img
               src={qrDataUrl}
-              alt={translate(
+              alt={t(
                 'auto.components.settings.MobilePane.6436e56546',
                 'QR Code for mobile pairing'
               )}
@@ -123,7 +124,7 @@ export function MobilePairingQrSection({
           <p className="flex max-w-sm items-start gap-1.5 text-xs text-destructive" role="alert">
             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <span>
-              {translate(
+              {t(
                 'auto.components.settings.MobilePane.pairingQrError',
                 'This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.'
               )}
@@ -131,14 +132,14 @@ export function MobilePairingQrSection({
           </p>
         ) : (
           <p className="text-muted-foreground max-w-xs text-center text-xs">
-            {translate(
+            {t(
               'auto.components.settings.MobilePane.310924ad2c',
               'Scan this code with the Orca mobile app. Each code creates a unique device token.'
             )}
             {refreshesAutomatically ? (
               <>
                 {' '}
-                {translate(
+                {t(
                   'auto.components.settings.MobilePane.codeRefreshesAutomatically',
                   'Code refreshes automatically. A copied code works for up to 10 minutes.'
                 )}
@@ -149,7 +150,7 @@ export function MobilePairingQrSection({
         {pairingUrl && (
           <div className="flex w-full max-w-lg flex-col gap-1.5 px-4">
             <div className="text-muted-foreground text-center text-xs">
-              {translate(
+              {t(
                 'auto.components.settings.MobilePane.e778ecb209',
                 'Or paste this code in the mobile app:'
               )}
@@ -159,7 +160,7 @@ export function MobilePairingQrSection({
               variant="outline"
               size="sm"
               onClick={() => void copyPairingCode()}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.MobilePane.copyPairingCode',
                 'Copy pairing code'
               )}
@@ -181,17 +182,14 @@ export function MobilePairingQrSection({
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {translate(
-                  'auto.components.settings.MobilePane.dd3cd78d04',
-                  'Scan with Orca Mobile'
-                )}
+                {t('auto.components.settings.MobilePane.dd3cd78d04', 'Scan with Orca Mobile')}
               </DialogTitle>
             </DialogHeader>
             <div className="flex flex-col items-center gap-3">
               <div className="rounded-lg bg-white p-4">
                 <img
                   src={qrDataUrl}
-                  alt={translate(
+                  alt={t(
                     'auto.components.settings.MobilePane.6436e56546',
                     'QR Code for mobile pairing'
                   )}

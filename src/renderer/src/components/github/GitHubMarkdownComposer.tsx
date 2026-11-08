@@ -26,7 +26,7 @@ import {
 import { GitHubMarkdownImageInput } from './github-markdown-image-input'
 import { useImageInput } from '@/components/github/use-image-input'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
@@ -65,6 +65,7 @@ export function GitHubMarkdownComposer({
   layout = 'stacked',
   previewGithubRepo = null
 }: GitHubMarkdownComposerProps): React.JSX.Element {
+  const t = useTranslate()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const applyingExternalValueRef = useRef(false)
@@ -336,7 +337,7 @@ export function GitHubMarkdownComposer({
     >
       <Paperclip className="size-3.5 shrink-0" />
       <span>
-        {translate(
+        {t(
           'auto.components.github.GitHubMarkdownComposer.b7e4a1c902',
           'Paste, drop, or click to add files'
         )}

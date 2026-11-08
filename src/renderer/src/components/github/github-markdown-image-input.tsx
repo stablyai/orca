@@ -3,7 +3,7 @@ import { ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hasBoundedGitHubMarkdownImageUrlText } from './github-markdown-image-url'
 
 export function GitHubMarkdownImageInput({
@@ -21,6 +21,7 @@ export function GitHubMarkdownImageInput({
   insertImageUrl: () => void
   disabled: boolean
 }) {
+  const t = useTranslate()
   return (
     <form
       className="github-markdown-composer-image-row"
@@ -47,10 +48,7 @@ export function GitHubMarkdownImageInput({
             setImageInputOpen(false)
           }
         }}
-        placeholder={translate(
-          'auto.components.github.GitHubMarkdownComposer.f24783f470',
-          'https://...'
-        )}
+        placeholder={t('auto.components.github.GitHubMarkdownComposer.f24783f470', 'https://...')}
         disabled={disabled}
         className="h-8 min-w-0 text-xs"
       />
@@ -59,10 +57,10 @@ export function GitHubMarkdownImageInput({
         size="xs"
         disabled={disabled || !hasBoundedGitHubMarkdownImageUrlText(imageUrl)}
       >
-        {translate('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
+        {t('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
       </Button>
       <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>
-        {translate('auto.components.github.GitHubMarkdownComposer.015b4e607d', 'Cancel')}
+        {t('auto.components.github.GitHubMarkdownComposer.015b4e607d', 'Cancel')}
       </Button>
     </form>
   )

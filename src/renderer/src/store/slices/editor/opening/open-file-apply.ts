@@ -2,8 +2,8 @@ import { editorOpenTabBarOrder } from '../tabs/workspace-editor-files'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { getRecentlyClosedTabPosition } from '../../recently-closed-tab-position'
-import { pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
+import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import type { AppState } from '../../../types'
 import {
   type ClosedEditorTabSnapshot,

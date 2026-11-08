@@ -45,7 +45,13 @@ vi.mock('../runtime-client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
 
 describe('orca file CLI handlers', () => {
   beforeEach(() => {
@@ -69,6 +75,7 @@ describe('orca file CLI handlers', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_open', {
         worktree: 'wt-1',
         relativePath: 'src/App.tsx',
@@ -80,7 +87,7 @@ describe('orca file CLI handlers', () => {
     await main(['file', 'open', 'src/App.tsx'], '/tmp/repo/src')
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'files.open', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
       navigation: 'caller'
@@ -216,6 +223,7 @@ describe('orca file CLI handlers', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_status', {
         entries: [
           { path: 'src/App.tsx', status: 'modified', area: 'unstaged' },
@@ -246,22 +254,22 @@ describe('orca file CLI handlers', () => {
 
     await main(['file', 'open-changed'], '/tmp/repo/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'git.status', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'git.status', {
       worktree: 'id:repo::/tmp/repo'
     })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
       staged: false,
       navigation: 'caller'
     })
-    expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
+    expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'package.json',
       staged: true,
       navigation: 'caller'
     })
-    expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
+    expect(callMock).toHaveBeenNthCalledWith(6, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'docs/new.md',
       staged: false,

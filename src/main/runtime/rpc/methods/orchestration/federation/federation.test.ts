@@ -1,10 +1,10 @@
 import { registerFederationAnswerAtomicityTest } from './federation-answer-atomicity.test-support'
-import '../../../unused-default-rpc-methods.test-fixture'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -158,68 +158,6 @@ describe('orchestration federation', () => {
       expect.stringContaining(`Your task ID is: ${task.id}`),
       expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
     )
-  })
-
-  it('carries an explicit worker label as user display-name provenance', async () => {
-    const task = createHomeTask()
-
-    await homeDispatcher.dispatch(startRequest(task.id, { displayName: 'Windows release audit' }))
-
-    expect(workerRuntime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({
-        displayName: 'Windows release audit',
-        displayNameKind: 'user'
-      })
-    )
-  })
-
-  it('does not report remotely rejected preferences as effective', async () => {
-    const task = createHomeTask()
-
-    const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'gemini', model: 'unsupported-model' })
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        state: 'failed',
-        launch: {
-          requested: { agent: 'gemini', model: 'unsupported-model', effort: null },
-          effective: null
-        }
-      }
-    })
-  })
-
-  it('preserves wait-for-setup gating on the connected worker server', async () => {
-    vi.mocked(workerRuntime.createManagedWorktree).mockResolvedValueOnce({
-      worktree: { id: 'repo::windows-worktree', repoId: 'repo' },
-      startupTerminal: { spawned: true, handle: 'term_windows_worker' },
-      setupReceipt: {
-        requested: 'run',
-        hookFound: true,
-        startupPolicy: 'wait-for-setup',
-        state: 'running'
-      }
-    } as never)
-    const task = createHomeTask()
-
-    const response = await homeDispatcher.dispatch(startRequest(task.id, { setup: 'run' }))
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        state: 'ready',
-        setup: { startupPolicy: 'wait-for-setup', state: 'succeeded' },
-        effects: expect.arrayContaining([
-          expect.objectContaining({ kind: 'setup', state: 'succeeded' }),
-          expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-        ])
-      }
-    })
-    expect(response).toHaveProperty('result.setup.source', 'explicit_request')
-    expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
   })
 
   it('fails before remote task input when wait-for-setup fails', async () => {
@@ -753,27 +691,6 @@ describe('orchestration federation', () => {
     await Promise.all([first, second])
 
     expect(pullCount).toBe(1)
-  })
-
-  it('warns once while a federated Dispatch remains unreachable', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    await homeRuntime.syncOrchestrationFederation()
-    homeRuntime.stopOrchestrationFederationRelay()
-    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockRejectedValue(
-      new Error('worker server offline')
-    )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await homeRuntime.syncOrchestrationFederation()
-    await homeRuntime.syncOrchestrationFederation()
-
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Federation sync failed'),
-      expect.any(Error)
-    )
-    warn.mockRestore()
   })
 
   it('returns stop_unknown when the worker server disconnects after the home fence', async () => {

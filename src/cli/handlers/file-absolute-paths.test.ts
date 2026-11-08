@@ -32,7 +32,13 @@ vi.mock('../runtime-client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
 
 describe('absolute file CLI paths', () => {
   beforeEach(() => {
@@ -55,6 +61,9 @@ describe('absolute file CLI paths', () => {
       if (method === 'worktree.list') {
         return worktreeListFixture([buildWorktree('/root/orca/workspaces/xxx', 'feature')])
       }
+      if (method === 'folderWorkspace.list') {
+        return noFolderWorkspacesFixture()
+      }
       if (method === 'worktree.show') {
         return okFixture('req_show', {
           worktree: buildWorktree('/root/orca/workspaces/xxx', 'feature')
@@ -75,10 +84,10 @@ describe('absolute file CLI paths', () => {
 
     expect(process.exitCode).toBeUndefined()
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.show', {
       worktree: 'id:repo::/root/orca/workspaces/xxx'
     })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'files.open', {
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.open', {
       worktree: 'id:repo::/root/orca/workspaces/xxx',
       relativePath: 'xxx/xxx.ts',
       navigation: 'caller'

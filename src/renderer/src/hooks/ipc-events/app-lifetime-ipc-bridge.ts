@@ -4,7 +4,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtim
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
-import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
+import { remoteRuntimeTerminalColorPush } from '@/runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'

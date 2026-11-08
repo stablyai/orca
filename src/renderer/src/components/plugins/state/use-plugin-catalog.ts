@@ -5,9 +5,10 @@ import type {
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { useTranslate } from '@/i18n/use-translate'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
-import { requestPluginInstallCounts } from '@/store/plugin-install-counts'
+import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -47,6 +48,7 @@ export function usePluginCatalog({
   /** A plugin asked for from outside Settings (a file-type suggestion); opens its page. */
   onOpenRequested?: (pluginKey: string) => void
 }) {
+  const t = useTranslate()
   const [sources, setSources] = useState<PluginMarketplaceHostSourceState[]>([])
   const [listings, setListings] = useState<PluginMarketplaceHostListing[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,7 +111,7 @@ export function usePluginCatalog({
         setError(
           marketplaceError(
             cause,
-            translate(
+            t(
               'auto.components.settings.PluginMarketplaceBrowser.refreshFailed',
               "Couldn't refresh catalogs. Try again."
             )

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { PendingWorktreeCreation } from './pending-worktree-creation'
 import { activateAndRevealWorktree } from '../activation/worktree-activation'
 import '../activation/initial-surface/worktree-initial-terminal-seeding'

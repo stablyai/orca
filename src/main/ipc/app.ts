@@ -6,7 +6,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
@@ -29,7 +29,7 @@ import {
 import {
   isMarkdownDocumentName,
   markdownDocumentFromFilePath
-} from '../../shared/markdown-document-paths'
+} from '../../shared/file-listing/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import {
   registerRendererShutdownCheckpointHandler,

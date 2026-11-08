@@ -10,19 +10,21 @@ import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import {
+  DictationTranscript,
+  type DictationTranscriptSnapshot
+} from './mobile-dictation-transcript'
 
 type MobileDictationSession = {
   id: string
   owner: string
   clientId: string
   state: 'starting' | 'active' | 'closing'
-  partialText: string
-  finalTexts: string[]
+  transcript: DictationTranscript
   errors: string[]
-  // Bumped by each transcript event; chunks arrive far more often, so replies carry text only after a bump or a second.
-  textVersion: number
-  reportedVersion: number
+  // Chunks arrive far more often than text changes, so replies carry text only after a new revision or a second.
+  reportedRevision: number
   reportedAt: number
   chunkOrder: MobileDictationChunkOrder
   abandonTimer?: ReturnType<typeof setTimeout>
@@ -72,11 +74,9 @@ export class RuntimeMobileDictationController {
       owner,
       clientId,
       state: 'starting',
-      partialText: '',
-      finalTexts: [],
+      transcript: new DictationTranscript(),
       errors: [],
-      textVersion: 0,
-      reportedVersion: 0,
+      reportedRevision: 0,
       reportedAt: 0,
       chunkOrder: new MobileDictationChunkOrder()
     }
@@ -114,7 +114,7 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     seq?: number
     clientId?: string
-  }): { dictationId: string; text?: string } {
+  }): { dictationId: string } & Partial<DictationTranscriptSnapshot> {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -130,12 +130,13 @@ export class RuntimeMobileDictationController {
     }
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
-    if (session.reportedVersion === session.textVersion && now - session.reportedAt < 1000) {
+    const { revision } = session.transcript
+    if (session.reportedRevision === revision && now - session.reportedAt < 1000) {
       return { dictationId: params.dictationId }
     }
-    session.reportedVersion = session.textVersion
+    session.reportedRevision = revision
     session.reportedAt = now
-    return { dictationId: params.dictationId, text: transcriptOf(session) }
+    return { dictationId: params.dictationId, ...session.transcript.snapshot() }
   }
 
   async finish(params: {
@@ -150,7 +151,7 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    return { dictationId: params.dictationId, text: transcriptOf(session) }
+    return { dictationId: params.dictationId, text: session.transcript.snapshot().text }
   }
 
   async cancel(params: {
@@ -212,25 +213,13 @@ export class RuntimeMobileDictationController {
   }
 }
 
-function transcriptOf(session: MobileDictationSession): string {
-  return [...session.finalTexts, session.partialText].join(' ').trim()
-}
-
 function acceptEvent(
   session: MobileDictationSession,
   event: { type: string; text?: string; error?: string }
 ): void {
-  if (event.type === 'partial') {
-    session.partialText = event.text ?? ''
-    session.textVersion += 1
-  } else if (event.type === 'final') {
-    const text = event.text?.trim()
-    if (text) {
-      session.finalTexts.push(text)
-      session.partialText = ''
-      session.textVersion += 1
-    }
-  } else if (event.type === 'error') {
+  if (event.type === 'error') {
     session.errors.push(event.error ?? 'Speech worker error')
+  } else {
+    session.transcript.accept(event)
   }
 }

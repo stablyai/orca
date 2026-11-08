@@ -3,7 +3,7 @@ import { useEffect, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
 import { nativeEmulatorDeviceId, useEmulatorNativeVideo } from './use-emulator-native-video'
 
@@ -35,6 +35,7 @@ export function EmulatorScreenStreamContent({
   streamKey,
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
+  const t = useTranslate()
   const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
   const nativeDeviceId = nativeEmulatorDeviceId(previewUrl)
   const native = useEmulatorNativeVideo(
@@ -74,7 +75,7 @@ export function EmulatorScreenStreamContent({
         ref={nativeDeviceId ? native.canvasRef : video.canvasRef}
         className={mediaClassName}
         style={mediaStyle}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.emulator.pane.emulator.screen.stream.content.5ee64cd44e',
           'Emulator screen'
         )}
@@ -87,7 +88,7 @@ export function EmulatorScreenStreamContent({
       <img
         key={`${previewUrl}::${streamKey ?? ''}`}
         src={frameStream.frameUrl}
-        alt={translate(
+        alt={t(
           'auto.components.emulator.pane.emulator.screen.stream.content.5ee64cd44e',
           'Emulator screen'
         )}
@@ -116,7 +117,7 @@ export function EmulatorScreenStreamContent({
         <>
           <Loader2 className="size-6 animate-spin text-primary" />
           <span className="text-xs">
-            {translate(
+            {t(
               'auto.components.emulator.pane.emulator.screen.stream.content.5f818f12ab',
               'Connecting emulator…'
             )}
@@ -124,14 +125,14 @@ export function EmulatorScreenStreamContent({
         </>
       ) : displayError ? (
         <span className="px-6 text-center text-xs">
-          {translate(
+          {t(
             'auto.components.emulator.pane.emulator.screen.stream.content.36841af608',
             'Stream disconnected'
           )}
         </span>
       ) : (
         <span className="px-6 text-center text-xs">
-          {translate(
+          {t(
             'auto.components.emulator.pane.emulator.screen.stream.content.8b1a0d8694',
             'Emulator preview'
           )}

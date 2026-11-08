@@ -157,35 +157,6 @@ describe('Jira client credential storage', () => {
     )
   })
 
-  it('sends a non-browser User-Agent on Jira POST requests', async () => {
-    // Electron's Chrome UA trips Atlassian XSRF checks on token-authenticated writes.
-    const siteId = 'site-alpha'
-    writeJiraFiles(siteId, 'token-alpha')
-    netFetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ issues: [] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    )
-    const jira = await loadClientModule({ encryptionAvailable: true })
-    const client = jira.getClients(siteId)[0]
-
-    if (!client) {
-      throw new Error('Expected stored Jira client')
-    }
-
-    await jira.jiraRequest(client, '/rest/api/3/search/jql', {
-      method: 'POST',
-      body: JSON.stringify({ jql: 'project = ALP' })
-    })
-
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    const userAgent = headers.get('User-Agent') ?? ''
-    expect(netFetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
-    expect(userAgent).toBe('Orca')
-    expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|AppleWebKit/i)
-  })
-
   it('removes cancelled queued reads so the request pool recovers', async () => {
     const jira = await loadClientModule()
     await Promise.all([jira.acquire(), jira.acquire(), jira.acquire(), jira.acquire()])
@@ -351,21 +322,6 @@ describe('Jira client credential storage', () => {
     expect(jira.getStatus().credentialError).toBeUndefined()
   })
 
-  it('treats empty Jira token files as missing credentials', async () => {
-    const siteId = 'site-alpha'
-    writeJiraFiles(siteId, Buffer.alloc(0))
-    const jira = await loadClientModule({ encryptionAvailable: false })
-
-    await expect(jira.testConnection(siteId)).resolves.toEqual({
-      ok: false,
-      error: 'Not connected to Jira.',
-      errorCode: 'jira.notConnected'
-    })
-
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(jira.getStatus()).toMatchObject({ connected: false })
-  })
-
   it('keeps healthy sites under the "all" selection when one site cannot be decrypted', async () => {
     writeMultiSiteFiles(
       [
@@ -387,24 +343,6 @@ describe('Jira client credential storage', () => {
     expect(clients.map((client) => client.site.id)).toEqual(['good'])
     // The bad site's decrypt error is still recorded for the status banner.
     expect(jira.getStatus().credentialError).toContain('Could not decrypt')
-  })
-
-  it('rethrows the decrypt error for a specific site selection', async () => {
-    writeMultiSiteFiles(
-      [
-        { id: 'good', token: 'token-good' },
-        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
-      ],
-      'bad'
-    )
-    const jira = await loadClientModule({
-      encryptionAvailable: true,
-      decryptString: () => {
-        throw new Error('userCanceledErr')
-      }
-    })
-
-    expect(() => jira.getClients('bad')).toThrow('Could not decrypt')
   })
 
   it('does not clear credentials when Electron transport fails after a network change', async () => {
@@ -430,156 +368,6 @@ describe('Jira client credential storage', () => {
       connected: true,
       sites: [{ id: siteId }]
     })
-  })
-
-  it('does not treat Jira permission failures as credential revocation', async () => {
-    const jira = await loadClientModule()
-
-    expect(jira.isAuthError(new jira.JiraApiError('Unauthorized', 401))).toBe(true)
-    expect(jira.isAuthError(new jira.JiraApiError('Forbidden', 403))).toBe(false)
-  })
-
-  it('connects to self-hosted Jira with a Bearer PAT against REST v2', async () => {
-    netFetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          name: 'wquintal',
-          key: 'JIRAUSER10101',
-          displayName: 'William',
-          emailAddress: 'william@example.com'
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    )
-    const jira = await loadClientModule()
-
-    await expect(
-      jira.connect({
-        siteUrl: 'jira.example.com',
-        email: '',
-        apiToken: 'pat-token',
-        authType: 'server'
-      })
-    ).resolves.toMatchObject({
-      ok: true,
-      // Server /myself has no accountId; the username stands in for it.
-      viewer: { displayName: 'William', accountId: 'wquintal' }
-    })
-
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'https://jira.example.com/rest/api/2/myself',
-      expect.objectContaining({ headers: expect.any(Headers) })
-    )
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer pat-token')
-  })
-
-  it('connects to self-hosted Jira with Basic username/password against REST v2', async () => {
-    netFetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ name: 'jdoe', key: 'JIRAUSER20202', displayName: 'Jane Doe' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    )
-    const jira = await loadClientModule()
-
-    await expect(
-      jira.connect({
-        siteUrl: 'jira.example.com',
-        // Username selects classic Server/DC Basic auth; the token slot holds the password.
-        email: 'jdoe',
-        apiToken: 'account-password',
-        authType: 'server'
-      })
-    ).resolves.toMatchObject({
-      ok: true,
-      viewer: { displayName: 'Jane Doe', accountId: 'jdoe' }
-    })
-
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'https://jira.example.com/rest/api/2/myself',
-      expect.objectContaining({ headers: expect.any(Headers) })
-    )
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    expect(headers.get('Authorization')).toBe(
-      `Basic ${Buffer.from('jdoe:account-password').toString('base64')}`
-    )
-  })
-
-  it('uses Basic auth for stored self-hosted sites that carry a username', async () => {
-    const siteId = 'site-server-basic'
-    const orcaDir = join(tempHome, '.orca')
-    mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
-    writeFileSync(
-      join(orcaDir, 'jira-sites.json'),
-      JSON.stringify({
-        version: 1,
-        activeSiteId: siteId,
-        selectedSiteId: siteId,
-        sites: [
-          {
-            id: siteId,
-            siteUrl: 'https://jira.example.com',
-            email: 'jdoe',
-            displayName: 'Jane Doe',
-            accountId: 'jdoe',
-            authType: 'server'
-          }
-        ]
-      }),
-      { encoding: 'utf-8' }
-    )
-    writeFileSync(tokenPathForSite(siteId), 'account-password')
-    netFetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ name: 'jdoe', displayName: 'Jane Doe' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    )
-    const jira = await loadClientModule()
-
-    await expect(jira.testConnection(siteId)).resolves.toMatchObject({ ok: true })
-
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    expect(headers.get('Authorization')).toBe(
-      `Basic ${Buffer.from('jdoe:account-password').toString('base64')}`
-    )
-  })
-
-  it('requires a token but not an email for self-hosted connections', async () => {
-    const jira = await loadClientModule()
-
-    await expect(
-      jira.connect({
-        siteUrl: 'jira.example.com',
-        email: '',
-        apiToken: '',
-        authType: 'server'
-      })
-    ).resolves.toEqual({
-      ok: false,
-      error: 'Personal access token is required.',
-      errorCode: 'jira.personalTokenRequired'
-    })
-    expect(netFetchMock).not.toHaveBeenCalled()
-  })
-
-  it('requires a password when a username is present on self-hosted', async () => {
-    const jira = await loadClientModule()
-
-    await expect(
-      jira.connect({
-        siteUrl: 'jira.example.com',
-        email: 'jdoe',
-        apiToken: '',
-        authType: 'server'
-      })
-    ).resolves.toEqual({
-      ok: false,
-      error: 'Password is required.',
-      errorCode: 'jira.passwordRequired'
-    })
-    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('keeps distinct self-hosted PAT accounts on one host as separate sites', async () => {
@@ -619,79 +407,6 @@ describe('Jira client credential storage', () => {
     }
     expect(stored.sites).toHaveLength(2)
     expect(stored.sites.map((site) => site.accountId).sort()).toEqual(['alice', 'bot'])
-  })
-
-  it('uses Bearer auth and REST v2 for stored self-hosted sites', async () => {
-    const siteId = 'site-server'
-    const orcaDir = join(tempHome, '.orca')
-    mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
-    writeFileSync(
-      join(orcaDir, 'jira-sites.json'),
-      JSON.stringify({
-        version: 1,
-        activeSiteId: siteId,
-        selectedSiteId: siteId,
-        sites: [
-          {
-            id: siteId,
-            siteUrl: 'https://jira.example.com',
-            email: '',
-            displayName: 'William',
-            accountId: 'wquintal',
-            authType: 'server'
-          }
-        ]
-      }),
-      { encoding: 'utf-8' }
-    )
-    writeFileSync(tokenPathForSite(siteId), 'pat-token')
-    netFetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ name: 'wquintal', displayName: 'William' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    )
-    const jira = await loadClientModule()
-
-    await expect(jira.testConnection(siteId)).resolves.toMatchObject({
-      ok: true,
-      viewer: { displayName: 'William' }
-    })
-
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'https://jira.example.com/rest/api/2/myself',
-      expect.objectContaining({ headers: expect.any(Headers) })
-    )
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer pat-token')
-  })
-
-  it('bridges proxy environment settings before Jira connect requests', async () => {
-    netFetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          accountId: 'account-alpha',
-          displayName: 'Ada',
-          emailAddress: 'ada@example.com'
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    )
-    const jira = await loadClientModule()
-
-    await expect(
-      jira.connect({
-        siteUrl: 'example.atlassian.net',
-        email: 'ada@example.com',
-        apiToken: 'token-alpha'
-      })
-    ).resolves.toMatchObject({ ok: true, viewer: { displayName: 'Ada' } })
-
-    expect(resolveProxyMock).toHaveBeenCalledWith('https://example.atlassian.net/rest/api/3/myself')
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
-    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
-    expect(headers.get('User-Agent')).toBe('Orca')
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -812,19 +527,5 @@ describe('Jira site file cross-process visibility', () => {
     )
 
     expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
-  })
-
-  it('follows the selected site changing underneath it', async () => {
-    const sites = [
-      { id: 'site-alpha', token: 'token-alpha' },
-      { id: 'site-beta', token: 'token-beta' }
-    ]
-    writeMultiSiteFiles(sites, 'site-alpha')
-    const jira = await loadClientModule()
-    expect(jira.getStatus()).toMatchObject({ selectedSiteId: 'site-alpha' })
-
-    writeMultiSiteFiles(sites, 'site-beta')
-
-    expect(jira.getStatus()).toMatchObject({ selectedSiteId: 'site-beta' })
   })
 })

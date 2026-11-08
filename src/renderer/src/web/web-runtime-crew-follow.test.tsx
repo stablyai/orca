@@ -9,8 +9,8 @@ import {
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import type * as RuntimeSession from './preload-api/web-runtime-session'
 import type { PreloadApi } from '../../../preload/api-types'
-import { replaceRuntimeEnvironmentRevisions } from '../runtime/runtime-environment-revision'
-import { useOrchestrationCrew } from '../components/native-chat/use-orchestration-crew'
+import { replaceRuntimeEnvironmentRevisions } from '../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useOrchestrationCrew } from '../components/native-chat/worker-lifetime/use-orchestration-crew'
 import { SharedControlReconnectScheduler } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
 import {
   CrewSocket,

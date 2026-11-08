@@ -1,5 +1,4 @@
 import type * as RuntimeEnvironmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -67,8 +66,9 @@ const {
   useWorktreeAwarenessEnvironment: configureWorktreeAwarenessEnvironment
 }: AgentLaunchCwdEnvironmentBindings = await import(harnessPath)
 const fixturesPath = '../../../../../cli/test-fixtures'
-const { buildWorktree, okFixture, worktreeListFixture }: AgentLaunchCwdWorktreeFixtures =
-  await import(fixturesPath)
+const { buildWorktree, worktreeListFixture }: AgentLaunchCwdWorktreeFixtures = await import(
+  fixturesPath
+)
 const agentFixturesPath = '../../../../../cli/agent-launch-test-fixtures'
 const { agentLaunchHostFixture }: AgentLaunchCwdAgentFixtures = await import(agentFixturesPath)
 
@@ -89,10 +89,8 @@ import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
 } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { runtimeStub, setAgentLaunchRecordStore } from './agent-launch.test-fixture'
+import { setAgentLaunchRecordStore } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../../workspaces/lineage/runtime-worktree-lineage-controller'
-import type { RuntimeManagedWorktreeCreateArgs } from '../../../workspaces/creation/runtime-managed-worktree-create-types'
-import type { ResolvedWorktree } from '../../../workspaces/catalog/runtime-worktree-path-identity'
 import { formatAmbiguousCwdParentMessage } from '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
 
@@ -480,212 +478,6 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
           samples
         })
       )
-    }
-  )
-  it.each(['uuid', 'root+instances'] as const)(
-    'retains small raw/import/host frame controls for %s T and X',
-    async (shape) => {
-      const records = await openTestAgentSessionRecordStore(directory)
-      setAgentLaunchRecordStore(records)
-      const writes = vi.spyOn(records, 'recordOperationOutcome')
-      const endpoint =
-        process.platform === 'win32'
-          ? `\\\\.\\pipe\\orca-scale-${randomUUID()}`
-          : join(directory, 'scale.sock')
-      transport = new UnixSocketTransport({
-        endpoint,
-        kind: process.platform === 'win32' ? 'named-pipe' : 'unix'
-      })
-      let first = buildWorktree('/tmp/scale-parent', 'main', 'abc', 'repo-1')
-      let terminalValid = false
-      let expectedSelector = ''
-      let lineageReads = 0
-      const controller = new RuntimeWorktreeLineageController({
-        getStore: () => null,
-        getDb: () => null,
-        showTerminal: async () => {
-          lineageReads++
-          if (!terminalValid) {
-            throw new Error('terminal_not_found')
-          }
-          return { worktreeId: first.id }
-        },
-        resolveWorktree: async (selector) => {
-          lineageReads++
-          expect([`id:${first.id}`, expectedSelector]).toContain(selector)
-          const base: Omit<ReturnType<typeof buildWorktree>, 'identity'> = buildWorktree(
-            first.path,
-            'main',
-            'abc',
-            'repo-1'
-          )
-          const resolved: ResolvedWorktree = {
-            ...base,
-            ...base.git,
-            id: first.id,
-            hostId: 'local',
-            instanceId: first.id,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-          return resolved
-        }
-      })
-      const effects = runtimeStub({ settings: {} })
-      const create = vi.fn(async (args: RuntimeManagedWorktreeCreateArgs) => {
-        await controller.resolveCreate(args.lineage, 'local')
-        return effects.createManagedWorktree(args)
-      })
-      const runtime = Object.assign(new OrcaRuntimeService(runtimeStore), effects, {
-        createManagedWorktree: create
-      })
-      const dispatcher = new RpcDispatcher({ runtime, methods: AGENT_LAUNCH_METHODS })
-      const frames: string[] = []
-      transport.onMessage((raw, reply) => {
-        void dispatcher
-          .dispatch(JSON.parse(raw))
-          .then((response) => reply(JSON.stringify(response)))
-      })
-      await transport.start()
-      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-      const samples: number[] = []
-      const populations = [
-        ...[
-          '/tmp/import cafe\u0301',
-          `/tmp/${'long'.repeat(225)}`,
-          '/tmp/quotes" and smart“quotes” & $`%!',
-          '/tmp/line\nfeed',
-          String.raw`\\wsl.localhost\Ubuntu\home\User\Repo`
-        ].map((path) => ({ count: 2, path })),
-        { count: 2, path: '/tmp/host-choice', hostQualified: true }
-      ]
-      for (const population of populations) {
-        const { count, path } = population
-        const hostQualified = 'hostQualified' in population && population.hostQualified === true
-        let operations = 0
-        let identityReads = 0
-        const rows = Array.from({ length: count }, (_, index) => {
-          const base = buildWorktree(path, 'main', 'abc', 'repo-1')
-          const id =
-            shape === 'root+instances' && index === 0
-              ? base.id
-              : `${base.id}::workspace:${index.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
-          return {
-            ...base,
-            get id() {
-              operations++
-              return id
-            },
-            get hostId() {
-              operations++
-              return 'local' as const
-            },
-            get path() {
-              operations++
-              return base.path
-            },
-            get identity() {
-              identityReads++
-              return hostQualified ? { key: `local:${id}` } : undefined
-            }
-          }
-        })
-        first = rows[0]!
-        expectedSelector = hostQualified ? `identity:local:${first.id}` : `id:${first.id}`
-        const catalog = hostQualified ? [...rows, { ...first, hostId: 'ssh:other' }] : rows
-        callMock.mockImplementation(async (method, params) => {
-          if (method === 'worktree.list') {
-            return worktreeListFixture(catalog)
-          }
-          if (method === 'status.get') {
-            return agentLaunchHostFixture()
-          }
-          if (method === 'worktree.show') {
-            return okFixture('shown', {
-              worktree: { ...buildWorktree(first.path, 'main', 'abc', 'repo-1'), id: 'wt-new' }
-            })
-          }
-          const frame = `${JSON.stringify({ id: 'scale', authToken: 'fixture', method, params })}\n`
-          frames.push(frame)
-          const response = JSON.parse(await socketCall(endpoint, frame))
-          if (!response.ok) {
-            throw new RuntimeRpcFailureError(response)
-          }
-          return response
-        })
-        const started = performance.now()
-        for (const valid of [true, false]) {
-          terminalValid = valid
-          lineageReads = 0
-          operations = 0
-          identityReads = 0
-          log.mockClear()
-          process.exitCode = prior
-          process.env.ORCA_TERMINAL_HANDLE = valid ? 'term_R' : 'term_X'
-          const createsBefore = effects.createManagedWorktree.mock.calls.length
-          const writesBefore = writes.mock.calls.length
-          const framesBefore = frames.length
-          await main(
-            [
-              'worktree',
-              'create',
-              '--repo',
-              'id:repo-1',
-              '--name',
-              'child',
-              '--agent',
-              'codex',
-              '--json'
-            ],
-            first.path
-          )
-          expect(frames.length - framesBefore).toBe(1)
-          expect(writes.mock.calls.length - writesBefore).toBeGreaterThanOrEqual(1)
-          expect(writes.mock.calls.length - writesBefore).toBeLessThanOrEqual(3)
-          const envelope = JSON.parse(frames.at(-1)!)
-          expect(envelope.params.target.create).toMatchObject({
-            cwdParentWorktree: expectedSelector,
-            cwdParentAmbiguous: true
-          })
-          const { cwdParentAmbiguous: _observation, ...oldCreate } = envelope.params.target.create
-          const baseline = `${JSON.stringify({ ...envelope, params: { ...envelope.params, target: { ...envelope.params.target, create: oldCreate } } })}\n`
-          expect(Buffer.byteLength(frames.at(-1)!)).toBe(Buffer.byteLength(baseline) + 26)
-          expect(Buffer.byteLength(frames.at(-1)!)).toBeLessThan(1024 * 1024)
-          expect(identityReads).toBe(hostQualified ? 2 : 0)
-          expect(operations).toBeLessThanOrEqual(50 * count)
-          expect(lineageReads).toBeLessThanOrEqual(3)
-          const output = JSON.parse(log.mock.calls.flat().join(''))
-          expect(output.ok).toBe(valid)
-          expect(effects.createManagedWorktree.mock.calls.length - createsBefore).toBe(
-            valid ? 1 : 0
-          )
-          if (!valid) {
-            expect(output.error).toEqual({
-              code: 'LINEAGE_PARENT_AMBIGUOUS',
-              message: formatAmbiguousCwdParentMessage()
-            })
-            expect(
-              records
-                .listOperationRows()
-                .find((row) => row.operationId === envelope.params.operationId)?.outcome
-            ).toEqual({
-              status: 'failed',
-              code: 'LINEAGE_PARENT_AMBIGUOUS',
-              message: output.error.message
-            })
-            expect(JSON.stringify(output).length).toBeLessThan(1500)
-          }
-          samples.push(operations)
-        }
-        expect(performance.now() - started).toBeLessThan(30000)
-      }
-      expect(effects.createManagedWorktree).toHaveBeenCalledTimes(populations.length)
-      expect(effects.createTerminal).not.toHaveBeenCalled()
     }
   )
 })

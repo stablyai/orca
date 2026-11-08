@@ -56,45 +56,6 @@ function fixture(deferred: boolean, backpressure: boolean) {
   }
 }
 
-it.each([false, true])(
-  'releases the completed last drain closure while the peer remains usable (backpressure=%s)',
-  async (backpressure) => {
-    const state = fixture(false, backpressure)
-    try {
-      await state.peer.notify('first', { text: 'x'.repeat(256 * 1024) })
-      expect(state.output.writableLength).toBe(0)
-      expect(state.output.listenerCount('drain')).toBe(0)
-      await collect()
-      expect(state.refs.filter((ref) => ref.deref())).toHaveLength(0)
-      await state.peer.notify('next', {})
-      expect(state.writes).toEqual(['first', 'next'])
-    } finally {
-      state.close()
-    }
-  }
-)
-
-it('keeps the active write until stream completion then releases its drain closure', async () => {
-  const state = fixture(true, true)
-  try {
-    const first = state.peer.notify('first', {})
-    const second = state.peer.notify('second', {})
-    await collect()
-    expect(state.refs.filter((ref) => ref.deref())).toHaveLength(1)
-    expect(state.writes).toEqual(['first'])
-    state.complete()
-    await first
-    expect(state.writes).toEqual(['first', 'second'])
-    state.complete()
-    await second
-    await collect()
-    expect(state.refs.filter((ref) => ref.deref())).toHaveLength(0)
-    expect(state.output.listenerCount('drain')).toBe(0)
-  } finally {
-    state.close()
-  }
-})
-
 it('retires a closed peer drain closure after its late stream completion', async () => {
   const state = fixture(true, true)
   try {

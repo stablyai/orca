@@ -16,9 +16,10 @@ import {
   type BrowserLinkTestStore
 } from './browser-link-open.test-fixture'
 import { captureLinkOpenIntent } from '../../link-open-intent'
-import '@/store/slices/store-test-helpers'
-import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
-import { makeWorktree, makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import '@/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { canOfferHttpLinkGroupAction } from './http-link-in-group-availability'
 
 let store: BrowserLinkTestStore

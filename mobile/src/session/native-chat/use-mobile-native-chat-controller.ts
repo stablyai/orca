@@ -109,7 +109,9 @@ export function useMobileNativeChatController(args: {
     // Off-chat null would look like host retraction and permanently decline launch prefill; preserve the draft plus visibility.
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
-    transcriptSettled: nativeChatSession.status === 'ready'
+    transcriptSettled: nativeChatSession.status === 'ready',
+    connected: connState === 'connected',
+    onSendError
   })
 
   // Require both input lease and live connection; remembered-only agents may now be shells and must never receive chat writes.
@@ -233,6 +235,8 @@ export function useMobileNativeChatController(args: {
         compactInstructions: structuredNativeChat.compactInstructions,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
+        appliesOnAttach: structuredNativeChat.appliesOnAttach,
+        heldPick: structuredNativeChat.heldPick,
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
