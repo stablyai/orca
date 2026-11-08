@@ -62,6 +62,34 @@ describe('openSessionSearchDatabase', () => {
     second.close()
   })
 
+  it('carries the main and the CJK FTS tables and throws away an index that carries a third', async () => {
+    const path = await tempDatabasePath()
+    const fresh = openSessionSearchDatabase(path)
+    const tables = (): string[] =>
+      (
+        fresh
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
+          .all() as { name: string }[]
+      ).map((row) => row.name)
+    expect(tables().sort()).toEqual(['messages_cjk_fts', 'messages_fts'])
+
+    // A version bump must remove obsolete tables that CREATE IF NOT EXISTS would retain.
+    fresh.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(user_text, assistant_text)')
+    fresh.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    fresh.prepare("UPDATE meta SET value = '3' WHERE key = 'schema_version'").run()
+    fresh.close()
+
+    const rebuilt = openSessionSearchDatabase(path)
+    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
+    expect(
+      rebuilt
+        .prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'conversation_fts'")
+        .get()
+    ).toEqual({ n: 0 })
+    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    rebuilt.close()
+  })
+
   it('adds the prefix hash column once when another opener migrates under its lock', async () => {
     const path = await tempDatabasePath()
     const setup = openSessionSearchDatabase(path)
