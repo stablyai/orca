@@ -225,21 +225,16 @@ export function configuredAgentPickerLaunchOption(
   )
 }
 
-/** An omnibox result's setup-panel launch, or none for results without agent setup. */
-export function agentResultSetupLaunch(
-  option: ActiveOption,
-  terminalPending: boolean | undefined,
-  submit: (option: ActiveOption) => boolean | void | Promise<boolean>
-): ((draft: AgentPickerDraft) => boolean | void | Promise<boolean>) | undefined {
-  if (option.kind !== 'agent' || !option.option.pickerEntry) {
-    return undefined
+/** The omnibox result a setup panel launches, configured from its draft. */
+export function agentResultSetupOption(
+  option: Extract<ActiveOption, { kind: 'agent' }>,
+  draft: AgentPickerDraft,
+  terminalPending: boolean | undefined
+): ActiveOption {
+  return {
+    kind: 'agent',
+    option: configuredAgentPickerLaunchOption(option.option, draft, terminalPending)
   }
-  const agentOption = option.option
-  return (draft) =>
-    submit({
-      kind: 'agent',
-      option: configuredAgentPickerLaunchOption(agentOption, draft, terminalPending)
-    })
 }
 
 function terminalReadyOption(

@@ -7,7 +7,7 @@ import {
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
 import {
-  agentResultSetupLaunch,
+  agentResultSetupOption,
   matchingAgentLaunchOptions,
   tabAgentLaunchOptionDisabled
 } from './tab-agent-launch-options'
@@ -386,8 +386,15 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                {...setupSubmenu(getActiveOptionId(option))}
-                onUseAgent={agentResultSetupLaunch(option, terminalPending, submitOption)}
+                setupOpen={setupSubmenu.openId === getActiveOptionId(option)}
+                onSetupOpenChange={(open) => setupSubmenu.change(getActiveOptionId(option), open)}
+                onHover={() => setupSubmenu.hover(getActiveOptionId(option))}
+                onUseAgent={
+                  option.kind === 'agent' && option.option.pickerEntry
+                    ? (draft) =>
+                        submitOption(agentResultSetupOption(option, draft, terminalPending))
+                    : undefined
+                }
                 terminalPending={terminalPending}
                 disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}

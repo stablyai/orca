@@ -48,10 +48,10 @@ export function EntryStatusRow({
 }
 
 /** Keeps one agent setup submenu open at a time, keyed by result option id. */
-export function useEntrySetupSubmenu(): (optionId: string) => {
-  setupOpen: boolean
-  onSetupOpenChange: (open: boolean) => void
-  onHover: () => void
+export function useEntrySetupSubmenu(): {
+  openId: string | null
+  change: (optionId: string, open: boolean) => void
+  hover: (optionId: string) => void
 } {
   const [openId, setOpenId] = useState<string | null>(null)
   const closeTimer = useRef<number | null>(null)
@@ -62,13 +62,13 @@ export function useEntrySetupSubmenu(): (optionId: string) => {
     }
   }
   useEffect(() => cancelClose, [])
-  return (optionId) => ({
-    setupOpen: openId === optionId,
-    onSetupOpenChange: (open) => {
+  return {
+    openId,
+    change: (optionId, open) => {
       cancelClose()
       setOpenId((current) => (open ? optionId : current === optionId ? null : current))
     },
-    onHover: () => {
+    hover: (optionId) => {
       if (openId === optionId) {
         cancelClose()
       } else if (openId !== null && closeTimer.current === null) {
@@ -79,7 +79,7 @@ export function useEntrySetupSubmenu(): (optionId: string) => {
         }, 300)
       }
     }
-  })
+  }
 }
 
 export function EntryActionRow({
