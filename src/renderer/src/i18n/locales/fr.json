@@ -8837,16 +8837,9 @@
           "b661b034ec": "· Par défaut :",
           "builtin_themes": "Intégrée",
           "ceefb9d7f1": "Aucun thème trouvé.",
-          "imported_from": "Importé depuis {{value0}}",
           "imported_themes": "Importé",
-          "9119fb2268": "Actuel",
-          "4e11f87ca6": "Affichage de",
-          "fbb428db98": "Sélectionné :",
           "search_terminal_themes": "Rechercher des thèmes de terminal",
-          "cb330ef7f8": " sur {{value0}}",
-          "c822571b2e": " correspondant à \"{{value0}}\"",
-          "plugin_themes": "Plugins",
-          "from_plugin": "De {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

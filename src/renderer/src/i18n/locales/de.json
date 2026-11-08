@@ -8968,16 +8968,9 @@
           "b661b034ec": "· Standard:",
           "builtin_themes": "Integriert",
           "ceefb9d7f1": "Keine Designs gefunden.",
-          "imported_from": "Aus {{value0}} importiert",
           "imported_themes": "Importiert",
-          "9119fb2268": "Aktuell",
-          "4e11f87ca6": "Angezeigt",
-          "fbb428db98": "Ausgewählt:",
           "search_terminal_themes": "Terminal-Designs suchen",
-          "cb330ef7f8": " von {{value0}}",
-          "c822571b2e": " passend zu „{{value0}}“",
-          "plugin_themes": "Plugins",
-          "from_plugin": "Von {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

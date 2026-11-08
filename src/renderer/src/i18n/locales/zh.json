@@ -8275,17 +8275,10 @@
           "a4ff6143f8": "清除字体选择",
           "b661b034ec": "· 默认：",
           "ceefb9d7f1": "未找到主题。",
-          "9119fb2268": "当前",
-          "4e11f87ca6": "显示中",
-          "fbb428db98": "已选择：",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 匹配“{{value0}}”",
           "builtin_themes": "内置",
-          "imported_from": "从 {{value0}} 导入",
           "imported_themes": "已导入",
           "search_terminal_themes": "搜索终端主题",
-          "plugin_themes": "插件",
-          "from_plugin": "来自 {{value0}}"
+          "plugin_themes": "插件"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

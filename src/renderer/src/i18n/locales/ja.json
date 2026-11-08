@@ -8313,16 +8313,9 @@
           "b661b034ec": "・デフォルト：",
           "builtin_themes": "組み込み",
           "ceefb9d7f1": "テーマが見つかりませんでした。",
-          "imported_from": "{{value0}} からインポート",
           "imported_themes": "インポート済み",
-          "9119fb2268": "現在",
-          "4e11f87ca6": "表示中",
-          "fbb428db98": "選択済み:",
           "search_terminal_themes": "ターミナルテーマを検索",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 「{{value0}}」に一致",
-          "plugin_themes": "プラグイン",
-          "from_plugin": "{{value0}} から"
+          "plugin_themes": "プラグイン"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

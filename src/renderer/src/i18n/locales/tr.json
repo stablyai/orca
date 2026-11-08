@@ -8952,16 +8952,9 @@
           "b661b034ec": "· Varsayılan:",
           "builtin_themes": "Yerleşik",
           "ceefb9d7f1": "Tema bulunamadı.",
-          "imported_from": "{{value0}} konumundan içe aktarıldı",
           "imported_themes": "İçe Aktarılan",
-          "9119fb2268": "Geçerli",
-          "4e11f87ca6": "Gösteriliyor",
-          "fbb428db98": "Seçili:",
           "search_terminal_themes": "Terminal temalarında ara",
-          "cb330ef7f8": " / {{value0}}",
-          "c822571b2e": " \"{{value0}}\" ile eşleşen",
-          "plugin_themes": "Eklentiler",
-          "from_plugin": "{{value0}} kaynağından"
+          "plugin_themes": "Eklentiler"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
