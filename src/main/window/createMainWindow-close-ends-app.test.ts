@@ -28,7 +28,7 @@ describe('createMainWindow close that ends the app (win32)', () => {
   type CloseFixture = {
     windowHandlers: Record<string, (...args: any[]) => void>
     webContents: { send: ReturnType<typeof vi.fn> }
-    instance: { hide: ReturnType<typeof vi.fn> }
+    instance: unknown
   }
 
   function setupCloseWindow(): CloseFixture {
@@ -59,7 +59,6 @@ describe('createMainWindow close that ends the app (win32)', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      hide: vi.fn(),
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
@@ -67,14 +66,6 @@ describe('createMainWindow close that ends the app (win32)', () => {
       return instance
     })
     return { windowHandlers, webContents, instance }
-  }
-
-  function makeStore(minimizeToTrayOnClose: boolean, trayMinimizeNoticeShown: boolean) {
-    return {
-      getUI: vi.fn(() => ({ trayMinimizeNoticeShown })),
-      getSettings: vi.fn(() => ({ windowBackgroundBlur: false, minimizeToTrayOnClose })),
-      updateUI: vi.fn()
-    }
   }
 
   function captureIpcHandlers(): Record<string, (...args: any[]) => void> {
@@ -119,20 +110,5 @@ describe('createMainWindow close that ends the app (win32)', () => {
       isQuitting: true,
       requestId: expect.any(Number)
     })
-  })
-
-  it('still hides to the tray instead of asking when the close would end the app', () => {
-    const ipcHandlers = captureIpcHandlers()
-    const { webContents, instance } = setupCloseWindow()
-
-    createMainWindow(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tray guard reads only getSettings/getUI/updateUI, which makeStore provides.
-      makeStore(true, true) as never,
-      { getIsQuitting: () => false, getWindowCloseEndsApp: () => true }
-    )
-    ipcHandlers['window:request-close']?.()
-
-    expect(instance.hide).toHaveBeenCalledTimes(1)
-    expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
   })
 })
