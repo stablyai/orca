@@ -9,7 +9,6 @@ import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit
 import {
   forgetSavedAiVaultSession,
   readSavedAiVaultSessionList,
-  saveAiVaultSessionList,
   type SavedAiVaultSessionList
 } from './ai-vault-saved-session-lists'
 
@@ -99,8 +98,6 @@ export function cacheAiVaultSessionResult(args: {
     }
     cachedSessionResults.delete(oldestKey)
   }
-  // Every scan saves, which keeps the saved order by recency and retries refused writes.
-  void saveAiVaultSessionList(args.key, args.limit, args.result)
 }
 
 export function resetAiVaultSessionResultCacheForTest(): void {

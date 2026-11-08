@@ -379,6 +379,23 @@ describe('useAiVaultSessionRefresh after a restart', () => {
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-3'])
     expect(latest?.loading).toBe(false)
   })
+
+  // The saved-list write is skipped by row identity, so an unchanged IPC clone must reuse the rows.
+  it('hands the save the same rows when a refocus rescan changed nothing', async () => {
+    const rows = () => ({ ...EMPTY_RESULT, sessions: [makeVaultSession(1), makeVaultSession(2)] })
+    listSessionsMock.mockResolvedValueOnce(rows()).mockResolvedValueOnce(rows())
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    await flushMicrotasks()
+    const [saved] = [...savedLists.lists.values()]
+
+    await act(async () => {
+      await latest?.refresh({ background: true })
+    })
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect([...savedLists.lists.values()][0]?.sessions).toBe(saved?.sessions)
+  })
 })
 
 // Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).

@@ -20,6 +20,7 @@ import {
 } from './ai-vault-session-list-request'
 import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
+import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import {
@@ -119,13 +120,17 @@ export function useAiVaultSessionRefresh(
       const { scopeOnly } = request
       const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, scopeOnly)
       const scanKey = `${baseKey}\n${selectedLimit}`
-      const applyListed = (published: AiVaultListResult) =>
+      const applyListed = (published: AiVaultListResult, scanned = false) =>
         applyScan(
           { result: published, limit: selectedLimit, scopeKey: scanKey, scopeOnly },
           (applied) => {
             conditionalSnapshotRef.current = published.fingerprint
               ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
               : null
+            // The applied rows keep their identity when a rescan changed nothing, so the save skips.
+            if (scanned) {
+              void saveAiVaultSessionList(baseKey, selectedLimit, applied)
+            }
           }
         )
       const cachedResult =
@@ -145,8 +150,7 @@ export function useAiVaultSessionRefresh(
           // Chat links only change which rows are linked; the stale list is replaced by the rescan anyway.
           ({ result, limit }) => {
             if (mountedRef.current && scanKey === currentScanScopeKey()) {
-              // Keyed by the depth it holds: the scope-only check in `shown` rebuilds the key from limit.
-              applyScan({ result, limit, scopeKey: `${baseKey}\n${limit}`, scopeOnly, stale: true })
+              applyScan({ result, limit, scopeKey: scanKey, scopeOnly, stale: true })
             }
           }
         )
@@ -200,7 +204,7 @@ export function useAiVaultSessionRefresh(
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
         publicationGateRef.current.publish(result, (published) => {
           if (requestCurrent()) {
-            applyListed(published)
+            applyListed(published, true)
           }
         })
       } catch (err) {

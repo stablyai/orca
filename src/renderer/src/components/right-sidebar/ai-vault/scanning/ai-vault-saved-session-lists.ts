@@ -45,6 +45,9 @@ function storageKey(key: string): string | null {
 }
 
 let connection: (() => Promise<IDBDatabase>) | null = null
+// The rows each stored key last wrote. Callers pass the panel's reconciled rows, which keep their
+// identity across unchanged rescans, so a focus refresh costs no copy and no write.
+const lastSavedRows = new Map<string, readonly AiVaultSession[]>()
 
 function database(): Promise<IDBDatabase> {
   connection ??= indexedDbConnection(indexedDB, DATABASE_NAME, DATABASE_VERSION, (db) => {
@@ -114,7 +117,7 @@ export async function saveAiVaultSessionList(
   result: AiVaultListResult
 ): Promise<void> {
   const stored = storageKey(key)
-  if (!stored) {
+  if (!stored || lastSavedRows.get(stored) === result.sessions) {
     return
   }
   // Host lists are newest first, so the cut keeps the rows the panel opens on.
@@ -139,12 +142,15 @@ export async function saveAiVaultSessionList(
       const excess = Math.max(0, keys.result.length - MAX_SAVED_LISTS)
       for (const oldest of keys.result.slice(0, excess)) {
         lists.delete(oldest)
+        // Evicted keys must write again, even when their rows haven't changed.
+        lastSavedRows.delete(String(oldest))
       }
       transaction.commit?.()
     }
     await done
+    lastSavedRows.set(stored, result.sessions)
   } catch {
-    // A refused write only costs the next restart its instant list.
+    // A refused write only costs the next restart its instant list; the next scan tries again.
   }
 }
 
@@ -153,6 +159,8 @@ export async function forgetSavedAiVaultSession(sessionId: string): Promise<void
   if (!savedListsAvailable()) {
     return
   }
+  // Whatever lists held the row are rewritten, so the next scan of each scope saves again.
+  lastSavedRows.clear()
   try {
     const transaction = (await database()).transaction(LISTS, 'readwrite')
     const done = committedTransaction(transaction)
