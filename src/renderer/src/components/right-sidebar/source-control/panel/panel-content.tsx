@@ -81,7 +81,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
-  const recovery = useGitCommitActionsSupport(model.activeRepoTarget)
+  const recovery = useGitCommitActionsSupport(
+    conflictOperation === 'revert' ? model.activeRepoTarget : null
+  )
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =

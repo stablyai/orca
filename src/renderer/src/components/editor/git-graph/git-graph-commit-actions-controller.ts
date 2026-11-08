@@ -1,3 +1,4 @@
+import { refreshGitStatusForWorktree } from '@/components/right-sidebar/source-control/sync/git-status-refresh'
 import { switchRuntimeGitBranch } from '@/runtime/source-control/git/runtime-git-branch-client'
 import type { BranchSwitchTarget } from '../../../../../shared/git/branch-switch-target'
 import { createStore } from 'zustand/vanilla'
@@ -176,7 +177,23 @@ export class GitGraphCommitActionsController {
       const selectResult = current()
       const refreshing = this.history.refresh()
       const afterRefresh = this.history.captureActionView()
-      const refreshed = await refreshing
+      const shouldApplyStatus = () =>
+        useAppStore.getState().activeWorktreeId === this.history.worktreeId &&
+        this.owns(scope) &&
+        gitGraphOwnerKey(gitGraphScope(this.history.worktreeId)) === gitGraphOwnerKey(scope)
+      const statusRefresh = shouldApplyStatus()
+        ? refreshGitStatusForWorktree({
+            target: scope.target,
+            ownerHostId: scope.route.executionHostId,
+            worktreeId: this.history.worktreeId,
+            worktreePath: scope.worktree.path,
+            connectionId: scope.connectionId ?? undefined,
+            pushTarget: scope.worktree.pushTarget,
+            deps: useAppStore.getState(),
+            request: { shouldApply: shouldApplyStatus }
+          }).catch(() => {})
+        : undefined
+      const [refreshed] = await Promise.all([refreshing, statusRefresh])
       if (selectResult && afterRefresh() && this.owns(scope) && result.commitId) {
         outside = !refreshed?.items.some((commit) => commit.id === result.commitId)
         if (!outside && this.owns(scope)) {

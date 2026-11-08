@@ -597,3 +597,23 @@ it('keeps the confirm strip across tab switches, discarding it on navigation, fi
   await act(async () => root.render(render()))
   expect(container.textContent).not.toContain('Revert a?')
 })
+
+it('canonicalizes selected refs before requesting history', async () => {
+  let history: ReturnType<typeof useGitGraphHistory>
+  function History() {
+    history = useGitGraphHistory(workspaceId)
+    return null
+  }
+  getHistory.mockReset().mockResolvedValue({ ...result, refs: 'all' })
+  await act(async () => root.render(<History />))
+  getHistory.mockClear().mockResolvedValue({
+    ...result,
+    refs: ['refs/heads/main', 'refs/heads/topic'],
+    resolvedRefs: ['refs/heads/main', 'refs/heads/topic']
+  })
+  await act(async () => {
+    history!.changeFilter(['refs/heads/topic', 'refs/heads/main', 'refs/heads/topic'])
+    await history!.controller.settledResult()
+  })
+  expect(getHistory.mock.calls[0]?.[1].refs).toEqual(['refs/heads/main', 'refs/heads/topic'])
+})

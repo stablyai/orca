@@ -26,7 +26,10 @@ export function useGitGraphHistory(worktreeId: string) {
     controller,
     changeFilter: (refs: GitHistoryRefs) =>
       useAppStore.setState((state) => ({
-        gitGraphFiltersByWorktree: { ...state.gitGraphFiltersByWorktree, [worktreeId]: refs }
+        gitGraphFiltersByWorktree: {
+          ...state.gitGraphFiltersByWorktree,
+          [worktreeId]: Array.isArray(refs) ? [...new Set(refs)].sort() : refs
+        }
       })),
     refresh: controller.refresh,
     loadMore: controller.loadMore,

@@ -11,10 +11,14 @@ import { workspaceId, local, repo } from './git-graph-workspace.test-fixtures'
 import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 
-const { getHistory } = vi.hoisted(() => ({ getHistory: vi.fn() }))
+const { getHistory, getStatus } = vi.hoisted(() => ({
+  getHistory: vi.fn(),
+  getStatus: vi.fn()
+}))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
-  getRuntimeGitHistory: getHistory
+  getRuntimeGitHistory: getHistory,
+  getRuntimeGitStatus: getStatus
 }))
 const initial = useAppStore.getState()
 const result: GitHistoryResult = {
@@ -34,9 +38,15 @@ beforeEach(() => {
     worktreesByRepo: { r: [local] },
     activeWorktreeId: workspaceId,
     activeWorkspaceExecutionHostId: 'local',
-    gitGraphFiltersByWorktree: {}
+    gitGraphFiltersByWorktree: {},
+    gitConflictOperationByWorktree: {}
   })
   getHistory.mockReset().mockResolvedValue(result)
+  getStatus.mockReset().mockResolvedValue({
+    entries: [],
+    conflictOperation: 'unknown',
+    upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+  })
   vi.spyOn(commitSupport, 'gitCommitActionsSupported').mockResolvedValue(true)
 })
 afterEach(() => {
@@ -153,3 +163,23 @@ it.each([
     )
   }
 )
+
+it('shows refreshed conflict status by the time the action outcome is announced', async () => {
+  const controller = gitGraphHistoryForTab(workspaceId)
+  detach = controller.attach()
+  await controller.settledResult()
+  vi.spyOn(commitActions, 'cherryPickRuntimeGit').mockResolvedValue({ outcome: 'conflicted' })
+  getStatus.mockResolvedValue({
+    entries: [],
+    conflictOperation: 'cherry-pick',
+    upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+  })
+  let operationAtAnnouncement: string | undefined
+  vi.spyOn(toast, 'message').mockImplementation(() => {
+    operationAtAnnouncement = useAppStore.getState().gitConflictOperationByWorktree[workspaceId]
+    return 'outcome'
+  })
+  controller.actions.request('cherry-pick', result.items[0]!)
+  await controller.actions.confirm()
+  expect(operationAtAnnouncement).toBe('cherry-pick')
+})
