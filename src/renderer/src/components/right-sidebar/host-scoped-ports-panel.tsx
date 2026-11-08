@@ -74,6 +74,7 @@ export function HostScopedPortsPanel({
     }
     return installWindowVisibilityInterval({
       run: () => void refresh(),
+      slowWhileUnfocused: true,
       intervalMs: HOST_SCOPED_PORT_SCAN_INTERVAL_MS
     })
   }, [isVisible, refresh])
